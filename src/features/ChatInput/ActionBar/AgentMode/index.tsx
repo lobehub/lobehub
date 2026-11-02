@@ -1,4 +1,5 @@
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+// lobe-design-ignore LOBE-ANTD-IMPORT: @lobehub/ui 5.64.4 does not export its style APIs
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ChevronDownIcon,
@@ -63,7 +64,9 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillTertiary};
 
-    transition: all 0.2s;
+    transition:
+      color 0.2s,
+      background-color 0.2s;
 
     &:hover {
       color: ${cssVar.colorText};
@@ -83,7 +86,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     width: 100%;
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadius};
 
@@ -136,6 +139,12 @@ const AGENT_CAPS = [
   { icon: TerminalIcon, key: 'env' },
 ] as const;
 
+const MODE_COPY = {
+  'agent': { description: 'chatMode.agentDesc', label: 'chatMode.agent' },
+  'chat': { description: 'chatMode.chatDesc', label: 'chatMode.chat' },
+  'on-demand': { description: 'chatMode.onDemandDesc', label: 'chatMode.onDemand' },
+} as const satisfies Record<ChatInputMode, { description: string; label: string }>;
+
 const AgentMode = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
@@ -145,28 +154,34 @@ const AgentMode = memo(() => {
   const { allowed: canCreateContent, reason } = usePermission('create_content');
   const { canUseResource, isAccessLoading, isGroupContext } = useChatInputResourceAccess();
 
-  const { canSelectAgentMode, currentMode, isAgentModeUnavailable, isPreferenceLoading } =
-    useEffectiveAgentMode(agentId);
+  const {
+    canSelectAgentMode,
+    canSelectOnDemandMode,
+    currentMode,
+    isAgentModeUnavailable,
+    isPreferenceLoading,
+  } = useEffectiveAgentMode(agentId);
   const disabled = !canCreateContent || !canUseResource;
   const disabledReason = !canCreateContent
     ? reason
     : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent');
   const MODE_ICONS: Record<ChatInputMode, typeof InfinityIcon> = {
-    agent: InfinityIcon,
-    efficient: ZapIcon,
-    chat: MessageCircleIcon,
+    'agent': InfinityIcon,
+    'chat': MessageCircleIcon,
+    'on-demand': ZapIcon,
   };
   const CurrentIcon = MODE_ICONS[currentMode];
 
   const handleSelect = useCallback(
     async (mode: ChatInputMode) => {
       if (disabled) return;
-      if ((mode === 'agent' || mode === 'efficient') && !canSelectAgentMode) return;
+      if (mode === 'agent' && !canSelectAgentMode) return;
+      if (mode === 'on-demand' && !canSelectOnDemandMode) return;
 
       setOpen(false);
       await toggleAgentMode(mode);
     },
-    [canSelectAgentMode, disabled, toggleAgentMode],
+    [canSelectAgentMode, canSelectOnDemandMode, disabled, toggleAgentMode],
   );
 
   const handleOpenChange = useCallback(
@@ -191,20 +206,21 @@ const AgentMode = memo(() => {
   );
 
   const chatTooltip = t('chatMode.chatDesc');
-  const isAgentFamily = currentMode === 'agent' || currentMode === 'efficient';
   const buttonTooltip = isAgentModeUnavailable
     ? t('chatMode.agentUnsupported')
-    : isAgentFamily
-      ? agentTooltip
-      : chatTooltip;
+    : currentMode === 'on-demand'
+      ? t('chatMode.onDemandDesc')
+      : currentMode === 'agent'
+        ? agentTooltip
+        : chatTooltip;
   const MODE_OPTIONS: Array<{
     disabled?: boolean;
     icon: typeof InfinityIcon;
     key: ChatInputMode;
   }> = [
     { icon: InfinityIcon, key: 'agent' },
-    { disabled: !canSelectAgentMode, icon: ZapIcon, key: 'efficient' },
     { icon: MessageCircleIcon, key: 'chat' },
+    { disabled: !canSelectOnDemandMode, icon: ZapIcon, key: 'on-demand' },
   ];
 
   const popoverContent = (
@@ -213,6 +229,7 @@ const AgentMode = memo(() => {
         <Flexbox
           horizontal
           align="center"
+          aria-disabled={optionDisabled || undefined}
           gap={12}
           key={key}
           className={cx(
@@ -232,8 +249,14 @@ const AgentMode = memo(() => {
             <Icon icon={OptionIcon} size={16} />
           </Flexbox>
           <Flexbox flex={1}>
-            <div className={styles.optionTitle}>{t(`chatMode.${key}`)}</div>
-            <div className={styles.optionDesc}>{t(`chatMode.${key}Desc`)}</div>
+            <div className={styles.optionTitle}>{t(MODE_COPY[key].label)}</div>
+            <div className={styles.optionDesc}>
+              {t(
+                optionDisabled && !canSelectAgentMode
+                  ? 'chatMode.agentUnsupported'
+                  : MODE_COPY[key].description,
+              )}
+            </div>
           </Flexbox>
         </Flexbox>
       ))}
@@ -243,7 +266,7 @@ const AgentMode = memo(() => {
   const button = (
     <div className={cx(styles.button, disabled && styles.buttonDisabled)}>
       <Icon icon={CurrentIcon} size={14} />
-      <span>{t(`chatMode.${currentMode}`)}</span>
+      <span>{t(MODE_COPY[currentMode].label)}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );

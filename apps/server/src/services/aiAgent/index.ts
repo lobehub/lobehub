@@ -200,6 +200,7 @@ import {
 import { resolveServerSearchDecision } from './searchDecision';
 import { acquireTopicStartReservation } from './topicStartReservation';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
+import { getWorkspaceMemberChatOverrides } from './workspaceMemberChatConfig';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -1397,8 +1398,7 @@ export class AiAgentService {
     let memberDeviceOverride:
       Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | undefined;
     let memberModelOverride: AgentModelOverride | undefined;
-    let memberModeOverride: boolean | undefined;
-
+    let memberChatOverrides: Pick<LobeAgentChatConfig, 'contextMode' | 'enableAgentMode'> = {};
     // Layer this caller's workspace-scoped execution and model preferences over
     // the shared Agent row. Device selection keeps its existing fallback rules;
     // public Workspace Agents allow member choice by default unless the author
@@ -1414,7 +1414,7 @@ export class AiAgentService {
         const preference = await workspaceUserSettings.getPreference();
         memberDeviceOverride = preference.agentDeviceOverrides?.[resolvedAgentId];
         memberModelOverride = preference.agentModelOverrides?.[resolvedAgentId];
-        memberModeOverride = preference.agentModeOverrides?.[resolvedAgentId];
+        memberChatOverrides = getWorkspaceMemberChatOverrides(preference, resolvedAgentId);
       } catch (error) {
         // Losing preferences is non-fatal: execution falls back to the shared
         // Agent row.
@@ -1458,13 +1458,12 @@ export class AiAgentService {
         workspaceId: agentWorkspaceId,
       },
     );
-    if (!canManageAgent && memberModeOverride !== undefined) {
+    if (!canManageAgent) {
       agentConfig.chatConfig = {
         ...agentConfig.chatConfig,
-        enableAgentMode: memberModeOverride,
+        ...memberChatOverrides,
       };
     }
-
     // callSubAgent thinking / reasoning-effort overrides. A virtual sub-agent
     // executes the same agent row, so `agentConfig.chatConfig` here IS the
     // parent's chatConfig — merging the `agencyConfig.subagent.chatConfig`
@@ -1495,6 +1494,7 @@ export class AiAgentService {
       const storedToolMode = agentConfig.chatConfig?.toolMode;
       agentConfig.chatConfig = {
         ...agentConfig.chatConfig,
+        contextMode: 'default',
         enableAgentMode: toolModeOverride === 'agent',
         toolMode:
           toolModeOverride === 'agent' && storedToolMode === 'custom' ? 'custom' : toolModeOverride,

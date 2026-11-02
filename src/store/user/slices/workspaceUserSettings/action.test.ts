@@ -84,6 +84,26 @@ describe('WorkspaceUserSettingsActionImpl', () => {
     });
   });
 
+  it('optimistically deep-merges one Agent context mode without dropping other Agents', async () => {
+    const state = {
+      workspaceUserPreference: {
+        agentContextModeOverrides: { existing: 'on-demand' as const },
+      },
+    };
+    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
+    const action = new WorkspaceUserSettingsActionImpl(set as never, () => state as never);
+    vi.spyOn(workspaceUserSettingsService, 'updatePreference').mockResolvedValue();
+
+    await action.updateWorkspaceUserPreference({
+      agentContextModeOverrides: { selected: 'default' },
+    });
+
+    expect(state.workspaceUserPreference.agentContextModeOverrides).toEqual({
+      existing: 'on-demand',
+      selected: 'default',
+    });
+  });
+
   it('optimistically deep-merges sidebar visibility without dropping other items', async () => {
     const state = {
       workspaceUserPreference: {

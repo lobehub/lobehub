@@ -1,50 +1,42 @@
-import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
+import { type AgentContextMode, resolveContextMode, resolveToolMode } from '@lobechat/types';
+
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { useUserStore } from '@/store/user';
 
-export type ChatInputMode = 'agent' | 'efficient' | 'chat';
+import { useEffectiveAgentModePreference } from './effectiveAgentModePreference';
+import { useEffectiveModel } from './useEffectiveModel';
 
-/**
- * Chat input mode derived from `enableAgentMode` × `promptMode`:
- *   - agent:     agent + full prompt (upstream-identical)
- *   - efficient: agent + lean prompt (the only divergence from upstream)
- *   - chat:      chat + full prompt (upstream-identical)
- */
-export const resolveChatMode = (
-  enableAgentMode: boolean,
-  promptMode?: 'full' | 'lean',
-): ChatInputMode => {
-  if (enableAgentMode) return promptMode === 'lean' ? 'efficient' : 'agent';
-  return 'chat';
-};
+export type ChatInputMode = 'agent' | 'chat' | 'on-demand';
+
+interface ModeFlags {
+  contextMode: AgentContextMode;
+  enableAgentMode: boolean;
+  promptMode: 'full' | 'lean';
+}
 
 /**
- * Map a chat mode to its `enableAgentMode` + `promptMode` pair.
- *   - agent:     agent + full   (upstream byte-identical)
- *   - efficient: agent + lean   (token optimization — our only divergence)
- *   - chat:      chat + full    (upstream byte-identical; lean is never used
- *                                 outside efficient mode)
+ * Map the explicit UI mode to the persisted agent flags. Selecting either
+ * legacy mode writes `contextMode: 'default'`; only the third option opts into
+ * on-demand loading.
  */
-export const resolveModeFlags = (
-  mode: ChatInputMode,
-): { enableAgentMode: boolean; promptMode: 'full' | 'lean' } => {
+export const resolveModeFlags = (mode: ChatInputMode): ModeFlags => {
   switch (mode) {
-    case 'agent': {
-      return { enableAgentMode: true, promptMode: 'full' };
+    case 'on-demand': {
+      return { contextMode: 'on-demand', enableAgentMode: true, promptMode: 'full' };
     }
-    case 'efficient': {
-      return { enableAgentMode: true, promptMode: 'lean' };
+    case 'agent': {
+      return { contextMode: 'default', enableAgentMode: true, promptMode: 'full' };
     }
     default: {
-      return { enableAgentMode: false, promptMode: 'full' };
+      return { contextMode: 'default', enableAgentMode: false, promptMode: 'full' };
     }
   }
 };
 
 interface ResolveEffectiveAgentModeParams {
+  contextMode?: AgentContextMode;
   enableAgentMode: boolean;
   /**
    * Whether the aiProvider runtime-state (the enabled-model list + abilities)
@@ -52,15 +44,16 @@ interface ResolveEffectiveAgentModeParams {
    * the prior behaviour.
    */
   isModelListReady?: boolean;
-  promptMode?: 'full' | 'lean';
   supportToolUse: boolean;
+  toolMode?: 'agent' | 'chat' | 'custom';
 }
 
 export const resolveEffectiveAgentMode = ({
+  contextMode,
   enableAgentMode,
   isModelListReady = true,
-  promptMode,
   supportToolUse,
+  toolMode,
 }: ResolveEffectiveAgentModeParams) => {
   // While the model list is not ready, `supportToolUse` is `false` only because
   // the model hasn't hydrated into the store yet — not because it lacks tool
@@ -69,51 +62,72 @@ export const resolveEffectiveAgentMode = ({
   // available while loading and honour the user's stored intent; the real
   // capability re-evaluates once the list loads.
   const effectiveSupportToolUse = isModelListReady ? supportToolUse : true;
-
-  // Agent modes require tool-calling support; otherwise fall back to chat-family mode.
+  const resolvedToolMode = resolveToolMode({ enableAgentMode, toolMode });
+  const resolvedContextMode = resolveContextMode(
+    { contextMode, enableAgentMode, toolMode },
+    { supportToolUse: effectiveSupportToolUse },
+  );
   const currentMode: ChatInputMode =
-    enableAgentMode && effectiveSupportToolUse
-      ? resolveChatMode(enableAgentMode, promptMode)
-      : resolveChatMode(false, promptMode);
-  // Example: stored Agent mode + a model without tool calling should render chat-only runtime UI.
-  const isAgentRuntimeMode = currentMode === 'agent' || currentMode === 'efficient';
+    resolvedToolMode !== 'chat' && effectiveSupportToolUse
+      ? resolvedContextMode === 'on-demand'
+        ? 'on-demand'
+        : 'agent'
+      : 'chat';
 
   return {
     canSelectAgentMode: effectiveSupportToolUse,
+    canSelectOnDemandMode:
+      effectiveSupportToolUse && (toolMode === undefined || toolMode === 'agent'),
     currentMode,
-    isAgentModeUnavailable: enableAgentMode && !effectiveSupportToolUse,
-    isAgentRuntimeMode,
+    isAgentModeUnavailable:
+      (resolvedToolMode !== 'chat' || contextMode === 'on-demand') && !effectiveSupportToolUse,
+    isAgentRuntimeMode: currentMode === 'agent' || currentMode === 'on-demand',
     supportToolUse: effectiveSupportToolUse,
   };
 };
 
-export const useEffectiveAgentMode = (agentId: string) => {
-  const [sharedEnableAgentMode, sharedPromptMode, model, provider, agent] = useAgentStore((s) => [
-    agentByIdSelectors.getAgentEnableModeById(agentId)(s),
-    agentByIdSelectors.getAgentPromptModeById(agentId)(s),
-    agentByIdSelectors.getAgentModelById(agentId)(s),
-    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
-    agentByIdSelectors.getAgentById(agentId)(s),
-  ]);
-  const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
-  const usesWorkspaceMemberMode =
-    !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;
-  const storePreference = useUserStore((s) => s.workspaceUserPreference);
-  const { data: fetchedPreference, isLoading } = useUserStore(
-    (s) => s.useFetchWorkspaceUserPreference,
-  )();
-  const preference = fetchedPreference === undefined ? storePreference : (fetchedPreference ?? {});
-  const memberModeOverride = usesWorkspaceMemberMode
-    ? preference.agentModeOverrides?.[agentId]
-    : undefined;
-  const enableAgentMode = memberModeOverride ?? sharedEnableAgentMode;
-  const promptMode = memberModeOverride === undefined ? sharedPromptMode : undefined;
+interface ModelAndProvider {
+  model: string;
+  provider: string;
+}
+
+const useAgentModeForModel = (agentId: string, { model, provider }: ModelAndProvider) => {
+  const { contextMode, enableAgentMode, isPreferenceLoading, toolMode, usesWorkspaceMemberMode } =
+    useEffectiveAgentModePreference(agentId);
   const supportToolUse = useModelSupportToolUse(model, provider);
   const isModelListReady = useAiInfraStore(aiProviderSelectors.isInitAiProviderRuntimeState);
 
   return {
-    ...resolveEffectiveAgentMode({ enableAgentMode, isModelListReady, promptMode, supportToolUse }),
-    isPreferenceLoading: isAccessLoading || (usesWorkspaceMemberMode && isLoading),
+    ...resolveEffectiveAgentMode({
+      contextMode,
+      enableAgentMode,
+      isModelListReady,
+      supportToolUse,
+      toolMode,
+    }),
+    isPreferenceLoading,
     usesWorkspaceMemberMode,
   };
+};
+
+/**
+ * Agent mode for a chat composer: judged by the model that will actually run —
+ * the active topic's pinned model, otherwise the agent default
+ * (see `useEffectiveModel`).
+ */
+export const useEffectiveAgentMode = (agentId: string) =>
+  useAgentModeForModel(agentId, useEffectiveModel(agentId));
+
+/**
+ * Agent mode judged by the agent's own default model only. For surfaces that
+ * have no topic context (e.g. task execution settings, which target an assignee
+ * agent) and must not follow whatever topic the chat page currently has active.
+ */
+export const useAgentDefaultModelAgentMode = (agentId: string) => {
+  const [model, provider] = useAgentStore((state) => [
+    agentByIdSelectors.getAgentModelById(agentId)(state),
+    agentByIdSelectors.getAgentModelProviderById(agentId)(state),
+  ]);
+
+  return useAgentModeForModel(agentId, { model, provider });
 };

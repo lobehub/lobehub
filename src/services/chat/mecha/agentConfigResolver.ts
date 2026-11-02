@@ -217,6 +217,9 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const memberModeOverride = usesWorkspaceMemberSelection
     ? useUserStore.getState().workspaceUserPreference.agentModeOverrides?.[agentId]
     : undefined;
+  const memberContextModeOverride = usesWorkspaceMemberSelection
+    ? useUserStore.getState().workspaceUserPreference.agentContextModeOverrides?.[agentId]
+    : undefined;
   const agentConfig = {
     ...sharedAgentConfig,
     ...resolveAgentModelConfig(
@@ -232,9 +235,15 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   };
   const sharedChatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
   const chatConfig =
-    memberModeOverride === undefined
+    memberModeOverride === undefined && memberContextModeOverride === undefined
       ? sharedChatConfig
-      : { ...sharedChatConfig, enableAgentMode: memberModeOverride };
+      : {
+          ...sharedChatConfig,
+          ...(memberModeOverride === undefined ? {} : { enableAgentMode: memberModeOverride }),
+          ...(memberContextModeOverride === undefined
+            ? {}
+            : { contextMode: memberContextModeOverride }),
+        };
 
   // Base plugins from agent config (pinned identifiers only — disabled entries excluded)
   const basePlugins = getActivePluginIds(agentConfig?.plugins);

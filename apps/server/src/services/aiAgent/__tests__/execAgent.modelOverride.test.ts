@@ -283,7 +283,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,
       agencyConfig: { modelSelectionPolicy: 'member' },
-      chatConfig: { enableAgentMode: true },
+      chatConfig: { contextMode: 'default', enableAgentMode: true },
       visibility: 'public',
     });
     mockGetPreference.mockResolvedValue({
@@ -302,6 +302,25 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(false);
   });
 
+  it('uses the caller context-mode preference for a shared Workspace Agent', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { contextMode: 'default', enableAgentMode: true },
+      visibility: 'public',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentContextModeOverrides: { 'agent-1': 'on-demand' },
+      agentModeOverrides: { 'agent-1': true },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.contextMode).toBe('on-demand');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+  });
+
   it('ignores member overrides for the Agent author and uses the shared model and target', async () => {
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,
@@ -311,7 +330,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
         modelSelectionPolicy: 'member',
       },
       userId,
-      chatConfig: { enableAgentMode: true },
+      chatConfig: { contextMode: 'default', enableAgentMode: true },
       visibility: 'public',
       workspaceId: 'workspace-1',
     });
@@ -322,6 +341,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       agentModelOverrides: {
         'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
       },
+      agentContextModeOverrides: { 'agent-1': 'on-demand' },
       agentModeOverrides: { 'agent-1': false },
     });
     service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
@@ -331,7 +351,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig).toMatchObject({
       agencyConfig: { executionTarget: 'sandbox' },
-      chatConfig: { enableAgentMode: true },
+      chatConfig: { contextMode: 'default', enableAgentMode: true },
       model: 'gpt-4',
       provider: 'openai',
     });
@@ -343,7 +363,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,
       agencyConfig: { modelSelectionPolicy: 'member' },
-      chatConfig: { enableAgentMode: true },
+      chatConfig: { contextMode: 'default', enableAgentMode: true },
       userId: 'agent-author',
       visibility: 'public',
       workspaceId: 'workspace-1',
@@ -605,5 +625,20 @@ describe('AiAgentService.execAgent - toolModeOverride (/mode command)', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.chatConfig.toolMode).toBe('agent');
     expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+  });
+
+  it('/mode always leaves the explicit on-demand context strategy', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { contextMode: 'on-demand', enableAgentMode: true },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'agent' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig).toMatchObject({
+      contextMode: 'default',
+      enableAgentMode: true,
+    });
   });
 });

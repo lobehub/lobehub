@@ -99,6 +99,14 @@ export class WorkspaceUserSettingsActionImpl {
             },
           }
         : {}),
+      ...(patch.agentContextModeOverrides
+        ? {
+            agentContextModeOverrides: {
+              ...previous.agentContextModeOverrides,
+              ...patch.agentContextModeOverrides,
+            },
+          }
+        : {}),
       ...(patch.agentModeOverrides
         ? {
             agentModeOverrides: {

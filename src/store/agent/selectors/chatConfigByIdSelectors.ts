@@ -3,7 +3,11 @@ import {
   DEFAULT_AGENT_SEARCH_FC_MODEL,
   isDesktop,
 } from '@lobechat/const';
-import { type LobeAgentChatConfig, type RuntimeEnvMode } from '@lobechat/types';
+import {
+  type AgentContextMode,
+  type LobeAgentChatConfig,
+  type RuntimeEnvMode,
+} from '@lobechat/types';
 
 import { resolveRuntimeMode, resolveToolMode } from '@/helpers/executionTarget';
 import { resolveGatewayModeEnabled } from '@/helpers/gatewayMode';
@@ -105,8 +109,14 @@ const getToolModeById =
 const isChatModeById = (agentId: string) => (s: AgentStoreState) =>
   getToolModeById(agentId)(s) === 'chat';
 
+const getContextModeById =
+  (agentId: string) =>
+  (s: AgentStoreState): AgentContextMode =>
+    getChatConfigById(agentId)(s).contextMode ?? 'default';
+
 export const chatConfigByIdSelectors = {
   getChatConfigById,
+  getContextModeById,
   getEnableHistoryCountById,
   getHistoryCountById,
   getRuntimeEnvConfigById,

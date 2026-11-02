@@ -13,6 +13,8 @@ export interface WorkingModel {
   provider: string;
 }
 
+export type AgentContextMode = 'default' | 'on-demand';
+
 export interface AgentMemoryChatConfig {
   memory?: {
     effort?: UserMemoryEffort;
@@ -46,19 +48,24 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Model ID to use for generating compression summaries
    */
   compressionModelId?: string;
+  /**
+   * Context loading strategy. Only an explicit `on-demand` selects the third
+   * mode; undefined means `default` and keeps the legacy chat/agent behaviour.
+   */
+  contextMode?: AgentContextMode;
   deepseekV4GAReasoningEffort?: 'none' | 'low' | 'high' | 'max';
-  deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
 
+  deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
   /**
    * Disable context caching
    */
   disableContextCaching?: boolean;
+
   /**
    * Disable Gateway mode for this agent. Undefined means Gateway mode follows
    * the app-level default and stays enabled when the server supports it.
    */
   disableGatewayMode?: boolean;
-
   effort?: 'low' | 'medium' | 'high' | 'max';
   /**
    * Whether to enable adaptive thinking (Claude Opus 4.6)
@@ -161,13 +168,10 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   preserveThinking?: boolean;
 
   /**
-   * Prompt construction mode. Together with `enableAgentMode` it selects one
-   * of the three chat modes:
-   *   - Lobe (agent + full prompt): enableAgentMode=true,  promptMode=full
-   *   - 智能 (agent + lean prompt): enableAgentMode=true,  promptMode=lean
-   *   - 对话 (chat, no tools):      enableAgentMode=false, promptMode=lean
-   * `lean` drops the per-plugin teaching blocks / persona sections to save
-   * tokens. Undefined means full (legacy behaviour).
+   * Prompt construction mode. `lean` drops the per-plugin teaching blocks /
+   * persona sections to save tokens. Undefined means full (legacy behaviour).
+   * Tool availability is owned by `toolMode` / `enableAgentMode`; context
+   * loading is owned by `contextMode`.
    */
   promptMode?: 'full' | 'lean';
   reasoningBudgetToken?: number;
@@ -292,6 +296,7 @@ export const SelfIterationChatConfigSchema = z.object({
 export const AgentChatConfigSchema = z
   .object({
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    contextMode: z.enum(['default', 'on-demand']).optional(),
     compression: z.enum(['off', 'standard', 'smart']).optional(),
     deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),

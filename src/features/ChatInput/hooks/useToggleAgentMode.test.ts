@@ -67,6 +67,7 @@ describe('useToggleAgentMode', () => {
     await act(() => result.current('chat'));
 
     expect(testState.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+      agentContextModeOverrides: { 'agent-1': 'default' },
       agentModeOverrides: { 'agent-1': false },
     });
     expect(testState.updateAgentChatConfig).not.toHaveBeenCalled();
@@ -80,10 +81,49 @@ describe('useToggleAgentMode', () => {
     await act(() => result.current('agent'));
 
     expect(testState.updateAgentChatConfig).toHaveBeenCalledWith({
+      contextMode: 'default',
       enableAgentMode: true,
       promptMode: 'full',
     });
     expect(testState.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+  });
+
+  it('persists on-demand only when the user explicitly selects the third mode', async () => {
+    const { result } = renderHook(() => useToggleAgentMode());
+
+    await act(() => result.current('on-demand'));
+
+    expect(testState.updateAgentChatConfig).toHaveBeenCalledWith({
+      contextMode: 'on-demand',
+      enableAgentMode: true,
+      promptMode: 'full',
+    });
+  });
+
+  it('stores on-demand as a per-Agent Workspace member preference', async () => {
+    testState.agent.current = { visibility: 'public', workspaceId: 'workspace-1' };
+    const { result } = renderHook(() => useToggleAgentMode());
+
+    await act(() => result.current('on-demand'));
+
+    expect(testState.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+      agentContextModeOverrides: { 'agent-1': 'on-demand' },
+      agentModeOverrides: { 'agent-1': true },
+    });
+    expect(testState.updateAgentChatConfig).not.toHaveBeenCalled();
+  });
+
+  it('downgrades to the legacy default when business policy disables Agent mode', async () => {
+    testState.businessCanEnable = false;
+    const { result } = renderHook(() => useToggleAgentMode());
+
+    await act(() => result.current('on-demand'));
+
+    expect(testState.updateAgentChatConfig).toHaveBeenCalledWith({
+      contextMode: 'default',
+      enableAgentMode: false,
+      promptMode: 'full',
+    });
   });
 
   it('does not write while management access is unresolved', async () => {

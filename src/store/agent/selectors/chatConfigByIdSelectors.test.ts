@@ -146,6 +146,28 @@ describe('chatConfigByIdSelectors', () => {
     });
   });
 
+  describe('getContextModeById', () => {
+    it('returns default when contextMode was never persisted', () => {
+      const state = createState({
+        agentMap: { 'agent-1': { chatConfig: { enableAgentMode: true } } },
+      });
+
+      expect(chatConfigByIdSelectors.getContextModeById('agent-1')(state)).toBe('default');
+    });
+
+    it('returns the explicitly stored context mode per Agent', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { chatConfig: { contextMode: 'on-demand' } },
+          'agent-2': { chatConfig: { contextMode: 'default' } },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getContextModeById('agent-1')(state)).toBe('on-demand');
+      expect(chatConfigByIdSelectors.getContextModeById('agent-2')(state)).toBe('default');
+    });
+  });
+
   describe('getHistoryCountById', () => {
     it('should return historyCount for specified agent', () => {
       const state = createState({

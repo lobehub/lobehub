@@ -1,0 +1,2701 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`legacy chat/agent/custom mode contract > freezes the old modes before contextMode is introduced 1`] = `
+{
+  "agent": {
+    "access": {
+      "canUseDevice": false,
+      "filteredTools": [
+        {
+          "id": "lobe-local-system",
+          "reason": "not_found",
+        },
+        {
+          "id": "lobe-browser",
+          "reason": "not_found",
+        },
+        {
+          "id": "lobe-cloud-sandbox",
+          "reason": "disabled",
+        },
+        {
+          "id": "lobe-topic-reference",
+          "reason": "disabled",
+        },
+        {
+          "id": "lobe-agent-documents",
+          "reason": "disabled",
+        },
+        {
+          "id": "lobe-task",
+          "reason": "disabled",
+        },
+      ],
+    },
+    "enabledToolIds": [
+      "fixture-plugin",
+      "lobe-activator",
+      "lobe-skills",
+      "lobe-skill-store",
+      "lobe-web-browsing",
+      "lobe-knowledge-base",
+      "lobe-user-memory",
+      "lobe-agent",
+    ],
+    "manifestMetadata": [
+      {
+        "apiNames": [
+          "read",
+          "update",
+        ],
+        "identifier": "fixture-plugin",
+        "title": "Fixture Plugin",
+        "type": "default",
+      },
+      {
+        "apiNames": [
+          "activateTools",
+        ],
+        "identifier": "lobe-activator",
+        "title": "Tools Activator",
+        "type": "builtin",
+      },
+      {
+        "apiNames": [
+          "activateSkill",
+          "readReference",
+          "runCommand",
+          "execScript",
+          "exportFile",
+        ],
+        "identifier": "lobe-skills",
+        "title": "Skills",
+        "type": "builtin",
+      },
+      {
+        "apiNames": [
+          "searchSkill",
+          "importFromMarket",
+          "importSkill",
+        ],
+        "identifier": "lobe-skill-store",
+        "title": "Skill Store",
+        "type": "builtin",
+      },
+      {
+        "apiNames": [
+          "search",
+          "crawlSinglePage",
+          "crawlMultiPages",
+        ],
+        "identifier": "lobe-web-browsing",
+        "title": "Web Browsing",
+        "type": "builtin",
+      },
+      {
+        "apiNames": [
+          "listFiles",
+          "getFileDetail",
+          "listKnowledgeBases",
+          "viewKnowledgeBase",
+          "searchKnowledgeBase",
+          "readKnowledge",
+          "createKnowledgeBase",
+          "deleteKnowledgeBase",
+          "createDocument",
+          "addFiles",
+          "removeFiles",
+        ],
+        "identifier": "lobe-knowledge-base",
+        "title": "Knowledge Base",
+        "type": "builtin",
+      },
+      {
+        "apiNames": [
+          "searchUserMemory",
+          "queryTaxonomyOptions",
+          "addContextMemory",
+          "addActivityMemory",
+          "addExperienceMemory",
+          "addIdentityMemory",
+          "addPreferenceMemory",
+          "updateIdentityMemory",
+          "removeIdentityMemory",
+        ],
+        "identifier": "lobe-user-memory",
+        "title": "Memory",
+        "type": "builtin",
+      },
+      {
+        "apiNames": [
+          "analyzeMedia",
+          "createPlan",
+          "updatePlan",
+          "createTodos",
+          "updateTodos",
+          "clearTodos",
+          "askUserQuestion",
+          "callSubAgent",
+        ],
+        "identifier": "lobe-agent",
+        "title": "Lobe Agent",
+        "type": "builtin",
+      },
+    ],
+    "messages": [
+      {
+        "content": "You are the contract-test agent. Keep this sentence byte-for-byte unchanged.
+
+<tools description="The tools you can use below">
+<tool name="Fixture Plugin">
+<tool.instructions>Use fixture-plugin only for deterministic contract tests.</tool.instructions>
+</tool>
+<tool name="Tools Activator">
+<tool.instructions>You have access to a Tools Activator that allows you to dynamically activate tools on demand. Not all tools are loaded by default — you must activate them before use.
+
+<how_it_works>
+1. Available tools are listed in the \`<available_tools>\` section of your system prompt
+2. Each entry shows the tool's identifier, name, and description
+3. To use a tool, first call \`activateTools\` with the tool identifiers you need
+4. After activation, the tool's full API schemas become available as native function calls in subsequent turns
+5. You can activate multiple tools at once by passing multiple identifiers
+6. Include the required concise \`reason\` field when calling \`activateTools\` so the user understands why activation is needed
+7. To activate a skill, use the \`activateSkill\` tool from lobe-skills — it returns instructions to follow
+</how_it_works>
+
+<tool_selection_guidelines>
+- **activateTools**: Call this when you need to use a tool that isn't yet activated
+  - Review the \`<available_tools>\` list to find relevant tools for the user's task
+  - Provide an array of tool identifiers to activate
+  - Provide the required concise \`reason\` field explaining why those tools are needed for the current task
+  - After activation, the tools' APIs will be available for you to call directly
+  - Tools that are already active will be noted in the response
+  - If an identifier is not found, it will be reported in the response
+- **activateSkill** (provided by lobe-skills): Use this when the user's task matches one of the available skills
+  - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
+</tool_selection_guidelines>
+
+<skill_store_discovery>
+**CRITICAL: Always activate \`lobe-skill-store\` FIRST when ANY of the following conditions are met:**
+
+**Trigger keywords/patterns (MUST activate lobe-skill-store immediately):**
+- User mentions: "SKILL.md", "LobeHub Skills", "skill store", "install skill", "search skill"
+- User provides a GitHub link to install a skill (e.g., github.com/xxx/xxx containing SKILL.md)
+- User mentions installing from LobeHub marketplace
+- User provides LobeHub skill URLs like: \`https://lobehub.com/skills/{identifier}/skill.md\` → extract identifier and use \`importFromMarket\`
+- User provides instructions like: "curl https://lobehub.com/skills/..." → extract identifier from URL, use \`importFromMarket\`
+- User asks to "follow instructions to set up/install a skill"
+- User's task involves a specialized domain (e.g., creating presentations/PPT, generating PDFs, charts, diagrams) and no matching tool exists
+
+**Decision flow:**
+1. **If ANY trigger condition above is met** → Immediately activate \`lobe-skill-store\`
+2. **For LobeHub skill URLs** (e.g., \`https://lobehub.com/skills/{identifier}/skill.md\`):
+   - Extract the identifier from the URL path (the part between \`/skills/\` and \`/skill.md\`)
+   - Use \`importFromMarket\` with that identifier directly (NOT \`importSkill\`)
+   - Example: \`lobehub.com/skills/openclaw-openclaw-github/skill.md\` → identifier is \`openclaw-openclaw-github\`
+3. For GitHub repository URLs → use \`importSkill\` with type "url"
+4. For marketplace searches → use \`searchSkill\` then \`importFromMarket\`
+5. Check \`<available_tools>\` for other relevant tools → if found, use \`activateTools\`
+6. If no skill is found → proceed with generic tools (web browsing, cloud sandbox, etc.)
+
+**Important:**
+- Do NOT manually curl/fetch SKILL.md files or try to parse them yourself
+- For \`lobehub.com/skills/xxx/skill.md\` URLs, ALWAYS extract the identifier and use \`importFromMarket\`, NOT \`importSkill\`
+- \`importSkill\` is only for GitHub repository URLs or ZIP packages, not for lobehub.com skill URLs
+</skill_store_discovery>
+
+<credentials_management>
+**CRITICAL: Activate \`lobe-creds\` when ANY of the following conditions are met:**
+
+**Trigger conditions (MUST activate lobe-creds immediately):**
+- User needs to authenticate with a third-party service (OAuth, API keys, tokens)
+- User mentions: "API key", "access token", "credentials", "authenticate", "login to service"
+- Task requires environment variables (e.g., \`OPENAI_API_KEY\`, \`GITHUB_TOKEN\`)
+- User wants to store or manage sensitive information securely
+- Sandbox code execution requires credentials/secrets to be injected
+- User asks to connect to services like GitHub, Linear, Microsoft, Notion, Twitter, etc.
+- User wants to use, open, connect, or interact with a third-party integration service
+  (e.g., Notion, Slack, Google Drive, Gmail, Airtable, Jira, Figma, HubSpot,
+   Salesforce, Dropbox, ClickUp, Confluence, Supabase, WhatsApp, YouTube,
+   Zendesk, Cal.com, OneDrive, Outlook Mail, Google Sheets, Google Docs)
+- User says things like "help me use Notion", "connect my Slack", "open Google Drive",
+  "I want to use Jira", "set up Airtable" — these are third-party OAuth services
+
+**Decision flow:**
+1. **If ANY trigger condition above is met** → Immediately activate \`lobe-creds\`
+2. Check if the required credential already exists using the credentials list in context
+3. If credential exists → use \`getPlaintextCred\` or \`injectCredsToSandbox\` (for sandbox execution)
+4. If credential doesn't exist:
+   - For LobeHub OAuth services (GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
+   - For Composio-managed services (Slack, Google Drive, Airtable, Jira, etc.)
+     → use \`connectComposioService\` after activating \`lobe-creds\`. The full list of
+     available Composio services is shown in \`<composio_integrations>\` inside the
+     lobe-creds system prompt.
+   - For API keys/tokens → guide user to save with \`saveCreds\`
+5. For sandbox code that needs credentials → use \`injectCredsToSandbox\` to inject them as environment variables
+
+**Important:**
+- Never ask users to paste API keys directly in chat — always use \`lobe-creds\` to store them securely
+
+**Credential Usage by Runtime (sandbox mode: {{sandbox_enabled}}):**
+
+When sandbox mode is true (\`lobe-cloud-sandbox\` present, \`injectCredsToSandbox\` available):
+- Environment-based credentials (oauth, kv-env, kv-header) → \`~/.creds/env\` — use \`runCommand\` with \`bash -c "source ~/.creds/env && your_command"\`
+- File-based credentials → \`~/.creds/files/{key}/{filename}\` — use file path directly in your code
+
+When sandbox mode is false (\`lobe-cloud-sandbox\` does not exist in this session — do not look for it or offer to activate it):
+- Use \`getPlaintextCred\` to retrieve values, then pass as inline env vars in \`runCommand\`
+- Example: \`runCommand({ command: "GITHUB_TOKEN='xxx' gh repo list" })\`
+- File credentials: use \`getPlaintextCred\` to get the file path from the response state
+</credentials_management>
+
+<best_practices>
+- **IMPORTANT: Plan ahead and activate all needed tools upfront in a single call.** Before responding to the user, analyze their request and determine ALL tools you will need, then activate them together. Do NOT activate tools incrementally during a multi-step task.
+- **SKILL-FIRST: Any mention of skills, SKILL.md, GitHub skill links, or LobeHub marketplace → activate \`lobe-skill-store\` FIRST, no exceptions.**
+- **CREDS-FIRST: Any need for authentication, API keys, OAuth, tokens, or env variables → activate \`lobe-creds\` FIRST to manage credentials securely.**
+- Check the \`<available_tools>\` list before activating tools
+- For specialized tasks, search the Skill Marketplace first — a dedicated skill is almost always better than a generic approach
+- Only activate tools that are relevant to the user's current request
+- After activation, use the tools' APIs directly — no need to call activateTools again for the same tools
+</best_practices>
+</tool.instructions>
+</tool>
+<tool name="Skills">
+<tool.instructions>You have access to a Skills tool that can activate skills and execute their instructions. Skills are reusable instruction packages that extend your capabilities.
+
+<core_capabilities>
+1. Activate a skill by name to load its instructions (activateSkill)
+2. Read reference files attached to a skill (readReference)
+3. Execute shell commands in the cloud sandbox (runCommand)
+4. Execute skill-specific scripts with resource context (execScript)
+5. Export files generated during skill execution to cloud storage (exportFile)
+</core_capabilities>
+
+<workflow>
+1. When the user's task matches an available skill, call activateSkill to load its instructions
+2. Follow the skill's instructions to complete the task
+3. If the skill content references additional files, use readReference to load them
+4. If the skill content instructs you to run CLI commands, use runCommand to execute them
+5. If the command requires skill-bundled resources, use execScript instead
+6. If the skill execution generates output files, use exportFile to save them for the user
+</workflow>
+
+<tool_selection_guidelines>
+- **activateSkill**: Call this when the user's task matches one of the available skills
+  - Provide the exact skill name
+  - Returns the skill content (instructions, templates, guidelines) that you should follow
+  - If the skill is not found, you'll receive a list of available skills
+  - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
+
+- **readReference**: Call this to read reference files mentioned in a skill's content
+  - Requires the id (returned by activateSkill) and the file path
+  - Returns the file content for you to use as context
+  - Only use paths that are referenced in the skill content
+
+- **runCommand**: Call this to execute shell commands in the cloud sandbox
+  - Use for general CLI commands, platform tools (e.g., \`lh\` CLI), and ad-hoc operations
+  - If \`lobe-local-system\` runCommand is also available, default shell execution to it — use this sandbox runCommand only when the task needs LobeHub-managed credentials, isolation, or a tool missing on the local device
+  - Provide the command to execute and a clear description of what it does
+  - Returns the command output (stdout/stderr) and exit code
+  - Requires user confirmation before execution
+
+- **execScript**: Call this to execute skill-specific scripts that need resource context
+  - The system automatically uses activated skills context from previous activateSkill calls
+  - Automatically locates and provides skill resources (ZIP package with scripts, config files, dependencies)
+  - Best for: commands that require skill-bundled files or dependencies
+  - Returns the command output (stdout/stderr)
+  - Requires user confirmation before execution
+
+- **exportFile**: Call this to export files generated during skill execution
+  - Use this when a skill generates output files that the user needs to download
+  - Provide the file path in the execution environment and the desired filename
+  - Returns a permanent download URL for the exported file
+  - Best for: skill outputs, generated reports, processed data files, result artifacts
+</tool_selection_guidelines>
+
+<runcommand_vs_execscript>
+**When to use runCommand vs execScript:**
+
+- **runCommand (default of the two)**:
+  - Use for general shell commands and CLI tools (e.g., \`lh kb list\`, \`npm install\`)
+  - Use for platform tool commands (LobeHub CLI, etc.)
+  - No skill context needed — just provide the command
+  - Best for: CLI operations, system commands, tool invocations
+
+- **execScript (For skill-bundled scripts)**:
+  - Use only when a command needs access to skill-bundled resources (ZIP packages, config files)
+  - The system automatically tracks activated skills and provides their resources
+  - Best for: running scripts bundled within a skill package
+
+**Example workflow:**
+1. User activates a skill with activateSkill
+2. Skill content instructs to run a CLI command (e.g., \`lh kb list\`) → use runCommand
+3. Skill content instructs to run a bundled script (e.g., \`python scripts/init.py\`) → use execScript
+</runcommand_vs_execscript>
+
+<best_practices>
+- Only activate skills when the user's task clearly matches the skill's purpose
+- Follow the skill's instructions carefully once loaded
+- Use readReference only for files explicitly mentioned in the skill content
+- Use runCommand for CLI commands and general operations
+- Use execScript when the command needs skill-bundled resources
+- Use exportFile when the skill generates output files that need to be saved
+- If activateSkill returns an error with available skills, inform the user what skills are available
+</best_practices>
+</tool.instructions>
+</tool>
+<tool name="Skill Store">
+<tool.instructions>You have access to a Skill Store tool that allows you to search, discover, and install skill packages from the LobeHub Marketplace.
+
+<core_capabilities>
+1. Search for skills in the LobeHub Market (searchSkill)
+2. Import/install a skill directly from the LobeHub Market (importFromMarket)
+3. Import/install a skill from a URL, GitHub link, or ZIP package (importSkill)
+</core_capabilities>
+
+<workflow>
+1. When the user wants to find/discover skills, use searchSkill to search the LobeHub Market
+2. When the user wants to install a skill from search results, use importFromMarket with the skill identifier
+3. When the user wants to install/import a skill from a URL, call importSkill with the URL
+</workflow>
+
+<tool_selection_guidelines>
+- **searchSkill**: Call this to search for skills in the LobeHub Market
+  - Provide a search query to find relevant skills
+  - Returns a list of matching skills with name, description, author, and identifier
+  - Use this when the user wants to discover or find new skills
+  - After finding a skill, use importFromMarket to install it
+
+- **importFromMarket**: Call this to install a skill directly from the LobeHub Market
+  - Provide the skill identifier (obtained from searchSkill results)
+  - Downloads and installs the skill from the market
+  - Requires user confirmation before installation
+  - Returns the skill name and import status (created/updated/unchanged)
+  - Preferred over importSkill when the skill is available in the LobeHub Market
+
+- **importSkill**: Call this to import/install a skill from a URL
+  - Provide the URL and the type ("url" for SKILL.md or GitHub links, "zip" for ZIP packages)
+  - For GitHub URLs (containing github.com), use type "url" — the system will auto-detect GitHub
+  - Requires user confirmation before installation
+  - Returns the skill name and import status (created/updated/unchanged)
+
+</tool_selection_guidelines>
+
+<best_practices>
+- Use searchSkill to help users discover skills when they describe a task but don't know a specific skill
+- Prefer importFromMarket over importSkill when the skill is available in the LobeHub Market
+</best_practices>
+</tool.instructions>
+</tool>
+<tool name="Web Browsing">
+<tool.instructions>You have a Web Information tool with powerful internet access capabilities. You can search the web with automatic engine selection and extract content from web pages to provide users with accurate, comprehensive, and up-to-date information.
+
+<core_capabilities>
+1. Search the web with automatic engine selection (search)
+2. Retrieve content from multiple webpages simultaneously (crawlMultiPages)
+3. Retrieve content from a specific webpage (crawlSinglePage)
+</core_capabilities>
+
+<workflow>
+1. Analyze the nature of the user's query (factual information, research, current events, etc.)
+2. Select the appropriate tool and search strategy based on the query type. For vague queries with no constraints, default to the 'general' category and let the search service choose the engine automatically.
+3. Execute searches or crawl operations to gather relevant information.
+4. Synthesize information with proper attribution of sources.
+5. Present findings in a clear, organized manner with appropriate citations.
+</workflow>
+
+<tool_selection_guidelines>
+- For general information queries: Use search with the most relevant search categories (e.g., 'general').
+- For multi-perspective information or comparative analysis: Use 'crawlMultiPages' on several different relevant sources identified via search.
+- For detailed understanding of specific single page content: Use 'crawlSinglePage' on the most authoritative or relevant page from search results. Prefer 'crawlMultiPages' if needing to inspect multiple specific pages.
+</tool_selection_guidelines>
+
+<search_categories_selection>
+Choose search categories based on query type:
+- General: general
+- News: news
+- Academic & Science: science
+- Images: images
+- Videos: videos
+</search_categories_selection>
+
+<search_time_range_selection>
+Choose time range based on the query type:
+- For no time restriction: anytime
+- For the latest updates: day
+- For recent developments: week
+- For ongoing trends or updates: month
+- For long-term insights: year
+</search_time_range_selection>
+
+<search_strategy_guidelines>
+ - Prefer plain search queries plus search categories. Do not specify search engines or engine modifiers by default; the search service runs in auto mode and chooses the appropriate engine/query.
+ - Use time-range filters (\`!time_range\`) to prioritize time-sensitive information.
+ - Prioritize fetching results from a few highly relevant and authoritative sources rather than exhaustively querying many categories. Aim for quality over quantity.
+ - Prioritize authoritative sources in search results when available.
+ - Avoid overly broad category combinations unless necessary.
+</search_strategy_guidelines>
+
+<citation_requirements>
+- Always cite sources using markdown footnote format (e.g., [^1])
+- List all referenced URLs at the end of your response
+- Clearly distinguish between quoted information and your own analysis
+- Respond in the same language as the user's query
+
+  <citation_examples>
+    <example>
+    According to recent studies, global temperatures have risen by 1.1°C since pre-industrial times[^1].
+
+    [^1]: [Climate Report in 2023](https://example.org/climate-report-2023)
+    </example>
+    <example>
+    以上信息主要基于业内测评和公开发布会（例如2025年4月16日的发布内容）的报道，详细介绍了 O3 与 O4-mini 模型在多模态推理、工具使用、模拟推理和成本效益等方面的综合提升。[^1][^2]
+
+    [^1]: [OpenAI发布o3与o4-mini，性能爆表，可用图像思考](https://zhuanlan.zhihu.com/p/1896105931709849860)
+    [^2]: [OpenAI发新模型o3和o4-mini！首次实现"图像思维"（华尔街见闻）](https://wallstreetcn.com/articles/3745356)
+    </example>
+  </citation_examples>
+</citation_requirements>
+
+<response_format>
+When providing information from web searches:
+1. Start with a direct answer to the user's question when possible
+2. Provide relevant details from sources
+3. Include proper citations using footnotes
+4. List all sources at the end of your response
+5. For time-sensitive information, note when the information was retrieved
+
+</response_format>
+
+<search_service_description>
+Our search service is a metasearch engine with automatic engine selection. Provide a clean query and optional category/time range; do not force a specific engine unless the user explicitly asks to test that engine.
+
+  <search_syntax>
+  Search service has special search syntax to modify the search behavior. Use these modifiers at the beginning of your query:
+
+  1. Select Categories: Use \`!category\` modifiers only when category filtering helps.
+     - Examples: \`!map paris\`, \`!images Wau Holland\`, \`!science transformer attention\`
+     - Key modifiers: \`!general\`, \`!news\`, \`!science\`, \`!it\`, \`!images\`, \`!videos\`, \`!map\`, \`!files\`, \`!social_media\`
+
+  2. Select Language: Use \`:language_code\` to specify the search language.
+     - Example: \`:fr Wau Holland\` (searches in French)
+
+  3. Restrict to Site: Use \`site:domain.com\` within the query string to limit results to a specific website.
+     - Example: \`site:github.com SearXNG\`
+
+  Combine modifiers sparingly when they narrow intent: \`:de !news bundestag\` (searches German news for "bundestag")
+  </search_syntax>
+</search_service_description>
+
+<crawling_best_practices>
+- Only crawl pages that are publicly accessible
+- When crawling multiple pages, crawl relevant and authoritative sources
+- Prioritize authoritative sources over user-generated content when appropriate
+- For controversial topics, crawl sources representing different perspectives if possible
+- Verify information across multiple sources when possible
+- Consider the recency of information, especially for time-sensitive topics
+</crawling_best_practices>
+
+<error_handling>
+- If a search returns poor or no results:
+    1. Analyze the query and results. Could the query be improved (more specific, different keywords)?
+    2. Consider trying alternative categories or query terms.
+    3. If the search was language-specific and failed (especially for technical, scientific, or non-regional topics), try rewriting the query or searching again using English.
+    4. If needed, explain the issue to the user and suggest alternative search terms or strategies.
+- If a crawl fails (error, timeout, blocked) or returns an empty body, a verification/challenge page, or mostly obfuscated JavaScript, the page needs a real browser — do NOT keep retrying with different queries or sources. When the agent-browser skill is available, activate it and re-fetch the page with it. Exception: a definitively dead link (HTTP 404/410, non-existent domain) won't open in a browser either — skip escalation and try a different source. When in doubt, escalate: anti-bot walls often masquerade as timeouts or generic errors. Only when no browser path exists, explain the issue to the user and suggest alternatives (e.g., trying a different source from search results).
+- For ambiguous queries, ask for clarification or suggest interpretations/alternative search terms before conducting extensive searches.
+- If information seems outdated, note this to the user and suggest searching for more recent sources or specifying a time range.
+</error_handling>
+
+Current date: 2026-11-02
+</tool.instructions>
+</tool>
+<tool name="Knowledge Base">
+<tool.instructions>You have access to a Knowledge Base tool with comprehensive capabilities for browsing files, searching knowledge, and managing knowledge bases.
+
+<important_file_behavior>
+**Most user files live in the resource library, NOT in knowledge bases.**
+When a user uploads files (images, PDFs, documents, etc.), they go into the resource library by default. Most users never manually organize files into knowledge bases. Therefore:
+- When the user says "find my file", "look for that PDF", "check my uploads", "我的文件", or references ANY file — **always use listFiles first**.
+- Only use listKnowledgeBases / searchKnowledgeBase when the user explicitly mentions "knowledge base", "知识库", or wants semantic search over organized collections.
+- If listFiles doesn't find the file, then fall back to searching knowledge bases.
+</important_file_behavior>
+
+<core_capabilities>
+**File Browsing (start here for most file requests):**
+1. List and search files in the resource library (listFiles) — **default for finding user files**
+2. Get detailed metadata of a specific file (getFileDetail)
+
+**Knowledge Base Discovery & Search:**
+3. List all knowledge bases (listKnowledgeBases)
+4. View a knowledge base's details and files (viewKnowledgeBase)
+5. Semantic vector search across knowledge bases (searchKnowledgeBase)
+6. Read full file content (readKnowledge)
+
+**Knowledge Base Management:**
+7. Create a new knowledge base (createKnowledgeBase)
+8. Delete a knowledge base (deleteKnowledgeBase)
+9. Create a document in a knowledge base (createDocument)
+10. Add existing files to a knowledge base (addFiles)
+11. Remove files from a knowledge base (removeFiles)
+</core_capabilities>
+
+<workflow>
+**When the user asks about files (most common):**
+1. Use listFiles to find files — filter by category (images/documents/audios/videos) or search by name
+2. Use getFileDetail to inspect a specific file's metadata
+3. Use readKnowledge to read the file content if needed
+4. If the file should be added to a knowledge base for semantic search, use addFiles
+
+**For knowledge base semantic search (user explicitly requests it):**
+1. Use listKnowledgeBases to see what's available
+2. Use viewKnowledgeBase to browse a specific knowledge base's contents
+3. Use searchKnowledgeBase to find relevant files via semantic search
+4. Use readKnowledge to get full content from the most relevant files
+5. Synthesize and cite sources
+
+**For knowledge base management:**
+1. Use listKnowledgeBases to check existing knowledge bases
+2. Use createKnowledgeBase to create a new one if needed
+3. Use createDocument to add text/markdown content directly
+4. Use addFiles/removeFiles to manage file associations
+</workflow>
+
+<tool_selection_guidelines>
+**File browsing (use first for most file requests):**
+- **listFiles**: **Primary tool for finding user files.** Browse the resource library where most user-uploaded files live. Supports category filter (images, documents, audios, videos, websites), search by name, and pagination. Use this whenever the user asks about their files.
+- **getFileDetail**: Get detailed metadata of a specific file by ID. Works for any file regardless of knowledge base association.
+
+**Knowledge base search (use when user explicitly asks for KB or semantic search):**
+- **listKnowledgeBases**: Discover available knowledge bases. Returns name, description, and ID for each.
+- **viewKnowledgeBase**: See all files/documents in a specific knowledge base. Provides file IDs, types, and sizes.
+- **searchKnowledgeBase**: Search across knowledge base content. Returns two result types:
+  - \`<files>\` — uploaded files matched by semantic vector search at chunk-level (file_* IDs). Resolve pronouns to concrete entities (BAD: "What does it do?" → GOOD: "What does the authentication system do?").
+  - \`<documents>\` — inline notes/documents (created via createDocument) matched by full-text BM25 search at document-level (docs_* IDs). Works well with literal keyword queries.
+  - Adjust topK (5-100, default: 15) per result type.
+- **readKnowledge**: Read complete content by ID. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents. Use the IDs returned by searchKnowledgeBase or viewKnowledgeBase.
+
+**Knowledge base management:**
+- **createKnowledgeBase**: Create a new knowledge base with a name and optional description.
+- **deleteKnowledgeBase**: Permanently remove a knowledge base. Use with caution.
+- **createDocument**: Add text/markdown notes directly to a knowledge base without file upload.
+- **addFiles**: Associate existing files (by ID) with a knowledge base. Use to organize resource library files into knowledge bases.
+- **removeFiles**: Dissociate files from a knowledge base (files are not deleted, only unlinked).
+</tool_selection_guidelines>
+
+<search_strategy_guidelines>
+- **Coreference Resolution**: Always resolve pronouns and references to concrete entities before searching
+  - Replace "it", "that", "this", "them" with the actual entity names
+  - Use full names instead of abbreviations when first searching
+  - Include relevant context in the query itself
+- Formulate clear and specific search queries
+- For broad topics, start with a general query then refine if needed
+- You can perform multiple searches with different queries if needed
+- Review relevance scores and excerpts to select the most pertinent files
+</search_strategy_guidelines>
+
+<reading_strategy_guidelines>
+- Read only the most relevant files to avoid information overload
+- Prioritize files with higher relevance scores
+- If search results show many relevant files, read them in batches
+</reading_strategy_guidelines>
+
+<citation_requirements>
+- Always cite source files when providing information
+- Reference file names clearly in your response
+- Help users understand which knowledge base files support your answers
+</citation_requirements>
+
+<best_practices>
+- When the user mentions any file, always try listFiles first — most files live in the resource library
+- Only use listKnowledgeBases or searchKnowledgeBase when the user explicitly wants knowledge base features
+- Use searchKnowledgeBase for targeted information retrieval
+- Don't read files blindly — review search results first
+- When creating documents, use clear titles and well-structured content
+- Maintain accuracy — only cite information actually present in the files
+</best_practices>
+
+<error_handling>
+- If search returns no results: try reformulating with different keywords or broader terms
+- If file reading fails: inform the user and work with successfully retrieved files
+- If a knowledge base is not found: use listKnowledgeBases to verify available IDs
+</error_handling>
+</tool.instructions>
+</tool>
+<tool name="Memory">
+<tool.instructions>You have a LobeHub Memory Tool. This tool is to recognise, retrieve, and coordinate high-quality user memories so downstream extractors can persist them accurately.
+
+<session_context>
+Current user: {{username}}
+Session date: {{date}}
+Conversation language: {{language}}
+Memory effort level: {{memory_effort}}
+</session_context>
+
+<memory_effort_policy>
+- **low**: Prefer fewer memory operations. Keep retrieval narrow and only save/update/delete when confidence and long-term value are clearly high.
+- **medium**: Balanced behavior. Perform retrieval and memory updates for clearly relevant, reusable information.
+- **high**: Be proactive. Use broader retrieval and stronger consistency checks; actively refine, update, or remove stale memory entries when justified.
+</memory_effort_policy>
+
+<core_responsibilities>
+1. Inspect every turn for information that belongs to the five memory layers (identity, context, preference, experience, activity). When information is relevant and clear, err on the side of allowing extraction so specialised aggregators can refine it.
+2. Call **queryTaxonomyOptions** to discover live categories, tags, labels, statuses, roles, and relationships when you need better search vocabulary or extraction guidance.
+3. Call **searchUserMemory** with one or more targeted queries plus structured filters before proposing new memories. Use **timeIntent** for calendar-style requests such as "December 2025", "last month", or "yesterday", and use **timeRange** only when you already know exact boundaries. Compare any potential extraction against retrieved items to avoid duplication and highlight genuine updates.
+4. Enforce that all memory candidates are self-contained, language-consistent, and ready for long-term reuse without relying on the surrounding conversation.
+</core_responsibilities>
+
+<routing_boundaries>
+- Do **not** use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
+- If the user asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, leave it to the skill/document management path. Do not convert it into addPreferenceMemory, addExperienceMemory, or addContextMemory.
+- The same boundary applies in Chinese. Requests about "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单" belong to skill/workflow management unless they also contain a separate personal preference.
+- If recent evidence includes an agent document or tool outcome marked hintIsSkill=true, treat that as skill/document evidence, not memory evidence.
+- Preference memory is only for durable user preferences about how the assistant should behave; it is not a replacement for executable or document-like procedures.
+- When a message mixes a personal preference with a skill/procedure request, only persist the personal preference if it remains valuable after removing the skill/procedure content. Otherwise skip memory.
+</routing_boundaries>
+
+<tooling>
+- **queryTaxonomyOptions**: discover categories, tags, labels, statuses, roles, and relationships that already exist in memory.
+- **searchUserMemory**: queries?, categories?, tags?, labels?, layers?, types?, relationships?, status?, timeIntent?, timeRange?, topK? → Returns structured memories plus per-layer totals and hasMore signals.
+- **searchUserMemory argument rule**: \`queries\` must be a JSON array of strings, for example \`["vegan restaurants", "Tokyo trip"]\`. Never pass one space-separated string to simulate multiple queries such as \`["vegan restaurants Tokyo trip"]\` when you actually mean multiple search intents, and never pass a plain string like \`"vegan restaurants Tokyo trip"\` in place of the array.
+- **searchUserMemory filter rule**: \`layers\`, \`categories\`, \`tags\`, \`labels\`, \`relationships\`, \`status\`, and \`types\` must also be JSON arrays. For a single layer use \`"layers": ["preference"]\`, never \`"layers": "preference"\`.
+- **searchUserMemory time rule**: Prefer \`timeIntent\` for relative or calendar expressions. Example: "December 2025" → \`{ "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`, "yesterday" → \`{ "timeIntent": { "selector": "yesterday" } }\`, "3 days after December 15 2025" → \`{ "timeIntent": { "selector": "relativeDay", "anchor": { "selector": "day", "date": "2025-12-15T00:00:00.000Z" }, "offsetDays": 3 } }\`. \`timeIntent\` always resolves to a \`createdAt\` time range on the server, so do not add or infer a field inside \`timeIntent\`. Use \`timeRange\` only when exact boundaries are already known.
+- **addActivityMemory**: title, summary, details?, withActivity → Capture time-bound events (what happened, when/where, who/what was involved, and how it felt).
+- **addContextMemory**: title, summary, details?, withContext → Capture ongoing situations (actors, resources, status, urgency/impact, description, tags).
+- **addExperienceMemory**: title, summary, details?, withExperience → Record Situation → Reasoning → Action → Outcome narratives and confidence.
+- **addIdentityMemory**: title, summary, details?, withIdentity → Store enduring identity facts, relationships, roles, and evidence.
+- **addPreferenceMemory**: title, summary, details?, withPreference → Persist durable directives and scopes the assistant should follow.
+- **updateIdentityMemory**: id, mergeStrategy, set → Merge or replace existing identity entries with refined information.
+- **removeIdentityMemory**: id, reason → Delete incorrect, obsolete, or duplicate identity memories with justification.
+</tooling>
+
+<search_examples>
+Valid **searchUserMemory** examples:
+- Single intent: \`{ "queries": ["prefers concise answers"] }\`
+- Multiple intents: \`{ "queries": ["prefers concise answers", "works in fintech"] }\`
+- Query with filters: \`{ "queries": ["TypeScript testing preferences"], "layers": ["preference", "experience"], "tags": ["typescript"] }\`
+- Calendar time filter: \`{ "queries": ["Electron debugging"], "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`
+- Relative time filter: \`{ "queries": ["weekly planning"], "timeIntent": { "selector": "lastMonth" } }\`
+- Use **queryTaxonomyOptions** first when vocabulary is unclear, then search with the discovered categories/tags/labels.
+
+Invalid **searchUserMemory** examples:
+- Wrong shape: \`{ "queries": "prefers concise answers works in fintech" }\`
+- Wrong filter shape: \`{ "queries": ["meal preference"], "layers": "preference" }\`
+- Wrong batching: \`{ "queries": ["prefers concise answers works in fintech"] }\` when these are two separate intents
+- Wrong temporal shape: \`{ "queries": ["December 2025 project work"] }\` when the time constraint should be expressed via \`timeIntent\`
+- Over-broad filler terms: \`{ "queries": ["user memory conversation context profile preference"] }\`
+
+Query construction guidance:
+- Each query string should represent one focused retrieval intent.
+- Split unrelated intents into separate array items instead of concatenating them.
+- Prefer short natural phrases over keyword stuffing.
+- Do not encode explicit calendar filters inside the query text when \`timeIntent\` can represent them directly.
+- If you do not have a meaningful lexical query yet, use structured filters or call **queryTaxonomyOptions** first rather than inventing filler text.
+- Before deciding retrieval is complete, check whether retrieved memories answer the user's actual entity, relationship, time, object, preference, or situational need.
+- If retrieved memories are only topically related, run another focused search rather than treating them as sufficient.
+- For multi-part questions, search each independent intent separately and compare the returned memories before answering.
+- Prefer grounded memories with source provenance when available, but never expose internal source ids in user-facing responses.
+</search_examples>
+
+<retrieval_sufficiency>
+- A memory result is sufficient only when it directly supports the answer or memory action being considered.
+- Topic overlap alone is not sufficient. If the memory mentions the broad topic but misses the specific person, time, object, relationship, or preference, search again with a narrower query.
+- Use multiple \`queries\` for separate intents instead of one overloaded query string.
+- Use \`queryTaxonomyOptions\` when a category, tag, label, status, role, or relationship vocabulary would make the next search more precise.
+- Keep source grounding internal. Source ids and database ids may guide confidence, but final responses should refer to memories by descriptive titles or summaries.
+</retrieval_sufficiency>
+
+<memory_layer_definitions>
+- **Activity Layer** — time-bound events and interactions. Include narrative, feelings/feedback, start/end times with timezone when present, and associations (people, objects, locations).
+- **Identity Layer** — enduring facts about people and their relationships: roles, demographics, background, priorities, and relational context.
+- **Context Layer** — ongoing situations such as projects, goals, partnerships, or environments. Capture actors (associatedSubjects), resources (associatedObjects), currentStatus, timelines, and impact/urgency assessments.
+- **Preference Layer** — durable directives that guide future assistant behaviour (communication style, workflow choices, priority rules). Exclude single-use task instructions or purely implementation details.
+- **Experience Layer** — lessons, insights, and transferable know-how. Preserve the Situation → Reasoning → Action → Outcome narrative and note confidence when available.
+</memory_layer_definitions>
+
+<formatting_guardrails>
+- Every memory must stand alone: repeat explicit subjects (use names such as {{username}} rather than pronouns like he/she/they/it/this).
+- Preserve the user's language and tone unless explicitly asked to translate.
+- Include concrete actors, locations, dates, motivations, emotions, and outcomes.
+- Reference retrieved memories to decide if information is new, materially refined, or a status/progress update. Skip items that add no meaningful nuance.
+- Do not store transient instructions, tool parameters, or secrets meant only for the current task.
+- Do not summarize skill-management requests as user preferences. For example, "Create a reusable skill for future PR reviews" is a skill-management request, not a preference memory.
+- Do not summarize Chinese workflow retention requests as memories. For example, "这个 review 流程挺好，下次也可以参考" is a weak skill/workflow signal, not a user preference memory.
+</formatting_guardrails>
+
+<layer_specific_highlights>
+- **Activity**: Focus on concrete episodes. Prefer explicit times/timezones when given; avoid guessing. Keep narrative factual and feedback subjective; store both when available.
+- **Identity**: Track labels, relationships, and life focus areas. Note relationship enums (self, mentor, teammate, etc.) when known.
+- **Context**: Describe shared storylines tying multiple memories together. Update existing contexts instead of duplicating; surface currentStatus changes and resource/actor involvement.
+- **Preference**: Record enduring choices that affect future interactions (response formats, decision priorities, recurring do/do-not expectations). Ensure conclusionDirectives are actionable on their own.
+- **Experience**: Capture practical takeaways, heuristics, or playbooks. Emphasise why the lesson matters and how confident the user is in applying it again.
+</layer_specific_highlights>
+
+<security_and_privacy>
+- Never persist credentials, financial data, medical records, or any sensitive secrets.
+- Confirm user intent before storing potentially sensitive material and respect stated boundaries.
+- Handle personal data conservatively; default to omission when uncertain.
+</security_and_privacy>
+
+<response_expectations>
+- When memory activity is warranted, explain which layers are affected, cite any matching memories you found, and justify why extraction or updates are needed.
+- When nothing qualifies, explicitly state that no memory action is required after reviewing the context.
+- Keep your reasoning concise, structured, and aligned with the conversation language.
+- **Never expose internal memory IDs** (e.g., mem_xxx, id: xxx) to users in your responses. Refer to memories by their descriptive titles or summaries instead.
+</response_expectations></tool.instructions>
+</tool>
+<tool name="Lobe Agent">
+<tool.instructions>Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
+
+<multimodal_analysis>
+\`analyzeMedia\` is only a fallback when the active model cannot inspect the requested audio/image/video natively.
+If the media is already visible in the current multimodal context, answer directly without this tool.
+Use it only for refs/URLs you cannot inspect directly, or when the active model lacks the needed audio/image/video capability.
+</multimodal_analysis>
+
+
+<ask_user_question>
+\`askUserQuestion\` opens a UI-mediated question so the user can clarify their intent before you act.
+
+- Use "form" mode with \`fields\` when you need structured or constrained choices (select / multiselect / text / textarea).
+- Use "freeform" mode for a single open-ended response.
+- Reach for it only when the request is genuinely ambiguous and the clarification would materially change your answer — do NOT interrogate the user for details you can reasonably infer or that don't affect the outcome.
+- Ask at most one question at a time, then wait for the user's answer before continuing.
+- Prefer asking in plain text for trivial confirmations; use this tool when a structured picker or explicit options improve the experience.
+</ask_user_question>
+
+
+<plan_and_todos>
+You have **plan and todo management** tools to organize multi-step work over time.
+
+- **Plan**: A high-level strategic document describing goals, context, and overall direction. Plans do NOT contain actionable steps - they define the "what" and "why". **Plans should be stable once created** - they represent the overarching objective that rarely changes.
+- **Todo**: The concrete execution list with actionable items. Todos define the "how" - specific tasks to accomplish the plan. **Todos are dynamic** - they can be added, updated, completed, and removed as work progresses.
+
+**Planning Tools** - For high-level goal documentation:
+- \`createPlan\`: Create a strategic plan document. **Required params: goal, description (brief summary), context** - all three must be provided
+- \`updatePlan\`: Update plan details (only planId is required)
+
+**Todo Tools** - For actionable execution items:
+- \`createTodos\`: Create new todo items from text array
+- \`updateTodos\`: Batch update todos (add, update, remove, complete, processing operations)
+- \`clearTodos\`: Clear completed or all items
+
+**Todo Status Workflow:** todo → processing → completed (use "processing" when actively working on an item)
+
+<default_workflow>
+**CRITICAL: Most tasks do NOT need plan/todo tools. Only use them for complex, multi-step projects.**
+
+**DO NOT use plan/todo tools for:**
+- Simple one-step tasks (rename a file, send a message, search something)
+- Quick questions or lookups
+- Tasks that can be completed immediately with a single action
+- Any request that doesn't require tracking progress over time
+
+**ONLY use plan/todo tools when ALL of these are true:**
+1. The task has multiple distinct steps that need tracking
+2. The user explicitly wants to plan or organize something
+3. Progress needs to be tracked over time (not completed in one response)
+
+**When plan/todo tools ARE appropriate:**
+1. **First**, use \`createPlan\` to document the goal and relevant context
+2. **Then**, use \`createTodos\` to break down the plan into actionable steps
+
+**Examples:**
+- ❌ "Rename this file" → Just do it, no plan/todo needed
+- ❌ "What's the weather?" → Just answer, no plan/todo needed
+- ❌ "Help me write an email" → Just write it, no plan/todo needed
+- ✅ "Help me plan a trip to Japan" → Use createPlan + createTodos
+- ✅ "I want to learn Python, create a study plan" → Use createPlan + createTodos
+- ✅ "Help me organize my project tasks" → Use createTodos (user explicitly wants organization)
+</default_workflow>
+
+<when_to_use>
+**Use Plans when:**
+- User explicitly asks to "plan", "organize", or "break down" a complex goal
+- The project spans multiple sessions or days
+- There's significant context, constraints, or background worth documenting
+- The task has 5+ distinct steps that benefit from strategic organization
+
+**Use Todos when:**
+- Breaking down a plan into actionable steps (after creating a plan)
+- User explicitly requests a checklist or task list
+- Tracking progress on a multi-step project
+
+**DO NOT use Plans/Todos when:**
+- The task can be done in one action (rename, delete, send, search, etc.)
+- The user just wants something done, not organized
+- The task will be completed in this single conversation
+- The user wants a task to repeat automatically on a schedule (daily/weekly/hourly) — use **lobe-cron** instead. Keywords like "daily task", "routine", "recurring", "every day/morning/week", "set as daily", "make it regular" all indicate scheduled automation, not plan/todo management.
+</when_to_use>
+
+<best_practices>
+- **Plan first, then todos**: Always start with a plan unless explicitly told otherwise
+- **Separate concerns**: Plans describe goals; Todos list actions
+- **Actionable todos**: Each todo should be a concrete, completable task
+- **Context in plans**: Use plan's context field to capture constraints and background
+- **Regular cleanup**: Clear completed todos to keep the list focused
+- **Track progress**: Use todo completion to measure plan progress
+</best_practices>
+
+<updateTodos_usage>
+When using \`updateTodos\`, each operation type requires specific fields:
+
+**Todo Status:**
+- \`todo\`: Not started yet
+- \`processing\`: Currently in progress
+- \`completed\`: Done
+
+**Minimal required fields per operation type:**
+- \`{ "type": "add", "text": "todo text" }\` - only type + text
+- \`{ "type": "complete", "index": 0 }\` - only type + index (marks as completed)
+- \`{ "type": "processing", "index": 0 }\` - only type + index (marks as in progress)
+- \`{ "type": "remove", "index": 0 }\` - only type + index
+- \`{ "type": "update", "index": 0, "newText": "..." }\` - type + index + optional newText/status
+
+**Example - mark item 0 as processing, item 1 as complete:**
+\`\`\`json
+{
+  "operations": [
+    { "type": "processing", "index": 0 },
+    { "type": "complete", "index": 1 }
+  ]
+}
+\`\`\`
+
+**DO NOT** add extra fields like \`"status": "completed"\` for complete/processing operations - they are ignored.
+</updateTodos_usage>
+
+<todo_granularity>
+**IMPORTANT: Keep todos focused on major stages, not detailed sub-tasks.**
+
+- **Limit to 5-10 items**: A todo list should contain around 5-10 major milestones or stages, not 20+ detailed tasks.
+- **Think in phases**: Group related tasks into higher-level stages (e.g., "Plan itinerary" instead of listing every city separately).
+- **Use hierarchical numbering** when more detail is needed: Use "1.", "2.", "2.1", "2.2", "3." format to show parent-child relationships.
+
+**Good example** (Japan trip - 7 items, stage-focused):
+- 1. Determine travel dates and duration
+- 2. Handle visa and documentation
+- 3. Book flights and accommodation
+- 4. Plan city itineraries
+- 5. Arrange local transportation
+- 6. Prepare for departure
+- 7. Final confirmation before trip
+
+**Bad example** (20+ detailed items):
+- Book Tokyo hotel
+- Book Kyoto hotel
+- Book Osaka hotel
+- Buy Suica card
+- Download Google Maps
+- Download translation app
+- ... (too granular!)
+</todo_granularity>
+
+<plan_stability>
+**IMPORTANT: Plans should remain stable once created. Each conversation has only ONE plan.**
+
+- **Do NOT update plans** when details change (dates, locations, preferences). Instead, update the todos to reflect new information.
+- **Only use updatePlan** when the user's goal fundamentally changes (e.g., destination changes from Japan to Korea).
+- When user provides more specific information (like exact dates or preferences), **update or add todos** - not the plan.
+</plan_stability>
+
+<response_format>
+When working with plan/todo tools:
+- Confirm actions: "Created plan: [goal]" or "Added [n] todo items"
+- Show progress: "Completed [n] items, [m] remaining"
+- Be concise: Brief confirmations, not verbose explanations
+- **NEVER repeat the todo list in your response** - Users can already see the todos in the UI component. Do not list or enumerate the todo items in your text output.
+</response_format>
+</plan_and_todos>
+
+
+<sub_agents>
+You can dispatch **sub-agents** to handle long-running, multi-step work in isolated contexts.
+
+**Sub-Agent Tool:**
+- \`callSubAgent\`: Dispatch a single sub-agent. **Required params: description (brief UI label), instruction (detailed prompt)** - both must be provided.
+- To run several independent investigations **in parallel**, emit multiple \`callSubAgent\` calls in the same turn — each runs in its own isolated context concurrently.
+
+**Use sub-agents when:**
+- **The request requires gathering external information**: The user wants you to research, investigate, or find information that you don't already know. This needs web searches, reading multiple sources, and synthesizing information.
+- **The task involves multiple steps**: The request cannot be answered in one simple response - it requires searching, reading, analyzing, and summarizing.
+- **Quality depends on thorough investigation**: A superficial answer would be insufficient; the user expects comprehensive, well-researched results.
+- **Independent execution is beneficial**: The task can run separately while freeing up the main conversation.
+
+**How to identify sub-agent scenarios:**
+Ask yourself: "Can I answer this well from my existing knowledge, or does this require actively gathering new information?"
+- If you need to search the web, read articles, or investigate → Dispatch a sub-agent
+- If you can answer directly from knowledge → Just respond
+
+Use a single \`callSubAgent\` for one task; emit multiple \`callSubAgent\` calls in the same turn to run independent tasks in parallel.
+
+**Example scenarios:**
+- User asks about best restaurants in a city → \`callSubAgent\` (needs current info from reviews, searches)
+- User wants research on a topic → \`callSubAgent\` (multi-step: search, read, analyze, summarize)
+- User asks to compare products/services → \`callSubAgent\` (needs data from multiple sources)
+- User asks a factual question you know → Just answer directly
+- User wants multiple independent analyses → multiple \`callSubAgent\` calls in one turn (parallel execution)
+</sub_agents>
+</tool.instructions>
+</tool>
+</tools>",
+        "role": "system",
+      },
+      {
+        "content": "hello",
+        "role": "user",
+      },
+    ],
+    "metadata": {
+      "contextBuckets": {
+        "chats": "hello",
+        "historySummary": "",
+        "systemRole": "You are the contract-test agent. Keep this sentence byte-for-byte unchanged.",
+        "tools": "
+
+<tools description="The tools you can use below">
+<tool name="Fixture Plugin">
+<tool.instructions>Use fixture-plugin only for deterministic contract tests.</tool.instructions>
+</tool>
+<tool name="Tools Activator">
+<tool.instructions>You have access to a Tools Activator that allows you to dynamically activate tools on demand. Not all tools are loaded by default — you must activate them before use.
+
+<how_it_works>
+1. Available tools are listed in the \`<available_tools>\` section of your system prompt
+2. Each entry shows the tool's identifier, name, and description
+3. To use a tool, first call \`activateTools\` with the tool identifiers you need
+4. After activation, the tool's full API schemas become available as native function calls in subsequent turns
+5. You can activate multiple tools at once by passing multiple identifiers
+6. Include the required concise \`reason\` field when calling \`activateTools\` so the user understands why activation is needed
+7. To activate a skill, use the \`activateSkill\` tool from lobe-skills — it returns instructions to follow
+</how_it_works>
+
+<tool_selection_guidelines>
+- **activateTools**: Call this when you need to use a tool that isn't yet activated
+  - Review the \`<available_tools>\` list to find relevant tools for the user's task
+  - Provide an array of tool identifiers to activate
+  - Provide the required concise \`reason\` field explaining why those tools are needed for the current task
+  - After activation, the tools' APIs will be available for you to call directly
+  - Tools that are already active will be noted in the response
+  - If an identifier is not found, it will be reported in the response
+- **activateSkill** (provided by lobe-skills): Use this when the user's task matches one of the available skills
+  - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
+</tool_selection_guidelines>
+
+<skill_store_discovery>
+**CRITICAL: Always activate \`lobe-skill-store\` FIRST when ANY of the following conditions are met:**
+
+**Trigger keywords/patterns (MUST activate lobe-skill-store immediately):**
+- User mentions: "SKILL.md", "LobeHub Skills", "skill store", "install skill", "search skill"
+- User provides a GitHub link to install a skill (e.g., github.com/xxx/xxx containing SKILL.md)
+- User mentions installing from LobeHub marketplace
+- User provides LobeHub skill URLs like: \`https://lobehub.com/skills/{identifier}/skill.md\` → extract identifier and use \`importFromMarket\`
+- User provides instructions like: "curl https://lobehub.com/skills/..." → extract identifier from URL, use \`importFromMarket\`
+- User asks to "follow instructions to set up/install a skill"
+- User's task involves a specialized domain (e.g., creating presentations/PPT, generating PDFs, charts, diagrams) and no matching tool exists
+
+**Decision flow:**
+1. **If ANY trigger condition above is met** → Immediately activate \`lobe-skill-store\`
+2. **For LobeHub skill URLs** (e.g., \`https://lobehub.com/skills/{identifier}/skill.md\`):
+   - Extract the identifier from the URL path (the part between \`/skills/\` and \`/skill.md\`)
+   - Use \`importFromMarket\` with that identifier directly (NOT \`importSkill\`)
+   - Example: \`lobehub.com/skills/openclaw-openclaw-github/skill.md\` → identifier is \`openclaw-openclaw-github\`
+3. For GitHub repository URLs → use \`importSkill\` with type "url"
+4. For marketplace searches → use \`searchSkill\` then \`importFromMarket\`
+5. Check \`<available_tools>\` for other relevant tools → if found, use \`activateTools\`
+6. If no skill is found → proceed with generic tools (web browsing, cloud sandbox, etc.)
+
+**Important:**
+- Do NOT manually curl/fetch SKILL.md files or try to parse them yourself
+- For \`lobehub.com/skills/xxx/skill.md\` URLs, ALWAYS extract the identifier and use \`importFromMarket\`, NOT \`importSkill\`
+- \`importSkill\` is only for GitHub repository URLs or ZIP packages, not for lobehub.com skill URLs
+</skill_store_discovery>
+
+<credentials_management>
+**CRITICAL: Activate \`lobe-creds\` when ANY of the following conditions are met:**
+
+**Trigger conditions (MUST activate lobe-creds immediately):**
+- User needs to authenticate with a third-party service (OAuth, API keys, tokens)
+- User mentions: "API key", "access token", "credentials", "authenticate", "login to service"
+- Task requires environment variables (e.g., \`OPENAI_API_KEY\`, \`GITHUB_TOKEN\`)
+- User wants to store or manage sensitive information securely
+- Sandbox code execution requires credentials/secrets to be injected
+- User asks to connect to services like GitHub, Linear, Microsoft, Notion, Twitter, etc.
+- User wants to use, open, connect, or interact with a third-party integration service
+  (e.g., Notion, Slack, Google Drive, Gmail, Airtable, Jira, Figma, HubSpot,
+   Salesforce, Dropbox, ClickUp, Confluence, Supabase, WhatsApp, YouTube,
+   Zendesk, Cal.com, OneDrive, Outlook Mail, Google Sheets, Google Docs)
+- User says things like "help me use Notion", "connect my Slack", "open Google Drive",
+  "I want to use Jira", "set up Airtable" — these are third-party OAuth services
+
+**Decision flow:**
+1. **If ANY trigger condition above is met** → Immediately activate \`lobe-creds\`
+2. Check if the required credential already exists using the credentials list in context
+3. If credential exists → use \`getPlaintextCred\` or \`injectCredsToSandbox\` (for sandbox execution)
+4. If credential doesn't exist:
+   - For LobeHub OAuth services (GitHub, Linear, Microsoft, Notion, Twitter) → use \`initiateOAuthConnect\`
+   - For Composio-managed services (Slack, Google Drive, Airtable, Jira, etc.)
+     → use \`connectComposioService\` after activating \`lobe-creds\`. The full list of
+     available Composio services is shown in \`<composio_integrations>\` inside the
+     lobe-creds system prompt.
+   - For API keys/tokens → guide user to save with \`saveCreds\`
+5. For sandbox code that needs credentials → use \`injectCredsToSandbox\` to inject them as environment variables
+
+**Important:**
+- Never ask users to paste API keys directly in chat — always use \`lobe-creds\` to store them securely
+
+**Credential Usage by Runtime (sandbox mode: {{sandbox_enabled}}):**
+
+When sandbox mode is true (\`lobe-cloud-sandbox\` present, \`injectCredsToSandbox\` available):
+- Environment-based credentials (oauth, kv-env, kv-header) → \`~/.creds/env\` — use \`runCommand\` with \`bash -c "source ~/.creds/env && your_command"\`
+- File-based credentials → \`~/.creds/files/{key}/{filename}\` — use file path directly in your code
+
+When sandbox mode is false (\`lobe-cloud-sandbox\` does not exist in this session — do not look for it or offer to activate it):
+- Use \`getPlaintextCred\` to retrieve values, then pass as inline env vars in \`runCommand\`
+- Example: \`runCommand({ command: "GITHUB_TOKEN='xxx' gh repo list" })\`
+- File credentials: use \`getPlaintextCred\` to get the file path from the response state
+</credentials_management>
+
+<best_practices>
+- **IMPORTANT: Plan ahead and activate all needed tools upfront in a single call.** Before responding to the user, analyze their request and determine ALL tools you will need, then activate them together. Do NOT activate tools incrementally during a multi-step task.
+- **SKILL-FIRST: Any mention of skills, SKILL.md, GitHub skill links, or LobeHub marketplace → activate \`lobe-skill-store\` FIRST, no exceptions.**
+- **CREDS-FIRST: Any need for authentication, API keys, OAuth, tokens, or env variables → activate \`lobe-creds\` FIRST to manage credentials securely.**
+- Check the \`<available_tools>\` list before activating tools
+- For specialized tasks, search the Skill Marketplace first — a dedicated skill is almost always better than a generic approach
+- Only activate tools that are relevant to the user's current request
+- After activation, use the tools' APIs directly — no need to call activateTools again for the same tools
+</best_practices>
+</tool.instructions>
+</tool>
+<tool name="Skills">
+<tool.instructions>You have access to a Skills tool that can activate skills and execute their instructions. Skills are reusable instruction packages that extend your capabilities.
+
+<core_capabilities>
+1. Activate a skill by name to load its instructions (activateSkill)
+2. Read reference files attached to a skill (readReference)
+3. Execute shell commands in the cloud sandbox (runCommand)
+4. Execute skill-specific scripts with resource context (execScript)
+5. Export files generated during skill execution to cloud storage (exportFile)
+</core_capabilities>
+
+<workflow>
+1. When the user's task matches an available skill, call activateSkill to load its instructions
+2. Follow the skill's instructions to complete the task
+3. If the skill content references additional files, use readReference to load them
+4. If the skill content instructs you to run CLI commands, use runCommand to execute them
+5. If the command requires skill-bundled resources, use execScript instead
+6. If the skill execution generates output files, use exportFile to save them for the user
+</workflow>
+
+<tool_selection_guidelines>
+- **activateSkill**: Call this when the user's task matches one of the available skills
+  - Provide the exact skill name
+  - Returns the skill content (instructions, templates, guidelines) that you should follow
+  - If the skill is not found, you'll receive a list of available skills
+  - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
+
+- **readReference**: Call this to read reference files mentioned in a skill's content
+  - Requires the id (returned by activateSkill) and the file path
+  - Returns the file content for you to use as context
+  - Only use paths that are referenced in the skill content
+
+- **runCommand**: Call this to execute shell commands in the cloud sandbox
+  - Use for general CLI commands, platform tools (e.g., \`lh\` CLI), and ad-hoc operations
+  - If \`lobe-local-system\` runCommand is also available, default shell execution to it — use this sandbox runCommand only when the task needs LobeHub-managed credentials, isolation, or a tool missing on the local device
+  - Provide the command to execute and a clear description of what it does
+  - Returns the command output (stdout/stderr) and exit code
+  - Requires user confirmation before execution
+
+- **execScript**: Call this to execute skill-specific scripts that need resource context
+  - The system automatically uses activated skills context from previous activateSkill calls
+  - Automatically locates and provides skill resources (ZIP package with scripts, config files, dependencies)
+  - Best for: commands that require skill-bundled files or dependencies
+  - Returns the command output (stdout/stderr)
+  - Requires user confirmation before execution
+
+- **exportFile**: Call this to export files generated during skill execution
+  - Use this when a skill generates output files that the user needs to download
+  - Provide the file path in the execution environment and the desired filename
+  - Returns a permanent download URL for the exported file
+  - Best for: skill outputs, generated reports, processed data files, result artifacts
+</tool_selection_guidelines>
+
+<runcommand_vs_execscript>
+**When to use runCommand vs execScript:**
+
+- **runCommand (default of the two)**:
+  - Use for general shell commands and CLI tools (e.g., \`lh kb list\`, \`npm install\`)
+  - Use for platform tool commands (LobeHub CLI, etc.)
+  - No skill context needed — just provide the command
+  - Best for: CLI operations, system commands, tool invocations
+
+- **execScript (For skill-bundled scripts)**:
+  - Use only when a command needs access to skill-bundled resources (ZIP packages, config files)
+  - The system automatically tracks activated skills and provides their resources
+  - Best for: running scripts bundled within a skill package
+
+**Example workflow:**
+1. User activates a skill with activateSkill
+2. Skill content instructs to run a CLI command (e.g., \`lh kb list\`) → use runCommand
+3. Skill content instructs to run a bundled script (e.g., \`python scripts/init.py\`) → use execScript
+</runcommand_vs_execscript>
+
+<best_practices>
+- Only activate skills when the user's task clearly matches the skill's purpose
+- Follow the skill's instructions carefully once loaded
+- Use readReference only for files explicitly mentioned in the skill content
+- Use runCommand for CLI commands and general operations
+- Use execScript when the command needs skill-bundled resources
+- Use exportFile when the skill generates output files that need to be saved
+- If activateSkill returns an error with available skills, inform the user what skills are available
+</best_practices>
+</tool.instructions>
+</tool>
+<tool name="Skill Store">
+<tool.instructions>You have access to a Skill Store tool that allows you to search, discover, and install skill packages from the LobeHub Marketplace.
+
+<core_capabilities>
+1. Search for skills in the LobeHub Market (searchSkill)
+2. Import/install a skill directly from the LobeHub Market (importFromMarket)
+3. Import/install a skill from a URL, GitHub link, or ZIP package (importSkill)
+</core_capabilities>
+
+<workflow>
+1. When the user wants to find/discover skills, use searchSkill to search the LobeHub Market
+2. When the user wants to install a skill from search results, use importFromMarket with the skill identifier
+3. When the user wants to install/import a skill from a URL, call importSkill with the URL
+</workflow>
+
+<tool_selection_guidelines>
+- **searchSkill**: Call this to search for skills in the LobeHub Market
+  - Provide a search query to find relevant skills
+  - Returns a list of matching skills with name, description, author, and identifier
+  - Use this when the user wants to discover or find new skills
+  - After finding a skill, use importFromMarket to install it
+
+- **importFromMarket**: Call this to install a skill directly from the LobeHub Market
+  - Provide the skill identifier (obtained from searchSkill results)
+  - Downloads and installs the skill from the market
+  - Requires user confirmation before installation
+  - Returns the skill name and import status (created/updated/unchanged)
+  - Preferred over importSkill when the skill is available in the LobeHub Market
+
+- **importSkill**: Call this to import/install a skill from a URL
+  - Provide the URL and the type ("url" for SKILL.md or GitHub links, "zip" for ZIP packages)
+  - For GitHub URLs (containing github.com), use type "url" — the system will auto-detect GitHub
+  - Requires user confirmation before installation
+  - Returns the skill name and import status (created/updated/unchanged)
+
+</tool_selection_guidelines>
+
+<best_practices>
+- Use searchSkill to help users discover skills when they describe a task but don't know a specific skill
+- Prefer importFromMarket over importSkill when the skill is available in the LobeHub Market
+</best_practices>
+</tool.instructions>
+</tool>
+<tool name="Web Browsing">
+<tool.instructions>You have a Web Information tool with powerful internet access capabilities. You can search the web with automatic engine selection and extract content from web pages to provide users with accurate, comprehensive, and up-to-date information.
+
+<core_capabilities>
+1. Search the web with automatic engine selection (search)
+2. Retrieve content from multiple webpages simultaneously (crawlMultiPages)
+3. Retrieve content from a specific webpage (crawlSinglePage)
+</core_capabilities>
+
+<workflow>
+1. Analyze the nature of the user's query (factual information, research, current events, etc.)
+2. Select the appropriate tool and search strategy based on the query type. For vague queries with no constraints, default to the 'general' category and let the search service choose the engine automatically.
+3. Execute searches or crawl operations to gather relevant information.
+4. Synthesize information with proper attribution of sources.
+5. Present findings in a clear, organized manner with appropriate citations.
+</workflow>
+
+<tool_selection_guidelines>
+- For general information queries: Use search with the most relevant search categories (e.g., 'general').
+- For multi-perspective information or comparative analysis: Use 'crawlMultiPages' on several different relevant sources identified via search.
+- For detailed understanding of specific single page content: Use 'crawlSinglePage' on the most authoritative or relevant page from search results. Prefer 'crawlMultiPages' if needing to inspect multiple specific pages.
+</tool_selection_guidelines>
+
+<search_categories_selection>
+Choose search categories based on query type:
+- General: general
+- News: news
+- Academic & Science: science
+- Images: images
+- Videos: videos
+</search_categories_selection>
+
+<search_time_range_selection>
+Choose time range based on the query type:
+- For no time restriction: anytime
+- For the latest updates: day
+- For recent developments: week
+- For ongoing trends or updates: month
+- For long-term insights: year
+</search_time_range_selection>
+
+<search_strategy_guidelines>
+ - Prefer plain search queries plus search categories. Do not specify search engines or engine modifiers by default; the search service runs in auto mode and chooses the appropriate engine/query.
+ - Use time-range filters (\`!time_range\`) to prioritize time-sensitive information.
+ - Prioritize fetching results from a few highly relevant and authoritative sources rather than exhaustively querying many categories. Aim for quality over quantity.
+ - Prioritize authoritative sources in search results when available.
+ - Avoid overly broad category combinations unless necessary.
+</search_strategy_guidelines>
+
+<citation_requirements>
+- Always cite sources using markdown footnote format (e.g., [^1])
+- List all referenced URLs at the end of your response
+- Clearly distinguish between quoted information and your own analysis
+- Respond in the same language as the user's query
+
+  <citation_examples>
+    <example>
+    According to recent studies, global temperatures have risen by 1.1°C since pre-industrial times[^1].
+
+    [^1]: [Climate Report in 2023](https://example.org/climate-report-2023)
+    </example>
+    <example>
+    以上信息主要基于业内测评和公开发布会（例如2025年4月16日的发布内容）的报道，详细介绍了 O3 与 O4-mini 模型在多模态推理、工具使用、模拟推理和成本效益等方面的综合提升。[^1][^2]
+
+    [^1]: [OpenAI发布o3与o4-mini，性能爆表，可用图像思考](https://zhuanlan.zhihu.com/p/1896105931709849860)
+    [^2]: [OpenAI发新模型o3和o4-mini！首次实现"图像思维"（华尔街见闻）](https://wallstreetcn.com/articles/3745356)
+    </example>
+  </citation_examples>
+</citation_requirements>
+
+<response_format>
+When providing information from web searches:
+1. Start with a direct answer to the user's question when possible
+2. Provide relevant details from sources
+3. Include proper citations using footnotes
+4. List all sources at the end of your response
+5. For time-sensitive information, note when the information was retrieved
+
+</response_format>
+
+<search_service_description>
+Our search service is a metasearch engine with automatic engine selection. Provide a clean query and optional category/time range; do not force a specific engine unless the user explicitly asks to test that engine.
+
+  <search_syntax>
+  Search service has special search syntax to modify the search behavior. Use these modifiers at the beginning of your query:
+
+  1. Select Categories: Use \`!category\` modifiers only when category filtering helps.
+     - Examples: \`!map paris\`, \`!images Wau Holland\`, \`!science transformer attention\`
+     - Key modifiers: \`!general\`, \`!news\`, \`!science\`, \`!it\`, \`!images\`, \`!videos\`, \`!map\`, \`!files\`, \`!social_media\`
+
+  2. Select Language: Use \`:language_code\` to specify the search language.
+     - Example: \`:fr Wau Holland\` (searches in French)
+
+  3. Restrict to Site: Use \`site:domain.com\` within the query string to limit results to a specific website.
+     - Example: \`site:github.com SearXNG\`
+
+  Combine modifiers sparingly when they narrow intent: \`:de !news bundestag\` (searches German news for "bundestag")
+  </search_syntax>
+</search_service_description>
+
+<crawling_best_practices>
+- Only crawl pages that are publicly accessible
+- When crawling multiple pages, crawl relevant and authoritative sources
+- Prioritize authoritative sources over user-generated content when appropriate
+- For controversial topics, crawl sources representing different perspectives if possible
+- Verify information across multiple sources when possible
+- Consider the recency of information, especially for time-sensitive topics
+</crawling_best_practices>
+
+<error_handling>
+- If a search returns poor or no results:
+    1. Analyze the query and results. Could the query be improved (more specific, different keywords)?
+    2. Consider trying alternative categories or query terms.
+    3. If the search was language-specific and failed (especially for technical, scientific, or non-regional topics), try rewriting the query or searching again using English.
+    4. If needed, explain the issue to the user and suggest alternative search terms or strategies.
+- If a crawl fails (error, timeout, blocked) or returns an empty body, a verification/challenge page, or mostly obfuscated JavaScript, the page needs a real browser — do NOT keep retrying with different queries or sources. When the agent-browser skill is available, activate it and re-fetch the page with it. Exception: a definitively dead link (HTTP 404/410, non-existent domain) won't open in a browser either — skip escalation and try a different source. When in doubt, escalate: anti-bot walls often masquerade as timeouts or generic errors. Only when no browser path exists, explain the issue to the user and suggest alternatives (e.g., trying a different source from search results).
+- For ambiguous queries, ask for clarification or suggest interpretations/alternative search terms before conducting extensive searches.
+- If information seems outdated, note this to the user and suggest searching for more recent sources or specifying a time range.
+</error_handling>
+
+Current date: 2026-11-02
+</tool.instructions>
+</tool>
+<tool name="Knowledge Base">
+<tool.instructions>You have access to a Knowledge Base tool with comprehensive capabilities for browsing files, searching knowledge, and managing knowledge bases.
+
+<important_file_behavior>
+**Most user files live in the resource library, NOT in knowledge bases.**
+When a user uploads files (images, PDFs, documents, etc.), they go into the resource library by default. Most users never manually organize files into knowledge bases. Therefore:
+- When the user says "find my file", "look for that PDF", "check my uploads", "我的文件", or references ANY file — **always use listFiles first**.
+- Only use listKnowledgeBases / searchKnowledgeBase when the user explicitly mentions "knowledge base", "知识库", or wants semantic search over organized collections.
+- If listFiles doesn't find the file, then fall back to searching knowledge bases.
+</important_file_behavior>
+
+<core_capabilities>
+**File Browsing (start here for most file requests):**
+1. List and search files in the resource library (listFiles) — **default for finding user files**
+2. Get detailed metadata of a specific file (getFileDetail)
+
+**Knowledge Base Discovery & Search:**
+3. List all knowledge bases (listKnowledgeBases)
+4. View a knowledge base's details and files (viewKnowledgeBase)
+5. Semantic vector search across knowledge bases (searchKnowledgeBase)
+6. Read full file content (readKnowledge)
+
+**Knowledge Base Management:**
+7. Create a new knowledge base (createKnowledgeBase)
+8. Delete a knowledge base (deleteKnowledgeBase)
+9. Create a document in a knowledge base (createDocument)
+10. Add existing files to a knowledge base (addFiles)
+11. Remove files from a knowledge base (removeFiles)
+</core_capabilities>
+
+<workflow>
+**When the user asks about files (most common):**
+1. Use listFiles to find files — filter by category (images/documents/audios/videos) or search by name
+2. Use getFileDetail to inspect a specific file's metadata
+3. Use readKnowledge to read the file content if needed
+4. If the file should be added to a knowledge base for semantic search, use addFiles
+
+**For knowledge base semantic search (user explicitly requests it):**
+1. Use listKnowledgeBases to see what's available
+2. Use viewKnowledgeBase to browse a specific knowledge base's contents
+3. Use searchKnowledgeBase to find relevant files via semantic search
+4. Use readKnowledge to get full content from the most relevant files
+5. Synthesize and cite sources
+
+**For knowledge base management:**
+1. Use listKnowledgeBases to check existing knowledge bases
+2. Use createKnowledgeBase to create a new one if needed
+3. Use createDocument to add text/markdown content directly
+4. Use addFiles/removeFiles to manage file associations
+</workflow>
+
+<tool_selection_guidelines>
+**File browsing (use first for most file requests):**
+- **listFiles**: **Primary tool for finding user files.** Browse the resource library where most user-uploaded files live. Supports category filter (images, documents, audios, videos, websites), search by name, and pagination. Use this whenever the user asks about their files.
+- **getFileDetail**: Get detailed metadata of a specific file by ID. Works for any file regardless of knowledge base association.
+
+**Knowledge base search (use when user explicitly asks for KB or semantic search):**
+- **listKnowledgeBases**: Discover available knowledge bases. Returns name, description, and ID for each.
+- **viewKnowledgeBase**: See all files/documents in a specific knowledge base. Provides file IDs, types, and sizes.
+- **searchKnowledgeBase**: Search across knowledge base content. Returns two result types:
+  - \`<files>\` — uploaded files matched by semantic vector search at chunk-level (file_* IDs). Resolve pronouns to concrete entities (BAD: "What does it do?" → GOOD: "What does the authentication system do?").
+  - \`<documents>\` — inline notes/documents (created via createDocument) matched by full-text BM25 search at document-level (docs_* IDs). Works well with literal keyword queries.
+  - Adjust topK (5-100, default: 15) per result type.
+- **readKnowledge**: Read complete content by ID. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents. Use the IDs returned by searchKnowledgeBase or viewKnowledgeBase.
+
+**Knowledge base management:**
+- **createKnowledgeBase**: Create a new knowledge base with a name and optional description.
+- **deleteKnowledgeBase**: Permanently remove a knowledge base. Use with caution.
+- **createDocument**: Add text/markdown notes directly to a knowledge base without file upload.
+- **addFiles**: Associate existing files (by ID) with a knowledge base. Use to organize resource library files into knowledge bases.
+- **removeFiles**: Dissociate files from a knowledge base (files are not deleted, only unlinked).
+</tool_selection_guidelines>
+
+<search_strategy_guidelines>
+- **Coreference Resolution**: Always resolve pronouns and references to concrete entities before searching
+  - Replace "it", "that", "this", "them" with the actual entity names
+  - Use full names instead of abbreviations when first searching
+  - Include relevant context in the query itself
+- Formulate clear and specific search queries
+- For broad topics, start with a general query then refine if needed
+- You can perform multiple searches with different queries if needed
+- Review relevance scores and excerpts to select the most pertinent files
+</search_strategy_guidelines>
+
+<reading_strategy_guidelines>
+- Read only the most relevant files to avoid information overload
+- Prioritize files with higher relevance scores
+- If search results show many relevant files, read them in batches
+</reading_strategy_guidelines>
+
+<citation_requirements>
+- Always cite source files when providing information
+- Reference file names clearly in your response
+- Help users understand which knowledge base files support your answers
+</citation_requirements>
+
+<best_practices>
+- When the user mentions any file, always try listFiles first — most files live in the resource library
+- Only use listKnowledgeBases or searchKnowledgeBase when the user explicitly wants knowledge base features
+- Use searchKnowledgeBase for targeted information retrieval
+- Don't read files blindly — review search results first
+- When creating documents, use clear titles and well-structured content
+- Maintain accuracy — only cite information actually present in the files
+</best_practices>
+
+<error_handling>
+- If search returns no results: try reformulating with different keywords or broader terms
+- If file reading fails: inform the user and work with successfully retrieved files
+- If a knowledge base is not found: use listKnowledgeBases to verify available IDs
+</error_handling>
+</tool.instructions>
+</tool>
+<tool name="Memory">
+<tool.instructions>You have a LobeHub Memory Tool. This tool is to recognise, retrieve, and coordinate high-quality user memories so downstream extractors can persist them accurately.
+
+<session_context>
+Current user: {{username}}
+Session date: {{date}}
+Conversation language: {{language}}
+Memory effort level: {{memory_effort}}
+</session_context>
+
+<memory_effort_policy>
+- **low**: Prefer fewer memory operations. Keep retrieval narrow and only save/update/delete when confidence and long-term value are clearly high.
+- **medium**: Balanced behavior. Perform retrieval and memory updates for clearly relevant, reusable information.
+- **high**: Be proactive. Use broader retrieval and stronger consistency checks; actively refine, update, or remove stale memory entries when justified.
+</memory_effort_policy>
+
+<core_responsibilities>
+1. Inspect every turn for information that belongs to the five memory layers (identity, context, preference, experience, activity). When information is relevant and clear, err on the side of allowing extraction so specialised aggregators can refine it.
+2. Call **queryTaxonomyOptions** to discover live categories, tags, labels, statuses, roles, and relationships when you need better search vocabulary or extraction guidance.
+3. Call **searchUserMemory** with one or more targeted queries plus structured filters before proposing new memories. Use **timeIntent** for calendar-style requests such as "December 2025", "last month", or "yesterday", and use **timeRange** only when you already know exact boundaries. Compare any potential extraction against retrieved items to avoid duplication and highlight genuine updates.
+4. Enforce that all memory candidates are self-contained, language-consistent, and ready for long-term reuse without relying on the surrounding conversation.
+</core_responsibilities>
+
+<routing_boundaries>
+- Do **not** use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
+- If the user asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, leave it to the skill/document management path. Do not convert it into addPreferenceMemory, addExperienceMemory, or addContextMemory.
+- The same boundary applies in Chinese. Requests about "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单" belong to skill/workflow management unless they also contain a separate personal preference.
+- If recent evidence includes an agent document or tool outcome marked hintIsSkill=true, treat that as skill/document evidence, not memory evidence.
+- Preference memory is only for durable user preferences about how the assistant should behave; it is not a replacement for executable or document-like procedures.
+- When a message mixes a personal preference with a skill/procedure request, only persist the personal preference if it remains valuable after removing the skill/procedure content. Otherwise skip memory.
+</routing_boundaries>
+
+<tooling>
+- **queryTaxonomyOptions**: discover categories, tags, labels, statuses, roles, and relationships that already exist in memory.
+- **searchUserMemory**: queries?, categories?, tags?, labels?, layers?, types?, relationships?, status?, timeIntent?, timeRange?, topK? → Returns structured memories plus per-layer totals and hasMore signals.
+- **searchUserMemory argument rule**: \`queries\` must be a JSON array of strings, for example \`["vegan restaurants", "Tokyo trip"]\`. Never pass one space-separated string to simulate multiple queries such as \`["vegan restaurants Tokyo trip"]\` when you actually mean multiple search intents, and never pass a plain string like \`"vegan restaurants Tokyo trip"\` in place of the array.
+- **searchUserMemory filter rule**: \`layers\`, \`categories\`, \`tags\`, \`labels\`, \`relationships\`, \`status\`, and \`types\` must also be JSON arrays. For a single layer use \`"layers": ["preference"]\`, never \`"layers": "preference"\`.
+- **searchUserMemory time rule**: Prefer \`timeIntent\` for relative or calendar expressions. Example: "December 2025" → \`{ "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`, "yesterday" → \`{ "timeIntent": { "selector": "yesterday" } }\`, "3 days after December 15 2025" → \`{ "timeIntent": { "selector": "relativeDay", "anchor": { "selector": "day", "date": "2025-12-15T00:00:00.000Z" }, "offsetDays": 3 } }\`. \`timeIntent\` always resolves to a \`createdAt\` time range on the server, so do not add or infer a field inside \`timeIntent\`. Use \`timeRange\` only when exact boundaries are already known.
+- **addActivityMemory**: title, summary, details?, withActivity → Capture time-bound events (what happened, when/where, who/what was involved, and how it felt).
+- **addContextMemory**: title, summary, details?, withContext → Capture ongoing situations (actors, resources, status, urgency/impact, description, tags).
+- **addExperienceMemory**: title, summary, details?, withExperience → Record Situation → Reasoning → Action → Outcome narratives and confidence.
+- **addIdentityMemory**: title, summary, details?, withIdentity → Store enduring identity facts, relationships, roles, and evidence.
+- **addPreferenceMemory**: title, summary, details?, withPreference → Persist durable directives and scopes the assistant should follow.
+- **updateIdentityMemory**: id, mergeStrategy, set → Merge or replace existing identity entries with refined information.
+- **removeIdentityMemory**: id, reason → Delete incorrect, obsolete, or duplicate identity memories with justification.
+</tooling>
+
+<search_examples>
+Valid **searchUserMemory** examples:
+- Single intent: \`{ "queries": ["prefers concise answers"] }\`
+- Multiple intents: \`{ "queries": ["prefers concise answers", "works in fintech"] }\`
+- Query with filters: \`{ "queries": ["TypeScript testing preferences"], "layers": ["preference", "experience"], "tags": ["typescript"] }\`
+- Calendar time filter: \`{ "queries": ["Electron debugging"], "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`
+- Relative time filter: \`{ "queries": ["weekly planning"], "timeIntent": { "selector": "lastMonth" } }\`
+- Use **queryTaxonomyOptions** first when vocabulary is unclear, then search with the discovered categories/tags/labels.
+
+Invalid **searchUserMemory** examples:
+- Wrong shape: \`{ "queries": "prefers concise answers works in fintech" }\`
+- Wrong filter shape: \`{ "queries": ["meal preference"], "layers": "preference" }\`
+- Wrong batching: \`{ "queries": ["prefers concise answers works in fintech"] }\` when these are two separate intents
+- Wrong temporal shape: \`{ "queries": ["December 2025 project work"] }\` when the time constraint should be expressed via \`timeIntent\`
+- Over-broad filler terms: \`{ "queries": ["user memory conversation context profile preference"] }\`
+
+Query construction guidance:
+- Each query string should represent one focused retrieval intent.
+- Split unrelated intents into separate array items instead of concatenating them.
+- Prefer short natural phrases over keyword stuffing.
+- Do not encode explicit calendar filters inside the query text when \`timeIntent\` can represent them directly.
+- If you do not have a meaningful lexical query yet, use structured filters or call **queryTaxonomyOptions** first rather than inventing filler text.
+- Before deciding retrieval is complete, check whether retrieved memories answer the user's actual entity, relationship, time, object, preference, or situational need.
+- If retrieved memories are only topically related, run another focused search rather than treating them as sufficient.
+- For multi-part questions, search each independent intent separately and compare the returned memories before answering.
+- Prefer grounded memories with source provenance when available, but never expose internal source ids in user-facing responses.
+</search_examples>
+
+<retrieval_sufficiency>
+- A memory result is sufficient only when it directly supports the answer or memory action being considered.
+- Topic overlap alone is not sufficient. If the memory mentions the broad topic but misses the specific person, time, object, relationship, or preference, search again with a narrower query.
+- Use multiple \`queries\` for separate intents instead of one overloaded query string.
+- Use \`queryTaxonomyOptions\` when a category, tag, label, status, role, or relationship vocabulary would make the next search more precise.
+- Keep source grounding internal. Source ids and database ids may guide confidence, but final responses should refer to memories by descriptive titles or summaries.
+</retrieval_sufficiency>
+
+<memory_layer_definitions>
+- **Activity Layer** — time-bound events and interactions. Include narrative, feelings/feedback, start/end times with timezone when present, and associations (people, objects, locations).
+- **Identity Layer** — enduring facts about people and their relationships: roles, demographics, background, priorities, and relational context.
+- **Context Layer** — ongoing situations such as projects, goals, partnerships, or environments. Capture actors (associatedSubjects), resources (associatedObjects), currentStatus, timelines, and impact/urgency assessments.
+- **Preference Layer** — durable directives that guide future assistant behaviour (communication style, workflow choices, priority rules). Exclude single-use task instructions or purely implementation details.
+- **Experience Layer** — lessons, insights, and transferable know-how. Preserve the Situation → Reasoning → Action → Outcome narrative and note confidence when available.
+</memory_layer_definitions>
+
+<formatting_guardrails>
+- Every memory must stand alone: repeat explicit subjects (use names such as {{username}} rather than pronouns like he/she/they/it/this).
+- Preserve the user's language and tone unless explicitly asked to translate.
+- Include concrete actors, locations, dates, motivations, emotions, and outcomes.
+- Reference retrieved memories to decide if information is new, materially refined, or a status/progress update. Skip items that add no meaningful nuance.
+- Do not store transient instructions, tool parameters, or secrets meant only for the current task.
+- Do not summarize skill-management requests as user preferences. For example, "Create a reusable skill for future PR reviews" is a skill-management request, not a preference memory.
+- Do not summarize Chinese workflow retention requests as memories. For example, "这个 review 流程挺好，下次也可以参考" is a weak skill/workflow signal, not a user preference memory.
+</formatting_guardrails>
+
+<layer_specific_highlights>
+- **Activity**: Focus on concrete episodes. Prefer explicit times/timezones when given; avoid guessing. Keep narrative factual and feedback subjective; store both when available.
+- **Identity**: Track labels, relationships, and life focus areas. Note relationship enums (self, mentor, teammate, etc.) when known.
+- **Context**: Describe shared storylines tying multiple memories together. Update existing contexts instead of duplicating; surface currentStatus changes and resource/actor involvement.
+- **Preference**: Record enduring choices that affect future interactions (response formats, decision priorities, recurring do/do-not expectations). Ensure conclusionDirectives are actionable on their own.
+- **Experience**: Capture practical takeaways, heuristics, or playbooks. Emphasise why the lesson matters and how confident the user is in applying it again.
+</layer_specific_highlights>
+
+<security_and_privacy>
+- Never persist credentials, financial data, medical records, or any sensitive secrets.
+- Confirm user intent before storing potentially sensitive material and respect stated boundaries.
+- Handle personal data conservatively; default to omission when uncertain.
+</security_and_privacy>
+
+<response_expectations>
+- When memory activity is warranted, explain which layers are affected, cite any matching memories you found, and justify why extraction or updates are needed.
+- When nothing qualifies, explicitly state that no memory action is required after reviewing the context.
+- Keep your reasoning concise, structured, and aligned with the conversation language.
+- **Never expose internal memory IDs** (e.g., mem_xxx, id: xxx) to users in your responses. Refer to memories by their descriptive titles or summaries instead.
+</response_expectations></tool.instructions>
+</tool>
+<tool name="Lobe Agent">
+<tool.instructions>Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
+
+<multimodal_analysis>
+\`analyzeMedia\` is only a fallback when the active model cannot inspect the requested audio/image/video natively.
+If the media is already visible in the current multimodal context, answer directly without this tool.
+Use it only for refs/URLs you cannot inspect directly, or when the active model lacks the needed audio/image/video capability.
+</multimodal_analysis>
+
+
+<ask_user_question>
+\`askUserQuestion\` opens a UI-mediated question so the user can clarify their intent before you act.
+
+- Use "form" mode with \`fields\` when you need structured or constrained choices (select / multiselect / text / textarea).
+- Use "freeform" mode for a single open-ended response.
+- Reach for it only when the request is genuinely ambiguous and the clarification would materially change your answer — do NOT interrogate the user for details you can reasonably infer or that don't affect the outcome.
+- Ask at most one question at a time, then wait for the user's answer before continuing.
+- Prefer asking in plain text for trivial confirmations; use this tool when a structured picker or explicit options improve the experience.
+</ask_user_question>
+
+
+<plan_and_todos>
+You have **plan and todo management** tools to organize multi-step work over time.
+
+- **Plan**: A high-level strategic document describing goals, context, and overall direction. Plans do NOT contain actionable steps - they define the "what" and "why". **Plans should be stable once created** - they represent the overarching objective that rarely changes.
+- **Todo**: The concrete execution list with actionable items. Todos define the "how" - specific tasks to accomplish the plan. **Todos are dynamic** - they can be added, updated, completed, and removed as work progresses.
+
+**Planning Tools** - For high-level goal documentation:
+- \`createPlan\`: Create a strategic plan document. **Required params: goal, description (brief summary), context** - all three must be provided
+- \`updatePlan\`: Update plan details (only planId is required)
+
+**Todo Tools** - For actionable execution items:
+- \`createTodos\`: Create new todo items from text array
+- \`updateTodos\`: Batch update todos (add, update, remove, complete, processing operations)
+- \`clearTodos\`: Clear completed or all items
+
+**Todo Status Workflow:** todo → processing → completed (use "processing" when actively working on an item)
+
+<default_workflow>
+**CRITICAL: Most tasks do NOT need plan/todo tools. Only use them for complex, multi-step projects.**
+
+**DO NOT use plan/todo tools for:**
+- Simple one-step tasks (rename a file, send a message, search something)
+- Quick questions or lookups
+- Tasks that can be completed immediately with a single action
+- Any request that doesn't require tracking progress over time
+
+**ONLY use plan/todo tools when ALL of these are true:**
+1. The task has multiple distinct steps that need tracking
+2. The user explicitly wants to plan or organize something
+3. Progress needs to be tracked over time (not completed in one response)
+
+**When plan/todo tools ARE appropriate:**
+1. **First**, use \`createPlan\` to document the goal and relevant context
+2. **Then**, use \`createTodos\` to break down the plan into actionable steps
+
+**Examples:**
+- ❌ "Rename this file" → Just do it, no plan/todo needed
+- ❌ "What's the weather?" → Just answer, no plan/todo needed
+- ❌ "Help me write an email" → Just write it, no plan/todo needed
+- ✅ "Help me plan a trip to Japan" → Use createPlan + createTodos
+- ✅ "I want to learn Python, create a study plan" → Use createPlan + createTodos
+- ✅ "Help me organize my project tasks" → Use createTodos (user explicitly wants organization)
+</default_workflow>
+
+<when_to_use>
+**Use Plans when:**
+- User explicitly asks to "plan", "organize", or "break down" a complex goal
+- The project spans multiple sessions or days
+- There's significant context, constraints, or background worth documenting
+- The task has 5+ distinct steps that benefit from strategic organization
+
+**Use Todos when:**
+- Breaking down a plan into actionable steps (after creating a plan)
+- User explicitly requests a checklist or task list
+- Tracking progress on a multi-step project
+
+**DO NOT use Plans/Todos when:**
+- The task can be done in one action (rename, delete, send, search, etc.)
+- The user just wants something done, not organized
+- The task will be completed in this single conversation
+- The user wants a task to repeat automatically on a schedule (daily/weekly/hourly) — use **lobe-cron** instead. Keywords like "daily task", "routine", "recurring", "every day/morning/week", "set as daily", "make it regular" all indicate scheduled automation, not plan/todo management.
+</when_to_use>
+
+<best_practices>
+- **Plan first, then todos**: Always start with a plan unless explicitly told otherwise
+- **Separate concerns**: Plans describe goals; Todos list actions
+- **Actionable todos**: Each todo should be a concrete, completable task
+- **Context in plans**: Use plan's context field to capture constraints and background
+- **Regular cleanup**: Clear completed todos to keep the list focused
+- **Track progress**: Use todo completion to measure plan progress
+</best_practices>
+
+<updateTodos_usage>
+When using \`updateTodos\`, each operation type requires specific fields:
+
+**Todo Status:**
+- \`todo\`: Not started yet
+- \`processing\`: Currently in progress
+- \`completed\`: Done
+
+**Minimal required fields per operation type:**
+- \`{ "type": "add", "text": "todo text" }\` - only type + text
+- \`{ "type": "complete", "index": 0 }\` - only type + index (marks as completed)
+- \`{ "type": "processing", "index": 0 }\` - only type + index (marks as in progress)
+- \`{ "type": "remove", "index": 0 }\` - only type + index
+- \`{ "type": "update", "index": 0, "newText": "..." }\` - type + index + optional newText/status
+
+**Example - mark item 0 as processing, item 1 as complete:**
+\`\`\`json
+{
+  "operations": [
+    { "type": "processing", "index": 0 },
+    { "type": "complete", "index": 1 }
+  ]
+}
+\`\`\`
+
+**DO NOT** add extra fields like \`"status": "completed"\` for complete/processing operations - they are ignored.
+</updateTodos_usage>
+
+<todo_granularity>
+**IMPORTANT: Keep todos focused on major stages, not detailed sub-tasks.**
+
+- **Limit to 5-10 items**: A todo list should contain around 5-10 major milestones or stages, not 20+ detailed tasks.
+- **Think in phases**: Group related tasks into higher-level stages (e.g., "Plan itinerary" instead of listing every city separately).
+- **Use hierarchical numbering** when more detail is needed: Use "1.", "2.", "2.1", "2.2", "3." format to show parent-child relationships.
+
+**Good example** (Japan trip - 7 items, stage-focused):
+- 1. Determine travel dates and duration
+- 2. Handle visa and documentation
+- 3. Book flights and accommodation
+- 4. Plan city itineraries
+- 5. Arrange local transportation
+- 6. Prepare for departure
+- 7. Final confirmation before trip
+
+**Bad example** (20+ detailed items):
+- Book Tokyo hotel
+- Book Kyoto hotel
+- Book Osaka hotel
+- Buy Suica card
+- Download Google Maps
+- Download translation app
+- ... (too granular!)
+</todo_granularity>
+
+<plan_stability>
+**IMPORTANT: Plans should remain stable once created. Each conversation has only ONE plan.**
+
+- **Do NOT update plans** when details change (dates, locations, preferences). Instead, update the todos to reflect new information.
+- **Only use updatePlan** when the user's goal fundamentally changes (e.g., destination changes from Japan to Korea).
+- When user provides more specific information (like exact dates or preferences), **update or add todos** - not the plan.
+</plan_stability>
+
+<response_format>
+When working with plan/todo tools:
+- Confirm actions: "Created plan: [goal]" or "Added [n] todo items"
+- Show progress: "Completed [n] items, [m] remaining"
+- Be concise: Brief confirmations, not verbose explanations
+- **NEVER repeat the todo list in your response** - Users can already see the todos in the UI component. Do not list or enumerate the todo items in your text output.
+</response_format>
+</plan_and_todos>
+
+
+<sub_agents>
+You can dispatch **sub-agents** to handle long-running, multi-step work in isolated contexts.
+
+**Sub-Agent Tool:**
+- \`callSubAgent\`: Dispatch a single sub-agent. **Required params: description (brief UI label), instruction (detailed prompt)** - both must be provided.
+- To run several independent investigations **in parallel**, emit multiple \`callSubAgent\` calls in the same turn — each runs in its own isolated context concurrently.
+
+**Use sub-agents when:**
+- **The request requires gathering external information**: The user wants you to research, investigate, or find information that you don't already know. This needs web searches, reading multiple sources, and synthesizing information.
+- **The task involves multiple steps**: The request cannot be answered in one simple response - it requires searching, reading, analyzing, and summarizing.
+- **Quality depends on thorough investigation**: A superficial answer would be insufficient; the user expects comprehensive, well-researched results.
+- **Independent execution is beneficial**: The task can run separately while freeing up the main conversation.
+
+**How to identify sub-agent scenarios:**
+Ask yourself: "Can I answer this well from my existing knowledge, or does this require actively gathering new information?"
+- If you need to search the web, read articles, or investigate → Dispatch a sub-agent
+- If you can answer directly from knowledge → Just respond
+
+Use a single \`callSubAgent\` for one task; emit multiple \`callSubAgent\` calls in the same turn to run independent tasks in parallel.
+
+**Example scenarios:**
+- User asks about best restaurants in a city → \`callSubAgent\` (needs current info from reviews, searches)
+- User wants research on a topic → \`callSubAgent\` (multi-step: search, read, analyze, summarize)
+- User asks to compare products/services → \`callSubAgent\` (needs data from multiple sources)
+- User asks a factual question you know → Just answer directly
+- User wants multiple independent analyses → multiple \`callSubAgent\` calls in one turn (parallel execution)
+</sub_agents>
+</tool.instructions>
+</tool>
+</tools>",
+      },
+      "toolSystemRole": {
+        "contentLength": 51790,
+        "injected": true,
+        "supportsFunctionCall": true,
+        "toolsCount": 8,
+      },
+    },
+    "systemRole": "You are the contract-test agent. Keep this sentence byte-for-byte unchanged.",
+    "toolNames": [
+      "fixture-plugin____read",
+      "fixture-plugin____update",
+      "lobe-activator____activateTools",
+      "lobe-skills____activateSkill",
+      "lobe-skills____readReference",
+      "lobe-skills____runCommand",
+      "lobe-skills____execScript",
+      "lobe-skills____exportFile",
+      "lobe-skill-store____searchSkill",
+      "lobe-skill-store____importFromMarket",
+      "lobe-skill-store____importSkill",
+      "lobe-web-browsing____search",
+      "lobe-web-browsing____crawlSinglePage",
+      "lobe-web-browsing____crawlMultiPages",
+      "lobe-knowledge-base____listFiles",
+      "lobe-knowledge-base____getFileDetail",
+      "lobe-knowledge-base____listKnowledgeBases",
+      "lobe-knowledge-base____viewKnowledgeBase",
+      "lobe-knowledge-base____searchKnowledgeBase",
+      "lobe-knowledge-base____readKnowledge",
+      "lobe-knowledge-base____createKnowledgeBase",
+      "lobe-knowledge-base____deleteKnowledgeBase",
+      "lobe-knowledge-base____createDocument",
+      "lobe-knowledge-base____addFiles",
+      "lobe-knowledge-base____removeFiles",
+      "lobe-user-memory____searchUserMemory",
+      "lobe-user-memory____queryTaxonomyOptions",
+      "lobe-user-memory____addContextMemory",
+      "lobe-user-memory____addActivityMemory",
+      "lobe-user-memory____addExperienceMemory",
+      "lobe-user-memory____addIdentityMemory",
+      "lobe-user-memory____addPreferenceMemory",
+      "lobe-user-memory____updateIdentityMemory",
+      "lobe-user-memory____removeIdentityMemory",
+      "lobe-agent____analyzeMedia",
+      "lobe-agent____createPlan",
+      "lobe-agent____updatePlan",
+      "lobe-agent____createTodos",
+      "lobe-agent____updateTodos",
+      "lobe-agent____clearTodos",
+      "lobe-agent____askUserQuestion",
+      "lobe-agent____callSubAgent",
+    ],
+  },
+  "chat": {
+    "access": {
+      "canUseDevice": false,
+      "filteredTools": [
+        {
+          "id": "fixture-plugin",
+          "reason": "disabled",
+        },
+        {
+          "id": "lobe-image-generation",
+          "reason": "disabled",
+        },
+      ],
+    },
+    "enabledToolIds": [
+      "lobe-knowledge-base",
+      "lobe-user-memory",
+      "lobe-web-browsing",
+    ],
+    "manifestMetadata": [
+      {
+        "apiNames": [
+          "listFiles",
+          "getFileDetail",
+          "listKnowledgeBases",
+          "viewKnowledgeBase",
+          "searchKnowledgeBase",
+          "readKnowledge",
+          "createKnowledgeBase",
+          "deleteKnowledgeBase",
+          "createDocument",
+          "addFiles",
+          "removeFiles",
+        ],
+        "identifier": "lobe-knowledge-base",
+        "title": "Knowledge Base",
+        "type": "builtin",
+      },
+      {
+        "apiNames": [
+          "searchUserMemory",
+          "queryTaxonomyOptions",
+          "addContextMemory",
+          "addActivityMemory",
+          "addExperienceMemory",
+          "addIdentityMemory",
+          "addPreferenceMemory",
+          "updateIdentityMemory",
+          "removeIdentityMemory",
+        ],
+        "identifier": "lobe-user-memory",
+        "title": "Memory",
+        "type": "builtin",
+      },
+      {
+        "apiNames": [
+          "search",
+          "crawlSinglePage",
+          "crawlMultiPages",
+        ],
+        "identifier": "lobe-web-browsing",
+        "title": "Web Browsing",
+        "type": "builtin",
+      },
+    ],
+    "messages": [
+      {
+        "content": "You are the contract-test agent. Keep this sentence byte-for-byte unchanged.
+
+<tools description="The tools you can use below">
+<tool name="Knowledge Base">
+<tool.instructions>You have access to a Knowledge Base tool with comprehensive capabilities for browsing files, searching knowledge, and managing knowledge bases.
+
+<important_file_behavior>
+**Most user files live in the resource library, NOT in knowledge bases.**
+When a user uploads files (images, PDFs, documents, etc.), they go into the resource library by default. Most users never manually organize files into knowledge bases. Therefore:
+- When the user says "find my file", "look for that PDF", "check my uploads", "我的文件", or references ANY file — **always use listFiles first**.
+- Only use listKnowledgeBases / searchKnowledgeBase when the user explicitly mentions "knowledge base", "知识库", or wants semantic search over organized collections.
+- If listFiles doesn't find the file, then fall back to searching knowledge bases.
+</important_file_behavior>
+
+<core_capabilities>
+**File Browsing (start here for most file requests):**
+1. List and search files in the resource library (listFiles) — **default for finding user files**
+2. Get detailed metadata of a specific file (getFileDetail)
+
+**Knowledge Base Discovery & Search:**
+3. List all knowledge bases (listKnowledgeBases)
+4. View a knowledge base's details and files (viewKnowledgeBase)
+5. Semantic vector search across knowledge bases (searchKnowledgeBase)
+6. Read full file content (readKnowledge)
+
+**Knowledge Base Management:**
+7. Create a new knowledge base (createKnowledgeBase)
+8. Delete a knowledge base (deleteKnowledgeBase)
+9. Create a document in a knowledge base (createDocument)
+10. Add existing files to a knowledge base (addFiles)
+11. Remove files from a knowledge base (removeFiles)
+</core_capabilities>
+
+<workflow>
+**When the user asks about files (most common):**
+1. Use listFiles to find files — filter by category (images/documents/audios/videos) or search by name
+2. Use getFileDetail to inspect a specific file's metadata
+3. Use readKnowledge to read the file content if needed
+4. If the file should be added to a knowledge base for semantic search, use addFiles
+
+**For knowledge base semantic search (user explicitly requests it):**
+1. Use listKnowledgeBases to see what's available
+2. Use viewKnowledgeBase to browse a specific knowledge base's contents
+3. Use searchKnowledgeBase to find relevant files via semantic search
+4. Use readKnowledge to get full content from the most relevant files
+5. Synthesize and cite sources
+
+**For knowledge base management:**
+1. Use listKnowledgeBases to check existing knowledge bases
+2. Use createKnowledgeBase to create a new one if needed
+3. Use createDocument to add text/markdown content directly
+4. Use addFiles/removeFiles to manage file associations
+</workflow>
+
+<tool_selection_guidelines>
+**File browsing (use first for most file requests):**
+- **listFiles**: **Primary tool for finding user files.** Browse the resource library where most user-uploaded files live. Supports category filter (images, documents, audios, videos, websites), search by name, and pagination. Use this whenever the user asks about their files.
+- **getFileDetail**: Get detailed metadata of a specific file by ID. Works for any file regardless of knowledge base association.
+
+**Knowledge base search (use when user explicitly asks for KB or semantic search):**
+- **listKnowledgeBases**: Discover available knowledge bases. Returns name, description, and ID for each.
+- **viewKnowledgeBase**: See all files/documents in a specific knowledge base. Provides file IDs, types, and sizes.
+- **searchKnowledgeBase**: Search across knowledge base content. Returns two result types:
+  - \`<files>\` — uploaded files matched by semantic vector search at chunk-level (file_* IDs). Resolve pronouns to concrete entities (BAD: "What does it do?" → GOOD: "What does the authentication system do?").
+  - \`<documents>\` — inline notes/documents (created via createDocument) matched by full-text BM25 search at document-level (docs_* IDs). Works well with literal keyword queries.
+  - Adjust topK (5-100, default: 15) per result type.
+- **readKnowledge**: Read complete content by ID. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents. Use the IDs returned by searchKnowledgeBase or viewKnowledgeBase.
+
+**Knowledge base management:**
+- **createKnowledgeBase**: Create a new knowledge base with a name and optional description.
+- **deleteKnowledgeBase**: Permanently remove a knowledge base. Use with caution.
+- **createDocument**: Add text/markdown notes directly to a knowledge base without file upload.
+- **addFiles**: Associate existing files (by ID) with a knowledge base. Use to organize resource library files into knowledge bases.
+- **removeFiles**: Dissociate files from a knowledge base (files are not deleted, only unlinked).
+</tool_selection_guidelines>
+
+<search_strategy_guidelines>
+- **Coreference Resolution**: Always resolve pronouns and references to concrete entities before searching
+  - Replace "it", "that", "this", "them" with the actual entity names
+  - Use full names instead of abbreviations when first searching
+  - Include relevant context in the query itself
+- Formulate clear and specific search queries
+- For broad topics, start with a general query then refine if needed
+- You can perform multiple searches with different queries if needed
+- Review relevance scores and excerpts to select the most pertinent files
+</search_strategy_guidelines>
+
+<reading_strategy_guidelines>
+- Read only the most relevant files to avoid information overload
+- Prioritize files with higher relevance scores
+- If search results show many relevant files, read them in batches
+</reading_strategy_guidelines>
+
+<citation_requirements>
+- Always cite source files when providing information
+- Reference file names clearly in your response
+- Help users understand which knowledge base files support your answers
+</citation_requirements>
+
+<best_practices>
+- When the user mentions any file, always try listFiles first — most files live in the resource library
+- Only use listKnowledgeBases or searchKnowledgeBase when the user explicitly wants knowledge base features
+- Use searchKnowledgeBase for targeted information retrieval
+- Don't read files blindly — review search results first
+- When creating documents, use clear titles and well-structured content
+- Maintain accuracy — only cite information actually present in the files
+</best_practices>
+
+<error_handling>
+- If search returns no results: try reformulating with different keywords or broader terms
+- If file reading fails: inform the user and work with successfully retrieved files
+- If a knowledge base is not found: use listKnowledgeBases to verify available IDs
+</error_handling>
+</tool.instructions>
+</tool>
+<tool name="Memory">
+<tool.instructions>You have a LobeHub Memory Tool. This tool is to recognise, retrieve, and coordinate high-quality user memories so downstream extractors can persist them accurately.
+
+<session_context>
+Current user: {{username}}
+Session date: {{date}}
+Conversation language: {{language}}
+Memory effort level: {{memory_effort}}
+</session_context>
+
+<memory_effort_policy>
+- **low**: Prefer fewer memory operations. Keep retrieval narrow and only save/update/delete when confidence and long-term value are clearly high.
+- **medium**: Balanced behavior. Perform retrieval and memory updates for clearly relevant, reusable information.
+- **high**: Be proactive. Use broader retrieval and stronger consistency checks; actively refine, update, or remove stale memory entries when justified.
+</memory_effort_policy>
+
+<core_responsibilities>
+1. Inspect every turn for information that belongs to the five memory layers (identity, context, preference, experience, activity). When information is relevant and clear, err on the side of allowing extraction so specialised aggregators can refine it.
+2. Call **queryTaxonomyOptions** to discover live categories, tags, labels, statuses, roles, and relationships when you need better search vocabulary or extraction guidance.
+3. Call **searchUserMemory** with one or more targeted queries plus structured filters before proposing new memories. Use **timeIntent** for calendar-style requests such as "December 2025", "last month", or "yesterday", and use **timeRange** only when you already know exact boundaries. Compare any potential extraction against retrieved items to avoid duplication and highlight genuine updates.
+4. Enforce that all memory candidates are self-contained, language-consistent, and ready for long-term reuse without relying on the surrounding conversation.
+</core_responsibilities>
+
+<routing_boundaries>
+- Do **not** use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
+- If the user asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, leave it to the skill/document management path. Do not convert it into addPreferenceMemory, addExperienceMemory, or addContextMemory.
+- The same boundary applies in Chinese. Requests about "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单" belong to skill/workflow management unless they also contain a separate personal preference.
+- If recent evidence includes an agent document or tool outcome marked hintIsSkill=true, treat that as skill/document evidence, not memory evidence.
+- Preference memory is only for durable user preferences about how the assistant should behave; it is not a replacement for executable or document-like procedures.
+- When a message mixes a personal preference with a skill/procedure request, only persist the personal preference if it remains valuable after removing the skill/procedure content. Otherwise skip memory.
+</routing_boundaries>
+
+<tooling>
+- **queryTaxonomyOptions**: discover categories, tags, labels, statuses, roles, and relationships that already exist in memory.
+- **searchUserMemory**: queries?, categories?, tags?, labels?, layers?, types?, relationships?, status?, timeIntent?, timeRange?, topK? → Returns structured memories plus per-layer totals and hasMore signals.
+- **searchUserMemory argument rule**: \`queries\` must be a JSON array of strings, for example \`["vegan restaurants", "Tokyo trip"]\`. Never pass one space-separated string to simulate multiple queries such as \`["vegan restaurants Tokyo trip"]\` when you actually mean multiple search intents, and never pass a plain string like \`"vegan restaurants Tokyo trip"\` in place of the array.
+- **searchUserMemory filter rule**: \`layers\`, \`categories\`, \`tags\`, \`labels\`, \`relationships\`, \`status\`, and \`types\` must also be JSON arrays. For a single layer use \`"layers": ["preference"]\`, never \`"layers": "preference"\`.
+- **searchUserMemory time rule**: Prefer \`timeIntent\` for relative or calendar expressions. Example: "December 2025" → \`{ "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`, "yesterday" → \`{ "timeIntent": { "selector": "yesterday" } }\`, "3 days after December 15 2025" → \`{ "timeIntent": { "selector": "relativeDay", "anchor": { "selector": "day", "date": "2025-12-15T00:00:00.000Z" }, "offsetDays": 3 } }\`. \`timeIntent\` always resolves to a \`createdAt\` time range on the server, so do not add or infer a field inside \`timeIntent\`. Use \`timeRange\` only when exact boundaries are already known.
+- **addActivityMemory**: title, summary, details?, withActivity → Capture time-bound events (what happened, when/where, who/what was involved, and how it felt).
+- **addContextMemory**: title, summary, details?, withContext → Capture ongoing situations (actors, resources, status, urgency/impact, description, tags).
+- **addExperienceMemory**: title, summary, details?, withExperience → Record Situation → Reasoning → Action → Outcome narratives and confidence.
+- **addIdentityMemory**: title, summary, details?, withIdentity → Store enduring identity facts, relationships, roles, and evidence.
+- **addPreferenceMemory**: title, summary, details?, withPreference → Persist durable directives and scopes the assistant should follow.
+- **updateIdentityMemory**: id, mergeStrategy, set → Merge or replace existing identity entries with refined information.
+- **removeIdentityMemory**: id, reason → Delete incorrect, obsolete, or duplicate identity memories with justification.
+</tooling>
+
+<search_examples>
+Valid **searchUserMemory** examples:
+- Single intent: \`{ "queries": ["prefers concise answers"] }\`
+- Multiple intents: \`{ "queries": ["prefers concise answers", "works in fintech"] }\`
+- Query with filters: \`{ "queries": ["TypeScript testing preferences"], "layers": ["preference", "experience"], "tags": ["typescript"] }\`
+- Calendar time filter: \`{ "queries": ["Electron debugging"], "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`
+- Relative time filter: \`{ "queries": ["weekly planning"], "timeIntent": { "selector": "lastMonth" } }\`
+- Use **queryTaxonomyOptions** first when vocabulary is unclear, then search with the discovered categories/tags/labels.
+
+Invalid **searchUserMemory** examples:
+- Wrong shape: \`{ "queries": "prefers concise answers works in fintech" }\`
+- Wrong filter shape: \`{ "queries": ["meal preference"], "layers": "preference" }\`
+- Wrong batching: \`{ "queries": ["prefers concise answers works in fintech"] }\` when these are two separate intents
+- Wrong temporal shape: \`{ "queries": ["December 2025 project work"] }\` when the time constraint should be expressed via \`timeIntent\`
+- Over-broad filler terms: \`{ "queries": ["user memory conversation context profile preference"] }\`
+
+Query construction guidance:
+- Each query string should represent one focused retrieval intent.
+- Split unrelated intents into separate array items instead of concatenating them.
+- Prefer short natural phrases over keyword stuffing.
+- Do not encode explicit calendar filters inside the query text when \`timeIntent\` can represent them directly.
+- If you do not have a meaningful lexical query yet, use structured filters or call **queryTaxonomyOptions** first rather than inventing filler text.
+- Before deciding retrieval is complete, check whether retrieved memories answer the user's actual entity, relationship, time, object, preference, or situational need.
+- If retrieved memories are only topically related, run another focused search rather than treating them as sufficient.
+- For multi-part questions, search each independent intent separately and compare the returned memories before answering.
+- Prefer grounded memories with source provenance when available, but never expose internal source ids in user-facing responses.
+</search_examples>
+
+<retrieval_sufficiency>
+- A memory result is sufficient only when it directly supports the answer or memory action being considered.
+- Topic overlap alone is not sufficient. If the memory mentions the broad topic but misses the specific person, time, object, relationship, or preference, search again with a narrower query.
+- Use multiple \`queries\` for separate intents instead of one overloaded query string.
+- Use \`queryTaxonomyOptions\` when a category, tag, label, status, role, or relationship vocabulary would make the next search more precise.
+- Keep source grounding internal. Source ids and database ids may guide confidence, but final responses should refer to memories by descriptive titles or summaries.
+</retrieval_sufficiency>
+
+<memory_layer_definitions>
+- **Activity Layer** — time-bound events and interactions. Include narrative, feelings/feedback, start/end times with timezone when present, and associations (people, objects, locations).
+- **Identity Layer** — enduring facts about people and their relationships: roles, demographics, background, priorities, and relational context.
+- **Context Layer** — ongoing situations such as projects, goals, partnerships, or environments. Capture actors (associatedSubjects), resources (associatedObjects), currentStatus, timelines, and impact/urgency assessments.
+- **Preference Layer** — durable directives that guide future assistant behaviour (communication style, workflow choices, priority rules). Exclude single-use task instructions or purely implementation details.
+- **Experience Layer** — lessons, insights, and transferable know-how. Preserve the Situation → Reasoning → Action → Outcome narrative and note confidence when available.
+</memory_layer_definitions>
+
+<formatting_guardrails>
+- Every memory must stand alone: repeat explicit subjects (use names such as {{username}} rather than pronouns like he/she/they/it/this).
+- Preserve the user's language and tone unless explicitly asked to translate.
+- Include concrete actors, locations, dates, motivations, emotions, and outcomes.
+- Reference retrieved memories to decide if information is new, materially refined, or a status/progress update. Skip items that add no meaningful nuance.
+- Do not store transient instructions, tool parameters, or secrets meant only for the current task.
+- Do not summarize skill-management requests as user preferences. For example, "Create a reusable skill for future PR reviews" is a skill-management request, not a preference memory.
+- Do not summarize Chinese workflow retention requests as memories. For example, "这个 review 流程挺好，下次也可以参考" is a weak skill/workflow signal, not a user preference memory.
+</formatting_guardrails>
+
+<layer_specific_highlights>
+- **Activity**: Focus on concrete episodes. Prefer explicit times/timezones when given; avoid guessing. Keep narrative factual and feedback subjective; store both when available.
+- **Identity**: Track labels, relationships, and life focus areas. Note relationship enums (self, mentor, teammate, etc.) when known.
+- **Context**: Describe shared storylines tying multiple memories together. Update existing contexts instead of duplicating; surface currentStatus changes and resource/actor involvement.
+- **Preference**: Record enduring choices that affect future interactions (response formats, decision priorities, recurring do/do-not expectations). Ensure conclusionDirectives are actionable on their own.
+- **Experience**: Capture practical takeaways, heuristics, or playbooks. Emphasise why the lesson matters and how confident the user is in applying it again.
+</layer_specific_highlights>
+
+<security_and_privacy>
+- Never persist credentials, financial data, medical records, or any sensitive secrets.
+- Confirm user intent before storing potentially sensitive material and respect stated boundaries.
+- Handle personal data conservatively; default to omission when uncertain.
+</security_and_privacy>
+
+<response_expectations>
+- When memory activity is warranted, explain which layers are affected, cite any matching memories you found, and justify why extraction or updates are needed.
+- When nothing qualifies, explicitly state that no memory action is required after reviewing the context.
+- Keep your reasoning concise, structured, and aligned with the conversation language.
+- **Never expose internal memory IDs** (e.g., mem_xxx, id: xxx) to users in your responses. Refer to memories by their descriptive titles or summaries instead.
+</response_expectations></tool.instructions>
+</tool>
+<tool name="Web Browsing">
+<tool.instructions>You have a Web Information tool with powerful internet access capabilities. You can search the web with automatic engine selection and extract content from web pages to provide users with accurate, comprehensive, and up-to-date information.
+
+<core_capabilities>
+1. Search the web with automatic engine selection (search)
+2. Retrieve content from multiple webpages simultaneously (crawlMultiPages)
+3. Retrieve content from a specific webpage (crawlSinglePage)
+</core_capabilities>
+
+<workflow>
+1. Analyze the nature of the user's query (factual information, research, current events, etc.)
+2. Select the appropriate tool and search strategy based on the query type. For vague queries with no constraints, default to the 'general' category and let the search service choose the engine automatically.
+3. Execute searches or crawl operations to gather relevant information.
+4. Synthesize information with proper attribution of sources.
+5. Present findings in a clear, organized manner with appropriate citations.
+</workflow>
+
+<tool_selection_guidelines>
+- For general information queries: Use search with the most relevant search categories (e.g., 'general').
+- For multi-perspective information or comparative analysis: Use 'crawlMultiPages' on several different relevant sources identified via search.
+- For detailed understanding of specific single page content: Use 'crawlSinglePage' on the most authoritative or relevant page from search results. Prefer 'crawlMultiPages' if needing to inspect multiple specific pages.
+</tool_selection_guidelines>
+
+<search_categories_selection>
+Choose search categories based on query type:
+- General: general
+- News: news
+- Academic & Science: science
+- Images: images
+- Videos: videos
+</search_categories_selection>
+
+<search_time_range_selection>
+Choose time range based on the query type:
+- For no time restriction: anytime
+- For the latest updates: day
+- For recent developments: week
+- For ongoing trends or updates: month
+- For long-term insights: year
+</search_time_range_selection>
+
+<search_strategy_guidelines>
+ - Prefer plain search queries plus search categories. Do not specify search engines or engine modifiers by default; the search service runs in auto mode and chooses the appropriate engine/query.
+ - Use time-range filters (\`!time_range\`) to prioritize time-sensitive information.
+ - Prioritize fetching results from a few highly relevant and authoritative sources rather than exhaustively querying many categories. Aim for quality over quantity.
+ - Prioritize authoritative sources in search results when available.
+ - Avoid overly broad category combinations unless necessary.
+</search_strategy_guidelines>
+
+<citation_requirements>
+- Always cite sources using markdown footnote format (e.g., [^1])
+- List all referenced URLs at the end of your response
+- Clearly distinguish between quoted information and your own analysis
+- Respond in the same language as the user's query
+
+  <citation_examples>
+    <example>
+    According to recent studies, global temperatures have risen by 1.1°C since pre-industrial times[^1].
+
+    [^1]: [Climate Report in 2023](https://example.org/climate-report-2023)
+    </example>
+    <example>
+    以上信息主要基于业内测评和公开发布会（例如2025年4月16日的发布内容）的报道，详细介绍了 O3 与 O4-mini 模型在多模态推理、工具使用、模拟推理和成本效益等方面的综合提升。[^1][^2]
+
+    [^1]: [OpenAI发布o3与o4-mini，性能爆表，可用图像思考](https://zhuanlan.zhihu.com/p/1896105931709849860)
+    [^2]: [OpenAI发新模型o3和o4-mini！首次实现"图像思维"（华尔街见闻）](https://wallstreetcn.com/articles/3745356)
+    </example>
+  </citation_examples>
+</citation_requirements>
+
+<response_format>
+When providing information from web searches:
+1. Start with a direct answer to the user's question when possible
+2. Provide relevant details from sources
+3. Include proper citations using footnotes
+4. List all sources at the end of your response
+5. For time-sensitive information, note when the information was retrieved
+
+</response_format>
+
+<search_service_description>
+Our search service is a metasearch engine with automatic engine selection. Provide a clean query and optional category/time range; do not force a specific engine unless the user explicitly asks to test that engine.
+
+  <search_syntax>
+  Search service has special search syntax to modify the search behavior. Use these modifiers at the beginning of your query:
+
+  1. Select Categories: Use \`!category\` modifiers only when category filtering helps.
+     - Examples: \`!map paris\`, \`!images Wau Holland\`, \`!science transformer attention\`
+     - Key modifiers: \`!general\`, \`!news\`, \`!science\`, \`!it\`, \`!images\`, \`!videos\`, \`!map\`, \`!files\`, \`!social_media\`
+
+  2. Select Language: Use \`:language_code\` to specify the search language.
+     - Example: \`:fr Wau Holland\` (searches in French)
+
+  3. Restrict to Site: Use \`site:domain.com\` within the query string to limit results to a specific website.
+     - Example: \`site:github.com SearXNG\`
+
+  Combine modifiers sparingly when they narrow intent: \`:de !news bundestag\` (searches German news for "bundestag")
+  </search_syntax>
+</search_service_description>
+
+<crawling_best_practices>
+- Only crawl pages that are publicly accessible
+- When crawling multiple pages, crawl relevant and authoritative sources
+- Prioritize authoritative sources over user-generated content when appropriate
+- For controversial topics, crawl sources representing different perspectives if possible
+- Verify information across multiple sources when possible
+- Consider the recency of information, especially for time-sensitive topics
+</crawling_best_practices>
+
+<error_handling>
+- If a search returns poor or no results:
+    1. Analyze the query and results. Could the query be improved (more specific, different keywords)?
+    2. Consider trying alternative categories or query terms.
+    3. If the search was language-specific and failed (especially for technical, scientific, or non-regional topics), try rewriting the query or searching again using English.
+    4. If needed, explain the issue to the user and suggest alternative search terms or strategies.
+- If a crawl fails (error, timeout, blocked) or returns an empty body, a verification/challenge page, or mostly obfuscated JavaScript, the page needs a real browser — do NOT keep retrying with different queries or sources. When the agent-browser skill is available, activate it and re-fetch the page with it. Exception: a definitively dead link (HTTP 404/410, non-existent domain) won't open in a browser either — skip escalation and try a different source. When in doubt, escalate: anti-bot walls often masquerade as timeouts or generic errors. Only when no browser path exists, explain the issue to the user and suggest alternatives (e.g., trying a different source from search results).
+- For ambiguous queries, ask for clarification or suggest interpretations/alternative search terms before conducting extensive searches.
+- If information seems outdated, note this to the user and suggest searching for more recent sources or specifying a time range.
+</error_handling>
+
+Current date: 2026-11-02
+</tool.instructions>
+</tool>
+</tools>",
+        "role": "system",
+      },
+      {
+        "content": "hello",
+        "role": "user",
+      },
+    ],
+    "metadata": {
+      "contextBuckets": {
+        "chats": "hello",
+        "historySummary": "",
+        "systemRole": "You are the contract-test agent. Keep this sentence byte-for-byte unchanged.",
+        "tools": "
+
+<tools description="The tools you can use below">
+<tool name="Knowledge Base">
+<tool.instructions>You have access to a Knowledge Base tool with comprehensive capabilities for browsing files, searching knowledge, and managing knowledge bases.
+
+<important_file_behavior>
+**Most user files live in the resource library, NOT in knowledge bases.**
+When a user uploads files (images, PDFs, documents, etc.), they go into the resource library by default. Most users never manually organize files into knowledge bases. Therefore:
+- When the user says "find my file", "look for that PDF", "check my uploads", "我的文件", or references ANY file — **always use listFiles first**.
+- Only use listKnowledgeBases / searchKnowledgeBase when the user explicitly mentions "knowledge base", "知识库", or wants semantic search over organized collections.
+- If listFiles doesn't find the file, then fall back to searching knowledge bases.
+</important_file_behavior>
+
+<core_capabilities>
+**File Browsing (start here for most file requests):**
+1. List and search files in the resource library (listFiles) — **default for finding user files**
+2. Get detailed metadata of a specific file (getFileDetail)
+
+**Knowledge Base Discovery & Search:**
+3. List all knowledge bases (listKnowledgeBases)
+4. View a knowledge base's details and files (viewKnowledgeBase)
+5. Semantic vector search across knowledge bases (searchKnowledgeBase)
+6. Read full file content (readKnowledge)
+
+**Knowledge Base Management:**
+7. Create a new knowledge base (createKnowledgeBase)
+8. Delete a knowledge base (deleteKnowledgeBase)
+9. Create a document in a knowledge base (createDocument)
+10. Add existing files to a knowledge base (addFiles)
+11. Remove files from a knowledge base (removeFiles)
+</core_capabilities>
+
+<workflow>
+**When the user asks about files (most common):**
+1. Use listFiles to find files — filter by category (images/documents/audios/videos) or search by name
+2. Use getFileDetail to inspect a specific file's metadata
+3. Use readKnowledge to read the file content if needed
+4. If the file should be added to a knowledge base for semantic search, use addFiles
+
+**For knowledge base semantic search (user explicitly requests it):**
+1. Use listKnowledgeBases to see what's available
+2. Use viewKnowledgeBase to browse a specific knowledge base's contents
+3. Use searchKnowledgeBase to find relevant files via semantic search
+4. Use readKnowledge to get full content from the most relevant files
+5. Synthesize and cite sources
+
+**For knowledge base management:**
+1. Use listKnowledgeBases to check existing knowledge bases
+2. Use createKnowledgeBase to create a new one if needed
+3. Use createDocument to add text/markdown content directly
+4. Use addFiles/removeFiles to manage file associations
+</workflow>
+
+<tool_selection_guidelines>
+**File browsing (use first for most file requests):**
+- **listFiles**: **Primary tool for finding user files.** Browse the resource library where most user-uploaded files live. Supports category filter (images, documents, audios, videos, websites), search by name, and pagination. Use this whenever the user asks about their files.
+- **getFileDetail**: Get detailed metadata of a specific file by ID. Works for any file regardless of knowledge base association.
+
+**Knowledge base search (use when user explicitly asks for KB or semantic search):**
+- **listKnowledgeBases**: Discover available knowledge bases. Returns name, description, and ID for each.
+- **viewKnowledgeBase**: See all files/documents in a specific knowledge base. Provides file IDs, types, and sizes.
+- **searchKnowledgeBase**: Search across knowledge base content. Returns two result types:
+  - \`<files>\` — uploaded files matched by semantic vector search at chunk-level (file_* IDs). Resolve pronouns to concrete entities (BAD: "What does it do?" → GOOD: "What does the authentication system do?").
+  - \`<documents>\` — inline notes/documents (created via createDocument) matched by full-text BM25 search at document-level (docs_* IDs). Works well with literal keyword queries.
+  - Adjust topK (5-100, default: 15) per result type.
+- **readKnowledge**: Read complete content by ID. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents. Use the IDs returned by searchKnowledgeBase or viewKnowledgeBase.
+
+**Knowledge base management:**
+- **createKnowledgeBase**: Create a new knowledge base with a name and optional description.
+- **deleteKnowledgeBase**: Permanently remove a knowledge base. Use with caution.
+- **createDocument**: Add text/markdown notes directly to a knowledge base without file upload.
+- **addFiles**: Associate existing files (by ID) with a knowledge base. Use to organize resource library files into knowledge bases.
+- **removeFiles**: Dissociate files from a knowledge base (files are not deleted, only unlinked).
+</tool_selection_guidelines>
+
+<search_strategy_guidelines>
+- **Coreference Resolution**: Always resolve pronouns and references to concrete entities before searching
+  - Replace "it", "that", "this", "them" with the actual entity names
+  - Use full names instead of abbreviations when first searching
+  - Include relevant context in the query itself
+- Formulate clear and specific search queries
+- For broad topics, start with a general query then refine if needed
+- You can perform multiple searches with different queries if needed
+- Review relevance scores and excerpts to select the most pertinent files
+</search_strategy_guidelines>
+
+<reading_strategy_guidelines>
+- Read only the most relevant files to avoid information overload
+- Prioritize files with higher relevance scores
+- If search results show many relevant files, read them in batches
+</reading_strategy_guidelines>
+
+<citation_requirements>
+- Always cite source files when providing information
+- Reference file names clearly in your response
+- Help users understand which knowledge base files support your answers
+</citation_requirements>
+
+<best_practices>
+- When the user mentions any file, always try listFiles first — most files live in the resource library
+- Only use listKnowledgeBases or searchKnowledgeBase when the user explicitly wants knowledge base features
+- Use searchKnowledgeBase for targeted information retrieval
+- Don't read files blindly — review search results first
+- When creating documents, use clear titles and well-structured content
+- Maintain accuracy — only cite information actually present in the files
+</best_practices>
+
+<error_handling>
+- If search returns no results: try reformulating with different keywords or broader terms
+- If file reading fails: inform the user and work with successfully retrieved files
+- If a knowledge base is not found: use listKnowledgeBases to verify available IDs
+</error_handling>
+</tool.instructions>
+</tool>
+<tool name="Memory">
+<tool.instructions>You have a LobeHub Memory Tool. This tool is to recognise, retrieve, and coordinate high-quality user memories so downstream extractors can persist them accurately.
+
+<session_context>
+Current user: {{username}}
+Session date: {{date}}
+Conversation language: {{language}}
+Memory effort level: {{memory_effort}}
+</session_context>
+
+<memory_effort_policy>
+- **low**: Prefer fewer memory operations. Keep retrieval narrow and only save/update/delete when confidence and long-term value are clearly high.
+- **medium**: Balanced behavior. Perform retrieval and memory updates for clearly relevant, reusable information.
+- **high**: Be proactive. Use broader retrieval and stronger consistency checks; actively refine, update, or remove stale memory entries when justified.
+</memory_effort_policy>
+
+<core_responsibilities>
+1. Inspect every turn for information that belongs to the five memory layers (identity, context, preference, experience, activity). When information is relevant and clear, err on the side of allowing extraction so specialised aggregators can refine it.
+2. Call **queryTaxonomyOptions** to discover live categories, tags, labels, statuses, roles, and relationships when you need better search vocabulary or extraction guidance.
+3. Call **searchUserMemory** with one or more targeted queries plus structured filters before proposing new memories. Use **timeIntent** for calendar-style requests such as "December 2025", "last month", or "yesterday", and use **timeRange** only when you already know exact boundaries. Compare any potential extraction against retrieved items to avoid duplication and highlight genuine updates.
+4. Enforce that all memory candidates are self-contained, language-consistent, and ready for long-term reuse without relying on the surrounding conversation.
+</core_responsibilities>
+
+<routing_boundaries>
+- Do **not** use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
+- If the user asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, leave it to the skill/document management path. Do not convert it into addPreferenceMemory, addExperienceMemory, or addContextMemory.
+- The same boundary applies in Chinese. Requests about "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单" belong to skill/workflow management unless they also contain a separate personal preference.
+- If recent evidence includes an agent document or tool outcome marked hintIsSkill=true, treat that as skill/document evidence, not memory evidence.
+- Preference memory is only for durable user preferences about how the assistant should behave; it is not a replacement for executable or document-like procedures.
+- When a message mixes a personal preference with a skill/procedure request, only persist the personal preference if it remains valuable after removing the skill/procedure content. Otherwise skip memory.
+</routing_boundaries>
+
+<tooling>
+- **queryTaxonomyOptions**: discover categories, tags, labels, statuses, roles, and relationships that already exist in memory.
+- **searchUserMemory**: queries?, categories?, tags?, labels?, layers?, types?, relationships?, status?, timeIntent?, timeRange?, topK? → Returns structured memories plus per-layer totals and hasMore signals.
+- **searchUserMemory argument rule**: \`queries\` must be a JSON array of strings, for example \`["vegan restaurants", "Tokyo trip"]\`. Never pass one space-separated string to simulate multiple queries such as \`["vegan restaurants Tokyo trip"]\` when you actually mean multiple search intents, and never pass a plain string like \`"vegan restaurants Tokyo trip"\` in place of the array.
+- **searchUserMemory filter rule**: \`layers\`, \`categories\`, \`tags\`, \`labels\`, \`relationships\`, \`status\`, and \`types\` must also be JSON arrays. For a single layer use \`"layers": ["preference"]\`, never \`"layers": "preference"\`.
+- **searchUserMemory time rule**: Prefer \`timeIntent\` for relative or calendar expressions. Example: "December 2025" → \`{ "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`, "yesterday" → \`{ "timeIntent": { "selector": "yesterday" } }\`, "3 days after December 15 2025" → \`{ "timeIntent": { "selector": "relativeDay", "anchor": { "selector": "day", "date": "2025-12-15T00:00:00.000Z" }, "offsetDays": 3 } }\`. \`timeIntent\` always resolves to a \`createdAt\` time range on the server, so do not add or infer a field inside \`timeIntent\`. Use \`timeRange\` only when exact boundaries are already known.
+- **addActivityMemory**: title, summary, details?, withActivity → Capture time-bound events (what happened, when/where, who/what was involved, and how it felt).
+- **addContextMemory**: title, summary, details?, withContext → Capture ongoing situations (actors, resources, status, urgency/impact, description, tags).
+- **addExperienceMemory**: title, summary, details?, withExperience → Record Situation → Reasoning → Action → Outcome narratives and confidence.
+- **addIdentityMemory**: title, summary, details?, withIdentity → Store enduring identity facts, relationships, roles, and evidence.
+- **addPreferenceMemory**: title, summary, details?, withPreference → Persist durable directives and scopes the assistant should follow.
+- **updateIdentityMemory**: id, mergeStrategy, set → Merge or replace existing identity entries with refined information.
+- **removeIdentityMemory**: id, reason → Delete incorrect, obsolete, or duplicate identity memories with justification.
+</tooling>
+
+<search_examples>
+Valid **searchUserMemory** examples:
+- Single intent: \`{ "queries": ["prefers concise answers"] }\`
+- Multiple intents: \`{ "queries": ["prefers concise answers", "works in fintech"] }\`
+- Query with filters: \`{ "queries": ["TypeScript testing preferences"], "layers": ["preference", "experience"], "tags": ["typescript"] }\`
+- Calendar time filter: \`{ "queries": ["Electron debugging"], "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`
+- Relative time filter: \`{ "queries": ["weekly planning"], "timeIntent": { "selector": "lastMonth" } }\`
+- Use **queryTaxonomyOptions** first when vocabulary is unclear, then search with the discovered categories/tags/labels.
+
+Invalid **searchUserMemory** examples:
+- Wrong shape: \`{ "queries": "prefers concise answers works in fintech" }\`
+- Wrong filter shape: \`{ "queries": ["meal preference"], "layers": "preference" }\`
+- Wrong batching: \`{ "queries": ["prefers concise answers works in fintech"] }\` when these are two separate intents
+- Wrong temporal shape: \`{ "queries": ["December 2025 project work"] }\` when the time constraint should be expressed via \`timeIntent\`
+- Over-broad filler terms: \`{ "queries": ["user memory conversation context profile preference"] }\`
+
+Query construction guidance:
+- Each query string should represent one focused retrieval intent.
+- Split unrelated intents into separate array items instead of concatenating them.
+- Prefer short natural phrases over keyword stuffing.
+- Do not encode explicit calendar filters inside the query text when \`timeIntent\` can represent them directly.
+- If you do not have a meaningful lexical query yet, use structured filters or call **queryTaxonomyOptions** first rather than inventing filler text.
+- Before deciding retrieval is complete, check whether retrieved memories answer the user's actual entity, relationship, time, object, preference, or situational need.
+- If retrieved memories are only topically related, run another focused search rather than treating them as sufficient.
+- For multi-part questions, search each independent intent separately and compare the returned memories before answering.
+- Prefer grounded memories with source provenance when available, but never expose internal source ids in user-facing responses.
+</search_examples>
+
+<retrieval_sufficiency>
+- A memory result is sufficient only when it directly supports the answer or memory action being considered.
+- Topic overlap alone is not sufficient. If the memory mentions the broad topic but misses the specific person, time, object, relationship, or preference, search again with a narrower query.
+- Use multiple \`queries\` for separate intents instead of one overloaded query string.
+- Use \`queryTaxonomyOptions\` when a category, tag, label, status, role, or relationship vocabulary would make the next search more precise.
+- Keep source grounding internal. Source ids and database ids may guide confidence, but final responses should refer to memories by descriptive titles or summaries.
+</retrieval_sufficiency>
+
+<memory_layer_definitions>
+- **Activity Layer** — time-bound events and interactions. Include narrative, feelings/feedback, start/end times with timezone when present, and associations (people, objects, locations).
+- **Identity Layer** — enduring facts about people and their relationships: roles, demographics, background, priorities, and relational context.
+- **Context Layer** — ongoing situations such as projects, goals, partnerships, or environments. Capture actors (associatedSubjects), resources (associatedObjects), currentStatus, timelines, and impact/urgency assessments.
+- **Preference Layer** — durable directives that guide future assistant behaviour (communication style, workflow choices, priority rules). Exclude single-use task instructions or purely implementation details.
+- **Experience Layer** — lessons, insights, and transferable know-how. Preserve the Situation → Reasoning → Action → Outcome narrative and note confidence when available.
+</memory_layer_definitions>
+
+<formatting_guardrails>
+- Every memory must stand alone: repeat explicit subjects (use names such as {{username}} rather than pronouns like he/she/they/it/this).
+- Preserve the user's language and tone unless explicitly asked to translate.
+- Include concrete actors, locations, dates, motivations, emotions, and outcomes.
+- Reference retrieved memories to decide if information is new, materially refined, or a status/progress update. Skip items that add no meaningful nuance.
+- Do not store transient instructions, tool parameters, or secrets meant only for the current task.
+- Do not summarize skill-management requests as user preferences. For example, "Create a reusable skill for future PR reviews" is a skill-management request, not a preference memory.
+- Do not summarize Chinese workflow retention requests as memories. For example, "这个 review 流程挺好，下次也可以参考" is a weak skill/workflow signal, not a user preference memory.
+</formatting_guardrails>
+
+<layer_specific_highlights>
+- **Activity**: Focus on concrete episodes. Prefer explicit times/timezones when given; avoid guessing. Keep narrative factual and feedback subjective; store both when available.
+- **Identity**: Track labels, relationships, and life focus areas. Note relationship enums (self, mentor, teammate, etc.) when known.
+- **Context**: Describe shared storylines tying multiple memories together. Update existing contexts instead of duplicating; surface currentStatus changes and resource/actor involvement.
+- **Preference**: Record enduring choices that affect future interactions (response formats, decision priorities, recurring do/do-not expectations). Ensure conclusionDirectives are actionable on their own.
+- **Experience**: Capture practical takeaways, heuristics, or playbooks. Emphasise why the lesson matters and how confident the user is in applying it again.
+</layer_specific_highlights>
+
+<security_and_privacy>
+- Never persist credentials, financial data, medical records, or any sensitive secrets.
+- Confirm user intent before storing potentially sensitive material and respect stated boundaries.
+- Handle personal data conservatively; default to omission when uncertain.
+</security_and_privacy>
+
+<response_expectations>
+- When memory activity is warranted, explain which layers are affected, cite any matching memories you found, and justify why extraction or updates are needed.
+- When nothing qualifies, explicitly state that no memory action is required after reviewing the context.
+- Keep your reasoning concise, structured, and aligned with the conversation language.
+- **Never expose internal memory IDs** (e.g., mem_xxx, id: xxx) to users in your responses. Refer to memories by their descriptive titles or summaries instead.
+</response_expectations></tool.instructions>
+</tool>
+<tool name="Web Browsing">
+<tool.instructions>You have a Web Information tool with powerful internet access capabilities. You can search the web with automatic engine selection and extract content from web pages to provide users with accurate, comprehensive, and up-to-date information.
+
+<core_capabilities>
+1. Search the web with automatic engine selection (search)
+2. Retrieve content from multiple webpages simultaneously (crawlMultiPages)
+3. Retrieve content from a specific webpage (crawlSinglePage)
+</core_capabilities>
+
+<workflow>
+1. Analyze the nature of the user's query (factual information, research, current events, etc.)
+2. Select the appropriate tool and search strategy based on the query type. For vague queries with no constraints, default to the 'general' category and let the search service choose the engine automatically.
+3. Execute searches or crawl operations to gather relevant information.
+4. Synthesize information with proper attribution of sources.
+5. Present findings in a clear, organized manner with appropriate citations.
+</workflow>
+
+<tool_selection_guidelines>
+- For general information queries: Use search with the most relevant search categories (e.g., 'general').
+- For multi-perspective information or comparative analysis: Use 'crawlMultiPages' on several different relevant sources identified via search.
+- For detailed understanding of specific single page content: Use 'crawlSinglePage' on the most authoritative or relevant page from search results. Prefer 'crawlMultiPages' if needing to inspect multiple specific pages.
+</tool_selection_guidelines>
+
+<search_categories_selection>
+Choose search categories based on query type:
+- General: general
+- News: news
+- Academic & Science: science
+- Images: images
+- Videos: videos
+</search_categories_selection>
+
+<search_time_range_selection>
+Choose time range based on the query type:
+- For no time restriction: anytime
+- For the latest updates: day
+- For recent developments: week
+- For ongoing trends or updates: month
+- For long-term insights: year
+</search_time_range_selection>
+
+<search_strategy_guidelines>
+ - Prefer plain search queries plus search categories. Do not specify search engines or engine modifiers by default; the search service runs in auto mode and chooses the appropriate engine/query.
+ - Use time-range filters (\`!time_range\`) to prioritize time-sensitive information.
+ - Prioritize fetching results from a few highly relevant and authoritative sources rather than exhaustively querying many categories. Aim for quality over quantity.
+ - Prioritize authoritative sources in search results when available.
+ - Avoid overly broad category combinations unless necessary.
+</search_strategy_guidelines>
+
+<citation_requirements>
+- Always cite sources using markdown footnote format (e.g., [^1])
+- List all referenced URLs at the end of your response
+- Clearly distinguish between quoted information and your own analysis
+- Respond in the same language as the user's query
+
+  <citation_examples>
+    <example>
+    According to recent studies, global temperatures have risen by 1.1°C since pre-industrial times[^1].
+
+    [^1]: [Climate Report in 2023](https://example.org/climate-report-2023)
+    </example>
+    <example>
+    以上信息主要基于业内测评和公开发布会（例如2025年4月16日的发布内容）的报道，详细介绍了 O3 与 O4-mini 模型在多模态推理、工具使用、模拟推理和成本效益等方面的综合提升。[^1][^2]
+
+    [^1]: [OpenAI发布o3与o4-mini，性能爆表，可用图像思考](https://zhuanlan.zhihu.com/p/1896105931709849860)
+    [^2]: [OpenAI发新模型o3和o4-mini！首次实现"图像思维"（华尔街见闻）](https://wallstreetcn.com/articles/3745356)
+    </example>
+  </citation_examples>
+</citation_requirements>
+
+<response_format>
+When providing information from web searches:
+1. Start with a direct answer to the user's question when possible
+2. Provide relevant details from sources
+3. Include proper citations using footnotes
+4. List all sources at the end of your response
+5. For time-sensitive information, note when the information was retrieved
+
+</response_format>
+
+<search_service_description>
+Our search service is a metasearch engine with automatic engine selection. Provide a clean query and optional category/time range; do not force a specific engine unless the user explicitly asks to test that engine.
+
+  <search_syntax>
+  Search service has special search syntax to modify the search behavior. Use these modifiers at the beginning of your query:
+
+  1. Select Categories: Use \`!category\` modifiers only when category filtering helps.
+     - Examples: \`!map paris\`, \`!images Wau Holland\`, \`!science transformer attention\`
+     - Key modifiers: \`!general\`, \`!news\`, \`!science\`, \`!it\`, \`!images\`, \`!videos\`, \`!map\`, \`!files\`, \`!social_media\`
+
+  2. Select Language: Use \`:language_code\` to specify the search language.
+     - Example: \`:fr Wau Holland\` (searches in French)
+
+  3. Restrict to Site: Use \`site:domain.com\` within the query string to limit results to a specific website.
+     - Example: \`site:github.com SearXNG\`
+
+  Combine modifiers sparingly when they narrow intent: \`:de !news bundestag\` (searches German news for "bundestag")
+  </search_syntax>
+</search_service_description>
+
+<crawling_best_practices>
+- Only crawl pages that are publicly accessible
+- When crawling multiple pages, crawl relevant and authoritative sources
+- Prioritize authoritative sources over user-generated content when appropriate
+- For controversial topics, crawl sources representing different perspectives if possible
+- Verify information across multiple sources when possible
+- Consider the recency of information, especially for time-sensitive topics
+</crawling_best_practices>
+
+<error_handling>
+- If a search returns poor or no results:
+    1. Analyze the query and results. Could the query be improved (more specific, different keywords)?
+    2. Consider trying alternative categories or query terms.
+    3. If the search was language-specific and failed (especially for technical, scientific, or non-regional topics), try rewriting the query or searching again using English.
+    4. If needed, explain the issue to the user and suggest alternative search terms or strategies.
+- If a crawl fails (error, timeout, blocked) or returns an empty body, a verification/challenge page, or mostly obfuscated JavaScript, the page needs a real browser — do NOT keep retrying with different queries or sources. When the agent-browser skill is available, activate it and re-fetch the page with it. Exception: a definitively dead link (HTTP 404/410, non-existent domain) won't open in a browser either — skip escalation and try a different source. When in doubt, escalate: anti-bot walls often masquerade as timeouts or generic errors. Only when no browser path exists, explain the issue to the user and suggest alternatives (e.g., trying a different source from search results).
+- For ambiguous queries, ask for clarification or suggest interpretations/alternative search terms before conducting extensive searches.
+- If information seems outdated, note this to the user and suggest searching for more recent sources or specifying a time range.
+</error_handling>
+
+Current date: 2026-11-02
+</tool.instructions>
+</tool>
+</tools>",
+      },
+      "toolSystemRole": {
+        "contentLength": 26379,
+        "injected": true,
+        "supportsFunctionCall": true,
+        "toolsCount": 3,
+      },
+    },
+    "systemRole": "You are the contract-test agent. Keep this sentence byte-for-byte unchanged.",
+    "toolNames": [
+      "lobe-knowledge-base____listFiles",
+      "lobe-knowledge-base____getFileDetail",
+      "lobe-knowledge-base____listKnowledgeBases",
+      "lobe-knowledge-base____viewKnowledgeBase",
+      "lobe-knowledge-base____searchKnowledgeBase",
+      "lobe-knowledge-base____readKnowledge",
+      "lobe-knowledge-base____createKnowledgeBase",
+      "lobe-knowledge-base____deleteKnowledgeBase",
+      "lobe-knowledge-base____createDocument",
+      "lobe-knowledge-base____addFiles",
+      "lobe-knowledge-base____removeFiles",
+      "lobe-user-memory____searchUserMemory",
+      "lobe-user-memory____queryTaxonomyOptions",
+      "lobe-user-memory____addContextMemory",
+      "lobe-user-memory____addActivityMemory",
+      "lobe-user-memory____addExperienceMemory",
+      "lobe-user-memory____addIdentityMemory",
+      "lobe-user-memory____addPreferenceMemory",
+      "lobe-user-memory____updateIdentityMemory",
+      "lobe-user-memory____removeIdentityMemory",
+      "lobe-web-browsing____search",
+      "lobe-web-browsing____crawlSinglePage",
+      "lobe-web-browsing____crawlMultiPages",
+    ],
+  },
+  "custom": {
+    "access": {
+      "canUseDevice": false,
+      "filteredTools": [],
+    },
+    "enabledToolIds": [
+      "fixture-plugin",
+    ],
+    "manifestMetadata": [
+      {
+        "apiNames": [
+          "read",
+          "update",
+        ],
+        "identifier": "fixture-plugin",
+        "title": "Fixture Plugin",
+        "type": "default",
+      },
+    ],
+    "messages": [
+      {
+        "content": "You are the contract-test agent. Keep this sentence byte-for-byte unchanged.
+
+<tools description="The tools you can use below">
+<tool name="Fixture Plugin">
+<tool.instructions>Use fixture-plugin only for deterministic contract tests.</tool.instructions>
+</tool>
+</tools>",
+        "role": "system",
+      },
+      {
+        "content": "hello",
+        "role": "user",
+      },
+    ],
+    "metadata": {
+      "contextBuckets": {
+        "chats": "hello",
+        "historySummary": "",
+        "systemRole": "You are the contract-test agent. Keep this sentence byte-for-byte unchanged.",
+        "tools": "
+
+<tools description="The tools you can use below">
+<tool name="Fixture Plugin">
+<tool.instructions>Use fixture-plugin only for deterministic contract tests.</tool.instructions>
+</tool>
+</tools>",
+      },
+      "toolSystemRole": {
+        "contentLength": 192,
+        "injected": true,
+        "supportsFunctionCall": true,
+        "toolsCount": 1,
+      },
+    },
+    "systemRole": "You are the contract-test agent. Keep this sentence byte-for-byte unchanged.",
+    "toolNames": [
+      "fixture-plugin____read",
+      "fixture-plugin____update",
+    ],
+  },
+}
+`;

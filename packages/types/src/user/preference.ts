@@ -2,6 +2,7 @@ import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
 import type { DeviceExecutionTarget } from '../agent/agencyConfig';
+import type { AgentContextMode } from '../agent/chatConfig';
 import type { AgentModelOverride } from '../agent/modelSelection';
 import type { Plans } from '../subscription';
 import type { TopicGroupMode, TopicSortBy } from '../topic';
@@ -63,6 +64,8 @@ export interface SidebarLayoutPreference {
 }
 
 export interface WorkspaceUserPreference {
+  /** Per-member context strategy for shared workspace agents. */
+  agentContextModeOverrides?: Record<string /* agentId */, AgentContextMode>;
   agentDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverride>;
   /** Personal model choices for workspace agents that allow member selection. */
   agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;

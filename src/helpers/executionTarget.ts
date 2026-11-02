@@ -6,7 +6,9 @@ import type {
   LobeAgentChatConfig,
   RuntimeEnvMode,
 } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { RequestTrigger, resolveToolMode } from '@lobechat/types';
+
+export { resolveContextMode, resolveToolMode } from '@lobechat/types';
 
 /**
  * Whether a workspace config still needs the shared-row safety coercion.
@@ -17,19 +19,6 @@ export const resolveWorkspaceScoped = (
   isWorkspaceAgent: boolean,
   deviceOverride: AgentDeviceOverride | null | undefined,
 ): boolean => isWorkspaceAgent && deviceOverride?.executionTarget === undefined;
-
-/**
- * The agent's tool mode — explicit `chatConfig.toolMode` wins; otherwise derive
- * from `enableAgentMode` (undefined = agent). `chat` = no execution
- * environment (plain chat); `custom` = toolset is exactly the agent's plugins.
- *
- * Single source of truth so client (selectors), server tools engine, and
- * `resolveExecutionPlan` all agree on what counts as chat mode.
- */
-export const resolveToolMode = (
-  chatConfig: LobeAgentChatConfig | undefined,
-): 'agent' | 'chat' | 'custom' =>
-  chatConfig?.toolMode ?? (chatConfig?.enableAgentMode === false ? 'chat' : 'agent');
 
 export interface ResolveExecutionTargetOptions {
   /**

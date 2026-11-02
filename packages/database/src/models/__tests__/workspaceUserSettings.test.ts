@@ -124,6 +124,19 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(preference.agentModeOverrides).toEqual({ agentX: true, agentY: false });
   });
 
+  it('deep-merges agentContextModeOverrides across single-Agent patches', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({ agentContextModeOverrides: { agentX: 'on-demand' } });
+
+    await model.updatePreference({ agentContextModeOverrides: { agentY: 'default' } });
+
+    const preference = await model.getPreference();
+    expect(preference.agentContextModeOverrides).toEqual({
+      agentX: 'on-demand',
+      agentY: 'default',
+    });
+  });
+
   it('deep-merges sidebarAgentVisibilityOverrides across single-item patches', async () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     await model.updatePreference({ sidebarAgentVisibilityOverrides: { agentX: true } });
