@@ -495,7 +495,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                 disabled={loading || isMessageCreating || approveDisabled}
                 icon={Zap}
                 size={'middle'}
-                type={'text'}
+                type={'default'}
                 onClick={handleSwitchToAutoRun}
               >
                 {t('tool.intervention.switchToAutoRun')}
