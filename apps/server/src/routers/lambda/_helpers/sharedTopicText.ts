@@ -19,7 +19,7 @@ export const sharedTopicText = (messages: UIChatMessage[]): string => {
       else if (message.compressedMessages) collect(parse(message.compressedMessages).flatList);
       else if (message.role === 'user') append('User', message.content);
       else if (message.role === 'assistantGroup') {
-        const blocks = message.taskCompletions?.length ? message.taskCompletions : message.children;
+        const blocks = message.children;
         // Never fall back to pre-tool narration when a run has no final answer.
         const lastToolIndex = blocks?.findLastIndex((block) => !!block.tools?.length) ?? -1;
         const { segments } = partitionAssistantGroupBlocks(blocks?.slice(lastToolIndex + 1) ?? [], {
