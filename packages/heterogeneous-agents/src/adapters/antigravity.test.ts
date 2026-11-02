@@ -96,6 +96,41 @@ describe('AntigravityAdapter', () => {
     expect(text(events)).toBe('Checking.hello\n');
   });
 
+  it('starts each tool once with its final arguments so trace recorders keep the tool step', () => {
+    const adapter = new AntigravityAdapter();
+    // Clone like the IPC/stdout bridge, so later payload mutation cannot hide stale args.
+    const adapt = (raw: unknown) => structuredClone(adapter.adapt(raw));
+    const events: HeterogeneousAgentEvent[] = [
+      init,
+      tool(3, { state: 'ACTIVE', tool_info: { name: 'run_command' } }),
+      tool(3),
+    ].flatMap(adapt);
+    const starts = events.filter((e) => e.type === 'tool_start');
+    expect(starts).toHaveLength(1);
+    expect(starts[0].data).toEqual({
+      toolCallId: 'agy_conv-1_3',
+      toolCalling: {
+        apiName: 'run_command',
+        arguments: '{"CommandLine":"echo hello"}',
+        id: 'agy_conv-1_3',
+        identifier: 'antigravity',
+        type: 'default',
+      },
+    });
+    expect(events.indexOf(starts[0])).toBeLessThan(
+      events.findIndex((e) => e.type === 'tool_result'),
+    );
+  });
+
+  it('starts an interrupted tool before settling it', () => {
+    const adapter = new AntigravityAdapter();
+    adapter.adapt(init);
+    adapter.adapt(tool(3, { state: 'ACTIVE', tool_info: { name: 'run_command' } }));
+    expect(adapter.flush().map((e) => e.type)).toEqual(
+      expect.arrayContaining(['tool_start', 'tool_result', 'tool_end']),
+    );
+  });
+
   it('updates a running tool with its final arguments and error exactly once', () => {
     const adapter = new AntigravityAdapter();
     adapter.adapt(init);
@@ -210,6 +245,10 @@ describe('AntigravityAdapter', () => {
       totalOutputTokens: 4,
       outputReasoningTokens: 1,
     });
+    // The cumulative result total must not reach recorders as the run total.
+    expect(events.some((e) => e.type === 'step_complete' && e.data.phase === 'result_usage')).toBe(
+      false,
+    );
   });
 
   it('ignores malformed, unknown, and child-conversation events', () => {
