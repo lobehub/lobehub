@@ -22,8 +22,9 @@ interface ReasoningEffortSettingsFieldProps {
 /**
  * Declares a custom model's reasoning effort control: the levels its API
  * accepts and, optionally, the one sent when the user has not picked any.
- * Clearing every level removes the control; clearing the default lets it
- * resolve from the same model under other providers, else the middle level.
+ * Clearing every level or the default lets it resolve from the same model
+ * under other providers; without one there is no control, and a control
+ * without a default takes the middle level.
  */
 const ReasoningEffortSettingsField = memo<ReasoningEffortSettingsFieldProps>(
   ({ disabled, onChange, value }) => {

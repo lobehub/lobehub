@@ -1,5 +1,5 @@
 /**
- * The effort extend param each bundled card declared before LOBE-14979, keyed
+ * The effort extend param each bundled card declared before the `reasoningEffort` spec, keyed
  * `provider/model`. Generated once from the pre-migration catalog; the old
  * runtime sent only this key, so it decides which saved value a row really ran at.
  */

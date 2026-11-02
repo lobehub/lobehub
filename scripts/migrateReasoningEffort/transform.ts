@@ -1,4 +1,4 @@
-import type { AiModelReasoningEffortSettings, ReasoningEffortLevel } from 'model-bank/aiModel';
+import type { ReasoningEffortLevel } from 'model-bank/aiModel';
 import { createReasoningEffortSettings, LEGACY_REASONING_EFFORT_KEYS } from 'model-bank/aiModel';
 
 import { LEGACY_CARD_EFFORT_KEYS } from './legacyCardKeys';
@@ -153,8 +153,6 @@ export const migrateReasoningConfig = (
 };
 
 export interface MigrateModelSettingsContext {
-  /** The spec of the bundled card with the same model id, under any provider. */
-  cardSpec?: AiModelReasoningEffortSettings;
   /**
    * The provider ships a card for this model, so the card's spec applies and
    * the row only drops its legacy keys.
@@ -165,12 +163,13 @@ export interface MigrateModelSettingsContext {
 /**
  * Moves a user model row's legacy effort extend param into
  * `settings.reasoningEffort`. Rows backed by a provider card only drop the key;
- * custom and remote-only rows get a spec — the same-id card's when one exists,
- * else the legacy key's levels without a default (it resolves at runtime).
+ * custom and remote-only rows get the legacy key's levels — the ones their API
+ * accepted, which a same-id card elsewhere may not match — without a default,
+ * so it still resolves from the same model at runtime.
  */
 export const migrateModelSettings = (
   settings: unknown,
-  { cardSpec, hasProviderCard }: MigrateModelSettingsContext,
+  { hasProviderCard }: MigrateModelSettingsContext,
 ): Record<string, unknown> | undefined => {
   if (!isRecord(settings) || !Array.isArray(settings.extendParams)) return;
 
@@ -187,12 +186,52 @@ export const migrateModelSettings = (
 
   if (!hasProviderCard && next.reasoningEffort === undefined) {
     const [key] = legacy;
-    next.reasoningEffort =
-      cardSpec ??
-      createReasoningEffortSettings(LEGACY_EFFORT_LEVELS[key], {
-        controlsThinking: LEGACY_CONTROLS_THINKING.has(key),
-      });
+    next.reasoningEffort = createReasoningEffortSettings(LEGACY_EFFORT_LEVELS[key], {
+      controlsThinking: LEGACY_CONTROLS_THINKING.has(key),
+    });
   }
 
   return next;
+};
+
+export interface MigrateAiModelRowInput {
+  chatConfig: unknown;
+  /** The provider ships a card for this model (see `migrateModelSettings`). */
+  hasProviderCard: boolean;
+  model: string;
+  provider: string;
+  settings: unknown;
+}
+
+export type MigrateAiModelRowResult =
+  | { conflict: true }
+  | {
+      chatConfig?: Record<string, unknown>;
+      conflict: false;
+      settings?: Record<string, unknown>;
+    };
+
+/**
+ * Migrates one `ai_models` row: its saved pick and its own effort declaration.
+ * A conflicting pick leaves the whole row unchanged for manual review, since a
+ * new settings spec would make the runtime read the unresolved values.
+ */
+export const migrateAiModelRow = ({
+  chatConfig,
+  hasProviderCard,
+  model,
+  provider,
+  settings,
+}: MigrateAiModelRowInput): MigrateAiModelRowResult | undefined => {
+  const effortKey = resolveLegacyEffortKey({
+    extendParams: isRecord(settings) ? settings.extendParams : undefined,
+    model,
+    provider,
+  });
+  const nextChatConfig = migrateReasoningConfig(chatConfig, effortKey);
+  if (nextChatConfig?.conflict) return { conflict: true };
+
+  const nextSettings = migrateModelSettings(settings, { hasProviderCard });
+  if (!nextChatConfig && !nextSettings) return;
+  return { chatConfig: nextChatConfig?.next, conflict: false, settings: nextSettings };
 };

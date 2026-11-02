@@ -54,6 +54,11 @@ export const AiModelReasoningEffortSettingsSchema = z
     default: ReasoningEffortLevelSchema.optional(),
     levels: z.array(ReasoningEffortLevelSchema).min(1),
   })
+  // The middle-level fallback and the slider read the list as given.
+  .refine((value) => sortReasoningEffortLevels(value.levels).join() === value.levels.join(), {
+    message: 'levels must be unique and ordered low → high',
+    path: ['levels'],
+  })
   .refine((value) => value.default === undefined || value.levels.includes(value.default), {
     message: 'default must be one of levels',
     path: ['default'],
@@ -138,7 +143,7 @@ export const resolveReasoningEffortLevel = (
 
 /**
  * Saved-value keys of the per-model effort params that `reasoningEffort`
- * replaced (LOBE-14979). Writes that set `reasoningEffort` remove them, so a
+ * replaced. Writes that set `reasoningEffort` remove them, so a
  * leftover key is always a pick made by the previous app version and the
  * migration script can still move it without overwriting a newer pick.
  */

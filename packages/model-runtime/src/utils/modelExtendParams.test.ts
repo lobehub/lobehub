@@ -38,7 +38,7 @@ describe('applyModelExtendParams', () => {
   });
 
   describe('reasoning effort', () => {
-    // LOBE-14979: the control showed the card default while nothing was sent, so the
+    // Regression: the control showed the card default while nothing was sent, so the
     // upstream ran at its own default (MiniMax M3.1 Flash: max).
     it('sends the card default when the user has not picked a level', () => {
       expect(

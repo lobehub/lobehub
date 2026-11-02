@@ -1,6 +1,6 @@
 /**
  * Migrates saved reasoning effort data to the model-card `reasoningEffort`
- * spec (LOBE-14979). The per-model effort keys (`gpt5_2ReasoningEffort`,
+ * spec. The per-model effort keys (`gpt5_2ReasoningEffort`,
  * `thinkingLevel3`, `opus47Effort`, …) collapse into one `reasoningEffort`
  * field in:
  *
@@ -24,7 +24,6 @@
  *   bun scripts/migrateReasoningEffort/index.ts
  *   bun scripts/migrateReasoningEffort/index.ts --apply --batch-size=500
  */
-import type { AiModelReasoningEffortSettings } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 import { ModelProvider } from 'model-bank/modelProvider';
 import pg from 'pg';
@@ -32,7 +31,7 @@ import pg from 'pg';
 import {
   LEGACY_CONFIG_KEYS,
   LEGACY_EXTEND_PARAMS,
-  migrateModelSettings,
+  migrateAiModelRow,
   migrateReasoningConfig,
   resolveLegacyEffortKey,
 } from './transform';
@@ -58,15 +57,6 @@ if (!connectionString) throw new Error('DATABASE_URL is required');
 const pool = new Pool({ connectionString });
 
 const providerCards = new Set(LOBE_DEFAULT_MODEL_LIST.map((m) => `${m.providerId}/${m.id}`));
-const cardSpecById = new Map<string, AiModelReasoningEffortSettings>();
-for (const card of LOBE_DEFAULT_MODEL_LIST) {
-  const spec = card.settings?.reasoningEffort;
-  if (spec && !cardSpecById.has(card.id)) cardSpecById.set(card.id, spec);
-}
-
-/** Aggregators address models as `vendor/model`; their cards use the bare id. */
-const findCardSpec = (id: string) =>
-  cardSpecById.get(id) ?? cardSpecById.get(id.slice(id.lastIndexOf('/') + 1));
 
 interface Stats {
   applied: number;
@@ -181,30 +171,26 @@ const aiModelsJob: TableJob<AiModelRow, AiModelChange> = {
     return result.rowCount ?? 0;
   },
   toChange: (row) => {
-    const effortKey = resolveLegacyEffortKey({
-      extendParams: (row.settings as { extendParams?: unknown } | null)?.extendParams,
-      model: row.id,
-      provider: row.provider_id,
-    });
-    const chatConfig = migrateReasoningConfig(row.config?.chatConfig, effortKey);
-    const settings = migrateModelSettings(row.settings, {
-      cardSpec: findCardSpec(row.id),
+    const result = migrateAiModelRow({
+      chatConfig: row.config?.chatConfig,
       // LobeHub's model list is managed server-side; its cards always apply.
       hasProviderCard:
         row.provider_id === ModelProvider.LobeHub ||
         providerCards.has(`${row.provider_id}/${row.id}`),
+      model: row.id,
+      provider: row.provider_id,
+      settings: row.settings,
     });
-    if (!chatConfig && !settings) return;
-    if (!chatConfig?.next && !settings) return { conflict: true };
+    if (!result || result.conflict) return result;
     return {
       change: {
-        chatConfig: chatConfig?.next,
+        chatConfig: result.chatConfig,
         key: row._id,
         oldChatConfig: row.config?.chatConfig,
         oldSettings: row.settings,
-        settings,
+        settings: result.settings,
       },
-      conflict: !!chatConfig?.conflict,
+      conflict: false,
     };
   },
   toCursor: (row) => row._id,

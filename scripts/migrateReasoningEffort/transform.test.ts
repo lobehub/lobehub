@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LEGACY_CONFIG_KEYS,
   LEGACY_EXTEND_PARAMS,
+  migrateAiModelRow,
   migrateModelSettings,
   migrateReasoningConfig,
   resolveLegacyEffortKey,
@@ -118,14 +119,16 @@ describe('migrateModelSettings', () => {
     ).toEqual({ extendParams: ['urlContext'], searchImpl: 'params' });
   });
 
-  it('copies the same-id card spec onto remote rows', () => {
-    const cardSpec = { default: 'high' as const, levels: ['low' as const, 'high' as const] };
+  it('keeps the legacy levels of remote rows instead of another card spec', () => {
+    // deepseekV4ReasoningEffort accepted none/high/max; the GA card adds low.
     expect(
       migrateModelSettings(
-        { extendParams: ['thinkingLevel2'] },
-        { cardSpec, hasProviderCard: false },
+        { extendParams: ['deepseekV4ReasoningEffort'] },
+        { hasProviderCard: false },
       ),
-    ).toEqual({ reasoningEffort: cardSpec });
+    ).toEqual({
+      reasoningEffort: { controlsThinking: true, levels: ['none', 'high', 'max'] },
+    });
   });
 
   it('builds a spec without a default for custom rows without a card', () => {
@@ -146,5 +149,37 @@ describe('migrateModelSettings', () => {
       reasoningEffort: { levels: ['low', 'medium', 'high', 'max'] },
     });
     expect(migrateModelSettings(migrated, { hasProviderCard: false })).toBeUndefined();
+  });
+});
+
+describe('migrateAiModelRow', () => {
+  it('leaves a conflicting row unchanged, including its settings', () => {
+    // A custom row declares a legacy key but saved no value for it, and the
+    // remaining values disagree: a new spec would activate the stale generic one.
+    expect(
+      migrateAiModelRow({
+        chatConfig: { reasoningEffort: 'high', thinkingLevel3: 'low' },
+        hasProviderCard: false,
+        model: 'my-model',
+        provider: 'custom',
+        settings: { extendParams: ['gpt5ReasoningEffort'] },
+      }),
+    ).toEqual({ conflict: true });
+  });
+
+  it('migrates the pick and the declaration together', () => {
+    expect(
+      migrateAiModelRow({
+        chatConfig: { gpt5ReasoningEffort: 'low' },
+        hasProviderCard: false,
+        model: 'my-model',
+        provider: 'custom',
+        settings: { extendParams: ['gpt5ReasoningEffort'] },
+      }),
+    ).toEqual({
+      chatConfig: { reasoningEffort: 'low' },
+      conflict: false,
+      settings: { reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] } },
+    });
   });
 });

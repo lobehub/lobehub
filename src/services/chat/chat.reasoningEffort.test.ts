@@ -200,7 +200,7 @@ describe('ChatService.createAssistantMessage reasoning effort', () => {
     );
   });
 
-  // LOBE-14979: the control showed "high" while nothing was sent, so MiniMax ran at "max".
+  // Regression: the control showed "high" while nothing was sent, so MiniMax ran at "max".
   it('sends the card default effort when the user has not picked one', async () => {
     const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
     const messages = [{ content: 'Test default effort', role: 'user' }] as UIChatMessage[];

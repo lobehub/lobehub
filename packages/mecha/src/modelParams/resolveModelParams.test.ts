@@ -101,7 +101,7 @@ describe('resolveModelParams', () => {
       expect(facts.resolvedExtendParams).toMatchObject({ reasoning_effort: 'high' });
     });
 
-    // LOBE-14979: the shown default must be the level that is sent.
+    // The shown default must be the level that is sent.
     it('sends the card default effort when nothing was picked', async () => {
       const facts = await resolveModelParams(request(), providers());
       expect(facts.resolvedExtendParams).toMatchObject({ reasoning_effort: 'medium' });
@@ -443,6 +443,37 @@ describe('frozen model facts', () => {
     ]);
   });
 
+  it('freezes the effort an aggregator inherits from a card it does not keep', async () => {
+    // OpenRouter `openai/o3`: neither its own card nor the first same-id card
+    // carries the control; a later provider's card does.
+    const o3 = (providerId: string, reasoningEffort?: AiModelReasoningEffortSettings) => ({
+      abilities: {},
+      id: 'o3',
+      providerId,
+      ...(reasoningEffort ? { reasoningEffort } : {}),
+    });
+    const live = providers({
+      getModelReasoningConfig: async () => ({ reasoningEffort: 'high' }),
+      listModelCards: () => [
+        o3('openrouter'),
+        o3('github'),
+        o3('vercelaigateway', { levels: ['low', 'medium', 'high'] }),
+        o3('openai', { default: 'medium', levels: ['low', 'medium', 'high'] }),
+      ],
+    });
+    const req = request({ model: 'o3', provider: 'openrouter' });
+
+    const facts = await readFrozenModelFacts(req, live);
+    expect(facts.cards.map((card) => card.providerId)).toEqual(['openrouter', 'github']);
+
+    const fromSnapshot = await resolveModelParams(req, createFrozenModelParamsProviders(facts));
+    expect(fromSnapshot.modelReasoningEffort).toEqual({
+      default: 'medium',
+      levels: ['low', 'medium', 'high'],
+    });
+    expect(fromSnapshot.resolvedExtendParams).toMatchObject({ reasoning_effort: 'high' });
+  });
+
   it('keeps the effort the run started with when the user edits it mid-run', async () => {
     const live = liveProviders();
     const facts = await readFrozenModelFacts(request(), live);
@@ -512,6 +543,8 @@ describe('frozen model facts', () => {
       deploymentName: 'prod-endpoint',
       id: 'deepseek-v4-pro',
       providerId: 'volcengine',
+      // Inherited from the same model under deepseek, frozen resolved.
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
     });
     // The canonical card of the same id elsewhere is frozen untouched.
     expect(facts.cards.slice(1)).not.toContainEqual(

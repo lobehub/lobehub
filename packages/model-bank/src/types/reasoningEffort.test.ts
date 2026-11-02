@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveReasoningEffortLevel, resolveReasoningEffortSettings } from './reasoningEffort';
+import {
+  AiModelReasoningEffortSettingsSchema,
+  resolveReasoningEffortLevel,
+  resolveReasoningEffortSettings,
+} from './reasoningEffort';
+
+describe('AiModelReasoningEffortSettingsSchema', () => {
+  it('accepts a control without a default', () => {
+    expect(
+      AiModelReasoningEffortSettingsSchema.safeParse({ levels: ['low', 'high'] }).success,
+    ).toBe(true);
+  });
+
+  // The middle-level fallback reads the list as given, so `['high', 'low']`
+  // would resolve to `low`.
+  it.each([[['high', 'low']], [['low', 'low', 'high']]])('rejects levels %j', (levels) => {
+    expect(AiModelReasoningEffortSettingsSchema.safeParse({ levels }).success).toBe(false);
+  });
+});
 
 describe('resolveReasoningEffortSettings', () => {
   it('keeps the declared default', () => {

@@ -283,7 +283,7 @@ export const updateConfig = async (
   }
 
   // A new sub-agent effort pick replaces the legacy per-model effort keys
-  // (LOBE-14979) instead of merging next to them.
+  // instead of merging next to them.
   const subAgentChatConfig = toRecord(mergedValue.agencyConfig?.subagent?.chatConfig);
   if (subAgentChatConfig && data.agencyConfig?.subagent?.chatConfig?.reasoningEffort) {
     mergedValue.agencyConfig!.subagent!.chatConfig = stripLegacyEffortKeys(subAgentChatConfig);

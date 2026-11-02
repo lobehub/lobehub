@@ -149,8 +149,13 @@ export const readFrozenModelFacts = async (
   providers: ModelParamsProviders,
 ): Promise<FrozenModelFacts> => {
   const { model, provider } = request;
-  const { canonicalModelCard, modelCard, modelHasReasoningControls, userModelRow } =
-    await resolveModelExtendParamList(request, providers);
+  const {
+    canonicalModelCard,
+    modelCard,
+    modelHasReasoningControls,
+    modelReasoningEffort,
+    userModelRow,
+  } = await resolveModelExtendParamList(request, providers);
   // Read the reasoning sources only for models that can consume them, exactly
   // as the per-attempt rules do: a non-reasoning model freezes none.
   const reasoningConfig = modelHasReasoningControls
@@ -163,12 +168,26 @@ export const readFrozenModelFacts = async (
   // (`ai_models.config.deploymentName`) replaces the bundled one — otherwise
   // calls 404 wherever only the user's endpoint exists.
   const deploymentName = userModelRow?.deploymentName || modelCard?.deploymentName || undefined;
+  // The effort control is frozen resolved, on the source that answers first
+  // (the user row, else the own card): its spec or default may come from a
+  // same-model card the snapshot does not keep (OpenRouter `openai/o3` takes
+  // its spec from the Vercel AI Gateway card).
+  const frozenUserModelRow =
+    userModelRow?.reasoningEffort && modelReasoningEffort
+      ? { ...userModelRow, reasoningEffort: modelReasoningEffort }
+      : userModelRow;
+  const cardReasoningEffort =
+    !userModelRow?.reasoningEffort && modelReasoningEffort ? modelReasoningEffort : undefined;
+  const cardOverrides = {
+    ...(deploymentName ? { deploymentName } : {}),
+    ...(cardReasoningEffort ? { reasoningEffort: cardReasoningEffort } : {}),
+  };
   const mergedModelCard: ModelCardFacts | undefined = modelCard
-    ? { ...modelCard, ...(deploymentName ? { deploymentName } : {}) }
-    : userModelRow?.deploymentName
-      ? // A custom model has no bundled card; the user row alone still names
-        // its deployment, so freeze a minimal card for the transport.
-        { deploymentName: userModelRow.deploymentName, id: model, providerId: provider }
+    ? { ...modelCard, ...cardOverrides }
+    : Object.keys(cardOverrides).length > 0
+      ? // A custom model has no bundled card; freeze a minimal one for the
+        // user's deployment alias and the inherited effort control.
+        { ...cardOverrides, id: model, providerId: provider }
       : undefined;
 
   return {
@@ -189,7 +208,7 @@ export const readFrozenModelFacts = async (
     model,
     provider,
     reasoningConfig,
-    userModelRow,
+    userModelRow: frozenUserModelRow,
   };
 };
 

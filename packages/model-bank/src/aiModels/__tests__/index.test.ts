@@ -521,7 +521,7 @@ describe('reasoning effort declarations', () => {
     expect(invalid).toEqual([]);
   });
 
-  // LOBE-14979: M3.1 Flash ran at the upstream default (max) while the control showed high.
+  // Regression: M3.1 Flash ran at the upstream default (max) while the control showed high.
   // Card defaults follow the upstream's documented default, so the control now shows max.
   it('defaults MiniMax-M3.1-Flash to the upstream default (max)', () => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
