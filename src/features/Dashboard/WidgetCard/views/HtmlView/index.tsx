@@ -1,14 +1,14 @@
 'use client';
 
 import type { WidgetOutput } from '@lobechat/types';
-import { ActionIcon, useThemeMode } from '@lobehub/ui';
+import { ActionIcon, Center, Text, useThemeMode } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Maximize2Icon, Minimize2Icon } from 'lucide-react';
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createWidgetHtmlDocument } from './document';
+import { createWidgetHtmlDocument, WIDGET_HTML_WRAPPER_DOCUMENT } from './document';
 import { useElementFullscreen } from './useElementFullscreen';
 import { useWidgetHtmlBridge } from './useWidgetHtmlBridge';
 
@@ -34,6 +34,9 @@ const styles = stylex.create({
     borderRadius: 0,
     borderWidth: 0,
     height: '100%',
+  },
+  hidden: {
+    display: 'none',
   },
   root: {
     height: '100%',
@@ -81,8 +84,13 @@ const HtmlView = memo<HtmlViewProps>(({ html, output, framed }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const { isDarkMode } = useThemeMode();
-  const srcDoc = useMemo(() => createWidgetHtmlDocument(html), [html]);
-  useWidgetHtmlBridge(frameRef, output, isDarkMode ? 'dark' : 'light');
+  const contentDocument = useMemo(() => createWidgetHtmlDocument(html), [html]);
+  const { blocked } = useWidgetHtmlBridge(
+    frameRef,
+    contentDocument,
+    output,
+    isDarkMode ? 'dark' : 'light',
+  );
   const fullscreen = useElementFullscreen(containerRef);
   const toggleLabel = t(
     fullscreen.isFullscreen ? 'widget.fullscreen.exit' : 'widget.fullscreen.enter',
@@ -101,14 +109,21 @@ const HtmlView = memo<HtmlViewProps>(({ html, output, framed }) => {
     >
       <iframe
         data-widget-html
-        className={stylex.props(styles.frame).className}
+        className={stylex.props(styles.frame, blocked && styles.hidden).className}
         ref={frameRef}
         sandbox={'allow-scripts'}
-        srcDoc={srcDoc}
+        srcDoc={WIDGET_HTML_WRAPPER_DOCUMENT}
         style={FRAME_STYLE}
         title={'widget'}
       />
-      {fullscreen.supported && (
+      {blocked && (
+        <Center data-widget-html-blocked height={'100%'} padding={12}>
+          <Text fontSize={12} type={'secondary'}>
+            {t('widget.html.blocked')}
+          </Text>
+        </Center>
+      )}
+      {fullscreen.supported && !blocked && (
         <ActionIcon
           data-widget-html-fullscreen-toggle
           aria-label={toggleLabel}

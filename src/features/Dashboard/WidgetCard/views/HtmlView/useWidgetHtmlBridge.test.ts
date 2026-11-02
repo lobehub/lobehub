@@ -11,9 +11,9 @@ const setup = () => {
   document.body.append(frame);
   const post = vi.spyOn(frame.contentWindow!, 'postMessage');
   const hook = renderHook(
-    ({ appearance }: { appearance: 'dark' | 'light' }) =>
-      useWidgetHtmlBridge({ current: frame }, output, appearance),
-    { initialProps: { appearance: 'dark' } },
+    ({ appearance, doc }: { appearance: 'dark' | 'light'; doc: string }) =>
+      useWidgetHtmlBridge({ current: frame }, doc, output, appearance),
+    { initialProps: { appearance: 'dark', doc: '<p>v1</p>' } },
   );
   const fromFrame = (data: unknown, source: MessageEventSource | null = frame.contentWindow) =>
     act(() => {
@@ -26,6 +26,7 @@ const update = (appearance: 'dark' | 'light') => [
   { output, source: 'lobe-widget-host', theme: { appearance }, type: 'update' },
   '*',
 ];
+const document_ = (html: string) => [{ html, source: 'lobe-widget-host', type: 'document' }, '*'];
 
 describe('useWidgetHtmlBridge', () => {
   afterEach(() => {
@@ -33,7 +34,18 @@ describe('useWidgetHtmlBridge', () => {
     document.body.innerHTML = '';
   });
 
-  it('sends the output and theme again when the frame reports ready', () => {
+  it('sends the content document when the wrapper is ready, and again when it changes', () => {
+    const { fromFrame, hook, post } = setup();
+    expect(post).not.toHaveBeenCalledWith(...document_('<p>v1</p>'));
+
+    fromFrame({ source: 'lobe-widget-frame', type: 'wrapper-ready' });
+    expect(post).toHaveBeenCalledWith(...document_('<p>v1</p>'));
+
+    hook.rerender({ appearance: 'dark', doc: '<p>v2</p>' });
+    expect(post).toHaveBeenLastCalledWith(...document_('<p>v2</p>'));
+  });
+
+  it('sends the output and theme when the content reports ready', () => {
     const { fromFrame, post } = setup();
     post.mockClear();
     fromFrame({ source: 'lobe-widget-frame', type: 'ready' });
@@ -42,8 +54,22 @@ describe('useWidgetHtmlBridge', () => {
 
   it('sends the new theme when it changes', () => {
     const { hook, post } = setup();
-    hook.rerender({ appearance: 'light' });
+    hook.rerender({ appearance: 'light', doc: '<p>v1</p>' });
     expect(post).toHaveBeenLastCalledWith(...update('light'));
+  });
+
+  it('stops posting for good once the content tried to navigate away', () => {
+    const { fromFrame, hook, post } = setup();
+    expect(hook.result.current.blocked).toBe(false);
+
+    fromFrame({ source: 'lobe-widget-frame', type: 'navigated' });
+    expect(hook.result.current.blocked).toBe(true);
+
+    post.mockClear();
+    fromFrame({ source: 'lobe-widget-frame', type: 'ready' });
+    fromFrame({ source: 'lobe-widget-frame', type: 'wrapper-ready' });
+    hook.rerender({ appearance: 'light', doc: '<p>v2</p>' });
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('opens only web links, and only from its own frame', () => {

@@ -5,6 +5,8 @@ import {
   isOpenableWidgetUrl,
   isWidgetHtmlFrameMessage,
   WIDGET_HTML_CSP,
+  WIDGET_HTML_WRAPPER_CSP,
+  WIDGET_HTML_WRAPPER_DOCUMENT,
 } from './document';
 
 describe('createWidgetHtmlDocument', () => {
@@ -21,6 +23,23 @@ describe('createWidgetHtmlDocument', () => {
   it('blocks network access', () => {
     expect(WIDGET_HTML_CSP).toContain("default-src 'none'");
     expect(WIDGET_HTML_CSP).not.toMatch(/connect-src|https?:/);
+  });
+});
+
+describe('WIDGET_HTML_WRAPPER_DOCUMENT', () => {
+  it('forbids its content frame from navigating anywhere', () => {
+    expect(WIDGET_HTML_WRAPPER_CSP).toContain("frame-src 'none'");
+    expect(WIDGET_HTML_WRAPPER_CSP).toContain("default-src 'none'");
+    // The content frame inherits this policy, so it must not take away what the content may load.
+    expect(WIDGET_HTML_WRAPPER_CSP.startsWith(WIDGET_HTML_CSP)).toBe(true);
+    expect(WIDGET_HTML_WRAPPER_DOCUMENT.indexOf(`content="${WIDGET_HTML_WRAPPER_CSP}"`)).toBe(
+      WIDGET_HTML_WRAPPER_DOCUMENT.indexOf('content="'),
+    );
+  });
+
+  it('runs the content in a script-only sandbox and drops it on a second load', () => {
+    expect(WIDGET_HTML_WRAPPER_DOCUMENT).toContain("setAttribute('sandbox', 'allow-scripts')");
+    expect(WIDGET_HTML_WRAPPER_DOCUMENT).toContain("type: 'navigated'");
   });
 });
 
