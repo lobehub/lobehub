@@ -1,5 +1,5 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
 import { AuvApiName, AuvIdentifier } from '@lobechat/builtin-tool-auv';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { DeviceClient } from '@lobechat/types';
 
 import { deviceGateway } from '@/server/services/deviceGateway';

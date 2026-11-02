@@ -1,5 +1,5 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
 import type { LlmRelayDeadlines } from '@lobechat/agent-gateway-client';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type {
   ChatMethodOptions,
   ChatStreamPayload,

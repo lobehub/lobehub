@@ -1,4 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
+
 import { escapeXmlContent } from '../search/xmlEscape';
 
 export interface WorkspaceContextWorkspace {

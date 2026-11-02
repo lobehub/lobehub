@@ -1,4 +1,3 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
 import { builtinSkills } from '@lobechat/builtin-skills';
 import type { SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
@@ -16,6 +15,7 @@ import {
   type SkillRuntimeService,
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { resolveShareAllowedSkillIds } from '@lobechat/const';
 import {
   type BuiltinSkill,

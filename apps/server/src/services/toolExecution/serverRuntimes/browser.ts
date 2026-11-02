@@ -1,6 +1,6 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
 import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { DeviceClient } from '@lobechat/types';
 import debug from 'debug';
 

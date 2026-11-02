@@ -1,5 +1,5 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
 import type { AgentRunClientLlmWait, AgentRuntimeContext } from '@lobechat/agent-runtime';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { ChatMessageError } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 

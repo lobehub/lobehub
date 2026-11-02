@@ -1,10 +1,10 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
 import type {
   AgentRunClientLlmWait,
   AgentRunLlmExecutor,
   AgentRuntimeContext,
   AgentState,
 } from '@lobechat/agent-runtime';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { type ClientLlmWaitItem, type ResumeClientLlmWaitResult } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
