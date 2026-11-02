@@ -318,7 +318,6 @@ const resolveUsageLookupParam = (
 ): number | boolean | undefined => {
   switch (param) {
     // Providers such as Qwen pick the input tier from the whole prompt, cached part included.
-    case 'textInput':
     case 'textInputRange': {
       return usage.totalInputTokens ?? usage.inputTextTokens;
     }

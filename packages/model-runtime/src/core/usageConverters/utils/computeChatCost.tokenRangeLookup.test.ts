@@ -120,8 +120,9 @@ describe('computeChatCost token-range lookups', () => {
     );
   });
 
-  it('prices every model-bank chat lookup unit that depends on token usage', () => {
-    const tokenParams = new Set(['textInput', 'textInputRange', 'textOutputRange', 'thinkingMode']);
+  // Every chat lookup param other than the caller-supplied `ttl` must be resolvable from usage,
+  // so a card using an unknown param name fails here instead of silently pricing at $0.
+  it('prices every model-bank chat lookup unit keyed on usage', () => {
     const usage: ModelTokensUsage = {
       inputCacheMissTokens: 10_000,
       inputCachedTokens: 10_000,
@@ -136,7 +137,7 @@ describe('computeChatCost token-range lookups', () => {
         const units = (model.pricing?.units ?? []).filter(
           (unit): unit is LookupPricingUnit =>
             unit.strategy === 'lookup' &&
-            unit.lookup.pricingParams.some((param) => tokenParams.has(param)),
+            unit.lookup.pricingParams.some((param) => param !== 'ttl'),
         );
         if (units.length === 0) return [];
 
