@@ -88,7 +88,7 @@ export const runCodemod = async (
       compileStylex(code, filePath);
       const linted = await lintAndFix(await format(code, filePath), filePath);
       if (linted.errors.length > 0) throw new UnsupportedCssError(`lint: ${linted.errors[0]}`);
-      // eslint --fix merges duplicate imports without formatting them.
+      // oxlint --fix merges duplicate imports without formatting them.
       if (write) writeFileSync(filePath, await format(linted.code, filePath));
       report.converted.push(file);
       if (mergesOutsideClassName > 0) report.review.push(file);

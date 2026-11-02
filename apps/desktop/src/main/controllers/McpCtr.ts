@@ -35,7 +35,7 @@ const loadMcpClient = () => import('../libs/mcp/client');
  * Desktop-only copy of `@lobechat/types`'s `CheckMcpInstallResult`.
  *
  * We intentionally keep it local to avoid pulling the web app's path-alias
- * expectations (e.g. `@/config/*`) into the desktop `tsgo` typecheck.
+ * expectations (e.g. `@/config/*`) into the desktop `tsrs` typecheck.
  */ interface CheckMcpInstallResult {
   allDependenciesMet?: boolean;
   allOptions?: Array<{

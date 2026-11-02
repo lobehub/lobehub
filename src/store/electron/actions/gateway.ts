@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import type { GatewayConnectionState } from '@lobechat/electron-client-ipc';
-import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
+import { type SWRResponse } from 'swr';
 
 import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
 import { electronKeys } from '@/libs/swr/keys';

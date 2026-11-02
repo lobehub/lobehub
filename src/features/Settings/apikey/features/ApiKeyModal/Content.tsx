@@ -13,8 +13,8 @@ import {
 import { Form, useForm } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import { CheckCircle2 } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';

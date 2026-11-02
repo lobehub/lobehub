@@ -1,7 +1,14 @@
 'use client';
 
-import { Flexbox, SortableList } from '@lobehub/ui';
-import { ActionIcon, Button, Select, type SelectOption, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Flexbox,
+  Select,
+  type SelectOption,
+  SortableList,
+  Text,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PlusIcon, XIcon } from 'lucide-react';

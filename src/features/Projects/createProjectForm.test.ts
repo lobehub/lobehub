@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildCreateProjectRequest,
   getCreateProjectInput,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
@@ -60,5 +61,23 @@ describe('createProjectForm', () => {
     expect(
       getCreateProjectInput({ identifier: 'LOBE', name: 'LobeHub Project', slug: '-invalid' }),
     ).toBeNull();
+  });
+
+  it('leaves the main agent out so the server creates a dedicated one', () => {
+    expect(
+      buildCreateProjectRequest(
+        { name: 'Launch' },
+        { avatar: '🚀', mainAgentId: 'inbox', mainAgentMode: 'dedicated' },
+      ),
+    ).toEqual({ avatar: '🚀', name: 'Launch' });
+  });
+
+  it('sends the picked agent when the project reuses an existing one', () => {
+    expect(
+      buildCreateProjectRequest(
+        { name: 'Launch', slug: 'launch' },
+        { mainAgentId: 'agt_1', mainAgentMode: 'existing' },
+      ),
+    ).toEqual({ coordinatorAgentId: 'agt_1', name: 'Launch', slug: 'launch' });
   });
 });

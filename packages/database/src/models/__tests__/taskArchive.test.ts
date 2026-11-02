@@ -35,6 +35,23 @@ describe('TaskArchiveModel', () => {
     expect(again?.status).toBe('backlog');
   });
 
+  it('archives only a task still in one of the given statuses', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    const task = await tasks.create({ instruction: 'Reopened task' });
+    await tasks.updateStatus(task.id, 'completed', { completedAt: new Date() });
+    // Reopened between the caller's read and its archive write.
+    await tasks.updateStatus(task.id, 'backlog');
+
+    expect(await model.archive(task.id, { onlyStatuses: ['completed', 'canceled'] })).toBeNull();
+    expect((await tasks.findById(task.id))?.archivedAt).toBeNull();
+
+    await tasks.updateStatus(task.id, 'canceled');
+    expect(
+      (await model.archive(task.id, { onlyStatuses: ['completed', 'canceled'] }))?.archivedAt,
+    ).toBeInstanceOf(Date);
+  });
+
   it('refuses a running task in the same statement', async () => {
     const tasks = new TaskModel(serverDB, userId);
     const model = new TaskArchiveModel(serverDB, userId);
@@ -109,6 +126,13 @@ describe('TaskArchiveModel', () => {
 
     const restored = await model.unarchive(task.id);
     expect(restored?.archivedAt).toBeNull();
+  });
+
+  it('unarchives nothing when it is handed no ids', async () => {
+    const model = new TaskArchiveModel(serverDB, userId);
+
+    // No statement to run, so the empty list must not reach the database.
+    expect(await model.unarchiveMany([])).toEqual([]);
   });
 
   it("cannot touch another user's task", async () => {

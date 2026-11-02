@@ -128,11 +128,15 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // CLI would resolve to the device credentials' PERSONAL scope, which is
         // how a workspace agent ends up unable to find (or edit) itself. Set on
         // every command, so an `lh` reached indirectly (`bash -lc 'lh …'`, a
-        // script, a Makefile) inherits the scope too. The model's own `env`
-        // wins: it may be deliberately overriding the scope.
+        // script, a Makefile) inherits the scope too. The run id travels with
+        // it: `lh goal plan` and the other run-attributed commands need it. The
+        // model's own `env` wins: it may be deliberately overriding the scope.
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
           finalArgs = { ...finalArgs, topicId: context.topicId, agentId: context.agentId };
-          const lhEnv = buildDeviceLhEnv(await getContentWorkspaceId());
+          const lhEnv = buildDeviceLhEnv({
+            operationId: context.operationId,
+            workspaceId: await getContentWorkspaceId(),
+          });
           if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
 
           // The sandbox decision belongs to the run's owner, not to the model:
