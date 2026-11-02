@@ -1,11 +1,11 @@
 import {
   ActionIcon,
   confirmModal,
+  cssVar,
   type DropdownItem,
   DropdownMenu,
   Icon,
   toast,
-  Tooltip,
 } from '@lobehub/ui';
 import {
   ArchiveIcon,
@@ -268,29 +268,24 @@ const TaskDetailHeaderActions = memo(() => {
   const archiveLabel = t(
     isArchived ? 'taskList.contextMenu.unarchive' : 'taskList.contextMenu.archive',
   );
-  const archiveButton = (
-    <ActionIcon
-      aria-label={archiveLabel}
-      disabled={!canArchive}
-      icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon}
-      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-      title={canArchive ? archiveLabel : undefined}
-      tooltipProps={{ placement: 'bottom' }}
-      onClick={() => void toggleArchive()}
-    />
-  );
+  const archiveDeniedReason = archiveDeniedKey ? t(archiveDeniedKey) : undefined;
 
   return (
     <>
       {favoriteTarget && <FavoriteButton {...favoriteTarget} />}
-      {canArchive ? (
-        archiveButton
-      ) : (
-        // A disabled button swallows hover, so the reason tooltip sits on a wrapper.
-        <Tooltip placement={'bottom'} title={archiveDeniedKey && t(archiveDeniedKey)}>
-          <span style={{ display: 'inline-flex' }}>{archiveButton}</span>
-        </Tooltip>
-      )}
+      {/* A blocked archive stays focusable instead of natively disabled, so hover
+          and keyboard users can still read why; toggleArchive no-ops. */}
+      <ActionIcon
+        aria-description={archiveDeniedReason}
+        aria-label={archiveLabel}
+        color={canArchive ? undefined : cssVar.colorTextDisabled}
+        icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon}
+        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        style={canArchive ? undefined : { cursor: 'not-allowed' }}
+        title={archiveDeniedReason ?? archiveLabel}
+        tooltipProps={{ placement: 'bottom' }}
+        onClick={() => void toggleArchive()}
+      />
       <DropdownMenu items={menuItems}>
         <ActionIcon icon={MoreHorizontal} size={'small'} />
       </DropdownMenu>

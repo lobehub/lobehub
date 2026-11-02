@@ -299,11 +299,15 @@ describe('TaskDetailHeaderActions', () => {
     await waitFor(() => expect(mocks.archiveTask).toHaveBeenCalledWith('T-1', false));
   });
 
-  it('disables the button while the task can still run', () => {
+  it('keeps a blocked button focusable with its reason and makes clicks a no-op', () => {
     mocks.taskState.taskDetailMap = { 'T-1': { status: 'running', visibility: 'private' } };
     render(<TaskDetailHeaderActions />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'taskList.contextMenu.archive' }));
+    const button = screen.getByRole('button', { name: 'taskList.contextMenu.archive' });
+    // Not natively disabled, so keyboard users can focus it and read the reason.
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAttribute('aria-description', 'taskList.contextMenu.archiveBlocked');
+    fireEvent.click(button);
 
     expect(mocks.archiveTask).not.toHaveBeenCalled();
   });
