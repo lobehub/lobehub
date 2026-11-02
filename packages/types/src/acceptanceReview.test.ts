@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { reviewAnchorSchema } from './acceptanceReview';
+import { acceptanceReviewAnchorSchema } from './acceptanceReview';
 
 const base = {
   intent: 'change',
@@ -14,9 +14,9 @@ const base = {
 
 const ref = { box: { height: 0.5, width: 0.5, x: 0.1, y: 0.2 }, selector: '#card', text: 'Card' };
 
-describe('reviewAnchorSchema', () => {
+describe('acceptanceReviewAnchorSchema', () => {
   it('keeps the route and region refs the SDK sends', () => {
-    const parsed = reviewAnchorSchema.parse({
+    const parsed = acceptanceReviewAnchorSchema.parse({
       ...base,
       regionRefs: [ref, null],
       route: '/app#/settings',
@@ -27,20 +27,26 @@ describe('reviewAnchorSchema', () => {
 
   it('allows region ref selectors as long as target selectors', () => {
     const long = { ...ref, selector: 's'.repeat(2000) };
-    expect(reviewAnchorSchema.safeParse({ ...base, regionRefs: [long] }).success).toBe(true);
+    expect(acceptanceReviewAnchorSchema.safeParse({ ...base, regionRefs: [long] }).success).toBe(
+      true,
+    );
   });
 
   it('still accepts anchors from older SDKs', () => {
-    const parsed = reviewAnchorSchema.parse(base);
+    const parsed = acceptanceReviewAnchorSchema.parse(base);
     expect(parsed.route).toBeUndefined();
     expect(parsed.regionRefs).toBeUndefined();
   });
 
   it('rejects oversized routes and too many region refs', () => {
-    expect(reviewAnchorSchema.safeParse({ ...base, route: 'x'.repeat(501) }).success).toBe(false);
     expect(
-      reviewAnchorSchema.safeParse({ ...base, regionRefs: Array.from({ length: 7 }, () => ref) })
-        .success,
+      acceptanceReviewAnchorSchema.safeParse({ ...base, route: 'x'.repeat(501) }).success,
+    ).toBe(false);
+    expect(
+      acceptanceReviewAnchorSchema.safeParse({
+        ...base,
+        regionRefs: Array.from({ length: 7 }, () => ref),
+      }).success,
     ).toBe(false);
   });
 });
