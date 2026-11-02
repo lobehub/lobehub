@@ -185,9 +185,21 @@ export class StaleOperationReaper {
   }
 
   /**
-   * Warn about topics where more than one foreground run is live. Top-level
-   * runs only: sub-agent children (`parentOperationId`) and thread runs
-   * (`threadId`) legitimately run beside the topic's main run.
+   * Report topics where more than one foreground run is live. Top-level runs
+   * only: sub-agent children (`parentOperationId`) and thread runs (`threadId`)
+   * legitimately run beside the topic's main run.
+   *
+   * Logged through the `lobe-server:stale-operation-reaper` debug namespace
+   * rather than `console.warn`. The patrol query has no lookback floor (a live
+   * overlap must be visible even while the sweep window is full of dead rows),
+   * so a `running` row whose lease froze longer than the lookback is reported
+   * again on every tick forever: it never leaves `running`, and the main sweep
+   * no longer examines it. In an actively-used deployment that re-reports the
+   * same set once a minute (the opportunistic sweep interval) and buries any
+   * fresh signal in it. The count is still returned and surfaces in the sweep
+   * result as `concurrentForegroundTopics`, which is what the cron response
+   * alerts on; enable the namespace when the metric says a real overlap is
+   * worth dissecting.
    */
   private async reportConcurrentForegroundRuns(): Promise<number> {
     const rows = await this.db
@@ -225,7 +237,7 @@ export class StaleOperationReaper {
       if (unstopped.length === 0) continue;
 
       reported += 1;
-      console.warn('[StaleOperationReaper] concurrent foreground operations on one topic', {
+      log('concurrent foreground operations on one topic %o', {
         ...row,
         unstoppedOperationIds: unstopped,
       });

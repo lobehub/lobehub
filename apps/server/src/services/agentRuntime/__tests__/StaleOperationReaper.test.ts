@@ -25,6 +25,16 @@ vi.mock('../AbandonOperationService', () => ({
   }),
 }));
 
+// The concurrent-foreground patrol logs through `debug`. Capture the logger so a
+// test can assert the report is emitted under that namespace (not console.warn)
+// without other sweep log lines (`sweep done`, per-candidate notes) interfering.
+const { logMock } = vi.hoisted(() => ({ logMock: vi.fn() }));
+vi.mock('debug', () => ({
+  default: vi.fn(() => logMock),
+}));
+const concurrencyLogs = () =>
+  logMock.mock.calls.filter((args) => String(args[0]).includes('concurrent foreground operations'));
+
 /**
  * Minimal drizzle select chains: the stale-candidate query (`orderBy`) returns
  * `rows`, the concurrent-foreground patrol (`groupBy`) returns `overlapRows`.
@@ -100,6 +110,7 @@ describe('StaleOperationReaper', () => {
     settleStaleRunningMock.mockReset().mockResolvedValue(true);
     releaseStaleRedriveMock.mockReset().mockResolvedValue(true);
     finalizeAbandonedMock.mockClear();
+    logMock.mockClear();
     whereConditions.length = 0;
     process.env.APP_URL = 'https://app.lobehub.test';
   });
@@ -383,7 +394,6 @@ describe('StaleOperationReaper', () => {
   });
 
   it('reports topics with more than one foreground run live', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const overlap = { operationIds: ['op_a', 'op_b'], topicId: 'tpc_x' };
     const reaper = new StaleOperationReaper(buildDb([], [overlap]), {
       coordinator: buildCoordinator(null) as any,
@@ -393,15 +403,33 @@ describe('StaleOperationReaper', () => {
     const result = await reaper.sweep();
 
     expect(result.concurrentForegroundTopics).toBe(1);
-    expect(warn).toHaveBeenCalledWith(
-      '[StaleOperationReaper] concurrent foreground operations on one topic',
-      { ...overlap, unstoppedOperationIds: ['op_a'] },
-    );
+    expect(concurrencyLogs()).toEqual([
+      [
+        'concurrent foreground operations on one topic %o',
+        { ...overlap, unstoppedOperationIds: ['op_a'] },
+      ],
+    ]);
+  });
+
+  it('does not warn on the console for a reported overlap', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const overlap = { operationIds: ['op_a', 'op_b'], topicId: 'tpc_x' };
+    const reaper = new StaleOperationReaper(buildDb([], [overlap]), {
+      coordinator: buildCoordinator(null) as any,
+      queueService: buildQueue() as any,
+    });
+
+    const result = await reaper.sweep();
+
+    // The overlap is still reported, but silently: a row nobody can recover is
+    // re-reported every tick, so the detail belongs in the debug namespace.
+    expect(result.concurrentForegroundTopics).toBe(1);
+    expect(concurrencyLogs()).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
   it('ignores an overlap whose older runs were already asked to stop', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const overlap = { operationIds: ['op_a', 'op_b'], topicId: 'tpc_x' };
     const reaper = new StaleOperationReaper(buildDb([], [overlap]), {
       coordinator: buildCoordinator(null, [], (id) => id === 'op_a') as any,
@@ -411,8 +439,7 @@ describe('StaleOperationReaper', () => {
     const result = await reaper.sweep();
 
     expect(result.concurrentForegroundTopics).toBe(0);
-    expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
+    expect(concurrencyLogs()).toHaveLength(0);
   });
 
   it('still reports recovery results when the patrol query fails', async () => {
