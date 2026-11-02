@@ -116,6 +116,12 @@ export default defineConfig(async (env) => {
     },
     define: {
       ...processEnvDefine,
+      // Distribution identity. A packaged app has no shell env to inherit, so
+      // these must be baked in; electron-builder.mjs reads the same variables
+      // for the OS-level registration, and a mismatch leaves the app listening
+      // on a scheme the OS never routes to it.
+      'process.env.DESKTOP_APP_ID': JSON.stringify(process.env.DESKTOP_APP_ID),
+      'process.env.DESKTOP_PROTOCOL_SCHEME': JSON.stringify(process.env.DESKTOP_PROTOCOL_SCHEME),
       'process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS': JSON.stringify(externalNavigationHosts),
       'process.env.RENDERER_OTA_PUBLIC_KEY': JSON.stringify(process.env.RENDERER_OTA_PUBLIC_KEY),
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),

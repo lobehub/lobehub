@@ -38,6 +38,7 @@ import type {
   PollVideoStatusResult,
   VideoGenerationCapabilities,
 } from '../../types/video';
+import { respondJsonAfterStream } from '../../utils/consumeStream';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
@@ -102,6 +103,7 @@ import {
   parseStructuredToolArguments,
   StructuredOutputError,
 } from './structuredOutput';
+import { createOpenAICompatibleSpeech } from './textToSpeech';
 
 export type { PollVideoStatusResult };
 export * from './createVideo';
@@ -748,17 +750,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           options?.signal,
         );
 
-        if (responseMode === 'json') {
-          log('returning JSON response mode');
-          return Response.json(response);
-        }
-
         log('transforming non-streaming response to stream');
+        // Snapshot first: provider transform handlers may rewrite the completion in place
+        const jsonBody = responseMode === 'json' ? structuredClone(response) : undefined;
         const transformHandler =
           chatCompletion?.handleTransformResponseToStream || transformResponseToStream;
         const stream = transformHandler(response as unknown as OpenAI.ChatCompletion);
 
-        return StreamingResponse(
+        const streamingResponse = StreamingResponse(
           chatCompletion?.handleStream
             ? chatCompletion.handleStream(stream, {
                 callbacks: streamOptions.callbacks,
@@ -770,6 +769,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             headers: options?.headers,
           },
         );
+        if (jsonBody) return await respondJsonAfterStream(streamingResponse, jsonBody);
+        return streamingResponse;
       } catch (error) {
         throw this.handleError(error);
       }
@@ -1168,25 +1169,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
-      const log = debug(`${this.logPrefix}:textToSpeech`);
-      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
-      log(
-        'textToSpeech called with input length: %d, voice: %s',
-        payload.input?.length || 0,
-        payload.voice,
-      );
-
-      try {
-        const mp3 = await this.client.audio.speech.create(requestPayload as any, {
-          headers: options?.headers,
-          signal: options?.signal,
-        });
-        const buffer = await mp3.arrayBuffer();
-        log('generated audio with size: %d bytes', buffer.byteLength);
-        return buffer;
-      } catch (error) {
-        throw this.handleError(error);
-      }
+      return createOpenAICompatibleSpeech(this.client, payload, options, {
+        handleError: (error) => this.handleError(error),
+        logPrefix: this.logPrefix,
+        provider: this.id,
+        requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
+      });
     }
 
     /**

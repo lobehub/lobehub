@@ -15,7 +15,7 @@ const execution = new ChannelExecutionRepository(db);
 beforeEach(fixture.setup);
 afterEach(fixture.cleanup);
 
-const sendInput = { content: 'Hello', requestKey: 'hello', routing: 'jev' as const };
+const sendInput = { content: 'Hello', requestKey: 'hello', routing: 'decision' as const };
 const createAgent = async (workspaceId: string | null = fixture.workspaceId) => {
   const [agent] = await db
     .insert(agents)
@@ -111,6 +111,25 @@ describe('direct Channel identity', () => {
     });
     expect(personal.channel.id).not.toBe(first.channel.id);
     expect(personal.channel.workspaceId).toBeNull();
+  });
+
+  it('seats the bound Agent in the environment its caller resolved', async () => {
+    const agent = await createAgent(null);
+    const environment = {
+      deviceId: 'device-1',
+      deviceOwnerId: fixture.ownerId,
+      workingDirectory: '/repo',
+    };
+    const { channel } = await new ChannelRepository(db, fixture.ownerId).create({
+      agentConfig: environment,
+      agentId: agent.id,
+      title: 'Direct',
+    });
+    const [member] = await db
+      .select()
+      .from(channelMembers)
+      .where(and(eq(channelMembers.channelId, channel.id), eq(channelMembers.actorType, 'agent')));
+    expect(member).toMatchObject({ agentId: agent.id, config: environment });
   });
 
   it('keeps a group unbound even when it contains a single Agent', async () => {

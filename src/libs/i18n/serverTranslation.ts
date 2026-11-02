@@ -1,4 +1,5 @@
 import { DEFAULT_LANG } from '@/const/locale';
+import { applyBrandStrings } from '@/locales/brandPostProcessor';
 import { type Locales, type NS } from '@/locales/resources';
 import { normalizeLocale } from '@/locales/resources';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
@@ -52,7 +53,9 @@ export const translation = async (ns: NS = 'common', hl: string) => {
           content = content.replace(`{{${k}}}`, value);
         });
       }
-      return content;
+      // Mirror the client's brand post-processor (packages/locales/src/create.ts)
+      // so SSR copy does not leak the upstream product's names either.
+      return applyBrandStrings(content);
     },
   };
 };

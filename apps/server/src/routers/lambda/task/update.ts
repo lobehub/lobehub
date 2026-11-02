@@ -2,6 +2,7 @@ import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { TaskTakeOverError } from '@/database/repositories/taskSubtree';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
@@ -159,10 +160,25 @@ export const updateRouter = router({
       }
     }),
   updateVisibility: taskProcedureWrite
-    .input(idInput.merge(z.object({ visibility: z.enum(['private', 'public']) })))
+    .input(
+      idInput.merge(
+        z.object({
+          // A member making someone else's public task private takes it over:
+          // it becomes their private task. Opt-in, so a plain demotion by a
+          // non-creator still fails instead of silently moving the task.
+          takeOwnership: z.boolean().optional(),
+          visibility: z.enum(['private', 'public']),
+        }),
+      ),
+    )
     .mutation(async ({ input, ctx }) => {
       try {
         const resolved = await resolveTaskOrThrow(ctx.taskModel, input.id);
+        const takeOwnership =
+          !!ctx.workspaceId &&
+          !!input.takeOwnership &&
+          input.visibility === 'private' &&
+          resolved.createdByUserId !== ctx.userId;
 
         // Mirror the edit-lock contract from `update`: reject visibility flips
         // while another workspace member is actively editing this task. Without
@@ -181,11 +197,10 @@ export const updateRouter = router({
 
         // The creator can always change visibility on their own tasks. In
         // workspace mode, workspace owners may still promote other members'
-        // tasks (mirrors the transferTask policy at line ~1166), but demoting
-        // to private stays creator-only: the task would land in
-        // the creator's private list, so an owner-initiated demotion just
-        // appropriates another member's data.
-        if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId) {
+        // tasks (mirrors the transferTask policy at line ~1166). Demoting
+        // someone else's task leaves it in the creator's private list, so a
+        // non-creator may only demote by taking the task over as their own.
+        if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId && !takeOwnership) {
           if (input.visibility === 'private') {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -226,16 +241,10 @@ export const updateRouter = router({
           }
         }
 
-        // Demoting a member-assigned task to private would strand the
-        // assignee: the task disappears from their view while still carrying
-        // their name. Reject early — unassign first, then demote.
-        if (input.visibility === 'private') {
-          ctx.taskService.assertAssigneeUserVisibilityCompat(
-            input.visibility,
-            resolved.assigneeUserId,
-            resolved.createdByUserId,
-          );
-        }
+        // A member assignee does not block demotion: the subtree write clears
+        // every assignee other than the creator in the same transaction, since
+        // the task disappears from that member's view (see
+        // `setSubtreeVisibility`).
 
         // A private assignee agent on a public task breaks the visibility
         // invariant. Reject early — reassign first, then promote.
@@ -252,7 +261,16 @@ export const updateRouter = router({
           ctx.taskService.assertParentVisibilityCompat(input.visibility, parent?.visibility);
         }
 
-        const updated = await ctx.taskSubtree.updateVisibility(resolved.id, input.visibility);
+        // A takeover re-checks running runs and hidden private subtasks under
+        // the subtree lock (`TaskTakeOverError`).
+        const updated = await ctx.taskSubtree
+          .updateVisibility(resolved.id, input.visibility, { takeOwnership })
+          .catch((error: unknown) => {
+            if (error instanceof TaskTakeOverError) {
+              throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+            }
+            throw error;
+          });
         if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         return { data: updated, message: 'Task visibility updated', success: true };
       } catch (error) {

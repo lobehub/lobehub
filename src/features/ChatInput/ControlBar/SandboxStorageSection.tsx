@@ -9,6 +9,7 @@ import SandboxDrivePicker from './SandboxDrivePicker';
 import SandboxEnvironmentPicker from './SandboxEnvironmentPicker';
 import { useSandboxPlacement } from './useSandboxPlacement';
 import { useSandboxStorageAccess } from './useSandboxStorageAccess';
+import { useSeedDefaultSelection } from './useSeedDefaultSelection';
 
 interface SandboxStorageSectionProps {
   agentId: string;
@@ -21,17 +22,23 @@ interface SandboxStorageSectionProps {
  * the run could work.
  *
  * Nothing chosen means a temporary sandbox, cleaned up with the session; a
- * folder on the drive keeps its files. Beside it, the environment the working
- * directory is initialized from — a separate choice, so a temporary sandbox
- * can start from a checkout too.
+ * folder on the drive keeps its files. A plan with a drive starts each new
+ * conversation on its default folder rather than nothing. Beside it, the
+ * environment the working directory is initialized from — a separate choice,
+ * so a temporary sandbox can start from a checkout too.
  *
  * A plan without a drive still gets the chip: the temporary sandbox is
  * everyone's, and the way to a plan is a row in the same menu rather than a
  * different control.
  */
 const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }) => {
-  const { status } = useSandboxStorageAccess(agentId);
+  const { eligible, status } = useSandboxStorageAccess(agentId);
   const { selection, setSelection, topicId } = useSandboxPlacement(agentId, useTopicId());
+  useSeedDefaultSelection(agentId, {
+    eligible,
+    entitled: status === 'ready',
+    hasTopic: !!topicId,
+  });
 
   if (status === 'hidden') return null;
 

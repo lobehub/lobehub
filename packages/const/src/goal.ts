@@ -22,6 +22,12 @@ export const goalStatuses = [
 export type GoalStatus = (typeof goalStatuses)[number];
 
 /**
+ * Longest title a person may give a goal. A title is a one-line label for the
+ * list, the sidebar and the page header; the full ask lives in `requirement`.
+ */
+export const GOAL_TITLE_MAX_LENGTH = 255;
+
+/**
  * The execution carrier a goal is optionally bound to. Kept polymorphic so a
  * goal does not depend on any single execution model:
  *

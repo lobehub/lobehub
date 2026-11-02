@@ -205,7 +205,7 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableTopicPreview).toBe(false);
   });
 
-  it('should gate the mobile gateway mux independently from the Web flag', () => {
+  it('should gate the mobile gateway mux behind its own flag', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_gateway_mux_mobile).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableGatewayMuxMobile).toBe(
       false,
@@ -213,16 +213,11 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     const everyone = mapFeatureFlagsEnvToState({ agent_gateway_mux_mobile: true }, 'user-1');
     expect(everyone.enableGatewayMuxMobile).toBe(true);
-    expect(everyone.enableGatewayMux).toBeFalsy();
 
     const config = { agent_gateway_mux_mobile: ['user-123'] };
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableGatewayMuxMobile).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableGatewayMuxMobile).toBe(false);
     expect(mapFeatureFlagsEnvToState(config).enableGatewayMuxMobile).toBe(false);
-
-    const webOnly = mapFeatureFlagsEnvToState({ agent_gateway_mux: true }, 'user-1');
-    expect(webOnly.enableGatewayMux).toBe(true);
-    expect(webOnly.enableGatewayMuxMobile).toBeFalsy();
   });
 
   it('should keep dashboards off by default and enable them per user or globally', () => {
@@ -364,28 +359,5 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.showAiImage).toBe(false);
     expect(mappedState.enableKnowledgeBase).toBe(true);
     expect(mappedState.enableRAGEval).toBe(true);
-  });
-
-  describe('bot_wake rollout', () => {
-    it('is off for everyone by default', () => {
-      expect(DEFAULT_FEATURE_FLAGS.bot_wake).toBe(false);
-      expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'owner-1').enableBotWake).toBe(false);
-    });
-
-    it('turns on for the bot owners on the allowlist only, then for everyone', () => {
-      const allowlist = { ...DEFAULT_FEATURE_FLAGS, bot_wake: ['owner-1'] };
-
-      expect(mapFeatureFlagsEnvToState(allowlist, 'owner-1').enableBotWake).toBe(true);
-      expect(mapFeatureFlagsEnvToState(allowlist, 'owner-2').enableBotWake).toBe(false);
-      expect(mapFeatureFlagsEnvToState(allowlist).enableBotWake).toBe(false);
-
-      const everyone = { ...DEFAULT_FEATURE_FLAGS, bot_wake: true };
-      expect(mapFeatureFlagsEnvToState(everyone, 'owner-2').enableBotWake).toBe(true);
-    });
-
-    it('accepts a published allowlist or boolean', () => {
-      expect(FeatureFlagsSchema.safeParse({ bot_wake: ['owner-1'] }).success).toBe(true);
-      expect(FeatureFlagsSchema.safeParse({ bot_wake: true }).success).toBe(true);
-    });
   });
 });

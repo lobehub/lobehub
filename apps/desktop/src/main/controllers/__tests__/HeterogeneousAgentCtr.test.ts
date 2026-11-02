@@ -1297,6 +1297,7 @@ describe('HeterogeneousAgentCtr', () => {
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'deepseek-harness',
+        args: ['--config', '/custom/dsh.json'],
         command: '',
         cwd: '/workspace',
         env: { DEEPSEEK_API_KEY: 'test-key' },
@@ -1310,12 +1311,11 @@ describe('HeterogeneousAgentCtr', () => {
         systemContext: 'follow project rules',
       });
 
-      // An empty renderer command falls back to the `dsh` binary, resolved
-      // through the login-shell PATH a GUI launch otherwise lacks.
       expect(dshDetectMock).toHaveBeenCalledWith(
         'dsh',
         expect.objectContaining({ DEEPSEEK_API_KEY: 'test-key' }),
       );
+      expect(dshSpawnMock.mock.calls[0][0].args).toEqual(['--config', '/custom/dsh.json']);
       expect(dshSpawnMock).toHaveBeenCalledWith(
         expect.objectContaining({
           command: '/usr/local/bin/dsh',

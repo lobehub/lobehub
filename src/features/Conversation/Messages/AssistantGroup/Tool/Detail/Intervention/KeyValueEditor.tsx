@@ -1,37 +1,25 @@
-import { ActionIcon, Button, createStaticStyles, Flexbox, Icon, Input, toast } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Input, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  form: css`
-    position: relative;
-
-    width: 100%;
-    min-width: 600px;
-    padding: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  error: css`
-    font-size: 12px;
-    color: ${cssVar.colorError};
-  `,
-  formItem: css`
-    margin-block-end: 4px;
-  `,
-  input: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-  `,
-  row: css`
-    position: relative;
-  `,
-  title: css`
-    margin-block-end: 4px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  form: {
+    position: 'relative',
+    width: '100%',
+    minWidth: '600px',
+    padding: '8px',
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  error: { fontSize: '12px', color: cssVar.colorError },
+  formItem: { marginBlockEnd: '4px' },
+  input: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px' },
+  row: { position: 'relative' },
+  title: { marginBlockEnd: '4px', color: cssVar.colorTextTertiary },
+});
 
 interface KeyValueItem {
   id: string;
@@ -105,8 +93,8 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
   };
 
   return (
-    <Form autoComplete="off" className={styles.form} form={form} gap={0}>
-      <Flexbox horizontal className={styles.title} gap={8}>
+    <Form autoComplete="off" className={stylex.props(styles.form).className} form={form} gap={0}>
+      <Flexbox horizontal className={stylex.props(styles.title).className} gap={8}>
         <Flexbox flex={1}>key</Flexbox>
         <Flexbox flex={4}>value</Flexbox>
       </Flexbox>
@@ -117,7 +105,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
               <Flexbox
                 horizontal
                 align="center"
-                className={styles.row}
+                className={stylex.props(styles.row).className}
                 gap={8}
                 key={key}
                 width={'100%'}
@@ -129,26 +117,26 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
                   validate={validateKey}
                   validateOn={'change'}
                   render={({ error, onBlur, onChange, value }) => (
-                    <Flexbox className={styles.formItem} flex={1}>
+                    <Flexbox className={stylex.props(styles.formItem).className} flex={1}>
                       <Input
                         allowClear
                         aria-invalid={error ? true : undefined}
-                        className={styles.input}
+                        className={stylex.props(styles.input).className}
                         placeholder={t('updateArgs.form.key')}
                         value={value}
                         variant={'filled'}
                         onBlur={onBlur}
                         onChange={(e) => onChange(e.target.value)}
                       />
-                      {error && <div className={styles.error}>{error}</div>}
+                      {error && <div {...stylex.props(styles.error)}>{error}</div>}
                     </Flexbox>
                   )}
                 />
-                <Flexbox className={styles.formItem} flex={4}>
+                <Flexbox className={stylex.props(styles.formItem).className} flex={4}>
                   <Form.Field bare name={`${name}.value`}>
                     <Input
                       allowClear
-                      className={styles.input}
+                      className={stylex.props(styles.input).className}
                       placeholder={t('updateArgs.form.value')}
                       variant={'filled'}
                     />

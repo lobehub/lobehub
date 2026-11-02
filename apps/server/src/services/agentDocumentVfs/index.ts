@@ -6,6 +6,7 @@ import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 
 import { getAgentDocumentContentType } from '../agentDocuments/contentFormat';
 import { FileService } from '../file';
+import { writePageBodyThroughRoom } from '../pageCollab/bodyWriter';
 import type { AgentDocumentVfsDeps } from './deps';
 import { AgentDocumentVfsError } from './errors';
 import { deleteMountedSkill, writeMountedSkill } from './mountedSkills';
@@ -100,6 +101,12 @@ export class AgentDocumentVfsService {
       agentDocumentModel: this.agentDocumentModel,
       getFileService: () => this.fileService,
       skillMount: this.skillMount,
+      writeThroughRoom: (documentId, body) =>
+        writePageBodyThroughRoom(db, documentId, body, {
+          saveSource: 'llm_call',
+          userId,
+          workspaceId,
+        }),
     };
   }
 

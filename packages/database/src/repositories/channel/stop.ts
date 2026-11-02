@@ -29,7 +29,7 @@ interface StopCandidate {
 /**
  * Cancels queued and running jobs in the scope and revokes the publication of every claimed
  * job that has not both published and released its writer. Pending routing in a branch is
- * closed and its attempt bumped, so a late Jev answer is ignored.
+ * closed and its attempt bumped, so a late decision model answer is ignored.
  *
  * `requester` narrows a branch stop to that member's own requests and pending routing; admins
  * stop the whole branch.

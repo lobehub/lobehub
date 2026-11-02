@@ -32,28 +32,17 @@ export type IFeatureFlagsState = {
   enableChannels: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   /**
-   * Dashboards and the `lobe-dashboard` agent tool (`dashboard`). Off by
+   * Dashboards and the `builtin-dashboard` agent tool (`dashboard`). Off by
    * default: the pages, Portal view, in-chat previews and the tool are hidden
    * and the widget / dashboard APIs answer FORBIDDEN.
    */
   enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
-   * Rollout gate for the multiplexed gateway socket. Necessary but not
-   * sufficient: the transport also requires
-   * `GlobalServerConfig.agentGatewayProtocol === 2`.
-   */
-  enableGatewayMux: boolean | undefined;
-  /**
    * LobeHub Mobile rollout gate for the multiplexed gateway socket and
-   * protocol-v2 payloads; independent from `enableGatewayMux`.
+   * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
    */
   enableGatewayMuxMobile: boolean | undefined;
-  /**
-   * Rollout gate for the bot-wake pipeline (`bot_wake`), evaluated for the bot's owner. Read only
-   * by the server; it is part of the state because the two flag types must not drift apart.
-   */
-  enableBotWake: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
   /**
    * Rollout gate for relaying LLM calls of device-only model providers to the
@@ -167,6 +156,8 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableMultimodalUnderstanding?: boolean;
+  /** Pages collaborate live through the gateway's document rooms (LobeHub Cloud). */
+  enablePageCollab?: boolean;
   enableUploadFileToServer?: boolean;
   image?: PartialDeep<UserImageConfig>;
   /**
@@ -184,6 +175,11 @@ export interface GlobalServerConfig {
    * reverse proxy or on desktop.
    */
   oidcIssuer?: string;
+  /**
+   * The sandbox the page agent edits pages in: Market (needs the user's Market
+   * authorization unless the trusted client is configured), Onlyboxes, or none.
+   */
+  sandbox?: 'market' | 'onlyboxes' | 'unconfigured';
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;

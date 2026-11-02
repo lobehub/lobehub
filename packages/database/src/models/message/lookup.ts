@@ -18,6 +18,7 @@ import { ilikeContains } from '../../utils/like';
 import { searchableMessage } from '../../utils/searchableMessage';
 import { notShareVisitorMessage } from '../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { nonNull } from '../utils/rows';
 import { MessageScope } from './scope';
 import { buildMessageSearchSnippet } from './searchSnippet';
 
@@ -145,6 +146,37 @@ export class MessageLookupQueries extends MessageScope {
         eq(messages.role, 'assistant'),
       ),
     });
+
+  /**
+   * The agent relay hop (`metadata.agentSender.hop`) of the newest user
+   * message in a conversation — the main transcript, or one thread — or
+   * undefined when a person wrote it. Read when an agent turn sends to another
+   * conversation, to count how many agent → agent sends led to it.
+   */
+  findLatestUserTurnHop = async ({
+    threadId,
+    topicId,
+  }: {
+    threadId?: string;
+    topicId: string;
+  }): Promise<number | undefined> => {
+    const [row] = await this.db
+      .select({ hop: sql<null | string>`${messages.metadata}->'agentSender'->>'hop'` })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          eq(messages.topicId, topicId),
+          threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
+          eq(messages.role, 'user'),
+        ),
+      )
+      .orderBy(desc(messages.createdAt), desc(messages.id))
+      .limit(1);
+
+    const hop = Number(row?.hop);
+    return Number.isInteger(hop) && hop > 0 ? hop : undefined;
+  };
 
   /**
    * Resolve the `role='verify'` delivery-checker card for an Agent Run (created
@@ -396,8 +428,8 @@ export class MessageLookupQueries extends MessageScope {
 
     return rows.map(({ content, ...row }) => ({
       ...row,
-      /* v8 ignore next -- unreachable: `content` is never null: the ILIKE filter on `content` drops NULL rows */
-      ...buildMessageSearchSnippet(content ?? '', needle),
+      // The ILIKE filter on `content` drops NULL rows.
+      ...buildMessageSearchSnippet(nonNull(content, 'messages.content'), needle),
     }));
   };
 

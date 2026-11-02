@@ -45,7 +45,7 @@ describe('workspaceContextPrompt', () => {
     expect(result).toContain('<workspace_slug>acme</workspace_slug>');
     expect(result).not.toContain('<app_url>');
     expect(result).toContain('<link_base>/acme</link_base>');
-    expect(result).toContain('page (workspace document): /acme/page/<documentId>');
+    expect(result).toContain('page (workspace document): /acme/resource/page/<documentId>');
   });
 
   it('describes the personal scope when there is no workspace', () => {

@@ -55,7 +55,7 @@ const mentionAgent = async (config = deviceConfig()) => {
     content: 'Fix it',
     mentions: [agent.id],
     requestKey: 'req-1',
-    routing: 'jev',
+    routing: 'decision',
   });
   const [job] = await jobsOf(db, message.id);
 
@@ -153,7 +153,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Again',
       mentions: [agent.id],
       requestKey: 'req-2',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [nextJob] = await jobsOf(db, next.id);
     const second = (await execution.claim(channel.id, nextJob.id, lease))!;
@@ -169,7 +169,7 @@ describe('ChannelExecutionRepository', () => {
     const mainAgent = await fixture.addAgent(channel.id, 'Main', nativeConfig);
     const threadAgent = await fixture.addAgent(channel.id, 'Thread', nativeConfig);
     const send = (requestKey: string, input: Partial<ChannelSendInput> = {}) =>
-      asMember.send(channel.id, { content: requestKey, requestKey, routing: 'jev', ...input });
+      asMember.send(channel.id, { content: requestKey, requestKey, routing: 'decision', ...input });
     const root = await send('root', { mentions: [member.id] });
     const [thread] = await db
       .insert(channelThreads)
@@ -218,7 +218,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Second',
       mentions: [agent.id],
       requestKey: 'req-2',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [nextJob] = await jobsOf(db, next.id);
 
@@ -243,7 +243,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Together',
       mentions: [first.id, second.id, native.id],
       requestKey: 'parallel',
-      routing: 'jev',
+      routing: 'decision',
     });
     const jobs = await jobsOf(db, message.id);
     const claims = await Promise.all(jobs.map((job) => execution.claim(channel.id, job.id, lease)));
@@ -267,7 +267,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Same repo',
       mentions: [otherAgent.id],
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [job] = await jobsOf(db, message.id);
 
@@ -299,7 +299,7 @@ describe('ChannelExecutionRepository', () => {
         content: 'Same repo',
         mentions: [otherAgent.id],
         requestKey: 'req-1',
-        routing: 'jev',
+        routing: 'decision',
       });
       const [job] = await jobsOf(db, message.id);
 
@@ -445,7 +445,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Next',
       mentions: [agent.id],
       requestKey: 'req-2',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [nextJob] = await jobsOf(db, next.id);
     expect(await execution.claim(channel.id, nextJob.id, lease)).not.toBeNull();
@@ -502,7 +502,7 @@ describe('ChannelExecutionRepository', () => {
   });
 
   it('refuses unclaimed or revoked jobs and trashed channels', async () => {
-    const { channel, job } = await mentionAgent();
+    const { agent, asMember, channel, job } = await mentionAgent();
     await expect(execution.accepted(channel.id, job.id)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
@@ -517,15 +517,18 @@ describe('ChannelExecutionRepository', () => {
       code: 'CONFLICT',
     });
 
+    const next = await asMember.send(channel.id, {
+      content: 'Next',
+      mentions: [agent.id],
+      requestKey: 'req-2',
+      routing: 'decision',
+    });
+    const [nextJob] = await jobsOf(db, next.id);
     await db
       .update(channels)
       .set({ deletedAt: new Date(), isDeleted: true })
       .where(eq(channels.id, channel.id));
-    const [rerun] = await db
-      .insert(channelJobs)
-      .values({ ...job, deliveryKey: 'retry', id: undefined, status: 'queued' })
-      .returning();
-    expect(await execution.claim(channel.id, rerun.id, lease)).toBeNull();
+    expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
   });
 
   it('renews the lease only for the live owner', async () => {

@@ -38,6 +38,8 @@ export interface ResourceItem {
   fileId?: string | null;
   fileType: string;
   finishEmbedding?: boolean;
+  /** Whether any document or file sits under this row, so a page can expand like a folder. */
+  hasChildren?: boolean;
   // Identity
   id: string;
   knowledgeBaseId?: string;

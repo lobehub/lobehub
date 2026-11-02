@@ -63,7 +63,7 @@ import {
 } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
 import {
-  getPendingSandboxSelection,
+  resolvePendingSandboxSelection,
   toSandboxTopicMetadata,
 } from '@/store/chat/pendingSandboxSelection';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
@@ -113,7 +113,6 @@ import { getElectronStoreState } from '@/store/electron';
 import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -134,6 +133,7 @@ import {
   parseSingleAgentMentionDirectRoute,
   processCommands,
 } from '../commandBus';
+import { pageConversationNeedsGateway, preparePageConversation } from '../pageConversation';
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { resolveProjectDirectoryRun } from '../resolveProjectDirectoryRun';
@@ -430,29 +430,29 @@ export class ConversationLifecycleActionImpl {
     );
     const { workspaceScoped } = topicBinding;
     let { agencyConfig } = topicBinding;
-    const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
+    const isGatewayMode =
+      this.#get().isGatewayModeEnabled(agentId) || pageConversationNeedsGateway(context);
     const boundTopic = context.topicId
       ? topicSelectors.getTopicById(context.topicId)(this.#get())
       : undefined;
-    // A blank conversation opened from a project group's "+" runs in the
-    // directory it staged; the gateway transport has the server bind the topic.
+    // A blank conversation opened from a project "+" runs in the directory (or
+    // just the project) it staged; the new topic is born bound to it.
     const pendingDirectory = this.#get().pendingNewTopicDirectory;
-    const stagedDirectoryId =
-      !context.topicId &&
-      !context.isolatedTopic &&
-      !context.groupId &&
-      !directMentionRoute &&
-      pendingDirectory?.agentId === ownerAgentId
-        ? pendingDirectory.projectWorkingDirectoryId
-        : undefined;
     const projectRun = await resolveProjectDirectoryRun({
       agencyConfig,
       boundDirectoryId: boundTopic?.projectWorkingDirectoryId,
       isGatewayMode,
-      stagedDirectoryId,
+      staged:
+        !context.topicId &&
+        !context.isolatedTopic &&
+        !context.groupId &&
+        !directMentionRoute &&
+        pendingDirectory?.agentId === ownerAgentId
+          ? pendingDirectory
+          : undefined,
     });
     ({ agencyConfig } = projectRun);
-    const { stagedDirectory } = projectRun;
+    const { newTopicProject, stagedDirectory, stagedProjectId } = projectRun;
     if (stagedDirectory) consumePendingTopicRepos(ownerAgentId); // a cloud repo pick conflicts
 
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
@@ -536,22 +536,7 @@ export class ConversationLifecycleActionImpl {
     const hasMentionedAgents =
       !context.groupId && !directMentionRoute && mentionedAgents.length > 0;
 
-    // Page-scoped conversations: the page editor runtime tracks the currently
-    // open document. Inject its id at send time so the agent-runtime context
-    // (and downstream server-side PageAgent tool calls, which only receive that
-    // context) is scoped to the open document. Without this the server runtime
-    // throws "received a tool call without documentId in context".
-    //
-    // This fallback is only authoritative when the active page's editor is
-    // mounted (StoreUpdater has called setCurrentDocId for it). Callers that
-    // create a document and send before that editor mounts (e.g. sendAsWrite)
-    // MUST pass the new documentId in context explicitly — the `!context.documentId`
-    // guard preserves it, so the singleton (still bound to the previous page) is
-    // not consulted and a stale id is never injected.
-    const activePageDocumentId =
-      context.scope === 'page' && !context.documentId
-        ? pageAgentRuntime.getCurrentDocId()
-        : undefined;
+    const activePageDocumentId = await preparePageConversation(context);
 
     // Whether this send has to create the topic. From here on this flag — NOT
     // `!operationContext.topicId` — is the "new topic" test: the conversation
@@ -1101,10 +1086,7 @@ export class ConversationLifecycleActionImpl {
             id: mintedTopicId,
             ...newTopicModelSnapshot,
             // Shown under its project group from the first frame.
-            ...(stagedDirectory && {
-              projectId: stagedDirectory.projectId,
-              projectWorkingDirectoryId: stagedDirectory.id,
-            }),
+            ...newTopicProject,
             ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
             title: newTopicTitle,
           },
@@ -1275,7 +1257,7 @@ export class ConversationLifecycleActionImpl {
     // renders under a cloud-sandbox target.
     const pendingSandboxSelection =
       willCreateNewTopic && operationContext.agentId
-        ? getPendingSandboxSelection(operationContext.agentId)
+        ? await resolvePendingSandboxSelection(operationContext.agentId)
         : undefined;
     const sandboxInstanceMetadata = toSandboxTopicMetadata(pendingSandboxSelection);
     /** First-send persistence bypasses turnSetup, so both runtime paths must carry the effort snapshot. */
@@ -1390,7 +1372,7 @@ export class ConversationLifecycleActionImpl {
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
         // Adopting the minted topic consumed the staging; the topic never came
         // to be, so the blank conversation still belongs to that directory.
-        if (stagedDirectory) this.#get().setPendingNewTopicDirectory(pendingDirectory);
+        if (newTopicProject) this.#get().setPendingNewTopicDirectory(pendingDirectory);
       }
       this.#get().internal_dispatchTopic(
         { ...optimisticTopicScope, type: 'deleteTopic', id: optimisticTopic.id },
@@ -1463,6 +1445,7 @@ export class ConversationLifecycleActionImpl {
                   id: optimisticTopic?.id,
                   metadata: optimisticTopicMetadata,
                   ...newTopicModelSnapshot,
+                  projectId: stagedProjectId,
                   title: newTopicTitle,
                   topicMessageIds: messages.map((m) => m.id),
                 }
@@ -1823,7 +1806,7 @@ export class ConversationLifecycleActionImpl {
           clientOperations,
           replacesOperationId: replaceableGatewayOperationId,
           optimisticTopic,
-          projectWorkingDirectoryId: stagedDirectory?.id,
+          ...newTopicProject,
           // Forward @-mentioned tool ids so the server runtime enables them for
           // this run — the gateway/server path otherwise never sees the mention
           // selection (only the client runtime did). Omit when empty.
@@ -2012,6 +1995,7 @@ export class ConversationLifecycleActionImpl {
                 // ever write the cwd back (the server-side binding only exists
                 // on the gateway path).
                 metadata: optimisticTopicMetadata,
+                projectId: stagedProjectId,
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
                 title: newTopicTitle,
               }

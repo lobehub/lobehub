@@ -489,10 +489,15 @@ export class TaskDetailSliceActionImpl {
     }
   };
 
-  updateTaskVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+  updateTaskVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+    options?: { takeOwnership?: boolean },
+  ): Promise<void> => {
     try {
-      await taskService.updateVisibility(id, visibility);
-      await Promise.all([this.#get().refreshTaskList(), this.internal_refreshTaskDetail(id)]);
+      await (options
+        ? taskService.updateVisibility(id, visibility, options)
+        : taskService.updateVisibility(id, visibility));
     } catch (error) {
       // Surfaces a specific actionable error when the task's assignee is a
       // private agent. The generic "failed" toast hides what the user must
@@ -500,6 +505,11 @@ export class TaskDetailSliceActionImpl {
       // or publish the agent first.
       const raw = (error as { message?: string })?.message ?? '';
       const isPrivateAgentBlock = /public task cannot be assigned to a private agent/i.test(raw);
+      const isOtherCreatorsBlock = /subtasks created by other members/i.test(raw);
+      const isRunningBlock = /cannot take over this task while it or a subtask is running/i.test(
+        raw,
+      );
+      const isHiddenSubtasksBlock = /private subtasks you cannot see/i.test(raw);
       toast.error(
         isPrivateAgentBlock
           ? t('taskDetail.publishToWorkspace.errorPrivateAgent', {
@@ -507,12 +517,38 @@ export class TaskDetailSliceActionImpl {
                 'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
               ns: 'chat',
             })
-          : t('createTask.visibility.changeFailed', {
-              defaultValue: 'Failed to change task visibility',
-              ns: 'chat',
-            }),
+          : isOtherCreatorsBlock
+            ? t('taskDetail.makePrivate.errorOtherCreators', {
+                defaultValue:
+                  'This task has subtasks created by other members. Move or remove them before making it private.',
+                ns: 'chat',
+              })
+            : isRunningBlock
+              ? t('taskDetail.takeOver.errorRunning', {
+                  defaultValue:
+                    'This task or one of its subtasks is running. Take it over once the run finishes.',
+                  ns: 'chat',
+                })
+              : isHiddenSubtasksBlock
+                ? t('taskDetail.takeOver.errorHiddenSubtasks', {
+                    defaultValue:
+                      'This task has private subtasks its creator kept to themselves, so it cannot be taken over.',
+                    ns: 'chat',
+                  })
+                : t('createTask.visibility.changeFailed', {
+                    defaultValue: 'Failed to change task visibility',
+                    ns: 'chat',
+                  }),
       );
       throw error;
+    }
+
+    // The write is committed; a failed refresh must not read as a failed
+    // change, or a caller chaining on it (assigning a private agent) would stop.
+    try {
+      await Promise.all([this.#get().refreshTaskList(), this.internal_refreshTaskDetail(id)]);
+    } catch (error) {
+      console.error('[task:updateTaskVisibility] refresh failed', error);
     }
   };
 

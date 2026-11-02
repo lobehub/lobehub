@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
   FolderIcon,
@@ -19,111 +21,84 @@ import { useEffectiveAgentMode } from '@/features/ChatInput/hooks/useEffectiveAg
 import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
 import { usePermission } from '@/hooks/usePermission';
 
-const styles = createStaticStyles(({ css }) => ({
-  activeOption: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
-  agentTooltip: css`
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 160px;
-  `,
-  agentTooltipCap: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  agentTooltipTitle: css`
-    margin-block-end: 2px;
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  button: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  buttonDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: transparent;
-    }
-  `,
-  option: css`
-    cursor: pointer;
-
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  optionDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.55;
-
-    &:hover {
-      background: transparent;
-    }
-  `,
-  optionDesc: css`
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextDescription};
-  `,
-  optionIcon: css`
-    flex-shrink: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgElevated};
-  `,
-  optionTitle: css`
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-  popoverPopup: css`
-    /* The popup pads its option rows by 4px, so its corner must be one step larger
-       than the rows' radius (borderRadius 8 → borderRadiusLG 12 = 8 + 4) to wrap them
-       concentrically instead of looking tighter than them. &&& outranks the base
-       popup style's border-radius. */
-    &&& {
-      border-radius: ${cssVar.borderRadiusLG};
-    }
-  `,
-}));
+const styles = stylex.create({
+  activeOption: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+  },
+  agentTooltip: { display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '160px' },
+  agentTooltipCap: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  agentTooltipTitle: {
+    marginBlockEnd: '2px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  button: {
+    cursor: 'pointer',
+    display: 'flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '4px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  buttonDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.5,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  option: {
+    cursor: 'pointer',
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  optionDesc: { fontSize: '12px', lineHeight: 1.4, color: cssVar.colorTextDescription },
+  optionDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.55,
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  optionDisabledActive: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': 'transparent' },
+    backgroundImage: 'none',
+  },
+  optionIcon: {
+    flexShrink: 0,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  optionTitle: { fontSize: '14px', fontWeight: 500, lineHeight: 1.4, color: cssVar.colorText },
+  // The popup pads its option rows by 4px, so its corner must be one step larger
+  // than the rows' radius (borderRadius 8 → borderRadiusLG 12 = 8 + 4) to wrap them
+  // concentrically instead of looking tighter than them.
+  popoverPopup: { borderRadius: cssVar.borderRadiusLG },
+});
 
 const AGENT_CAPS = [
   { icon: WrenchIcon, key: 'tools' },
@@ -172,10 +147,10 @@ const ModeSelector = memo(() => {
   );
 
   const agentTooltip = (
-    <div className={styles.agentTooltip}>
-      <div className={styles.agentTooltipTitle}>{t('chatMode.agent')}</div>
+    <div {...stylex.props(styles.agentTooltip)}>
+      <div {...stylex.props(styles.agentTooltipTitle)}>{t('chatMode.agent')}</div>
       {AGENT_CAPS.map(({ key, icon }) => (
-        <div className={styles.agentTooltipCap} key={key}>
+        <div {...stylex.props(styles.agentTooltipCap)} key={key}>
           <Icon icon={icon} size={12} />
           {t(`chatMode.agentCap.${key}`)}
         </div>
@@ -197,16 +172,19 @@ const ModeSelector = memo(() => {
         horizontal
         align="center"
         gap={12}
-        className={cx(
-          styles.option,
-          currentMode === 'agent' && styles.activeOption,
-          !canSelectAgentMode && styles.optionDisabled,
-        )}
+        className={
+          stylex.props(
+            styles.option,
+            currentMode === 'agent' && styles.activeOption,
+            !canSelectAgentMode && styles.optionDisabled,
+            currentMode === 'agent' && !canSelectAgentMode && styles.optionDisabledActive,
+          ).className
+        }
         onClick={() => handleSelect('agent')}
       >
         <Flexbox
           align="center"
-          className={styles.optionIcon}
+          className={stylex.props(styles.optionIcon).className}
           height={32}
           justify="center"
           width={32}
@@ -214,21 +192,23 @@ const ModeSelector = memo(() => {
           <Icon icon={InfinityIcon} size={16} />
         </Flexbox>
         <Flexbox flex={1}>
-          <div className={styles.optionTitle}>{t('chatMode.agent')}</div>
-          <div className={styles.optionDesc}>{agentDesc}</div>
+          <div {...stylex.props(styles.optionTitle)}>{t('chatMode.agent')}</div>
+          <div {...stylex.props(styles.optionDesc)}>{agentDesc}</div>
         </Flexbox>
       </Flexbox>
 
       <Flexbox
         horizontal
         align="center"
-        className={cx(styles.option, currentMode === 'chat' && styles.activeOption)}
         gap={12}
+        className={
+          stylex.props(styles.option, currentMode === 'chat' && styles.activeOption).className
+        }
         onClick={() => handleSelect('chat')}
       >
         <Flexbox
           align="center"
-          className={styles.optionIcon}
+          className={stylex.props(styles.optionIcon).className}
           height={32}
           justify="center"
           width={32}
@@ -236,15 +216,15 @@ const ModeSelector = memo(() => {
           <Icon icon={MessageCircleIcon} size={16} />
         </Flexbox>
         <Flexbox flex={1}>
-          <div className={styles.optionTitle}>{t('chatMode.chat')}</div>
-          <div className={styles.optionDesc}>{t('chatMode.chatDesc')}</div>
+          <div {...stylex.props(styles.optionTitle)}>{t('chatMode.chat')}</div>
+          <div {...stylex.props(styles.optionDesc)}>{t('chatMode.chatDesc')}</div>
         </Flexbox>
       </Flexbox>
     </Flexbox>
   );
 
   const button = (
-    <div className={cx(styles.button, disabled && styles.buttonDisabled)}>
+    <div {...stylex.props(styles.button, disabled && styles.buttonDisabled)}>
       <Icon icon={CurrentIcon} size={14} />
       <span>{t(`chatMode.${currentMode}`)}</span>
       <Icon icon={ChevronDownIcon} size={12} />
@@ -263,7 +243,7 @@ const ModeSelector = memo(() => {
 
   return (
     <Popover
-      className={styles.popoverPopup}
+      className={stylex.props(styles.popoverPopup).className}
       content={popoverContent}
       open={!disabled && open}
       placement="topLeft"

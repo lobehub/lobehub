@@ -156,6 +156,27 @@ export const readChannelView = async (
         )
     : [];
   const page = reversed.slice(0, limit).reverse();
+  const quoteIds = [
+    ...new Set(
+      [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
+        message.replyToId ? [message.replyToId] : [],
+      ),
+    ),
+  ];
+  const quoted = quoteIds.length
+    ? await tx
+        .select(publicMessageColumns)
+        .from(channelMessages)
+        .leftJoin(users, eq(users.id, channelMessages.userId))
+        .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+        .where(and(eq(channelMessages.channelId, channelId), inArray(channelMessages.id, quoteIds)))
+    : [];
+  const quotes = new Map(
+    quoted.map((row) => {
+      const { author, content, id, sequence, threadId } = publicMessage(row, []);
+      return [id, { author, content: content.slice(0, 240), id, sequence, threadId }] as const;
+    }),
+  );
   const files = await fileIdsByMessage(tx, [
     ...page.map((message) => message.id),
     ...(rootMessage ? [rootMessage.id] : []),
@@ -179,8 +200,16 @@ export const readChannelView = async (
     jobs,
     members,
     threads,
-    rootMessage: rootMessage ? publicMessage(rootMessage, files.get(rootMessage.id) ?? []) : null,
-    messages: page.map((message) => publicMessage(message, files.get(message.id) ?? [])),
+    rootMessage: rootMessage
+      ? {
+          ...publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+          replyTo: rootMessage.replyToId ? (quotes.get(rootMessage.replyToId) ?? null) : null,
+        }
+      : null,
+    messages: page.map((message) => ({
+      ...publicMessage(message, files.get(message.id) ?? []),
+      replyTo: message.replyToId ? (quotes.get(message.replyToId) ?? null) : null,
+    })),
   };
 };
 

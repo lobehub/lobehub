@@ -2,6 +2,7 @@ import {
   INSERT_ALERT_COMMAND,
   INSERT_CHART_COMMAND,
   INSERT_FOOTNOTE_COMMAND,
+  INSERT_VIDEO_COMMAND,
   type SlashOptions,
 } from '@lobehub/editor';
 import { renderHook } from '@testing-library/react';
@@ -22,6 +23,7 @@ vi.mock('@lobehub/editor', () => ({
   INSERT_ORDERED_LIST_COMMAND: 'INSERT_ORDERED_LIST_COMMAND',
   INSERT_TABLE_COMMAND: 'INSERT_TABLE_COMMAND',
   INSERT_UNORDERED_LIST_COMMAND: 'INSERT_UNORDERED_LIST_COMMAND',
+  INSERT_VIDEO_COMMAND: 'INSERT_VIDEO_COMMAND',
 }));
 
 vi.mock('@/features/EditorCanvas', () => ({ openFileSelector: vi.fn() }));
@@ -45,5 +47,16 @@ describe('useSlashItems', () => {
     item!.onSelect!(editor as any, {} as any);
 
     expect(editor.dispatchCommand).toHaveBeenCalledWith(command, undefined);
+  });
+
+  it('inserts an empty video block from the slash menu', () => {
+    const { result } = renderHook(() => useSlashItems());
+    const item = findItem(result.current, 'video');
+    const editor = { dispatchCommand: vi.fn(), focus: vi.fn() };
+
+    expect(item).toBeDefined();
+    item!.onSelect!(editor as any, {} as any);
+
+    expect(editor.dispatchCommand).toHaveBeenCalledWith(INSERT_VIDEO_COMMAND, {});
   });
 });

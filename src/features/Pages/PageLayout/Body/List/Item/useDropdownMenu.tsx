@@ -8,6 +8,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { isDesktop } from '@/const/version';
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -37,12 +38,10 @@ interface MenuClickInfo {
  * rename field with it — before anything can be typed, which is why "Rename"
  * appeared to do nothing. Close the handler over the row and stop the event.
  */
-const stopRowClick =
-  (run: () => void) =>
-  (info?: MenuClickInfo) => {
-    info?.domEvent?.stopPropagation();
-    run();
-  };
+const stopRowClick = (run: () => void) => (info?: MenuClickInfo) => {
+  info?.domEvent?.stopPropagation();
+  run();
+};
 
 /**
  * Business builds inject their own transfer entries (Move to a library, …).
@@ -165,7 +164,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
                 key: 'openInNewTab',
                 label: t('pageList.actions.openInNewTab', { ns: 'file' }),
                 onClick: stopRowClick(() => {
-                  const url = buildWorkspaceAwarePath(`/page/${pageId}`, activeWorkspaceSlug);
+                  const url = buildWorkspaceAwarePath(docsPagePath(pageId), activeWorkspaceSlug);
                   addTab(url);
                   navigate(url, { escape: true });
                 }),

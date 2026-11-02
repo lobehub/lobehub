@@ -568,6 +568,92 @@ export class GoalGraphModel {
     return nearest ? { id: nearest.id, title: nearest.title } : undefined;
   };
 
+  /**
+   * {@link findGoalByTaskId} for many tasks in two queries, with the same
+   * nearest-ancestor rule and the goal's status — for bulk task writes that
+   * must not probe each task on its own. Tasks without a goal are absent.
+   */
+  findGoalsByTaskIds = async (
+    taskIds: string[],
+  ): Promise<Map<string, { id: string; status: string; title: string }>> => {
+    const result = new Map<string, { id: string; status: string; title: string }>();
+    if (taskIds.length === 0) return result;
+
+    const chain = await this.db.execute<{ depth: number; id: string; root: string }>(sql`
+      WITH RECURSIVE chain(root, id, depth, visited) AS (
+        SELECT ${tasks.id}, ${tasks.id}, 0, ARRAY[${tasks.id}] FROM ${tasks}
+        WHERE ${tasks.id} IN (${sql.join(
+          taskIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+        UNION ALL
+        SELECT chain.root, ${tasks.parentTaskId}, chain.depth + 1, chain.visited || ${tasks.parentTaskId}
+        FROM ${tasks} JOIN chain ON ${tasks.id} = chain.id
+        WHERE ${tasks.parentTaskId} IS NOT NULL
+          AND NOT (${tasks.parentTaskId} = ANY(chain.visited))
+      )
+      SELECT root, id, depth FROM chain
+    `);
+    // ancestor id → every selected root it sits above, with its distance.
+    const rootsOf = new Map<string, { depth: number; root: string }[]>();
+    for (const row of chain.rows) {
+      const list = rootsOf.get(row.id) ?? [];
+      list.push({ depth: Number(row.depth), root: row.root });
+      rootsOf.set(row.id, list);
+    }
+    const chainIds = [...rootsOf.keys()];
+    if (chainIds.length === 0) return result;
+
+    const rows = await this.db
+      .select({
+        carrierTaskId: goals.subjectId,
+        createdAt: goals.createdAt,
+        id: goals.id,
+        nodeTaskId: goalNodes.taskId,
+        status: goals.status,
+        subjectType: goals.subjectType,
+        title: goals.title,
+      })
+      .from(goals)
+      .leftJoin(goalNodes, and(eq(goalNodes.goalId, goals.id), inArray(goalNodes.taskId, chainIds)))
+      .where(
+        and(
+          this.ownership(),
+          or(
+            inArray(goalNodes.taskId, chainIds),
+            and(eq(goals.subjectType, 'task'), inArray(goals.subjectId, chainIds)),
+          ),
+        ),
+      );
+
+    const best = new Map<
+      string,
+      { createdAt: number; depth: number; row: (typeof rows)[number] }
+    >();
+    const consider = (anchorId: string | null, row: (typeof rows)[number]) => {
+      if (!anchorId) return;
+      for (const { depth, root } of rootsOf.get(anchorId) ?? []) {
+        const createdAt = new Date(row.createdAt).getTime();
+        const current = best.get(root);
+        if (
+          !current ||
+          depth < current.depth ||
+          (depth === current.depth && createdAt > current.createdAt)
+        ) {
+          best.set(root, { createdAt, depth, row });
+        }
+      }
+    };
+    for (const row of rows) {
+      consider(row.nodeTaskId, row);
+      if (row.subjectType === 'task') consider(row.carrierTaskId, row);
+    }
+    for (const [root, { row }] of best) {
+      result.set(root, { id: row.id, status: row.status, title: row.title });
+    }
+    return result;
+  };
+
   createNode = async (goalId: string, input: CreateNodeInput) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
@@ -802,6 +888,32 @@ export class GoalGraphModel {
 
   /** Rewrite a node's description — e.g. the planner replacing the seeded requirement blob with its own problem statement. */
   /** `confidence` travels with the description when the planner re-reads the problem. */
+  /** Follow a goal rename on the root question, while it still carries the goal's old title. */
+  renameProblemNode = async (goalId: string, from: string, to: string) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [node] = await tx
+        .update(goalNodes)
+        .set({ title: to, updatedAt: new Date() })
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.kind, 'problem'),
+            eq(goalNodes.title, from),
+          ),
+        )
+        .returning();
+      if (!node) return undefined;
+      await this.appendEvent(tx, goalId, {
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'updated',
+        reason: 'Goal renamed',
+        taskId: node.taskId ?? undefined,
+      });
+      return node;
+    });
+
   updateNodeDescription = async (
     goalId: string,
     nodeId: string,
@@ -958,7 +1070,6 @@ export class GoalGraphModel {
           and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
         )
         .returning();
-      /* v8 ignore next -- unreachable: ownedGoal() holds the goal row FOR UPDATE and every writer of a decision's status takes that lock first, so the pending row selected above is still pending */
       if (!decision) return undefined;
       await tx
         .update(goalNodes)
@@ -1038,7 +1149,6 @@ export class GoalGraphModel {
           and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
         )
         .returning();
-      /* v8 ignore next -- unreachable: ownedGoal() holds the goal row FOR UPDATE and every writer of a decision's status takes that lock first, so the pending row selected above is still pending */
       if (!decision) return undefined;
       await tx
         .update(goalNodes)

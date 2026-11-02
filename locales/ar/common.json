@@ -412,7 +412,6 @@
   "serverVersionOutdated.warning": "قد لا تعمل بعض الميزات بشكل صحيح أو قد تتصرف بشكل غير متوقع. يُرجى تحديث الخادم للحصول على أفضل تجربة.",
   "setting": "الإعدادات",
   "share": "مشاركة",
-  "stillLoading": "لا يزال يتم التحميل...",
   "stop": "إيقاف",
   "supportAgent.context.attached": "تم إرفاق معلومات التشخيص",
   "supportAgent.context.remove": "إزالة",

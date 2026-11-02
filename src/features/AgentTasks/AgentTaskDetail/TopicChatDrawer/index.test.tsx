@@ -440,6 +440,39 @@ describe('TopicChatDrawer', () => {
     expect(getByTitle('taskDetail.topicDrawer.collapse')).toBeInTheDocument();
   });
 
+  it('opens expanded on hosts that default to the wide reading panel', () => {
+    const { getByTestId, getByTitle } = render(<TopicChatDrawer defaultExpanded />);
+
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-width',
+      'min(960px, calc(100vw - 16px))',
+    );
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-height', 'calc(100dvh - 16px)');
+    expect(getByTitle('taskDetail.topicDrawer.collapse')).toBeInTheDocument();
+  });
+
+  it('restores the host default size each time the drawer reopens', () => {
+    // The store mock is not reactive, so a throwaway prop forces each re-render.
+    const renderAt = (revision: number) => (
+      <TopicChatDrawer defaultExpanded {...({ 'data-revision': revision } as object)} />
+    );
+    const { getByTestId, getByTitle, queryByTestId, rerender } = render(renderAt(0));
+
+    fireEvent.click(getByTitle('taskDetail.topicDrawer.collapse'));
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-width', '640');
+
+    mocks.taskState.activeTopicDrawerTopicId = undefined as unknown as string;
+    rerender(renderAt(1));
+    expect(queryByTestId('topic-panel')).not.toBeInTheDocument();
+
+    mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
+    rerender(renderAt(2));
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-width',
+      'min(960px, calc(100vw - 16px))',
+    );
+  });
+
   it('opens the run in its Agent conversation', () => {
     const { getByText } = render(<TopicChatDrawer />);
 

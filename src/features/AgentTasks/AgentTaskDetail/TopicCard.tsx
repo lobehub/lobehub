@@ -1,14 +1,20 @@
 import type { TaskDetailActivity } from '@lobechat/types';
 import { formatDuration } from '@lobechat/utils';
 import {
+  ActionIcon,
+  Avatar,
   Block,
+  confirmModal,
+  cssVar,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
   Markdown,
   stopPropagation,
+  Tag,
+  Text,
+  toast,
 } from '@lobehub/ui';
-import { ActionIcon, Avatar, confirmModal, cssVar, Tag, Text, toast } from '@lobehub/ui';
 import {
   ChevronDown,
   ChevronRight,

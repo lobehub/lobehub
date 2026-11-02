@@ -19,6 +19,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import AgentPendant from './AgentPendant';
 import type { AgentRowAuthor } from './AgentRow';
+import { coverPattern } from './coverColor';
 import ItemActions from './ItemActions';
 import { resolveAgentBadge } from './resolveAgentBadge';
 import SidebarItemAvatar from './SidebarItemAvatar';
@@ -58,8 +59,15 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
   `,
   // Identity texture, not artwork: a straight-edged band tinted from the
   // agent's avatar (see useAgentCoverColor), mixed toward the container color
-  // so it stays calm in both themes, with a faint dot grid on top.
+  // so it stays calm in both themes, with a faint texture on top picked from
+  // the agent id (see coverPattern). Every texture is drawn in the container
+  // color at low alpha: dots in --cover-ink, strokes in the lighter
+  // --cover-line, and dense strokes in --cover-faint, so none outshouts another.
   cover: css`
+    --cover-ink: color-mix(in srgb, ${cssVar.colorBgContainer} 30%, transparent);
+    --cover-line: color-mix(in srgb, ${cssVar.colorBgContainer} 22%, transparent);
+    --cover-faint: color-mix(in srgb, ${cssVar.colorBgContainer} 15%, transparent);
+
     position: absolute;
     inset-block-start: 0;
     inset-inline: 0;
@@ -72,14 +80,79 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
       var(--agent-cover, ${cssVar.colorFill}) 72%,
       ${cssVar.colorBgContainer}
     );
-    background-image: radial-gradient(
-      color-mix(in srgb, ${cssVar.colorBgContainer} 30%, transparent) 1px,
-      transparent 1.5px
-    );
+    background-image: radial-gradient(var(--cover-ink) 1px, transparent 1.5px);
     background-size: 10px 10px;
 
     /* The sampled color fades in over the neutral band. */
     transition: background-color 0.3s;
+
+    /* An uploaded profile cover replaces both the tint and the texture. */
+    &[data-cover-image] {
+      background-position: center;
+      background-size: cover;
+    }
+
+    &[data-pattern='grid'] {
+      background-image:
+        linear-gradient(var(--cover-faint) 1px, transparent 1px),
+        linear-gradient(90deg, var(--cover-faint) 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+
+    &[data-pattern='stripes'] {
+      background-image: repeating-linear-gradient(
+        45deg,
+        var(--cover-line) 0 1px,
+        transparent 1px 8px
+      );
+      background-size: auto;
+    }
+
+    &[data-pattern='crosshatch'] {
+      background-image:
+        repeating-linear-gradient(45deg, var(--cover-line) 0 1px, transparent 1px 10px),
+        repeating-linear-gradient(-45deg, var(--cover-line) 0 1px, transparent 1px 10px);
+      background-size: auto;
+    }
+
+    /* Concentric arcs from the top-right corner, away from the avatar. */
+    &[data-pattern='rings'] {
+      background-image: repeating-radial-gradient(
+        circle at 100% 0,
+        var(--cover-line) 0 1px,
+        transparent 1px 10px
+      );
+      background-size: auto;
+    }
+
+    &[data-pattern='stagger'] {
+      background-image:
+        radial-gradient(var(--cover-ink) 1.5px, transparent 2px),
+        radial-gradient(var(--cover-ink) 1.5px, transparent 2px);
+      background-position:
+        0 0,
+        8px 8px;
+      background-size: 16px 16px;
+    }
+
+    &[data-pattern='lines'] {
+      background-image: repeating-linear-gradient(
+        0deg,
+        var(--cover-faint) 0 1px,
+        transparent 1px 8px
+      );
+      background-size: auto;
+    }
+
+    &[data-pattern='scales'] {
+      background-image: radial-gradient(
+        circle at 50% 0,
+        transparent 6px,
+        var(--cover-line) 6px 7px,
+        transparent 7px
+      );
+      background-size: 14px 8px;
+    }
   `,
   avatarRing: css`
     position: relative;
@@ -91,8 +164,11 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 50%;
 
     /* Neutral face plate for emoji avatars without a background color;
-       images and colored avatars paint over it. */
-    background: ${cssVar.colorFillTertiary};
+       images and colored avatars paint over it. The fill is translucent, so it
+       sits on an opaque card-color base: a cover image would show through it. */
+    background:
+      linear-gradient(${cssVar.colorFillTertiary}, ${cssVar.colorFillTertiary}),
+      ${cssVar.colorBgContainer};
     background-clip: padding-box;
   `,
   // Group avatars are a square member grid; a circle would clip its corners.
@@ -248,7 +324,7 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
   const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
   const roleTag = agentSecondaryDisplayName(item);
   const badge = resolveAgentBadge(item);
-  const coverColor = useAgentCoverColor(item, badge.cover);
+  const coverColor = useAgentCoverColor(item, badge.cover, !!badge.coverImage);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   // Right-click support — same bridge as AgentRow: the hook-bearing menu
@@ -274,7 +350,16 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
           <Block clickable className={cardStyles.card} height={'100%'} variant={'outlined'}>
             <div
               className={cardStyles.cover}
-              style={{ '--agent-cover': coverColor } as CSSProperties}
+              data-cover-image={badge.coverImage ? '' : undefined}
+              data-pattern={badge.coverImage ? undefined : coverPattern(item)}
+              style={
+                {
+                  '--agent-cover': coverColor,
+                  'backgroundImage': badge.coverImage
+                    ? `url(${JSON.stringify(badge.coverImage)})`
+                    : undefined,
+                } as CSSProperties
+              }
             />
             <AgentPendant bottom={badge.bottom} top={badge.top}>
               <span

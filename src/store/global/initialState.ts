@@ -573,6 +573,7 @@ export const createNavigationRef = (): GlobalNavigationRef => ({ current: null }
 export interface GlobalState {
   hasNewVersion?: boolean;
   isMobile?: boolean;
+  isNavPanelResizing?: boolean;
   /**
    * Server version is too old, does not support /api/version endpoint
    * Need to prompt user to update server

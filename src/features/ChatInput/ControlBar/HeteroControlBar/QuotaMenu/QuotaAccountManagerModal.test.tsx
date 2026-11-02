@@ -6,7 +6,9 @@ import { type ReactElement } from 'react';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createReplicaState } from '@/libs/replica';
 import { agentQuotaService } from '@/services/agentQuota';
+import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { useAgentQuotaStore } from '@/store/agentQuota';
 import {
@@ -192,6 +194,8 @@ describe('QuotaAccountManager on the desktop', () => {
   beforeEach(() => {
     desktop.value = true;
     isolateQuotaReplica();
+    // A signed-in desktop: the IPC below resolves this as its stable id.
+    useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never);
     vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([
       account('here'),
       account('away'),
@@ -207,11 +211,22 @@ describe('QuotaAccountManager on the desktop', () => {
     vi.spyOn(heterogeneousAgentService, 'getClaudeCodeQuota').mockResolvedValue({
       status: 'unavailable',
     } as never);
+    vi.spyOn(agentQuotaService, 'getDeviceAccount').mockResolvedValue({ accountId: null });
+    vi.spyOn(agentQuotaService, 'syncDeviceLogins').mockResolvedValue(undefined as never);
+    // The desktop IPC behind this machine's stable device id answers with the
+    // id each case sets on `gatewayDeviceInfo`.
+    vi.spyOn(gatewayConnectionService, 'getStableDeviceId').mockImplementation(
+      async () => useElectronStore.getState().gatewayDeviceInfo?.deviceId ?? null,
+    );
   });
 
   afterEach(() => {
     desktop.value = false;
-    useElectronStore.setState({ gatewayDeviceInfo: undefined });
+    useElectronStore.setState({
+      gatewayDeviceInfo: undefined,
+      gatewayStableDeviceIdMap: {},
+      gatewayStableDeviceIdReplica: createReplicaState(),
+    });
     vi.restoreAllMocks();
   });
 
@@ -254,6 +269,90 @@ describe('QuotaAccountManager on the desktop', () => {
     await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
     expect(radioFor('away@example.com').getAttribute('aria-disabled')).toBe('true');
     expect(heterogeneousAgentService.listClaudeCodeAccounts).toHaveBeenCalled();
+  });
+
+  it('shows this device’s own pick over the agent-wide pin', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    vi.mocked(agentQuotaService.listBindings).mockResolvedValue([
+      binding('b1', 'here', 'pinned'),
+      binding('b2', 'away', 'pool'),
+    ]);
+    vi.mocked(agentQuotaService.getDeviceAccount).mockResolvedValue({ accountId: 'away' });
+
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'device-1'} />);
+
+    await waitFor(() => expect(checkedOption()).toContain('away@example.com'));
+    expect(agentQuotaService.getDeviceAccount).toHaveBeenCalledWith('agent-1', 'device-1');
+  });
+
+  // Regression: a pin made on another machine read as this device's choice,
+  // with its account marked "not signed in on this device".
+  it('reads an agent-wide pin this device cannot run as Auto', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    vi.mocked(agentQuotaService.listBindings).mockResolvedValue([
+      binding('b1', 'here', 'pool'),
+      binding('b2', 'away', 'pinned'),
+    ]);
+
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+
+    await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
+    await waitFor(() =>
+      expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto'),
+    );
+    expect(screen.getByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/)).toBeTruthy();
+  });
+
+  it('saves a switch for this device only, not for every device', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    const setDeviceAccount = vi
+      .spyOn(agentQuotaService, 'setDeviceAccount')
+      .mockResolvedValue(undefined as never);
+    const switchAccount = vi.spyOn(agentQuotaService, 'switchAccount');
+
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    await waitFor(() =>
+      expect(radioFor('here@example.com').getAttribute('aria-disabled')).not.toBe('true'),
+    );
+    fireEvent.click(radioFor('here@example.com'));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'heteroAgent.claudeQuota.manage.confirmSwitch' }),
+    );
+
+    await waitFor(() =>
+      expect(setDeviceAccount).toHaveBeenCalledWith('agent-1', 'this-desktop', 'here'),
+    );
+    expect(switchAccount).not.toHaveBeenCalled();
+  });
+
+  // Regression: a failed stable-id lookup read as "no device", so a switch
+  // here became an agent-wide pin that moved every other device too.
+  it('takes no writes while this desktop’s device id cannot be resolved', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    vi.mocked(gatewayConnectionService.getStableDeviceId).mockRejectedValue(new Error('ipc down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const switchAccount = vi.spyOn(agentQuotaService, 'switchAccount');
+    const setDeviceAccount = vi.spyOn(agentQuotaService, 'setDeviceAccount');
+
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+
+    await waitFor(() =>
+      expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto'),
+    );
+    for (const radio of screen.getAllByRole('radio'))
+      expect(radio.getAttribute('aria-disabled')).toBe('true');
+    for (const toggle of screen.getAllByRole('switch'))
+      expect(toggle.hasAttribute('disabled')).toBe(true);
+    expect(switchAccount).not.toHaveBeenCalled();
+    expect(setDeviceAccount).not.toHaveBeenCalled();
   });
 
   it('lists only Claude Code accounts, never another coding agent’s', async () => {

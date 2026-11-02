@@ -2,7 +2,13 @@ import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { coverImageSrc, pickDominantColor, seedCoverColor } from './coverColor';
+import {
+  AGENT_COVER_PATTERNS,
+  coverImageSrc,
+  coverPattern,
+  pickDominantColor,
+  seedCoverColor,
+} from './coverColor';
 
 const agent = (overrides: Partial<SidebarAgentItem> = {}): SidebarAgentItem => ({
   id: 'agt_1',
@@ -67,5 +73,18 @@ describe('coverImageSrc', () => {
 describe('seedCoverColor', () => {
   it('is stable per agent id', () => {
     expect(seedCoverColor(agent())).toBe(seedCoverColor(agent({ title: 'Renamed' })));
+  });
+});
+
+describe('coverPattern', () => {
+  it('is stable per agent id', () => {
+    expect(coverPattern(agent())).toBe(coverPattern(agent({ title: 'Renamed' })));
+  });
+
+  it('spreads agents across every texture', () => {
+    const seen = new Set(
+      Array.from({ length: 200 }, (_, i) => coverPattern(agent({ id: `agt_${i}` }))),
+    );
+    expect([...seen].sort()).toEqual([...AGENT_COVER_PATTERNS].sort());
   });
 });

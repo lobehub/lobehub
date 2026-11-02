@@ -78,7 +78,6 @@ const toPlainTextPreview = (markdown: string): string => {
   try {
     return removeMarkdown(markdown).trimEnd();
   } catch {
-    /* v8 ignore next -- unreachable: remove-markdown swallows its own errors unless `throwError` is set, and the preview query only yields non-empty strings */
     return markdown;
   }
 };
@@ -267,11 +266,8 @@ export class RecentModel {
         status: row.status,
         title: row.title,
         type: row.type,
-        // Unreachable fallback: drizzle's timestamp column maps every driver value to a Date.
-        updatedAt:
-          row.updatedAt instanceof Date
-            ? row.updatedAt
-            : /* v8 ignore next -- unreachable: see note */ new Date(row.updatedAt as any),
+        // Fallback for a driver or decoder that stops handing timestamps back as Date.
+        updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
         userId: row.userId,
       };
     });

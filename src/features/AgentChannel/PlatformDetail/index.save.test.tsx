@@ -13,6 +13,7 @@ import PlatformDetail, { type CurrentConfig } from './index';
 
 const mocks = vi.hoisted(() => ({
   connectBot: vi.fn(),
+  heterogeneous: false,
   updateBotProvider: vi.fn(),
 }));
 
@@ -51,11 +52,12 @@ vi.mock('@/store/agent', () => ({
     }),
 }));
 vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: { isAgentHeterogeneousById: () => () => mocks.heterogeneous },
   agentSelectors: { getAgentMetaById: () => () => ({ title: 'Nasa' }) },
 }));
 vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: (selector: (s: { featureFlags: Record<string, unknown> }) => unknown) =>
-    selector({ featureFlags: { enableBotWake: true } }),
+    selector({ featureFlags: {} }),
 }));
 vi.mock('@/components/InfoTooltip', () => ({ default: () => null }));
 vi.mock('@/features/AgentChannel/const', () => ({ getPlatformIcon: () => null }));
@@ -76,7 +78,7 @@ const config: CurrentConfig = {
   id: 'provider-1',
   platform: 'discord',
   // A custom pace, so the numbers are on the page to edit.
-  settings: { botWakeEnabled: true, botWakePace: 'custom', showUsageStats: false },
+  settings: { botWakeDisabled: false, botWakePace: 'custom', showUsageStats: false },
 };
 
 const en = agentEn as Record<string, string>;
@@ -85,6 +87,7 @@ const openTab = (name: string) =>
 
 describe('PlatformDetail saving', () => {
   beforeEach(() => {
+    mocks.heterogeneous = false;
     vi.clearAllMocks();
     mocks.updateBotProvider.mockResolvedValue(undefined);
     mocks.connectBot.mockResolvedValue({ status: 'connected' });
@@ -108,6 +111,58 @@ describe('PlatformDetail saving', () => {
     expect(patch).not.toHaveProperty('applicationId');
   });
 
+  it('saves the wake switch by itself as soon as it is turned off, and hides the options', async () => {
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
+
+    openTab(en['channel.tab.wake']);
+    expect(screen.getByText(en['channel.wake.section.pace'])).toBeVisible();
+    fireEvent.click(screen.getByRole('switch', { name: new RegExp(en['channel.botWakeEnabled']) }));
+
+    await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1), {
+      timeout: 3000,
+    });
+    const [, , patch] = mocks.updateBotProvider.mock.calls[0];
+    expect(patch.settings.botWakeDisabled).toBe(true);
+    // The rest of the wake options are written as stored.
+    expect(patch.settings.botWakePace).toBe('custom');
+    expect(screen.queryByText(en['channel.wake.section.pace'])).toBeNull();
+  });
+
+  it.each([
+    ['with no switch stored', { showUsageStats: false }],
+    ['with the retired botWakeEnabled: false', { botWakeEnabled: false, showUsageStats: false }],
+  ])(
+    'shows a bot saved %s with the wake switch on, and keeps it on when saving something else',
+    async (_, settings) => {
+      render(
+        <PlatformDetail
+          agentId="agt"
+          currentConfig={{ ...config, settings }}
+          platformDef={platformDef}
+        />,
+        { wrapper: MemoryRouter },
+      );
+
+      openTab(en['channel.tab.wake']);
+      expect(
+        screen.getByRole('switch', { name: new RegExp(en['channel.botWakeEnabled']) }),
+      ).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByText(en['channel.wake.section.pace'])).toBeVisible();
+
+      openTab(en['channel.tab.reply']);
+      fireEvent.click(
+        screen.getByRole('switch', { name: new RegExp(en['channel.showUsageStats']) }),
+      );
+
+      await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1), {
+        timeout: 3000,
+      });
+      expect(mocks.updateBotProvider.mock.calls[0][2].settings.botWakeDisabled).not.toBe(true);
+    },
+  );
+
   it('writes an operator’s mode override back untouched when it saves something else', async () => {
     const override = { classifier: { mode: 'off' }, mode: 'shadow' };
     render(
@@ -116,7 +171,7 @@ describe('PlatformDetail saving', () => {
         platformDef={platformDef}
         currentConfig={{
           ...config,
-          settings: { ...config.settings, botWake: override, botWakeEnabled: true },
+          settings: { ...config.settings, botWake: override, botWakeDisabled: false },
         }}
       />,
       { wrapper: MemoryRouter },
@@ -176,14 +231,22 @@ describe('PlatformDetail saving', () => {
     expect(mocks.updateBotProvider.mock.calls[0][2].settings.replyStyle).toBe('Short and casual.');
   });
 
-  it('leaves the bottom bar to Remove and Test connection for a saved bot', () => {
+  it('keeps Remove and Test connection on the Connect tab, off the settings tabs', () => {
     render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
       wrapper: MemoryRouter,
     });
+    const remove = () =>
+      screen.queryByRole('button', { name: new RegExp(en['channel.removeChannel']) });
+    const test = () =>
+      screen.queryByRole('button', { name: new RegExp(en['channel.testConnection']) });
 
-    expect(
-      screen.getByRole('button', { name: new RegExp(en['channel.removeChannel']) }),
-    ).toBeVisible();
+    // A saved bot opens on a settings tab.
+    expect(remove()).toBeNull();
+    expect(test()).toBeNull();
+
+    openTab(en['channel.tab.connect']);
+    expect(remove()).toBeVisible();
+    expect(test()).toBeVisible();
     expect(screen.queryByRole('button', { name: en['channel.save'] })).toBeNull();
     expect(screen.queryByRole('button', { name: en['channel.saveAndConnect'] })).toBeNull();
   });

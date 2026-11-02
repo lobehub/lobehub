@@ -54,7 +54,7 @@ export const isOperationTokenRefusal = (error: unknown): boolean =>
  * The stored login, when it is usable and belongs to the operation token's own
  * account.
  */
-const storedLoginFor = async (
+export const storedLoginFor = async (
   operationToken: string,
 ): Promise<{ token: string } | { warning: string }> => {
   const result = await getValidToken();

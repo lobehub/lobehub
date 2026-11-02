@@ -63,7 +63,7 @@ export const recentRouter = router({
             break;
           }
           case 'document': {
-            routePath = `/page/${item.id}`;
+            routePath = `/resource/page/${item.id}`;
             break;
           }
           case 'task': {

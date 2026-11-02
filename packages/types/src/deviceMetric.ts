@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // ============================================
-// Device metrics — machine health samples (CPU / memory / load average)
+// Device metrics — machine health samples (CPU / memory / load average / disk)
 // ============================================
 
 /** How often a device takes one sample. One sample averages CPU over this window. */
@@ -35,6 +35,13 @@ export const deviceMetricSampleSchema = z.object({
   cpuCount: z.number().int().min(1).max(4096),
   /** Share of all cores busy over the sample window, 0–100. */
   cpuPercent: z.number().min(0).max(100).nullable(),
+  /**
+   * Size of the volume holding the user's home directory, and how much of it
+   * is no longer available to them. Null when the volume could not be read;
+   * absent in samples from devices that predate disk reporting.
+   */
+  diskTotalBytes: z.number().int().min(0).nullish(),
+  diskUsedBytes: z.number().int().min(0).nullish(),
   /** 1 / 5 / 15 minute load averages; null on platforms without them (Windows). */
   load1: z.number().min(0).nullable(),
   load5: z.number().min(0).nullable(),
@@ -52,6 +59,8 @@ export interface DeviceMetricPoint {
   /** False when any sample in the bucket was taken while disconnected. */
   connected: boolean;
   cpuPercent: number | null;
+  diskPercent: number | null;
+  diskUsedBytes: number | null;
   load1: number | null;
   memoryPercent: number | null;
   memoryUsedBytes: number | null;
@@ -64,14 +73,16 @@ export interface DeviceMetricSeries {
   bucketMs: number;
   /** From the newest sample; null when the device never reported. */
   cpuCount: number | null;
+  /** From the newest sample that read the disk; null when none did. */
+  diskTotalBytes: number | null;
   from: number;
   memoryTotalBytes: number | null;
   points: DeviceMetricPoint[];
   to: number;
 }
 
-const average = (values: (number | null)[]): number | null => {
-  const present = values.filter((v): v is number => v !== null);
+const average = (values: (number | null | undefined)[]): number | null => {
+  const present = values.filter((v): v is number => v !== null && v !== undefined);
   return present.length === 0 ? null : present.reduce((a, b) => a + b, 0) / present.length;
 };
 
@@ -98,6 +109,14 @@ export const bucketDeviceMetrics = (
     .map(([observedAt, group]) => ({
       connected: group.every((s) => s.connected),
       cpuPercent: average(group.map((s) => s.cpuPercent)),
+      diskPercent: average(
+        group.map((s) =>
+          s.diskTotalBytes && s.diskUsedBytes != null
+            ? (s.diskUsedBytes * 100) / s.diskTotalBytes
+            : null,
+        ),
+      ),
+      diskUsedBytes: average(group.map((s) => s.diskUsedBytes)),
       load1: average(group.map((s) => s.load1)),
       memoryPercent: average(
         group.map((s) =>

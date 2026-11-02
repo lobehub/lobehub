@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowRight, type LucideIcon, ShieldCheck } from 'lucide-react';
 import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -71,51 +73,48 @@ const STEP_VISUAL: Record<
   },
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  arrow: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  more: css`
-    flex: none;
-
-    padding-block: 3px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  placeholder: css`
-    padding-block: 4px;
-    padding-inline: 10px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: 6px;
-  `,
-  step: css`
-    overflow: hidden;
-
-    /* Equal share of the row, so a long first title cannot squeeze the rest to a few characters. */
-    flex: 1 1 0;
-
-    min-width: 0;
-    max-width: 240px;
-    padding-block: 4px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 6px;
-  `,
-  stepOpen: css`
-    border-color: ${cssVar.colorBorder};
-    background: ${cssVar.colorFillTertiary};
-  `,
-  stepQueued: css`
-    border-style: dashed;
-  `,
-}));
+const styles = stylex.create({
+  arrow: { flex: 'none', color: cssVar.colorTextQuaternary },
+  more: {
+    flex: 'none',
+    paddingBlock: '3px',
+    paddingInline: '8px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  placeholder: {
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '6px',
+  },
+  step: {
+    overflow: 'hidden',
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0',
+    minWidth: '0',
+    maxWidth: '240px',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '6px',
+  },
+  stepOpen: {
+    borderColor: cssVar.colorBorder,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  stepQueued: { borderStyle: 'dashed' },
+});
 
 const Step = memo<{ step: PlanStep }>(({ step }) => {
   const { t } = useTranslation('chat');
@@ -128,11 +127,13 @@ const Step = memo<{ step: PlanStep }>(({ step }) => {
       align={'center'}
       gap={6}
       title={`${t(visual.labelKey as any)} · ${title}`}
-      className={cx(
-        styles.step,
-        visual.open && styles.stepOpen,
-        step.state === 'queued' && styles.stepQueued,
-      )}
+      className={
+        stylex.props(
+          styles.step,
+          visual.open && styles.stepOpen,
+          step.state === 'queued' && styles.stepQueued,
+        ).className
+      }
     >
       {visual.icon ? (
         <Icon color={visual.color} icon={visual.icon} size={13} style={{ flex: 'none' }} />
@@ -165,7 +166,11 @@ const PlanChain = memo<{
   if (steps.length === 0) {
     if (stage !== 'planning') return null;
     return (
-      <Flexbox horizontal className={styles.placeholder} style={{ alignSelf: 'flex-start' }}>
+      <Flexbox
+        horizontal
+        className={stylex.props(styles.placeholder).className}
+        style={{ alignSelf: 'flex-start' }}
+      >
         <Text className={shinyTextStyles.shinyText} fontSize={12}>
           {t('goalTask.plan.drafting')}
         </Text>
@@ -177,20 +182,22 @@ const PlanChain = memo<{
     <Flexbox horizontal align={'center'} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
       {hiddenBefore > 0 && (
         <>
-          <span className={styles.more}>+{hiddenBefore}</span>
-          <Icon className={styles.arrow} icon={ArrowRight} size={12} />
+          <span {...stylex.props(styles.more)}>+{hiddenBefore}</span>
+          <Icon className={stylex.props(styles.arrow).className} icon={ArrowRight} size={12} />
         </>
       )}
       {steps.map((step, index) => (
         <Fragment key={step.id}>
-          {index > 0 && <Icon className={styles.arrow} icon={ArrowRight} size={12} />}
+          {index > 0 && (
+            <Icon className={stylex.props(styles.arrow).className} icon={ArrowRight} size={12} />
+          )}
           <Step step={step} />
         </Fragment>
       ))}
       {hiddenAfter > 0 && (
         <>
-          <Icon className={styles.arrow} icon={ArrowRight} size={12} />
-          <span className={styles.more}>+{hiddenAfter}</span>
+          <Icon className={stylex.props(styles.arrow).className} icon={ArrowRight} size={12} />
+          <span {...stylex.props(styles.more)}>+{hiddenAfter}</span>
         </>
       )}
     </Flexbox>

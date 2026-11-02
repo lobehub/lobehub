@@ -1,6 +1,11 @@
 import { createReplicaState, type ReplicaPagedData, type ReplicaState } from '@/libs/replica';
 import { type ChatTopic, type TopicQuerySortBy } from '@/types/topic';
 
+/** The project (and directory, when there is one) a blank conversation was opened in. */
+export type PendingNewTopicDirectory =
+  | { agentId: string; projectId?: undefined; projectWorkingDirectoryId: string }
+  | { agentId: string; projectId: string; projectWorkingDirectoryId?: undefined };
+
 /**
  * Unified topic data structure for each agent: the generic local-first paged
  * view plus topic query descriptors.
@@ -88,9 +93,11 @@ export interface ChatTopicState {
    * it into the create call, which is what keeps the deferred row inside the
    * project instead of dropping it into a path-only conversation. The agent id
    * is part of the value: switching agents must not let one agent's pending
-   * directory land on another agent's topic.
+   * directory land on another agent's topic. A project without a directory the
+   * agent can run in stages the project alone: the topic is born
+   * conversation-only inside it.
    */
-  pendingNewTopicDirectory?: { agentId: string; projectWorkingDirectoryId: string };
+  pendingNewTopicDirectory?: PendingNewTopicDirectory;
   searchTopics: ChatTopic[];
   /**
    * Unified topic data map for each agent

@@ -25,6 +25,18 @@ describe('resolveAgentBadge', () => {
     expect(resolveAgentBadge(agent({ backgroundColor: 'rgba(0, 0, 0, 0)' })).cover).toBeUndefined();
   });
 
+  it('treats an image background as the cover image, not a color', () => {
+    for (const url of [
+      'https://cdn.example.com/cover.png',
+      '/f/cover.png',
+      'data:image/png;base64,AA',
+    ]) {
+      const badge = resolveAgentBadge(agent({ backgroundColor: url }));
+      expect(badge.coverImage).toBe(url);
+      expect(badge.cover).toBeUndefined();
+    }
+  });
+
   it('marks only builtin agents with a chip', () => {
     expect(resolveAgentBadge(agent({ slug: 'inbox' })).bottom).toBe('official');
     expect(resolveAgentBadge(agent({ pinned: true, slug: 'inbox' })).bottom).toBe('official');

@@ -1985,6 +1985,7 @@ export default class HeterogeneousAgentCtr {
 
     try {
       const dshSession = spawnDshAcpSession({
+        args: session.args,
         clientVersion: electronApp.getVersion(),
         command: dsh.path,
         cwd,
@@ -1998,7 +1999,6 @@ export default class HeterogeneousAgentCtr {
         resumeSessionId: session.agentSessionId,
       });
       session.dshSession = dshSession;
-
       // Stop pressed before launch: nothing has spawned yet. The `finally`
       // below still disposes the handle.
       if (session.cancelledByUs) {

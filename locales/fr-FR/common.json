@@ -412,7 +412,6 @@
   "serverVersionOutdated.warning": "Certaines fonctionnalités peuvent ne pas fonctionner correctement ou se comporter de manière inattendue. Veuillez mettre à jour votre serveur pour une expérience optimale.",
   "setting": "Paramètres",
   "share": "Partager",
-  "stillLoading": "Chargement en cours...",
   "stop": "Arrêter",
   "supportAgent.context.attached": "Informations de diagnostic jointes",
   "supportAgent.context.remove": "Supprimer",

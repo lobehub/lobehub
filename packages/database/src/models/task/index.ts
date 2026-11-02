@@ -31,7 +31,7 @@ import * as documents from './documents';
 import * as queries from './queries';
 import { resolveRefs } from './refs';
 import * as rows from './rows';
-import type { OrphanedRunningTopic } from './scheduling';
+import type { InterruptedRunningTopic, OrphanedRunningTopic } from './scheduling';
 import * as scheduling from './scheduling';
 import * as transfer from './transfer';
 import * as tree from './tree';
@@ -44,7 +44,7 @@ import {
   withStaleReposCleared,
 } from './utils';
 
-export type { OrphanedRunningTopic } from './scheduling';
+export type { InterruptedRunningTopic, OrphanedRunningTopic } from './scheduling';
 export { isTaskIdentifierUniqueViolation, taskActivityActor } from './utils';
 
 export class TaskModel {
@@ -133,7 +133,6 @@ export class TaskModel {
 
   async resolve(ref: string): Promise<TaskItem | null> {
     const result = await this.resolveRefs([ref]);
-    /* v8 ignore next -- unreachable: one ref matches at most one row, ids are primary keys and identifiers are unique per scope (tasks_identifier_idx / tasks_identifier_workspace_id_unique) */
     if (result.ambiguous.length) throw new Error(`Ambiguous task reference: ${ref}`);
     return result.byRef.get(ref) ?? null;
   }
@@ -193,6 +192,14 @@ export class TaskModel {
     return rows.countTasksBlockingAgentDemotion(this.ctx, assigneeAgentId, agentOwnerUserId);
   }
 
+  async lockWholeSubtree(rootId: string): Promise<{ id: string; status: string }[]> {
+    return tree.lockWholeSubtree(this.ctx, rootId);
+  }
+
+  async takeOverSubtree(taskIds: string[]): Promise<void> {
+    return tree.takeOverSubtree(this.ctx, taskIds);
+  }
+
   async subtreeHasOtherCreators(rootTaskId: string, creatorUserId: string): Promise<boolean> {
     return rows.subtreeHasOtherCreators(this.ctx, rootTaskId, creatorUserId);
   }
@@ -203,6 +210,10 @@ export class TaskModel {
 
   async deleteIfStatus(id: string, status: string): Promise<boolean> {
     return rows.deleteIfStatus(this.ctx, id, status);
+  }
+
+  async deleteIfStatusForIds(expected: { id: string; status: string }[]): Promise<string[]> {
+    return rows.deleteIfStatusForIds(this.ctx, expected);
   }
 
   async deleteAll(options?: { restrictToCreator?: boolean }): Promise<number> {
@@ -289,6 +300,13 @@ export class TaskModel {
     return rows.updateStatusIfCurrent(this.ctx, id, currentStatus, status, extra);
   }
 
+  async updateStatusIfCurrentForIds(
+    expected: { id: string; status: string }[],
+    status: string,
+  ): Promise<string[]> {
+    return rows.updateStatusIfCurrentForIds(this.ctx, expected, status);
+  }
+
   async completeIfCompletionRequested(id: string, operationId: string): Promise<TaskItem | null> {
     return rows.completeIfCompletionRequested(this.ctx, id, operationId);
   }
@@ -307,6 +325,18 @@ export class TaskModel {
     extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem[]> {
     return rows.updateStatusForIds(this.ctx, ids, status, extra);
+  }
+
+  async lockForBulkEdit(ids: string[]) {
+    return rows.lockForBulkEdit(this.ctx, ids);
+  }
+
+  async updateFieldsForIds(
+    ids: string[],
+    data: Parameters<typeof rows.updateFieldsForIds>[2],
+    configById?: ReadonlyMap<string, unknown>,
+  ): Promise<TaskItem[]> {
+    return rows.updateFieldsForIds(this.ctx, ids, data, configById);
   }
 
   // ========== Config ==========
@@ -452,6 +482,13 @@ export class TaskModel {
     options: { limit?: number; staleBefore: Date },
   ): Promise<OrphanedRunningTopic[]> {
     return scheduling.findOrphanedRunningTopics(db, options);
+  }
+
+  static async findInterruptedRunningTopics(
+    db: LobeChatDatabase,
+    options: { limit?: number; staleBefore: Date },
+  ): Promise<InterruptedRunningTopic[]> {
+    return scheduling.findInterruptedRunningTopics(db, options);
   }
 
   // ========== Dependencies ==========
@@ -667,7 +704,6 @@ export class TaskModel {
           }
         : data;
       const updated = await scoped.update(id, writeData);
-      /* v8 ignore next -- unreachable: the row was just locked FOR UPDATE in this transaction under the same ownership predicate, so the write always returns it */
       if (!updated) return null;
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];

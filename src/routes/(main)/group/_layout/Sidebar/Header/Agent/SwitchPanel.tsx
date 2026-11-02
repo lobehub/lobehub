@@ -1,6 +1,6 @@
 import { Flexbox, Popover } from '@lobehub/ui';
-import { type PropsWithChildren } from 'react';
 import React, { memo, Suspense, useState } from 'react';
+import { type PropsWithChildren } from 'react';
 
 import List from '@/features/HomeSidebar/Body/Agent/List';
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';

@@ -13,10 +13,12 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { WorkModel } from '@/database/models/work';
+import { CanvasFileRepository } from '@/database/repositories/canvasFile';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createCanvasStorageService } from '@/server/services/canvas';
 import { createCanvasAgentRuntime } from '@/server/services/canvas/agentRuntime';
+import { deleteCanvas } from '@/server/services/canvas/delete';
 import { buildCanvasPublishBundle } from '@/server/services/canvas/publish';
 import { saveCanvas } from '@/server/services/canvas/save';
 
@@ -30,6 +32,29 @@ const canvasProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
 });
 
 export const canvasRouter = router({
+  // Frees a canvas's storage: the Work, its versions and every file it holds.
+  delete: canvasProcedure
+    .use(requireWorkspaceRoleWhenScoped('member'))
+    .input(
+      z.object({
+        canvasId: z.string().min(1).max(128),
+        orphanOnly: z.boolean().optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      deleteCanvas(
+        input.canvasId,
+        {
+          db: ctx.serverDB,
+          storage: createCanvasStorageService(ctx.serverDB, ctx.userId, ctx.workspaceId),
+          userId: ctx.userId,
+          workModel: ctx.workModel,
+          workspaceId: ctx.workspaceId,
+        },
+        { orphanOnly: input.orphanOnly },
+      ),
+    ),
+
   getPublishContext: canvasProcedure.query(({ ctx }) => ({
     canPublish: isCanvasPublishEnabled(),
     userId: ctx.userId,
@@ -211,6 +236,12 @@ export const canvasRouter = router({
 
       return { intent, output };
     }),
+
+  // Canvas files count toward file storage but stay out of the resource library,
+  // so the canvas Works list names this usage per canvas instead.
+  listStorage: canvasProcedure.query(({ ctx }) =>
+    new CanvasFileRepository(ctx.serverDB, ctx.userId, ctx.workspaceId).listStorage(),
+  ),
 
   listVersions: canvasProcedure
     .input(z.object({ canvasId: z.string() }))

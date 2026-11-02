@@ -33,7 +33,8 @@ const ROUTE_HINTS: [label: string, path: string][] = [
   ['agent chat', '/agent/<agentId>'],
   ['agent task detail', '/agent/<agentId>/task/<taskIdentifier>'],
   ['agent document', '/agent/<agentId>/docs/<docId>'],
-  ['page (workspace document)', '/page/<documentId>'],
+  ['page (workspace document)', '/resource/page/<documentId>'],
+  ['uploaded file', '/resource/file/<fileId>'],
   ['knowledge base', '/resource/library/<knowledgeBaseId>'],
 ];
 

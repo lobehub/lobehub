@@ -18,6 +18,13 @@ export interface PublishCanvasSiteResult {
   url: string;
 }
 
+export interface UnpublishCanvasSiteParams {
+  db: LobeChatDatabase;
+  deploymentId: string;
+  userId: string;
+  workspaceId?: string;
+}
+
 export const isCanvasPublishEnabled = () => false;
 
 export const getCanvasPublishRuntimeUrl = async (_major: number): Promise<string | undefined> =>
@@ -28,3 +35,9 @@ export const publishCanvasSite = async (
 ): Promise<PublishCanvasSiteResult> => {
   throw new Error('Canvas publishing is not available in this deployment');
 };
+
+/**
+ * Take a canvas's published site offline (a deleted canvas must not stay
+ * public). Nothing is ever published here, so there is nothing to take down.
+ */
+export const unpublishCanvasSite = async (_params: UnpublishCanvasSiteParams): Promise<void> => {};

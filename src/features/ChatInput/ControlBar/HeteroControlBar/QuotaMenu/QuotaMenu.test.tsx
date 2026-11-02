@@ -439,6 +439,13 @@ describe('CodexQuotaMenu', () => {
     ).toBe('low');
     expect(screen.getByText('heteroAgent.codexQuota.fiveHour')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
+    // each bar fill is styled (height + color), and a low window paints differently
+    const fills = [...document.querySelectorAll<HTMLElement>('div[data-quota-level]')];
+    expect(fills.map((fill) => fill.style.width)).toEqual(['81%', '12%']);
+    const [normalFill, lowFill] = fills;
+    expect(normalFill.className).not.toBe('');
+    expect(lowFill.className).not.toBe('');
+    expect(lowFill.className).not.toBe(normalFill.className);
     // each row carries its reset as a bare short duration, not a resetsIn/resetAt sentence
     expect(
       screen.getAllByText((content) => content.startsWith('heteroAgent.quota.duration.')),

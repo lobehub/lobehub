@@ -404,7 +404,7 @@ const gatherAgentManagementContext = async (
         }
       : undefined;
 
-    if (canDelegate) {
+    if (canDelegate && request.includeRecentAgents !== false) {
       const { listRecentAgents } = providers;
       const recent =
         (await attempt('recentAgents', () => listRecentAgents(AVAILABLE_AGENTS_LIMIT + 2))) ?? [];

@@ -26,8 +26,8 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   const factories: ((original: typeof importOriginal) => unknown)[] = [
     async (importOriginal) => ({
       ...(await importOriginal<object>()),
-      Flexbox: ({ children }: { children: React.ReactNode }) => (
-        <div data-testid="sidebar-body">{children}</div>
+      Flexbox: ({ children, flex }: { children: React.ReactNode; flex?: number }) => (
+        <div data-testid={flex ? 'sidebar-body' : 'sidebar-sections'}>{children}</div>
       ),
     }),
     async (importOriginal) => ({
@@ -171,13 +171,13 @@ describe('Home sidebar body', () => {
       child.hasAttribute('data-sidebar-bottom-spacer'),
     );
 
-    expect(spacerIndex).toBe(3);
+    expect(spacerIndex).toBe(2);
     expect(children[0]).toHaveTextContent('Pages');
-    expect(children[1]).toHaveAttribute('data-testid', 'sidebar-accordion');
-    expect(children[2]).toHaveAttribute('data-testid', 'sidebar-channels');
-    expect(children[4]).toHaveTextContent('Image');
-    expect(children[5]).toHaveTextContent('Tasks');
-    expect(children[6]).toHaveTextContent('Resource');
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-channels'));
+    expect(children[3]).toHaveTextContent('Image');
+    expect(children[4]).toHaveTextContent('Tasks');
+    expect(children[5]).toHaveTextContent('Resource');
   });
 
   it('keeps a top item that was dragged past the spacer in its new position', () => {
@@ -192,19 +192,19 @@ describe('Home sidebar body', () => {
 
     const children = Array.from(screen.getByTestId('sidebar-body').children);
 
-    expect(children[0]).toHaveAttribute('data-testid', 'sidebar-accordion');
-    expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
-    expect(children[2]).toHaveAttribute('data-sidebar-bottom-spacer');
-    expect(children[3]).toHaveTextContent('Image');
-    expect(children[4]).toHaveTextContent('Tasks');
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-channels'));
+    expect(children[1]).toHaveAttribute('data-sidebar-bottom-spacer');
+    expect(children[2]).toHaveTextContent('Image');
+    expect(children[3]).toHaveTextContent('Tasks');
   });
 
-  it('places Channels directly below Agents, outside the Agent accordion', () => {
+  it('keeps Channels between adjacent sections in the same spacing group with its own accordion', () => {
     mocks.globalState.status.sidebarItems = ['agent', 'recents'];
 
     render(<Body />);
 
-    const children = Array.from(screen.getByTestId('sidebar-body').children);
+    const children = Array.from(screen.getByTestId('sidebar-sections').children);
 
     expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
     expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');

@@ -8,9 +8,11 @@ import {
   CalendarClockIcon,
   CpuIcon,
   FolderIcon,
+  HardDriveIcon,
   LayersIcon,
   type LucideIcon,
   MemoryStickIcon,
+  MessagesSquareIcon,
   MonitorIcon,
   PowerIcon,
   ServerIcon,
@@ -21,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
+import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
 import { useDeviceMetricSeries } from './DeviceHealth/shared';
 import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
@@ -149,6 +152,11 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
         {dayjs(summary.lastConnectedAt).fromNow()}
       </InfoRow>
       {online && (
+        <InfoRow icon={MessagesSquareIcon} label={t('devices.card.runningTopics')}>
+          <DeviceRunningSummaryValue deviceId={device.deviceId} />
+        </InfoRow>
+      )}
+      {online && (
         <div className={styles.usage}>
           {usage.loading ? (
             <UsageMeterGroup loading>
@@ -162,6 +170,9 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
                 label={t('devices.card.memoryUsage')}
                 value={usage.latest?.memoryPercent}
               />
+              {usage.reportsDisk && (
+                <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
+              )}
             </UsageMeterGroup>
           )}
         </div>
@@ -187,6 +198,11 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       <InfoRow icon={MemoryStickIcon} label={t('devices.detail.memory')}>
         {summary.memoryTotalBytes ? formatSize(summary.memoryTotalBytes) : undefined}
       </InfoRow>
+      {summary.diskTotalBytes && (
+        <InfoRow icon={HardDriveIcon} label={t('devices.detail.disk')}>
+          {formatSize(summary.diskTotalBytes)}
+        </InfoRow>
+      )}
       <InfoRow icon={ServerIcon} label={t('devices.card.hostname')}>
         {summary.hostname ? (
           <span className={styles.code} title={summary.hostname}>

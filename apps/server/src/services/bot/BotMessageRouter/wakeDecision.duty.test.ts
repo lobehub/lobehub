@@ -81,7 +81,6 @@ const make = (
     db: {} as never,
     operatorUserId: OWNER,
     platform: 'discord',
-    rollout: async () => true,
     settings,
     state,
     userId: 'u1',
@@ -124,6 +123,21 @@ describe('bot-wake recorder: a message within the bot duties', () => {
     const [input] = vi.mocked(judge).mock.calls[0];
     expect(input.duties).toBe('群里有人描述需求时评估一下，简单的给 dario 建任务');
     expect(input.signal.author?.isOwner).toBe(false);
+  });
+
+  it('steps in to settle an open question that is not one of its duties, and says so', async () => {
+    const judge: WakeDutyJudge = vi.fn(async () => ({
+      duty: '评估需求',
+      helpful: 0.8,
+      inDuty: 0.3,
+      reason: 'p=0.30 helpful=0.80',
+    }));
+    const recorder = make(DUTIES(), fakeState(), { dutyJudge: judge });
+
+    // No duty is named: the agent is woken to answer, not to carry out a duty.
+    await expect(
+      recorder.initiate(request({ text: '话说我们能看到单个话题花了多少token么' })),
+    ).resolves.toEqual({ addressed: false, helpful: true, reason: 'in-duty' });
   });
 
   it('stays out when the score is under the threshold', async () => {

@@ -44,12 +44,15 @@ const wrapper = ({ children }: PropsWithChildren) =>
 const series = (cpuPercent: number): DeviceMetricSeries => ({
   bucketMs: 300_000,
   cpuCount: 8,
+  diskTotalBytes: null,
   from: 0,
   memoryTotalBytes: 100,
   points: [
     {
       connected: true,
       cpuPercent,
+      diskPercent: null,
+      diskUsedBytes: null,
       load1: 1,
       memoryPercent: 30,
       memoryUsedBytes: 30,

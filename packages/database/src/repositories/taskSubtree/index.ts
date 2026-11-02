@@ -5,6 +5,18 @@ import { TaskModel } from '../../models/task';
 import { WorkModel } from '../../models/work';
 import type { LobeChatDatabase } from '../../type';
 
+/** Why a takeover was refused; checked under the subtree lock. */
+export class TaskTakeOverError extends Error {
+  constructor(readonly reason: 'hidden_subtasks' | 'running') {
+    super(
+      reason === 'running'
+        ? 'Cannot take over this task while it or a subtask is running.'
+        : 'Cannot take over this task while it has private subtasks you cannot see.',
+    );
+    this.name = 'TaskTakeOverError';
+  }
+}
+
 /**
  * Cross-aggregate write flows over a task subtree. A task's visibility is
  * mirrored onto its Work rows, and its acceptances (verify aggregate) are keyed
@@ -30,7 +42,11 @@ export class TaskSubtreeRepository {
    *   - the root task and every descendant in `tasks`;
    *   - `task_dependencies` and `task_documents` whose `task_id` is in the set;
    *   - the indexed visibility mirror on the tasks' Work rows, so gallery/list
-   *     queries cannot observe a stale public row after demotion.
+   *     queries cannot observe a stale public row after demotion;
+   *   - on demotion, `assignee_user_id` is cleared wherever it names someone
+   *     other than the task's creator, who could no longer open the task;
+   *   - with `takeOwnership`, the caller becomes the subtree's creator first
+   *     and its automation stops (see `takeOverSubtree`).
    *
    * `task_topics` and `task_comments` are direction-sensitive. Their
    * `visibility` column is a write-time mirror of the parent task used as a
@@ -47,16 +63,46 @@ export class TaskSubtreeRepository {
    * (either missing or owned by another workspace member). Callers should
    * gate authorization (creator-only / admin) before invoking this.
    */
-  async updateVisibility(id: string, visibility: 'private' | 'public'): Promise<TaskItem | null> {
+  async updateVisibility(
+    id: string,
+    visibility: 'private' | 'public',
+    options: { takeOwnership?: boolean } = {},
+  ): Promise<TaskItem | null> {
     const taskModel = this.taskModel();
     const root = await taskModel.findById(id);
     if (!root) return null;
     if (root.visibility === visibility) return root;
 
     const descendantIds = (await taskModel.findAllDescendants(root.id)).map((d) => d.id);
+    // Taking a task over only applies on the way to private, and only when the
+    // subtree is not already the caller's.
+    const takeOver =
+      !!options.takeOwnership && visibility === 'private' && root.createdByUserId !== this.userId;
 
     return this.db.transaction(async (tx) => {
       const db = tx as LobeChatDatabase;
+      // Ownership moves first, so the visibility write below already treats
+      // the caller as the creator (and unassigns the previous one).
+      if (takeOver) {
+        const taskIds = [root.id, ...descendantIds];
+        const locked = await this.taskModel(db).lockWholeSubtree(root.id);
+        // A private subtask the previous creator kept to themselves is not the
+        // caller's to take, and leaving it behind would split the subtree.
+        const visible = new Set(taskIds);
+        if (locked.some((task) => !visible.has(task.id))) {
+          throw new TaskTakeOverError('hidden_subtasks');
+        }
+        // Runs are attributed to the creator; a live one would finish as the
+        // previous creator.
+        if (locked.some((task) => task.status === 'running')) {
+          throw new TaskTakeOverError('running');
+        }
+        await this.taskModel(db).takeOverSubtree(taskIds);
+        await new WorkModel(db, this.userId, this.workspaceId).reassignTaskWorksOwner(
+          taskIds,
+          root.createdByUserId,
+        );
+      }
       const updated = await this.taskModel(db).setSubtreeVisibility(
         root.id,
         descendantIds,

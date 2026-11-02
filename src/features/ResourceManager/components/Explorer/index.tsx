@@ -63,7 +63,7 @@ const ResourceExplorer = memo<ResourceExplorerProps>(({ hero }) => {
   ]);
 
   // Get folder path for empty state check
-  const { currentFolderSlug } = useFolderPath();
+  const { currentFolderId } = useFolderPath();
 
   // Build query params for SWR
   const queryParams = useMemo(
@@ -76,7 +76,7 @@ const ResourceExplorer = memo<ResourceExplorerProps>(({ hero }) => {
       filesOnly: !libraryId,
       includeContentPreview: viewMode === 'masonry',
       libraryId,
-      parentId: currentFolderSlug || null,
+      parentId: currentFolderId || null,
       showFilesInKnowledgeBase: !libraryId,
       sortType,
       sorter,
@@ -89,7 +89,7 @@ const ResourceExplorer = memo<ResourceExplorerProps>(({ hero }) => {
     [
       category,
       libraryId,
-      currentFolderSlug,
+      currentFolderId,
       sortType,
       sorter,
       listVisibility,
@@ -129,7 +129,7 @@ const ResourceExplorer = memo<ResourceExplorerProps>(({ hero }) => {
 
   useResetSelectionOnQueryChange({
     category,
-    currentFolderSlug,
+    currentFolderId,
     libraryId,
     searchQuery,
   });

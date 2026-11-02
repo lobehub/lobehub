@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import type { LocalAcceptanceSource } from '@lobechat/utils/verify/localAcceptance';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -47,6 +48,15 @@ const openInBrowser = (file: string) => {
   }
 };
 
+/** Write `report.html` from the acceptance as it stands now, and return its path. */
+export const writeReportPage = (acceptanceDir: string, source: LocalAcceptanceSource) => {
+  const run = source.rounds.at(-1)?.run;
+  const title = run?.title || run?.goal || path.basename(acceptanceDir);
+  const reportPath = path.join(acceptanceDir, REPORT_FILE);
+  writeFileSync(reportPath, renderReportHtml(readReportTemplate(), source, title));
+  return reportPath;
+};
+
 /**
  * Render a local acceptance into one offline page — the acceptance page,
  * without LobeHub. Re-rendering after a new round or after the reviewer saved
@@ -83,9 +93,7 @@ export async function renderReportAction(reportDir: string, options: RenderRepor
       'No requirement recorded — pass --requirement "<one-sentence business goal>" on the first render.',
     );
 
-  const reportPath = path.join(acceptanceDir, REPORT_FILE);
-  const title = latest.source.run.title || latest.source.run.goal || path.basename(acceptanceDir);
-  writeFileSync(reportPath, renderReportHtml(readReportTemplate(), source, title));
+  const reportPath = writeReportPage(acceptanceDir, source);
   const reportUrl = pathToFileURL(reportPath).toString();
   if (options.open) openInBrowser(reportPath);
 

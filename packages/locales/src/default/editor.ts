@@ -70,6 +70,7 @@ export default {
   'slash.table': 'Table',
   'slash.tex': 'TeX Formula',
   'slash.translate': 'Translate',
+  'slash.video': 'Video',
   'skillFrontmatter.edit': 'Edit metadata',
   'skillFrontmatter.empty': 'No metadata',
   'skillFrontmatter.invalid.descriptionInvalid': 'Description must be single-line text.',

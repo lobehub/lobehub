@@ -1,3 +1,4 @@
+import { projectChannelHistory } from '@lobechat/prompts/channel';
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
@@ -24,10 +25,12 @@ export const registerChannelCommand = (program: Command) => {
     .action(async (options: { before?: number; limit?: number }) => {
       const client = await getTrpcClient();
       outputJson(
-        await client.channel.readMessages.query({
-          beforeSequence: options.before,
-          limit: options.limit,
-        }),
+        projectChannelHistory(
+          await client.channel.readMessages.query({
+            beforeSequence: options.before,
+            limit: options.limit,
+          }),
+        ),
       );
     });
   channel
@@ -37,6 +40,10 @@ export const registerChannelCommand = (program: Command) => {
     .option('--json', 'Print structured JSON')
     .action(async (messageId: string, options: { offset?: number }) => {
       const client = await getTrpcClient();
-      outputJson(await client.channel.readMessage.query({ messageId, offset: options.offset }));
+      outputJson(
+        projectChannelHistory(
+          await client.channel.readMessage.query({ messageId, offset: options.offset }),
+        ),
+      );
     });
 };

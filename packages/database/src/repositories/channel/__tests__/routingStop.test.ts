@@ -24,14 +24,14 @@ const messageById = async (messageId: string) => {
 };
 
 describe('routing write-back', () => {
-  it('delivers a current Jev decision to the chosen candidates only', async () => {
+  it('delivers a current routing decision to the chosen candidates only', async () => {
     const { asMember, channel, member } = await fixture.createTeamChannel();
     const coder = await fixture.addAgent(channel.id, 'Coder');
     await fixture.addAgent(channel.id, 'Reviewer');
     const message = await asMember.send(channel.id, {
       content: 'Who knows?',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
 
     expect(
@@ -44,7 +44,7 @@ describe('routing write-back', () => {
 
     expect(await messageById(message.id)).toMatchObject({
       recipientMemberIds: [coder.id],
-      routingSource: 'jev',
+      routingSource: 'decision',
       routingStatus: 'assigned',
     });
     expect(await jobsOf(db, message.id)).toEqual([
@@ -58,7 +58,7 @@ describe('routing write-back', () => {
     const message = await asMember.send(channel.id, {
       content: 'Who knows?',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     await execution.resolveRouting(channel.id, message.id, 1, {
       reason: 'Unclear',
@@ -83,7 +83,7 @@ describe('routing write-back', () => {
     const message = await asOwner.send(channel.id, {
       content: 'Who knows?',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     await execution.resolveRouting(channel.id, message.id, 1, {
       reason: 'Unclear',
@@ -107,7 +107,7 @@ describe('stop', () => {
       content: 'Do it',
       mentions: [coder.id],
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [job] = await jobsOf(db, message.id);
     await execution.claim(channel.id, job.id, lease);
@@ -143,7 +143,7 @@ describe('stop', () => {
       content: 'Root',
       mentions: [coder.id],
       requestKey: 'root',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [thread] = await db
       .insert(channelThreads)
@@ -158,13 +158,13 @@ describe('stop', () => {
       content: 'In thread',
       mentions: [coder.id],
       requestKey: 'thread',
-      routing: 'jev',
+      routing: 'decision',
       threadId: thread.id,
     });
     const pending = await asOwner.send(channel.id, {
       content: 'Anyone?',
       requestKey: 'pending',
-      routing: 'jev',
+      routing: 'decision',
     });
 
     await asOwner.stop(channel.id, { threadId: null });
@@ -193,23 +193,23 @@ describe('stop', () => {
       content: 'Owner asks',
       mentions: [coder.id],
       requestKey: 'owner',
-      routing: 'jev',
+      routing: 'decision',
     });
     const memberRequest = await asMember.send(channel.id, {
       content: 'Member asks',
       mentions: [coder.id],
       requestKey: 'member',
-      routing: 'jev',
+      routing: 'decision',
     });
     const ownerPending = await asOwner.send(channel.id, {
       content: 'Owner: anyone?',
       requestKey: 'owner-pending',
-      routing: 'jev',
+      routing: 'decision',
     });
     const memberPending = await asMember.send(channel.id, {
       content: 'Member: anyone?',
       requestKey: 'member-pending',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [ownerJob] = await jobsOf(db, ownerRequest.id);
     const [memberJob] = await jobsOf(db, memberRequest.id);

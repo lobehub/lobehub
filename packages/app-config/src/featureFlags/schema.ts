@@ -40,20 +40,9 @@ export const FeatureFlagsSchema = z.object({
   rag_eval: FeatureFlagValue.optional(),
 
   /**
-   * Rollout gate for the multiplexed Agent Gateway socket (protocol v2: one
-   * `/v2/ws` connection per user instead of one per run). Array values are user
-   * ids, so the rollout can go allowlist → everyone without a deploy.
-   *
-   * Deployment support is independent and enforced separately: the client also
-   * requires `serverConfig.agentGatewayProtocol === 2`, because a gateway
-   * without `/v2/ws` cannot serve this no matter what the flag says.
-   */
-  agent_gateway_mux: FeatureFlagValue.optional(),
-
-  /**
    * LobeHub Mobile rollout switch for the multiplexed gateway socket and
-   * protocol-v2 payloads. Independent from `agent_gateway_mux`: flipping one
-   * never changes the other client. Array values are user ids.
+   * protocol-v2 payloads. Web needs no flag: it takes v2 wherever
+   * `serverConfig.agentGatewayProtocol === 2`. Array values are user ids.
    */
   agent_gateway_mux_mobile: FeatureFlagValue.optional(),
 
@@ -67,16 +56,7 @@ export const FeatureFlagsSchema = z.object({
   agent_llm_relay: FeatureFlagValue.optional(),
 
   /**
-   * Rollout gate for the bot-wake pipeline: recording every inbound bot message as a signal with
-   * its wake decision, follow-up wakes that may end in silence (`NO_REPLY`), and the scheduler,
-   * policies and classifier behind them. Evaluated per bot owner, so array values are the user
-   * ids of bot owners. Off means the bot behaves exactly as it did before the pipeline existed
-   * and nothing is written. Server-only: no client reads it.
-   */
-  bot_wake: FeatureFlagValue.optional(),
-
-  /**
-   * Dashboards: monitoring widgets built by the `lobe-dashboard` agent tool,
+   * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
    * already-published widgets keep refreshing on their schedule. Array values
@@ -155,16 +135,12 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   knowledge_base: true,
   rag_eval: false,
 
-  // Off until an admin publishes a user allowlist or flips it to true; the
-  // v1 socket stays the default everywhere until then.
-  agent_gateway_mux: false,
+  // Off until an admin publishes a user allowlist or flips it to true; Mobile
+  // stays on the v1 socket until then.
   agent_gateway_mux_mobile: false,
 
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
-
-  // Off until an admin publishes a bot-owner allowlist or flips it to true.
-  bot_wake: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
@@ -206,9 +182,7 @@ export const mapFeatureFlagsEnvToState = (
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
 
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId),
-    enableGatewayMux: evaluateFeatureFlag(config.agent_gateway_mux, userId),
     enableGatewayMuxMobile: evaluateFeatureFlag(config.agent_gateway_mux_mobile, userId),
-    enableBotWake: evaluateFeatureFlag(config.bot_wake, userId),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId),
     enableChannels: evaluateFeatureFlag(config.channel, userId),

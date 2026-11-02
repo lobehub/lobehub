@@ -163,7 +163,16 @@ describe('FavoriteModel', () => {
     expect((await workspaceModel.query()).map((item) => item.id)).toEqual([foreign.id]);
   });
 
-  it('leaves other sidebars untouched when reordering an empty one', async () => {
+  it('ignores a reorder while this sidebar holds no favorites', async () => {
+    const item = await personalModel.add(topic('tpc_keep'));
+
+    await expect(workspaceModel.reorder([item.id, 'tpc_missing'])).resolves.toBeUndefined();
+
+    expect(await workspaceModel.query()).toEqual([]);
+    expect((await personalModel.query()).map((row) => row.id)).toEqual([item.id]);
+  });
+
+  it('leaves the scope untouched when it has no favorites to reorder', async () => {
     const foreign = await workspaceModel.add(topic('tpc_ws'));
 
     await personalModel.reorder([foreign.id]);

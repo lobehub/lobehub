@@ -129,25 +129,33 @@ export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './
 export type {
   CreateMessageIntent,
   CreateThreadIntent,
+  FinalizedSubagentRunSnapshot,
   FinalizeThreadIntent,
   PersistContentIntent,
   PersistToolBatchEntry,
   PersistToolBatchIntent,
   RecordUsageIntent,
+  ReopenThreadIntent,
   ResolveToolResultIntent,
   StreamContentIntent,
   SubagentIntent,
   SubagentReduceCtx,
+  SubagentRun,
   SubagentRunSnapshot,
   SubagentRunsState,
+  SubagentThreadMessage,
   UpdateToolStateIntent,
 } from './subagentCoordinator';
 export {
+  buildFinalizedSubagentRunSnapshot,
+  buildSubagentRunSnapshot,
   createSubagentRunsState,
   type EventScope,
   getEventScope,
   reduceSubagentRuns,
   rehydrateSubagentRunsState,
+  restoreFinalizedSubagentRun,
+  restoreSubagentRun,
 } from './subagentCoordinator';
 export type {
   AgentEventAdapter,

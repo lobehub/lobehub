@@ -147,7 +147,7 @@ describe('Thread deletion', () => {
       content: 'Route me',
       requestKey: 'pending',
       threadId: thread.id,
-      routing: 'jev',
+      routing: 'decision',
     });
 
     await asOwner.removeThread(channel.id, thread.id);
