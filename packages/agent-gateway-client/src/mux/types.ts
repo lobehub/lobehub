@@ -231,6 +231,14 @@ export interface GatewayMuxClientOptions {
   autoReconnect?: boolean;
   /** Stable id for this tab; the hub tags the connection with it. Random when omitted. */
   clientId?: string;
+  /**
+   * Deadline for one dial, from minting the token to the hub's `ready`
+   * (default: none). An attempt that misses it — a `getToken` that never
+   * settles, a socket that opens but never gets `ready` — is abandoned and
+   * handled like a lost connection: it counts toward `maxDialFailures` while
+   * protocol v2 has not worked yet, and is redialed with backoff.
+   */
+  connectTimeoutMs?: number;
   /** Gateway URL base (e.g. https://gateway.lobehub.com); the client appends `/v2/ws`. */
   gatewayUrl: string;
   /** Called before EVERY connect attempt; must return a fresh user JWT. */

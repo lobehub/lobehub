@@ -1,4 +1,4 @@
-import type { AgentState } from '@lobechat/agent-runtime';
+import { type AgentState, omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
 import { type ChatToolPayload, type UIChatMessage } from '@lobechat/types';
 
@@ -73,7 +73,7 @@ export async function queryUiMessages(
   const includeFileWorks = isShareVisitorRun || agentState?.host?.acceptsFileWorks === true;
 
   try {
-    return await deps.messageService.queryMessages(
+    const messages = await deps.messageService.queryMessages(
       {
         agentId,
         groupId,
@@ -91,6 +91,7 @@ export async function queryUiMessages(
       // `GatewayStreamNotifier`.
       { allowShareVisitor: true, ...(workAccessScope && { workAccessScope }) },
     );
+    return messages.map(omitToolWorkRegistration);
   } catch (error) {
     // Stream events must never fail the step. If the DB hiccups, fall back
     // to letting the client refresh as before.
@@ -131,7 +132,7 @@ export async function queryMessagesFromDB(deps: MessagesDeps, state: AgentState)
   // reduce tool payloads to render-facing view models (see
   // `@lobechat/tool-view-model`), which would silently strip the results the
   // model is supposed to remember.
-  return deps.messageModel.query(
+  const messages = await deps.messageModel.query(
     {
       agentId: state.origin?.agentId,
       // Group runs must pass groupId, else the query filters `groupId IS NULL`
@@ -146,6 +147,7 @@ export async function queryMessagesFromDB(deps: MessagesDeps, state: AgentState)
     // of `query()`'s creator-facing agent-share exclusion.
     { allowShareVisitor: true, postProcessUrl },
   );
+  return messages.map(omitToolWorkRegistration);
 }
 
 /**
@@ -252,6 +254,7 @@ export async function queryStepEntryMessages(
       },
       { allowShareVisitor: true },
     );
+    messages = messages.map(omitToolWorkRegistration);
   } catch (error) {
     console.error('[queryStepEntryMessages] Failed to load messages: %O', error);
     return {};

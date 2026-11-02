@@ -57,6 +57,8 @@ export interface ListDecisionsByScopeParams {
   labeled?: { by: string; has: boolean };
   /** 1..{@link SCOPE_READ_MAX_LIMIT}; defaults to 20. */
   limit?: number;
+  /** Rows to skip, for numbered pages; applied after the cursor when both are given. */
+  offset?: number;
   outcome?: SignalDecisionOutcome;
   scopeKey: string;
   /** Lower bound on `created_at`; defaults to {@link SCOPE_READ_DEFAULT_DAYS} days ago. */
@@ -92,6 +94,8 @@ export interface ScopeDecisionListItem {
 export interface ScopeDecisionPage {
   items: ScopeDecisionListItem[];
   nextCursor?: ScopeDecisionCursor;
+  /** Decisions matching the filters in the window, ignoring the cursor and offset. */
+  total: number;
 }
 
 export interface SummarizeDecisionsByScopeParams {
@@ -257,8 +261,9 @@ export class SignalDecisionModel {
 
   /**
    * One channel's decisions, newest first, with the message preview and each source's current
-   * label. Every predicate starts from `(user_id, scope_key, created_at)`, so the read stays on the
-   * composite index; labels come in one extra query for the page's ids.
+   * label, and how many match the filters. Every predicate starts from
+   * `(user_id, scope_key, created_at)`, so the read and the count stay on the composite index;
+   * labels come in one extra query for the page's ids.
    */
   listByScope = async (params: ListDecisionsByScopeParams): Promise<ScopeDecisionPage> => {
     const limit = Math.min(Math.max(params.limit ?? 20, 1), SCOPE_READ_MAX_LIMIT);
@@ -273,10 +278,6 @@ export class SignalDecisionModel {
     if (params.outcome) conditions.push(eq(signalDecisions.outcome, params.outcome));
     if (params.finalReasons?.length)
       conditions.push(inArray(signalDecisions.finalReason, [...params.finalReasons]));
-    if (params.cursor)
-      conditions.push(
-        sql`(${signalDecisions.createdAt}, ${signalDecisions.id}) < (${params.cursor.createdAt}::timestamptz, ${params.cursor.id}::uuid)`,
-      );
     if (params.labeled) {
       // The source's latest label; `cleared` (or none) means it has no current opinion.
       const latest = sql`coalesce((select ${signalDecisionLabels.label} from ${signalDecisionLabels} where ${signalDecisionLabels.decisionId} = ${signalDecisions.id} and ${signalDecisionLabels.source} = ${params.labeled.by} order by ${signalDecisionLabels.createdAt} desc, ${signalDecisionLabels.id} desc limit 1), ${SIGNAL_DECISION_LABEL_CLEARED})`;
@@ -286,27 +287,41 @@ export class SignalDecisionModel {
           : sql`${latest} = ${SIGNAL_DECISION_LABEL_CLEARED}`,
       );
     }
+    const matching = and(...conditions);
+    const paged = params.cursor
+      ? and(
+          matching,
+          sql`(${signalDecisions.createdAt}, ${signalDecisions.id}) < (${params.cursor.createdAt}::timestamptz, ${params.cursor.id}::uuid)`,
+        )
+      : matching;
 
-    const rows = await this.db
-      .select({
-        address: sql<Record<string, string> | null>`${signals.metadata} -> 'address'`,
-        createdAt: signalDecisions.createdAt,
-        createdAtIso,
-        finalReason: signalDecisions.finalReason,
-        id: signalDecisions.id,
-        outcome: signalDecisions.outcome,
-        purged: sql<boolean>`(${signals.id} is null or ${signals.payloadPurgedAt} is not null)`,
-        text: sql<
-          string | null
-        >`case when ${signals.payloadPurgedAt} is null then left(${signals.payload} ->> 'text', ${SCOPE_READ_TEXT_PREVIEW}) end`,
-        toTag: signalDecisions.toTag,
-        verdicts: signalDecisions.verdicts,
-      })
-      .from(signalDecisions)
-      .leftJoin(signals, eq(signals.id, signalDecisions.signalId))
-      .where(and(...conditions))
-      .orderBy(desc(signalDecisions.createdAt), desc(signalDecisions.id))
-      .limit(limit + 1);
+    const [rows, [{ total }]] = await Promise.all([
+      this.db
+        .select({
+          address: sql<Record<string, string> | null>`${signals.metadata} -> 'address'`,
+          createdAt: signalDecisions.createdAt,
+          createdAtIso,
+          finalReason: signalDecisions.finalReason,
+          id: signalDecisions.id,
+          outcome: signalDecisions.outcome,
+          purged: sql<boolean>`(${signals.id} is null or ${signals.payloadPurgedAt} is not null)`,
+          text: sql<
+            string | null
+          >`case when ${signals.payloadPurgedAt} is null then left(${signals.payload} ->> 'text', ${SCOPE_READ_TEXT_PREVIEW}) end`,
+          toTag: signalDecisions.toTag,
+          verdicts: signalDecisions.verdicts,
+        })
+        .from(signalDecisions)
+        .leftJoin(signals, eq(signals.id, signalDecisions.signalId))
+        .where(paged)
+        .orderBy(desc(signalDecisions.createdAt), desc(signalDecisions.id))
+        .limit(limit + 1)
+        .offset(Math.max(params.offset ?? 0, 0)),
+      this.db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(signalDecisions)
+        .where(matching),
+    ]);
 
     const page = rows.slice(0, limit);
     const labels = await this.currentLabels(page.map((row) => row.id));
@@ -327,6 +342,7 @@ export class SignalDecisionModel {
       })),
       nextCursor:
         rows.length > limit && last ? { createdAt: last.createdAtIso, id: last.id } : undefined,
+      total,
     };
   };
 

@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 
-import { type AgentItemData } from './AgentItem';
 import AgentItem from './AgentItem';
+import { type AgentItemData } from './AgentItem';
 import { useAgentSelectionStore } from './store';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

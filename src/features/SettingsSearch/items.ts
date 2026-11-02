@@ -617,6 +617,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Hotkey,
     visible: (ctx) => ctx.isDesktop,
   },
+  {
+    anchor: 'hotkey-app-menu',
+    keywords: ['shortcut', 'keyboard', 'menu', 'new agent', 'new topic', 'zoom'],
+    labelKey: 'hotkey.group.appMenu',
+    tab: SettingsTabs.Hotkey,
+    visible: (ctx) => ctx.isDesktop,
+  },
   // Business pages below are rendered by business slots (cloud implementation);
   // their tabs only appear when the business build provides them, so tab
   // visibility via useCategory is the effective gate — no per-item gate needed.

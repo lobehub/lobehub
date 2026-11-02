@@ -293,7 +293,7 @@ jobs:
 
       # pnpm 12 writes broken relative symlinks for workspace members outside the desktop
       # workspace root (../../packages/*). Installing the root workspace relinks them so
-      # tsgo can resolve sibling packages from source.
+      # tsrs can resolve sibling packages from source.
       - name: Relink root workspace members
         run: pnpm install --ignore-scripts
         env:

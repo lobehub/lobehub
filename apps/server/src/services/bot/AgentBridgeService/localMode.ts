@@ -257,6 +257,7 @@ export async function executeWithHooksLocalMode(
                       event.errorAttribution,
                       event.errorBudget,
                       event.errorHeterogeneous,
+                      event.errorDispatch,
                     );
                     // Wrap in `{ markdown }` so the Chat SDK adapter sets the
                     // platform's markdown parse_mode (e.g. Telegram `Markdown`,
