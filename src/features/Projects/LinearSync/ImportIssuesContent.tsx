@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Checkbox, Flexbox, Icon, Text, toast, useModalContext } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text, toast, useModalContext } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { ChevronLeftIcon, InfoIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -10,6 +10,7 @@ import useSWR from 'swr';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { linearService } from '@/services/linear';
 
+import ImportOptions from './ImportOptions';
 import IssueList from './IssueList';
 import RunStep from './RunStep';
 import ScopeStep from './ScopeStep';
@@ -230,14 +231,11 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
               }}
               onSelectionChange={changeSelection}
             />
-            <Checkbox
-              checked={syncComments}
+            <ImportOptions
               disabled={starting !== null}
-              textProps={{ fontSize: 12, type: 'secondary' }}
-              onChange={setSyncComments}
-            >
-              {t('linear.sync.modal.syncComments')}
-            </Checkbox>
+              syncComments={syncComments}
+              onSyncCommentsChange={setSyncComments}
+            />
           </Flexbox>
         ) : null}
 

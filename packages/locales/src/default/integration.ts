@@ -147,8 +147,14 @@ export default {
   'linear.sync.modal.saveRule': 'Save as rule and sync all',
   'linear.sync.modal.saveRuleHint':
     'Sync every issue matching these filters now, and keep the filters to sync again later',
-  'linear.sync.modal.syncComments': 'Also sync Linear comments into task activity',
   'linear.sync.modal.title': 'Import issues from {{account}}',
+  'linear.sync.options.importTitle': 'Import options',
+  'linear.sync.options.syncComments': 'Sync comments',
+  'linear.sync.options.syncCommentsDesc':
+    "Copy each issue's Linear comments into the task's activity, keeping the author and time",
+  'linear.sync.options.syncCommentsRuleDesc':
+    'Tasks already synced also get the comments they are missing',
+  'linear.sync.options.syncTitle': 'Sync options',
   'linear.sync.project.connect': 'Connect Linear',
   'linear.sync.project.description':
     'Turn Linear issues into tasks of this project, one by one or through a saved team or project rule. Syncing is one way: nothing in Linear is changed.',

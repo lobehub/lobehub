@@ -3,11 +3,11 @@
 import type { LinearConnectionView, LinearSyncJobView, LinearSyncRuleView } from '@lobechat/types';
 import {
   ActionIcon,
-  Button,
-  Checkbox,
   confirmModal,
+  type DropdownItem,
   Flexbox,
   Icon,
+  SplitButton,
   Text,
   toast,
 } from '@lobehub/ui';
@@ -69,8 +69,27 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
   const isViewer = useIsWorkspaceViewer();
   const viewerHint = isViewer ? t('linear.sync.viewerDisabled') : undefined;
   const [starting, setStarting] = useState<string | null>(null);
-  // Applies to the next run of any rule; re-running fills in comments tasks lack.
+  // Tucked into each rule's sync menu; applies to the next run of any rule, and
+  // re-running with it on fills in the comments already-synced tasks lack.
   const [syncComments, setSyncComments] = useState(true);
+  const optionItems: DropdownItem[] = [
+    {
+      children: [
+        {
+          checked: syncComments,
+          closeOnClick: false,
+          desc: t('linear.sync.options.syncCommentsRuleDesc'),
+          key: 'syncComments',
+          label: t('linear.sync.options.syncComments'),
+          onCheckedChange: setSyncComments,
+          type: 'checkbox',
+        },
+      ],
+      key: 'options',
+      label: t('linear.sync.options.syncTitle'),
+      type: 'group',
+    },
+  ];
   const runningRuleIds = new Set(
     jobs.filter(isActiveLinearSyncJob).flatMap((job) => (job.ruleId ? [job.ruleId] : [])),
   );
@@ -122,17 +141,7 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
 
   return (
     <Flexbox gap={8}>
-      <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-        <Text type={'secondary'}>{t('linear.sync.rules.title')}</Text>
-        <Checkbox
-          checked={syncComments}
-          disabled={isViewer}
-          textProps={{ fontSize: 12, type: 'secondary' }}
-          onChange={setSyncComments}
-        >
-          {t('linear.sync.modal.syncComments')}
-        </Checkbox>
-      </Flexbox>
+      <Text type={'secondary'}>{t('linear.sync.rules.title')}</Text>
       <div {...stylex.props(styles.list)}>
         {rules.map((rule, index) => {
           // A disconnected workspace's rule can still be deleted, not run.
@@ -165,20 +174,24 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
                   ].join(' · ')}
                 </Text>
               </Flexbox>
-              <Button
+              <SplitButton
                 disabled={isViewer || disconnected}
-                icon={<Icon icon={RefreshCwIcon} />}
                 loading={starting === rule.id || runningRuleIds.has(rule.id)}
                 size={'small'}
-                title={
-                  viewerHint ?? (disconnected ? t('linear.sync.rules.disconnected') : undefined)
-                }
-                onClick={() => runRule(rule)}
               >
-                {runningRuleIds.has(rule.id)
-                  ? t('linear.sync.rules.running')
-                  : t('linear.sync.rules.run')}
-              </Button>
+                <SplitButton.Main
+                  icon={<Icon icon={RefreshCwIcon} />}
+                  title={
+                    viewerHint ?? (disconnected ? t('linear.sync.rules.disconnected') : undefined)
+                  }
+                  onClick={() => runRule(rule)}
+                >
+                  {runningRuleIds.has(rule.id)
+                    ? t('linear.sync.rules.running')
+                    : t('linear.sync.rules.run')}
+                </SplitButton.Main>
+                <SplitButton.Menu items={optionItems} placement={'bottomRight'} />
+              </SplitButton>
               <ActionIcon
                 disabled={isViewer || runningRuleIds.has(rule.id)}
                 icon={Trash2Icon}
