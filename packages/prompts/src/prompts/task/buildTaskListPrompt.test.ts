@@ -84,4 +84,19 @@ describe('buildTaskListPrompt', () => {
     expect(result).toContain('Default Lobe AI agent id: agt_inbox');
     expect(result).toContain('Do not use it as a listTasks filter');
   });
+
+  it('tells the agent the list is narrowed by a filter', () => {
+    const result = buildTaskListPrompt(
+      {
+        filtered: true,
+        tasks: [{ identifier: 'T-1', name: 'Write chapter 1', priority: 2, status: 'running' }],
+        total: 1,
+      },
+      NOW,
+    );
+    expect(result).toContain('with a filter applied');
+    expect(result).toContain('not every task');
+    expect(result).toContain('tasks outside the filter are not listed here');
+    expect(result).not.toContain('listTasks');
+  });
 });

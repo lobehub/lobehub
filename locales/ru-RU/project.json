@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Искать библиотеки",
   "knowledgeBases.updateFailed": "Не удалось обновить библиотеку",
   "list.deleteAction": "Удалить проект",
-  "list.deleteConfirmDescription": "Удалить «{{name}}»? Его задачи проекта, цели, темы и привязки будут удалены безвозвратно.",
-  "list.deleteConfirmTitle": "Удалить проект?",
   "list.deleteError": "Не удалось удалить проект.",
   "list.deleteSuccess": "«{{name}}» удален",
   "list.emptyDescription": "Создайте свой первый проект для организации целей, задач и ресурсов.",

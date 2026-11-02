@@ -4,6 +4,7 @@ const content = `# lh artifact - Publish local HTML and Canvas
 
 - \`lh artifact guide canvas\`: read the shared Canvas component and generation rules before authoring a Canvas.
 - \`lh artifact publish <file> [--type html|canvas] [--root <dir>] [--title <title>] [--slug <name>] [--new | --deployment <id>] [--json]\`: publish a public artifact.
+- \`lh artifact unpublish [file] [--deployment <id>] [--json]\`: take a published artifact offline.
 
 Ordinary HTML is the default for unbound files and bundles local resources allowed
 by --root. Canvas requires --type canvas on its first publish and accepts a
@@ -30,6 +31,12 @@ Canvas JSON failures include the saved canvasId, workId and version when known;
 an unsuccessful publish must never be reported as successful. Only a successful
 publish returns a publicUrl. A Canvas is also saved as a Work with version history;
 it does not require a topic or agent and uses the current authenticated scope.
+
+Unpublish takes the site offline and keeps the deployment and its release history,
+so publishing the same file again reactivates the same address. There is no hard
+delete, and the binding stays in .lobehub/artifacts.json on purpose. With a file,
+the bound deployment is used; --deployment names the id for this run. Unpublishing
+is idempotent, so a retry after a lost response needs no recovery state.
 `;
 
 export const artifact = content;
