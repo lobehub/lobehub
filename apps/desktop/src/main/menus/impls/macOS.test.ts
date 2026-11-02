@@ -172,6 +172,42 @@ describe('MacOSMenu', () => {
     });
   });
 
+  describe('image context menu', () => {
+    it.each(['default', 'chat'])('copies the right-clicked image itself in the %s menu', (type) => {
+      const imageData = {
+        mediaType: 'image' as const,
+        srcURL: 'https://example.com/a.png',
+        x: 12,
+        y: 34,
+      };
+      macOSMenu.buildContextMenu(type, imageData);
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'Copy Image');
+      expect(copyImage).toBeDefined();
+
+      const copyImageAt = vi.fn();
+      const win = { isDestroyed: () => false, webContents: { copyImageAt } };
+      copyImage.click({}, win);
+
+      expect(copyImageAt).toHaveBeenCalledWith(12, 34);
+    });
+
+    it('disables Copy Image when the image has no decoded contents', () => {
+      macOSMenu.buildContextMenu('default', {
+        hasImageContents: false,
+        mediaType: 'image',
+        srcURL: 'https://example.com/broken.png',
+        x: 12,
+        y: 34,
+      });
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'Copy Image');
+      expect(copyImage.enabled).toBe(false);
+    });
+  });
+
   describe('buildTrayMenu', () => {
     it('should build tray menu', () => {
       const menu = macOSMenu.buildTrayMenu();

@@ -4,8 +4,8 @@ import { Center, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Image as ImageIcon, X } from 'lucide-react';
-import { type FC } from 'react';
 import React, { memo, useEffect, useRef, useState } from 'react';
+import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Image from '@/libs/next/Image';

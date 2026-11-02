@@ -1,12 +1,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { compileFixtureTools } from './compileFixtureTools';
-import { prepareFixtureHost } from '../fixtures/host';
-import type { StyleFixture } from '../fixtures/fixtureRegistry';
-import { runIsolatedProcess } from './isolatedProcess';
-import { writeJson } from '../reporting/report';
 import { bindingObserverExport, prepareStyleBindings } from '../analysis/styleBindings';
+import type { StyleFixture } from '../fixtures/fixtureRegistry';
+import { prepareFixtureHost } from '../fixtures/host';
+import { writeJson } from '../reporting/report';
+import { compileFixtureTools } from './compileFixtureTools';
+import { runIsolatedProcess } from './isolatedProcess';
 
 export const buildComponentFixture = async (
   root: string,
@@ -26,6 +26,12 @@ export const buildComponentFixture = async (
     ...bindingPlan,
     observerExport: bindingObserverExport(bindingPlan),
   });
+  await writeJson(tools, 'fixture-boundaries.json', fixture.moduleBoundaries);
+  await writeFile(
+    path.join(tools, 'fixtureResolvers.ts'),
+    await readFile(path.join(sourceDirectory, 'build/fixtureResolvers.ts')),
+    { flag: 'wx' },
+  );
   await writeFile(
     path.join(tools, 'fixtureBuildWorker.ts'),
     await readFile(path.join(sourceDirectory, 'build/fixtureBuildWorker.ts')),
@@ -55,6 +61,9 @@ export const buildComponentFixture = async (
     durationMs: performance.now() - started,
     fixtureHashes,
     fixtureId: fixture.id,
+    dataBoundaries: JSON.parse(
+      await readFile(path.join(tools, 'fixture-boundary-hits.json'), 'utf8'),
+    ) as string[],
     modules: JSON.parse(await readFile(path.join(tools, 'build-modules.json'), 'utf8')) as string[],
     sandbox: 'macos-sandbox-exec',
     toolchain: { node: process.version, compiler },

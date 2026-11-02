@@ -25,6 +25,7 @@ const serverDB = await getTestDB();
 const userId = 'scm-control-user';
 
 const mocks = vi.hoisted(() => ({
+  archiveSignedOffGoalTasks: vi.fn(async () => {}),
   execAgent: vi.fn(),
   jobLog: vi.fn(),
   postComment: vi.fn(),
@@ -37,6 +38,9 @@ vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(function () {
     return { execAgent: mocks.execAgent };
   }),
+}));
+vi.mock('@/server/services/goal/signOffArchive', () => ({
+  archiveSignedOffGoalTasks: mocks.archiveSignedOffGoalTasks,
 }));
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: () => ({ set: mocks.redisSet }),
@@ -153,6 +157,11 @@ describe('ScmControlService — merge', () => {
       row,
     });
     expect(outcome).toEqual({ acceptanceId: acceptance.id, outcome: 'accepted' });
+    // A merge signs a Goal-level acceptance off, so its Goal's finished Tasks are archived too.
+    expect(mocks.archiveSignedOffGoalTasks).toHaveBeenCalledWith(
+      serverDB,
+      expect.objectContaining({ id: acceptance.id, status: 'accepted' }),
+    );
 
     const [after] = await serverDB
       .select()

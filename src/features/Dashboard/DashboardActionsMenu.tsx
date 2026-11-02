@@ -1,8 +1,14 @@
 'use client';
 
 import type { WidgetLevelFilter } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { ActionIcon, confirmModal, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  confirmModal,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+  toast,
+} from '@lobehub/ui';
 import { MoreHorizontalIcon, Settings2Icon, TrashIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

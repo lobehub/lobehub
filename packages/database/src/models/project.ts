@@ -1,4 +1,4 @@
-import { BUILTIN_AGENT_SLUGS, createProjectCoordinatorAgentConfig } from '@lobechat/builtin-agents';
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, max, ne, or, sql } from 'drizzle-orm';
@@ -26,11 +26,12 @@ import { topicRunStartedAtColumn } from '../utils/topicRunStartedAt';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AgentModel } from './agent';
 import { EnvironmentModel } from './environment';
+import { createProjectMainAgent } from './projectMainAgent';
 import { topicHasGoal } from './topicGoal';
 
 export interface CreateProjectInput {
   avatar?: string;
-  /** Lead the project with an existing agent instead of provisioning a dedicated one. */
+  /** Lead the project with an existing agent instead of creating one named after it. */
   coordinatorAgentId?: string;
   description?: string;
   /** Task prefix for this project; omit to keep the scope's default prefix. */
@@ -155,16 +156,11 @@ export class ProjectModel {
     return this.db.transaction(async (tx) => {
       const coordinator = input.coordinatorAgentId
         ? await this.findAccessibleAgent(tx as LobeChatDatabase, input.coordinatorAgentId)
-        : await new AgentModel(tx as LobeChatDatabase, this.userId, this.workspaceId).create({
-            ...createProjectCoordinatorAgentConfig({
-              avatar: input.avatar,
-              description: input.description,
-              identifier,
-              name: input.name,
-            }),
-            visibility: input.visibility,
-            virtual: true,
-          });
+        : await createProjectMainAgent(
+            tx as LobeChatDatabase,
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { avatar: input.avatar, name: input.name, visibility: input.visibility },
+          );
       if (!coordinator) throw new Error('Agent not found');
       if (input.coordinatorAgentId) {
         this.assertSharedResource(
@@ -230,6 +226,8 @@ export class ProjectModel {
   /**
    * A coordinator provisioned for one project: a virtual, non-builtin agent no
    * other project leads or counts as a member, and no group, session or Channel holds.
+   * Only projects created before main agents became ordinary agents have one;
+   * the agent a project creates now is a real agent the user keeps.
    */
   async isDedicatedCoordinator(
     agentId: string,
@@ -393,8 +391,9 @@ export class ProjectModel {
       .orderBy(desc(projects.updatedAt))
       .limit(limit)
       .offset(offset);
-    // Coordinators are virtual agents the client agent list never loads, so the
-    // list carries their display meta for the owner column.
+    // A main agent may be a virtual coordinator from before main agents were
+    // ordinary agents, which the client agent list never loads, so the list
+    // carries its display meta for the owner column.
     return rows.map(({ coordinatorAgent, project }) => ({ ...project, coordinatorAgent }));
   }
 

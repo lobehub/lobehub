@@ -7,6 +7,7 @@
   "builtins.builtin-dashboard.apiName.dryRunWidget": "Dry-run widget",
   "builtins.builtin-dashboard.apiName.getWidgetRuns": "Check widget runs",
   "builtins.builtin-dashboard.apiName.listDashboards": "List dashboards",
+  "builtins.builtin-dashboard.apiName.listWidgetPresets": "Browse widget presets",
   "builtins.builtin-dashboard.apiName.requestPublish": "Publish widget",
   "builtins.builtin-dashboard.apiName.updateDashboard": "Update dashboard",
   "builtins.builtin-dashboard.apiName.updateWidgetDraft": "Update widget draft",

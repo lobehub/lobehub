@@ -152,6 +152,19 @@ describe('agentBotWakeRouter', () => {
       );
     });
 
+    it('reads a numbered page and passes its total through', async () => {
+      mockListByScope.mockResolvedValue({ items: [], total: 42 });
+
+      const page = await agentBotWakeRouter
+        .createCaller(ctx)
+        .listWakeDecisions({ botId: BOT_ID, limit: 20, offset: 40 });
+
+      expect(mockListByScope).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 20, offset: 40 }),
+      );
+      expect(page.total).toBe(42);
+    });
+
     it('splits current labels into the agent’s silence and the owner’s mark', async () => {
       mockListByScope.mockResolvedValue({
         items: [

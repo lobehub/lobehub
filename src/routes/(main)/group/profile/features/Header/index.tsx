@@ -20,8 +20,8 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import AgentBuilderToggle from './AgentBuilderToggle';
-import { type ChromeTabItem } from './ChromeTabs';
 import ChromeTabs from './ChromeTabs';
+import { type ChromeTabItem } from './ChromeTabs';
 
 const styles = stylex.create({
   header: {
