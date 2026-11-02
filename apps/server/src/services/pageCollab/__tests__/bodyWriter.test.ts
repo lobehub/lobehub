@@ -265,6 +265,24 @@ describe('replaceTextThroughRoom', () => {
     expect(markdown).toContain('para TWO');
   });
 
+  it('rejects an anchor that occurs twice in the live draft without writing', async () => {
+    // The stored row this suggestion was validated against had one occurrence; a
+    // second one arrives in the room before it projects.
+    await seedRoom('Payment within 90 days.\n\nWe also accept 90 days.\n');
+
+    const applied = await replaceTextThroughRoom(
+      {} as any,
+      'doc_1',
+      { newText: '30 days', searchText: '90 days' },
+      { saveSource: 'llm_call', userId: 'u1' },
+    );
+
+    expect(applied?.ambiguous).toBe(true);
+    expect(applied?.replacementCount).toBe(0);
+    expect(room.pushes).toEqual([]);
+    expect((await markdownOfRoom()).match(/90 days/g)).toHaveLength(2);
+  });
+
   it('reports a missing anchor without writing to the room', async () => {
     const applied = await replaceTextThroughRoom(
       {} as any,

@@ -112,6 +112,16 @@ export const replaceTextInDocument = async (params: {
     );
 
     if (inRoom) {
+      // The row this suggestion was validated against can lag the room, so an
+      // occurrence typed since then makes the anchor ambiguous in the body that
+      // would actually be edited. Refuse instead of rewriting the first match.
+      if (inRoom.ambiguous) {
+        throw new ReviewServiceError(
+          'ANCHOR_AMBIGUOUS',
+          'The suggestion original text now appears more than once in the page; edit it to disambiguate before applying',
+        );
+      }
+
       if (inRoom.replacementCount === 0) {
         throw new ReviewServiceError(
           'ANCHOR_LOST',

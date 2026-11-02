@@ -14,6 +14,7 @@ import {
 } from '@/server/services/agentDocuments/headlessEditor';
 import type { DocumentService } from '@/server/services/document';
 import type { UpdateDocumentParams, UpdateDocumentResult } from '@/server/services/document/types';
+import { countQuoteOccurrences, textFromEditorData } from '@/server/services/review/textExtract';
 
 import { isPageCollabEnabled } from './config';
 import type { SerializedEditor } from './editorData';
@@ -102,6 +103,17 @@ export const writePageBodyThroughRoom = async (
   );
 };
 
+export interface TextReplacementResult {
+  /**
+   * The anchor now matches more than once in the live draft, so nothing was
+   * written: picking the first match could rewrite a passage the caller never
+   * meant to touch.
+   */
+  ambiguous?: boolean;
+  content: string;
+  replacementCount: number;
+}
+
 /**
  * Runs one text replacement on an editor, through the same runtime path the page
  * tools use, and exports the body it produced.
@@ -110,7 +122,17 @@ const replaceTextInDraft = async (
   editor: HeadlessEditor,
   documentId: string,
   { newText, searchText }: { newText: string; searchText: string },
-): Promise<{ content: string; replacementCount: number }> => {
+): Promise<TextReplacementResult> => {
+  // The caller validated the anchor against the stored snapshot, which can lag the
+  // draft by the projection delay. An occurrence typed since then makes the anchor
+  // ambiguous here even though the row still held exactly one, and `replaceText`
+  // with `replaceAll: false` would rewrite the first match — possibly the new one.
+  // Count on the draft itself, the body this write is about to change.
+  const draft = editor.export();
+  if (countQuoteOccurrences(textFromEditorData(draft.editorData), searchText) > 1) {
+    return { ambiguous: true, content: draft.markdown, replacementCount: 0 };
+  }
+
   const runtime = new EditorRuntime();
   runtime.setEditor(editor.kernel as unknown as EditorRuntimeEditorParam);
   runtime.setCurrentDocId(documentId);
@@ -138,7 +160,7 @@ export const replaceTextThroughRoom = async (
   documentId: string,
   replacement: { newText: string; searchText: string },
   writer: PageWriter,
-): Promise<{ content: string; replacementCount: number } | undefined> => {
+): Promise<TextReplacementResult | undefined> => {
   if (!isPageCollabEnabled()) return undefined;
 
   return runPageExclusive(documentId, () =>
@@ -148,6 +170,8 @@ export const replaceTextThroughRoom = async (
 
       try {
         const result = await replaceTextInDraft(session.draft.editor, documentId, replacement);
+        // Ambiguous: the caller rejects it against the unchanged page.
+        if (result.ambiguous) return result;
         // A zero count means the anchor is gone, so there is nothing to merge back;
         // the caller reports it as ANCHOR_LOST against the unchanged page.
         if (result.replacementCount > 0) await session.commit();
