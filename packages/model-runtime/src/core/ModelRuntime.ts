@@ -40,6 +40,13 @@ import type {
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
 import { getModelType } from '../utils/getModelPricing';
+import {
+  hasMediaPart,
+  hasRemoteImage,
+  inlineRemoteImages,
+  isMediaFetchError,
+  replaceMediaWithPlaceholders,
+} from '../utils/remoteMediaFallback';
 import { createTimingHelpers, getDurationMs } from '../utils/timing';
 import { createVideoWithCompletionMode } from '../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from './BaseAI';
@@ -323,7 +330,7 @@ export class ModelRuntime {
         );
       }
       const runtimeStartedAt = Date.now();
-      const response = await this._runtime.chat(payload, finalOptions);
+      const response = await this.chatWithMediaFallback(payload, finalOptions);
       if (metadata) {
         timing(
           'ModelRuntime.chat runtime done model=%s durationMs=%d totalMs=%d traceId=%s',
@@ -356,6 +363,39 @@ export class ModelRuntime {
         }
       }
       throw error;
+    }
+  }
+
+  /**
+   * A media part the provider cannot fetch or decode would otherwise fail every later turn
+   * of the topic, because it stays in the history. Retry once with remote images inlined
+   * as data URIs, then once more with all media replaced by text placeholders.
+   */
+  private async chatWithMediaFallback(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+    const chat = this._runtime.chat!.bind(this._runtime);
+
+    try {
+      return await chat(payload, options);
+    } catch (error) {
+      if (!isMediaFetchError(error) || !hasMediaPart(payload.messages)) throw error;
+
+      let lastError = error;
+      if (hasRemoteImage(payload.messages)) {
+        console.warn('[ModelRuntime] provider could not fetch media, retrying with inlined images');
+        try {
+          const messages = await inlineRemoteImages(payload.messages);
+          return await chat({ ...payload, messages }, options);
+        } catch (retryError) {
+          if (!isMediaFetchError(retryError)) throw retryError;
+          lastError = retryError;
+        }
+      }
+
+      if (options?.signal?.aborted) throw lastError;
+
+      console.warn('[ModelRuntime] provider could not process media, retrying without it');
+      const messages = await replaceMediaWithPlaceholders(payload.messages);
+      return chat({ ...payload, messages }, options);
     }
   }
 
