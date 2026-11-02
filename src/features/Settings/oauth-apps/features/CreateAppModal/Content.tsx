@@ -1,10 +1,18 @@
 'use client';
 
 import { type OAuthAppType } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Input, Text, TextArea, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Icon,
+  Input,
+  Text,
+  TextArea,
+  useModalContext,
+} from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { CheckIcon, GlobeIcon, type LucideIcon, TerminalIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';

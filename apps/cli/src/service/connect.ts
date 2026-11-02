@@ -45,16 +45,6 @@ export interface ConnectServiceOptions {
   workspace?: string;
 }
 
-export interface ConnectServiceStatus {
-  active: boolean;
-  enabled: boolean;
-  installed: boolean;
-  mainPid: number | null;
-  serviceName: string;
-  subState: string | null;
-  unitFileState: string | null;
-}
-
 function systemctl(args: string[], stdio: 'pipe' | 'inherit' = 'pipe'): string {
   const output = execFileSync('systemctl', ['--user', ...args], {
     encoding: 'utf8',
@@ -274,32 +264,4 @@ export function restartConnectService(): boolean {
   writeServiceEnvironmentFile();
   systemctl(['restart', SERVICE_NAME], 'inherit');
   return true;
-}
-
-export function readConnectServiceStatus(): ConnectServiceStatus | null {
-  if (!fs.existsSync(path.join(getUserServiceDir(), SERVICE_NAME))) return null;
-
-  requireLinuxSystemd();
-
-  const getShowValue = (property: string): string | null => {
-    try {
-      return systemctl(['show', SERVICE_NAME, `--property=${property}`, '--value']);
-    } catch {
-      return null;
-    }
-  };
-  const activeState = getShowValue('ActiveState');
-  const unitFileState = getShowValue('UnitFileState');
-  const subState = getShowValue('SubState');
-  const mainPidRaw = getShowValue('MainPID');
-
-  return {
-    active: activeState === 'active',
-    enabled: unitFileState === 'enabled',
-    installed: true,
-    mainPid: mainPidRaw && mainPidRaw !== '0' ? Number.parseInt(mainPidRaw, 10) : null,
-    serviceName: SERVICE_NAME,
-    subState,
-    unitFileState,
-  };
 }

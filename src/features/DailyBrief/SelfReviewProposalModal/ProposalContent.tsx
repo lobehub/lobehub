@@ -2,9 +2,7 @@ import {
   formatSelfReviewItemHeadline,
   type SelfReviewProposalContentItem,
 } from '@lobechat/agent-signal/brief';
-import { Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 

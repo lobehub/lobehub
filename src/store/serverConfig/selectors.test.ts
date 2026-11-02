@@ -27,6 +27,21 @@ describe('featureFlagsSelectors', () => {
 });
 
 describe('serverConfigSelectors', () => {
+  describe('enableWorkspace', () => {
+    it('needs both the business deployment and the per-user workspace flag', () => {
+      const state = (enableBusinessFeatures: boolean, enableWorkspace?: boolean) =>
+        initServerConfigStore({
+          featureFlags: { enableWorkspace } as any,
+          serverConfig: { enableBusinessFeatures } as any,
+        }).getState();
+
+      expect(serverConfigSelectors.enableWorkspace(state(true, true))).toBe(true);
+      expect(serverConfigSelectors.enableWorkspace(state(true, false))).toBe(false);
+      expect(serverConfigSelectors.enableWorkspace(state(true))).toBe(false);
+      expect(serverConfigSelectors.enableWorkspace(state(false, true))).toBe(false);
+    });
+  });
+
   describe('enableDashboard', () => {
     it('is off by default and on only when the flag resolves to true', () => {
       expect(serverConfigSelectors.enableDashboard(initServerConfigStore({}).getState())).toBe(
@@ -95,30 +110,6 @@ describe('serverConfigSelectors', () => {
       const result = serverConfigSelectors.enabledTelemetryChat(store.getState());
 
       expect(result).toBe(false);
-    });
-  });
-
-  describe('widgetSandboxEnforcesNetworkHosts', () => {
-    it('is true only when the sandbox runs in allowlist mode', () => {
-      const enforced = initServerConfigStore({
-        serverConfig: { aiProvider: {}, telemetry: {}, widgetSandboxNetworkFormat: 'allowlist' },
-      });
-      expect(serverConfigSelectors.widgetSandboxEnforcesNetworkHosts(enforced.getState())).toBe(
-        true,
-      );
-
-      // The deployed Worker's boolean format — and an unset format, which
-      // defaults to it — cannot limit egress to the declared hosts.
-      const booleanFormat = initServerConfigStore({
-        serverConfig: { aiProvider: {}, telemetry: {}, widgetSandboxNetworkFormat: 'boolean' },
-      });
-      expect(
-        serverConfigSelectors.widgetSandboxEnforcesNetworkHosts(booleanFormat.getState()),
-      ).toBe(false);
-      const unset = initServerConfigStore({
-        serverConfig: { aiProvider: {}, telemetry: {} },
-      });
-      expect(serverConfigSelectors.widgetSandboxEnforcesNetworkHosts(unset.getState())).toBe(false);
     });
   });
 });

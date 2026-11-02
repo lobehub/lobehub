@@ -1,8 +1,15 @@
 'use client';
 
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  confirmModal,
+  createStaticStyles,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { MoreVerticalIcon, PowerIcon, PowerOffIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';

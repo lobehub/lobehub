@@ -6,6 +6,7 @@ import type {
   TaskListItem,
 } from '@/store/task/slices/list/initialState';
 
+import type { CreateTaskContentProps } from '../CreateTaskModal/CreateTaskContent';
 import type { TaskGroupBy, TaskGroupMeta } from './listViewOptions';
 import {
   getTaskAssigneeGroupMeta,
@@ -194,6 +195,23 @@ export const getKanbanColumnCreateDefaults = (
     return assigneeId ? { assigneeAgentId: assigneeId } : undefined;
   }
 };
+
+/**
+ * Props for the create task modal opened from a column. The column's pinned
+ * fields are prefilled, so an untouched modal creates the task in this column.
+ */
+export const getKanbanCreateTaskModalProps = (
+  defaults: KanbanColumnCreateDefaults,
+  scope: { agentId?: string; projectId?: string },
+): CreateTaskContentProps => ({
+  agentId: defaults.assigneeAgentId ?? scope.agentId,
+  defaultPriority: defaults.priority,
+  // An agent-scoped board only holds that agent's tasks.
+  lockAssignee: !!scope.agentId,
+  projectId: scope.projectId,
+  // The board has no inline entry to minimize into.
+  showInlineToggle: false,
+});
 
 export const canDropTaskIntoKanbanColumn = (
   task: TaskListItem,

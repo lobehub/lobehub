@@ -1,6 +1,7 @@
 {
   "agent_cron_job_completed": "تم إكمال المهمة المجدولة \"{{jobName}}\" بنجاح.",
   "agent_cron_job_completed_title": "تم إكمال المهمة المجدولة",
+  "agent_cron_job_completed_with_summary": "تم إكمال المهمة المجدولة \"{{jobName}}\" بنجاح.\n\n{{summary}}",
   "agent_cron_job_failed": "فشل تنفيذ مهمتك المجدولة \"{{jobName}}\". افتح المهمة لعرض الخطأ الكامل.",
   "agent_cron_job_failed_insufficient_budget": "تعذّر تشغيل مهمتك المجدولة \"{{jobName}}\" بسبب نفاد رصيد الحساب. يُرجى شحن الرصيد أو ترقية خطتك لاستئناف التشغيل المستقبلي.",
   "agent_cron_job_failed_insufficient_budget_title": "إيقاف المهمة المجدولة: رصيد غير كافٍ",

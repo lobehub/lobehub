@@ -1,7 +1,7 @@
 'use client';
 
 import { LayersEnum } from '@lobechat/types';
-import { Text } from '@lobehub/ui/base-ui';
+import { Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

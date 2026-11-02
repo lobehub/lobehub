@@ -2,8 +2,8 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,8 +1,16 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Skeleton,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -74,13 +82,10 @@ const DatasetsTab = memo<DatasetsTabProps>(
     const total = useEvalStore(testCaseSelectors.testCaseTotal(caseQuery));
     const loading = useEvalStore(testCaseSelectors.isLoadingTestCases(caseQuery));
 
-    const handleRefreshTestCases = useCallback(
-      async () => {
-        await refreshTestCases();
-        onRefresh();
-      },
-      [refreshTestCases, onRefresh],
-    );
+    const handleRefreshTestCases = useCallback(async () => {
+      await refreshTestCases();
+      onRefresh();
+    }, [refreshTestCases, onRefresh]);
 
     const filteredCases = testCases.filter((c: any) => {
       if (diffFilter !== 'all' && c.metadata?.difficulty !== diffFilter) return false;

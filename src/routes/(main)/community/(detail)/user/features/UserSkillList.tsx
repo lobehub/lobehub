@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Grid, Icon } from '@lobehub/ui';
-import { Button, Input, Pagination, Tag, Text } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, Grid, Icon, Input, Pagination, Tag, Text } from '@lobehub/ui';
 import { Plus, SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

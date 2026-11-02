@@ -20,23 +20,33 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
-    <button {...rest} aria-label={title} type="button" onClick={onClick} />
-  ),
-}));
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  // Keep content mounted after dismissal to model the popover's exit animation.
-  Popover: ({ children, content, onOpenChange }: any) => (
-    <div onMouseEnter={() => onOpenChange?.(true)} onMouseLeave={() => onOpenChange?.(false)}>
-      {children}
-      {content}
-    </div>
-  ),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
+        <button {...rest} aria-label={title} type="button" onClick={onClick} />
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      // Keep content mounted after dismissal to model the popover's exit animation.
+      Popover: ({ children, content, onOpenChange }: any) => (
+        <div onMouseEnter={() => onOpenChange?.(true)} onMouseLeave={() => onOpenChange?.(false)}>
+          {children}
+          {content}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 // `enableMessageLinkIcon` is read via useUserStore(selector). We drive the
 // selector's return value through this module-level flag so each case can flip
@@ -72,16 +82,18 @@ vi.mock('@/libs/swr', () => ({
     if (key === null) return { data: undefined, mutate: vi.fn() };
     if (Array.isArray(key) && key[0] === 'internal-entity-preview')
       return { data: mockEntityPreview, mutate: vi.fn() };
-    return {
-      data: [{ documentId: 'docs_doc1', id: 'agent-document-1' }],
-      mutate: vi.fn(),
-    };
+    return { data: undefined, mutate: vi.fn() };
   },
 }));
 
-vi.mock('@/services/agentDocument', () => ({
-  agentDocumentService: { listDocuments: vi.fn() },
-  agentDocumentSWRKeys: { documentsList: (agentId: string) => ['agent-documents', agentId] },
+// The active agent's document-list replica, already loaded.
+vi.mock('@/store/agentDocument', () => ({
+  agentDocumentActions: { fetchDocumentList: vi.fn(), useFetchDocumentList: vi.fn() },
+  agentDocumentSelectors: {
+    getDocumentList: (agentId?: string) => () =>
+      agentId ? [{ documentId: 'docs_doc1', id: 'agent-document-1' }] : undefined,
+  },
+  useAgentDocumentStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -110,6 +122,18 @@ vi.mock('@/store/user/selectors', () => ({
   },
 }));
 
+const mockOpenTrustedExternalUrl = vi.fn();
+
+vi.mock('@/utils/openTrustedExternalUrl', () => ({
+  openTrustedExternalUrl: (url: string) => mockOpenTrustedExternalUrl(url),
+}));
+
+let mockAppOrigin = 'https://app.lobehub.com';
+
+vi.mock('@/hooks/useAppOrigin', () => ({
+  useAppOrigin: () => mockAppOrigin,
+}));
+
 vi.mock('@/store/global', () => ({
   useGlobalStore: (selector: (s: unknown) => unknown) =>
     selector({ openInBrowserTab: mockOpenInBrowserTab }),
@@ -136,6 +160,7 @@ afterEach(() => {
   mockShowIcon = true;
   mockConst.isDesktop = false;
   mockEntityPreview = null;
+  mockAppOrigin = 'https://app.lobehub.com';
   vi.restoreAllMocks();
 });
 
@@ -246,6 +271,68 @@ describe('Link Render — internal entities', () => {
     fireEvent.mouseEnter(container.firstElementChild!);
     expect(getByText('Updated requirement')).toBeInTheDocument();
     expect(getByText('Updated acceptance')).toBeInTheDocument();
+  });
+
+  it('opens an acceptance in the browser from its preview, not the side panel', () => {
+    // A click on the link itself opens the side panel; the preview offers the
+    // full page as an explicit alternative, as an absolute URL so the desktop
+    // system browser can resolve it.
+    mockEntityPreview = { title: 'Workspace publishing' };
+    const { container, getByRole } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+    fireEvent.mouseEnter(container.firstElementChild!);
+
+    fireEvent.click(getByRole('button', { name: 'report.actions.openInBrowser' }));
+
+    expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.lobehub.com/acceptance/acceptance-1',
+    );
+    expect(mockOpenAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('opens the app, not the gateway apex, from the desktop cloud preview', () => {
+    // Desktop in cloud mode reports `https://lobehub.com` as its origin, where
+    // `/acceptance/<id>` is the marketing site's page rather than the report.
+    mockAppOrigin = 'https://lobehub.com';
+    mockEntityPreview = { title: 'Workspace publishing' };
+    const { container, getByRole } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+    fireEvent.mouseEnter(container.firstElementChild!);
+
+    fireEvent.click(getByRole('button', { name: 'report.actions.openInBrowser' }));
+
+    expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.lobehub.com/acceptance/acceptance-1',
+    );
+  });
+
+  it('offers no browser action without an app origin to resolve against', () => {
+    mockAppOrigin = '';
+    const { container, queryByRole } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+    fireEvent.mouseEnter(container.firstElementChild!);
+
+    expect(queryByRole('button', { name: 'report.actions.openInBrowser' })).toBeNull();
+  });
+
+  it('keeps the browser action off previews of other entities', () => {
+    const { container, queryByRole } = renderLink({
+      linkHref: '/task/T-198',
+      linkKind: 'generic',
+      linkLabel: 'Task',
+    });
+    fireEvent.mouseEnter(container.firstElementChild!);
+
+    expect(queryByRole('button', { name: 'report.actions.openInBrowser' })).toBeNull();
   });
 
   it('replaces a pasted URL label with the resolved entity title', () => {

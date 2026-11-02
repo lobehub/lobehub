@@ -5,9 +5,8 @@ import {
   type SidebarAgentLabel,
   type SidebarVisibility,
 } from '@lobechat/types';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import {
   Check,
@@ -36,6 +35,7 @@ import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalPr
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { agentService } from '@/services/agent';
@@ -89,7 +89,7 @@ export const useAgentDropdownMenu = ({
   title,
   userId,
   visibility,
-}: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
+}: UseAgentDropdownMenuParams): (() => DropdownItem[]) => {
   const { t } = useTranslation(['chat', 'common', 'setting']);
   const navigate = useWorkspaceAwareNavigate();
 
@@ -189,6 +189,8 @@ export const useAgentDropdownMenu = ({
     { userId, visibility },
   );
 
+  const copyAgentIdItem = useCopyAgentIdMenuItem(id);
+
   const isDefault = group === SessionDefaultGroup.Default;
 
   // Visibility flips move the item across accordions. Reveal the destination
@@ -240,6 +242,7 @@ export const useAgentDropdownMenu = ({
           },
           sfSymbol: 'macwindow.badge.plus',
         },
+        ...(copyAgentIdItem ? [copyAgentIdItem] : []),
         ...(canConfigure || canCreate || canEdit ? [{ type: 'divider' as const }] : []),
         ...(canConfigure
           ? [
@@ -584,7 +587,7 @@ export const useAgentDropdownMenu = ({
                 : []),
             ]
           : []),
-      ] as MenuProps['items'],
+      ] as DropdownItem[],
     [
       activeWorkspaceId,
       canCreate,
@@ -610,6 +613,7 @@ export const useAgentDropdownMenu = ({
       labelsEnabled,
       openCreateLabelModal,
       openAgentInNewWindow,
+      copyAgentIdItem,
       sessionCustomGroups,
       group,
       isDefault,

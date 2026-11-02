@@ -83,35 +83,6 @@ exports[`EditorRuntime - Real Cases > modifyNodes - batch remove paragraphs > sh
 </root>"
 `;
 
-exports[`EditorRuntime - Real Cases > modifyNodes - remove then add > should remove 13 paragraphs then insert a list > insert new 1`] = `
-"<?xml version="1.0" encoding="UTF-8"?>
-<root>
-  <p id="wihj">
-    <span id="wo1u">杭州是中国著名的旅游城市，素有"人间天堂"的美誉。这里既有美丽的自然风光，又有深厚的历史文化底蕴。</span>
-  </p>
-  <h2 id="wtm5">
-    <span id="wz6g">必游景点</span>
-  </h2>
-  <ul id="9nfi">
-    <li id="9szt">
-      <span id="9yk4">西湖风景区：杭州的灵魂，世界文化遗产</span>
-    </li>
-    <li id="a44f">
-      <span id="a9oq">灵隐寺：杭州最著名的佛教寺庙</span>
-    </li>
-    <li id="af91">
-      <span id="aktc">西溪国家湿地公园：中国第一个国家湿地公园</span>
-    </li>
-    <li id="aqdn">
-      <span id="avxy">宋城：以宋代文化为主题的大型主题公园</span>
-    </li>
-  </ul>
-  <h2 id="562n">
-    <span id="5bmy">美食推荐</span>
-  </h2>
-</root>"
-`;
-
 exports[`EditorRuntime - Real Cases > modifyNodes - remove then add > should remove 13 paragraphs then insert a list > remove 13 paragraphs 1`] = `
 "<?xml version="1.0" encoding="UTF-8"?>
 <root>

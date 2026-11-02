@@ -3,8 +3,8 @@
 import { TodoPanelHeader } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Icon } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Checkbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { CircleArrowRight } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

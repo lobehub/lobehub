@@ -1,9 +1,18 @@
 'use client';
 
-import { type BlockProps, type GenericItemType, type IconProps } from '@lobehub/ui';
-import { Block, Center, ContextMenuTrigger, Flexbox, Icon } from '@lobehub/ui';
-import { Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { type BlockProps, type DropdownItem, type IconProps } from '@lobehub/ui';
+import {
+  Block,
+  Center,
+  ContextMenuTrigger,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Spin,
+  Text,
+} from '@lobehub/ui';
 import { type FocusEvent, type PointerEvent, type ReactNode } from 'react';
 import { memo } from 'react';
 
@@ -16,9 +25,19 @@ const CONTENT_CLASS_NAME = 'nav-item-content';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
+    /* Width the title fades out under: one small action icon (24px) plus spacing.
+       Each extra icon adds its 24px plus the 2px gap. The focus guards and the
+       aria-owns portal marker an open menu inserts beside its trigger are not
+       icons, so they are not counted. */
+    --nav-item-actions-inset: 28px;
+
     user-select: none;
     overflow: hidden;
     min-width: 32px;
+
+    &:has(.${ACTION_CLASS_NAME} > :nth-child(2 of :not([data-base-ui-focus-guard], [aria-owns]))) {
+      --nav-item-actions-inset: 54px;
+    }
 
     /* focus-visible, not focus-within: closing a dropdown hands focus back to its
        trigger, which would pin the actions open after the pointer has left. */
@@ -35,8 +54,8 @@ const styles = createStaticStyles(({ css }) => ({
       .${CONTENT_CLASS_NAME} {
         mask-image: linear-gradient(
           to right,
-          #000 calc(100% - 56px),
-          transparent calc(100% - 28px)
+          #000 calc(100% - var(--nav-item-actions-inset) - 28px),
+          transparent calc(100% - var(--nav-item-actions-inset))
         );
       }
     }
@@ -72,7 +91,7 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
    */
   actions?: LazyActions;
   active?: boolean;
-  contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
+  contextMenuItems?: DropdownItem[] | (() => DropdownItem[]);
   /**
    * Optional second line rendered under the title (e.g. a topic's project
    * directory). When set, the row grows to fit both lines; when omitted the

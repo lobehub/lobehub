@@ -1,5 +1,6 @@
 import type { TopicQuerySortBy } from '@lobechat/types';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import { resolveAgentTopicGroupMode } from '@/features/AgentSidebar/Topic/utils/topicGroupMode';
 import { useAgentStore } from '@/store/agent';
@@ -23,6 +24,7 @@ const EXCLUDE_STATUSES_COMPLETED = ['completed'];
 export interface SidebarTopicListQuery {
   excludeStatuses?: string[];
   excludeTriggers?: string[];
+  onlyMine?: boolean;
   sortBy?: TopicQuerySortBy;
 }
 
@@ -40,14 +42,17 @@ export interface SidebarTopicListQuery {
 export const deriveSidebarTopicListQuery = ({
   includeCompleted,
   isGroupSession,
+  onlyMine,
   topicGroupMode,
 }: {
   includeCompleted: boolean;
   isGroupSession: boolean;
+  onlyMine: boolean;
   topicGroupMode: TopicGroupMode;
 }): SidebarTopicListQuery => ({
   excludeStatuses: includeCompleted ? undefined : EXCLUDE_STATUSES_COMPLETED,
   excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
+  onlyMine: onlyMine || undefined,
   sortBy: !isGroupSession && topicGroupMode === 'byStatus' ? 'status' : undefined,
 });
 
@@ -84,16 +89,21 @@ export const getSidebarTopicListParams = (session: {
 
   const agentState = useAgentStore.getState();
   const inboxAgentId = builtinAgentSelectors.inboxAgentId(agentState);
+  const userState = useUserStore.getState();
+  const globalState = useGlobalStore.getState();
 
   return normalizeTopicListParams({
     ...deriveSidebarTopicListQuery({
-      includeCompleted: preferenceSelectors.topicIncludeCompleted(useUserStore.getState()),
+      includeCompleted: preferenceSelectors.topicIncludeCompleted(userState),
       isGroupSession: !!groupId,
+      onlyMine:
+        !!getActiveWorkspaceId() &&
+        systemStatusSelectors.topicOnlyMine(groupId ?? agentId)(globalState),
       topicGroupMode: getTopicGroupModeForAgent(agentId),
     }),
     agentId,
     groupId,
     isInbox: !groupId && !!inboxAgentId && inboxAgentId === agentId,
-    pageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
+    pageSize: systemStatusSelectors.topicPageSize(globalState),
   });
 };

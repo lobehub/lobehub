@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from '../overviewData';
+import {
+  collectChangeStats,
+  getStatusDeviceId,
+  isLinkedWorktreeCheckout,
+  shouldShowCiLabel,
+  shouldShowGitSkeleton,
+} from '../overviewData';
 
 describe('collectChangeStats', () => {
   it('sums additions/deletions across repo and submodule patches', () => {
@@ -66,5 +72,40 @@ describe('shouldShowCiLabel', () => {
     expect(shouldShowCiLabel('success')).toBe(false);
     expect(shouldShowCiLabel('unknown')).toBe(false);
     expect(shouldShowCiLabel(undefined)).toBe(false);
+  });
+});
+
+describe('getStatusDeviceId', () => {
+  it('shows the bound remote device', () => {
+    expect(getStatusDeviceId('device', 'dev-1')).toBe('dev-1');
+  });
+
+  it('shows the bound local desktop, which has no RPC routing id', () => {
+    expect(getStatusDeviceId('local', 'desktop-1')).toBe('desktop-1');
+  });
+
+  it.each(['auto', 'none', 'sandbox'] as const)('shows nothing for %s', (target) => {
+    expect(getStatusDeviceId(target, 'dev-1')).toBeUndefined();
+  });
+
+  it('shows nothing when no device is bound', () => {
+    expect(getStatusDeviceId('device', undefined)).toBeUndefined();
+  });
+});
+
+describe('shouldShowGitSkeleton', () => {
+  it('shows the skeleton only on a first-ever load with no git data at all', () => {
+    expect(shouldShowGitSkeleton({ hasData: false, loading: true })).toBe(true);
+  });
+
+  // Regression: the skeleton keyed off `branchLoading || reviewLoading`, so a
+  // reload with a cached branch still blanked the whole section until the diff
+  // patches came back.
+  it('keeps rendering cached rows while other git reads are still in flight', () => {
+    expect(shouldShowGitSkeleton({ hasData: true, loading: true })).toBe(false);
+  });
+
+  it('never shows the skeleton once loading settles', () => {
+    expect(shouldShowGitSkeleton({ hasData: false, loading: false })).toBe(false);
   });
 });

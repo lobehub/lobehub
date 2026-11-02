@@ -1,8 +1,14 @@
 'use client';
 
-import { CopyButton, Flexbox } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Button,
+  CopyButton,
+  createModal,
+  createStaticStyles,
+  Flexbox,
+  type ModalInstance,
+  useModalContext,
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';

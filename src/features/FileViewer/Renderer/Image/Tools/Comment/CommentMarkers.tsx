@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { Rotation } from '../../geometry';

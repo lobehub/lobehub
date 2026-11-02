@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
   copyToClipboard: vi.fn(async (_text: string) => undefined),
   confirmModal: vi.fn(),
   deleteResource: vi.fn<() => Promise<void>>(async () => {}),
+  downloadFile: vi.fn(async (_url: string, _filename: string) => undefined),
   dropTreeNodes: vi.fn(async () => undefined),
+  getFile: vi.fn(async (_id: string) => ({ url: 'https://storage.example.com/fresh-signed' })),
   publishFileToWorkspace: vi.fn(async (_id: string) => undefined),
   setFileVisibility: vi.fn(async (_id: string, _visibility: string) => undefined),
   refreshFileList: vi.fn(async () => undefined),
@@ -23,15 +25,30 @@ const mocks = vi.hoisted(() => ({
   useSendToMessengerMenuItem: vi.fn((_params: SendToMessengerParams) => undefined),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: mocks.confirmModal,
-  toast: {
-    error: vi.fn(),
-    loading: vi.fn(() => ({ close: vi.fn() })),
-    success: vi.fn(),
-    warning: vi.fn(),
-  },
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    () => ({
+      confirmModal: mocks.confirmModal,
+      toast: {
+        error: vi.fn(),
+        loading: vi.fn(() => ({ close: vi.fn() })),
+        success: vi.fn(),
+        warning: vi.fn(),
+      },
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<Record<string, unknown>>()),
+      copyToClipboard: mocks.copyToClipboard,
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem', () => ({
   useSendToMessengerMenuItem: mocks.useSendToMessengerMenuItem,
@@ -65,16 +82,15 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => mocks.activeWorkspaceSlug,
 }));
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  copyToClipboard: mocks.copyToClipboard,
-}));
 
 vi.mock('@/store/tree', () => ({
   useTreeStore: Object.assign(() => vi.fn(), {
     getState: () => ({ dropNodes: mocks.dropTreeNodes, revalidate: mocks.revalidateTree }),
   }),
 }));
+
+vi.mock('@/services/file', () => ({ fileService: { getFile: mocks.getFile } }));
+vi.mock('@/utils/client/downloadFile', () => ({ downloadFile: mocks.downloadFile }));
 
 const { useFileItemDropdown } = await import('./useFileItemDropdown');
 
@@ -114,7 +130,7 @@ describe('useFileItemDropdown — copy link', () => {
     mocks.activeWorkspaceId = 'ws-1';
     mocks.activeWorkspaceSlug = 'acme';
     await expect(copyLink({ id: 'docs_abc' })).resolves.toBe(
-      'https://app.example.com/acme/resource?file=docs_abc',
+      'https://app.example.com/acme/resource/page/abc',
     );
   });
 
@@ -122,13 +138,13 @@ describe('useFileItemDropdown — copy link', () => {
     mocks.activeWorkspaceId = 'ws-1';
     mocks.activeWorkspaceSlug = 'acme';
     await expect(copyLink({ id: 'docs_abc', libraryId: 'kb_1' })).resolves.toBe(
-      'https://app.example.com/acme/resource/library/kb_1?file=docs_abc',
+      'https://app.example.com/acme/resource/library/kb_1/docs/docs_abc',
     );
   });
 
   it('leaves the personal-scope page link unprefixed', async () => {
     await expect(copyLink({ id: 'docs_abc' })).resolves.toBe(
-      'https://app.example.com/resource?file=docs_abc',
+      'https://app.example.com/resource/page/abc',
     );
   });
 
@@ -369,6 +385,58 @@ describe('useFileItemDropdown — workspace resource permissions', () => {
 
     await waitFor(() =>
       expect(mocks.dropTreeNodes).toHaveBeenCalledWith(['resource-id'], 'parent-id'),
+    );
+  });
+});
+
+/** @example A sidebar row painted from the persisted tree, before its folder refreshed. */
+describe('useFileItemDropdown — row without a stored URL', () => {
+  const click = async (key: string, params: Record<string, unknown> = {}) => {
+    const { result } = renderHook(() =>
+      useFileItemDropdown({ ...baseParams, fileId: 'file-id', url: '', ...params } as any),
+    );
+    const item = result.current.menuItems().find((entry) => entry?.key === key) as any;
+    await item.onClick({ domEvent: { stopPropagation: vi.fn() } });
+  };
+
+  it('copies a freshly resolved URL instead of an empty string', async () => {
+    await click('copyUrl');
+    expect(mocks.getFile).toHaveBeenCalledWith('file-id');
+    expect(mocks.copyToClipboard).toHaveBeenCalledWith('https://storage.example.com/fresh-signed');
+  });
+
+  it('downloads from a freshly resolved URL', async () => {
+    await click('download');
+    expect(mocks.downloadFile).toHaveBeenCalledWith(
+      'https://storage.example.com/fresh-signed',
+      'notes.md',
+    );
+  });
+
+  it('closes the loading toast and reports the failure when the URL lookup fails', async () => {
+    const close = vi.fn();
+    const { toast } = await import('@lobehub/ui');
+    vi.mocked(toast.loading).mockReturnValueOnce({ close } as any);
+    mocks.getFile.mockRejectedValueOnce(new Error('offline'));
+
+    await click('download');
+
+    expect(mocks.downloadFile).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('FileManager.actions.downloadError');
+  });
+
+  it('still offers Send to chat platform, which resolves the file by id', () => {
+    renderHook(() => useFileItemDropdown({ ...baseParams, fileId: 'file-id', url: '' } as any));
+    expect(mocks.useSendToMessengerMenuItem.mock.calls.at(-1)![0].enabled).toBe(true);
+  });
+
+  it('uses the row URL without a request when it has one', async () => {
+    await click('download', { url: 'https://storage.example.com/notes.md' });
+    expect(mocks.getFile).not.toHaveBeenCalled();
+    expect(mocks.downloadFile).toHaveBeenCalledWith(
+      'https://storage.example.com/notes.md',
+      'notes.md',
     );
   });
 });

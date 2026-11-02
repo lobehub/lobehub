@@ -1,6 +1,12 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  createStaticStyles,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import { ArrowDownUpIcon, FilePlusIcon, FileUp, FolderPlusIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

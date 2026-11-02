@@ -1,5 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { DoorOpen } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,11 +38,14 @@ const Title = memo(() => {
     const revision = findBatchGate(graph, nodeView.node.id)?.round.revision;
     const plan = findBatchPlan(graph, nodeView.node.id);
     const titleKey = coordinatorNodeTitleKey(nodeView);
+    // `selected` is a plan skill version; a round rewritten in place spans several.
     const planRound = plan
-      ? (plan.model.rounds.find((item) => item.revision === selected) ?? plan.round)
+      ? (plan.model.rounds.find((item) => item.planVersion === selected) ?? plan.round)
       : undefined;
     const title = plan
-      ? t(batchPlanTitleKey(plan.model, planRound!), { revision: planRound!.revision })
+      ? t(batchPlanTitleKey(plan.model, planRound!), {
+          revision: selected ?? planRound!.planVersion,
+        })
       : revision && revision > 1
         ? t('goalBatch.gate.titleRound', { revision })
         : titleKey

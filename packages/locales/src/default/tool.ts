@@ -1,9 +1,6 @@
 export default {
   'askUserQuestion.submitting': 'Submitting your response…',
   'askUserQuestion.checking': 'Checking submission status…',
-  'askUserQuestion.uncertain':
-    'We couldn’t confirm whether your response was received. Check its status before trying again.',
-  'askUserQuestion.checkStatus': 'Check submission status',
   'askUserQuestion.submitFailed':
     'Your response hasn’t been confirmed. Your answers are saved; please try again.',
 
@@ -87,6 +84,10 @@ export default {
   'codeInterpreter.output': 'Output:',
   'codeInterpreter.returnValue': 'Return Value:',
   'connector.actionFailed': 'Operation failed, please try again',
+  'connector.error.network':
+    'The network connection was interrupted. Check your connection and try again.',
+  'connector.error.stdioDesktopOnly':
+    'Stdio connectors can only sync in the desktop app. Open LobeHub Desktop to sync this connector.',
   'connector.add.advanced': 'Advanced settings',
   'connector.add.authError': 'Authorization failed: {{reason}}',
   'connector.add.authFailed':
@@ -107,6 +108,7 @@ export default {
   'connector.add.unknownError': 'unknown error',
   'connector.add.update': 'Save',
   'connector.add.url': 'Remote MCP server URL',
+  'connector.authError': 'Authorization error',
   'connector.connected': 'Connected',
   'connector.createTools': 'Create tools',
   'connector.delete': 'Delete',
@@ -119,9 +121,20 @@ export default {
   'connector.disconnect': 'Disconnect',
   'connector.edit': 'Edit',
   'connector.edit.success': 'Connector updated',
+  'connector.enabled': 'Enabled',
+  'connector.kind.agent': 'Agent connector',
+  'connector.kind.builtin': 'Built-in tool',
+  'connector.kind.community': 'Community tool',
+  'connector.kind.custom': 'Custom connector',
+  'connector.kind.oauth': 'OAuth connector',
   'connector.manageOnlyCreator': 'Only the creator or a workspace owner can manage this connector',
   'connector.noTools': 'No tool permissions to configure.',
   'connector.notConnected': 'Not connected',
+  'connector.overview.about': 'About',
+  'connector.overview.authorizedBy': 'Authorized by',
+  'connector.overview.connection': 'Connection',
+  'connector.overview.status': 'Status',
+  'connector.overview.type': 'Type',
   'connector.permission.approvalAll': 'Needs approval all',
   'connector.permission.auto': 'Auto — AI calls directly',
   'connector.permission.autoAll': 'Auto all',
@@ -133,8 +146,14 @@ export default {
   'connector.refresh': 'Refresh',
   'connector.resetPermissions': 'Reset permissions',
   'connector.sync': 'Sync',
+  'connector.tab.overview': 'Overview',
+  'connector.tab.tools': 'Tools',
   'connector.thisAgent': 'this agent',
   'connector.title': 'Connectors',
+  'connector.toolCount_one': '{{count}} tool',
+  'connector.toolCount_other': '{{count}} tools',
+  'connector.toolsHint':
+    'Choose for each tool whether the AI calls it directly, asks for approval first, or never sees it.',
   'connector.uninstall': 'Uninstall',
   'connector.uninstallConfirm': 'Uninstall this tool?',
   'connector.updateTools': 'Update tools',
@@ -153,6 +172,9 @@ export default {
   'credsInput.notice.workspace':
     "Saved encrypted to this workspace's credentials. The values go directly to storage and are never shown to the AI.",
   'credsInput.placeholder': 'Enter {{field}}',
+  'credsInput.proseConfirm': 'Save anyway',
+  'credsInput.proseWarning':
+    'The value for “{{fields}}” looks like a sentence rather than a secret (it contains CJK text or a whole phrase). If it was pasted by mistake, fix it before saving; otherwise confirm with “Save anyway”.',
   'credsInput.saveFailed': "Couldn't save the credential. Please try again.",
   'credsInput.skip': 'Skip',
   'credsInput.submit': 'Save',

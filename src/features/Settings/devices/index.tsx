@@ -1,8 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
@@ -11,7 +10,7 @@ import { DeviceConnectModal, DeviceDetailPage, DeviceManager } from '@/features/
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 
-import KeepAwake from './KeepAwake';
+import ThisComputer from './ThisComputer';
 
 interface PageProps {
   mobile?: boolean;
@@ -48,7 +47,7 @@ const Page = memo<PageProps>(({ mobile }) => {
         onConnect={handleConnect}
         onOpenDevice={openDevice}
       />
-      {isDesktop && <KeepAwake />}
+      {isDesktop && <ThisComputer />}
     </Flexbox>
   );
 

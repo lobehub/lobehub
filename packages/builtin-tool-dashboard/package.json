@@ -9,12 +9,14 @@
     "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/widget-spec": "workspace:*"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
-    "antd-style": "*",
+    "@lobehub/ui": "^6.0.4",
     "lucide-react": "*",
     "react": "*",
     "react-i18next": "*"

@@ -2,7 +2,7 @@
 
 import { priorityLabel } from '@lobechat/prompts';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -148,11 +148,11 @@ const MemberChip = memo<{ userId: string }>(({ userId }) => {
 MemberChip.displayName = 'MemberChip';
 
 export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, EditTaskState>>(
-  ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+  ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
     const { t } = useTranslation('plugin');
 
     const params = args || partialArgs || ({} as Partial<EditTaskParams>);
-    const identifier = params.identifier;
+    const identifier = pluginState?.identifier ?? params.identifier;
 
     const segments: { content: ReactNode; key: string }[] = [];
 

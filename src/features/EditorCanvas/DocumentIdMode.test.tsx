@@ -4,6 +4,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import AsyncError from '@/components/AsyncError';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
@@ -12,6 +13,7 @@ import InternalEditor from './InternalEditor';
 
 const handleContentChangeStore = vi.fn();
 const performSave = vi.fn();
+const saveVersion = vi.fn();
 const flushSave = vi.fn();
 const onEditorInit = vi.fn().mockResolvedValue(undefined);
 const createFetchDocumentResult = (
@@ -31,6 +33,7 @@ const mockDocumentStore = {
   handleContentChange: handleContentChangeStore,
   onEditorInit,
   performSave,
+  saveVersion,
   useFetchDocument,
 };
 
@@ -81,6 +84,7 @@ describe('DocumentIdMode', () => {
   beforeEach(() => {
     handleContentChangeStore.mockClear();
     performSave.mockClear();
+    saveVersion.mockClear();
     flushSave.mockClear();
     onEditorInit.mockClear();
     useFetchDocument.mockClear();
@@ -108,7 +112,7 @@ describe('DocumentIdMode', () => {
     });
 
     expect(handleContentChangeStore).toHaveBeenCalledTimes(1);
-    expect(performSave).toHaveBeenCalledWith('doc-1', undefined, { saveSource: 'manual' });
+    expect(saveVersion).toHaveBeenCalledWith('doc-1');
     expect(flushSave).not.toHaveBeenCalled();
   });
 
@@ -121,7 +125,7 @@ describe('DocumentIdMode', () => {
     render(<DocumentIdMode documentId="doc-1" editor={editor} onInit={onInit} />);
 
     await waitFor(() => {
-      expect(onEditorInit).toHaveBeenCalledWith(editor);
+      expect(onEditorInit).toHaveBeenCalledWith(editor, 'doc-1');
       expect(onInit).toHaveBeenCalledWith(editor);
     });
   });
@@ -241,6 +245,27 @@ describe('DocumentIdMode', () => {
     expect(screen.queryByTestId('internal-editor')).not.toBeInTheDocument();
   });
 
+  it('should explain missing access instead of a load failure on FORBIDDEN', () => {
+    const editor = {
+      getLexicalEditor: vi.fn(() => ({})),
+    } as any;
+    useFetchDocument.mockReturnValueOnce({
+      ...createFetchDocumentResult(),
+      error: Object.assign(new Error('forbidden'), { data: { code: 'FORBIDDEN' } }),
+    });
+    vi.mocked(editorSelectors.isDocumentLoading).mockReturnValueOnce(() => true);
+
+    render(<DocumentIdMode documentId="doc-1" editor={editor} />);
+
+    expect(screen.queryByTestId('not-found')).not.toBeInTheDocument();
+    expect(vi.mocked(AsyncError).mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({
+        description: 'pageEditor.noAccess.description',
+        title: 'pageEditor.noAccess.title',
+      }),
+    );
+  });
+
   it('should render not found when the document fetch resolves to null', () => {
     const editor = {
       getLexicalEditor: vi.fn(() => ({})),
@@ -255,5 +280,24 @@ describe('DocumentIdMode', () => {
 
     expect(screen.getByTestId('not-found')).toBeInTheDocument();
     expect(screen.queryByTestId('internal-editor')).not.toBeInTheDocument();
+  });
+  it('shows the pending body over the mounted editor until the room body arrives', () => {
+    const editor = { getLexicalEditor: vi.fn(() => ({})) } as any;
+    const { rerender } = render(
+      <DocumentIdMode
+        collab
+        documentId="doc-1"
+        editor={editor}
+        pendingBody={<div data-testid="pending-body" />}
+      />,
+    );
+
+    expect(screen.getByTestId('pending-body')).toBeInTheDocument();
+    expect(screen.getByTestId('internal-editor')).not.toBeVisible();
+
+    rerender(<DocumentIdMode collab documentId="doc-1" editor={editor} />);
+
+    expect(screen.queryByTestId('pending-body')).not.toBeInTheDocument();
+    expect(screen.getByTestId('internal-editor')).toBeVisible();
   });
 });

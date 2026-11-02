@@ -74,6 +74,19 @@ describe('workbench stub surface', () => {
     expect(stubUsageGaps(surface, usage!)).toEqual([]);
   });
 
+  // Regression: the send path awaits this member on the electron store, so the
+  // SSR build rejected the module graph until the stub carried it.
+  it('covers the device-id resolver the chat send path calls', () => {
+    const surface = parseStubSurface(readFileSync(path.join(stubDir, 'electronStore.ts'), 'utf8'));
+    const usage = collectStubUsage(
+      `import { getElectronStoreState } from '@/store/electron';
+       void getElectronStoreState().resolveGatewayDeviceId();`,
+      '@/store/electron',
+    );
+
+    expect(stubUsageGaps(surface, usage!)).toEqual([]);
+  });
+
   it('does not treat a catch-all selector proxy as covering new methods', () => {
     const surface = parseStubSurface(`
       export const fileChatSelectors = new Proxy({}, { get: () => () => undefined });

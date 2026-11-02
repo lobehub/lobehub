@@ -2,7 +2,7 @@
 
 import type { WidgetSeriesOutput, WidgetView } from '@lobechat/types';
 import { AreaChart, BarChart, LineChart } from '@lobehub/charts';
-import { Text } from '@lobehub/ui/base-ui';
+import { Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,8 +1,6 @@
 'use client';
 
-import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { CopyButton, createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDownIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,5 +1,4 @@
-import { Block, Center, Flexbox } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Block, Center, cssVar, Flexbox } from '@lobehub/ui';
 
 import { SkeletonBar } from '@/components/Skeleton';
 

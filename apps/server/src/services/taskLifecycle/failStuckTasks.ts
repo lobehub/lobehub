@@ -18,9 +18,14 @@ const log = debug('lobe-server:task:fail-stuck-tasks');
  */
 export const failStuckTasks = async (
   db: LobeChatDatabase,
-): Promise<{ checked: number; failed: string[] }> => {
+): Promise<{
+  checked: number;
+  failed: string[];
+  failedTasks: { id: string; identifier: string }[];
+}> => {
   const stuckTasks = await TaskModel.findStuckTasks(db);
   const failed: string[] = [];
+  const failedTasks: { id: string; identifier: string }[] = [];
 
   for (const task of stuckTasks) {
     const workspaceId = task.workspaceId ?? undefined;
@@ -45,7 +50,8 @@ export const failStuckTasks = async (
     );
 
     failed.push(task.identifier);
+    failedTasks.push({ id: task.id, identifier: task.identifier });
   }
 
-  return { checked: stuckTasks.length, failed };
+  return { checked: stuckTasks.length, failed, failedTasks };
 };

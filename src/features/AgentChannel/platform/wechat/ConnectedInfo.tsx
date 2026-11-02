@@ -1,10 +1,7 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Form } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
-import type { LucideIcon } from 'lucide-react';
-import { Fingerprint, KeyRound, UserRound } from 'lucide-react';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/form';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,11 +9,7 @@ import { FormInput, FormPassword } from '@/components/FormInput';
 
 import QrCodeAuth from './QrCodeAuth';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  fieldIcon: css`
-    flex: none;
-    color: ${cssVar.colorTextSecondary};
-  `,
+const styles = createStaticStyles(({ css }) => ({
   header: css`
     display: flex;
     align-items: center;
@@ -26,21 +19,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ReadOnlyField = memo<{
   divider?: boolean;
-  icon: LucideIcon;
   label: string;
   password?: boolean;
   value?: string;
-}>(({ divider, icon, label, password, value }) => {
+}>(({ divider, label, password, value }) => {
   const InputComponent = password ? FormPassword : FormInput;
 
   return (
-    <Form.Field
-      avatar={<Icon className={styles.fieldIcon} icon={icon} size={20} />}
-      divider={divider}
-      label={label}
-      minWidth={'max(50%, 400px)'}
-      variant="outlined"
-    >
+    <Form.Field divider={divider} label={label} layout="vertical">
       <InputComponent readOnly value={value || ''} />
     </Form.Field>
   );
@@ -69,7 +55,7 @@ const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
         <div className={styles.header}>
           <Flexbox gap={4}>
             <div style={{ fontSize: 16, fontWeight: 600 }}>{t('channel.wechatConnectedInfo')}</div>
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>
+            <div style={{ color: 'var(--lobe-color-text-secondary)', fontSize: 13 }}>
               {t('channel.wechatManagedCredentials')}
             </div>
           </Flexbox>
@@ -83,30 +69,23 @@ const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
           />
         )}
         {shouldShowApplicationId && (
-          <ReadOnlyField
-            icon={Fingerprint}
-            label={t('channel.applicationId')}
-            value={currentConfig.applicationId}
-          />
+          <ReadOnlyField label={t('channel.applicationId')} value={currentConfig.applicationId} />
         )}
         {__DEV__ && (
           <>
             <ReadOnlyField
               divider={shouldShowApplicationId}
-              icon={Fingerprint}
               label={t('channel.wechatBotId')}
               value={currentConfig.credentials.botId}
             />
             <ReadOnlyField
               divider
               password
-              icon={KeyRound}
               label={t('channel.botToken')}
               value={currentConfig.credentials.botToken}
             />
             <ReadOnlyField
               divider
-              icon={UserRound}
               label={t('channel.wechatUserId')}
               value={currentConfig.credentials.userId}
             />

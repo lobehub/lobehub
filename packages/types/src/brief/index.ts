@@ -86,6 +86,8 @@ export interface BriefGoalMetadata {
   kind: 'decision' | 'signOff';
   /** The action the goal advises — set apart among the brief's buttons. */
   recommendedAction?: string;
+  /** Present on a held batch release: the review report the decision is made in. */
+  reviewAcceptanceId?: string;
   /** Present on a sign-off brief — the Goal-level acceptance to sign. */
   signOffAcceptanceId?: string;
 }

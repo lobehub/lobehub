@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { LinkIcon } from 'lucide-react';
 import { memo } from 'react';
 

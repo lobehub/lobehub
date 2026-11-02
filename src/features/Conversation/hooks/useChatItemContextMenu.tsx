@@ -2,9 +2,9 @@ import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import {
   type ActionIconGroupEvent,
   type ActionIconGroupItemType,
-  type GenericItemType,
+  type DropdownItem,
 } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
@@ -354,7 +354,7 @@ export const useChatItemContextMenu = ({
     [handleAction],
   );
 
-  const contextMenuItems = useMemo<GenericItemType[]>(() => {
+  const contextMenuItems = useMemo<DropdownItem[]>(() => {
     if (!menuItems) return [];
     return menuItems.filter(Boolean).map((item) => {
       if ('type' in item && item.type === 'divider') return { type: 'divider' as const };

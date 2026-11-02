@@ -8,6 +8,7 @@ import {
   type ReplicaSyncResult,
 } from '@/libs/replica';
 import { documentService } from '@/services/document';
+import { fileService } from '@/services/file';
 import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
@@ -16,7 +17,14 @@ import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type RecentEntityRef, toRecentEntityRef } from './initialState';
-import { recentListResource } from './projection';
+import {
+  DOCS_HOME_LIMIT,
+  docsHomeListResource,
+  type DocsHomeRow,
+  type DocsHomeTab,
+  recentListResource,
+  toDocsHomeRow,
+} from './projection';
 
 const n = setNamespace('recent');
 
@@ -63,6 +71,7 @@ export class RecentActionImpl {
   readonly #renameQueues = new Map<RecentEntityRef, Promise<unknown>>();
   readonly #recentList;
   readonly #recents;
+  readonly #docsHome;
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -77,6 +86,15 @@ export class RecentActionImpl {
       view: recordLens<HomeStore, RecentItem[]>('recentListMap'),
     });
     this.#recents = linkReplicaEntity<RecentItem>([this.#recentList]);
+    this.#docsHome = createReplicaSlice(docsHomeListResource, {
+      actionPrefix: n('docsHome'),
+      fetcher: async ({ tab }) =>
+        (await fileService.getDocsHomeItems(tab, DOCS_HOME_LIMIT)).map(toDocsHomeRow),
+      get,
+      set,
+      stateKey: 'docsHomeReplica',
+      view: recordLens<HomeStore, DocsHomeRow[]>('docsHomeMap'),
+    });
   }
 
   closeAllRecentsDrawer = (): void => {
@@ -133,6 +151,15 @@ export class RecentActionImpl {
   /** "All recents" drawer. Read the rows with `homeRecentSelectors.query`. */
   useFetchAllRecents = (open: boolean): ReplicaSyncResult =>
     this.#recentList.useSync({ limit: ALL_RECENTS_LIMIT }, { enabled: open });
+
+  /** Refetch every loaded Docs home tab, e.g. after a page or file was added. */
+  refreshDocsHome = async (): Promise<void> => {
+    await this.#docsHome.revalidate();
+  };
+
+  /** The Docs home list for one tab. Read it with `homeRecentSelectors.docsHome`. */
+  useFetchDocsHome = (tab: DocsHomeTab, enabled: boolean = true): ReplicaSyncResult =>
+    this.#docsHome.useSync({ tab }, { enabled });
 
   /**
    * Sidebar recents. Asks for `limit + 1` rows to know whether "view all" is

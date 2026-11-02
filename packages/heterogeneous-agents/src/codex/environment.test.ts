@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pickCodexRunProvenance, withCodexThreadEnv } from './environment';
+import { getCodexProcessEnv, pickCodexRunProvenance, withCodexThreadEnv } from './environment';
 
 describe('Codex thread environment', () => {
   it('picks only run provenance from a launch environment', () => {
@@ -15,7 +15,17 @@ describe('Codex thread environment', () => {
       LOBEHUB_AGENT_ID: undefined,
       LOBEHUB_OPERATION_ID: 'op',
       LOBEHUB_TOPIC_ID: 'topic',
+      LOBEHUB_WORKSPACE_ID: undefined,
     });
+  });
+
+  it('keeps the workspace out of the shared app-server process env', () => {
+    // Runs from two workspaces must reuse one app-server; a workspace in the process env made
+    // the reuse check reject the second run as a different environment.
+    const launch = (workspace: string) =>
+      getCodexProcessEnv({ CODEX_HOME: '/codex', LOBEHUB_WORKSPACE_ID: workspace });
+    expect(launch('ws-a')).toEqual(launch('ws-b'));
+    expect(launch('ws-a')).toEqual({ CODEX_HOME: '/codex' });
   });
 
   it('folds every shell policy override into one table carrying the run provenance', () => {
@@ -47,6 +57,7 @@ describe('Codex thread environment', () => {
           LOBEHUB_AGENT_ID: '',
           LOBEHUB_OPERATION_ID: 'current',
           LOBEHUB_TOPIC_ID: '',
+          LOBEHUB_WORKSPACE_ID: '',
         },
       },
     });

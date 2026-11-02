@@ -214,7 +214,7 @@ describe('GET /oidc/interaction/[uid]', () => {
       const response = await GET(createRequest('uid-r'), createProps('uid-r'));
       const body = await response.json();
 
-      expect(body.acceptanceReview).toEqual({ allowed: false });
+      expect(body.acceptanceReview).toEqual({ allowed: false, kind: 'acceptance' });
     });
 
     it('is not looked up for other clients', async () => {

@@ -20,4 +20,9 @@ describe('resolveVerdict', () => {
     expect(resolveVerdict('planned')).toBe('pending');
     expect(resolveVerdict(null)).toBe('pending');
   });
+
+  it('tells a round under repair and a delivered round apart from an unchecked one', () => {
+    expect(resolveVerdict('repairing')).toBe('repairing');
+    expect(resolveVerdict('delivered')).toBe('review');
+  });
 });

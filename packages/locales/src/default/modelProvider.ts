@@ -377,6 +377,7 @@ export default {
     'Different model types have distinct use cases and capabilities',
   'providerModels.item.modelConfig.type.options.asr': 'Speech-to-Text',
   'providerModels.item.modelConfig.type.options.chat': 'Chat',
+  'providerModels.item.modelConfig.type.options.decision': 'Decision',
   'providerModels.item.modelConfig.type.options.embedding': 'Embedding',
   'providerModels.item.modelConfig.type.options.image': 'Image Generation',
   'providerModels.item.modelConfig.type.options.realtime': 'Real-time Chat',
@@ -391,6 +392,7 @@ export default {
   'providerModels.item.modelConfig.vision.extra':
     'This configuration will only enable image upload capabilities in the application. Whether recognition is supported depends entirely on the model itself. Please test the visual recognition capabilities of the model yourself.',
   'providerModels.item.modelConfig.vision.title': 'Support Vision',
+  'providerModels.item.pricing.audioOutputTokens': 'Audio output ${{amount}}/M',
   'providerModels.item.pricing.image': '${{amount}}/Image',
   'providerModels.item.pricing.inputCharts': '${{amount}}/M Characters',
   'providerModels.item.pricing.inputMinutes': '${{amount}}/Minutes',
@@ -436,6 +438,7 @@ export default {
   'providerModels.tabs.all': 'All',
   'providerModels.tabs.asr': 'ASR',
   'providerModels.tabs.chat': 'Chat',
+  'providerModels.tabs.decision': 'Decision',
   'providerModels.tabs.embedding': 'Embedding',
   'providerModels.tabs.image': 'Image',
   'providerModels.tabs.tts': 'TTS',

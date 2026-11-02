@@ -13,7 +13,7 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { detectIndentStyle } from './indent';
 import { getEditorLanguage } from './language';
 import StatusBar, { type CursorPosition } from './StatusBar';
-import { styles } from './style';
+import styles from './style.module.css';
 
 /**
  * The parts of the underlying CodeMirror 6 view that the compat wrapper does
@@ -163,7 +163,7 @@ const CodeEditorPane = memo<CodeEditorPaneProps>(
         const events = ['keyup', 'mouseup', 'focusin'] as const;
         // Removed by `detachCursorListeners` in this effect's cleanup, which the
         // lint rule cannot follow across the loader promise.
-        // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener
+        // eslint-disable-next-line @eslint-react/web-api-no-leaked-event-listener
         for (const event of events) view.dom.addEventListener(event, syncCursor);
         detachCursorListeners = () => {
           for (const event of events) view.dom.removeEventListener(event, syncCursor);

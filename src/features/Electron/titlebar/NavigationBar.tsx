@@ -1,9 +1,7 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox, Popover, Tooltip } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles, Flexbox, Popover, Tooltip } from '@lobehub/ui';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,6 +52,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
     transition: width 0.2s ${cssVar.motionEaseOut};
 
+    &[data-resizing] {
+      transition: none;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       transition: none;
     }
@@ -70,6 +72,7 @@ const NavigationBar = memo(() => {
   const activeRecentScope = useElectronStore((state) => state.activeRecentScope);
 
   const leftPanelWidth = useNavPanelWidth();
+  const navPanelResizing = useGlobalStore((s) => !!s.isNavPanelResizing);
 
   useWatchBroadcast('windowFullscreenChanged', ({ isFullScreen }) => {
     if (isMac) setIsWindowFullScreen(isFullScreen);
@@ -142,6 +145,7 @@ const NavigationBar = memo(() => {
       horizontal
       align="center"
       className={styles.root}
+      data-resizing={navPanelResizing || undefined}
       data-width={leftPanelWidth}
       gap={8}
       justify={isMac || isWindows ? 'space-between' : 'end'}

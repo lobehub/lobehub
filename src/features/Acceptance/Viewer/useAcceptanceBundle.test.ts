@@ -216,3 +216,24 @@ it('keeps a cached bundle on a retryable revalidation failure', async () => {
 
   expect(useVerifyStore.getState().acceptanceBundleMap['acceptance-1']).toBeDefined();
 });
+
+it.each(['starting', 'running'])(
+  'polls a delivered Site during repair %s and stops after completion',
+  async (state) => {
+    seedBundle('site', { acceptance: { status: 'delivered' }, repair: { state } });
+    renderHook(() => useAcceptanceBundle('site'));
+    expect((await bundleSyncConfig())?.refreshInterval).toBe(5000);
+
+    swr.useClientDataSWR.mockClear();
+    await act(async () => {
+      seedBundle('site', { acceptance: { status: 'delivered' }, repair: { state: 'finished' } });
+    });
+    expect((await bundleSyncConfig())?.refreshInterval).toBe(0);
+  },
+);
+
+it('does not poll a delivered Site after repair failure', async () => {
+  seedBundle('site', { acceptance: { status: 'delivered' }, repair: { state: 'failed' } });
+  renderHook(() => useAcceptanceBundle('site'));
+  expect((await bundleSyncConfig())?.refreshInterval).toBe(0);
+});

@@ -3,7 +3,7 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicListScopeContext } from '../../TopicListScope';
 import TopicItem from './index';
@@ -17,6 +17,9 @@ const activeTopicIdMock = vi.hoisted(() => ({ value: undefined as string | undef
 const agentRuntimeRunningMock = vi.hoisted(() => ({ value: false }));
 const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | undefined }));
 const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
+const onlyMineMock = vi.hoisted(() => ({ value: false }));
+const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefined }));
+const goalsEnabledMock = vi.hoisted(() => ({ value: true }));
 const topicMetaCardMock = vi.hoisted(() => ({
   value: undefined as
     | { pullRequest?: { ciStatus?: 'failure' | 'pending' | 'success' | 'unknown'; state: string } }
@@ -50,6 +53,7 @@ vi.mock('../../useScopedTopics', () => ({ useScopedTopic: () => scopedTopicMock.
 vi.mock('@/const/version', () => ({ isDesktop: false }));
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
+    actions,
     active,
     description,
     extra,
@@ -57,6 +61,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     icon,
     title,
   }: {
+    actions?: ReactNode | (() => ReactNode);
     active?: boolean;
     description?: ReactNode;
     extra?: ReactNode;
@@ -69,6 +74,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
       {title}
       {description}
       {extra}
+      {typeof actions === 'function' ? actions() : actions}
     </div>
   ),
 }));
@@ -92,7 +98,26 @@ vi.mock('@/store/agent', () => ({
       agentMap: Record<string, unknown>;
       builtinAgentIdMap: Record<string, string>;
     }) => unknown,
-  ) => selector({ activeAgentId: 'agt_test', agentMap: {}, builtinAgentIdMap: {} }),
+  ) =>
+    selector({
+      activeAgentId: 'agt_test',
+      agentMap: { agt_test: { visibility: 'public' } },
+      builtinAgentIdMap: {},
+    }),
+}));
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: { enableGoals: () => goalsEnabledMock.value },
+  userProfileSelectors: { userId: () => currentUserIdMock.value },
+}));
+vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => onlyMineMock.value }));
+vi.mock('@/features/TopicCreatorAvatar', () => ({
+  default: ({ userId }: { userId?: string }) => (
+    <div data-testid="creator-avatar" data-user-id={userId} />
+  ),
+  useTopicCreator: (userId?: string) => (userId ? { fullName: 'Member' } : undefined),
 }));
 vi.mock('@/store/chat', () => {
   const useChatStore = (
@@ -144,7 +169,9 @@ vi.mock('./metaCardData', () => {
   };
 });
 vi.mock('./Actions', () => ({
-  default: () => null,
+  default: ({ showInlineArchive }: { showInlineArchive?: boolean }) => (
+    <div data-show-inline-archive={String(!!showInlineArchive)} data-testid="topic-actions" />
+  ),
 }));
 vi.mock('./useDropdownMenu', () => ({
   useTopicItemDropdownMenu: () => ({ dropdownMenu: [] }),
@@ -166,7 +193,45 @@ describe('TopicItem active state', () => {
     runningStartTimeMock.value = undefined;
     topicUnreadCompletedMock.value = false;
     topicMetaCardMock.value = undefined;
+    onlyMineMock.value = false;
+    currentUserIdMock.value = 'user-1';
+    goalsEnabledMock.value = true;
     vi.useRealTimers();
+  });
+
+  describe('creator avatar', () => {
+    beforeEach(() => {
+      useTopicNavigationMock.mockReturnValue({
+        focusTopicPopup: vi.fn(),
+        isInAgentSubRoute: false,
+        isInTopicContextRoute: false,
+        navigateToTopic: vi.fn(),
+        routeTopicId: undefined,
+        urlTopicId: undefined,
+      });
+    });
+
+    it('shows the creator avatar on a shared agent topic', () => {
+      render(<TopicItem id="tpc_test" title="Topic" userId="user-1" />);
+
+      expect(screen.getByTestId('creator-avatar')).toHaveAttribute('data-user-id', 'user-1');
+    });
+
+    it('hides the creator avatar on my own topic when only my topics are shown', () => {
+      onlyMineMock.value = true;
+
+      render(<TopicItem id="tpc_test" title="Topic" userId="user-1" />);
+
+      expect(screen.queryByTestId('creator-avatar')).not.toBeInTheDocument();
+    });
+
+    it('keeps the creator avatar on a retained teammate topic when only my topics are shown', () => {
+      onlyMineMock.value = true;
+
+      render(<TopicItem id="tpc_test" title="Topic" userId="user-2" />);
+
+      expect(screen.getByTestId('creator-avatar')).toHaveAttribute('data-user-id', 'user-2');
+    });
   });
 
   it('renders the Project row Agent avatar and keeps its link in the Project', () => {
@@ -194,7 +259,7 @@ describe('TopicItem active state', () => {
     );
     expect(screen.getByTestId('nav-item')).toHaveAttribute(
       'data-href',
-      '/team/project/project-1/conversation/project-topic',
+      '/team/project/project-1/topic/project-topic',
     );
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'true');
   });
@@ -364,6 +429,35 @@ describe('TopicItem active state', () => {
     expect(screen.queryByText('02:37')).not.toBeInTheDocument();
   });
 
+  it('hides the inline archive action while the topic is running', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" status="running" title="Topic" />);
+
+    expect(screen.getByTestId('topic-actions')).toHaveAttribute(
+      'data-show-inline-archive',
+      'false',
+    );
+  });
+
+  it('offers the inline archive action once the topic is idle', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('topic-actions')).toHaveAttribute('data-show-inline-archive', 'true');
+  });
+
   it('keeps idle topics iconless', () => {
     useTopicNavigationMock.mockReturnValue({
       isInAgentSubRoute: false,
@@ -467,6 +561,25 @@ describe('TopicItem active state', () => {
     expect(screen.getByTestId('topic-unread-dot')).toBeInTheDocument();
   });
 
+  /** @example A project row is not in the chat store, so only its own status says unread. */
+  it('shows the unread dot for a project row whose own status is unread', () => {
+    scopedTopicMock.value = { agentId: 'other-agent', agentName: 'Other Agent' };
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(
+      <TopicListScopeContext value={{ projectId: 'project-1' }}>
+        <TopicItem id="project-topic" status="unread" title="Project work" />
+      </TopicListScopeContext>,
+    );
+
+    expect(screen.getByTestId('topic-unread-dot')).toBeInTheDocument();
+  });
+
   it('shows the pull request marker once the topic is no longer unread', () => {
     topicMetaCardMock.value = { pullRequest: { state: 'open' } };
     useTopicNavigationMock.mockReturnValue({
@@ -480,6 +593,43 @@ describe('TopicItem active state', () => {
 
     expect(screen.queryByTestId('topic-unread-dot')).not.toBeInTheDocument();
     expect(screen.getByTestId('topic-item-icon')).toBeInTheDocument();
+  });
+
+  describe('goal marker', () => {
+    beforeEach(() => {
+      useTopicNavigationMock.mockReturnValue({
+        isInAgentSubRoute: false,
+        isInTopicContextRoute: false,
+        navigateToTopic: vi.fn(),
+        routeTopicId: undefined,
+      });
+    });
+
+    it('marks a topic that has a goal, ahead of its pull request', () => {
+      topicMetaCardMock.value = { pullRequest: { state: 'open' } };
+
+      render(<TopicItem hasGoal id="tpc_test" title="Topic" />);
+
+      expect(screen.getByLabelText('metaCard.goal')).toBeInTheDocument();
+      expect(screen.getByTestId('topic-item-icon')).not.toHaveAttribute(
+        'data-icon',
+        'PullRequestIcon',
+      );
+    });
+
+    it('keeps the execution status ahead of the goal marker', () => {
+      render(<TopicItem hasGoal id="tpc_test" status="failed" title="Topic" />);
+
+      expect(screen.queryByLabelText('metaCard.goal')).not.toBeInTheDocument();
+    });
+
+    it('hides the goal marker while the goals lab is off', () => {
+      goalsEnabledMock.value = false;
+
+      render(<TopicItem hasGoal id="tpc_test" title="Topic" />);
+
+      expect(screen.queryByLabelText('metaCard.goal')).not.toBeInTheDocument();
+    });
   });
 
   it('adds the CI status to the pull request marker', () => {

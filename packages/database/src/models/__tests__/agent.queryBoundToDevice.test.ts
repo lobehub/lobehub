@@ -105,3 +105,43 @@ describe('AgentModel.queryBoundToDevice', () => {
     expect(rows.map((row) => row.id).sort()).toEqual(['ws-public', 'ws-shared-bound']);
   });
 });
+
+describe('AgentModel.queryAgencyRoutingByIds', () => {
+  it('returns the routing config of the requested agents in one read', async () => {
+    await insertAgent({
+      agencyConfig: { boundDeviceId: 'device-a', executionTarget: 'device' },
+      id: 'a-device',
+      userId: userA,
+    });
+    await insertAgent({ id: 'a-unbound', userId: userA });
+    await insertAgent({ id: 'a-not-requested', userId: userA });
+
+    const rows = await new AgentModel(serverDB, userA).queryAgencyRoutingByIds([
+      'a-device',
+      'a-unbound',
+    ]);
+
+    expect(rows.map((row) => row.id).sort()).toEqual(['a-device', 'a-unbound']);
+    expect(rows.find((row) => row.id === 'a-device')?.agencyConfig).toEqual({
+      boundDeviceId: 'device-a',
+      executionTarget: 'device',
+    });
+  });
+
+  it("drops an id the caller cannot see instead of leaking another member's private agent", async () => {
+    await insertAgent({ id: 'ws-public', userId: userA, workspaceId });
+    await insertAgent({ id: 'ws-private-a', userId: userA, visibility: 'private', workspaceId });
+
+    const rows = await new AgentModel(serverDB, userB, workspaceId).queryAgencyRoutingByIds([
+      'ws-public',
+      'ws-private-a',
+      'does-not-exist',
+    ]);
+
+    expect(rows.map((row) => row.id)).toEqual(['ws-public']);
+  });
+
+  it('short-circuits an empty request', async () => {
+    expect(await new AgentModel(serverDB, userA).queryAgencyRoutingByIds([])).toEqual([]);
+  });
+});

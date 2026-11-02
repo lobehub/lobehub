@@ -1,8 +1,16 @@
 import type { UpdateInfo } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Button as BaseButton, createModal, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button as BaseButton,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Markdown,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { X } from 'lucide-react';
 import React, { memo, useEffect, useRef, useState } from 'react';
@@ -16,6 +24,9 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { applyCoreUpdate } from './applyCoreUpdate';
 import { formatCoreVersion } from './coreVersion';
 import { selectUpdateInfo } from './selectUpdateInfo';
+import { useAutoDismiss } from './useAutoDismiss';
+
+const APPLIED_TOAST_DURATION = 3000;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   installLaterCloseButton: css`
@@ -182,6 +193,13 @@ export const UpdateNotification: React.FC = () => {
   });
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
+  // The "updated to version" toast only shows when no pending update takes its slot
+  const appliedToastHoverHandlers = useAutoDismiss(
+    updateInfo ? null : appliedVersion,
+    () => setAppliedVersion(null),
+    APPLIED_TOAST_DURATION,
+  );
+
   useWatchBroadcast('updateReady', (info) => {
     receivedUpdateEvent.current = true;
     setUpdateInfo((current) => selectUpdateInfo(current, info));
@@ -247,11 +265,18 @@ export const UpdateNotification: React.FC = () => {
 
   if (!updateInfo)
     return appliedVersion ? (
-      <div className={styles.installLaterToast}>
+      <div className={styles.installLaterToast} {...appliedToastHoverHandlers}>
         <span>
           {tElectron('updater.rendererUpdated', { version: formatCoreVersion(appliedVersion) })}
         </span>
-        <BaseButton size={'small'} type={'text'} onClick={() => setAppliedVersion(null)}>
+        <BaseButton
+          size={'small'}
+          type={'text'}
+          onClick={() => {
+            setAppliedVersion(null);
+            rendererOtaService.dismissAppliedNotice().catch(console.error);
+          }}
+        >
           {tElectron('updater.ignore')}
         </BaseButton>
       </div>

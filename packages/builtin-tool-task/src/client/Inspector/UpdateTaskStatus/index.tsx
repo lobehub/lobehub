@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps, TaskStatus } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -50,10 +50,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export const UpdateTaskStatusInspector = memo<
   BuiltinInspectorProps<UpdateTaskStatusParams, UpdateTaskStatusState>
->(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+>(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const identifier = args?.identifier || partialArgs?.identifier;
+  const identifier = pluginState?.identifier ?? args?.identifier ?? partialArgs?.identifier;
   const status = (args?.status || partialArgs?.status) as TaskStatus | undefined;
   const tone = status ? STATUS_TONE[status] : undefined;
 

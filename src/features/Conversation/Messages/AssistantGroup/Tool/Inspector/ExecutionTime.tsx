@@ -1,5 +1,5 @@
 import { formatDuration } from '@lobechat/utils';
-import { Text } from '@lobehub/ui/base-ui';
+import { Text } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 
 interface ExecutionTimeProps {

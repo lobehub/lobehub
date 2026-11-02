@@ -309,7 +309,7 @@ export class SkillImporter {
    */
   async importFromUrl(
     input: ImportUrlInput,
-    options?: { identifier?: string; source?: 'market' | 'user' },
+    options?: { identifier?: string; overwrite?: boolean; source?: 'market' | 'user' },
   ): Promise<SkillImportResult> {
     log('importFromUrl: starting with url=%s', input.url);
 
@@ -340,25 +340,23 @@ export class SkillImporter {
     let resources: Map<string, Buffer> | undefined;
     let zipBuffer: Buffer | undefined;
 
+    // Create abort controller for timeout. It stays armed until the body has been read:
+    // ssrfSafeFetch resolves at the headers and streams the body under the same signal.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+
     try {
       log('importFromUrl: fetching URL...');
-      // Create abort controller for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
-
-      let response: Response;
-      try {
-        // Use ssrfSafeFetch (not raw global fetch): input.url is fully user-controlled,
-        // so a raw fetch would let an authenticated user make the server request arbitrary
-        // internal hosts / cloud metadata (SSRF), and the body is stored and returned to the
-        // caller — a full-read SSRF. ssrfSafeFetch blocks private/link-local IPs at connect
-        // time and re-checks every redirect hop. See GHSA-53h9-fmjf-frwr / #16536.
-        response = await ssrfSafeFetch(input.url, { signal: controller.signal });
-      } finally {
-        clearTimeout(timeoutId);
-      }
+      // Use ssrfSafeFetch (not raw global fetch): input.url is fully user-controlled,
+      // so a raw fetch would let an authenticated user make the server request arbitrary
+      // internal hosts / cloud metadata (SSRF), and the body is stored and returned to the
+      // caller — a full-read SSRF. ssrfSafeFetch blocks private/link-local IPs at connect
+      // time and re-checks every redirect hop. See GHSA-53h9-fmjf-frwr / #16536.
+      const response = await ssrfSafeFetch(input.url, { signal: controller.signal });
 
       if (!response.ok) {
+        // The error body is never read; release its connection now rather than at GC.
+        await response.body?.cancel().catch(() => {});
         if (response.status === 404) {
           throw new SkillImportError(`Resource not found at ${input.url}`, 'NOT_FOUND');
         }
@@ -408,6 +406,8 @@ export class SkillImporter {
         `Failed to process URL: ${(error as Error).message}`,
         'DOWNLOAD_FAILED',
       );
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     log('importFromUrl: parsed manifest=%o', manifest);
@@ -424,6 +424,17 @@ export class SkillImporter {
     // 5. Check for existing skill
     let existing = await this.skillModel.findByIdentifier(identifier);
 
+    // Dependency installation never updates an installed row, including user
+    // imports that happen to carry the same source URL. Recheck here after the
+    // download as another request may have installed the skill in the meantime.
+    if (existing && options?.overwrite === false) {
+      if (existing.source === 'market') return { skill: existing, status: 'unchanged' };
+      throw new SkillImportError(
+        `A skill with identifier "${identifier}" is already installed from another source`,
+        'CONFLICT',
+      );
+    }
+
     // A user may have authored a skill under this very identifier. Only treat
     // the row as this import when it came from the market or from this same
     // URL; otherwise updating it would overwrite the user's own skill.
@@ -439,7 +450,7 @@ export class SkillImporter {
     // since then is still updated in place rather than installed twice. Only
     // take it when it was fetched from this same URL: a user skill may carry
     // that identifier explicitly and must not be overwritten.
-    if (!existing && identifier !== urlIdentifier) {
+    if (!existing && identifier !== urlIdentifier && options?.overwrite !== false) {
       const legacy = await this.skillModel.findByIdentifier(urlIdentifier);
       if (legacy?.manifest?.sourceUrl === input.url) existing = legacy;
     }
@@ -451,7 +462,7 @@ export class SkillImporter {
     if (!existing) {
       const sameName = await this.skillModel.findByName(manifest.name);
       if (sameName) {
-        if (sameName.manifest?.sourceUrl !== input.url) {
+        if (options?.overwrite === false || sameName.manifest?.sourceUrl !== input.url) {
           throw new SkillImportError(
             `A skill named "${manifest.name}" is already installed (identifier: ${sameName.identifier}). Use the installed skill, or delete it before importing this one.`,
             'CONFLICT',

@@ -1,8 +1,7 @@
 'use client';
 
-import { HotkeyInput } from '@lobehub/ui';
-import { Spin, toast } from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { HotkeyInput, Spin, toast } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

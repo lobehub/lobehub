@@ -118,7 +118,10 @@ vi.mock('@lobehub/editor/react', () => {
     useEditorState: vi.fn(() => ({ isEmpty: true })),
   };
 });
-vi.mock('@lobehub/ui', () => ({ combineKeys: vi.fn(() => 'alt+enter') }));
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  combineKeys: vi.fn(() => 'alt+enter'),
+}));
 vi.mock('fuse.js', () => ({
   default: class Fuse {
     search() {

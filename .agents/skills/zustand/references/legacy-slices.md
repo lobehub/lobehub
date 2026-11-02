@@ -1,6 +1,6 @@
 # Legacy Slices (actions flattened into state)
 
-Most stores still compose action classes into the Zustand state with `flattenActions`. Follow this layout only when editing one of them. New stores, and stores moving their data onto `@lobechat/replica`, use the state-only layout in [SKILL.md](../SKILL.md). Reference store: `src/store/eval` (benchmark slice).
+Most stores still compose action classes into the Zustand state with `flattenActions`. Follow this layout only when editing one of them. New stores, and stores moving their data onto `local-replica`, use the state-only layout in [SKILL.md](../SKILL.md). Reference store: `src/store/eval` (benchmark slice).
 
 ## Layout
 

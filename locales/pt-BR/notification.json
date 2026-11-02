@@ -1,6 +1,7 @@
 {
   "agent_cron_job_completed": "Sua tarefa agendada \"{{jobName}}\" foi concluída com sucesso.",
   "agent_cron_job_completed_title": "Tarefa agendada concluída",
+  "agent_cron_job_completed_with_summary": "Sua tarefa agendada \"{{jobName}}\" foi concluída com sucesso.\n\n{{summary}}",
   "agent_cron_job_failed": "Sua tarefa agendada \"{{jobName}}\" falhou. Abra a tarefa para ver o erro completo.",
   "agent_cron_job_failed_insufficient_budget": "Sua tarefa agendada \"{{jobName}}\" não pôde ser executada porque sua conta está sem créditos. Recarregue ou faça um upgrade do seu plano para retomar futuras execuções.",
   "agent_cron_job_failed_insufficient_budget_title": "Tarefa agendada pausada: créditos insuficientes",

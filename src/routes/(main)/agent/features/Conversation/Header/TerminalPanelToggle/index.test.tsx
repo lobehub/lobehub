@@ -1,4 +1,4 @@
-import type * as BaseUI from '@lobehub/ui/base-ui';
+import type * as BaseUI from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 const actionIconPropsSpy = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof BaseUI>();
   return {
     ...actual,

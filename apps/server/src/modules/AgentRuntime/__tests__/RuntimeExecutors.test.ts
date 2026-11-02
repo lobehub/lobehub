@@ -52,17 +52,11 @@ const mockBuiltinModels = vi.hoisted(() => [
 ]);
 
 // Mock dependencies
-vi.mock('@/server/modules/ModelRuntime', () => ({
-  initModelRuntimeFromDB: vi.fn().mockResolvedValue({
-    // Emit a minimal non-empty completion so the call_llm empty-completion
-    // guard doesn't treat the default mock as a "gave up" turn and
-    // throw ModelEmptyError. Tests that exercise real output override this.
-    chat: vi.fn().mockImplementation(async (_payload: any, options: any) => {
-      await options?.callback?.onText?.('done');
-      return new Response('done');
-    }),
-  }),
-}));
+vi.mock('@/server/modules/ModelRuntime', async () => {
+  const { createModelRuntimeMock } = await import('./mocks/modelRuntimeMock');
+
+  return createModelRuntimeMock();
+});
 
 vi.mock('@/server/services/message', () => ({
   MessageService: vi.fn().mockImplementation(function () {
@@ -3466,9 +3460,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: {
-            toolExecutionTimeMs: 100,
-          },
+          metadata: { toolExecutionTimeMs: 100, toolResultStop: false, toolResultSuccess: true },
         }),
       );
     });
@@ -3684,14 +3676,14 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         state: {},
         success: false,
       });
-      const loadAgentState = vi.fn().mockResolvedValue({ status: 'interrupted' });
-
+      const loadAgentState = vi.fn(async () => ({
+        status: mockToolExecutionService.executeTool.mock.calls.length ? 'interrupted' : 'running',
+      }));
       const executors = createRuntimeExecutors({
         ...ctx,
         loadAgentState,
       });
       const state = createMockState();
-
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',
@@ -3800,10 +3792,19 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     describe('skipCreateToolMessage (resumption after human approval)', () => {
+      beforeEach(() => {
+        mockMessageModel.findById.mockImplementation(async (id: string) => ({
+          id,
+          role: 'tool',
+          content: '',
+        }));
+        mockMessageModel.findMessagePlugin.mockImplementation(async (id: string) => ({
+          toolCallId: id.replace('pending-tool-msg-', 'tool-call-'),
+        }));
+      });
       it('should update existing tool message instead of creating a new one', async () => {
         const executors = createRuntimeExecutors(ctx);
         const state = createMockState();
-
         const instruction = {
           payload: {
             parentMessageId: 'pending-tool-msg-1',
@@ -3818,23 +3819,19 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
           type: 'call_tool' as const,
         };
-
         await executors.call_tool!(instruction, state);
-
         expect(mockMessageModel.create).not.toHaveBeenCalled();
         expect(mockMessageModel.updateToolMessage).toHaveBeenCalledWith(
           'pending-tool-msg-1',
           expect.objectContaining({
             content: 'Tool result',
-            metadata: { toolExecutionTimeMs: 100 },
+            metadata: { toolExecutionTimeMs: 100, toolResultStop: false, toolResultSuccess: true },
           }),
         );
       });
-
       it('should return the existing toolMessageId as parentMessageId for the next LLM step', async () => {
         const executors = createRuntimeExecutors(ctx);
         const state = createMockState();
-
         const instruction = {
           payload: {
             parentMessageId: 'pending-tool-msg-42',
@@ -3849,17 +3846,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
           type: 'call_tool' as const,
         };
-
         const result = await executors.call_tool!(instruction, state);
-
         const nextPayload = result.nextContext?.payload as { parentMessageId?: string } | undefined;
         expect(nextPayload?.parentMessageId).toBe('pending-tool-msg-42');
       });
-
       it('should fall back to creating a new tool message when skipCreateToolMessage is false', async () => {
         const executors = createRuntimeExecutors(ctx);
         const state = createMockState();
-
         const instruction = {
           payload: {
             parentMessageId: 'assistant-msg-7',
@@ -3874,15 +3867,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
           type: 'call_tool' as const,
         };
-
         await executors.call_tool!(instruction, state);
-
         expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
         expect(mockMessageModel.updateToolMessage).not.toHaveBeenCalled();
       });
     });
   });
-
   describe('request_human_approve executor', () => {
     const createMockState = (overrides?: Partial<AgentState>): AgentState => ({
       cost: createMockCost(),
@@ -5003,17 +4993,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(mockMessageModel.create).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({
-          metadata: {
-            toolExecutionTimeMs: 150,
-          },
+          metadata: { toolExecutionTimeMs: 150, toolResultStop: false, toolResultSuccess: true },
         }),
       );
       expect(mockMessageModel.create).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          metadata: {
-            toolExecutionTimeMs: 250,
-          },
+          metadata: { toolExecutionTimeMs: 250, toolResultStop: false, toolResultSuccess: true },
         }),
       );
     });
@@ -5229,6 +5215,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           parentId: 'assistant-msg-123',
           pluginError: 'blocked_by_security_privacy',
           pluginIntervention: {
+            runtimeType: 'server',
             rejectedReason: 'blocked_by_security_privacy',
             status: 'rejected',
           },
@@ -5298,14 +5285,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       // Should create two aborted tool messages
       expect(mockMessageModel.create).toHaveBeenCalledTimes(2);
-
       // First tool message
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'agent-123',
           content: 'Tool execution was aborted by user.',
           parentId: 'assistant-msg-123',
-          pluginIntervention: { status: 'aborted' },
+          pluginIntervention: { runtimeType: 'server', status: 'aborted' },
           role: 'tool',
           threadId: 'thread-123',
           tool_call_id: 'tool-call-1',
@@ -5319,7 +5305,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           agentId: 'agent-123',
           content: 'Tool execution was aborted by user.',
           parentId: 'assistant-msg-123',
-          pluginIntervention: { status: 'aborted' },
+          pluginIntervention: { runtimeType: 'server', status: 'aborted' },
           role: 'tool',
           threadId: 'thread-123',
           tool_call_id: 'tool-call-2',

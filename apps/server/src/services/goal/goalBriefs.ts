@@ -1,20 +1,18 @@
 import { GOAL_BRIEF_TRIGGER, GOAL_CLARIFICATION_OPTION } from '@lobechat/const/goal';
 import type { BriefAction, BriefGoalMetadata, GoalDecisionOption, GoalItem } from '@lobechat/types';
-import { coordinatorGateReason, coordinatorReasonCopies } from '@lobechat/utils/goalCopy';
+import { coordinatorGateReason } from '@lobechat/utils/goalCopy';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { BriefModel } from '@/database/models/brief';
 import { acceptances, briefs } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { translation } from '@/libs/i18n/serverTranslation';
-import { SystemAgentService } from '@/server/services/systemAgent';
 
 /** Option ids the coordinator writes; anything else is the main Agent's or the planner's. */
-const COORDINATOR_OPTION_KEYS: Record<string, string> = {
-  fail: 'goalProcess.gate.option.fail',
-  retire: 'goalProcess.gate.option.retire',
-  retry: 'goalProcess.gate.option.retry',
-  [GOAL_CLARIFICATION_OPTION.assume]: 'goalProcess.gate.option.assume',
+const COORDINATOR_OPTION_LABELS: Record<string, string> = {
+  fail: 'Fail goal',
+  retire: 'Retire work',
+  retry: 'Retry work',
+  [GOAL_CLARIFICATION_OPTION.assume]: 'Go with the assumption',
 };
 
 /** How the coordinator words a machine gate's question (see `openFailureDecisionLocked`). */
@@ -26,6 +24,9 @@ const DECIDED_ACCEPTANCE_STATUSES = new Set<string>(['accepted', 'closed', 'reje
 
 const signOffFor = (acceptanceId: string) =>
   sql`${briefs.metadata} -> 'goal' ->> 'signOffAcceptanceId' = ${acceptanceId}`;
+
+const decisionFor = (decisionId: string) =>
+  sql`${briefs.metadata} -> 'goal' ->> 'decisionId' = ${decisionId}`;
 
 const clip = (text: string, limit = SUMMARY_LIMIT) =>
   text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text;
@@ -48,6 +49,8 @@ interface DecisionInput {
   options?: GoalDecisionOption[] | null;
   question: string;
   recommendedOptionId?: string | null;
+  /** A held batch release: answered in this review report, not by a one-click action. */
+  reviewAcceptanceId?: string;
 }
 
 /**
@@ -76,24 +79,13 @@ export class GoalBriefService {
   /** A failure gate, or a question the main Agent escalated with its own options. */
   openDecision = async (goal: GoalItem, input: DecisionInput) =>
     this.safely('openDecision', async () => {
-      const { t } = await this.chatCopy();
-      const { t: tHome } = await this.homeCopy();
       const reason = coordinatorGateReason(input.question) ?? input.question;
-      // A batch gate lists every blocker it hit at once, joined by `; `; localize
-      // each so the brief carries no English into a non-English inbox.
-      const reasonCopies = coordinatorReasonCopies(reason);
-      const localizedReason = reasonCopies
-        ? reasonCopies.map((copy) => t(copy.key, copy.params)).join('; ')
-        : reason;
       // The machine gate's retry means "I fixed the setup", not "try again".
       const machine = MACHINE_GATE_TAIL.test(input.question);
-      const label = (option: GoalDecisionOption) => {
-        const key =
-          machine && option.id === 'retry'
-            ? 'goalProcess.gate.option.fixedRetry'
-            : COORDINATOR_OPTION_KEYS[option.id];
-        return key ? t(key) : option.label;
-      };
+      const label = (option: GoalDecisionOption) =>
+        machine && option.id === 'retry'
+          ? 'I fixed it — retry'
+          : (COORDINATOR_OPTION_LABELS[option.id] ?? option.label);
       const recommended = input.options?.find((o) => o.id === input.recommendedOptionId);
 
       const actions: BriefAction[] = [
@@ -105,7 +97,7 @@ export class GoalBriefService {
         })),
         {
           key: 'openGoal',
-          label: tHome('brief.action.openGoal'),
+          label: 'Open goal',
           type: 'link',
           url: goalPagePath(goal),
         },
@@ -121,15 +113,12 @@ export class GoalBriefService {
         metadata: {
           decisionId: input.decisionId,
           kind: 'decision',
+          ...(input.reviewAcceptanceId ? { reviewAcceptanceId: input.reviewAcceptanceId } : {}),
           ...(recommended ? { recommendedAction: recommended.id } : {}),
         },
         priority: 'urgent',
-        summary: clip(
-          recommended
-            ? `${localizedReason}\n\n${tHome('brief.goal.recommended', { option: label(recommended) })}`
-            : localizedReason,
-        ),
-        title: tHome('brief.goal.decision.title', { goal: goal.title }),
+        summary: clip(recommended ? `${reason}\n\nRecommended: ${label(recommended)}` : reason),
+        title: `Goal "${goal.title}" needs your decision`,
         type: 'decision',
       });
     });
@@ -140,12 +129,11 @@ export class GoalBriefService {
    */
   openClarification = async (goal: GoalItem, decisionIds: string[], questions: string[]) =>
     this.safely('openClarification', async () => {
-      const { t: tHome } = await this.homeCopy();
       await this.create(goal, {
         actions: [
           {
             key: 'answer',
-            label: tHome('brief.action.answer'),
+            label: 'Answer',
             type: 'link',
             url: goalPagePath(goal),
           },
@@ -155,7 +143,7 @@ export class GoalBriefService {
         metadata: { decisionId: decisionIds[0], kind: 'decision' },
         priority: 'urgent',
         summary: clip(questions.map((q, i) => `${i + 1}. ${q}`).join('\n')),
-        title: tHome('brief.goal.clarify.title', { goal: goal.title }),
+        title: `Goal "${goal.title}" has questions before it starts`,
         type: 'decision',
       });
     });
@@ -170,7 +158,6 @@ export class GoalBriefService {
    * the next tick retries.
    */
   openSignOff = async (goal: GoalItem, acceptanceId: string): Promise<void> => {
-    const { t: tHome } = await this.homeCopy();
     await this.db.transaction(async (tx) => {
       const [acceptance] = await tx
         .select({ status: acceptances.status })
@@ -193,15 +180,15 @@ export class GoalBriefService {
         goal,
         {
           actions: [
-            { key: 'signOff', label: tHome('brief.action.signOff'), type: 'resolve' },
+            { key: 'signOff', label: 'Sign off', type: 'resolve' },
             {
               key: 'requestChanges',
-              label: tHome('brief.action.requestChanges'),
+              label: 'Request changes',
               type: 'comment',
             },
             {
               key: 'openGoal',
-              label: tHome('brief.action.openGoal'),
+              label: 'Open goal',
               type: 'link',
               url: goalPagePath(goal),
             },
@@ -212,8 +199,9 @@ export class GoalBriefService {
             signOffAcceptanceId: acceptanceId,
           },
           priority: 'normal',
-          summary: tHome('brief.goal.signOff.summary'),
-          title: tHome('brief.goal.signOff.title', { goal: goal.title }),
+          summary:
+            'Goal-level acceptance passed. Sign it off to close the goal, or request changes to send it back.',
+          title: `Goal "${goal.title}" is done. Sign it off`,
           type: 'decision',
         },
         briefModel,
@@ -229,6 +217,17 @@ export class GoalBriefService {
         .set({ resolvedAction: action, resolvedAt: new Date(), resolvedComment: comment ?? null })
         .where(
           and(this.briefModel.ownership(), isNull(briefs.resolvedAt), signOffFor(acceptanceId)),
+        );
+    });
+
+  /** A gate was answered somewhere else — its review report, the goal page. */
+  settleDecision = async (decisionId: string, action: string, comment?: string) =>
+    this.safely('settleDecision', async () => {
+      await this.db
+        .update(briefs)
+        .set({ resolvedAction: action, resolvedAt: new Date(), resolvedComment: comment ?? null })
+        .where(
+          and(this.briefModel.ownership(), isNull(briefs.resolvedAt), decisionFor(decisionId)),
         );
     });
 
@@ -289,19 +288,6 @@ export class GoalBriefService {
       trigger: GOAL_BRIEF_TRIGGER,
       type: input.type,
     });
-
-  private locale?: Promise<string>;
-
-  private readLocale = () => {
-    this.locale ??= new SystemAgentService(this.db, this.userId, this.workspaceId)
-      .getUserLocale()
-      .catch(() => 'en-US');
-    return this.locale;
-  };
-
-  private chatCopy = async () => translation('chat', await this.readLocale());
-
-  private homeCopy = async () => translation('home', await this.readLocale());
 
   private safely = async (label: string, run: () => Promise<void>) => {
     try {

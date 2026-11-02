@@ -27,6 +27,6 @@
   },
   "peerDependencies": {
     "@icons-pack/react-simple-icons": "^13.8.0",
-    "@lobehub/ui": "^5"
+    "@lobehub/ui": "^6.0.4"
   }
 }

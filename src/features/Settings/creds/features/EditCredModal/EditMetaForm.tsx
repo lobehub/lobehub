@@ -1,10 +1,10 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button, Input, TextArea } from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
+import { Button, Input, TextArea } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
-import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,14 +12,9 @@ import { usePermission } from '@/hooks/usePermission';
 
 import { type CredsApi } from '../useCredsApi';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-block-start: 24px;
-  `,
-}));
+const styles = stylex.create({
+  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
+});
 
 interface EditMetaFormProps {
   cred: UserCredSummary;
@@ -79,7 +74,7 @@ const EditMetaForm: FC<EditMetaFormProps> = ({ cred, credsApi, onCancel, onSucce
         />
       </Form.Field>
 
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
         <Button
           disabled={!canManageCredentials}

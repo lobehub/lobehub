@@ -3,16 +3,46 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { ProjectModel } from '@/database/models/project';
+import {
+  type WorkspaceRole,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
+import { ProjectModel, type ProjectModelOptions } from '@/database/models/project';
+import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
+import { GoalService } from '@/server/services/goal';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+
+/**
+ * Reads `workspaceRole` as an optional context field: the cloud workspace-auth
+ * override injects it, while the OSS stub leaves it absent.
+ */
+const isWorkspaceAdmin = (ctx: { userId: string; workspaceRole?: WorkspaceRole }) =>
+  ctx.workspaceRole === 'owner' || ctx.workspaceRole === 'admin';
+
+/** Viewers hold no `agent:update` grant, so `projectWriteProcedure` rejects them. */
+const isWorkspaceViewer = (ctx: { workspaceId?: string | null; workspaceRole?: WorkspaceRole }) =>
+  !!ctx.workspaceId && ctx.workspaceRole === 'viewer';
 
 const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const options: ProjectModelOptions = {
+    canManageAllMembers: isWorkspaceAdmin(ctx),
+    readOnly: isWorkspaceViewer(ctx),
+  };
   return opts.next({
     ctx: {
-      projectModel: new ProjectModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+      projectCoordinatorRepo: new ProjectCoordinatorRepository(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+        options,
+      ),
+      projectModel: new ProjectModel(ctx.serverDB, ctx.userId, workspaceId, options),
     },
   });
 });
@@ -31,6 +61,48 @@ function requireResult<T>(result: T | null, message = 'Project not found'): T {
   if (!result) throw new TRPCError({ code: 'NOT_FOUND', message });
   return result;
 }
+
+/** Project rows leave the API with their main agent resolved (LobeAI when cleared). */
+async function withMainAgent<T extends { coordinatorAgentId: string | null }>(
+  projectModel: ProjectModel,
+  project: T,
+) {
+  const [resolved] = await projectModel.resolveCoordinatorAgents([project]);
+  return resolved;
+}
+
+/**
+ * A project only references reusable resources, so binding one requires the
+ * same `use` access as mounting it on an agent. Personal mode is already
+ * scoped to the caller's own rows by the model.
+ */
+const assertResourceUsable = async (
+  ctx: { serverDB: LobeChatDatabase; userId: string; workspaceId?: string | null },
+  resourceType: 'agent' | 'knowledgeBase',
+  resourceId: string,
+) => {
+  if (!ctx.workspaceId) return;
+  await assertCanPerformResourceAction({
+    action: 'use',
+    db: ctx.serverDB,
+    resourceId,
+    resourceType,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+};
+
+const agentBindingPatch = z.object({
+  enabled: z.boolean().optional(),
+  responsibility: z.string().max(1000).nullish(),
+  role: z.string().max(100).nullish(),
+  sortOrder: z.number().int().optional(),
+});
+
+const knowledgeBaseBindingPatch = z.object({
+  enabled: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+});
 
 function mapProjectError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
@@ -57,17 +129,10 @@ export const projectRouter = router({
     }),
 
   addAgent: projectWriteProcedure
-    .input(
-      idInput.extend({
-        agentId: z.string(),
-        enabled: z.boolean().optional(),
-        responsibility: z.string().nullish(),
-        role: z.string().nullish(),
-        sortOrder: z.number().int().optional(),
-      }),
-    )
+    .input(idInput.extend({ agentId: z.string() }).merge(agentBindingPatch))
     .mutation(async ({ ctx, input: { id, ...input } }) => {
       try {
+        await assertResourceUsable(ctx, 'agent', input.agentId);
         return {
           data: requireResult(await ctx.projectModel.addAgent(id, input)),
           message: 'Agent added to project',
@@ -79,15 +144,10 @@ export const projectRouter = router({
     }),
 
   addKnowledgeBase: projectWriteProcedure
-    .input(
-      idInput.extend({
-        enabled: z.boolean().optional(),
-        knowledgeBaseId: z.string(),
-        sortOrder: z.number().int().optional(),
-      }),
-    )
+    .input(idInput.extend({ knowledgeBaseId: z.string() }).merge(knowledgeBaseBindingPatch))
     .mutation(async ({ ctx, input: { id, ...input } }) => {
       try {
+        await assertResourceUsable(ctx, 'knowledgeBase', input.knowledgeBaseId);
         return {
           data: requireResult(await ctx.projectModel.addKnowledgeBase(id, input)),
           message: 'Knowledge base added to project',
@@ -116,8 +176,9 @@ export const projectRouter = router({
     .input(
       z.object({
         avatar: z.string().optional(),
+        coordinatorAgentId: z.string().optional(),
         description: z.string().optional(),
-        identifier: projectIdentifierInput,
+        identifier: projectIdentifierInput.optional(),
         name: z.string().min(1).max(255),
         slug: projectSlugInput.optional(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
@@ -125,11 +186,18 @@ export const projectRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return {
-          data: await ctx.projectModel.create(input),
-          message: 'Project created',
-          success: true,
-        };
+        if (input.coordinatorAgentId) {
+          await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
+        }
+        const project = await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input));
+        await createDefaultChannel({
+          agentId: project.coordinatorAgentId,
+          db: ctx.serverDB,
+          projectId: project.id,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data: project, message: 'Project created', success: true };
       } catch (error) {
         mapProjectError(error, 'create');
       }
@@ -149,16 +217,35 @@ export const projectRouter = router({
 
   detail: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
-      const project = requireResult(await ctx.projectModel.findByIdOrSlug(input.id));
-      const [agents, completionReviews, knowledgeBases, tasks, works] = await Promise.all([
-        ctx.projectModel.listAgents(project.id),
-        ctx.projectModel.listCompletionReviews(project.id),
-        ctx.projectModel.listKnowledgeBases(project.id),
-        ctx.projectModel.listTasks(project.id),
-        ctx.projectModel.listWorks(project.id),
-      ]);
+      const project = await withMainAgent(
+        ctx.projectModel,
+        requireResult(await ctx.projectModel.findByReference(input.id)),
+      );
+      // TODO(2026-12-31): remove with `ProjectModel.joinTopicAgents`.
+      await ctx.projectModel.joinTopicAgents(project.id);
+      const [agents, completionReviews, knowledgeBases, tasks, works, coordinatorRetires] =
+        await Promise.all([
+          ctx.projectModel.listAgents(project.id),
+          ctx.projectModel.listCompletionReviews(project.id),
+          ctx.projectModel.listKnowledgeBases(project.id),
+          ctx.projectModel.listTasks(project.id),
+          ctx.projectModel.listWorks(project.id),
+          ctx.projectModel.isDedicatedCoordinator(project.coordinatorAgentId, {
+            exceptProjectId: project.id,
+          }),
+        ]);
       return {
-        data: { agents, completionReviews, knowledgeBases, project, tasks, works },
+        data: {
+          agents,
+          completionReviews,
+          /** Replacing the main agent hands its history over and deletes it. */
+          coordinatorRetiresOnReplace: coordinatorRetires,
+          knowledgeBases,
+          permissions: ctx.projectModel.getPermissions(project),
+          project,
+          tasks,
+          works,
+        },
         success: true,
       };
     } catch (error) {
@@ -169,7 +256,10 @@ export const projectRouter = router({
   find: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
       return {
-        data: requireResult(await ctx.projectModel.findByIdOrSlug(input.id)),
+        data: await withMainAgent(
+          ctx.projectModel,
+          requireResult(await ctx.projectModel.findByReference(input.id)),
+        ),
         success: true,
       };
     } catch (error) {
@@ -187,7 +277,10 @@ export const projectRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return { data: await ctx.projectModel.list(input), success: true };
+        return {
+          data: await ctx.projectModel.resolveCoordinatorAgents(await ctx.projectModel.list(input)),
+          success: true,
+        };
       } catch (error) {
         mapProjectError(error, 'list');
       }
@@ -206,6 +299,9 @@ export const projectRouter = router({
 
   // Keep the released API contract so old clients receive a clear business error.
   // Project moves are paused while project-scoped task numbering is redesigned.
+  // Re-enabling them must also move the task's acceptances (and those of its
+  // run topics): `acceptances.project_id` is copied from the task when filed,
+  // unless the publisher named another project explicitly.
   moveTask: projectWriteProcedure
     .input(idInput.extend({ taskId: z.string() }))
     .mutation(async () => {
@@ -240,6 +336,26 @@ export const projectRouter = router({
         return { message: 'Agent removed from project', success: true };
       } catch (error) {
         mapProjectError(error, 'removeAgent');
+      }
+    }),
+
+  replaceCoordinator: projectWriteProcedure
+    .input(idInput.extend({ agentId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertResourceUsable(ctx, 'agent', input.agentId);
+        return {
+          data: await withMainAgent(
+            ctx.projectModel,
+            requireResult(
+              await ctx.projectCoordinatorRepo.replaceCoordinator(input.id, input.agentId),
+            ),
+          ),
+          message: 'Project main agent replaced',
+          success: true,
+        };
+      } catch (error) {
+        mapProjectError(error, 'replaceCoordinator');
       }
     }),
 
@@ -279,6 +395,20 @@ export const projectRouter = router({
     }
   }),
 
+  /** Move one project in the scope's shared manual order, next to another project. */
+  move: projectWriteProcedure
+    .input(
+      idInput.and(z.union([z.object({ beforeId: z.string() }), z.object({ afterId: z.string() })])),
+    )
+    .mutation(async ({ ctx, input: { id, ...anchor } }) => {
+      try {
+        await ctx.projectModel.move(id, anchor);
+        return { message: 'Project moved', success: true };
+      } catch (error) {
+        mapProjectError(error, 'move');
+      }
+    }),
+
   requestCompletion: projectWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return {
@@ -303,13 +433,66 @@ export const projectRouter = router({
     )
     .mutation(async ({ ctx, input: { id, ...input } }) => {
       try {
+        let previousVisibility: string | undefined;
+        if (input.visibility !== undefined) {
+          const project = requireResult(await ctx.projectModel.findById(id));
+          if (project.userId !== ctx.userId) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Only the project creator can change its visibility',
+            });
+          }
+          previousVisibility = project.visibility;
+        }
+        const updated = requireResult(await ctx.projectModel.update(id, input));
+        // Members can no longer see the project, so they must not keep opening its goals.
+        if (input.visibility === 'private' && previousVisibility === 'public')
+          await new GoalService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).privatizeProjectGoals(id);
         return {
-          data: requireResult(await ctx.projectModel.update(id, input)),
+          data: await withMainAgent(ctx.projectModel, updated),
           message: 'Project updated',
           success: true,
         };
       } catch (error) {
         mapProjectError(error, 'update');
+      }
+    }),
+
+  updateAgent: projectWriteProcedure
+    .input(idInput.extend({ agentId: z.string() }).merge(agentBindingPatch))
+    .mutation(async ({ ctx, input: { agentId, id, ...patch } }) => {
+      try {
+        return {
+          data: requireResult(
+            await ctx.projectModel.updateAgent(id, agentId, patch),
+            'Binding not found',
+          ),
+          message: 'Project agent updated',
+          success: true,
+        };
+      } catch (error) {
+        mapProjectError(error, 'updateAgent');
+      }
+    }),
+
+  updateKnowledgeBase: projectWriteProcedure
+    .input(idInput.extend({ knowledgeBaseId: z.string() }).merge(knowledgeBaseBindingPatch))
+    .mutation(async ({ ctx, input: { id, knowledgeBaseId, ...patch } }) => {
+      try {
+        return {
+          data: requireResult(
+            await ctx.projectModel.updateKnowledgeBase(id, knowledgeBaseId, patch),
+            'Binding not found',
+          ),
+          message: 'Project knowledge base updated',
+          success: true,
+        };
+      } catch (error) {
+        mapProjectError(error, 'updateKnowledgeBase');
       }
     }),
 

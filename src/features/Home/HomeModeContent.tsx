@@ -2,14 +2,22 @@ import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { RecentItem, TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Segmented,
+  Skeleton,
+  Text,
+} from '@lobehub/ui';
 import { HashIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
@@ -218,7 +226,8 @@ const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
         title={topic.title}
         icon={
           agent ? (
-            <Avatar
+            <AgentAvatar
+              agentId={topic.agentId}
               avatar={agent.avatar}
               background={agent.backgroundColor}
               className={styles.topicAvatar}

@@ -425,6 +425,11 @@ describe('builtin tool registry', () => {
       ClaudeCodeInterventions[UserInteractionApiName.askUserQuestion],
     );
     expect(getBuiltinIntervention('qoder', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinInspector('opencode', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinRender('opencode', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinIntervention('opencode', UserInteractionApiName.askUserQuestion)).toBe(
+      ClaudeCodeInterventions[UserInteractionApiName.askUserQuestion],
+    );
   });
 
   it('registers command and local-file surfaces for Devin ACP tool names', () => {

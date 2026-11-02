@@ -2,6 +2,10 @@ import {
   getSystemPromptForShareVisitor as getActivatorSystemPromptForShareVisitor,
   LobeActivatorIdentifier,
 } from '@lobechat/builtin-tool-activator';
+import {
+  CloudSandboxIdentifier,
+  shareVisitorSystemPrompt as cloudSandboxShareVisitorSystemPrompt,
+} from '@lobechat/builtin-tool-cloud-sandbox';
 import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { hasShareToolGrant, PLUGIN_SCHEMA_SEPARATOR, type ShareToolGrant } from '@lobechat/const';
 import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
@@ -143,6 +147,27 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   applyShareGateToDataToolAccess(toolSet, gate);
   applyShareGateToPerApiGrants(toolSet, grants);
   applyShareGateToActivator(toolSet);
+  applyShareGateToCloudSandbox(toolSet);
+};
+
+/**
+ * Tell a kept cloud sandbox's model up front that `lh` is refused here, so a
+ * flow the agent prompt or a skill routes through the CLI is redirected to a
+ * granted native tool, or declared out of scope before the visitor invests in
+ * its earlier steps. Appended rather than substituted: the default sandbox
+ * guidance still applies, and a partial API strip may already have replaced
+ * the `systemRole` with a narrower one.
+ */
+const applyShareGateToCloudSandbox = (toolSet: ShareGateToolSet): void => {
+  const manifest = toolSet.manifestMap[CloudSandboxIdentifier];
+  if (!manifest || manifest.systemRole?.includes(cloudSandboxShareVisitorSystemPrompt)) return;
+
+  toolSet.manifestMap[CloudSandboxIdentifier] = {
+    ...manifest,
+    systemRole: [manifest.systemRole, cloudSandboxShareVisitorSystemPrompt]
+      .filter(Boolean)
+      .join('\n\n'),
+  };
 };
 
 /**

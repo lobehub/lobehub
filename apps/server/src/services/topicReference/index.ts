@@ -1,7 +1,13 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import { messages } from '@/database/schemas';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
+
+/** Generated ids are alphanumerics joined by `_` (`tpc_…`); anything else is never matched. */
+const TOPIC_ID_PATTERN = /^\w+$/;
 
 export class TopicReferenceService {
   constructor(
@@ -22,6 +28,37 @@ export class TopicReferenceService {
     if (topic || !this.workspaceId) return topic;
 
     return new TopicModel(this.db, this.userId).findOwnTopicById(topicId);
+  };
+
+  /**
+   * Whether `topicId` is the conversation `conversationTopicId` itself, or one a user message
+   * in its main conversation names — as a bare id or inside a `<refer_topic>` tag,
+   * markdown-escaped (`tpc\_…`)
+   * or not. The id has to stand on its own: one that only starts a longer id does not count.
+   */
+  isNamedInConversation = async (conversationTopicId: string, topicId: string) => {
+    if (topicId === conversationTopicId) return true;
+    if (!TOPIC_ID_PATTERN.test(topicId)) return false;
+
+    const escaped = topicId.replaceAll('_', String.raw`\\_`);
+    const pattern = `(^|[^A-Za-z0-9_])(${topicId}|${escaped})([^A-Za-z0-9_]|$)`;
+    const [named] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, conversationTopicId),
+          eq(messages.role, 'user'),
+          // Ingest persists agent-authored subagent prompts as `user` messages
+          // in threads. They are not user authorization to read another topic.
+          isNull(messages.threadId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages),
+          sql`${messages.content} ~ ${pattern}`,
+        ),
+      )
+      .limit(1);
+
+    return !!named;
   };
 
   getTopicContext = async ({ topicId }: { topicId: string }) => {

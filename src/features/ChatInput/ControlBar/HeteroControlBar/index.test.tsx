@@ -182,35 +182,13 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
         </div>
       </div>
     ),
-    Skeleton: { Button: () => <div data-testid="skeleton" /> },
+    Skeleton: ({ height }: { height?: number }) => (
+      <div data-height={height} data-testid="skeleton" />
+    ),
     Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
     Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
   };
 });
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: ({
-    onClick,
-    title,
-    disabled,
-  }: {
-    disabled?: boolean;
-    onClick?: (e: React.MouseEvent) => void;
-    title?: string;
-  }) => (
-    <button
-      aria-label={title}
-      data-testid={title ? 'calendar' : 'refresh'}
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    />
-  ),
-  Skeleton: ({ height }: { height?: number }) => (
-    <div data-height={height} data-testid="skeleton" />
-  ),
-}));
 
 beforeEach(() => {
   effectiveAgencyConfig.current = {

@@ -1,5 +1,5 @@
-import { toast } from '@lobehub/ui/base-ui';
-import { useForm } from '@lobehub/ui/base-ui/form';
+import { toast } from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -26,6 +26,7 @@ interface SignUpErrorLike {
     };
   };
   message?: string;
+  retryAfterDays?: number;
 }
 
 export const useSignUp = () => {
@@ -102,9 +103,20 @@ export const useSignUp = () => {
           return;
         }
 
-        const translated = signUpError.code
-          ? t(`authError:codes.${signUpError.code}`, { defaultValue: '' })
-          : '';
+        const retryAfterDays = signUpError.retryAfterDays;
+        const retryAfterTranslated =
+          signUpError.code &&
+          typeof retryAfterDays === 'number' &&
+          Number.isSafeInteger(retryAfterDays) &&
+          retryAfterDays > 0
+            ? t(`authError:codes.${signUpError.code}_WITH_RETRY_AFTER_DAYS`, {
+                count: retryAfterDays,
+                defaultValue: '',
+              })
+            : '';
+        const translated =
+          retryAfterTranslated ||
+          (signUpError.code ? t(`authError:codes.${signUpError.code}`, { defaultValue: '' }) : '');
         toast.error(translated || signUpError.message || t('betterAuth.signup.error'));
         return;
       }

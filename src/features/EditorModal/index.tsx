@@ -1,4 +1,4 @@
-import { Button, createModal, ModalFooter, Text, useModalContext } from '@lobehub/ui/base-ui';
+import { Button, createModal, ModalFooter, Text, useModalContext } from '@lobehub/ui';
 import { lazy, memo, type ReactNode, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

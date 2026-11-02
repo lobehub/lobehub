@@ -1,11 +1,10 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -18,7 +17,8 @@ const Title = memo(() => {
 
   return (
     <Flexbox horizontal align="center" gap={8} style={{ minWidth: 0 }}>
-      <Avatar
+      <AgentAvatar
+        agentId={agentId}
         avatar={meta.avatar}
         background={meta.backgroundColor}
         name={displayName}

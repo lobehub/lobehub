@@ -4,7 +4,7 @@ import { parse } from '../parse';
 import type { Message } from '../types/shared';
 
 /**
- * Regression tests for string `createdAt` payloads (LOBE-14005 / T-614).
+ * Regression tests for string `createdAt` payloads.
  *
  * The Gateway snapshot serializes timestamps as ISO strings while the static
  * contract says `number`. Every ordering site used arithmetic comparison, so a
@@ -23,7 +23,7 @@ const base = (overrides: Partial<Message> & { id: string }): Message =>
     ...overrides,
   }) as Message;
 
-describe('string createdAt payloads (LOBE-14005)', () => {
+describe('string createdAt payloads', () => {
   it('orders a linear conversation chronologically when createdAt is ISO strings', () => {
     const messages: Message[] = [
       base({ id: 'msg-old', createdAt: iso(30), role: 'user', content: 'first' }),

@@ -1,7 +1,11 @@
 'use client';
 
-import { ActionIcon, FloatingSheet, type FloatingSheetProps } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  createStaticStyles,
+  FloatingSheet,
+  type FloatingSheetProps,
+} from '@lobehub/ui';
 import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -103,6 +107,8 @@ export interface FloatingChatPanelProps {
   maxHeight?: number;
   minHeight?: number;
   mode?: 'embedded' | 'overlay';
+  /** Embedded mode only: collapse the hosting side panel from the toolbar. */
+  onCollapse?: () => void;
   onOpenChange?: (open: boolean) => void;
   onSnapPointChange?: (point: number) => void;
   open?: boolean;
@@ -138,6 +144,7 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     hooks,
     defaultOpen = false,
     mode = 'overlay',
+    onCollapse,
 
     width = '100%',
 
@@ -266,7 +273,11 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
           {isEmbedded ? (
             <>
               <PageAgentPanelOverrideProvider defaultExpand>
-                <CopilotToolbar topicId={activeTopicId} onTopicChange={setEmbeddedTopicId} />
+                <CopilotToolbar
+                  topicId={activeTopicId}
+                  onCollapse={onCollapse}
+                  onTopicChange={setEmbeddedTopicId}
+                />
               </PageAgentPanelOverrideProvider>
               <ChatBody />
               <InputRow isCollapsed={false} showExpandBar={false} onExpand={expand} />

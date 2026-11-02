@@ -50,18 +50,18 @@ execAgent({ hooks })
 
 ## Key Files
 
-| File                                                                   | Role                                                      |
-| ---------------------------------------------------------------------- | --------------------------------------------------------- |
-| `packages/agent-runtime/src/types/hooks.ts`                            | Event types and required/optional fields                  |
-| `apps/server/src/services/agentRuntime/hooks/types.ts`                 | Registration and webhook types                            |
-| `apps/server/src/services/agentRuntime/hooks/HookDispatcher.ts`        | Registration, dispatch, local mocks, HTTP/QStash delivery |
-| `apps/server/src/services/agentRuntime/hooks/webhookPayload.ts`        | Event projection and email enrichment                     |
-| `apps/server/src/modules/AgentRuntime/adapters/toolCallHookContext.ts` | Shared tool-event context builder                         |
-| `apps/server/src/modules/AgentRuntime/adapters/ServerToolTransport.ts` | Tool notifications and execution results                  |
-| `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts`             | Tool, compression and human-intervention execution        |
-| `apps/server/src/services/agentRuntime/AgentRuntimeService.ts`         | Step events and human-intervention continuation           |
-| `apps/server/src/services/agentRuntime/CompletionLifecycle.ts`         | Terminal events                                           |
-| `apps/server/src/services/aiAgent/subAgentRuns.ts`                     | Sub-agent events                                          |
+| File                                                                                             | Role                                                      |
+| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `packages/agent-runtime/src/types/hooks.ts`                                                      | Event types and required/optional fields                  |
+| `apps/server/src/services/agentRuntime/hooks/types.ts`                                           | Registration and webhook types                            |
+| `apps/server/src/services/agentRuntime/hooks/HookDispatcher.ts`                                  | Registration, dispatch, local mocks, HTTP/QStash delivery |
+| `apps/server/src/services/agentRuntime/hooks/webhookPayload.ts`                                  | Event projection and email enrichment                     |
+| `apps/server/src/modules/AgentRuntime/adapters/toolCallHookContext.ts`                           | Shared tool-event context builder                         |
+| `apps/server/src/modules/AgentRuntime/adapters/ServerToolTransport.ts`                           | Tool notifications and execution results                  |
+| `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts`                                       | Tool, compression and human-intervention execution        |
+| `apps/server/src/services/agentRuntime/AgentRuntimeService/` (`executeStep/`, `intervention.ts`) | Step events and human-intervention continuation           |
+| `apps/server/src/services/agentRuntime/CompletionLifecycle/index.ts`                             | Terminal events                                           |
+| `apps/server/src/services/aiAgent/subAgentRuns.ts`                                               | Sub-agent events                                          |
 
 ## Registration
 

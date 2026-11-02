@@ -39,6 +39,7 @@ import { GoalService } from './index';
 import { decideFailedTurn, GoalManagerService, MAX_FAILED_MANAGER_TURNS } from './manager';
 import * as scheduler from './scheduler';
 import { GoalStartService } from './start';
+import { answerDistill, pendingRelease as heldRelease } from './testUtils';
 import { GoalWaitService } from './wait';
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: () => db }));
@@ -1964,21 +1965,206 @@ describe('a batch the main Agent declares', () => {
     });
   });
 
-  it('lets the gate release the next wave instead of starting a planning turn', async () => {
-    const { id, state, op } = await start();
-    await manager().submit(id, state.token, op.id, batchPlan);
-    await ops().recordCompletion(op.id, { status: 'done' });
-    await service().tick(id);
-    const probes = (await service().graph(id)).nodes.filter((n) => n.kind === 'task');
+  /** Declare the batch, settle the probes, and let the gate pass for the first wave. */
+  const probesPassed = async (config: Partial<GoalConfig> = {}) => {
+    const started = await start(4, config);
+    await manager().submit(started.id, started.state.token, started.op.id, batchPlan);
+    await ops().recordCompletion(started.op.id, { status: 'done' });
+    await service().tick(started.id);
+    const probes = (await service().graph(started.id)).nodes.filter((n) => n.kind === 'task');
     await settle(probes.map((n) => n.id));
-
+    await answerDistill(service(), db, userId, started.id, batchPlan.rollout.recipe);
+    return started;
+  };
+  const pendingRelease = (id: string) => heldRelease(service(), id);
+  const approve = async (id: string) => {
+    const pending = await pendingRelease(id);
+    expect(pending).toBeDefined();
+    await service().answerReleaseGate(pending!.nodeId, 'release');
     await service().tick(id);
+  };
+  /** The release turn the coordinator handed to the main Agent. */
+  const releaseTurn = async (id: string) => {
+    const state = (await model().findById(id))!.config!.managerState!;
+    expect(state.problemKind).toBe('rollout_release');
+    const op = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    return { op: op!, state };
+  };
 
-    const after = await service().graph(id);
-    const released = after.nodes.find((n) => n.title === 'Project skills');
+  it('holds the first wave for the owner once the probes taught the plan', async () => {
+    const { id } = await probesPassed();
+
+    expect((await service().graph(id)).nodes.some((n) => n.title === 'Project skills')).toBe(false);
+    expect(await pendingRelease(id)).toBeDefined();
+    expect((await model().findById(id))!.config!.managerState!.problemKind).toBe('rollout_distill');
+
+    await approve(id);
+
+    const released = (await service().graph(id)).nodes.find((n) => n.title === 'Project skills');
     expect(released?.description).toContain('src/hooks/useFetchProjectSkills.ts:17');
     expect(released?.description).toContain('show stale data first');
-    expect((await model().findById(id))!.config!.managerState!.token).toBe(state.token);
+  });
+
+  it('hands every later wave to the main Agent, which releases it', async () => {
+    const { id } = await probesPassed({ rollout: { trigger: 'canary', waveSize: 1 } });
+    await approve(id);
+    const first = (await service().graph(id)).nodes.find((n) => n.title === 'Project skills')!;
+    await settle([first.id]);
+
+    // The gate passed again: the main Agent is asked, the owner is not.
+    await service().tick(id);
+    expect(await pendingRelease(id)).toBeUndefined();
+    const { op, state } = await releaseTurn(id);
+    expect((await service().graph(id)).nodes.some((n) => n.title === 'Home inbox')).toBe(false);
+
+    await manager().submit(id, state.token, op.id, {
+      action: 'release',
+      reason: 'Project skills delivered with a passing acceptance',
+    });
+    await ops().recordCompletion(op.id, { status: 'done' });
+    await service().tick(id);
+    await service().tick(id);
+
+    expect((await service().graph(id)).nodes.some((n) => n.title === 'Home inbox')).toBe(true);
+    expect((await model().findById(id))!.config!.rolloutState!.gateLog!.at(-1)).toMatchObject({
+      approvedBy: 'agent',
+      outcome: 'released',
+    });
+  });
+
+  it('asks the owner when the main Agent escalates a later release', async () => {
+    const { id } = await probesPassed({ rollout: { trigger: 'canary', waveSize: 1 } });
+    await approve(id);
+    const first = (await service().graph(id)).nodes.find((n) => n.title === 'Project skills')!;
+    await settle([first.id]);
+    await service().tick(id);
+    const { op, state } = await releaseTurn(id);
+
+    await manager().submit(id, state.token, op.id, {
+      action: 'escalate',
+      reason: 'The acceptance only checked screenshots; the owner should look first',
+    });
+    await ops().recordCompletion(op.id, { status: 'done' });
+    await service().tick(id);
+    await service().tick(id);
+
+    const pending = await pendingRelease(id);
+    expect(pending?.question).toContain('The main Agent asked you to approve releasing wave 2');
+    const node = (await service().graph(id)).nodes.find((n) => n.id === pending!.nodeId)!;
+    expect(node.description).toContain('the owner should look first');
+    expect((await service().graph(id)).nodes.some((n) => n.title === 'Home inbox')).toBe(false);
+  });
+
+  it('refuses anything but release or a plain escalation on a release turn', async () => {
+    const { id } = await probesPassed({ rollout: { trigger: 'canary', waveSize: 1 } });
+    await approve(id);
+    const first = (await service().graph(id)).nodes.find((n) => n.title === 'Project skills')!;
+    await settle([first.id]);
+    await service().tick(id);
+    const { op, state } = await releaseTurn(id);
+
+    await expect(manager().submit(id, state.token, op.id, taskPlan)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  /** The turn a plan the owner sent back was handed to. */
+  const reviseTurn = async (id: string) => {
+    const state = (await model().findById(id))!.config!.managerState!;
+    expect(state.problemKind).toBe('rollout_revise');
+    const op = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    return { op: op!, state };
+  };
+
+  it('sends a plan the owner sent back to the main Agent, and re-runs the experiments on its rewrite in the same round', async () => {
+    const { id } = await probesPassed();
+    const pending = await pendingRelease(id);
+
+    await service().answerReleaseGate(pending!.nodeId, 'revise', '冷启动验证必须逐帧取证');
+
+    // The correction is the Agent's to apply; the goal resumes to hand it over.
+    const held = (await model().findById(id))!;
+    expect(held.status).toBe('running');
+    expect(held.config!.rolloutState).toMatchObject({
+      pendingRevision: { correction: '冷启动验证必须逐帧取证' },
+      phase: 'plan_revision',
+    });
+    await service().tick(id);
+    const { op, state } = await reviseTurn(id);
+    expect(state.problem).toContain('冷启动验证必须逐帧取证');
+
+    const recipe = '# 方案 v2\n\n## 4. 真实产品验收\n- 刷新后第一帧截图，证明首屏直接是持久化数据';
+    await manager().submit(id, state.token, op.id, {
+      action: 'revise_plan',
+      reason: '把逐帧取证写进第 4 步',
+      recipe,
+    });
+    await ops().recordCompletion(op.id, { status: 'done' });
+    await service().tick(id);
+    await service().tick(id);
+
+    const after = (await model().findById(id))!.config!;
+    // The experiments the correction judged run again on the rewrite, in round 1.
+    const reruns = after.rolloutState!.probeNodeIds;
+    expect(after.rolloutState).toMatchObject({ phase: 'probe', templateRevision: 1 });
+    expect(reruns).toHaveLength(held.config!.rolloutState!.probeNodeIds.length);
+    expect(reruns.some((n) => held.config!.rolloutState!.probeNodeIds.includes(n))).toBe(false);
+    expect(after.rolloutState!.pendingRevision).toBeUndefined();
+    // The rewrite replaces the plan; the correction is not pasted under it.
+    expect(after.rollout!.spec!.recipeOutline).toBe(recipe);
+    // Their results, not the old ones, go back to the owner for the release.
+    await settle(reruns);
+    // The re-run units are new probes: they teach the plan again before the review.
+    await answerDistill(service(), db, userId, id, recipe);
+    expect((await pendingRelease(id))!.nodeId).not.toBe(pending!.nodeId);
+  });
+
+  it('takes only a rewrite on a revise turn, and hands the revision over again when none came', async () => {
+    const { id } = await probesPassed();
+    const pending = await pendingRelease(id);
+    await service().answerReleaseGate(pending!.nodeId, 'revise', '冷启动验证必须逐帧取证');
+    await service().tick(id);
+    const first = await reviseTurn(id);
+
+    // Nobody applies the correction in the Agent's place.
+    await expect(
+      manager().submit(id, first.state.token, first.op.id, {
+        action: 'escalate',
+        reason: 'The correction contradicts step 2',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    // The turn ends without a rewrite: the revision is handed over again.
+    await ops().recordCompletion(first.op.id, { status: 'done' });
+    await service().tick(id);
+    await service().tick(id);
+    const second = await reviseTurn(id);
+    expect(second.state.token).not.toBe(first.state.token);
+    const after = (await model().findById(id))!.config!;
+    expect(after.rolloutState!.phase).toBe('plan_revision');
+    expect(after.rollout!.spec!.recipeOutline).not.toContain('冷启动验证必须逐帧取证');
+  });
+
+  it('refuses revise_plan on a turn no plan was sent back to', async () => {
+    const { id, state, op } = await start();
+
+    await expect(
+      manager().submit(id, state.token, op.id, { action: 'revise_plan', reason: 'x', recipe: 'y' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('refuses a release no gate handed to the turn', async () => {
+    const { id, state, op } = await start();
+
+    await expect(
+      manager().submit(id, state.token, op.id, { action: 'release', reason: 'go' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
   it.each([

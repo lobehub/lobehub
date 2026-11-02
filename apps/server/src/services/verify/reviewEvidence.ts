@@ -1,3 +1,5 @@
+import { verifyTextEvidenceTypes } from '@lobechat/const/verify';
+
 /**
  * Nonvisual evidence assembly for the review predictor.
  *
@@ -7,7 +9,7 @@
  */
 
 /** Evidence types whose payload is text the model can read inline. */
-export const TEXT_EVIDENCE_TYPES = new Set(['text', 'markdown', 'dom_snapshot', 'transcript']);
+export const TEXT_EVIDENCE_TYPES = verifyTextEvidenceTypes;
 
 /**
  * Characters of nonvisual evidence one review prompt may carry.

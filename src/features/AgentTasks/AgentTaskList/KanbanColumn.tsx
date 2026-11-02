@@ -1,19 +1,30 @@
 import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { TaskStatus } from '@lobechat/types';
-import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
-import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  ActionIcon,
+  createStaticStyles,
+  cx,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+  Skeleton,
+  Text,
+} from '@lobehub/ui';
 import { EyeOff, MoreHorizontal, Plus } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TaskKanbanGroupBy, TaskListItem } from '@/store/task/slices/list/initialState';
 
+import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
 import TaskStatusIcon from '../features/TaskStatusIcon';
-import { getKanbanColumnHeaderVariant, type KanbanColumnCreateDefaults } from './kanbanBoardModel';
-import KanbanInlineCreate from './KanbanInlineCreate';
+import {
+  getKanbanColumnHeaderVariant,
+  getKanbanCreateTaskModalProps,
+  type KanbanColumnCreateDefaults,
+} from './kanbanBoardModel';
 import type { TaskGroupMeta } from './listViewOptions';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
@@ -228,10 +239,11 @@ const KanbanColumn = memo<KanbanColumnProps>(
     });
     const isDragActive = !!active;
 
-    const [creating, setCreating] = useState(false);
-    const openCreate = useCallback(() => setCreating(true), []);
-    const closeCreate = useCallback(() => setCreating(false), []);
     const canCreate = !!createDefaults;
+    const openCreate = useCallback(() => {
+      if (!createDefaults) return;
+      createTaskModal(getKanbanCreateTaskModalProps(createDefaults, { agentId, projectId }));
+    }, [agentId, createDefaults, projectId]);
 
     // Don't highlight if dragging a card that's already in this column
     const activeTask = active?.data.current?.task as TaskListItem | undefined;
@@ -308,14 +320,6 @@ const KanbanColumn = memo<KanbanColumnProps>(
           </div>
         </div>
         <div className={styles.body}>
-          {creating && createDefaults && (
-            <KanbanInlineCreate
-              agentId={agentId}
-              defaults={createDefaults}
-              projectId={projectId}
-              onClose={closeCreate}
-            />
-          )}
           {loading ? (
             Array.from({ length: 3 }).map((_, index) => (
               <div className={cardStyles.card} key={`kanban-skeleton-${columnKey}-${index}`}>
@@ -326,7 +330,7 @@ const KanbanColumn = memo<KanbanColumnProps>(
             tasks.map((task) => (
               <DraggableTaskCard key={task.identifier} routeScope={routeScope} task={task} />
             ))
-          ) : creating ? null : canCreate ? (
+          ) : canCreate ? (
             <div
               className={cx(styles.addPill, styles.action, 'kanban-col-action')}
               title={t('taskList.kanban.addTask')}

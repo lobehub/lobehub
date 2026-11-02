@@ -78,6 +78,16 @@ export {
   resolveCodexInitialModel,
 } from './codexModel';
 export {
+  buildCodexLobeHubContextArgs,
+  buildCodexShellEnvSetArgs,
+  CODEX_LOBEHUB_CONTEXT_ENV_KEYS,
+  type CodexJwtFile,
+  createCodexJwtFile,
+  LOBEHUB_JWT_FILE_ENV,
+  refreshCodexJwtFiles,
+  toTomlBasicString,
+} from './codexShellEnv';
+export {
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
   CursorAcpSession,
@@ -151,6 +161,17 @@ export {
   type NormalizeImageOptions,
 } from './input';
 export { JsonlStreamProcessor } from './jsonlProcessor';
+export {
+  buildLobeHubCliPluginFiles,
+  CLAUDE_CODE_PLUGIN_SKILLS_MIN_VERSION,
+  claudeCodeLoadsPluginSkills,
+  type ClaudeCodeLobeHubCliDelivery,
+  LOBEHUB_CLI_PLUGIN_NAME,
+  LOBEHUB_CLI_SKILL_NAME,
+  omitLobeHubCliGuide,
+  prepareClaudeCodeLobeHubCli,
+  resolveLobeHubCliPluginDir,
+} from './lobeHubCliPlugin';
 // NOTE: `resolveCliCommand` is intentionally NOT re-exported here. It runs
 // `promisify(execFile)` at module load, which throws under a partial
 // `node:child_process` mock — and this barrel is widely imported (e.g. for
@@ -170,8 +191,10 @@ export {
   ensureClaudeCodeResumeTranscript,
   type EnsureResumeTranscriptReason,
   type EnsureResumeTranscriptResult,
+  findClaudeCodeTranscriptPath,
   resolveClaudeCodeTranscriptPath,
 } from './ensureResumeTranscript';
+export { getHeterogeneousAgentPresetEnv } from './presetEnv';
 export {
   AMP_BASE_ARGS,
   buildQoderArgs,

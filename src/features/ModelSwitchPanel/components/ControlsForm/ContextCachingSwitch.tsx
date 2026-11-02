@@ -1,4 +1,4 @@
-import { Switch } from '@lobehub/ui/base-ui';
+import { Switch } from '@lobehub/ui';
 import { memo } from 'react';
 
 interface ContextCachingSwitchProps {

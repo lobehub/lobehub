@@ -1,7 +1,5 @@
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui/base-ui';
+import { Center, createStaticStyles, cssVar, cx, Divider, Flexbox, Icon } from '@lobehub/ui';
 import { GlobeOffIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
 import { SparkleIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';

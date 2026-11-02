@@ -24,6 +24,7 @@ const VALID_TYPES = [
   'plugin',
   'communityAgent',
   'knowledgeBase',
+  'task',
 ] as const;
 
 export type ValidSearchType = (typeof VALID_TYPES)[number];

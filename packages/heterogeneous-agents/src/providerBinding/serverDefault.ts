@@ -10,6 +10,10 @@ interface ServerDefaultHeterogeneousAgentConfig {
 }
 
 export const SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG = {
+  'droid': {
+    ingress: 'anthropic-messages',
+    tokenHeader: 'x-api-key',
+  },
   'claude-code': {
     ingress: 'anthropic-messages',
     tokenHeader: 'bearer',
@@ -27,6 +31,10 @@ export const SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG = {
     tokenHeader: 'x-api-key',
   },
   'pi': {
+    ingress: 'openai-responses',
+    tokenHeader: 'bearer',
+  },
+  'opencode': {
     ingress: 'openai-responses',
     tokenHeader: 'bearer',
   },

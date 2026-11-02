@@ -106,6 +106,39 @@ describe('ComposioService.getComposioManifests', () => {
     expect(mocks.pluginQuery).toHaveBeenCalledTimes(1); // called, but yields nothing new
   });
 
+  it('reads only the requested identifiers', async () => {
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([activeConnectorRow()]);
+    mocks.connectorToolQueryAll.mockResolvedValue([
+      { description: 'Send', toolName: 'GMAIL_SEND_EMAIL', userConnectorId: 'conn-gmail' },
+    ]);
+    mocks.pluginQuery.mockResolvedValue([
+      {
+        customParams: { composio: { status: 'ACTIVE' } },
+        identifier: 'slack',
+        manifest: { api: [{ name: 'SLACK_POST' }] },
+      },
+    ]);
+
+    const manifests = await service().getComposioManifests('agent-1', {
+      identifiers: ['gmail', 'not-composio'],
+    });
+
+    expect(mocks.connectorQuery).not.toHaveBeenCalled();
+    expect(mocks.connectorQueryByIdentifiers).toHaveBeenCalledWith(['gmail'], 'agent-1');
+    expect(manifests.map((m) => m.identifier)).toEqual(['gmail']);
+  });
+
+  it('reads nothing when no requested identifier is a Composio app', async () => {
+    const manifests = await service().getComposioManifests('agent-1', {
+      identifiers: ['deepwiki'],
+    });
+
+    expect(manifests).toEqual([]);
+    expect(mocks.connectorQuery).not.toHaveBeenCalled();
+    expect(mocks.connectorQueryByIdentifiers).not.toHaveBeenCalled();
+    expect(mocks.pluginQuery).not.toHaveBeenCalled();
+  });
+
   it('falls back to plugin table for identifiers without a connector projection', async () => {
     mocks.connectorQuery.mockResolvedValue([]);
     mocks.pluginQuery.mockResolvedValue([

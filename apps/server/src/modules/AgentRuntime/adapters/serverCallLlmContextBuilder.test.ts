@@ -6,12 +6,19 @@ import type { RuntimeExecutorContext } from '../context';
 import { buildServerCallLlmContext } from './serverCallLlmContextBuilder';
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
+const queryAgentsMock = vi.hoisted(() => vi.fn());
 const getInfoForAIGenerationMock = vi.hoisted(() => vi.fn());
 const getUserSettingsMock = vi.hoisted(() => vi.fn());
 const resolveServerCallLlmContextHintsMock = vi.hoisted(() => vi.fn());
 const serverMessagesEngineMock = vi.hoisted(() => vi.fn());
 const marketCredsListMock = vi.hoisted(() => vi.fn());
 const workspaceFindByIdMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: class {
+    queryAgents = queryAgentsMock;
+  },
+}));
 
 vi.mock('@/database/models/user', () => ({
   UserModel: class {
@@ -84,6 +91,7 @@ const tooling = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  queryAgentsMock.mockResolvedValue([{ id: 'other-agent', name: 'Coder', title: 'Coding helper' }]);
 
   getInfoForAIGenerationMock.mockResolvedValue({
     responseLanguage: 'en-US',
@@ -112,6 +120,31 @@ beforeEach(() => {
  * received anything. So each link gets an assertion of its own.
  */
 describe('buildServerCallLlmContext - system-message context reaches the engine', () => {
+  it.each(['channel', 'user'])(
+    'scopes unsolicited agent inventory for %s runs',
+    async (trigger) => {
+      await buildServerCallLlmContext({
+        ctx: createCtx(),
+        llmPayload,
+        model: 'gpt-4',
+        provider: 'openai',
+        state: createState({ origin: { agentId: 'self-agent', trigger } }),
+        tooling,
+      });
+
+      const context = serverMessagesEngineMock.mock.calls[0][0].agentManagementContext;
+      expect(context.currentAgent.id).toBe('self-agent');
+      if (trigger === 'channel') {
+        expect(queryAgentsMock).not.toHaveBeenCalled();
+        expect(context.availableAgents).toBeUndefined();
+      } else {
+        expect(context.availableAgents).toEqual([
+          { id: 'other-agent', name: 'Coder', title: 'Coding helper', description: undefined },
+        ]);
+      }
+    },
+  );
+
   it('forwards the project instructions off the world snapshot', async () => {
     const projectInstructions = [{ content: 'Use bun.', source: 'AGENTS.md' }];
 

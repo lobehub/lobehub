@@ -8,6 +8,7 @@ import type {
 } from '@lobechat/builtin-tool-lobe-agent';
 import {
   buildAnalyzeMediaContent,
+  buildBackgroundSubAgentReceipt,
   createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
   formatMediaUrlValidationError,
@@ -40,6 +41,7 @@ import {
 } from '@/server/services/vent';
 
 import type { ToolExecutionContext } from '../types';
+import { startBackgroundSubAgent } from './backgroundSubAgent';
 import { normalizeMultimodalImageItems } from './lobeAgentImage';
 import { createServerPlanRuntimeService } from './lobeAgentPlan';
 import type { ServerRuntimeRegistration } from './types';
@@ -325,13 +327,30 @@ class LobeAgentExecutionRuntime {
     // declared field, so "start a new sub-agent" arrives as `subAgentId: ""`
     // rather than an omitted key. Blank means new.
     const subAgentId = params.subAgentId?.trim() || undefined;
+    const background = params.runInBackground === true;
 
-    const { started, error, threadId, subOperationId, toolMessageId } = await ctx.subAgent.run({
-      description,
-      instruction,
-      subAgentId,
-      timeout,
-    });
+    const runner = ctx.subAgent;
+    const startRun = () =>
+      runner.run({ background, description, instruction, subAgentId, timeout });
+
+    let runResult: Awaited<ReturnType<typeof startRun>>;
+    if (background) {
+      const outcome = await startBackgroundSubAgent({
+        db: this.db,
+        groupId: this.groupId,
+        retryHint: 'Call callSubAgent again without runInBackground to wait for the result.',
+        start: startRun,
+        threadId: this.threadId,
+        topicId: this.topicId,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if ('refusal' in outcome) return buildError(outcome.refusal.message, outcome.refusal.code);
+      runResult = outcome.result;
+    } else {
+      runResult = await startRun();
+    }
+    const { started, error, threadId, subOperationId, toolMessageId } = runResult;
 
     // The child op failed to start — no completion bridge will ever fire to
     // backfill a placeholder, so we must NOT defer/park here. Return a normal
@@ -343,6 +362,17 @@ class LobeAgentExecutionRuntime {
         error ? `Sub-agent ${action}: ${error}` : `Sub-agent ${action}.`,
         'SUB_AGENT_START_FAILED',
       );
+    }
+
+    // Detached: the receipt is the whole tool result and the parent keeps going.
+    // It goes into the placeholder the runner created (it anchors the thread);
+    // the answer reaches the parent later as its own message.
+    if (background) {
+      return {
+        content: buildBackgroundSubAgentReceipt(threadId),
+        success: true,
+        toolMessageId,
+      };
     }
 
     return {

@@ -77,7 +77,10 @@ describe('groupManagementRuntime', () => {
 
     it('keeps the opaque fallback message when the runner reports no reasons', async () => {
       run.mockResolvedValue({ started: false, startedCount: 0 });
-      const result = await runtime().delegate({ agentId: 'agent-a', reason: 'take over' }, makeCtx());
+      const result = await runtime().delegate(
+        { agentId: 'agent-a', reason: 'take over' },
+        makeCtx(),
+      );
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe('AGENT_MEMBER_START_FAILED');
       expect(result.content).toBe('Agent member(s) failed to start.');
@@ -168,6 +171,26 @@ describe('groupManagementRuntime', () => {
     it('errors without tasks', async () => {
       const result = await runtime().executeAgentTasks({ tasks: [] } as any, makeCtx());
       expect(result.error?.code).toBe('INVALID_ARGUMENTS');
+    });
+  });
+
+  describe('vote', () => {
+    it('returns an explicit not-implemented error (not a success-shaped stub)', async () => {
+      const result = await runtime().vote(
+        {
+          options: [
+            { id: 'a', label: 'Option A' },
+            { id: 'b', label: 'Option B' },
+          ],
+          question: 'Which design should we pick?',
+        },
+        makeCtx(),
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('VOTE_NOT_IMPLEMENTED');
+      expect(result.content).toContain('broadcast');
+      expect(run).not.toHaveBeenCalled();
     });
   });
 });

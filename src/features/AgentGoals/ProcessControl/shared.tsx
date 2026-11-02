@@ -1,7 +1,5 @@
-import { Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, Icon, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar } from 'antd-style';
 import {
   Boxes,
   CircleHelp,

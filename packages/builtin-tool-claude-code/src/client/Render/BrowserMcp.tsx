@@ -1,9 +1,15 @@
 'use client';
 
 import type { BuiltinRender, BuiltinRenderProps } from '@lobechat/types';
-import { Block, Flexbox, Highlighter, Image, PreviewGroup } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Block,
+  createStaticStyles,
+  Flexbox,
+  Highlighter,
+  Image,
+  PreviewGroup,
+  Text,
+} from '@lobehub/ui';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';
 
@@ -149,6 +155,7 @@ const RENDER_BY_API: Record<BrowserMcpApi, BuiltinRender> = {
   readPage: PageDump as BuiltinRender,
   screenshot: Screenshot as BuiltinRender,
   scroll: PageAction as BuiltinRender,
+  setViewport: PageAction as BuiltinRender,
   snapshot: PageDump as BuiltinRender,
 };
 

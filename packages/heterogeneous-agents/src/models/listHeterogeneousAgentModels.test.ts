@@ -30,6 +30,11 @@ vi.mock('../spawn/droidAcpSession', () => ({
 
 vi.mock('./codex', () => ({ listCodexModels: listCodexModelsMock }));
 
+// Catalog parsing uses a mocked process; directory failures exercise the real spawn separately.
+vi.mock('../spawn/workingDirectory', () => ({
+  resolveHeteroSpawnCwd: vi.fn((cwd: string) => cwd),
+}));
+
 const execFileMock = vi.mocked(childProcess.execFile);
 
 const resolveExecFile = (stdout: string, stderr = '') => {
@@ -59,6 +64,51 @@ describe('heterogeneous agent model discovery', () => {
   afterEach(() => {
     vi.resetModules();
   });
+
+  it('loads Pi provider extensions with the same discovery policy as the configured run', async () => {
+    resolveExecFile('custom  fixture-model  4K  512  no  no');
+    const { listHeterogeneousAgentModels } = await importModule();
+    const result = await listHeterogeneousAgentModels({
+      args: [
+        '-e',
+        '/config/provider.mjs',
+        '-ne',
+        '--offline',
+        '--mode',
+        'rpc',
+        '--',
+        '-e',
+        '/ignored',
+      ],
+      command: '/custom/pi',
+      type: 'pi',
+    });
+    expect(result).toMatchObject({ models: [{ modelId: 'fixture-model' }], status: 'success' });
+    expect(execFileMock).toHaveBeenCalledWith(
+      '/custom/pi',
+      ['--list-models', '-e', '/config/provider.mjs', '-ne', '--offline'],
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it.each(['droid', 'trae'] as const)(
+    'reports an unsupported %s ACP discovery method as a client capability error',
+    async (type) => {
+      const { AcpRpcResponseError } = await import('../spawn/acpStdioClient');
+      const discover = type === 'droid' ? listDroidAcpModelsMock : listTraeAcpModelsMock;
+      discover.mockRejectedValue(
+        new AcpRpcResponseError('session/new', {
+          code: -32_601,
+          message: 'Method not found',
+        }),
+      );
+      const { listHeterogeneousAgentModels } = await importModule();
+      await expect(
+        listHeterogeneousAgentModels({ command: `/custom/${type}`, type }),
+      ).resolves.toMatchObject({ error: { code: 'unsupported_client' }, status: 'error' });
+    },
+  );
 
   it('queries Codex independently of task transport and forwards the target configuration', async () => {
     const models = [{ id: 'future-model', modelId: 'future-model', providerId: 'codex' }];

@@ -1,13 +1,17 @@
 'use client';
 
 import type { ExpertiseEnforcement } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   Checkbox,
   createModal,
+  createStaticStyles,
+  cssVar,
+  cx,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Input,
   Segmented,
   Spin,
@@ -15,8 +19,7 @@ import {
   TextArea,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   ArrowLeftIcon,

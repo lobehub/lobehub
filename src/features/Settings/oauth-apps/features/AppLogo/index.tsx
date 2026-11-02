@@ -1,8 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Avatar, createStaticStyles, cx, Icon } from '@lobehub/ui';
 import { AppWindowIcon } from 'lucide-react';
 import { memo } from 'react';
 

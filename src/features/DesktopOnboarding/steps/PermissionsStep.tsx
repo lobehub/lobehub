@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   Bell,

@@ -1,6 +1,11 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import {
+  isLocalHeterogeneousType,
+  isLocalRuntimeHeterogeneousType,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import debug from 'debug';
-import { and, asc, eq, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import urlJoin from 'url-join';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -11,21 +16,12 @@ import { QueueService } from '@/server/services/queue';
 
 import { AbandonOperationService } from './AbandonOperationService';
 import { BACKGROUND_OPERATION_TRIGGERS } from './foregroundOperation';
+import {
+  HETERO_OPERATION_SILENCE_MS as HETERO_SILENCE_MS,
+  OPERATION_LEASE_STALE_MS as DEFAULT_STALE_AFTER_MS,
+} from './operationLease';
 
 const log = debug('lobe-server:stale-operation-reaper');
-
-/**
- * How long an operation may go without refreshing its durable liveness lease
- * before this sweep treats it as dead.
- *
- * `AgentRuntimeService.startStepLockHeartbeat` touches the row every
- * `STEP_LOCK_HEARTBEAT_MS * DURABLE_LEASE_HEARTBEAT_EVERY_TICKS` = 90s while a
- * step holds the step lock, so five minutes is three missed beats: comfortably
- * past jitter, and far tighter than the 30-minute in-flight window the gateway
- * watchdog has to use (it can only reason about stream events, which stop for
- * legitimately slow first-token latency too).
- */
-const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
 
 /**
  * Redriving costs a real LLM call, so a step that dies deterministically
@@ -38,11 +34,35 @@ const DEFAULT_MAX_REDRIVE_ATTEMPTS = 3;
 /** Bound the work of a single cron tick so one sweep cannot run long. */
 const DEFAULT_LIMIT = 50;
 
+/**
+ * How far back the sweep looks for candidates.
+ *
+ * Without a floor the oldest-first scan never gets past rows nobody will ever
+ * recover: production carries ~21k `running` rows whose lease froze more than a
+ * day ago (the oldest from May), every one of them without coordinator state
+ * and therefore `skipped`. The 50-row window was the same 50 dead rows on every
+ * tick, so a run that died five minutes ago was never examined. Coordinator
+ * state lives for two hours (`AgentStateManager` TTL), so nothing older than a
+ * day can be redriven anyway, and a stateless heterogeneous run is retired well
+ * inside it (see `HETERO_SILENCE_MS`).
+ */
+const DEFAULT_LOOKBACK_MS = 24 * 60 * 60_000;
+
+const isHeterogeneousProvider = (provider: string | null | undefined): boolean =>
+  !!provider &&
+  (isLocalHeterogeneousType(provider) ||
+    isRemoteHeterogeneousType(provider) ||
+    isLocalRuntimeHeterogeneousType(provider));
+
 /** Bound how many overlapping topics one sweep reports. */
 const CONCURRENT_FOREGROUND_REPORT_LIMIT = 20;
 
 export interface ReapStaleOperationsParams {
+  /** Silence after which a stateless heterogeneous run is retired. */
+  heteroSilenceMs?: number;
   limit?: number;
+  /** Ignore rows whose lease froze longer ago than this. */
+  lookbackMs?: number;
   maxRedriveAttempts?: number;
   staleAfterMs?: number;
 }
@@ -122,9 +142,12 @@ export class StaleOperationReaper {
     const staleAfterMs = params?.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
     const maxRedriveAttempts = params?.maxRedriveAttempts ?? DEFAULT_MAX_REDRIVE_ATTEMPTS;
     const limit = params?.limit ?? DEFAULT_LIMIT;
-    const staleBefore = new Date(Date.now() - staleAfterMs);
+    const now = Date.now();
+    const staleBefore = new Date(now - staleAfterMs);
+    const heteroStaleBefore = new Date(now - (params?.heteroSilenceMs ?? HETERO_SILENCE_MS));
+    const notBefore = new Date(now - (params?.lookbackMs ?? DEFAULT_LOOKBACK_MS));
 
-    const candidates = await this.listStaleRunning(staleBefore, limit);
+    const candidates = await this.listStaleRunning(staleBefore, notBefore, limit);
     const result: ReapStaleOperationsResult = {
       abandoned: 0,
       alive: 0,
@@ -137,7 +160,12 @@ export class StaleOperationReaper {
 
     for (const candidate of candidates) {
       try {
-        const outcome = await this.recover(candidate, staleBefore, maxRedriveAttempts);
+        const outcome = await this.recover(
+          candidate,
+          staleBefore,
+          heteroStaleBefore,
+          maxRedriveAttempts,
+        );
         result[outcome] += 1;
       } catch (e) {
         // One poisoned row must not abort the rest of the sweep.
@@ -213,13 +241,15 @@ export class StaleOperationReaper {
    * model with the row's own owner so ownership is still enforced where it
    * matters.
    */
-  private async listStaleRunning(staleBefore: Date, limit: number) {
+  private async listStaleRunning(staleBefore: Date, notBefore: Date, limit: number) {
     return (
       this.db
         // Only what recovery needs: everything else about the run is read from
         // the coordinator state, and the abandon path re-reads the row itself.
         .select({
           id: agentOperations.id,
+          provider: agentOperations.provider,
+          updatedAt: agentOperations.updatedAt,
           userId: agentOperations.userId,
           workspaceId: agentOperations.workspaceId,
         })
@@ -228,6 +258,9 @@ export class StaleOperationReaper {
           and(
             eq(agentOperations.status, 'running'),
             lt(agentOperations.updatedAt, staleBefore),
+            // See DEFAULT_LOOKBACK_MS: without this floor the oldest-first
+            // window is permanently filled by long-dead rows.
+            gte(agentOperations.updatedAt, notBefore),
             // A never-heartbeated row is only meaningful once it is older than
             // the window too; `startedAt` is the lease's initial value.
             or(isNull(agentOperations.startedAt), lt(agentOperations.startedAt, staleBefore)),
@@ -241,8 +274,15 @@ export class StaleOperationReaper {
   }
 
   private async recover(
-    candidate: { id: string; userId: string; workspaceId: string | null },
+    candidate: {
+      id: string;
+      provider: string | null;
+      updatedAt: Date;
+      userId: string;
+      workspaceId: string | null;
+    },
     staleBefore: Date,
+    heteroStaleBefore: Date,
     maxRedriveAttempts: number,
   ): Promise<'abandoned' | 'alive' | 'redriven' | 'skipped'> {
     const operationId = candidate.id;
@@ -268,11 +308,35 @@ export class StaleOperationReaper {
     // `heteroIngest` bails out on `touchRunning` returning false, so every
     // subsequent batch of a live session would be dropped before persistence.
     //
-    // Stateless-but-genuinely-dead operations are the inactivity watchdog's
-    // job (it reaches them through `finalize-abandoned`), and it has the
-    // gateway-side evidence to tell the two apart. This sweep deliberately
-    // limits itself to runs it can actually resume.
-    if (!state || !this.queueService) return 'skipped';
+    // So a stateless heterogeneous run is only retired once it has been silent
+    // for the full hetero window — the same window the agent-gateway inactivity
+    // watchdog uses. That watchdog used to be the only thing that ever ended
+    // such a run, and it does not always fire: on 2026-10-12 two Codex runs on
+    // one desktop went silent in the same minute; one was abandoned after an
+    // hour, the other stayed `running` (its Task refusing every new message as
+    // "Topic is already running") until the user paused it, and dozens more
+    // hetero rows have sat `running` for days. This is the server-side backstop.
+    // `abandonIfStillStale` re-checks the lease inside its UPDATE, so a batch
+    // that lands meanwhile keeps the run alive.
+    if (!state) {
+      if (
+        isHeterogeneousProvider(candidate.provider) &&
+        new Date(candidate.updatedAt).getTime() < heteroStaleBefore.getTime()
+      ) {
+        return this.abandonIfStillStale(
+          operationModel,
+          operationId,
+          heteroStaleBefore,
+          'hetero_silent',
+        );
+      }
+
+      return 'skipped';
+    }
+
+    // Any other stateless operation is left alone: this sweep only acts on
+    // runs it can resume or can prove dead.
+    if (!this.queueService) return 'skipped';
 
     // Parked operations have their own resume paths; a plain step would run
     // past whatever they are waiting on.

@@ -22,6 +22,12 @@ export const goalStatuses = [
 export type GoalStatus = (typeof goalStatuses)[number];
 
 /**
+ * Longest title a person may give a goal. A title is a one-line label for the
+ * list, the sidebar and the page header; the full ask lives in `requirement`.
+ */
+export const GOAL_TITLE_MAX_LENGTH = 255;
+
+/**
  * The execution carrier a goal is optionally bound to. Kept polymorphic so a
  * goal does not depend on any single execution model:
  *
@@ -133,6 +139,19 @@ export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
 export const VERIFICATION_ERRORED_ERROR =
   'Verification could not run (internal error); the delivery was not evaluated.';
 /**
+ * The verifier could not run because the account has no credits left for its
+ * model. The delivery was never evaluated, and nothing a builder does changes
+ * that.
+ *
+ * Deliberately has NO recovery branch. Recovering it like any other verifier
+ * error started a fresh builder attempt, which re-delivered the same evidence
+ * into the same refused verifier and spent attempt after attempt until the
+ * budget ran out. The `InsufficientBudgetForModel` code in the text classifies
+ * it as a setup problem, so the gate asks for credits instead of a judgment.
+ */
+export const VERIFICATION_OUT_OF_CREDITS_ERROR =
+  'Verification could not run: the verifier model was refused for lack of credits (InsufficientBudgetForModel); the delivery was not evaluated.';
+/**
  * The review read the evidence and found the criterion undecidable from it — it
  * asks for an action the review layer cannot perform (re-running the delivered
  * scripts, building, driving a live system).
@@ -202,6 +221,13 @@ export const GOAL_GRAPH_CAPABILITY = {
  */
 export const GOAL_BATCH_ASSAY_TITLE = 'Prove the batch runs automatically';
 
+/**
+ * Fixed title of the decision node a passed batch gate opens when the next wave
+ * waits on a person's approval. Each hold gets its own node: a node carries one
+ * decision, and the Assay keeps its own for a pattern break.
+ */
+export const GOAL_BATCH_RELEASE_TITLE = 'Approve releasing the next wave';
+
 /** Fixed title of the Template (recipe) finding node a batch distills. */
 export const GOAL_BATCH_TEMPLATE_TITLE = 'Batch recipe';
 
@@ -231,6 +257,22 @@ export const GOAL_BATCH_BREAK_OPTION = {
   newClass: 'new_class',
   revise: 'revise',
 } as const;
+
+/** Prefix of the reason recorded while a passed batch gate waits on a person to approve the release. */
+export const RELEASE_REVIEW_PAUSE_REASON = 'Batch release needs approval';
+
+/**
+ * The release-approval gate's option ids. `revise` shares the pattern break's
+ * id, but here the correction goes to the main Agent, whose rewritten plan
+ * returns to the same review; the probes are not run again.
+ */
+export const GOAL_BATCH_RELEASE_OPTION = {
+  release: 'release',
+  revise: GOAL_BATCH_BREAK_OPTION.revise,
+} as const;
+
+/** The release-approval question's fixed English tail, localized on the client. */
+export const GOAL_BATCH_RELEASE_QUESTION_TAIL = 'Release the next wave?';
 
 /**
  * The batch pattern-break question's fixed English tail. The client strips it to

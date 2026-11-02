@@ -309,7 +309,7 @@ describe('AiAgentService.execAgent - user turn spine anchoring', () => {
     });
   });
 
-  // LOBE-14875: after a regenerate the user can switch back to the earlier
+  // After a regenerate the user can switch back to the earlier
   // reply. Anchoring on the newest row hid every new turn from the UI and from
   // the model's context, which both follow the selected branch.
   describe('after switching back to an earlier reply', () => {

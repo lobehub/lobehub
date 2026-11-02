@@ -120,6 +120,7 @@ vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
     isAgentRuntimeRunningByContext: () => () => chatListMocks.isStreaming,
   },
+  topicSelectors: { getTopicById: () => () => undefined },
 }));
 
 vi.mock('@/store/serverConfig', () => ({

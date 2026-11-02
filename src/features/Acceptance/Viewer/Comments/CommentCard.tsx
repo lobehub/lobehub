@@ -1,22 +1,24 @@
 'use client';
 
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   confirmModal,
+  cx,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import { Link2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAcceptanceOrigin } from '@/features/Acceptance/origin';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -85,6 +87,7 @@ const CommentCard = memo<CommentCardProps>(
   }) => {
     const { t } = useTranslation('verify');
     const time = useActivityTime(comment.createdAt);
+    const appOrigin = useAcceptanceOrigin();
     const [deleting, setDeleting] = useState(false);
     const name = nameOverride ?? commentAuthorName(comment.author);
     const viewerId = useUserStore(userProfileSelectors.userId);
@@ -92,7 +95,7 @@ const CommentCard = memo<CommentCardProps>(
 
     const copyAnchor = async () => {
       try {
-        await navigator.clipboard.writeText(commentAnchorUrl(comment.id));
+        await navigator.clipboard.writeText(commentAnchorUrl(comment.id, appOrigin));
         toast.success(t('acceptance.comments.linkCopied'));
       } catch (cause) {
         console.error('[acceptance:comments]', cause);

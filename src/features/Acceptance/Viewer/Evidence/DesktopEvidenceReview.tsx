@@ -1,8 +1,16 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Text,
+  TextArea,
+} from '@lobehub/ui';
 import { Film, ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -175,7 +183,6 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
             <div className={styles.stageRow} style={{ position: 'relative' }}>
               {isVideo ? (
                 <VideoReviewStage
-                  activeNoteKey={model.activeNoteKey}
                   chapters={activeEvidence.chapters ?? []}
                   handleRef={videoStage}
                   key={activeEvidence.id}

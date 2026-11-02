@@ -147,6 +147,8 @@ export interface GoalReportVersion {
   content: string | null;
   createdAt: Date;
   metadata: GoalReportMetadata;
+  /** The report as a self-contained HTML page (a `custom/html` document), when one was written. */
+  pageDocumentId?: string;
   version: number;
   workId: string;
   workVersionId: string;

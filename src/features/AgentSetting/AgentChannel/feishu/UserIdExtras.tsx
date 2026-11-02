@@ -1,8 +1,8 @@
 'use client';
 
 import { isMaskedBotCredential } from '@lobechat/const';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { useFormInstance, useWatch } from '@lobehub/ui/base-ui/form';
+import { Button, toast } from '@lobehub/ui';
+import { useFormInstance, useWatch } from '@lobehub/ui/form';
 import { Download } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -161,7 +161,7 @@ export const FeishuUserIdExtras = ({
       icon={<Download size={14} />}
       loading={loading}
       size="small"
-      style={{ alignSelf: 'flex-start', marginBlockEnd: 12, marginInlineStart: 32 }}
+      style={{ alignSelf: 'flex-start', marginBlockEnd: 12 }}
       type="default"
       onClick={handleClick}
     >

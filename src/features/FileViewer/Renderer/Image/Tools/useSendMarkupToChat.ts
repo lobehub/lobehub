@@ -1,5 +1,5 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,8 +1,7 @@
 'use client';
 
 import type { DeviceVisibility } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Icon, Tabs } from '@lobehub/ui';
 import { LockIcon, UsersIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

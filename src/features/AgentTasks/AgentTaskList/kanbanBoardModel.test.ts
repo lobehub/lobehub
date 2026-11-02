@@ -9,6 +9,7 @@ import {
   getKanbanAssigneeUpdate,
   getKanbanColumnCreateDefaults,
   getKanbanColumnHeaderVariant,
+  getKanbanCreateTaskModalProps,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
@@ -270,6 +271,32 @@ describe('kanbanBoardModel', () => {
       ).toMatchObject({ excludeStatuses });
       expect(buildKanbanGroupQuery({ excludeStatuses, groupBy: 'status' })).toMatchObject({
         excludeStatuses,
+      });
+    });
+  });
+
+  describe('getKanbanCreateTaskModalProps', () => {
+    it('prefills the column priority in the create task modal', () => {
+      expect(getKanbanCreateTaskModalProps({ priority: 4 }, { projectId: 'project-1' })).toEqual({
+        agentId: undefined,
+        defaultPriority: 4,
+        lockAssignee: false,
+        projectId: 'project-1',
+        showInlineToggle: false,
+      });
+    });
+
+    it('prefills the column assignee over the board agent', () => {
+      expect(
+        getKanbanCreateTaskModalProps({ assigneeAgentId: 'agent-col' }, { agentId: 'agent-board' }),
+      ).toMatchObject({ agentId: 'agent-col', lockAssignee: true });
+    });
+
+    it('falls back to the board agent and locks it on an agent-scoped board', () => {
+      expect(getKanbanCreateTaskModalProps({}, { agentId: 'agent-board' })).toMatchObject({
+        agentId: 'agent-board',
+        defaultPriority: undefined,
+        lockAssignee: true,
       });
     });
   });

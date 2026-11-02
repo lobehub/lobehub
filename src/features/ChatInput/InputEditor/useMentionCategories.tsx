@@ -1,8 +1,6 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
+import { Avatar, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Bot, Lock, MessageSquareText, Users, Wrench } from 'lucide-react';
 import { useMemo } from 'react';

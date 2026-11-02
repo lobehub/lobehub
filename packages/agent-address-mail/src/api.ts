@@ -92,6 +92,17 @@ const stripTrailingSlashes = (url: string) => {
  * throws on a non-2xx response with the service's `{ error: { code, message } }`
  * envelope flattened into the message.
  */
+/** A non-2xx answer from the Agent Mail REST API, with its HTTP status kept. */
+export class LobeMailApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'LobeMailApiError';
+    this.status = status;
+  }
+}
+
 export class LobeMailApiClient {
   readonly apiKey: string;
   readonly baseUrl: string;
@@ -123,7 +134,8 @@ export class LobeMailApiClient {
       } catch {
         // keep the raw body
       }
-      throw new Error(
+      throw new LobeMailApiError(
+        response.status,
         `Agent Mail ${init.method ?? 'GET'} ${path} failed: ${response.status}${
           detail ? ` — ${detail}` : ''
         }`,

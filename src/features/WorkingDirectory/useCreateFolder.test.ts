@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,7 +16,9 @@ vi.mock('react-i18next', () => ({
 
 const setup = (parentPath = '/home/me') => {
   const onCreated = vi.fn();
-  const hook = renderHook(() => useCreateFolder({ deviceId: 'device', onCreated, parentPath }));
+  const create = (parentPath: string, name: string) =>
+    deviceService.createDirectory({ deviceId: 'device', name, parentPath });
+  const hook = renderHook(() => useCreateFolder({ create, onCreated, parentPath }));
   const submitName = async (name: string) => {
     act(() => hook.result.current.setName(name));
     await act(() => hook.result.current.submit());

@@ -1,9 +1,7 @@
 'use client';
 
 import { type ConversationContext } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createModal, type ModalInstance, Tabs } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { createModal, cssVar, Flexbox, Icon, type ModalInstance, Tabs } from '@lobehub/ui';
 import { t } from 'i18next';
 import { BracesIcon, FileDownIcon, FileTextIcon, ImageIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';

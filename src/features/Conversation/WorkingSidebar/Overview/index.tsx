@@ -1,10 +1,19 @@
 'use client';
 
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Skeleton, toast } from '@lobehub/ui/base-ui';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Empty,
+  Flexbox,
+  Icon,
+  Skeleton,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -49,7 +58,13 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
-import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
+import DeviceStatusSection from './DeviceStatusSection';
+import {
+  collectChangeStats,
+  isLinkedWorktreeCheckout,
+  shouldShowCiLabel,
+  shouldShowGitSkeleton,
+} from './overviewData';
 import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 import PortSwitcher from './PortSwitcher';
@@ -68,6 +83,7 @@ const styles = createStaticStyles(({ css }) => ({
 interface OverviewProps {
   active: boolean;
   agentId?: string;
+  /** Routes file / git RPCs; empty for "This device", which reads over IPC. */
   deviceId?: string;
   environmentAvailable: boolean;
   onOpenTab: (tab: string) => void;
@@ -76,6 +92,8 @@ interface OverviewProps {
   pullRequest?: DeviceGitLinkedPullRequest | null;
   repoType?: string;
   sourcePath?: string;
+  /** The bound machine whose live status to show, local desktop included. */
+  statusDeviceId?: string;
   workingDirectory?: string;
 }
 
@@ -92,6 +110,7 @@ const Overview = memo<OverviewProps>(
     pullRequest,
     repoType,
     sourcePath,
+    statusDeviceId,
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
@@ -110,6 +129,7 @@ const Overview = memo<OverviewProps>(
     const {
       data: branchData,
       error: branchError,
+      isConfirmed: branchConfirmed,
       isLoading: branchLoading,
       mutate: mutateBranch,
     } = useFetchGitBranch(deviceId, gitPath);
@@ -118,6 +138,7 @@ const Overview = memo<OverviewProps>(
     const {
       data: aheadBehind,
       error: aheadBehindError,
+      isConfirmed: aheadBehindConfirmed,
       mutate: mutateAheadBehind,
     } = useFetchGitAheadBehind(deviceId, gitPath);
     const {
@@ -126,10 +147,13 @@ const Overview = memo<OverviewProps>(
       isLoading: reviewLoading,
       mutate: mutateReview,
     } = useReviewPatches(gitPath, 'unstaged', undefined, deviceId, active);
-    const { data: worktrees = [], mutate: mutateWorktrees } = useFetchGitWorktrees(
-      deviceId,
-      gitPath,
-    );
+    const {
+      data: worktreesData,
+      isConfirmed: worktreesConfirmed,
+      isLoading: worktreesLoading,
+      mutate: mutateWorktrees,
+    } = useFetchGitWorktrees(deviceId, gitPath);
+    const worktrees = worktreesData ?? [];
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const [pulling, setPulling] = useState(false);
     const [pushing, setPushing] = useState(false);
@@ -137,7 +161,20 @@ const Overview = memo<OverviewProps>(
     const changeStats = useMemo(() => collectChangeStats(reviewData), [reviewData]);
 
     const gitError = branchError || aheadBehindError || reviewError;
-    const isGitLoading = branchLoading || reviewLoading;
+    // Stale-first: the small git reads are replicas (`@/store/device/gitStatus`),
+    // so after a reload they paint from the persisted copy while the rest (e.g.
+    // the diff patches) are still in flight. Only fall back to the skeleton when
+    // nothing at all is there yet; rows whose own read is pending render a
+    // placeholder instead.
+    const isGitLoading = shouldShowGitSkeleton({
+      hasData:
+        branchData !== undefined ||
+        aheadBehind !== undefined ||
+        reviewData !== undefined ||
+        worktreesData !== undefined,
+      loading: branchLoading || reviewLoading || worktreesLoading,
+    });
+    const changesPending = reviewData === undefined && reviewLoading;
     const visibleWorks = works.slice(0, 3);
     const directoryName = workingDirectory ? pathBasename(workingDirectory) : undefined;
     const hasWorkspace = environmentAvailable && !!workingDirectory;
@@ -164,6 +201,12 @@ const Overview = memo<OverviewProps>(
     );
 
     const syncBusy = pulling || pushing;
+    // The branch and its counts may be stale-first paints from the last
+    // session. Checkout, pull and push assume both still describe the live
+    // branch, so they stay inert until this session confirms both reads — a
+    // faster branch probe must not enable sync against the previous branch's
+    // ahead/behind snapshot.
+    const actionsBlocked = syncBusy || !branchConfirmed || !aheadBehindConfirmed;
 
     const handlePull = useCallback(async () => {
       if (syncBusy || !workingDirectory) return;
@@ -212,12 +255,16 @@ const Overview = memo<OverviewProps>(
     const showAhead = !!aheadBehind?.hasUpstream && aheadBehind.ahead > 0;
     const showBehind = !!aheadBehind?.hasUpstream && aheadBehind.behind > 0;
 
+    // The branch picker routes through the worktree list, so both reads must be
+    // confirmed before either picker may act on them.
+    const pickersReady = branchConfirmed && worktreesConfirmed;
+    const canSwitchBranch = !detached && !!agentId && !!workingDirectory && pickersReady;
     const branchRow = (
       <OverviewRow
         icon={GitBranchIcon}
-        interactive={!detached && !!agentId && !!workingDirectory}
+        interactive={canSwitchBranch}
         title={detached ? tDevice('workingDirectory.detachedHead', { sha: branch ?? '' }) : branch}
-        trailing={!detached && agentId ? <PickerGlyph /> : undefined}
+        trailing={canSwitchBranch ? <PickerGlyph /> : undefined}
         value={
           detached ? (
             <>
@@ -234,7 +281,7 @@ const Overview = memo<OverviewProps>(
     const gitRows = (
       <>
         {branch &&
-          (!detached && agentId && workingDirectory ? (
+          (canSwitchBranch ? (
             <BranchSwitcher
               agentId={agentId}
               currentBranch={branch}
@@ -269,7 +316,7 @@ const Overview = memo<OverviewProps>(
                 <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.pull')}</span>
               )
             }
-            onClick={syncBusy ? undefined : handlePull}
+            onClick={actionsBlocked ? undefined : handlePull}
           />
         )}
         {showAhead && (
@@ -285,7 +332,7 @@ const Overview = memo<OverviewProps>(
                 <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.push')}</span>
               )
             }
-            onClick={syncBusy ? undefined : handlePush}
+            onClick={actionsBlocked ? undefined : handlePush}
           />
         )}
 
@@ -295,6 +342,7 @@ const Overview = memo<OverviewProps>(
             currentBranch={branch}
             detached={detached}
             deviceId={deviceId}
+            disabled={!pickersReady}
             isGithub={isGithub}
             path={workingDirectory}
             placement={'bottomLeft'}
@@ -303,10 +351,10 @@ const Overview = memo<OverviewProps>(
             onWorktreesChange={mutateWorktrees}
           >
             <OverviewRow
-              interactive
               icon={GitForkIcon}
+              interactive={pickersReady}
               title={sourcePath ?? workingDirectory}
-              trailing={<PickerGlyph />}
+              trailing={pickersReady ? <PickerGlyph /> : undefined}
               value={t('workingPanel.overview.worktree.of', {
                 name: pathBasename(sourcePath ?? workingDirectory),
               })}
@@ -317,7 +365,9 @@ const Overview = memo<OverviewProps>(
         <OverviewRow
           icon={ClipboardListIcon}
           trailing={
-            changeStats.files > 0 ? (
+            changesPending ? (
+              <RingLoadingIcon size={12} />
+            ) : changeStats.files > 0 ? (
               <>
                 <span className={rowStyles.changeAdditions}>+{changeStats.additions}</span>
                 <span className={rowStyles.changeDeletions}>−{changeStats.deletions}</span>
@@ -418,6 +468,9 @@ const Overview = memo<OverviewProps>(
             </Flexbox>
           </>
         )}
+
+        {/* The bound machine's live state, as its device card shows it. */}
+        {statusDeviceId && <DeviceStatusSection active={active} deviceId={statusDeviceId} />}
 
         <TopicBackgroundActivity topicId={topicId} />
         {environmentAvailable && !workingDirectory && (

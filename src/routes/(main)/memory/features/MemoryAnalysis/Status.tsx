@@ -1,8 +1,7 @@
 'use client';
 
 import { AsyncTaskStatus } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Progress, Text } from '@lobehub/ui/base-ui';
+import { Alert, Flexbox, Icon, Progress, Text } from '@lobehub/ui';
 import { Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

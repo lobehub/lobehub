@@ -1,10 +1,30 @@
-import type { DeviceListItem } from '@lobechat/types';
+import type { DeviceListItem, DeviceMetricSeries } from '@lobechat/types';
 
 import { getChannelKind } from '@/features/DeviceManager/channelKind';
 
 import type { DeviceState } from './initialState';
+import {
+  DEVICE_LIST_KEY,
+  deviceMetricSeriesKey,
+  type DeviceMetricSeriesParams,
+} from './projection';
 
-const deviceList = (s: DeviceState): DeviceListItem[] => s.devices;
+const EMPTY_DEVICES: DeviceListItem[] = [];
+
+const deviceList = (s: DeviceState): DeviceListItem[] =>
+  s.deviceListMap[DEVICE_LIST_KEY] ?? EMPTY_DEVICES;
+
+/** The list is on screen — from the persisted copy or the server. */
+const isDeviceListLoaded = (s: DeviceState): boolean =>
+  s.deviceListMap[DEVICE_LIST_KEY] !== undefined;
+
+/**
+ * The list was confirmed by the server this session. A persisted copy holds
+ * stale `workingDirs` and unknown presence, so writes that merge into a device
+ * row wait for this.
+ */
+const isDeviceListConfirmed = (s: DeviceState): boolean =>
+  s.deviceListReplica.entries[DEVICE_LIST_KEY]?.source === 'server';
 
 /**
  * Whether a shell opened from the browser can run on this device.
@@ -33,12 +53,12 @@ export const canHostTerminal = (device: DeviceListItem): boolean => {
  * `Object.is`, and a fresh array on every call would re-render the panel on
  * every unrelated store write.
  */
-const hasTerminalTarget = (s: DeviceState): boolean => s.devices.some(canHostTerminal);
+const hasTerminalTarget = (s: DeviceState): boolean => deviceList(s).some(canHostTerminal);
 
 const getDeviceById =
   (deviceId: string | undefined) =>
   (s: DeviceState): DeviceListItem | undefined =>
-    deviceId ? s.devices.find((d) => d.deviceId === deviceId) : undefined;
+    deviceId ? deviceList(s).find((d) => d.deviceId === deviceId) : undefined;
 
 /** A device's user-configured default working directory (per-device fallback cwd). */
 const getDeviceDefaultCwd =
@@ -50,10 +70,19 @@ const getDeviceDefaultCwd =
 const getDeviceWorkingDirs = (deviceId: string | undefined) => (s: DeviceState) =>
   getDeviceById(deviceId)(s)?.workingDirs ?? [];
 
+/** A device's health series, or `undefined` until storage or the server answers. */
+const getMetricSeries =
+  (params: DeviceMetricSeriesParams) =>
+  (s: DeviceState): DeviceMetricSeries | undefined =>
+    s.deviceMetricSeriesMap[deviceMetricSeriesKey(params)];
+
 export const deviceSelectors = {
   deviceList,
   getDeviceById,
   getDeviceDefaultCwd,
   getDeviceWorkingDirs,
+  getMetricSeries,
   hasTerminalTarget,
+  isDeviceListConfirmed,
+  isDeviceListLoaded,
 };

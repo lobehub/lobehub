@@ -337,6 +337,14 @@ describe('HomeRepository', () => {
             trigger: 'document',
             userId,
           },
+          {
+            agentId,
+            id: 'channel-unread-topic',
+            status: 'unread',
+            title: 'Channel unread topic',
+            trigger: 'channel',
+            userId,
+          },
         ]);
       });
 

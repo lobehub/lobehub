@@ -155,6 +155,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
       acceptsFileWorks: vi.fn().mockResolvedValue(false),
       acceptsMemberRuntimeEnd: vi.fn().mockResolvedValue(false),
       getLlmExecutor: vi.fn().mockResolvedValue(undefined),
+      getOperationEditingGroupId: vi.fn().mockResolvedValue(undefined),
       completeGroupActionMember: mockCompleteGroupActionMember,
       createOperation: mockCreateOperation,
       ensureInterventionContinuationStarted: mockEnsureInterventionContinuationStarted,

@@ -1,9 +1,19 @@
 'use client';
 
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Input, Select, Text, TextArea, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Center,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Input,
+  Select,
+  Text,
+  TextArea,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { CheckIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,6 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Highlighter, Snippet } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Highlighter, Snippet, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import GuideActions from '../GuideActions';

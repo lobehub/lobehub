@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { CircleAlertIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,7 +38,7 @@ export const ErrorLine = memo<{ detail?: ReactNode; summary: ReactNode }>(({ sum
     <Flexbox gap={4}>
       <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
         <Icon color={cssVar.colorError} icon={CircleAlertIcon} size={14} />
-        <Text fontSize={12} type={'secondary'}>
+        <Text fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
           {summary}
         </Text>
         {detail && (

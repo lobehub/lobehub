@@ -1,9 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { useSize } from 'ahooks';
-import { createStaticStyles, cssVar } from 'antd-style';
 import { type ReactNode, useRef } from 'react';
 
 import SkeletonBar from '@/components/Skeleton/Bar';

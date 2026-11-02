@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { getTaskDetailPageUrl } from './url';
 
 describe('getTaskDetailPageUrl', () => {
+  it('uses a public short link while the portal keeps a stable task id', () => {
+    expect(
+      getTaskDetailPageUrl({
+        appOrigin: 'https://app.example.com',
+        taskId: 'task_stable',
+        identifier: 'T-3',
+        workspaceSlug: 'team',
+        agentId: 'agt_1',
+      }),
+    ).toBe('https://app.example.com/team/agent/agt_1/task/T-3');
+  });
   it('builds a workspace-aware agent task URL', () => {
     expect(
       getTaskDetailPageUrl({

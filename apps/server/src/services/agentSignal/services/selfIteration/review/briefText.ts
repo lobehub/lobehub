@@ -4,7 +4,34 @@ import {
   type SelfReviewBriefDetails,
 } from '@lobechat/agent-signal/brief';
 
-import home from '@/locales/default/home';
+const COPY: Record<string, string> = {
+  'brief.agentSignal.selfReview.applied.heading': 'Updated',
+  'brief.agentSignal.selfReview.applied.summary': '{{count}} dream update was applied.',
+  'brief.agentSignal.selfReview.applied.summary_plural': '{{count}} dream updates were applied.',
+  'brief.agentSignal.selfReview.applied.title': 'Dream updated resources',
+  'brief.agentSignal.selfReview.ideas.summary': 'Saved dream notes for future review.',
+  'brief.agentSignal.selfReview.ideas.title': 'Dream notes',
+  'brief.agentSignal.selfReview.kind.consolidate_skill.plain': 'Merge skills',
+  'brief.agentSignal.selfReview.kind.consolidate_skill.withTarget': 'Merge skills into {{target}}',
+  'brief.agentSignal.selfReview.kind.create_skill.plain': 'New skill',
+  'brief.agentSignal.selfReview.kind.create_skill.withTarget': 'New skill: {{target}}',
+  'brief.agentSignal.selfReview.kind.idea.plain': 'Dream note',
+  'brief.agentSignal.selfReview.kind.idea.withTarget': 'Dream note: {{target}}',
+  'brief.agentSignal.selfReview.kind.other.plain': 'Suggestion',
+  'brief.agentSignal.selfReview.kind.other.withTarget': 'Suggestion: {{target}}',
+  'brief.agentSignal.selfReview.kind.refine_prompt.plain': 'Refine system prompt',
+  'brief.agentSignal.selfReview.kind.refine_skill.plain': 'Refine skill',
+  'brief.agentSignal.selfReview.kind.refine_skill.withTarget': 'Refine skill: {{target}}',
+  'brief.agentSignal.selfReview.kind.write_memory.plain': 'Save memory',
+  'brief.agentSignal.selfReview.kind.write_memory.withTarget': 'Save memory: {{target}}',
+  'brief.agentSignal.selfReview.list.more': '{{count}} more',
+  'brief.agentSignal.selfReview.proposal.heading': 'Suggestion',
+  'brief.agentSignal.selfReview.proposal.summary': '{{count}} dream suggestion needs your review.',
+  'brief.agentSignal.selfReview.proposal.summary_plural':
+    '{{count}} dream suggestions need your review.',
+  'brief.agentSignal.selfReview.proposal.title': 'Dream suggestion needs review',
+  'brief.agentSignal.selfReview.title.more': '{{title}} (+{{count}} more)',
+};
 
 /**
  * Counts of self-review actions grouped by execution status.
@@ -33,14 +60,6 @@ export interface SelfReviewBriefTextActionSummaries {
 }
 
 /**
- * Translation function used to render persisted Agent Signal Daily Brief text.
- */
-export interface SelfReviewBriefTextTranslator {
-  /** Resolves a `home` namespace key with simple string interpolation. */
-  (key: string, options?: Record<string, string>): string;
-}
-
-/**
  * Input context for deterministic nightly self-review Daily Brief copy.
  */
 export interface SelfReviewBriefTextInput {
@@ -56,8 +75,6 @@ export interface SelfReviewBriefTextInput {
   details?: SelfReviewBriefDetails;
   /** Coarse outcome selected by the projection service. */
   outcome: 'applied' | 'ideas' | 'proposal';
-  /** Locale-aware translator for the `home` namespace. Defaults to English resources. */
-  t?: SelfReviewBriefTextTranslator;
 }
 
 /**
@@ -74,8 +91,8 @@ export interface SelfReviewBriefText {
   type: 'decision' | 'insight';
 }
 
-const defaultTranslate: SelfReviewBriefTextTranslator = (key, options = {}) => {
-  const template = home[key as keyof typeof home] ?? key;
+const t = (key: string, options: Record<string, string> = {}) => {
+  const template = COPY[key] ?? key;
 
   return Object.entries(options).reduce(
     (content, [name, value]) => content.replace(`{{${name}}}`, value),
@@ -83,13 +100,8 @@ const defaultTranslate: SelfReviewBriefTextTranslator = (key, options = {}) => {
   );
 };
 
-const actionCountKey = (input: {
-  count: number;
-  pluralKey: string;
-  singularKey: string;
-  t: SelfReviewBriefTextTranslator;
-}) =>
-  input.t(input.count === 1 ? input.singularKey : input.pluralKey, {
+const actionCountKey = (input: { count: number; pluralKey: string; singularKey: string }) =>
+  t(input.count === 1 ? input.singularKey : input.pluralKey, {
     count: String(input.count),
   });
 
@@ -106,7 +118,7 @@ const withDetails = (summary: string, heading: string, details: string[] = []) =
  *
  * Use when:
  * - Nightly self-review projection needs title, summary, type, and priority
- * - The output is user-visible and must be translated before persistence
+ * - The output is user-visible and persisted in source English
  *
  * Expects:
  * - `outcome` and `actionCounts` have already been computed by service policy
@@ -116,8 +128,6 @@ const withDetails = (summary: string, heading: string, details: string[] = []) =
  * - Deterministic brief text without making a model call
  */
 export const createSelfReviewBriefText = (input: SelfReviewBriefTextInput): SelfReviewBriefText => {
-  const t = input.t ?? defaultTranslate;
-
   const details = input.details;
 
   if (input.outcome === 'proposal' && details?.kind === 'proposal') {
@@ -129,7 +139,6 @@ export const createSelfReviewBriefText = (input: SelfReviewBriefTextInput): Self
           count: input.actionCounts.proposed,
           pluralKey: 'brief.agentSignal.selfReview.proposal.summary_plural',
           singularKey: 'brief.agentSignal.selfReview.proposal.summary',
-          t,
         }),
       title: formatSelfReviewBriefTitle(details, t),
       type: 'decision',
@@ -141,7 +150,6 @@ export const createSelfReviewBriefText = (input: SelfReviewBriefTextInput): Self
       count: input.actionCounts.proposed,
       pluralKey: 'brief.agentSignal.selfReview.proposal.summary_plural',
       singularKey: 'brief.agentSignal.selfReview.proposal.summary',
-      t,
     });
 
     return {
@@ -179,7 +187,6 @@ export const createSelfReviewBriefText = (input: SelfReviewBriefTextInput): Self
     count: input.actionCounts.applied,
     pluralKey: 'brief.agentSignal.selfReview.applied.summary_plural',
     singularKey: 'brief.agentSignal.selfReview.applied.summary',
-    t,
   });
 
   return {

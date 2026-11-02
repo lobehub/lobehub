@@ -363,14 +363,10 @@ describe('getServerDefaultHeterogeneousModels', () => {
       },
     });
 
-    await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
-      'claude-code': [{ model: 'kimi-k3' }],
-      'codex': [{ model: 'kimi-k3' }],
-      'grok-build': [{ model: 'kimi-k3' }],
-      'kimi-code': [{ model: 'kimi-k3' }],
-      'pi': [{ model: 'kimi-k3' }],
-      'trae': [{ model: 'kimi-k3' }],
-    });
+    const models = await getServerDefaultHeterogeneousModels();
+    for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
+      expect(models[agentType]).toEqual([{ model: 'kimi-k3' }]);
+    }
   });
 
   it('accepts arbitrary chat model ids when the relay catalog declares no abilities', async () => {
@@ -1163,13 +1159,8 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime'].baseURL).toBe('http://custom-comfyui:8188');
     });
 
-    it('Unknown Provider', async () => {
-      const jwtPayload = {};
-      const runtime = await initModelRuntimeWithUserPayload('unknown', jwtPayload);
-
-      // 根据实际实现，你可能需要检查是否返回了默认的 runtime 实例，或者是否抛出了异常
-      // 例如，如果默认使用 OpenAI:
-      expect(runtime['_runtime']).toBeInstanceOf(LobeOpenAI);
+    it('Unknown Provider: requires user credentials', () => {
+      expect(() => initModelRuntimeWithUserPayload('unknown', {})).toThrow();
     });
   });
 });

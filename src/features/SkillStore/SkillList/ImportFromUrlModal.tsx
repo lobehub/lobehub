@@ -1,16 +1,17 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Alert,
   Button,
   createModal,
+  Flexbox,
+  Icon,
   Input,
   type ModalInstance,
   Text,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { ArrowLeftRight, Link, Sparkles } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,7 +59,7 @@ const ImportFromUrlContent = memo(() => {
           <Icon
             icon={ArrowLeftRight}
             size={16}
-            style={{ color: 'var(--ant-color-text-tertiary)' }}
+            style={{ color: 'var(--lobe-color-text-tertiary)' }}
           />
           <Icon icon={Sparkles} size={28} />
         </Flexbox>

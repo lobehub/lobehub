@@ -2,11 +2,8 @@
 
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { type ReactNode, use } from 'react';
-import { memo, useEffect } from 'react';
+import { Center, createStaticStyles, cx, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { memo, type ReactNode, use, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -20,8 +17,8 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { type ActionToolbarProps } from '../ActionBar';
 import ActionBar from '../ActionBar';
+import { type ActionToolbarProps } from '../ActionBar';
 import ControlBar from '../ControlBar';
 import InputEditor from '../InputEditor';
 import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';

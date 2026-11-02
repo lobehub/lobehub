@@ -461,8 +461,8 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('include artifact paths, commands, and observed results');
     expect(result).toContain('an independent verifier decides whether this Task is complete');
     expect(result).toContain('Run the Acceptance inside this Task, not after it');
-    expect(result).toContain('lh acceptance install');
-    expect(result).toContain('lh acceptance run result submit');
+    expect(result).toMatch(/`lh acceptance install`.*plan path.*chapters on every recording/);
+    expect(result).not.toContain('lh acceptance run result submit'); // the skill owns publishing
     expect(result).toContain('proved by a screenshot or recording');
     // The portable skill is pulled to disk by CLI builders and is absent from
     // `builtinSkills`, so it must never be named as an unconditional step.
@@ -487,7 +487,7 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('Verify — delivery acceptance');
     expect(result).toContain('Run the Acceptance inside this Task, not after it');
     expect(result).toContain('Criterion ids are minted when this run starts');
-    expect(result).toContain('lh verify plan state');
+    expect(result).toContain('lh acceptance plan state');
   });
 
   it('should omit the verify section when verify is disabled', () => {
@@ -735,6 +735,51 @@ describe('buildTaskRunPrompt', () => {
       }
     },
   );
+
+  /**
+   * Regression: each round asked the owner the same questions, timed out,
+   * delivered "awaiting your confirmation", failed Acceptance and spawned the
+   * next round, which asked again. The round now sees what was already asked.
+   */
+  it('hands the next round the questions already asked and tells it not to re-ask', () => {
+    const result = buildTaskRunPrompt(
+      {
+        goalLoop: {
+          askedQuestions: [
+            {
+              answer: 'User answers:\n- 四项决策是否按推荐确认？: 是',
+              questions: ['四项决策是否按推荐确认？'],
+            },
+            {
+              answer: 'No answer received within the wait window; the user did not respond.',
+              questions: ['能不能在本机建虚拟屏？', '能不能装驱动？'],
+            },
+            { questions: ['ssh 被 1Password 挡住怎么办？'] },
+          ],
+          round: 3,
+        },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: '对比设计', name: '对比设计' },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Questions earlier rounds already asked the owner');
+    expect(result).toContain('1. 四项决策是否按推荐确认？');
+    expect(result).toContain('- 四项决策是否按推荐确认？: 是');
+    expect(result).toContain('2. 能不能在本机建虚拟屏？ / 能不能装驱动？');
+    expect(result).toContain('3. ssh 被 1Password 挡住怎么办？\n       → (nothing came back)');
+    expect(result).toContain('Do not ask the owner again');
+  });
+
+  it('tells every later round not to re-ask, even with no recorded questions', () => {
+    const result = buildTaskRunPrompt(
+      { goalLoop: { round: 2 }, task: { ...baseTask, identifier: 'TASK-1', instruction: 'x' } },
+      NOW,
+    );
+
+    expect(result).not.toContain('Questions earlier rounds already asked');
+    expect(result).toContain('Do not ask the owner again');
+  });
 
   it('omits the round budget suffix for uncapped goals', () => {
     const result = buildTaskRunPrompt(

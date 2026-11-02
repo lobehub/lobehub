@@ -1,9 +1,21 @@
 'use client';
 
 import { MCP } from '@lobehub/icons';
-import { Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon, Avatar, Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  toast,
+  Tooltip,
+  TooltipGroup,
+  useResponsive,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BookmarkCheckIcon,
   BookmarkIcon,
@@ -29,12 +41,7 @@ import { resolveCommunityProfileLink } from '../../utils/profileLink';
 import AgentForkTag from './AgentForkTag';
 import { useDetailContext } from './DetailProvider';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  time: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+const styles = stylex.create({ time: { fontSize: '12px', color: cssVar.colorTextDescription } });
 
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { t } = useTranslation('discover');
@@ -174,7 +181,10 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               author
             )}
             <Icon icon={DotIcon} />
-            <PublishedTime className={styles.time} date={createdAt as string} />
+            <PublishedTime
+              className={stylex.props(styles.time).className}
+              date={createdAt as string}
+            />
             <AgentForkTag />
             {!!forkCount && forkCount > 0 && (
               <Tag color="default" icon={<Icon icon={GitBranchIcon} />}>

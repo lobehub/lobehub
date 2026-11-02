@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { saveClaudeCodeToken } from './claudeCodeToken';
+import { deleteClaudeCodeToken, saveClaudeCodeToken } from './claudeCodeToken';
 
 const { mockCreds } = vi.hoisted(() => ({
-  mockCreds: { createKV: vi.fn(), share: vi.fn(), update: vi.fn() },
+  mockCreds: { createKV: vi.fn(), delete: vi.fn(), share: vi.fn(), update: vi.fn() },
 }));
 
 vi.mock('@/libs/trpc/client', () => ({
@@ -11,6 +11,7 @@ vi.mock('@/libs/trpc/client', () => ({
     market: {
       creds: {
         createKV: { mutate: mockCreds.createKV },
+        delete: { mutate: mockCreds.delete },
         share: { mutate: mockCreds.share },
         update: { mutate: mockCreds.update },
       },
@@ -91,5 +92,24 @@ describe('saveClaudeCodeToken', () => {
 
     expect(result).toEqual({ failedStep: 'save', ok: false });
     expect(mockCreds.share).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteClaudeCodeToken', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('deletes the personal token credential by id', async () => {
+    mockCreds.delete.mockResolvedValue({ success: true });
+
+    await expect(deleteClaudeCodeToken({ id: 7 })).resolves.toBe(true);
+    expect(mockCreds.delete).toHaveBeenCalledWith({ id: 7 });
+  });
+
+  it('reports a failed delete', async () => {
+    mockCreds.delete.mockRejectedValue(new Error('market unavailable'));
+
+    await expect(deleteClaudeCodeToken({ id: 7 })).resolves.toBe(false);
   });
 });

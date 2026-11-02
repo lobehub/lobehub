@@ -2,7 +2,7 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Tag } from '@lobehub/ui/base-ui';
+import { Avatar, Button, Tag } from '@lobehub/ui';
 import { CheckCircle, Download, Package, Search } from 'lucide-react';
 import { memo, useState } from 'react';
 

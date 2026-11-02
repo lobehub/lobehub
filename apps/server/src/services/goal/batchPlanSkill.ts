@@ -41,6 +41,9 @@ export const planSkillName = (batchNodeId: string) =>
 export const planSkillIdentifier = (skill: GoalRolloutPlanSkill) =>
   buildUserSkillIdentifier(skill.name);
 
+/** Opens the instruction a plan-skill brief writes under its `Unit:` line. */
+export const PLAN_SKILL_BRIEF_LEAD = "Do this unit by the batch's execution plan";
+
 /**
  * A unit's brief. With a plan skill the brief names the skill — the run loads
  * its latest version — and still carries the plan as it stood at dispatch, so a
@@ -54,7 +57,7 @@ export const planUnitBrief = (
   plan.skill
     ? [
         `Unit: ${title}`,
-        `Do this unit by the batch's execution plan, the skill \`${planSkillIdentifier(plan.skill)}\` loaded for this run. Follow its latest version.`,
+        `${PLAN_SKILL_BRIEF_LEAD}, the skill \`${planSkillIdentifier(plan.skill)}\` loaded for this run. Follow its latest version.`,
         plan.outline &&
           `If that skill is not loaded in this run, follow the plan as it stood at dispatch:\n\n${plan.outline}`,
       ]

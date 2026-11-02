@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
 import { memo, Suspense, useCallback } from 'react';
@@ -11,6 +11,7 @@ import BubblesLoading from '@/components/BubblesLoading';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+import { sx } from '@/styles/sx';
 
 import History from '../components/History';
 import { useChatItemContextMenu } from '../hooks/useChatItemContextMenu';
@@ -25,6 +26,7 @@ import PendingRetryTurn from './components/PendingRetryTurn';
 import TextSelectionActionLayer from './components/TextSelectionActionLayer';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
+import cssModule from './index.module.css';
 import { getMessageInteractionState } from './messageInteraction';
 import TaskMessage from './Task';
 import TaskCallbackMessage from './TaskCallback';
@@ -33,20 +35,10 @@ import ToolMessage from './Tool';
 import UserMessage from './User';
 import VerifyMessage from './Verify';
 
-const prefixCls = 'ant';
-
-const styles = createStaticStyles(({ css }) => ({
-  loading: css`
-    opacity: 0.6;
-  `,
-  message: css`
-    position: relative;
-    // prevent the textarea too long
-    .${prefixCls}-input {
-      max-height: 900px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  loading: { opacity: 0.6 },
+  message: { position: 'relative' },
+});
 
 export interface MessageItemProps {
   className?: string;
@@ -285,7 +277,10 @@ const MessageItem = memo<MessageItemProps>(
       <>
         {enableHistoryDivider && <History />}
         <Flexbox
-          className={cx(styles.message, className, shouldDimCreatingMessage && styles.loading)}
+          {...sx(
+            [styles.message, shouldDimCreatingMessage && styles.loading],
+            [cssModule.message, className].filter(Boolean).join(' '),
+          )}
           data-index={index}
           onContextMenu={onContextMenu}
         >

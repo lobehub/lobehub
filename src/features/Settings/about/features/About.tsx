@@ -2,10 +2,8 @@
 
 import { SiDiscord, SiGithub, SiRss, SiX, SiYoutube } from '@icons-pack/react-simple-icons';
 import { BRANDING_EMAIL, BRANDING_NAME, SOCIAL_URL } from '@lobechat/business-const';
-import { Flexbox } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui/base-ui';
-import { Form } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Divider, Flexbox } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/form';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

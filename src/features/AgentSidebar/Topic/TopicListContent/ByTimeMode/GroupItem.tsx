@@ -1,11 +1,11 @@
-import { Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +39,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
           {children.map((topic) => (
             <TopicItem
               fav={topic.favorite}
+              hasGoal={topic.hasGoal}
               id={topic.id}
               key={topic.id}
               metadata={topic.metadata}

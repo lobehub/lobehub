@@ -3,6 +3,7 @@ import type { LayersEnum, TopicCommentItem } from '@lobechat/types';
 import { projectFileService } from '@/services/projectFile';
 import { type ChatStore } from '@/store/chat/store';
 import { useGlobalStore } from '@/store/global';
+import { canvasTabKey } from '@/store/global/initialState';
 import { getServerConfigStoreState } from '@/store/serverConfig';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
@@ -701,6 +702,20 @@ export class ChatPortalActionImpl {
       type: PortalViewType.DashboardWidget,
       widgetId,
     });
+  };
+
+  openCanvas = (canvasId: string, version?: number): void => {
+    const { [canvasId]: _previous, ...canvasTabVersions } = this.#get().canvasTabVersions;
+    this.#set(
+      {
+        canvasTabVersions: version
+          ? { ...canvasTabVersions, [canvasId]: version }
+          : canvasTabVersions,
+      },
+      false,
+      'openCanvas',
+    );
+    useGlobalStore.getState().openWorkingSidebar(canvasTabKey(canvasId));
   };
 
   openNotebook = (): void => {

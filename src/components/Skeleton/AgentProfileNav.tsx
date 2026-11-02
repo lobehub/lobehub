@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Center, cssVar, Flexbox } from '@lobehub/ui';
 
 import SkeletonBar from './Bar';
 

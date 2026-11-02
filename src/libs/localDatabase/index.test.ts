@@ -40,6 +40,21 @@ describe('localDatabase', () => {
     ]);
   });
 
+  it('discovers populated collections with current entry counts', async () => {
+    await localDatabase.batch([
+      { collection, key: 'first', type: 'set', value: 1 },
+      { collection, key: 'second', type: 'set', value: 2 },
+      { collection: otherCollection, key: 'only', type: 'set', value: 3 },
+    ]);
+
+    const collections = await localDatabase.listCollections();
+
+    expect(collections.filter(({ name }) => name.startsWith('database-test'))).toEqual([
+      { entryCount: 2, name: collection },
+      { entryCount: 1, name: otherCollection },
+    ]);
+  });
+
   it('commits mixed writes and deletes as one batch', async () => {
     await localDatabase.set(collection, 'legacy', { value: 'old' });
     await localDatabase.batch([
@@ -59,15 +74,20 @@ describe('localDatabase', () => {
       entriesByPrefix: vi.fn().mockResolvedValue([]),
       get: vi.fn().mockResolvedValue({ source: 'electron' }),
       initialize: vi.fn().mockResolvedValue(undefined),
+      listCollections: vi.fn().mockResolvedValue([{ entryCount: 1, name: 'runtime' }]),
       set: vi.fn().mockResolvedValue(undefined),
     };
     const unregister = registerLocalDatabaseAdapter(adapter);
 
     try {
       await expect(localDatabase.get('runtime', 'key')).resolves.toEqual({ source: 'electron' });
+      await expect(localDatabase.listCollections()).resolves.toEqual([
+        { entryCount: 1, name: 'runtime' },
+      ]);
       await localDatabase.set('runtime', 'key', { value: 1 });
 
       expect(adapter.get).toHaveBeenCalledWith('runtime', 'key');
+      expect(adapter.listCollections).toHaveBeenCalledOnce();
       expect(adapter.set).toHaveBeenCalledWith('runtime', 'key', { value: 1 });
     } finally {
       unregister();

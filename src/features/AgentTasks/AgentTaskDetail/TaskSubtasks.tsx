@@ -1,8 +1,17 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import type { TreeDataNode } from '@lobehub/ui/base-ui';
-import { ActionIcon, Collapsible, confirmModal, Text, toast, Tree } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import type { TreeDataNode } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Collapsible,
+  confirmModal,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+  Tree,
+} from '@lobehub/ui';
 import { ArchiveIcon, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -78,13 +87,13 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <TaskPriorityTag priority={task.priority} size={14} taskIdentifier={task.identifier} />
+        <TaskPriorityTag priority={task.priority} size={14} taskIdentifier={task.id} />
       </span>
       <span
         style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <TaskStatusTag size={14} status={status} taskIdentifier={task.identifier}>
+        <TaskStatusTag size={14} status={status} taskIdentifier={task.id}>
           {hasRunningTopic ? <TopicStatusIcon size={14} status="running" /> : undefined}
         </TaskStatusTag>
       </span>
@@ -116,7 +125,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
             currentUserId={task.assigneeUserId ?? null}
             disabled={isRunning}
             taskCreatorId={task.createdByUserId}
-            taskIdentifier={task.identifier}
+            taskIdentifier={task.id}
             taskVisibility={task.visibility}
           >
             <span
@@ -138,7 +147,8 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         <AssigneeAgentSelector
           currentAgentId={task.assignee?.id ?? null}
           disabled={isRunning}
-          taskIdentifier={task.identifier}
+          taskCreatorId={task.createdByUserId}
+          taskIdentifier={task.id}
           taskVisibility={task.visibility}
         >
           <span
@@ -160,7 +170,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
 const toTreeData = (tree: TaskTreeNode[]): TreeDataNode[] => {
   return tree.map((node) => ({
     children: toTreeData(node.children),
-    key: node.task.identifier,
+    key: node.task.id!,
     title: <SubtaskTitle task={node.task} />,
   }));
 };
@@ -189,7 +199,7 @@ const TaskSubtasks = memo(() => {
     const map = new Map<string, TaskDetailSubtask>();
     const walk = (items: TaskDetailSubtask[]) => {
       for (const item of items) {
-        map.set(item.identifier, item);
+        if (item.id) map.set(item.id, item);
         if (item.children?.length) walk(item.children);
       }
     };
@@ -198,9 +208,12 @@ const TaskSubtasks = memo(() => {
   }, [subtasks]);
 
   const handleNavigate = useCallback(
-    (identifier: string) => {
-      const subtask = subtaskMap.get(identifier);
-      navigate(taskDetailPath(identifier, subtask?.assignee?.id ?? undefined, subtask?.name));
+    (id: string) => {
+      const subtask = subtaskMap.get(id);
+      if (!subtask?.id) return;
+      navigate(
+        taskDetailPath(subtask.identifier, subtask?.assignee?.id ?? undefined, subtask?.name),
+      );
     },
     [navigate, subtaskMap],
   );
@@ -218,11 +231,11 @@ const TaskSubtasks = memo(() => {
       event.preventDefault();
       showContextMenu(
         buildItems({
+          id: subtask.id!,
           archivedAt: subtask.archivedAt ?? null,
           assigneeAgentId: subtask.assignee?.id,
           assigneeUserId: subtask.assigneeUserId,
           automationMode: subtask.automationMode,
-          createdByUserId: subtask.createdByUserId,
           heartbeatInterval: subtask.heartbeat?.interval,
           identifier: subtask.identifier,
           priority: subtask.priority,
@@ -231,11 +244,11 @@ const TaskSubtasks = memo(() => {
         }),
       );
       installKeyboardHandlers({
+        id: subtask.id!,
         archivedAt: subtask.archivedAt ?? null,
         assigneeAgentId: subtask.assignee?.id,
         assigneeUserId: subtask.assigneeUserId,
         automationMode: subtask.automationMode,
-        createdByUserId: subtask.createdByUserId,
         heartbeatInterval: subtask.heartbeat?.interval,
         identifier: subtask.identifier,
         priority: subtask.priority,

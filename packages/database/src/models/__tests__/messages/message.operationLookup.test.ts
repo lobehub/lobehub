@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { messages, topics, users } from '../../../schemas';
+import { messages, threads, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 
@@ -178,5 +178,101 @@ describe('MessageModel.findVerifyMessageByOperationId', () => {
     await expect(
       messageModel.findVerifyMessageByOperationId('verify-trashed-topic'),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('MessageModel.listLatestTurnAssistantContents', () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 9, 22, 19, minute));
+  const insert = (
+    rows: { content: string; id: string; minute: number; role: string; threadId?: string }[],
+  ) =>
+    serverDB.insert(messages).values(
+      rows.map(({ minute, ...row }) => ({
+        ...row,
+        createdAt: at(minute),
+        topicId,
+        updatedAt: at(minute),
+        userId,
+      })),
+    );
+
+  it("returns the latest turn's assistant replies newest first", async () => {
+    await insert([
+      { content: 'previous run prompt', id: 'turn-u1', minute: 0, role: 'user' },
+      { content: 'previous run report', id: 'turn-a1', minute: 1, role: 'assistant' },
+      { content: 'run prompt', id: 'turn-u2', minute: 2, role: 'user' },
+      { content: 'progress note', id: 'turn-a2', minute: 3, role: 'assistant' },
+      { content: 'tool output', id: 'turn-t1', minute: 4, role: 'tool' },
+      { content: 'final report', id: 'turn-a3', minute: 5, role: 'assistant' },
+      { content: 'trailing remark', id: 'turn-a4', minute: 6, role: 'assistant' },
+    ]);
+
+    const replies = await messageModel.listLatestTurnAssistantContents({ limit: 10, topicId });
+
+    expect(replies.map((reply) => reply.content)).toEqual([
+      'trailing remark',
+      'final report',
+      'progress note',
+    ]);
+  });
+
+  it('ignores subagent thread rows sharing the topic', async () => {
+    await serverDB
+      .insert(threads)
+      .values({ id: 'turn-thread', topicId, type: 'isolation', userId });
+    await insert([
+      { content: 'run prompt', id: 'sub-u1', minute: 0, role: 'user' },
+      { content: 'parent report', id: 'sub-a1', minute: 1, role: 'assistant' },
+      {
+        content: 'subagent prompt',
+        id: 'sub-u2',
+        minute: 2,
+        role: 'user',
+        threadId: 'turn-thread',
+      },
+      {
+        content: 'subagent partial result',
+        id: 'sub-a2',
+        minute: 3,
+        role: 'assistant',
+        threadId: 'turn-thread',
+      },
+      { content: 'trailing remark', id: 'sub-a3', minute: 4, role: 'assistant' },
+    ]);
+
+    const replies = await messageModel.listLatestTurnAssistantContents({ limit: 10, topicId });
+
+    expect(replies.map((reply) => reply.content)).toEqual(['trailing remark', 'parent report']);
+  });
+
+  it('honors the limit', async () => {
+    await insert([
+      { content: 'run prompt', id: 'limit-u1', minute: 0, role: 'user' },
+      { content: 'a', id: 'limit-a1', minute: 1, role: 'assistant' },
+      { content: 'b', id: 'limit-a2', minute: 2, role: 'assistant' },
+    ]);
+
+    const replies = await messageModel.listLatestTurnAssistantContents({ limit: 1, topicId });
+
+    expect(replies.map((reply) => reply.content)).toEqual(['b']);
+  });
+
+  it('returns every assistant reply of a topic without a user message', async () => {
+    await insert([{ content: 'only reply', id: 'nouser-a1', minute: 1, role: 'assistant' }]);
+
+    await expect(
+      messageModel.listLatestTurnAssistantContents({ limit: 10, topicId }),
+    ).resolves.toEqual([{ content: 'only reply', createdAt: at(1) }]);
+  });
+
+  it("does not read another user's topic", async () => {
+    await insert([{ content: 'mine', id: 'own-a1', minute: 1, role: 'assistant' }]);
+
+    await expect(
+      new MessageModel(serverDB, otherUserId).listLatestTurnAssistantContents({
+        limit: 10,
+        topicId,
+      }),
+    ).resolves.toEqual([]);
   });
 });

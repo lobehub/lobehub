@@ -25,7 +25,12 @@ import { VerifyCriterionModel } from './verifyCriterion';
  * / verifyStatus) so the router response and every UI / CLI consumer stay
  * unchanged while the storage moves from agent_operations to verify_runs.
  */
+/** What auto-repair decided for a failed round (`verify_runs.metadata.autoRepair`). */
+export type VerifyAutoRepairOutcome = 'declined' | 'spawned';
+
 export interface VerifyRunState {
+  /** `declined` makes a failed round with `auto_repair` checks final. */
+  verifyAutoRepair: VerifyAutoRepairOutcome | null;
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
   /** The session id — exposed so a builder holding only its operationId can
@@ -54,6 +59,8 @@ const decodeCursor = (cursor?: string): { createdAt: Date; id: string } | null =
 const toState = (run: VerifyRunItem | null | undefined): VerifyRunState | null =>
   run
     ? {
+        verifyAutoRepair:
+          (run.metadata as { autoRepair?: VerifyAutoRepairOutcome } | null)?.autoRepair ?? null,
         verifyPlan: (run.plan ?? null) as VerifyCheckItem[] | null,
         verifyPlanConfirmedAt: run.planConfirmedAt ?? null,
         verifyRunId: run.id,
@@ -390,7 +397,7 @@ export class VerifyRunModel {
           plan,
           planConfirmedAt: new Date(),
           scenario: target.scenario ?? source.scenario,
-          source: source.source ?? target.source,
+          source: source.source,
           // The survivor takes over the source's identity, so it takes over its
           // pipeline status too. An ingested round carries none and the report
           // settles it, which is what nulls the draft's own `planned` here. A LIVE
@@ -590,6 +597,16 @@ export class VerifyRunModel {
       .returning({ id: verifyRuns.id });
 
     return claimed.length > 0;
+  };
+
+  /** Record the auto-repair decision without clobbering the rest of `metadata`. */
+  recordAutoRepair = async (runId: string, outcome: VerifyAutoRepairOutcome): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('autoRepair', ${outcome}::text)`,
+      })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
   };
 
   setMetadata = async (runId: string, metadata: Record<string, unknown>): Promise<void> => {

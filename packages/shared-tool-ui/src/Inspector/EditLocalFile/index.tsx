@@ -3,8 +3,8 @@
 import type { EditFileState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Minus, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';

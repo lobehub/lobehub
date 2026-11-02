@@ -17,7 +17,8 @@
     "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts",
     "./featureGates": "./src/featureGates.ts",
     "./workRegistration": "./src/workRegistration.ts",
-    "./fileEditScan": "./src/fileEditScan/index.ts"
+    "./fileEditScan": "./src/fileEditScan/index.ts",
+    "./operationArtifacts": "./src/operationArtifacts/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
@@ -32,6 +33,8 @@
     "@lobechat/builtin-tool-auv": "workspace:*",
     "@lobechat/builtin-tool-brief": "workspace:*",
     "@lobechat/builtin-tool-browser": "workspace:*",
+    "@lobechat/builtin-tool-canvas": "workspace:*",
+    "@lobechat/builtin-tool-channel": "workspace:*",
     "@lobechat/builtin-tool-claude-code": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
     "@lobechat/builtin-tool-creds": "workspace:*",
@@ -59,15 +62,14 @@
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
     "@lobechat/builtin-tool-web-onboarding": "workspace:*",
     "@lobechat/const": "workspace:*",
-    "@lobehub/icons": "^5.11.0"
+    "@lobehub/icons": "^6.0.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
-    "antd-style": "*",
+    "@lobehub/ui": "^6.0.4",
     "lucide-react": "*",
     "react": "*",
     "react-i18next": "*"

@@ -1,8 +1,8 @@
 'use client';
 
+import type { DeviceScope } from '@lobechat/types';
 import { AreaChart, Tracker } from '@lobehub/charts';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
@@ -66,9 +66,9 @@ const MetricChart = ({ ceiling, data, label, latest }: MetricChartProps) => (
  * disconnected" from "not running at all" — what a user needs to explain why
  * a device dropped.
  */
-const DeviceHealth = ({ deviceId }: { deviceId: string }) => {
+const DeviceHealth = ({ deviceId, scope }: { deviceId: string; scope: DeviceScope }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isValidating, mutate } = useDeviceMetricSeries(deviceId);
+  const { data, error, isValidating, mutate } = useDeviceMetricSeries(deviceId, scope);
   const blockTooltip = useBlockTooltip();
 
   const view = healthViewState({ data, error });

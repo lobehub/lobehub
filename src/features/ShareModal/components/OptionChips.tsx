@@ -1,6 +1,4 @@
-import { Icon } from '@lobehub/ui';
-import { type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
 import { CheckIcon, ChevronDownIcon, PlusIcon } from 'lucide-react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

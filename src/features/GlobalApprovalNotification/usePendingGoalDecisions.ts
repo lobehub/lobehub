@@ -21,6 +21,8 @@ export interface IslandGoalDecision {
   options: GoalDecisionOption[];
   question: string;
   recommendedOptionId: string | null;
+  /** Set on a held batch release: the gate is reviewed in this report, not answered inline. */
+  releaseGateAcceptanceId?: string | null;
   sourceTitle: string | null;
 }
 

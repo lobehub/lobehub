@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "build:rr": "react-router build -c vite.config.rr.mts && node scripts/emit-static-css.mjs",
+    "build:rr": "react-router build -c vite.config.rr.mts",
     "deploy": "bun scripts/deploy.ts",
     "deploy:rr": "wrangler deploy --dry-run",
     "dev": "vite --port 3016",
@@ -14,7 +14,6 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "@ant-design/cssinjs": "^2.1.2",
     "@cloudflare/vite-plugin": "^1.52.1",
     "@codemirror/streamparser": "^6.0.0",
     "@react-router/dev": "^8.3.0",

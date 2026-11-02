@@ -1,6 +1,7 @@
 {
   "agent_cron_job_completed": "定时任务「{{jobName}}」已成功执行。",
   "agent_cron_job_completed_title": "定时任务执行成功",
+  "agent_cron_job_completed_with_summary": "定时任务「{{jobName}}」已成功执行。\n\n{{summary}}",
   "agent_cron_job_failed": "定时任务「{{jobName}}」执行失败，点击查看详情。",
   "agent_cron_job_failed_insufficient_budget": "定时任务「{{jobName}}」因账户额度不足未能执行。请充值或升级套餐以恢复后续运行。",
   "agent_cron_job_failed_insufficient_budget_title": "定时任务已暂停：额度不足",

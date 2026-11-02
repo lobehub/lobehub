@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AppIndexedDBStorage } from '@/libs/replica';
 import { aiProviderSelectors, useAiInfraStore as useStore } from '@/store/aiInfra';
 import { initialAIModelState } from '@/store/aiInfra/slices/aiModel/initialState';
 import type {
@@ -16,6 +17,7 @@ import {
   aiProviderListResource,
   aiProviderRuntimeStateQueryKey,
   aiProviderRuntimeStateResource,
+  type AiProviderRuntimeStateView,
 } from '../projection';
 
 vi.mock('@/services/aiProvider', () => ({
@@ -75,11 +77,20 @@ const readPersistedList = async () =>
   (await aiProviderListResource.storage!.get({ queryKey: AI_PROVIDER_LIST_KEY, scope: SCOPE }))
     ?.data;
 
+const RUNTIME_STATE_ROW = {
+  queryKey: aiProviderRuntimeStateResource.storageKey({ isLogin: true }),
+  scope: SCOPE,
+};
+const rawRuntimeStateStorage = new AppIndexedDBStorage<any>({
+  namespace: 'replica:aiProviderRuntimeState:v2',
+});
+
 beforeEach(async () => {
   vi.clearAllMocks();
   authLoaded = true;
   resetStore();
   await aiProviderListResource.storage!.remove({ queryKey: AI_PROVIDER_LIST_KEY, scope: SCOPE });
+  await rawRuntimeStateStorage.remove(RUNTIME_STATE_ROW);
 });
 
 /** Confirm a server list through the mounted sync, which also persists it. */
@@ -109,14 +120,13 @@ const syncCalls = async (
 
 describe('AiProviderSlice (replica)', () => {
   describe('persistence policy', () => {
-    it('persists only the secret-free provider list', () => {
-      // The provider list is safe to store; the detail and the derived runtime
-      // state carry decrypted `keyVaults` and must stay memory-only. Omitting
-      // `storage` is NOT memory-only — the app wrapper defaults to IndexedDB —
-      // so this guards the explicit `storage: 'memory'` on both.
+    it('keeps the provider detail memory-only', () => {
+      // The detail carries decrypted `keyVaults`. Omitting `storage` is NOT
+      // memory-only — the app wrapper defaults to IndexedDB — so this guards
+      // the explicit `storage: 'memory'`.
       expect(aiProviderListResource.persisted).toBe(true);
       expect(aiProviderDetailResource.persisted).toBe(false);
-      expect(aiProviderRuntimeStateResource.persisted).toBe(false);
+      expect(aiProviderRuntimeStateResource.persisted).toBe(true);
     });
   });
 
@@ -246,6 +256,85 @@ describe('AiProviderSlice (replica)', () => {
       expect(
         state.aiProviderRuntimeStateMap[aiProviderRuntimeStateQueryKey({ isLogin: true })],
       ).toEqual(value);
+    });
+
+    it('seeds the saved reasoning configs through the aiModel replica', async () => {
+      const value: AiProviderRuntimeStateView = {
+        ...runtimeState(),
+        modelReasoningConfigs: { 'openai/gpt-4o': { reasoningEffort: 'low' } },
+      };
+
+      renderHook(() => useStore.getState().useFetchAiProviderRuntimeState(true));
+      const [call] = await syncCalls('aiProviderRuntimeState');
+      act(() => call.config.onSuccess!(value));
+
+      const state = useStore.getState();
+      expect(state.modelReasoningConfigMap['openai/gpt-4o']).toEqual({ reasoningEffort: 'low' });
+      // Seeded as a *confirmed* replica entry, not a bare map write: only then
+      // does a storage hydration that resolves later leave it alone instead of
+      // repainting an older persisted row over the server's value.
+      expect(state.modelReasoningConfigReplica.entries['openai/gpt-4o']).toBeDefined();
+    });
+
+    it('does not seed reasoning configs from a display snapshot', async () => {
+      const value: AiProviderRuntimeStateView = {
+        ...runtimeState(),
+        isDisplaySnapshot: true,
+        modelReasoningConfigs: { 'openai/gpt-4o': { reasoningEffort: 'low' } },
+      };
+
+      renderHook(() => useStore.getState().useFetchAiProviderRuntimeState(true));
+      const [call] = await syncCalls('aiProviderRuntimeState');
+      act(() => call.config.onSuccess!(value));
+
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-4o']).toBeUndefined();
+    });
+
+    it('persists only the secret-free display fields of a confirmed value', async () => {
+      const value = {
+        ...runtimeState(),
+        enabledChatModelList: [{ children: [], id: 'anthropic', name: 'Anthropic' }],
+      };
+
+      renderHook(() => useStore.getState().useFetchAiProviderRuntimeState(true));
+      const [call] = await syncCalls('aiProviderRuntimeState');
+      act(() => call.config.onSuccess!(value));
+
+      await vi.waitFor(async () =>
+        expect(await rawRuntimeStateStorage.get(RUNTIME_STATE_ROW)).toBeDefined(),
+      );
+      const row = await rawRuntimeStateStorage.get(RUNTIME_STATE_ROW);
+      expect(JSON.stringify(row)).not.toContain('sk-live');
+      expect(row!.data.runtimeConfig).toEqual({});
+      expect(row!.data.enabledChatModelList).toEqual(value.enabledChatModelList);
+    });
+
+    it('paints the model lists from storage without marking the runtime state ready', async () => {
+      await rawRuntimeStateStorage.set(RUNTIME_STATE_ROW, {
+        data: runtimeState(),
+        updatedAt: Date.now(),
+      });
+
+      renderHook(() => useStore.getState().useFetchAiProviderRuntimeState(true));
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const hydrate = vi
+        .mocked(useClientDataSWR)
+        .mock.calls.find(
+          ([key]) =>
+            Array.isArray(key) &&
+            key[0] === 'replica:hydrate' &&
+            key[1] === 'aiProviderRuntimeState',
+        );
+      await act(async () => {
+        await (hydrate![1] as () => Promise<unknown>)();
+      });
+
+      expect(useStore.getState().enabledChatModelList).toEqual(runtimeState().enabledChatModelList);
+      const state = useStore.getState();
+      expect(state.enabledAiModels).toEqual(runtimeState().enabledAiModels);
+      expect(state.isInitAiProviderRuntimeState).toBe(false);
+      expect(state.aiProviderRuntimeConfig).toEqual({});
+      expect(state.builtinAiModelList).toEqual(initialAIModelState.builtinAiModelList);
     });
 
     it('does not register a sync until auth has loaded', async () => {

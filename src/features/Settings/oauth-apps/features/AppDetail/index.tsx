@@ -1,18 +1,18 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Alert,
   Button,
   confirmModal,
+  createStaticStyles,
+  Flexbox,
   Skeleton,
   Tabs,
   Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ArrowLeftIcon, PowerIcon, PowerOffIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useEffect } from 'react';

@@ -1,6 +1,4 @@
-import { Flexbox, Popover } from '@lobehub/ui';
-import { Select, Switch, Tag, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Popover, Select, Switch, Tag, Text } from '@lobehub/ui';
 import { type ExtendParamsType } from 'model-bank';
 import { memo, type ReactNode, type SyntheticEvent, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';

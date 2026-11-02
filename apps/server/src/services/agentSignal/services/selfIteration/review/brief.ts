@@ -9,11 +9,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import type { EvidenceRef, RunResult } from '../types';
 import { ActionStatus } from '../types';
-import {
-  createSelfReviewBriefText,
-  type SelfReviewBriefTextActionSummaries,
-  type SelfReviewBriefTextTranslator,
-} from './briefText';
+import { createSelfReviewBriefText, type SelfReviewBriefTextActionSummaries } from './briefText';
 import type {
   SelfReviewIdea,
   SelfReviewProposalMetadata,
@@ -295,8 +291,6 @@ export interface ProjectNightlyReviewBriefInput {
   reviewWindowEnd: string;
   /** Review window start ISO timestamp. */
   reviewWindowStart: string;
-  /** Locale-aware translator for persisted Daily Brief text. */
-  t?: SelfReviewBriefTextTranslator;
   /** IANA timezone used for nightly scheduling. */
   timezone: string;
   /** User that owns the agent and brief. */
@@ -574,7 +568,6 @@ export const createBriefSelfReviewService = () => ({
       actionSummaries,
       details: getSelfReviewBriefDetails(metadata),
       outcome,
-      t: input.t,
     });
     const artifacts = createBriefArtifacts({ ideas: input.ideas, proposal });
 

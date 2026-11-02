@@ -287,9 +287,28 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({
+        code: 'forbidden',
         error: 'File is outside the approved workspace',
         success: false,
       });
+    });
+
+    it('marks a file that vanished before its preview URL exists as not found', async () => {
+      mockLocalFileProtocolManager.createPreviewUrl.mockRejectedValue(
+        Object.assign(
+          new Error("ENOENT: no such file or directory, realpath '/workspace/gone.md'"),
+          {
+            code: 'ENOENT',
+          },
+        ),
+      );
+
+      const result = await localFileCtr.getLocalFilePreviewUrl({
+        path: '/workspace/gone.md',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result).toMatchObject({ code: 'not_found', success: false });
     });
 
     it('should forward image-only preview URL constraints', async () => {
@@ -479,6 +498,7 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({
+        code: 'forbidden',
         error: 'File is outside the approved workspace',
         success: false,
       });

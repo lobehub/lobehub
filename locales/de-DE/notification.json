@@ -1,6 +1,7 @@
 {
   "agent_cron_job_completed": "Ihre geplante Aufgabe \"{{jobName}}\" wurde erfolgreich abgeschlossen.",
   "agent_cron_job_completed_title": "Geplante Aufgabe abgeschlossen",
+  "agent_cron_job_completed_with_summary": "Ihre geplante Aufgabe \"{{jobName}}\" wurde erfolgreich abgeschlossen.\n\n{{summary}}",
   "agent_cron_job_failed": "Ihre geplante Aufgabe „{{jobName}}“ ist fehlgeschlagen. Öffnen Sie die Aufgabe, um den vollständigen Fehler zu sehen.",
   "agent_cron_job_failed_insufficient_budget": "Ihre geplante Aufgabe „{{jobName}}“ konnte nicht ausgeführt werden, da Ihr Guthaben aufgebraucht ist. Laden Sie Ihr Konto auf oder upgraden Sie Ihren Tarif, um zukünftige Ausführungen fortzusetzen.",
   "agent_cron_job_failed_insufficient_budget_title": "Geplante Aufgabe pausiert: unzureichendes Guthaben",

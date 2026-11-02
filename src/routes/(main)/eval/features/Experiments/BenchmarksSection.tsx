@@ -1,9 +1,7 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { Block, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Block, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
 import { ChevronRight, Database } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

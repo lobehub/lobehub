@@ -313,6 +313,21 @@ export class DeviceModel {
     });
   };
 
+  /**
+   * The caller's PERSONAL row for a deviceId. Unlike `findByDeviceId`, never
+   * resolves to a workspace enrollment of the same machine, which may share the
+   * deviceId (the personal and workspace unique indexes are partial).
+   */
+  findPersonalByDeviceId = async (deviceId: string) => {
+    return this.db.query.devices.findFirst({
+      where: and(
+        eq(devices.userId, this.userId),
+        eq(devices.deviceId, deviceId),
+        isNull(devices.workspaceId),
+      ),
+    });
+  };
+
   update = async (deviceId: string, value: UpdateDeviceParams) => {
     return this.db
       .update(devices)

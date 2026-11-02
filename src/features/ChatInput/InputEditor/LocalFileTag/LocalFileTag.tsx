@@ -1,7 +1,15 @@
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Popover,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import type { LexicalEditor } from 'lexical';
 import { $createNodeSelection, $setSelection, CLICK_COMMAND, COMMAND_PRIORITY_LOW } from 'lexical';
 import { ExternalLink, EyeIcon, FolderOpen } from 'lucide-react';

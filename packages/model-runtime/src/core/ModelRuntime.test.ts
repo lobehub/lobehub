@@ -444,64 +444,6 @@ describe('ModelRuntime', () => {
     });
   });
 
-  describe('ModelRuntime textToSpeech method', () => {
-    it('should run correctly', async () => {
-      const payload = {
-        model: 'tts-1',
-        input: 'Hello world',
-        voice: 'alloy',
-      };
-
-      const mockResponse = new ArrayBuffer(8);
-
-      vi.spyOn(LobeOpenAI.prototype, 'textToSpeech').mockResolvedValue(mockResponse);
-
-      const result = await mockModelRuntime.textToSpeech(payload);
-
-      expect(LobeOpenAI.prototype.textToSpeech).toHaveBeenCalledWith(payload, undefined);
-      expect(result).toBe(mockResponse);
-    });
-
-    it('should handle options correctly', async () => {
-      const payload = {
-        model: 'tts-1',
-        input: 'Hello world',
-        voice: 'alloy',
-      };
-
-      const options = {};
-
-      const mockResponse = new ArrayBuffer(8);
-
-      vi.spyOn(LobeOpenAI.prototype, 'textToSpeech').mockResolvedValue(mockResponse);
-
-      const result = await mockModelRuntime.textToSpeech(payload, options);
-
-      expect(LobeOpenAI.prototype.textToSpeech).toHaveBeenCalledWith(payload, options);
-      expect(result).toBe(mockResponse);
-    });
-
-    it('should handle undefined textToSpeech method gracefully', async () => {
-      const payload = {
-        model: 'tts-1',
-        input: 'Hello world',
-        voice: 'alloy',
-      };
-
-      // Mock runtime without textToSpeech method
-      const runtimeWithoutTextToSpeech = {
-        textToSpeech: undefined,
-      };
-
-      // @ts-ignore - testing edge case
-      mockModelRuntime['_runtime'] = runtimeWithoutTextToSpeech;
-
-      const result = await mockModelRuntime.textToSpeech(payload);
-
-      expect(result).toBeUndefined();
-    });
-  });
-
   describe('ModelRuntime pullModel method', () => {
     it('should run correctly', async () => {
       const params = {

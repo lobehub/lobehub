@@ -91,6 +91,7 @@ export class GroupAgentBuilderExecutionRuntime {
         avatar: agent.avatar,
         description: agent.description,
         id: agent.id,
+        name: agent.name ?? undefined,
         title: agent.title,
       }));
 
@@ -106,12 +107,17 @@ export class GroupAgentBuilderExecutionRuntime {
         };
       }
 
-      // Format agents list for LLM consumption
+      // Format agents list for LLM consumption. Lead with the name the agent is
+      // known by and keep the title as its role, so a named agent stays
+      // recognizable to the model.
       const agentList = agents
-        .map(
-          (a, i) =>
-            `${i + 1}. ${a.title || 'Untitled'} (ID: ${a.id})${a.description ? ` - ${a.description}` : ''}`,
-        )
+        .map((a, i) => {
+          const name = a.name?.trim();
+          const label = name
+            ? `${name}${a.title ? ` [title: ${a.title}]` : ''}`
+            : a.title || 'Untitled';
+          return `${i + 1}. ${label} (ID: ${a.id})${a.description ? ` - ${a.description}` : ''}`;
+        })
         .join('\n');
 
       return {

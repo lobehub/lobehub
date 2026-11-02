@@ -1,5 +1,9 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { DeviceUnavailableErrorData, ErrorType } from '@lobechat/types';
+import type {
+  ChatErrorDispatchContext,
+  DeviceUnavailableErrorData,
+  ErrorType,
+} from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import debug from 'debug';
 
@@ -52,6 +56,12 @@ export const finalizeHeteroDispatchError = async (
     agentId?: string;
     assistantMessageId: string;
     detail: string;
+    /**
+     * Allowlisted cause of the dispatch failure. Unlike `detail`, it also rides
+     * on the lifecycle error, so completion hooks (the IM bot reply) can name
+     * the cause without receiving the free-form text.
+     */
+    dispatch?: ChatErrorDispatchContext;
     /** The device this dispatch was routed to, when it was a device dispatch. */
     deviceRoute?: DeviceDispatchRoute;
     errorData?: DeviceUnavailableErrorData;
@@ -71,6 +81,7 @@ export const finalizeHeteroDispatchError = async (
     assistantMessageId,
     detail,
     deviceRoute,
+    dispatch,
     errorData,
     errorType = ChatErrorType.ServerAgentRuntimeError,
     message,
@@ -82,7 +93,11 @@ export const finalizeHeteroDispatchError = async (
   //    end event below re-reads a message that already carries the error.
   await deps.messageModel.update(assistantMessageId, {
     content: '',
-    error: { body: { detail, ...errorData }, message, type: errorType },
+    error: {
+      body: { detail, ...errorData, ...(dispatch && { dispatch }) },
+      message,
+      type: errorType,
+    },
   });
 
   // 1b. Finalize the run through CompletionLifecycle's single entry — the SAME
@@ -101,7 +116,12 @@ export const finalizeHeteroDispatchError = async (
     {
       agentId,
       assistantMessageId,
-      error: { message, type: errorType, ...(deviceRoute && { deviceRoute }) },
+      error: {
+        message,
+        type: errorType,
+        ...(deviceRoute && { deviceRoute }),
+        ...(dispatch && { body: { dispatch } }),
+      },
       operationId,
       serializedHooks: hookDispatcher.getSerializedHooks(operationId),
       topicId,

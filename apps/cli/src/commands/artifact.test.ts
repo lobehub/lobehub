@@ -13,6 +13,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       deployments: {
         commitWorkspaceHtmlUpload: { mutate: vi.fn() },
         prepareWorkspaceHtmlUpload: { mutate: vi.fn() },
+        unpublish: { mutate: vi.fn() },
       },
     },
   },
@@ -159,15 +160,15 @@ describe('artifact publish', () => {
       expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
     });
 
-    it('prints the product share URL rather than the raw hosting URL', async () => {
+    it('prints the hosting URL with a separate product share URL', async () => {
       await publish();
 
       const output = consoleSpy.mock.calls.flat().join('\n');
       expect(output).toContain('https://app.lobehub.com/share/artifact/dep-1');
-      expect(output).not.toContain('https://example.com/p');
+      expect(output).toContain('https://example.com/p');
     });
 
-    it('emits the product share URL as publicUrl in JSON output', async () => {
+    it('keeps publicUrl as the hosting URL and exposes shareUrl separately', async () => {
       await publish('--json');
 
       const payload = JSON.parse(
@@ -176,7 +177,8 @@ describe('artifact publish', () => {
           .filter((value): value is string => typeof value === 'string')
           .join('\n'),
       );
-      expect(payload.publicUrl).toBe('https://app.lobehub.com/share/artifact/dep-1');
+      expect(payload.publicUrl).toBe('https://example.com/p');
+      expect(payload.shareUrl).toBe('https://app.lobehub.com/share/artifact/dep-1');
       expect(payload.id).toBe('dep-1');
     });
 
@@ -241,6 +243,84 @@ describe('artifact publish', () => {
       await expect(publish()).rejects.toThrow('network died');
 
       expect(readManifest().artifacts['index.html'].pendingCreateKey).toEqual(expect.any(String));
+    });
+
+    it('remembers a pending HTML type when replacing a Canvas and retries through HTML', async () => {
+      writeManifest({
+        'index.html': { type: 'canvas', canvasId: 'cvs_old', deploymentId: 'dep_old' },
+      });
+      mockTrpcClient.market.deployments.prepareWorkspaceHtmlUpload.mutate.mockRejectedValueOnce(
+        new Error('Response lost'),
+      );
+      await expect(publish('--type', 'html', '--new')).rejects.toThrow('Response lost');
+      await publish('--new');
+      expect(exitSpy).not.toHaveBeenCalled();
+      expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
+    });
+  });
+
+  describe('unpublishing', () => {
+    const runUnpublish = async (...args: string[]) => {
+      const program = new Command();
+      program.exitOverride();
+      registerArtifactCommand(program);
+      await program.parseAsync(['node', 'lh', 'artifact', 'unpublish', ...args]);
+    };
+
+    const boundFile = () => path.join(workingDirectory, 'index.html');
+
+    beforeEach(() => {
+      fs.writeFileSync(boundFile(), '<title>Bound</title>');
+      mockTrpcClient.market.deployments.unpublish.mutate
+        .mockReset()
+        .mockResolvedValue({ data: { id: 'dep-bound', status: 'unpublished', title: 'Bound' } });
+    });
+
+    it('takes the deployment bound to the file offline', async () => {
+      writeManifest({ 'index.html': { deploymentId: 'dep-bound' } });
+
+      await runUnpublish(boundFile());
+
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).toHaveBeenCalledWith({
+        id: 'dep-bound',
+      });
+      // Kept on purpose: republishing the same file reactivates this deployment.
+      expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-bound' });
+    });
+
+    it('--deployment targets an id without a file', async () => {
+      await runUnpublish('--deployment', 'dep-oneoff');
+
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).toHaveBeenCalledWith({
+        id: 'dep-oneoff',
+      });
+    });
+
+    it('refuses to guess when neither a file nor --deployment is given', async () => {
+      await runUnpublish();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a file with no bound deployment', async () => {
+      writeManifest({});
+
+      await runUnpublish(boundFile());
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).not.toHaveBeenCalled();
+    });
+
+    it('reports a server failure instead of claiming success', async () => {
+      writeManifest({ 'index.html': { deploymentId: 'dep-gone' } });
+      mockTrpcClient.market.deployments.unpublish.mutate.mockRejectedValueOnce(
+        new Error('Deployment not found'),
+      );
+
+      await runUnpublish(boundFile());
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 });

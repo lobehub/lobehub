@@ -83,14 +83,16 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsTabs.Profile,
       WorkspaceSettingsTabs.Appearance,
       WorkspaceSettingsTabs.Hotkey,
+      WorkspaceSettingsTabs.ChatPreference,
       WorkspaceSettingsTabs.Messenger,
+      WorkspaceSettingsTabs.Integrations,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Profile,
     );
   });
 
-  it('shows About in a System group for every role', () => {
+  it('shows Trash and About in a System group for every role', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
     mocks.canViewBilling = false;
@@ -100,11 +102,49 @@ describe('workspace settings useCategory', () => {
       (group) => group.key === WorkspaceSettingsGroupKey.System,
     );
 
-    expect(systemGroup?.items.map((item) => item.key)).toEqual([WorkspaceSettingsTabs.About]);
+    expect(systemGroup?.items.map((item) => item.key)).toEqual([
+      WorkspaceSettingsTabs.Trash,
+      WorkspaceSettingsTabs.About,
+    ]);
     expect(result.current.map((group) => group.key).slice(-2)).toEqual([
       WorkspaceSettingsGroupKey.System,
       WorkspaceSettingsGroupKey.Developer,
     ]);
+  });
+
+  // The drives need no opt-in: every member sees the tab, which shows the
+  // public drive, their own, and the way to a plan when the workspace has none.
+  it('groups devices, subscription accounts, environments and drives under Resources', () => {
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
+    const keys = result.current.map((group) => group.key);
+    const resourceGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Resource,
+    );
+    const generalGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.General,
+    );
+
+    expect(keys.indexOf(WorkspaceSettingsGroupKey.Resource)).toBe(
+      keys.indexOf(WorkspaceSettingsGroupKey.General) + 1,
+    );
+    expect(resourceGroup?.items.map((item) => item.key)).toEqual([
+      WorkspaceSettingsTabs.Devices,
+      WorkspaceSettingsTabs.SubscriptionAccounts,
+      WorkspaceSettingsTabs.Environments,
+      WorkspaceSettingsTabs.Drive,
+    ]);
+    expect(generalGroup?.items.map((item) => item.key)).not.toContain(
+      WorkspaceSettingsTabs.Devices,
+    );
+  });
+
+  // Accounts are shared capacity every agent routes onto, so managing them is
+  // an admin task like the other workspace infrastructure.
+  it('hides Subscription Accounts below Admin', () => {
+    mocks.canManageWorkspace = false;
+
+    expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.SubscriptionAccounts);
+    expect(getItemKeys()).toContain(WorkspaceSettingsTabs.Devices);
   });
 
   it('hides OAuth Apps by default', () => {
@@ -219,15 +259,7 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
   });
 
-  it('hides Integrations until the Labs flag is on, then lists it with the account tabs', () => {
-    expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.Integrations);
-
-    useUserStore.setState({
-      preference: {
-        ...initialUserStoreState.preference,
-        lab: { ...initialUserStoreState.preference.lab, enableIntegrations: true },
-      },
-    });
+  it('lists Integrations with the account tabs without any Labs flag', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const accountGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Account,

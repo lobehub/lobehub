@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Tooltip } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Tooltip } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,18 +16,22 @@ const styles = createStaticStyles(({ css }) => ({
     inset-block-start: 20px;
 
     display: flex;
-    flex: 1 1 220px;
+    flex: none;
     flex-direction: column;
     gap: 16px;
 
-    max-width: 264px;
+    width: 296px;
 
     font-size: 13px;
+
+    @container (width < 720px) {
+      position: static;
+      width: auto;
+    }
 
     @media (width <= 767px) {
       position: static;
       order: -1;
-      max-width: none;
     }
   `,
   list: css`

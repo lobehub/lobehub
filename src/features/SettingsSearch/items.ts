@@ -1,11 +1,22 @@
 import { LAB_FEATURES } from '@/features/Settings/labs/features';
 import { SettingsTabs } from '@/store/global/initialState';
+import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
+
+/**
+ * Tab key the search indexes by. Personal tabs and the workspace-only tabs
+ * share one namespace: tabs whose page is the same on both surfaces use the
+ * personal key (the workspace sidebar maps e.g. `statistics` → `stats`).
+ */
+export type SettingsSearchTab = SettingsTabs | WorkspaceSettingsTabs;
 
 export interface SettingsSearchContext {
   disableEmailPassword: boolean;
   enableBusinessFeatures: boolean;
+  enableChannels: boolean;
   enableComposio: boolean;
   enableGatewayMode: boolean;
+  /** Workspaces are available to this user */
+  enableWorkspace: boolean;
   /** Whether the signed-in user has an email on their profile */
   hasEmail: boolean;
   hideDocs: boolean;
@@ -30,7 +41,7 @@ export interface SettingsSearchItem {
   labelKey: string;
   /** i18n namespace of `labelKey` / `descKey`, defaults to `setting` */
   ns?: 'auth' | 'electron' | 'labs' | 'setting' | 'spend' | 'subscription';
-  tab: SettingsTabs;
+  tab: SettingsSearchTab;
   /**
    * Extra visibility gate mirroring the target item's own render condition
    * (tab visibility is already handled via useCategory). Defaults to visible.
@@ -46,7 +57,9 @@ export interface SettingsSearchItem {
  * technical terms — it must always stay searchable; localized keywords enrich
  * on top of this floor.
  */
-export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
+// Keyed by `SettingsSearchTab` values. Typed as `string`: the two tab enums
+// share values ('about', 'skill', …), which TypeScript rejects as record keys.
+export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   [SettingsTabs.About]: ['about', 'version', 'changelog', 'feedback', 'help'],
   [SettingsTabs.Advanced]: ['advanced', 'developer', 'diagnostics'],
   [SettingsTabs.APIKey]: ['api', 'api key', 'apikey', 'token', 'secret', 'personal key'],
@@ -69,6 +82,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
   [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
+  [SettingsTabs.Drive]: ['storage', 'drive', 'network drive', 'files', 'quota'],
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',
@@ -164,6 +178,14 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
     'environment',
   ],
   [SettingsTabs.Usage]: ['usage', 'consumption', 'quota', 'spend', 'statistics'],
+  [WorkspaceSettingsTabs.ChatPreference]: [
+    'chat preferences',
+    'follow up',
+    'follow-up suggestions',
+    'input suggestions',
+    'input completion',
+    'autocomplete',
+  ],
 };
 
 /**
@@ -173,7 +195,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
  * "积分", and "文件" (files) should hit Storage ("数据存储"). Each locale
  * carries its own synonym set, layered on top of TAB_SEARCH_EN_KEYWORDS.
  */
-export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
+export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
   [SettingsTabs.About]: 'settingsSearch.tabKeywords.about',
   [SettingsTabs.Advanced]: 'settingsSearch.tabKeywords.advanced',
   [SettingsTabs.APIKey]: 'settingsSearch.tabKeywords.apikey',
@@ -203,6 +225,7 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.SystemTools]: 'settingsSearch.tabKeywords.systemTools',
   [SettingsTabs.Trash]: 'settingsSearch.tabKeywords.trash',
   [SettingsTabs.Usage]: 'settingsSearch.tabKeywords.usage',
+  [WorkspaceSettingsTabs.ChatPreference]: 'settingsSearch.tabKeywords.chatPreference',
 };
 
 /**
@@ -431,33 +454,77 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   // Labs — derived from the LAB_FEATURES catalog the page renders, so a new
   // lab flag becomes searchable without a second registration. Anchors use
   // `labs-${flag}`, matching the SettingsSearchAnchor wrap on each toggle.
-  ...LAB_FEATURES.map(({ desktopOnly, flag, i18nKey, searchKeywords }): SettingsSearchItem => ({
-    anchor: `labs-${flag}`,
-    descKey: `features.${i18nKey}.desc`,
-    keywords: searchKeywords,
-    labelKey: `features.${i18nKey}.title`,
-    ns: 'labs',
-    tab: SettingsTabs.Labs,
-    ...(desktopOnly ? { visible: (ctx: SettingsSearchContext) => ctx.isDesktop } : {}),
-  })),
+  ...LAB_FEATURES.map(
+    ({ desktopOnly, flag, i18nKey, searchKeywords, workspaceOnly }): SettingsSearchItem => ({
+      anchor: `labs-${flag}`,
+      descKey: `features.${i18nKey}.desc`,
+      keywords: searchKeywords,
+      labelKey: `features.${i18nKey}.title`,
+      ns: 'labs',
+      tab: SettingsTabs.Labs,
+      ...(desktopOnly ? { visible: (ctx: SettingsSearchContext) => ctx.isDesktop } : {}),
+      ...(workspaceOnly ? { visible: (ctx: SettingsSearchContext) => ctx.enableWorkspace } : {}),
+    }),
+  ),
   // Service Model
   {
     anchor: 'service-model-assignments',
-    keywords: ['model assignment', 'topic naming', 'translation', 'default model'],
-    labelKey: 'serviceModel.modelAssignments.title',
+    descKey: 'serviceModel.desc',
+    keywords: ['main model', 'flash model', 'embedding', 'default model', 'system recommended'],
+    labelKey: 'serviceModel.tier.main.title',
     tab: SettingsTabs.ServiceModel,
   },
   {
-    anchor: 'service-model-memory',
-    keywords: ['memory', 'embedding', 'vector'],
-    labelKey: 'serviceModel.memoryModels.title',
+    // Follow-up / input completion stay out of the keywords: inside a workspace
+    // they live on Chat Preferences, not here.
+    anchor: 'service-model-advanced',
+    keywords: [
+      'model assignment',
+      'topic naming',
+      'translation',
+      'memory',
+      'prompt rewrite',
+      'history compress',
+    ],
+    labelKey: 'serviceModel.advanced.title',
     tab: SettingsTabs.ServiceModel,
   },
   {
-    anchor: 'service-model-optional-features',
-    keywords: ['follow up', 'input completion', 'prompt rewrite', 'suggestion'],
-    labelKey: 'serviceModel.optionalFeatures.title',
+    anchor: 'service-model-verify',
+    descKey: 'serviceModel.tier.verify.desc',
+    keywords: ['acceptance', 'verify', 'verifier', 'vision', 'multimodal'],
+    labelKey: 'serviceModel.tier.verify.title',
     tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-asr',
+    keywords: ['voice', 'transcription', 'speech to text'],
+    labelKey: 'systemAgent.asr.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-channelRouting',
+    descKey: 'systemAgent.channelRouting.modelDesc',
+    keywords: ['channel', 'decision', 'Jev', '频道', '决策', '回复'],
+    labelKey: 'systemAgent.channelRouting.title',
+    tab: SettingsTabs.ServiceModel,
+    visible: (ctx) => ctx.enableChannels,
+  },
+  // Chat Preferences (workspace only — the personal sidebar keeps these rows in
+  // Service Model › Advanced)
+  {
+    anchor: 'chat-preference-followUpAction',
+    descKey: 'systemAgent.followUpAction.modelDesc',
+    keywords: ['follow up', 'suggestion', 'chips'],
+    labelKey: 'systemAgent.followUpAction.title',
+    tab: WorkspaceSettingsTabs.ChatPreference,
+  },
+  {
+    anchor: 'chat-preference-inputCompletion',
+    descKey: 'systemAgent.inputCompletion.modelDesc',
+    keywords: ['input completion', 'autocomplete', 'suggestion'],
+    labelKey: 'systemAgent.inputCompletion.title',
+    tab: WorkspaceSettingsTabs.ChatPreference,
   },
   {
     anchor: 'service-model-image',

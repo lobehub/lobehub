@@ -1,7 +1,6 @@
 'use client';
 
-import { Empty, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
 import { AppWindowIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';

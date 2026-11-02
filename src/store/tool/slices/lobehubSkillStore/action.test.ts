@@ -269,65 +269,55 @@ describe('lobehubSkillStore actions', () => {
       expect(result.current.lobehubSkillExecutingToolIds.has('linear:createIssue')).toBe(false);
     });
 
-    it('should handle NOT_CONNECTED error', async () => {
+    // The server reports a missing / expired connection as PRECONDITION_FAILED with
+    // the code in errorData (the message is human text).
+    it.each(['NOT_CONNECTED', 'TOKEN_EXPIRED'])(
+      'should flag a PRECONDITION_FAILED %s error as needing authorization',
+      async (code) => {
+        const { result } = renderHook(() => useToolStore());
+
+        vi.mocked(toolsClient.market.connectCallTool.mutate).mockRejectedValue(
+          Object.assign(new Error('Provider not connected. Please authorize first.'), {
+            data: { code: 'PRECONDITION_FAILED', errorData: { code } },
+          }),
+        );
+
+        let callResult;
+        await act(async () => {
+          callResult = await result.current.callLobehubSkillTool({
+            provider: 'linear',
+            toolName: 'createIssue',
+          });
+        });
+
+        expect(callResult).toEqual({
+          error: 'Provider not connected. Please authorize first.',
+          errorCode: 'NOT_CONNECTED',
+          success: false,
+        });
+        expect(result.current.lobehubSkillExecutingToolIds.has('linear:createIssue')).toBe(false);
+      },
+    );
+
+    it('should not treat a generic UNAUTHORIZED or code-in-message error as NOT_CONNECTED', async () => {
       const { result } = renderHook(() => useToolStore());
 
-      act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
-      });
-
-      vi.mocked(toolsClient.market.connectCallTool.mutate).mockRejectedValue(
+      for (const error of [
+        Object.assign(new Error('Unauthorized'), { data: { code: 'UNAUTHORIZED' } }),
         new Error('NOT_CONNECTED'),
-      );
+      ]) {
+        vi.mocked(toolsClient.market.connectCallTool.mutate).mockRejectedValueOnce(error);
 
-      let callResult;
-      await act(async () => {
-        callResult = await result.current.callLobehubSkillTool({
-          provider: 'linear',
-          toolName: 'createIssue',
+        let callResult;
+        await act(async () => {
+          callResult = await result.current.callLobehubSkillTool({
+            provider: 'linear',
+            toolName: 'createIssue',
+          });
         });
-      });
 
-      expect(callResult).toEqual({
-        error: 'NOT_CONNECTED',
-        errorCode: 'NOT_CONNECTED',
-        success: false,
-      });
-      expect(result.current.lobehubSkillExecutingToolIds.has('linear:createIssue')).toBe(false);
-    });
-
-    it('should handle TOKEN_EXPIRED error', async () => {
-      const { result } = renderHook(() => useToolStore());
-
-      act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
-      });
-
-      vi.mocked(toolsClient.market.connectCallTool.mutate).mockRejectedValue(
-        new Error('TOKEN_EXPIRED'),
-      );
-
-      let callResult;
-      await act(async () => {
-        callResult = await result.current.callLobehubSkillTool({
-          provider: 'linear',
-          toolName: 'createIssue',
-        });
-      });
-
-      expect(callResult).toEqual({
-        error: 'TOKEN_EXPIRED',
-        errorCode: 'NOT_CONNECTED',
-        success: false,
-      });
+        expect(callResult).toEqual({ error: error.message, success: false });
+      }
     });
 
     it('should handle generic error', async () => {
@@ -941,6 +931,11 @@ describe('lobehubSkillStore actions', () => {
       // Server should still be in state after error
       expect(result.current.lobehubSkillServers).toHaveLength(1);
       expect(result.current.lobehubSkillLoadingIds.has('linear')).toBe(false);
+      // The reason stays on the row, so the settings list can show it in place.
+      expect(result.current.lobehubSkillErrors.linear).toMatchObject({
+        action: 'remove',
+        message: 'Revoke failed',
+      });
     });
   });
 

@@ -1,11 +1,19 @@
-import type { MessagePluginItem } from '@lobechat/types';
+import type { ExecAgentResult, MessagePluginItem } from '@lobechat/types';
 
+import type { MessageModel } from '@/database/models/message';
+import type { ThreadModel } from '@/database/models/thread';
+import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type {
   GroupActionMemberMode,
   GroupActionOnComplete,
 } from '@/server/services/agentRuntime/types';
 
+import {
+  createGroupActionMemberBridgeHook,
+  createThreadHooks,
+  pickThreadCarryOver,
+} from '../hooks/threadRunHooks';
 import type { InternalExecAgentParams } from '../types';
 
 /** Bridge params persisted on a group member run's serialized `group-member-bridge` hook. */
@@ -46,8 +54,35 @@ export interface ParkedGroupMember {
   topicId?: string;
 }
 
+/** Wire {@link GroupMemberApprovalDeps} to the service's runtime and models. */
+export const createGroupMemberApprovalDeps = (models: {
+  agentRuntimeService: AgentRuntimeService;
+  messageModel: MessageModel;
+  threadModel: ThreadModel;
+}): GroupMemberApprovalDeps => ({
+  createBridgeHook: (bridge) =>
+    createGroupActionMemberBridgeHook(models.agentRuntimeService, bridge),
+  createThreadHooks: async (threadId) => {
+    const thread = await models.threadModel.findById(threadId);
+    if (!thread?.sourceMessageId) return [];
+    return createThreadHooks(
+      models.agentRuntimeService,
+      models.threadModel,
+      models.messageModel,
+      thread.id,
+      thread.metadata?.startedAt ?? new Date().toISOString(),
+      // The recovered group-member bridge owns result publication.
+      undefined,
+      'execVirtualSubAgent',
+      pickThreadCarryOver(thread.metadata),
+    );
+  },
+  findMessagePlugin: (messageId) => models.messageModel.findMessagePlugin(messageId),
+  loadMember: (operationId) => models.agentRuntimeService.loadGroupMemberBridge(operationId),
+});
+
 /**
- * Route an approval decision on a group MEMBER's tool back to that member.
+ * Route an approval or human answer on a group MEMBER's tool back to that member.
  *
  * Members answer to the supervisor's approval mode, so a member can park on a
  * tool that needs approval. The client resolves it from the group conversation,
@@ -71,7 +106,9 @@ export const resolveGroupMemberApprovalContinuation = async (
   if (params.hooks?.length) return undefined;
 
   const targetMessageId =
-    params.resumeApproval?.parentMessageId ?? params.resumeApprovals?.[0]?.parentMessageId;
+    params.resumeApproval?.parentMessageId ??
+    params.resumeApprovals?.[0]?.parentMessageId ??
+    params.resumeToolResult?.parentMessageId;
   if (!targetMessageId) return undefined;
 
   const sourceOperationId =
@@ -113,4 +150,36 @@ export const resolveGroupMemberApprovalContinuation = async (
     slug: undefined,
     topicStartOwnerOperationId: bridge.parentOperationId,
   };
+};
+
+export interface GroupMemberDeadlineDeps {
+  agentRuntimeService: AgentRuntimeService;
+}
+
+/**
+ * An approval continuation retires the parked member op, which silently
+ * disarms the timeout watchdog scheduled for it. Re-arm the same absolute
+ * deadline on the continuation (immediately when it has already passed).
+ */
+export const rearmGroupMemberDeadline = async (
+  deps: GroupMemberDeadlineDeps,
+  continuationParams: InternalExecAgentParams,
+  continuation: ExecAgentResult,
+): Promise<void> => {
+  const bridge = continuationParams.hooks?.find((hook) => hook.id === 'group-member-bridge')
+    ?.webhook?.body as GroupMemberBridgeParams | undefined;
+  if (!bridge?.deadlineAt || !continuation.success || !continuation.operationId) return;
+
+  await deps.agentRuntimeService.scheduleGroupMemberTimeout(
+    {
+      anchorMessageId: bridge.anchorMessageId,
+      expectedMembers: bridge.expectedMembers,
+      groupToolMessageId: bridge.groupToolMessageId,
+      memberOperationId: continuation.operationId,
+      mode: bridge.mode,
+      onComplete: bridge.onComplete,
+      parentOperationId: bridge.parentOperationId,
+    },
+    Math.max(1, bridge.deadlineAt - Date.now()),
+  );
 };

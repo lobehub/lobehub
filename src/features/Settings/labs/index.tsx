@@ -1,9 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Alert, Switch, Tag } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Alert, Flexbox, Switch, Tag, Tooltip } from '@lobehub/ui';
+import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { FlaskConicalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +12,7 @@ import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
@@ -44,7 +44,21 @@ const LabsForm = memo(() => {
   const labChecked = useUserStore((s) =>
     LAB_FEATURES.map(({ flag }) => labPreferSelectors[flag](s)),
   );
+  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableWorkspace);
   const form = useForm();
+
+  // Cross-surface experiments. Platform-specific ones (Electron main-process
+  // features) live in the Desktop group; workspace experiments only show to
+  // users with workspace access. Everything else is General.
+  const generalItems = LAB_FEATURES.filter(
+    (feature) => !feature.desktopOnly && !feature.workspaceOnly,
+  );
+  const workspaceItems = enableWorkspace
+    ? LAB_FEATURES.filter((feature) => feature.workspaceOnly)
+    : [];
+  // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
+  // in-app browser (renderer-retained Electron webviews).
+  const desktopItems = LAB_FEATURES.filter((feature) => feature.desktopOnly);
 
   if (!isUserStateInit) {
     // A failed user-state init must show error + Retry, not a permanent skeleton
@@ -56,19 +70,14 @@ const LabsForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    // Same groups as the loaded form: General always, Desktop only in Electron.
+    // Same groups as the loaded form: General always, Workspace with workspace
+    // access, Desktop only in Electron.
     return (
       <SettingsSectionSkeleton
         groups={[
-          { rows: LAB_FEATURES.filter((feature) => !feature.desktopOnly).length, titleWidth: 72 },
-          ...(isDesktop
-            ? [
-                {
-                  rows: LAB_FEATURES.filter((feature) => feature.desktopOnly).length,
-                  titleWidth: 72,
-                },
-              ]
-            : []),
+          { rows: generalItems.length, titleWidth: 72 },
+          ...(workspaceItems.length > 0 ? [{ rows: workspaceItems.length, titleWidth: 72 }] : []),
+          ...(isDesktop ? [{ rows: desktopItems.length, titleWidth: 72 }] : []),
         ]}
       />
     );
@@ -98,19 +107,19 @@ const LabsForm = memo(() => {
     minWidth: undefined,
   });
 
-  // Cross-surface experiments. Platform-specific ones (Electron main-process
-  // features) live in the Desktop group below; everything else is General.
-  const generalItems = LAB_FEATURES.filter((feature) => !feature.desktopOnly);
-  // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
-  // in-app browser (renderer-retained Electron webviews).
-  const desktopItems = LAB_FEATURES.filter((feature) => feature.desktopOnly);
-
   const items: FormGroupItem[] = [
     {
       children: generalItems.map((item) => toFormItem(item)),
       title: tLabs('group.general'),
     },
   ];
+
+  if (workspaceItems.length > 0) {
+    items.push({
+      children: workspaceItems.map((item) => toFormItem(item)),
+      title: tLabs('group.workspace'),
+    });
+  }
 
   // The Desktop group only renders in the Electron shell — all its experiments
   // are main-process features that do not exist on web.

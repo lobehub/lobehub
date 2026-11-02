@@ -1,4 +1,4 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 /** Shared chrome for the floating bottom bar and side panels of the image tools. */
 export const toolStyles = createStaticStyles(({ css }) => ({

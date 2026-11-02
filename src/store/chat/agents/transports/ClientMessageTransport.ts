@@ -3,8 +3,10 @@ import type {
   QueryMessagesInput,
   QueryMessagesOptions,
   RuntimeMessageRef,
+  RuntimeToolMessage,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
+import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import type {
   ChatMessagePluginError,
   CreateMessageParams,
@@ -57,14 +59,22 @@ export class ClientMessageTransport implements MessageTransport {
   }
 
   createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
-    return this.createMessage(params);
+    return this.createToolMessageForOperation(params, this.operationId);
   }
 
   createToolMessageForOperation(
     params: CreateMessageParams,
     operationId: string,
   ): Promise<RuntimeMessageRef> {
-    return this.createMessage(params, operationId);
+    return this.createMessage(
+      {
+        ...params,
+        ...(params.pluginIntervention && {
+          pluginIntervention: { ...params.pluginIntervention, runtimeType: 'client' },
+        }),
+      },
+      operationId,
+    );
   }
 
   async deleteMessage(id: string): Promise<void> {
@@ -82,11 +92,20 @@ export class ClientMessageTransport implements MessageTransport {
     return undefined;
   }
 
+  async getToolMessage(id: string): Promise<RuntimeToolMessage | undefined> {
+    const messages = await this.withStoredToolPayloads(this.getMessages());
+    const message = messages.find((message) => message.id === id && message.role === 'tool');
+    if (message?.payloadOmitted && !this.storedToolPayloads.has(id)) {
+      throw new Error(`Cannot restore tool result for ${id}`);
+    }
+    return message;
+  }
+
   async query(
     _params?: QueryMessagesInput,
     _options?: QueryMessagesOptions,
   ): Promise<UIChatMessage[]> {
-    return this.withStoredToolPayloads(this.getMessages());
+    return (await this.withStoredToolPayloads(this.getMessages())).map(omitToolWorkRegistration);
   }
 
   async update(id: string, params: Partial<UpdateMessageParams>): Promise<void> {
@@ -166,6 +185,7 @@ export class ClientMessageTransport implements MessageTransport {
     store.internal_dispatchMessage(
       { id, type: 'createMessage', value: { ...message } },
       optimisticContext,
+      { creationOrigin: 'client' },
     );
 
     try {
@@ -188,6 +208,7 @@ export class ClientMessageTransport implements MessageTransport {
       );
       throw createError;
     }
+    store.internal_confirmClientMessages([id]);
 
     return message;
   }

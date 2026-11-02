@@ -1,6 +1,7 @@
 {
   "agent_cron_job_completed": "Nhiệm vụ đã lên lịch \"{{jobName}}\" của bạn đã hoàn thành thành công.",
   "agent_cron_job_completed_title": "Nhiệm vụ đã lên lịch hoàn thành",
+  "agent_cron_job_completed_with_summary": "Nhiệm vụ đã lên lịch của bạn \"{{jobName}}\" đã hoàn thành thành công.\n\n{{summary}}",
   "agent_cron_job_failed": "Tác vụ đã lên lịch \"{{jobName}}\" của bạn đã gặp lỗi. Mở tác vụ để xem chi tiết đầy đủ.",
   "agent_cron_job_failed_insufficient_budget": "Tác vụ đã lên lịch \"{{jobName}}\" không thể chạy vì tài khoản của bạn đã hết tín dụng. Vui lòng nạp thêm hoặc nâng cấp gói để tiếp tục các lần chạy sau.",
   "agent_cron_job_failed_insufficient_budget_title": "Tác vụ tạm dừng: không đủ tín dụng",
