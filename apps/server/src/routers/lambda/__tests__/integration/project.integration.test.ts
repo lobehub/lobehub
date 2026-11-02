@@ -2,7 +2,7 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { agents, knowledgeBases, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { projectRouter } from '../../project';
 import { taskRouter } from '../../task';
@@ -20,9 +20,13 @@ describe('Project Router Integration', () => {
   let userId: string;
   let caller: ReturnType<typeof projectRouter.createCaller>;
 
-  beforeEach(async () => {
+  // Initial database migrations can exceed the default hook timeout on CI.
+  beforeAll(async () => {
     serverDB = await getTestDB();
     testDB = serverDB;
+  }, 60_000);
+
+  beforeEach(async () => {
     userId = await createTestUser(serverDB);
     caller = projectRouter.createCaller(createTestContext(userId));
   });
