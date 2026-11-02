@@ -11,6 +11,7 @@ import {
   Icon,
   Text,
   toast,
+  Tooltip,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -61,6 +62,11 @@ const styles = stylex.create({
 });
 
 interface ConnectionsProps {
+  /**
+   * Why this role cannot connect or disconnect here (a workspace Viewer);
+   * the controls stay visible but disabled, with the reason as a tooltip.
+   */
+  blockedReason?: string;
   /** False when the deployment has no Linear OAuth application; connecting is impossible. */
   configured: boolean;
   connections: LinearConnectionView[];
@@ -72,7 +78,7 @@ interface ConnectionsProps {
 
 /** Every Linear workspace connected in this scope. */
 const Connections = memo<ConnectionsProps>(
-  ({ configured, connections, installHref, onChanged, scope }) => {
+  ({ blockedReason, configured, connections, installHref, onChanged, scope }) => {
     const { t } = useTranslation('integration');
 
     const disconnect = (connection: LinearConnectionView) => {
@@ -100,15 +106,19 @@ const Connections = memo<ConnectionsProps>(
           <Text strong style={{ fontSize: 16 }}>
             {t('linear.connections.title')}
           </Text>
-          <Button
-            disabled={!installHref}
-            href={installHref}
-            icon={<Icon icon={PlusIcon} />}
-            size="small"
-            type={connections.length > 0 ? 'default' : 'primary'}
-          >
-            {t('linear.connections.connect')}
-          </Button>
+          <Tooltip title={blockedReason}>
+            <span>
+              <Button
+                disabled={!installHref}
+                href={installHref}
+                icon={<Icon icon={PlusIcon} />}
+                size="small"
+                type={connections.length > 0 ? 'default' : 'primary'}
+              >
+                {t('linear.connections.connect')}
+              </Button>
+            </span>
+          </Tooltip>
         </Flexbox>
 
         {configured ? null : (
@@ -165,6 +175,7 @@ const Connections = memo<ConnectionsProps>(
                       },
                       {
                         danger: true,
+                        disabled: !!blockedReason,
                         key: 'disconnect',
                         label: t('linear.disconnect.confirm'),
                         onClick: () => disconnect(connection),

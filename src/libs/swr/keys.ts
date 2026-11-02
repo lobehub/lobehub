@@ -906,21 +906,17 @@ export const agentSignalKeys = {
 export const botWakeKeys = {
   decisions: def(
     'botWake:decisions',
-    // Keyed by context: a bot id is only visible in the workspace it lives in.
     (
-      workspaceId: string | null,
       botId: string,
       filters: { followupOnly: boolean; outcome?: string; unmarkedOnly: boolean },
-      cursor: { createdAt: string; id: string } | undefined,
+      page: number,
     ) => [
       'botWake:decisions',
-      workspaceId,
       botId,
       filters.outcome ?? null,
       filters.followupOnly,
       filters.unmarkedOnly,
-      cursor?.createdAt ?? null,
-      cursor?.id ?? null,
+      page,
     ],
   ),
   summary: def('botWake:summary', (botId: string) => ['botWake:summary', botId]),
@@ -980,6 +976,7 @@ export const imessageKeys = {
 export const electronKeys = {
   /** Claude Code logins held on this machine (device-local, never persisted). */
   claudeCodeAccounts: def('electron:claudeCodeAccounts', () => ['electron:claudeCodeAccounts']),
+  appMenu: def('electron:getAppMenu', () => ['electron:getAppMenu']),
   appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
   desktopHotkeys: def('electron:getDesktopHotkeys', () => ['electron:getDesktopHotkeys']),
   gatewayDeviceInfo: def('electron:getGatewayDeviceInfo', () => ['electron:getGatewayDeviceInfo']),

@@ -62,7 +62,7 @@ export async function executeWithCallback(
     client?: PlatformClient;
     displayToolCalls?: boolean;
     /** The message falls within the bot's duties; told to the agent with a `followup`. */
-    duty?: { matched?: string };
+    duty?: { helpful?: boolean; matched?: string };
     /** The bot woke in its follow-up window; told to the agent with a `followup`. */
     followup?: BotPlatformContext['followup'];
     /** The bot woke only because its name is in the text; told to the agent with a `followup`. */

@@ -42,8 +42,8 @@ vi.mock('@/store/file/store', () => ({
   getFileStoreState: () => ({ moveChatContextSelections: vi.fn() }),
 }));
 
-/** The two server-side halves the transport requires: capability + rollout. */
-const mockServer = vi.hoisted(() => ({ agentGatewayProtocol: 2 as 1 | 2, enableGatewayMux: true }));
+/** The deployment capability the transport requires. */
+const mockServer = vi.hoisted(() => ({ agentGatewayProtocol: 2 as 1 | 2 }));
 const mockUserState = vi.hoisted(() => ({
   profile: { id: 'user-1' },
   workspaceUserPreference: { agentDeviceOverrides: {} as Record<string, any> },
@@ -187,11 +187,9 @@ function createTestAction(overrides: Record<string, any> = {}) {
 describe('GatewayActionImpl (multiplexed gateway transport)', () => {
   beforeEach(() => {
     mockServer.agentGatewayProtocol = 2;
-    mockServer.enableGatewayMux = true;
     (globalThis as any).window = {
       global_serverConfigStore: {
         getState: () => ({
-          featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
           serverConfig: {
             agentGatewayProtocol: mockServer.agentGatewayProtocol,
             agentGatewayUrl: GATEWAY_URL,
@@ -202,7 +200,6 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
     };
     // The conversation read resolves Gateway mode from this store too.
     vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
-      featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
       serverConfig: {
         agentGatewayProtocol: mockServer.agentGatewayProtocol,
         agentGatewayUrl: GATEWAY_URL,

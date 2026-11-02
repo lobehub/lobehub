@@ -43,8 +43,8 @@ vi.mock('@/store/file/store', () => ({
   getFileStoreState: () => ({ moveChatContextSelections: vi.fn() }),
 }));
 
-/** The two server-side halves the transport requires: capability + rollout. */
-const mockServer = vi.hoisted(() => ({ agentGatewayProtocol: 2 as 1 | 2, enableGatewayMux: true }));
+/** The deployment capability the transport requires. */
+const mockServer = vi.hoisted(() => ({ agentGatewayProtocol: 2 as 1 | 2 }));
 const mockUserState = vi.hoisted(() => ({
   profile: { id: 'user-1' },
   workspaceUserPreference: { agentDeviceOverrides: {} as Record<string, any> },
@@ -190,11 +190,9 @@ const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve,
 describe('GatewayActionImpl (multiplexed gateway transport)', () => {
   beforeEach(() => {
     mockServer.agentGatewayProtocol = 2;
-    mockServer.enableGatewayMux = true;
     (globalThis as any).window = {
       global_serverConfigStore: {
         getState: () => ({
-          featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
           serverConfig: {
             agentGatewayProtocol: mockServer.agentGatewayProtocol,
             agentGatewayUrl: GATEWAY_URL,
@@ -205,7 +203,6 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
     };
     // The conversation read resolves Gateway mode from this store too.
     vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
-      featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
       serverConfig: {
         agentGatewayProtocol: mockServer.agentGatewayProtocol,
         agentGatewayUrl: GATEWAY_URL,
@@ -252,8 +249,8 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       });
     });
 
-    it('keeps the v1 per-operation socket byte-for-byte outside the rollout', () => {
-      mockServer.enableGatewayMux = false;
+    it('keeps the v1 per-operation socket byte-for-byte on a v1 deployment', () => {
+      mockServer.agentGatewayProtocol = 1;
       const { action, state, v1Client } = createTestAction();
 
       action.connectToGateway({
@@ -275,36 +272,6 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       expect(action.createMuxClient).not.toHaveBeenCalled();
       expect(v1Client.connect).toHaveBeenCalled();
       expect(state.gatewayConnections['op-1'].client).toBe(v1Client);
-    });
-
-    it('uses the share-scoped mux even outside the rollout', () => {
-      mockServer.enableGatewayMux = false;
-      const { action, mux, muxClient, state, v1Client } = createTestAction();
-
-      action.connectToGateway({
-        agentShareId: 'share-1',
-        executor: true,
-        gatewayUrl: GATEWAY_URL,
-        operationId: 'op-1',
-        token: 'unused-in-mux',
-        topicId: 'topic-1',
-      });
-
-      expect(action.resolveGatewayMux).toHaveBeenCalledWith({
-        agentShareId: 'share-1',
-        gatewayUrl: GATEWAY_URL,
-      });
-      expect(action.createMuxClient).toHaveBeenCalledWith(mux, 'op-1', {
-        executor: true,
-        resumeOnConnect: undefined,
-      });
-      expect(action.createClient).not.toHaveBeenCalled();
-      expect(muxClient.connect).toHaveBeenCalled();
-      expect(v1Client.connect).not.toHaveBeenCalled();
-      expect(state.gatewayConnections['op-1']).toMatchObject({
-        client: muxClient,
-        status: 'connecting',
-      });
     });
 
     it('resolves the page-wide registry mux by default', () => {
@@ -561,7 +528,6 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       (globalThis as any).window = {
         global_serverConfigStore: {
           getState: () => ({
-            featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
             serverConfig: {
               agentGatewayProtocol: mockServer.agentGatewayProtocol,
               ...serverConfig,
@@ -595,7 +561,6 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
         const { action, mux } = createTestAction();
         Reflect.deleteProperty(globalThis, 'window');
         vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
-          featureFlags: { enableGatewayMux: true },
           serverConfig: {
             agentGatewayProtocol: 2,
             agentGatewayUrl: GATEWAY_URL,
@@ -615,14 +580,7 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       },
     );
 
-    it('is a no-op outside the rollout, without gateway mode, or on a v1 deployment', () => {
-      mockServer.enableGatewayMux = false;
-      withServerConfig({ agentGatewayUrl: GATEWAY_URL, enableGatewayMode: true });
-      const off = createTestAction();
-      off.action.warmupGatewayMux();
-      expect(off.mux.connect).not.toHaveBeenCalled();
-
-      mockServer.enableGatewayMux = true;
+    it('is a no-op without gateway mode or on a v1 deployment', () => {
       withServerConfig({ agentGatewayUrl: GATEWAY_URL, enableGatewayMode: false });
       const noGateway = createTestAction();
       noGateway.action.warmupGatewayMux();
@@ -658,7 +616,6 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       (globalThis as any).window = {
         global_serverConfigStore: {
           getState: () => ({
-            featureFlags: { enableGatewayMux: mockServer.enableGatewayMux },
             serverConfig: {
               agentGatewayProtocol: mockServer.agentGatewayProtocol,
               agentGatewayUrl: GATEWAY_URL,

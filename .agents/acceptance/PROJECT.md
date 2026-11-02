@@ -374,7 +374,7 @@ bash "$GUARD" stop                      # teardown, always
 | `ACCEPTANCE_GUARD_RED`    | `swap=80,free=8`                              | Linux host stop thresholds                                 |
 
 Thresholds are host-level on purpose. The groups (`Google Chrome for Testing`,
-`next-server|vite`, `tsgo`) also match other worktrees' servers and other runs'
+`next-server|vite`, `tsrs`) also match other worktrees' servers and other runs'
 browsers — five such processes held \~20 GB here — so a group or total RSS cap turns a
 merely busy machine red and stops a healthy run. The groups select what
 `stop-owned` may stop; they do not determine this adapter's tier.

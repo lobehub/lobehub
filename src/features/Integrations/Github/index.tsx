@@ -11,6 +11,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { usePermission } from '@/hooks/usePermission';
 import { scmService } from '@/services/scm';
 
 import { useGithubIntegration } from '../useGithubIntegration';
@@ -73,6 +74,8 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
   const workspaceSlug = useActiveWorkspaceSlug();
   const workspaceId = useActiveWorkspaceId();
   const scope = workspaceSlug ? 'workspace' : 'personal';
+  // The server only lets members and up bind or remove a workspace connection.
+  const { allowed: canWrite, reason: blockedReason } = usePermission('create_content');
   const data = useGithubIntegration();
 
   useEffect(() => {
@@ -124,7 +127,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
 
   const { config, identity, installations } = data;
   const installHref =
-    config?.enabled && config.installPath
+    canWrite && config?.enabled && config.installPath
       ? buildGithubInstallHref(config.installPath, { appOrigin, workspaceId, workspaceSlug })
       : undefined;
 
@@ -195,6 +198,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
         <Skeleton height={96} />
       ) : (
         <Connections
+          blockedReason={blockedReason}
           configured={!!config?.enabled}
           installHref={installHref}
           installations={installations}

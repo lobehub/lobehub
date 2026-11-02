@@ -510,13 +510,13 @@ describe('call_tool executor', () => {
 
   describe('Skip Create Tool Message Mode', () => {
     it('should reuse existing tool message when skipCreateToolMessage is true', async () => {
-      // Given
       const mockStore = createMockStore();
       const context = createTestContext();
 
       const assistantMessage = createAssistantMessage();
       const existingToolMessage = {
         id: 'msg_existing_tool',
+        tool_call_id: 'approval-call',
         role: 'tool',
         content: '',
         pluginIntervention: { status: 'pending' },
@@ -526,7 +526,7 @@ describe('call_tool executor', () => {
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage, existingToolMessage as any];
 
       const instruction = createCallToolInstruction(
-        {},
+        { id: 'approval-call' },
         {
           skipCreateToolMessage: true,
           parentMessageId: 'msg_existing_tool',
@@ -553,7 +553,6 @@ describe('call_tool executor', () => {
     });
 
     it('should still execute tool when skipping message creation', async () => {
-      // Given
       const mockStore = createMockStore({
         internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
           data: 'result',
@@ -565,6 +564,7 @@ describe('call_tool executor', () => {
       const assistantMessage = createAssistantMessage();
       const existingToolMessage = {
         id: 'msg_tool_reuse',
+        tool_call_id: 'tool_resume',
         role: 'tool',
         content: '',
         createdAt: Date.now(),
