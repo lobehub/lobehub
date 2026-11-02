@@ -67,6 +67,13 @@ describe('hierarchySubtreeHoldsSelection', () => {
     expect(hierarchySubtreeHoldsSelection(folderA, children, 'file_1')).toBe(true);
   });
 
+  it('walks through a document that holds the opened file', () => {
+    const parentPage = { hasChildren: true, id: 'parent_page', isFolder: false };
+    const nested = { '': [folderA], 'folder_a': [parentPage], 'parent_page': [page] } as any;
+
+    expect(hierarchySubtreeHoldsSelection(folderA, nested, 'file_1')).toBe(true);
+  });
+
   it('ignores a sibling subtree', () => {
     expect(hierarchySubtreeHoldsSelection(folderB, children, 'folder_a')).toBe(false);
   });

@@ -3,6 +3,7 @@ import { createElement, Fragment, type ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useChatStore } from '@/store/chat';
 import { useProjectStore } from '@/store/project';
 import { type ProjectListItem } from '@/store/project';
 
@@ -134,5 +135,18 @@ describe('useProjectConversation', () => {
 
     expect(screen.queryByText('Project not found or access denied')).toBeNull();
     expect(container.querySelector('[aria-busy]')).not.toBeNull();
+  });
+
+  /** @example User report: a project "+" with no runnable directory created an untitled topic up front. */
+  it('opens and stages a conversation-only draft that carries no directory', () => {
+    const { result } = renderHook(() => useProjectConversation(), {
+      wrapper: wrapper('/project/launch/topic?agent=agt_coord'),
+    });
+
+    expect(result.current.fallback).toBeUndefined();
+    expect(useChatStore.getState().pendingNewTopicDirectory).toEqual({
+      agentId: 'agt_coord',
+      projectId: 'prj_launch',
+    });
   });
 });

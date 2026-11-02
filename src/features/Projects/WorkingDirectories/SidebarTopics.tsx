@@ -126,7 +126,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
             onClick={() =>
               // Same habit as an agent's "+": straight into the coordinator's
               // conversation, on the first directory it can run in when there is one.
-              void startTopic({
+              startTopic({
                 agentId: coordinatorAgentId,
                 directoryId: directories.find((d) => canStageDraftOn(d, fixedDeviceId))?.id,
               })

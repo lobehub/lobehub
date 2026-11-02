@@ -147,8 +147,10 @@ export const observeChatAttempt = async (
         ...terminal.data,
         routeAttempt: {
           attemptId: attempt.attemptId,
+          channelId: attempt.channelId,
           outcome: finalResult.outcome,
           requestId: attempt.requestId,
+          routerId: attempt.routerId,
         },
         speed: finalResult.speed ? { ...finalResult.speed } : undefined,
       });

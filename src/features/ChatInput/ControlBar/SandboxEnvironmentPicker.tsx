@@ -53,13 +53,11 @@ const styles = stylex.create({
     padding: 0,
     transition: 'color 0.2s',
   },
-  // StyleX longhands outrank the row's own emotion padding.
+  // Applied after the row's defaults through xstyle.
   option: {
     paddingInline: 0,
   },
 });
-
-const optionClassName = stylex.props(styles.option).className;
 
 interface SandboxEnvironmentPickerProps {
   onChange: (selection: SandboxSelection) => Promise<void>;
@@ -131,21 +129,21 @@ const SandboxEnvironmentPicker = memo<SandboxEnvironmentPickerProps>(({ onChange
 
       <OptionRow
         active={!value.environmentId}
-        className={optionClassName}
         desc={t('sandboxEnvironment.noneDesc')}
         icon={<Icon icon={CircleSlashIcon} size={16} />}
         label={t('sandboxEnvironment.none')}
+        xstyle={styles.option}
         onClick={() => void select(undefined)}
       />
       <div {...stylex.props(styles.list)}>
         {environments.map((environment) => (
           <OptionRow
             active={environment.id === value.environmentId}
-            className={optionClassName}
             desc={environment.description || undefined}
             icon={<Icon icon={PackageIcon} size={16} />}
             key={environment.id}
             label={environment.name}
+            xstyle={styles.option}
             onClick={() => void select(environment.id)}
           />
         ))}
@@ -187,9 +185,12 @@ const SandboxEnvironmentPicker = memo<SandboxEnvironmentPickerProps>(({ onChange
       onOpenChange={setOpen}
     >
       <div>
-        <div className={workingDirectoryChipStyles.chip} data-testid={'sandbox-environment-chip'}>
+        <div
+          {...stylex.props(workingDirectoryChipStyles.chip)}
+          data-testid={'sandbox-environment-chip'}
+        >
           <Icon icon={value.environmentId ? PackageIcon : CircleSlashIcon} size={14} />
-          <span className={workingDirectoryChipStyles.label}>{label}</span>
+          <span {...stylex.props(workingDirectoryChipStyles.label)}>{label}</span>
           <Icon icon={ChevronDownIcon} size={12} />
         </div>
       </div>

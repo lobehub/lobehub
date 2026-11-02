@@ -1,8 +1,8 @@
+import type { UserMemoryActivityInsert } from '@lobechat/types';
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryActivity } from '../../../schemas';
 import { userMemories, userMemoriesActivities, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryActivityModel } from '../activity';
@@ -27,7 +27,7 @@ beforeEach(async () => {
 describe('UserMemoryActivityModel', () => {
   describe('create', () => {
     it('should create a new activity', async () => {
-      const activityData: Omit<NewUserMemoryActivity, 'userId'> = {
+      const activityData: Omit<UserMemoryActivityInsert, 'userId'> = {
         type: 'event',
         narrative: 'User attended a conference',
         notes: 'Met interesting people',

@@ -18,8 +18,12 @@ import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupMemberContinuationResult';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
+import { RequestedDeviceIgnoredError } from '@/server/services/aiAgent/pipeline/turnSetup';
 import { AgentRelayHopLimitError } from '@/server/services/aiAgent/sourceAttribution';
-import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
+import {
+  ForeignLiveRunError,
+  TopicStartReservationError,
+} from '@/server/services/aiAgent/topicStartReservation';
 
 import type { ExecAgentInput } from './execSchemas';
 import {
@@ -302,6 +306,22 @@ export const execRouter = router({
           code: 'CONFLICT',
           message: 'The conversation is busy with a running turn; queue the message behind it.',
         });
+      }
+
+      // Another member's run drives the topic; a send never interrupts it, and
+      // nothing was written.
+      if (error instanceof ForeignLiveRunError) {
+        throw new TRPCError({
+          cause: error,
+          code: 'CONFLICT',
+          message: 'Another member is running this conversation; wait until their turn finishes.',
+        });
+      }
+
+      // A device the caller required would be dropped by the agent's fixed
+      // execution target; nothing was written.
+      if (error instanceof RequestedDeviceIgnoredError) {
+        throw new TRPCError({ cause: error, code: 'PRECONDITION_FAILED', message: error.message });
       }
 
       // An agent → agent send past the relay bound: the sending agent has to

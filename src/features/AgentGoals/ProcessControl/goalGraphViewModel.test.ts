@@ -43,6 +43,7 @@ const goal = (overrides: Partial<GoalItem> = {}): GoalItem => ({
   title: 'Goal',
   updatedAt: T0,
   userId: 'user-1',
+  visibility: 'public',
   workspaceId: null,
   ...overrides,
 });

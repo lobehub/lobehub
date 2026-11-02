@@ -1,15 +1,10 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import {
-  Button,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  responsive,
-  Tag,
-  useResponsive,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Tag, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
@@ -20,37 +15,25 @@ import { SCROLL_PARENT_ID } from '../features/const';
 
 const SCROLL_CONTAINER_ID = 'lobe-mobile-scroll-container';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  more: css`
-    display: flex;
-    align-items: center;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  tag: css`
-    flex: none;
-
-    padding-block: 0.1em;
-    padding-inline: 0.3em;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 18px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-    ${responsive.sm} {
-      font-size: 14px;
-    }
-  `,
-  title: css`
-    margin-block-start: 0.5em;
-    font-size: 20px;
-    font-weight: 600;
-    ${responsive.sm} {
-      font-size: 18px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  more: { display: 'flex', alignItems: 'center', color: cssVar.colorTextSecondary },
+  tag: {
+    flex: 'none',
+    paddingBlock: '0.1em',
+    paddingInline: '0.3em',
+    borderRadius: cssVar.borderRadius,
+    fontSize: { default: '18px', [media.sm]: '14px' },
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  title: {
+    marginBlockStart: '0.5em',
+    fontSize: { default: '20px', [media.sm]: '18px' },
+    fontWeight: 600,
+  },
+});
 
 interface TitleProps extends FlexboxProps {
   more?: ReactNode;
@@ -60,7 +43,7 @@ interface TitleProps extends FlexboxProps {
 
 const Title = memo<TitleProps>(({ tag, children, moreLink, more }) => {
   const { mobile } = useResponsive();
-  const title = <h2 className={styles.title}>{children}</h2>;
+  const title = <h2 {...stylex.props(styles.title)}>{children}</h2>;
 
   const handleMoreClick = () => {
     if (!moreLink) return;
@@ -77,7 +60,7 @@ const Title = memo<TitleProps>(({ tag, children, moreLink, more }) => {
       {tag ? (
         <Flexbox horizontal align={'center'} gap={8}>
           {title}
-          <Tag className={styles.tag}>{tag}</Tag>
+          <Tag className={stylex.props(styles.tag).className}>{tag}</Tag>
         </Flexbox>
       ) : (
         title
@@ -88,7 +71,11 @@ const Title = memo<TitleProps>(({ tag, children, moreLink, more }) => {
           to={moreLink}
           onClick={handleMoreClick}
         >
-          <Button className={styles.more} style={{ paddingInline: 6 }} type={'text'}>
+          <Button
+            className={stylex.props(styles.more).className}
+            style={{ paddingInline: 6 }}
+            type={'text'}
+          >
             <span>{more}</span>
             <Icon icon={ChevronRight} />
           </Button>

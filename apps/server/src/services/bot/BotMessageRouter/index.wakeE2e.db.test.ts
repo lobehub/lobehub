@@ -110,7 +110,6 @@ vi.mock('../deferredReplay', () => ({
     }
   },
 }));
-vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -275,9 +274,8 @@ run(
       const subscribed = mockOnSubscribedMessage.mock.calls.at(-1)![0];
       const mention = mockOnNewMention.mock.calls.at(-1)![0];
       const { handleWakeFlush, recordWakeRunOutcome } = await import('../wake/scheduler');
-      // The flush loads the provider (settings and owner) and checks the owner's rollout flag, which
-      // the featureFlags mock above turns on.
-      const loadSettings = async () => ({ settings, userId: 'owner-user' });
+      // The flush re-reads the provider's settings, so a changed config applies at once.
+      const loadSettings = async () => ({ settings });
       const field = async (key: string, name: string) =>
         redis.hget(`${redisPrefix}:bot-wake:channel:v1:${key}`, name);
 

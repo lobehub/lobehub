@@ -31,11 +31,13 @@ export type QueuedFollowUpRequest = Omit<
   | 'parentMessageId'
   | 'queuedSuccessor'
   | 'replacesOperationId'
+  | 'requireDevice'
   | 'resumeApproval'
   | 'resumeApprovals'
   | 'resumeToolResult'
   | 'sourceOperationId'
   | 'steer'
+  | 'title'
 >;
 
 export interface QueuedFollowUp extends SteerQueueEntry {

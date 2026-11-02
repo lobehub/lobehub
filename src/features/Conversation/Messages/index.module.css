@@ -1,0 +1,4 @@
+/* Prevent the antd textarea from growing too long. */
+.message :global(.ant-input) {
+  max-height: 900px;
+}

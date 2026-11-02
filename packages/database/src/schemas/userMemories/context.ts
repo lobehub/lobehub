@@ -188,10 +188,3 @@ export const userMemoriesContextProjects = pgTable(
     index('user_memories_context_projects_user_id_index').on(table.userId),
   ],
 );
-
-export type UserMemoryContext = typeof userMemoriesContexts.$inferSelect;
-export type UserMemoryContextsWithoutVectors = Omit<
-  UserMemoryContext,
-  'titleVector' | 'descriptionVector'
->;
-export type NewUserMemoryContext = typeof userMemoriesContexts.$inferInsert;

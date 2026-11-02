@@ -1,10 +1,7 @@
-/**
- * @see https://github.com/lobehub/lobe-chat/discussions/6563
- */
+/** @see https://github.com/lobehub/lobe-chat/discussions/6563 */
 import type { GoogleGenAIOptions } from '@google/genai';
 import type { ModelPricingContext, RouterRuntimeRequestContext } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
-import { createTimingHelpers, getDurationMs } from '../../utils/timing';
 import debug from 'debug';
 import { nanoid } from 'nanoid';
 
@@ -27,6 +24,7 @@ import type {
   GenerateObjectOptions,
   GenerateObjectPayload,
   HandleCreateVideoWebhookPayload,
+  TextToSpeechOptions,
   TextToSpeechPayload,
   VideoPollingRoute,
 } from '../../types';
@@ -36,6 +34,7 @@ import { postProcessModelList } from '../../utils/postProcessModelList';
 import { isImageDecodingRequestError, shouldStopFallbackForError } from '../../utils/routeFallback';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { setRuntimeSignatureScopeSource } from '../../utils/signatureScope';
+import { createTimingHelpers, getDurationMs } from '../../utils/timing';
 import { createVideoWithCompletionMode } from '../../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from '../BaseAI';
 import type { ApiType } from './apiTypes';
@@ -1195,7 +1194,7 @@ export const createRouterRuntime = ({
       );
     }
 
-    async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
+    async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.textToSpeech!(payload, options),

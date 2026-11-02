@@ -45,8 +45,10 @@ const QueuedRequestSchema = ExecAgentFieldsSchema.omit({
   resumeApproval: true,
   resumeApprovals: true,
   resumeToolResult: true,
+  requireDevice: true,
   steer: true,
   supersedeLiveRun: true,
+  title: true,
 }).refine((data) => data.agentId || data.slug, {
   message: 'Either agentId or slug must be provided',
 });

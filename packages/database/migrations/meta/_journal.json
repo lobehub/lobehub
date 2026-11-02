@@ -1386,6 +1386,13 @@
       "when": 1793371200635,
       "tag": "0197_channel_jobs_message_member_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 198,
+      "version": "7",
+      "when": 1793450092790,
+      "tag": "0198_goal_visibility",
+      "breakpoints": true
     }
   ],
   "version": "6"

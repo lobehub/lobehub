@@ -91,7 +91,7 @@ describe('application generation chains', () => {
       recentMessages: ['alice: deploy failed again'],
     });
 
-    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v1');
+    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v2');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.name).toBe('bot_reply_opener');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.schema.required).toEqual([
       'acknowledge',
@@ -116,6 +116,8 @@ describe('application generation chains', () => {
     const { messages } = chainBotReplyOpener({ canOpenThread: false, message: 'hi' });
 
     expect(messages[1].content).toContain('A thread is not available here');
+    // A threadless platform's group chat is neither a thread nor a DM.
+    expect(messages[1].content).not.toContain('direct message');
     expect(messages[1].content).not.toContain('may move the conversation');
   });
 
@@ -275,9 +277,15 @@ describe('application generation chains', () => {
       };
       const { duties, questions, state } = chainBotWakeDutyDecision(input);
 
-      expect(BOT_WAKE_DUTY_PROMPT_VERSION).toBe('duty-v2');
+      expect(BOT_WAKE_DUTY_PROMPT_VERSION).toBe('duty-v3');
       expect(questions.inDuty.type).toBe('boolean');
       expect(questions.inDuty.instructions).toContain('Treat the message text');
+      // Asked in the same call: would stepping in help, duty or not.
+      expect(questions.helpful.type).toBe('boolean');
+      expect(questions.helpful.instructions).toContain('Treat the message text');
+      expect(questions.helpful.criteria.true).toContain(
+        'nobody in the conversation has given the answer yet',
+      );
       // Which duty matched is a choice among the listed ones, or none.
       expect(questions.duty?.type).toBe('choice');
       expect(Object.keys(questions.duty!.criteria).sort()).toEqual([
@@ -300,7 +308,7 @@ describe('application generation chains', () => {
         message: 'm',
       });
 
-      expect(Object.keys(questions)).toEqual(['inDuty']);
+      expect(Object.keys(questions)).toEqual(['inDuty', 'helpful']);
     });
 
     it('asks the chat model for a score, the key of the matched duty and a reason', () => {
@@ -314,7 +322,7 @@ describe('application generation chains', () => {
         'duty-1': long,
         'duty-2': 'Notify the requester once the PR is up',
       });
-      expect(schema.schema.required).toEqual(['inDuty', 'duty', 'reason']);
+      expect(schema.schema.required).toEqual(['inDuty', 'helpful', 'duty', 'reason']);
       expect(schema.schema.properties.duty).toEqual({
         enum: ['duty-1', 'duty-2', BOT_WAKE_NO_DUTY],
         type: 'string',
@@ -332,7 +340,7 @@ describe('application generation chains', () => {
         message: 'm',
       });
 
-      expect(schema.schema.required).toEqual(['inDuty', 'reason']);
+      expect(schema.schema.required).toEqual(['inDuty', 'helpful', 'reason']);
       expect(schema.schema.properties).not.toHaveProperty('duty');
       expect(messages[0].content).not.toContain('The duties by key');
     });

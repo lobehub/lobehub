@@ -26,6 +26,11 @@ export const RedisKeyNamespace = {
    */
   AGENT_STEER: 'agentSteer',
   /**
+   * Agent identity keys — replay claims for agent-account provider webhooks,
+   * shared by every instance that may receive a delivery.
+   */
+  AGENT_IDENTITY: 'agent-identity',
+  /**
    * Bot-wake channel state: when the bot and its owner last spoke, the follow-up window, the
    * silent-wake budget and the per-channel wake scheduler.
    */
@@ -176,6 +181,17 @@ export const RedisKeys = {
     threadStartFence: (threadId: string): string => `thread_start:v1:${threadId}`,
   },
   /**
+   * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.
+   */
+  agentIdentity: {
+    /**
+     * Replay claim on one provider webhook delivery.
+     * Full key: agent-identity:webhook_event:v1:{provider}:{eventId}
+     */
+    webhookEvent: (provider: string, eventId: string): string =>
+      `webhook_event:v1:${provider}:${eventId}`,
+  },
+  /**
    * AI generation scope - for AI-generated content like welcome messages
    */
   aiGeneration: {
@@ -243,6 +259,7 @@ export const RedisKeys = {
  * land under another scope's prefix. Every scope must be mapped.
  */
 export const RedisKeyScopeNamespace = {
+  agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,

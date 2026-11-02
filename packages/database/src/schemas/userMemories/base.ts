@@ -51,10 +51,3 @@ export const userMemories = pgTable(
     index('user_memories_user_id_index').on(table.userId),
   ],
 );
-
-export type UserMemoryItem = typeof userMemories.$inferSelect;
-export type UserMemoryItemWithoutVectors = Omit<
-  UserMemoryItem,
-  'summaryVector1024' | 'detailsVector1024'
->;
-export type NewUserMemory = typeof userMemories.$inferInsert;

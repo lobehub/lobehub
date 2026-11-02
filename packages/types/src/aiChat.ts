@@ -104,6 +104,8 @@ export interface SendMessageServerParams {
     metadata?: ChatTopicMetadata;
     /** Pinned model snapshot for the new topic (top-level `topics.model` column). */
     model?: string;
+    /** Project the topic is born in, conversation-only (a project "+" with no directory). */
+    projectId?: string;
     provider?: string;
     title?: string;
     topicMessageIds?: string[];
@@ -190,6 +192,7 @@ export const AiSendMessageServerSchema = z.object({
       id: clientEntityId('topics'),
       metadata: z.custom<ChatTopicMetadata>().optional(),
       model: z.string().optional(),
+      projectId: z.string().optional(),
       provider: z.string().optional(),
       title: z.string().optional(),
       topicMessageIds: z.array(z.string()).optional(),

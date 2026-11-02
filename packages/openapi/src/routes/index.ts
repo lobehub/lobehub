@@ -2,6 +2,7 @@ import AgentGroupsRoutes from './agent-groups.route';
 import AgentsRoutes from './agents.route';
 import AnthropicRoutes from './anthropic.route';
 import ApiKeysRoutes from './api-keys.route';
+import AudioRoutes from './audio.route';
 import ChatRoutes from './chat.route';
 import ChatGroupsRoutes from './chat-groups.route';
 import { ConnectorsRoutes } from './connectors.route';
@@ -34,6 +35,7 @@ export default {
   'agents': AgentsRoutes,
   'anthropic': AnthropicRoutes,
   'api-keys': ApiKeysRoutes,
+  'audio': AudioRoutes,
   'chat': ChatRoutes,
   'chat-groups': ChatGroupsRoutes,
   'connectors': ConnectorsRoutes,

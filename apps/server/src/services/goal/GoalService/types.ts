@@ -1,4 +1,9 @@
-import type { GoalCreateConfig, GoalNodeKind, GoalNodeStatus } from '@lobechat/types';
+import type {
+  GoalCreateConfig,
+  GoalNodeKind,
+  GoalNodeStatus,
+  GoalVisibility,
+} from '@lobechat/types';
 import type { GoalSeedTask } from '@lobechat/utils/goalSeeds';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -54,6 +59,7 @@ import type {
   updateTitle,
 } from './editing';
 import type {
+  archiveSignedOffTasks,
   close,
   deleteGoal,
   pause,
@@ -157,6 +163,12 @@ export interface CreateGoalGraphInput {
    * `topic` subject so the conversation can find and show it.
    */
   topicId?: string;
+  /**
+   * Workspace visibility. Omitted, it follows the agents: a private goal or
+   * task agent makes the goal private, otherwise it is public. An explicit
+   * 'public' with a private agent is rejected.
+   */
+  visibility?: GoalVisibility;
 }
 
 export interface CreateGoalNodeInput {
@@ -186,6 +198,7 @@ export interface GoalServiceContext {
   readonly agentModel: AgentModel;
   answerClarifications: Bound<typeof answerClarifications>;
   answerReleaseGate: GoalReleaseReview['answerReleaseGate'];
+  archiveSignedOffTasks: Bound<typeof archiveSignedOffTasks>;
   attachTaskDeliverables: Bound<typeof attachTaskDeliverables>;
   bindTopic: Bound<typeof bindTopic>;
   readonly briefs: GoalBriefService;

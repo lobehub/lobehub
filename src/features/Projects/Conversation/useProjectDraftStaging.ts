@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { useChatStore } from '@/store/chat';
-
-interface Draft {
-  agentId: string;
-  projectWorkingDirectoryId: string;
-}
+import { type PendingNewTopicDirectory as Draft } from '@/store/chat/slices/topic/initialState';
 
 const sameDraft = (a: Draft | undefined, b: Draft | undefined) =>
-  a?.agentId === b?.agentId && a?.projectWorkingDirectoryId === b?.projectWorkingDirectoryId;
+  a?.agentId === b?.agentId &&
+  a?.projectWorkingDirectoryId === b?.projectWorkingDirectoryId &&
+  a?.projectId === b?.projectId;
 
 /**
  * Keep this pane's blank draft staged for the send.
@@ -38,7 +36,7 @@ export const useProjectDraftStaging = (
   useEffect(() => {
     ownRef.current = draft;
     restage();
-  }, [draft?.agentId, draft?.projectWorkingDirectoryId, restage]);
+  }, [draft?.agentId, draft?.projectWorkingDirectoryId, draft?.projectId, restage]);
 
   useEffect(
     () =>
@@ -50,6 +48,7 @@ export const useProjectDraftStaging = (
             own &&
             pending &&
             pending.agentId === own.agentId &&
+            !!pending.projectWorkingDirectoryId &&
             directoryIdsRef.current.has(pending.projectWorkingDirectoryId)
           )
             ownRef.current = pending;

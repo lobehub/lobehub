@@ -53,16 +53,36 @@ export const LINEAR_OPEN_ISSUE_STATE_TYPES: LinearIssueStateType[] = [
   'started',
 ];
 
+/**
+ * States the import dialog starts with: open issues plus completed ones, so a
+ * team moving over keeps its history. Canceled issues stay out by default.
+ */
+export const LINEAR_DEFAULT_IMPORT_STATE_TYPES: LinearIssueStateType[] = [
+  ...LINEAR_OPEN_ISSUE_STATE_TYPES,
+  'completed',
+];
+
 /** Providers a task can be linked to through `task_external_links`. */
 export type TaskExternalProvider = 'linear';
 
 /** Facts about the linked Linear issue kept on the link row, for display only. */
 export interface LinearIssueLinkMetadata {
   assigneeName?: string;
+  /**
+   * The issue's comments were read and copied at least once. A closed task
+   * whose issue left a rule's filter is caught up only until this is set.
+   * Sync bookkeeping, not display: a display refresh keeps it.
+   */
+  commentsSynced?: boolean;
   labels?: string[];
   projectName?: string;
   stateName?: string;
   stateType?: LinearIssueStateType;
+  /**
+   * Linear comments already copied onto the task, so syncing again adds only
+   * new ones. Sync bookkeeping, not display: a display refresh keeps it.
+   */
+  syncedCommentIds?: string[];
   teamKey?: string;
 }
 
@@ -109,12 +129,16 @@ export type LinearSyncSkipReason =
   | 'closed'
   /** Writing the task failed; the next sync retries it. */
   | 'failed'
+  /** The task was synced, but its Linear comments were not; the next sync retries them. */
+  | 'commentsFailed'
   /** Picked for import, but Linear no longer returns it (deleted, or not visible). */
   | 'missing';
 
 export interface LinearSyncResult {
   /** Tasks closed because their issue was completed or canceled in Linear. */
   closed: number;
+  /** Linear comments copied onto tasks as task comments. Absent in older results. */
+  commentsImported?: number;
   created: number;
   /** Tasks edited in LobeHub, so their name, instruction and priority were kept. */
   keptLocalEdits: number;
@@ -122,7 +146,10 @@ export interface LinearSyncResult {
   skipped: { identifier: string; reason: LinearSyncSkipReason }[];
   /** Every skipped issue, including those past the `skipped` list. Absent in older results. */
   skippedCount?: number;
-  /** More issues matched than one run imports; run again for the rest. */
+  /**
+   * More issues matched than one run imports. A rule run continues on its own
+   * until this clears; it stays set only when the run stopped early.
+   */
   truncated: boolean;
   unchanged: number;
   updated: number;
@@ -151,18 +178,35 @@ export type LinearSyncJobErrorCode =
   | 'unavailable'
   /** No progress for too long; the run was likely cut off. */
   | 'timeout'
+  /** The user stopped it; tasks written before then are kept. */
+  | 'canceled'
   | 'failed';
 
 /** What a background sync was asked to do, kept on its `async_tasks` row. */
 export interface LinearSyncJobMetadata {
   connectionId: string;
+  /**
+   * Where the next round of a rule run resumes reading Linear, so a long run
+   * does not reread what earlier rounds covered. Absent: read from the start.
+   */
+  cursor?: string;
   /** Picked issues (`kind: 'issues'`). */
   issueIds?: string[];
   kind: 'issues' | 'rule';
   projectId: string;
+  /**
+   * This round reconciles linked tasks but creates none: the closing pass of
+   * a run that used up its creating rounds.
+   */
+  reconcileOnly?: boolean;
+  /** The outcome so far; while a rule run continues, the total of its finished rounds. */
   result?: LinearSyncResult;
+  /** Rounds a rule run has finished; each creates at most a fixed number of tasks. */
+  rounds?: number;
   /** The saved rule being run (`kind: 'rule'`). */
   ruleId?: string;
+  /** Copy each issue's Linear comments onto its task as task comments. */
+  syncComments?: boolean;
 }
 
 export interface LinearSyncJobView {

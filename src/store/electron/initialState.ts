@@ -6,6 +6,8 @@ import {
   type NetworkProxySettings,
 } from '@lobechat/electron-client-ipc';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
 import { type CurrentRouteMetaState } from './actions/currentRouteMeta';
 import { currentRouteMetaInitialState } from './actions/currentRouteMeta';
 import { type GatewayDeviceInfo } from './actions/gateway';
@@ -13,6 +15,7 @@ import { type RecentPagesState } from './actions/recentPages';
 import { recentPagesInitialState } from './actions/recentPages';
 import { type TabPagesState } from './actions/tabPages';
 import { tabPagesInitialState } from './actions/tabPages';
+import { type GatewayStableDeviceId } from './projection';
 
 export type RemoteServerError = 'CONFIG_ERROR' | 'AUTH_ERROR' | 'DISCONNECT_ERROR';
 
@@ -34,6 +37,10 @@ export interface ElectronState extends CurrentRouteMetaState, RecentPagesState, 
   gatewayConnectionError?: GatewayConnectionError;
   gatewayConnectionStatus: GatewayConnectionStatus;
   gatewayDeviceInfo?: GatewayDeviceInfo;
+  /** Replica view of this desktop's stable gateway device id (`GATEWAY_STABLE_DEVICE_ID_KEY`). */
+  gatewayStableDeviceIdMap: Record<string, GatewayStableDeviceId>;
+  /** Replica bookkeeping of `gatewayStableDeviceIdMap`. */
+  gatewayStableDeviceIdReplica: ReplicaState<GatewayStableDeviceId>;
   isAppStateInit?: boolean;
   isConnectingServer?: boolean;
   isConnectionDrawerOpen?: boolean;
@@ -53,6 +60,8 @@ export const initialState: ElectronState = {
   dataSyncConfig: { storageMode: 'cloud' },
   desktopHotkeys: {},
   gatewayConnectionStatus: 'disconnected',
+  gatewayStableDeviceIdMap: {},
+  gatewayStableDeviceIdReplica: createReplicaState(),
   isAppStateInit: false,
   isConnectingServer: false,
   isConnectionDrawerOpen: false,

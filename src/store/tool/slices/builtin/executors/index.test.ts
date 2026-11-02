@@ -52,7 +52,8 @@ describe('builtin executor registry', () => {
       await expect(hasExecutor(identifier, DashboardApiName.createDashboard)).resolves.toBe(true);
       await expect(hasExecutor(identifier, DashboardApiName.updateDashboard)).resolves.toBe(true);
     }
-  });
+    // First test to load every builtin executor; the cold import alone can pass 5s on CI.
+  }, 30_000);
 
   it('registers web onboarding executor APIs explicitly', async () => {
     await registerBuiltinToolExecutors();

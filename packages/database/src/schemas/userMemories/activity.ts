@@ -86,10 +86,3 @@ export const userMemoriesActivities = pgTable(
       .where(sql`${table.dossierId} IS NOT NULL`),
   ],
 );
-
-export type UserMemoryActivity = typeof userMemoriesActivities.$inferSelect;
-export type UserMemoryActivitiesWithoutVectors = Omit<
-  UserMemoryActivity,
-  'narrativeVector' | 'feedbackVector'
->;
-export type NewUserMemoryActivity = typeof userMemoriesActivities.$inferInsert;

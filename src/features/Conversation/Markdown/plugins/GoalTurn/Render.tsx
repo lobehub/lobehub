@@ -1,7 +1,14 @@
 'use client';
 
-import { createStaticStyles, cx, Flexbox, Icon } from '@lobehub/ui';
-import { Accordion, type AccordionItemType, Text } from '@lobehub/ui';
+import {
+  Accordion,
+  type AccordionItemType,
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { TargetIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';

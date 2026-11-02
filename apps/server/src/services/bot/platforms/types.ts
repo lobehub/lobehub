@@ -75,10 +75,15 @@ export interface FieldSchema {
   enumRecommended?: string;
   /**
    * Rollout gate for the field: the key of a boolean in the user's feature flags (for example
-   * `enableBotWake`). The form hides the field unless that flag is on for the signed-in user.
+   * `enableChannels`). The form hides the field unless that flag is on for the signed-in user.
    * The server stays authoritative; this only keeps unreleased options out of sight.
    */
   featureFlag?: string;
+  /**
+   * For a `boolean`: the switch shows on while the stored value is not `true`. For an off switch
+   * (`...Disabled`) whose absence means on, labelled as what it turns on.
+   */
+  inverted?: boolean;
   /** Array item schema */
   items?: FieldSchema;
   /** Unique field identifier */
@@ -298,6 +303,13 @@ export interface PlatformClient {
   createAdapter: () => Record<string, any>;
 
   /**
+   * Whether the bot decides how it opens a reply (an acknowledgement before the run) on a platform
+   * that offers no reply threads (no `getReplyTargets`): the reply always stays in
+   * `platformThreadId`. A platform with `getReplyTargets` lets the bot decide without it.
+   */
+  readonly decidesReplyOpening?: boolean;
+
+  /**
    * Ensure the triggering user is a member of the platform thread the bot
    * replies in, so the platform pushes them a notification and surfaces the
    * thread in their client.
@@ -391,6 +403,8 @@ export interface PlatformClient {
    */
   formatReply?: (body: string, stats?: UsageStats) => string;
 
+  // --- Runtime Operations ---
+
   /**
    * What people call the bot on this platform (display name, username), so a message that says the
    * name is read as addressed to it. Optional: without it the bot is recognised by @mention only.
@@ -400,8 +414,6 @@ export interface PlatformClient {
    */
   getBotNames?: (platformThreadId?: string) => Promise<string[]>;
 
-  // --- Runtime Operations ---
-
   /** Get a messenger for a specific thread (outbound messaging). */
   getMessenger: (platformThreadId: string) => PlatformMessenger;
 
@@ -409,7 +421,8 @@ export interface PlatformClient {
    * Where the reply to `message` can go, when it sits at the top level of a channel that has
    * threads (see `ReplyTargets`). `undefined` when there is no choice: a DM, a message already
    * inside a thread, or a threadless platform (Telegram, WeChat, QQ). Omit when the platform never
-   * offers one; the reply then stays in `platformThreadId`.
+   * offers one; the reply then stays in `platformThreadId`. Implementing it lets the bot decide how
+   * it opens a reply (see `decidesReplyOpening`).
    */
   getReplyTargets?: (
     platformThreadId: string,

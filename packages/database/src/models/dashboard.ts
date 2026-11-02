@@ -4,7 +4,7 @@ import { and, asc, count, eq, inArray, max } from 'drizzle-orm';
 import { agents } from '../schemas/agent';
 import { dashboardItems, dashboards } from '../schemas/dashboard';
 import { projects } from '../schemas/project';
-import { widgets } from '../schemas/widget';
+import { widgets, widgetVersions } from '../schemas/widget';
 import type { LobeChatDatabase, Transaction } from '../type';
 import {
   assertScopeParents,
@@ -325,18 +325,20 @@ export class DashboardModel {
   }
 
   /**
-   * Items of a readable board with their widgets, in display order. Widgets the
-   * caller cannot read (trashed, private to a teammate, under a private
-   * parent) drop out without losing their placement.
+   * Items of a readable board with their widgets and the published version's
+   * view (how the card draws the output; null before the first publish), in
+   * display order. Widgets the caller cannot read (trashed, private to a
+   * teammate, under a private parent) drop out without losing their placement.
    */
   async listItems(dashboardId: string) {
     const dashboard = await this.findById(dashboardId);
     if (!dashboard) return [];
 
     return this.db
-      .select({ item: dashboardItems, widget: widgets })
+      .select({ item: dashboardItems, view: widgetVersions.view, widget: widgets })
       .from(dashboardItems)
       .innerJoin(widgets, eq(dashboardItems.widgetId, widgets.id))
+      .leftJoin(widgetVersions, eq(widgets.publishedVersionId, widgetVersions.id))
       .where(and(eq(dashboardItems.dashboardId, dashboardId), this.readableWidget()))
       .orderBy(asc(dashboardItems.sortOrder), asc(dashboardItems.createdAt));
   }

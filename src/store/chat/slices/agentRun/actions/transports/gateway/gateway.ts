@@ -512,14 +512,8 @@ export class GatewayActionImpl {
 
     let superseded = false;
 
-    // Share visitors take protocol v2 wherever the deployment has it: the
-    // public surface has no user to carry a rollout flag. Owner runs wait for
-    // the rollout to reach them.
     const muxIdentity: GatewayMuxIdentity = { agentShareId, gatewayUrl };
-    const useGatewayMux =
-      (agentShareId
-        ? getGatewayServerConfig()?.agentGatewayProtocol === 2
-        : canUseGatewayProtocolV2()) && !isGatewayMuxUnavailable(muxIdentity);
+    const useGatewayMux = canUseGatewayProtocolV2() && !isGatewayMuxUnavailable(muxIdentity);
     let muxClient: OperationClient | undefined;
     if (useGatewayMux) {
       const mux = this.resolveGatewayMux(muxIdentity);
@@ -961,11 +955,8 @@ export class GatewayActionImpl {
      * without issuing a second legacy resume request.
      */
     precreatedResult?: ExecAgentResult;
-    /**
-     * Project working directory the NEW topic is born in — the blank
-     * conversation a project group's "+" staged. The caller reads it before the
-     * send adopts its minted topic, since that switch clears the staging.
-     */
+    /** Directory, else project, a project "+" staged the NEW topic in (read before adopt clears it). */
+    projectId?: string;
     projectWorkingDirectoryId?: string;
     /** Server operation whose visible output ended before this fresh turn. */
     replacesOperationId?: string;
@@ -1048,6 +1039,7 @@ export class GatewayActionImpl {
       parentMessageId,
       parentOperationId,
       precreatedResult,
+      projectId,
       projectWorkingDirectoryId,
       replacesOperationId,
       resumeApproval,
@@ -1183,7 +1175,7 @@ export class GatewayActionImpl {
                 executionContext,
                 initialTopicMetadata,
                 messageContext,
-                projectWorkingDirectoryId: isCreateNewTopic ? projectWorkingDirectoryId : undefined,
+                newTopicProject: isCreateNewTopic ? { projectId, projectWorkingDirectoryId } : {},
               }),
               ...desktopDeviceHints,
               clientOperations,

@@ -73,28 +73,55 @@ export const consolidationHandler = async (context: WorkflowContext) => {
 
   const pending = await runStep(context, `${STEP}:list-pending`, async () => {
     const s = service();
-    const [items, consolidated] = await Promise.all([
+    const [items, consolidated, resumable] = await Promise.all([
       s.model.listPendingLegacyContexts(),
       s.model.listConsolidated(),
+      s.model.findResumableQueue(),
     ]);
+    const contextIds = new Set(consolidated.contexts.map((c) => c.id));
+    // A stopped run left evidence queued: continue its queue in the mode it was built in.
+    // Incremental queues are keyed by target context (or `new:<title>`), backfill by domain.
+    const resumedMode = resumable
+      ? resumable.keys.some((k) => k?.startsWith('new:') || contextIds.has(k))
+        ? ('incremental' as const)
+        : ('backfill' as const)
+      : undefined;
     return {
       ids: items.map((i) => i.id),
-      mode: consolidated.contexts.length === 0 ? ('backfill' as const) : ('incremental' as const),
+      mode:
+        resumedMode ?? (contextIds.size === 0 ? ('backfill' as const) : ('incremental' as const)),
+      resume: resumable ? { fromRunId: resumable.runId, origin: resumable.origin } : undefined,
     };
   });
   if (pending.ids.length === 0) return { ...empty, mode: pending.mode };
 
+  const origin = pending.resume?.origin ?? runId;
+  const resume = pending.resume;
+  // Take the stopped run's queue over; what is left to classify / route is everything else.
+  const adopted = resume
+    ? await runStep(context, `${STEP}:adopt-queue`, async () => {
+        const s = service();
+        await s.model.adoptQueue(resume.fromRunId, resume.origin, runId);
+        return (await s.model.listQueued(runId)).map((q) => q.id);
+      })
+    : [];
+  const adoptedIds = new Set(adopted);
+  const toClassify = pending.ids.filter((id) => !adoptedIds.has(id));
+  // Domain mix and contexts built so far by this queue lineage (earlier attempts included).
+  const queueEvidence = async () =>
+    runStep(context, `${STEP}:queue-evidence`, () => service().model.listQueueEvidence(origin));
+
   // ---------- stage 1: decide route + queue key ----------
   if (pending.mode === 'backfill') {
-    const domainCounts: Record<string, number> = {};
-    for (let i = 0; i < pending.ids.length; i += CLASSIFY_BATCH) {
-      const batch = pending.ids.slice(i, i + CLASSIFY_BATCH);
-      const counts = await runStep(context, `${STEP}:classify:${i / CLASSIFY_BATCH}`, async () => {
+    for (let i = 0; i < toClassify.length; i += CLASSIFY_BATCH) {
+      const batch = toClassify.slice(i, i + CLASSIFY_BATCH);
+      await runStep(context, `${STEP}:classify:${i / CLASSIFY_BATCH}`, async () => {
         const s = service();
         const items = await s.classify(batch);
         await s.model.enqueue(
           runId,
           items.map((x) => ({ id: x.id, key: x.domain || 'misc', route: x.route })),
+          origin,
         );
         const routed: Record<string, ConsolidationRoute> = {};
         for (const x of items) if (x.route !== 'evidence') routed[x.id] = x.route;
@@ -104,8 +131,12 @@ export const consolidationHandler = async (context: WorkflowContext) => {
           if (x.route === 'evidence') out[x.domain || 'misc'] = (out[x.domain || 'misc'] ?? 0) + 1;
         return out;
       });
-      for (const [k, n] of Object.entries(counts)) domainCounts[k] = (domainCounts[k] ?? 0) + n;
     }
+    // Counted from the database, so a resumed run merges its whole lineage's domains, not only
+    // the ones it classified itself.
+    const evidence = await queueEvidence();
+    const domainCounts: Record<string, number> = {};
+    for (const e of evidence) domainCounts[e.key] = (domainCounts[e.key] ?? 0) + e.count;
     const domainMap = await runStep(context, `${STEP}:normalize`, () =>
       service().normalizeDomains(domainCounts),
     );
@@ -117,9 +148,14 @@ export const consolidationHandler = async (context: WorkflowContext) => {
       return out;
     });
 
+    // Contexts earlier attempts built per merged domain: a resumed run extends them.
+    const builtByDomain: Record<string, Set<string>> = {};
+    for (const e of evidence)
+      if (e.contextId) (builtByDomain[domainMap[e.key] ?? e.key] ??= new Set()).add(e.contextId);
+
     let contexts = 0;
     for (const [d, [domain, ids]] of Object.entries(groups).entries()) {
-      let domainContexts: string[] = [];
+      let domainContexts: string[] = [...(builtByDomain[domain] ?? [])];
       for (let c = 0; c * SYNTH_CHUNK < ids.length; c += 1) {
         const chunk = ids.slice(c * SYNTH_CHUNK, (c + 1) * SYNTH_CHUNK);
         const known = domainContexts;
@@ -133,8 +169,8 @@ export const consolidationHandler = async (context: WorkflowContext) => {
     return { contexts, mode: 'backfill', processed: pending.ids.length, runId };
   }
 
-  for (let i = 0; i < pending.ids.length; i += ROUTE_BATCH) {
-    const batch = pending.ids.slice(i, i + ROUTE_BATCH);
+  for (let i = 0; i < toClassify.length; i += ROUTE_BATCH) {
+    const batch = toClassify.slice(i, i + ROUTE_BATCH);
     await runStep(context, `${STEP}:route:${i / ROUTE_BATCH}`, async () => {
       const s = service();
       const [items, consolidated] = await Promise.all([
@@ -172,7 +208,7 @@ export const consolidationHandler = async (context: WorkflowContext) => {
         entries.push({ id: item.id, key, route: r.route });
         if (r.route !== 'evidence') routed[item.id] = r.route;
       }
-      await s.model.enqueue(runId, entries);
+      await s.model.enqueue(runId, entries, origin);
       await s.markRouted(routed);
       return entries.length;
     });
@@ -185,10 +221,16 @@ export const consolidationHandler = async (context: WorkflowContext) => {
     return out;
   });
   let contexts = 0;
+  // A resumed queue may have filed part of a `new:` group already; keep extending those contexts.
+  const builtByKey: Record<string, string[]> = {};
+  if (resume)
+    for (const e of await queueEvidence())
+      if (e.contextId) (builtByKey[e.key] ??= []).push(e.contextId);
+
   for (const [g, [key, ids]] of Object.entries(groups).entries()) {
     const isNew = key.startsWith('new:');
     // Later chunks of one group must see the contexts earlier chunks created, as in backfill.
-    let groupContexts: string[] = isNew ? [] : [key];
+    let groupContexts: string[] = isNew ? [...new Set(builtByKey[key] ?? [])] : [key];
     const touched = new Set<string>();
     for (let c = 0; c * SYNTH_CHUNK < ids.length; c += 1) {
       const chunk = ids.slice(c * SYNTH_CHUNK, (c + 1) * SYNTH_CHUNK);

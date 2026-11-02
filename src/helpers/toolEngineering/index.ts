@@ -7,8 +7,8 @@ import {
   createEnableChecker,
   type LobeToolManifest,
   type PluginEnableChecker,
+  ToolsEngine,
 } from '@lobechat/context-engine';
-import { ToolsEngine } from '@lobechat/context-engine';
 import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
 import {
   type BuiltinToolResolveContext,
