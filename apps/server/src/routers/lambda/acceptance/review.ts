@@ -27,7 +27,7 @@ import {
   readAcceptanceRepair,
 } from '../_helpers/acceptanceFeedbackRepair';
 import { type AcceptanceRepairDispatch } from '../_helpers/acceptanceRepairDispatch';
-import { settleGoalSignOff } from '../_helpers/acceptanceStatus';
+import { archiveSignedOffGoalTasks, settleGoalSignOff } from '../_helpers/acceptanceStatus';
 import * as goalGate from '../_helpers/goalGateAcceptance';
 import {
   acceptanceWriteProcedure,
@@ -77,6 +77,7 @@ export const reviewRouter = router({
       );
       // Signed where it lives — the inbox stops asking for the same sign-off.
       await settleGoalSignOff(ctx.serverDB, acceptance, 'signOff', input.comment);
+      await archiveSignedOffGoalTasks(ctx.serverDB, acceptance);
       return acceptanceResponse(accepted);
     }),
   /**

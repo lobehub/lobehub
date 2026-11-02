@@ -5,7 +5,9 @@ import {
 } from '@lobechat/const/goal';
 import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
 import { and, count, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
+import { agentOperations } from '../schemas/agentOperations';
 import type { TaskTopicItem } from '../schemas/task';
 import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
@@ -13,6 +15,23 @@ import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 import { topicsOwnership } from './task/context';
 import { countOf } from './utils/rows';
+
+/**
+ * The run row is not owned by an operation newer than `operationId`: the
+ * condition {@link TaskTopicModel.isSupersededOperation} reads, written as a
+ * predicate on the row being updated.
+ */
+const notSupersededBy = (operationId: string) => sql`not exists (
+  select 1 from ${agentOperations} as row_operation, ${agentOperations} as reported_operation
+  where row_operation.id = ${taskTopics.operationId}
+    and reported_operation.id = ${operationId}
+    and row_operation.id <> reported_operation.id
+    and row_operation.created_at > reported_operation.created_at
+)`;
+
+/** The operation a run row names, and the one reporting on it. */
+const current = alias(agentOperations, 'current_operation');
+const reported = alias(agentOperations, 'reported_operation');
 
 export const TERMINAL_TOPIC_STATUSES = new Set([
   'canceled',
@@ -95,15 +114,41 @@ export class TaskTopicModel {
       .onConflictDoNothing();
   }
 
-  async updateStatus(taskId: string, topicId: string, status: string): Promise<void> {
-    await this.db
+  /**
+   * Write a run's status.
+   *
+   * With `reportedOperationId`, the write is the completion of that operation
+   * and lands only while no newer operation owns the row — see
+   * {@link isSupersededOperation}. The guard is part of the UPDATE itself, so a
+   * follow-up taking the row over between a completion's ownership check and
+   * this write still wins. Returns whether a row was written.
+   */
+  async updateStatus(
+    taskId: string,
+    topicId: string,
+    status: string,
+    options: { reportedOperationId?: string } = {},
+  ): Promise<boolean> {
+    const { reportedOperationId } = options;
+    const rows = await this.db
       .update(taskTopics)
       .set({ status })
-      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
+      .where(
+        and(
+          eq(taskTopics.taskId, taskId),
+          eq(taskTopics.topicId, topicId),
+          this.ownership(),
+          reportedOperationId ? notSupersededBy(reportedOperationId) : undefined,
+        ),
+      )
+      .returning({ topicId: taskTopics.topicId });
+
+    if (reportedOperationId && rows.length === 0) return false;
 
     if (TERMINAL_TOPIC_STATUSES.has(status)) {
       await this.markTopicEnded(topicId, status);
     }
+    return rows.length > 0;
   }
 
   /**
@@ -150,8 +195,22 @@ export class TaskTopicModel {
       )
       .returning();
 
-    for (const topic of canceled) {
-      if (topic.topicId) await this.markTopicEnded(topic.topicId, 'canceled');
+    // One statement for every ended topic: callers run this inside a
+    // transaction holding task row locks, so a per-topic loop would stretch
+    // those locks over hundreds of sequential writes in a large batch.
+    const topicIds = canceled
+      .map((topic) => topic.topicId)
+      .filter((topicId): topicId is string => !!topicId);
+    if (topicIds.length > 0) {
+      await this.db
+        .update(topics)
+        .set({ completedAt: new Date() })
+        .where(
+          and(
+            inArray(topics.id, topicIds),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+          ),
+        );
     }
 
     return canceled;
@@ -331,6 +390,70 @@ export class TaskTopicModel {
     return result.length > 0;
   }
 
+  /**
+   * Hand a still-`running` run over to the operation that replaced it.
+   *
+   * A user following up in a Task's conversation while its run is still live
+   * interrupts that run (the composer supersedes it). The interrupted run never
+   * settles the row — an interrupt is not an outcome — so unless the follow-up
+   * takes the row over, the Task stays `running` with nothing behind it.
+   *
+   * Compare-and-swap on the replaced operation: the row moves only while it is
+   * still `running` under `fromOperationId`, so a run that settled in between,
+   * or another send that took the row over first, is never overwritten. The
+   * trigger is restamped `'manual'` for the same reason as
+   * {@link reopenSettledRun}.
+   */
+  async takeOverRunningRun(
+    topicId: string,
+    fromOperationId: string,
+    toOperationId: string,
+  ): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ operationId: toOperationId, trigger: 'manual' })
+      .where(
+        and(
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.operationId, fromOperationId),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ topicId: taskTopics.topicId });
+
+    return result.length > 0;
+  }
+
+  /**
+   * Whether `operationId` is an older run of this topic that a newer operation
+   * has already replaced on the run row.
+   *
+   * Ordered by the operations' creation, not by mere inequality: the runner
+   * records a run on the row only after its dispatch returns, so a short run can
+   * report before the row names it. That report comes from the *newer* operation
+   * and must go through; only a report from an operation older than the one the
+   * row names is a superseded run's late delivery.
+   */
+  async isSupersededOperation(topicId: string, operationId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ topicId: taskTopics.topicId })
+      .from(taskTopics)
+      .innerJoin(current, eq(current.id, taskTopics.operationId))
+      .innerJoin(reported, eq(reported.id, operationId))
+      .where(
+        and(
+          eq(taskTopics.topicId, topicId),
+          ne(taskTopics.operationId, operationId),
+          sql`${current.createdAt} > ${reported.createdAt}`,
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return !!row;
+  }
+
   /** Undo {@link markTopicEnded}'s end stamp for a run that is live again. */
   async clearTopicEnded(topicId: string): Promise<void> {
     await this.db
@@ -383,6 +506,15 @@ export class TaskTopicModel {
       .from(taskTopics)
       .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
       .orderBy(desc(taskTopics.seq));
+  }
+
+  async findByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
+    if (taskIds.length === 0) return [];
+
+    return this.db
+      .select()
+      .from(taskTopics)
+      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()));
   }
 
   async findRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {

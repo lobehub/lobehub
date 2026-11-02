@@ -30,7 +30,7 @@ import AcceptanceShare from './Header/AcceptanceShare';
 import AcceptanceStatusControl from './Header/AcceptanceStatusControl';
 import type { AcceptanceTabKey } from './Header/AcceptanceTabs';
 import AcceptanceTabs from './Header/AcceptanceTabs';
-import { acceptanceContentLayout } from './layout';
+import { acceptanceChecksLayout, acceptanceContentLayout } from './layout';
 import { flowPlanPhase } from './Plan/planReview';
 import AcceptanceDecision from './Review/AcceptanceDecision';
 import { AcceptanceRepair } from './Review/AcceptanceRepair';
@@ -39,6 +39,11 @@ import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { useAcceptanceTurn } from './useAcceptanceTurn';
 
 const styles = stylex.create({
+  checks: (maxWidth: number) => ({
+    width: '100%',
+    maxWidth,
+    marginInline: 'auto',
+  }),
   column: {
     width: '100%',
     marginInline: 'auto',
@@ -165,11 +170,11 @@ export const AcceptanceOverview = ({
         ) : tab === 'checks' && gateDossier ? (
           <GateReview dossier={gateDossier} />
         ) : tab === 'checks' ? (
-          <>
+          <Flexbox {...stylex.props(styles.checks(acceptanceChecksLayout.maxWidth))} gap={16}>
             <AcceptanceCheckInventory toolbar={<AcceptanceCheckOwnerToolbar />} />
             <ReviewerApprovalBar />
             <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
-          </>
+          </Flexbox>
         ) : (
           <AcceptanceResources />
         )}

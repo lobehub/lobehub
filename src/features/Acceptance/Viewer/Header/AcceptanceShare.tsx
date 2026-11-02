@@ -4,7 +4,7 @@ import { Button, confirmModal, DropdownMenu, Icon, toast } from '@lobehub/ui';
 import { Check, Share2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { useAcceptanceOrigin } from '@/features/Acceptance/origin';
 import { mutate as globalMutate } from '@/libs/swr';
 import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
@@ -59,7 +59,7 @@ const AcceptanceShare = () => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
-  const appOrigin = useAppOrigin();
+  const appOrigin = useAcceptanceOrigin();
   if (!data || !canReviewAcceptance(data)) return null;
 
   const current = data.acceptance.visibility;

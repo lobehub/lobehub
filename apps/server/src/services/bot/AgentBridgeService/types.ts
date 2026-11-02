@@ -36,10 +36,11 @@ export interface BridgeHandlerOpts {
   displayToolCalls?: boolean;
   /**
    * The bot woke on its own because a message nobody addressed to it falls within its duties (a
-   * `followup` wake); `matched` names the duty. The agent is told why. See
+   * `followup` wake); `matched` names the duty, `helpful` that it woke to settle an open question
+   * instead. The agent is told why. See
    * `formatBotPlatformContext`.
    */
-  duty?: { matched?: string };
+  duty?: { helpful?: boolean; matched?: string };
   /**
    * The bot woke in its follow-up window (a `followup` wake): how sure the classifier was and who
    * else is in the thread. The agent is told why. See `formatBotPlatformContext`.

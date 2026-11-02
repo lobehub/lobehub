@@ -126,6 +126,22 @@ describe('SignalDecisionModel scope reads', () => {
       expect(third.nextCursor).toBeUndefined();
     });
 
+    it('pages by offset and counts every match, not just the page', async () => {
+      for (let i = 0; i < 5; i++) await seed(`m${i}`, { minutesAgo: 10 - i });
+      await seed('elsewhere', { scope: 'discord:app-2' });
+      const model = new SignalDecisionModel(serverDB, userId);
+
+      const second = await model.listByScope({ limit: 2, offset: 2, scopeKey });
+      const last = await model.listByScope({ limit: 2, offset: 4, scopeKey });
+
+      expect(second.items.map((i) => i.text)).toEqual(['text of m2', 'text of m1']);
+      expect(second.total).toBe(5);
+      expect(last.items.map((i) => i.text)).toEqual(['text of m0']);
+      expect(last.total).toBe(5);
+      // The count follows the filters.
+      expect((await model.listByScope({ outcome: 'skip', scopeKey })).total).toBe(0);
+    });
+
     it('keeps rows that share a millisecond apart through the cursor', async () => {
       const a = await seed('same-a');
       const b = await seed('same-b');

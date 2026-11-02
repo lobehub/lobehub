@@ -151,4 +151,140 @@ describe('TaskRunnerService.runTask model snapshot backfill', () => {
     /** @example No wrapper provider is attached to the dispatched call. */
     expect(mocks.execAgent.mock.calls[0][0]).not.toHaveProperty('provider');
   });
+
+  // ROOT CAUSE:
+  // The pin written at creation never follows the Agent, and run had no way to
+  // replace it, so every retry kept dispatching the model the provider rejected.
+  /** @example An explicit pair replaces a stale pin for this run and later ones. */
+  it('replaces a stale pinned model with an explicit model and provider', async () => {
+    setupTask({ model: 'stale-model', provider: 'blocked-provider' });
+    mocks.getAgentAgencyConfig.mockResolvedValue({});
+
+    await new TaskRunnerService(db, 'user-1').runTask({
+      model: 'fixed-model',
+      provider: 'working-provider',
+      taskId: 'T-1',
+    });
+
+    expect(taskModel.updateTaskConfig).toHaveBeenCalledWith('task-1', {
+      model: 'fixed-model',
+      provider: 'working-provider',
+    });
+    expect(mocks.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'fixed-model', provider: 'working-provider' }),
+    );
+  });
+
+  /** @example A model-only override never inherits the provider of the model it replaces. */
+  it('resolves a model-only override without keeping the stale provider', async () => {
+    setupTask({ model: 'stale-model', provider: 'blocked-provider' });
+    mocks.getAgentModelConfig.mockResolvedValue({
+      model: 'agent-model',
+      provider: 'agent-provider',
+    });
+    mocks.getAgentAgencyConfig.mockResolvedValue({});
+
+    await new TaskRunnerService(db, 'user-1').runTask({ model: 'fixed-model', taskId: 'T-1' });
+
+    expect(taskModel.updateTaskConfig).toHaveBeenCalledTimes(1);
+    expect(taskModel.updateTaskConfig).toHaveBeenCalledWith('task-1', {
+      model: 'fixed-model',
+      provider: 'agent-provider',
+    });
+    expect(mocks.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'fixed-model', provider: 'agent-provider' }),
+    );
+  });
+
+  /** @example A replacement that cannot start leaves the previous pin in place. */
+  it('keeps the previous pin when the replacement run fails to start', async () => {
+    setupTask({ model: 'stale-model', provider: 'blocked-provider' });
+    mocks.getAgentAgencyConfig.mockResolvedValue({});
+    mocks.execAgent.mockResolvedValue({ error: 'unknown model', success: false });
+
+    await expect(
+      new TaskRunnerService(db, 'user-1').runTask({
+        model: 'typo-model',
+        provider: 'working-provider',
+        taskId: 'T-1',
+      }),
+    ).rejects.toThrow('unknown model');
+
+    expect(taskModel.updateTaskConfig).not.toHaveBeenCalled();
+  });
+
+  /** @example A pair the runtime would silently ignore is refused before dispatch. */
+  it('refuses a pair a heterogeneous runtime cannot use', async () => {
+    setupTask({ model: 'stale-model', provider: 'codex' });
+
+    await expect(
+      new TaskRunnerService(db, 'user-1').runTask({
+        model: 'gpt-5.4',
+        provider: 'openai',
+        taskId: 'T-1',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    expect(taskModel.updateTaskConfig).not.toHaveBeenCalled();
+    /** @example A refused input leaves the Task's status untouched. */
+    expect(taskModel.updateStatusIfCurrent).not.toHaveBeenCalled();
+    expect(taskModel.updateStatus).not.toHaveBeenCalled();
+  });
+
+  /** @example A server-default API binding cannot apply a model-only override. */
+  it('refuses a model-only override a server-default binding cannot use', async () => {
+    setupTask({ model: 'stale-model', provider: 'personal-provider' });
+    mocks.getAgentAgencyConfig.mockResolvedValue({
+      heterogeneousProvider: { authMode: 'api', type: 'codex' },
+    });
+
+    await expect(
+      new TaskRunnerService(db, 'user-1').runTask({ model: 'gpt-5.4', taskId: 'T-1' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    expect(taskModel.updateStatusIfCurrent).not.toHaveBeenCalled();
+  });
+
+  /** @example A native runtime still accepts a model-only override. */
+  it('accepts a model-only override on a native heterogeneous runtime', async () => {
+    setupTask({ model: 'stale-model', provider: 'codex' });
+
+    await new TaskRunnerService(db, 'user-1').runTask({ model: 'gpt-5.4', taskId: 'T-1' });
+
+    expect(taskModel.updateTaskConfig).toHaveBeenCalledWith('task-1', {
+      model: 'gpt-5.4',
+      provider: 'codex',
+    });
+  });
+
+  /** @example A run withdrawn during startup does not replace the pin. */
+  it('keeps the previous pin when the run is withdrawn before it is recorded', async () => {
+    setupTask({ model: 'stale-model', provider: 'blocked-provider' });
+    mocks.getAgentAgencyConfig.mockResolvedValue({});
+    taskModel.findById.mockResolvedValue({ id: 'task-1', status: 'canceled' });
+
+    await expect(
+      new TaskRunnerService(db, 'user-1').runTask({
+        model: 'fixed-model',
+        provider: 'working-provider',
+        taskId: 'T-1',
+      }),
+    ).rejects.toThrow();
+
+    expect(taskModel.updateTaskConfig).not.toHaveBeenCalled();
+  });
+
+  /** @example Without an override the run keeps the pinned pair and writes nothing. */
+  it('keeps the pinned pair when no override is passed', async () => {
+    setupTask({ model: 'pinned-model', provider: 'pinned-provider' });
+
+    await new TaskRunnerService(db, 'user-1').runTask({ taskId: 'T-1' });
+
+    expect(taskModel.updateTaskConfig).not.toHaveBeenCalled();
+    expect(mocks.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'pinned-model', provider: 'pinned-provider' }),
+    );
+  });
 });

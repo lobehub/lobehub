@@ -39,14 +39,8 @@ export type IFeatureFlagsState = {
   enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
-   * Rollout gate for the multiplexed gateway socket. Necessary but not
-   * sufficient: the transport also requires
-   * `GlobalServerConfig.agentGatewayProtocol === 2`.
-   */
-  enableGatewayMux: boolean | undefined;
-  /**
    * LobeHub Mobile rollout gate for the multiplexed gateway socket and
-   * protocol-v2 payloads; independent from `enableGatewayMux`.
+   * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
    */
   enableGatewayMuxMobile: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;

@@ -40,20 +40,9 @@ export const FeatureFlagsSchema = z.object({
   rag_eval: FeatureFlagValue.optional(),
 
   /**
-   * Rollout gate for the multiplexed Agent Gateway socket (protocol v2: one
-   * `/v2/ws` connection per user instead of one per run). Array values are user
-   * ids, so the rollout can go allowlist → everyone without a deploy.
-   *
-   * Deployment support is independent and enforced separately: the client also
-   * requires `serverConfig.agentGatewayProtocol === 2`, because a gateway
-   * without `/v2/ws` cannot serve this no matter what the flag says.
-   */
-  agent_gateway_mux: FeatureFlagValue.optional(),
-
-  /**
    * LobeHub Mobile rollout switch for the multiplexed gateway socket and
-   * protocol-v2 payloads. Independent from `agent_gateway_mux`: flipping one
-   * never changes the other client. Array values are user ids.
+   * protocol-v2 payloads. Web needs no flag: it takes v2 wherever
+   * `serverConfig.agentGatewayProtocol === 2`. Array values are user ids.
    */
   agent_gateway_mux_mobile: FeatureFlagValue.optional(),
 
@@ -146,9 +135,8 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   knowledge_base: true,
   rag_eval: false,
 
-  // Off until an admin publishes a user allowlist or flips it to true; the
-  // v1 socket stays the default everywhere until then.
-  agent_gateway_mux: false,
+  // Off until an admin publishes a user allowlist or flips it to true; Mobile
+  // stays on the v1 socket until then.
   agent_gateway_mux_mobile: false,
 
   // Off until the client executor ships everywhere; allowlist first.
@@ -194,7 +182,6 @@ export const mapFeatureFlagsEnvToState = (
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
 
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId),
-    enableGatewayMux: evaluateFeatureFlag(config.agent_gateway_mux, userId),
     enableGatewayMuxMobile: evaluateFeatureFlag(config.agent_gateway_mux_mobile, userId),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId),
