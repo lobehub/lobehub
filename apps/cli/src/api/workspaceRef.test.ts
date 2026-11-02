@@ -164,6 +164,12 @@ describe('workspaceRef', () => {
       else process.env.LOBEHUB_CLI_API_KEY = original;
     });
 
+    it('lets a command-level --workspace outrank an unresolvable global flag', async () => {
+      await applyWorkspaceOverride('bogus', 'workspace', true);
+      expect(mockList).not.toHaveBeenCalled();
+      expect(process.env.LOBEHUB_WORKSPACE_ID).toBeUndefined();
+    });
+
     it('lets a command-level --workspace outrank an unresolvable env value', async () => {
       process.env.LOBEHUB_WORKSPACE_ID = 'bogus';
       await applyWorkspaceOverride(undefined, 'workspace', true);

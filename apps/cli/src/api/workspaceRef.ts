@@ -122,14 +122,16 @@ const AMBIENT_SCOPE_FREE_COMMANDS = new Set([
  * because Cloud would otherwise answer the unknown header from another scope.
  *
  * A dispatched run (`LOBEHUB_JWT`) skips the env lookup: the server wrote that
- * id itself, and its operation token is refused by `workspace.list`. So does a
- * command given its own `--workspace`, which outranks the env value anyway.
+ * id itself, and its operation token is refused by `workspace.list`. A command
+ * given its own `--workspace` skips both, since that value outranks them.
  */
 export const applyWorkspaceOverride = async (
   flag: string | undefined,
   commandName: string,
   hasOwnWorkspace = false,
 ): Promise<void> => {
+  if (hasOwnWorkspace) return;
+
   if (flag !== undefined) {
     const value = flag.trim();
     // `-w "$UNSET"` must not quietly fall through to the saved scope.
@@ -157,8 +159,7 @@ export const applyWorkspaceOverride = async (
 
   const fromEnv = process.env.LOBEHUB_WORKSPACE_ID;
   if (!fromEnv || fromEnv === PERSONAL_SCOPE_ENV_VALUE) return;
-  if (process.env.LOBEHUB_JWT || hasOwnWorkspace || AMBIENT_SCOPE_FREE_COMMANDS.has(commandName))
-    return;
+  if (process.env.LOBEHUB_JWT || AMBIENT_SCOPE_FREE_COMMANDS.has(commandName)) return;
 
   process.env.LOBEHUB_WORKSPACE_ID = await resolveWorkspaceRef(fromEnv, 'LOBEHUB_WORKSPACE_ID');
 };
