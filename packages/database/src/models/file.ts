@@ -664,9 +664,9 @@ export class FileModel {
     });
   };
 
-  /** Latest row the caller can access for a storage key. */
-  findByUrl = async (url: string) => {
-    return this.db.query.files.findFirst({
+  /** Rows the caller can access for a storage key, newest first. */
+  findManyByUrl = async (url: string) => {
+    return this.db.query.files.findMany({
       orderBy: [desc(files.createdAt)],
       where: and(
         eq(files.url, url),

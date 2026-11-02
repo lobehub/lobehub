@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { AsyncTaskStatus } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -11,8 +12,27 @@ import { FileContentRepository } from '../index';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'file-content-user';
+const url = 'code-interpreter-exports/2026-11-02/topic/report.docx';
 const fileModel = new FileModel(serverDB, userId);
 const repository = new FileContentRepository(serverDB, userId);
+const newContent = { fileType: 'application/pdf', size: 99 };
+
+const insertFile = async (id: string, createdAt: Date) => {
+  await fileModel.create(
+    { createdAt, fileHash: `hash-${id}`, fileType: 'docx', id, name: 'a', size: 1, url },
+    true,
+  );
+};
+
+const attachChunkTask = async (id: string, status: AsyncTaskStatus) => {
+  const [task] = await serverDB
+    .insert(asyncTasks)
+    .values({ status, type: 'chunk', userId })
+    .returning();
+  await serverDB.update(files).set({ chunkTaskId: task!.id }).where(eq(files.id, id));
+
+  return task!.id;
+};
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -25,39 +45,48 @@ afterEach(async () => {
   await serverDB.delete(globalFiles);
 });
 
-describe('FileContentRepository', () => {
-  it('replaceStoredContent drops parsed data so a re-export cannot serve stale text', async () => {
-    const [task] = await serverDB
-      .insert(asyncTasks)
-      .values({ status: 'success', type: 'chunk', userId })
-      .returning();
-    await fileModel.create(
-      { fileHash: 'hash-a', fileType: 'docx', id: 'file-a', name: 'a', size: 1, url: 'key' },
-      true,
-    );
-    await serverDB.update(files).set({ chunkTaskId: task!.id }).where(eq(files.id, 'file-a'));
+describe('FileContentRepository.replaceStoredContent', () => {
+  it('drops parsed data on every row of the key and returns the newest', async () => {
+    await insertFile('file-old', new Date('2026-11-01'));
+    await insertFile('file-new', new Date('2026-11-02'));
+    const taskId = await attachChunkTask('file-old', AsyncTaskStatus.Success);
     await serverDB.insert(documents).values({
       content: 'old text',
-      fileId: 'file-a',
+      fileId: 'file-old',
       fileType: 'docx',
-      source: 'key',
+      source: url,
       sourceType: 'file',
       totalCharCount: 8,
       totalLineCount: 1,
       userId,
     });
 
-    const file = await fileModel.findById('file-a');
-    await repository.replaceStoredContent(file!, { fileType: 'application/pdf', size: 99 });
+    await expect(repository.replaceStoredContent(url, newContent)).resolves.toBe('file-new');
 
-    expect(await fileModel.findById('file-a')).toMatchObject({
+    expect(await fileModel.findById('file-old')).toMatchObject({
       chunkTaskId: null,
-      fileType: 'application/pdf',
-      size: 99,
+      ...newContent,
     });
-    expect(await serverDB.select().from(documents).where(eq(documents.fileId, 'file-a'))).toEqual(
+    expect(await fileModel.findById('file-new')).toMatchObject(newContent);
+    expect(await serverDB.select().from(documents).where(eq(documents.fileId, 'file-old'))).toEqual(
       [],
     );
-    expect(await serverDB.select().from(asyncTasks).where(eq(asyncTasks.id, task!.id))).toEqual([]);
+    expect(await serverDB.select().from(asyncTasks).where(eq(asyncTasks.id, taskId))).toEqual([]);
+  });
+
+  it.each([AsyncTaskStatus.Pending, AsyncTaskStatus.Processing])(
+    'does not reuse rows while a %s task may still write old chunks',
+    async (status) => {
+      await insertFile('file-a', new Date());
+      const taskId = await attachChunkTask('file-a', status);
+
+      await expect(repository.replaceStoredContent(url, newContent)).resolves.toBeUndefined();
+
+      expect(await fileModel.findById('file-a')).toMatchObject({ chunkTaskId: taskId, size: 1 });
+    },
+  );
+
+  it('resolves undefined when no row owns the key', async () => {
+    await expect(repository.replaceStoredContent(url, newContent)).resolves.toBeUndefined();
   });
 });

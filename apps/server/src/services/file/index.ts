@@ -293,23 +293,18 @@ export class FileService {
   }
 
   /**
-   * Sync the existing row for a storage key whose object was just overwritten,
+   * Sync the existing rows for a storage key whose object was just overwritten,
    * so re-uploading one key keeps a single record. Resolves to `undefined` when
-   * no accessible row owns the key yet.
+   * the caller should create a record instead.
    */
   public async refreshFileRecordByUrl(
     url: string,
     params: { fileType: string; size: number },
   ): Promise<{ fileId: string; url: string } | undefined> {
-    const existing = await this.fileModel.findByUrl(url);
-    if (!existing) return;
+    const fileId = await this.fileContentRepo.replaceStoredContent(url, params);
+    if (!fileId) return;
 
-    await this.fileContentRepo.replaceStoredContent(existing, params);
-
-    return {
-      fileId: existing.id,
-      url: await this.getFileAccessUrl({ id: existing.id, url }),
-    };
+    return { fileId, url: await this.getFileAccessUrl({ id: fileId, url }) };
   }
 
   /**

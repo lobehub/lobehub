@@ -506,34 +506,34 @@ describe('FileService', () => {
   });
 
   describe('refreshFileRecordByUrl', () => {
+    const replaceStoredContent = vi.mocked(FileContentRepository.prototype.replaceStoredContent);
+
     beforeEach(() => {
-      mockFileModel.findByUrl = vi.fn();
-      vi.mocked(FileContentRepository.prototype.replaceStoredContent).mockClear();
+      replaceStoredContent.mockReset();
     });
 
-    it('updates the row that owns the key and returns its access url', async () => {
-      mockFileModel.findByUrl.mockResolvedValue({ id: 'file-1' });
+    it('returns the access url of the reused row', async () => {
+      replaceStoredContent.mockResolvedValue('file-1');
 
       const result = await service.refreshFileRecordByUrl('files/a.docx', {
         fileType: 'application/docx',
         size: 42,
       });
 
-      expect(FileContentRepository.prototype.replaceStoredContent).toHaveBeenCalledWith(
-        { id: 'file-1' },
-        { fileType: 'application/docx', size: 42 },
-      );
+      expect(replaceStoredContent).toHaveBeenCalledWith('files/a.docx', {
+        fileType: 'application/docx',
+        size: 42,
+      });
       expect(result?.fileId).toBe('file-1');
       expect(result?.url).toContain('file-1');
     });
 
-    it('resolves undefined without writing when no row owns the key', async () => {
-      mockFileModel.findByUrl.mockResolvedValue(undefined);
+    it('resolves undefined when no row can be reused', async () => {
+      replaceStoredContent.mockResolvedValue(undefined);
 
       await expect(
         service.refreshFileRecordByUrl('files/a.docx', { fileType: 'x', size: 1 }),
       ).resolves.toBeUndefined();
-      expect(FileContentRepository.prototype.replaceStoredContent).not.toHaveBeenCalled();
     });
   });
 

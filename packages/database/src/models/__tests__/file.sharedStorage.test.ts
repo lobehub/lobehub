@@ -75,7 +75,7 @@ describe('FileModel shared storage objects', () => {
     await expect(fileModel.delete('file-a')).resolves.toBeUndefined();
   });
 
-  it('findByUrl returns the latest accessible row and ignores other users', async () => {
+  it('findManyByUrl returns accessible rows and ignores other users', async () => {
     await serverDB.insert(users).values({ id: 'other-user' });
     await new FileModel(serverDB, 'other-user').create(
       { fileHash: 'hash-x', fileType: 'docx', id: 'file-x', name: 'x', size: 1, url: 'foreign' },
@@ -83,15 +83,15 @@ describe('FileModel shared storage objects', () => {
     );
     await insertExport('file-a', 'hash-a');
 
-    expect((await fileModel.findByUrl(sharedKey))?.id).toBe('file-a');
-    expect(await fileModel.findByUrl('foreign')).toBeUndefined();
+    expect((await fileModel.findManyByUrl(sharedKey)).map((file) => file.id)).toEqual(['file-a']);
+    expect(await fileModel.findManyByUrl('foreign')).toEqual([]);
   });
 
-  it('findByUrl skips recycle-bin rows', async () => {
+  it('findManyByUrl skips recycle-bin rows', async () => {
     await insertExport('file-a', 'hash-a');
     await serverDB.update(files).set(trashStamp(new Date())).where(eq(files.id, 'file-a'));
 
-    expect(await fileModel.findByUrl(sharedKey)).toBeUndefined();
+    expect(await fileModel.findManyByUrl(sharedKey)).toEqual([]);
   });
 
   it('keeps the object for a workspace member private row without exposing that row', async () => {
@@ -111,6 +111,6 @@ describe('FileModel shared storage objects', () => {
     );
 
     await expect(ownerModel.delete('file-a')).resolves.toBeUndefined();
-    expect(await ownerModel.findByUrl(sharedKey)).toBeUndefined();
+    expect(await ownerModel.findManyByUrl(sharedKey)).toEqual([]);
   });
 });
