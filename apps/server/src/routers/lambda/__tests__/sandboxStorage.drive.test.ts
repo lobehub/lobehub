@@ -97,6 +97,7 @@ vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(function () {
     return {
       createDownloadUrl: async (key: string, name: string) => `https://files/${key}?as=${name}`,
+      createPreSignedUrlForPreview: async (key: string) => `https://files/${key}?inline`,
       createPreSignedUpload: async (key: string) => ({ url: `https://upload/${key}` }),
       deleteFile: async () => undefined,
       deleteFiles: async () => undefined,
@@ -659,6 +660,31 @@ describe('downloading from the drive', () => {
     await expect(drive(ownerId).prepareDownload({ path: 'big' })).rejects.toMatchObject({
       code: 'PAYLOAD_TOO_LARGE',
       message: 'DOWNLOAD_TOO_LARGE',
+    });
+  });
+
+  it('previews a file inline, through the same read rules as a download', async () => {
+    answer({ contentType: 'image/png', kind: 'file', ok: true, size: 5 });
+
+    const result = await drive(memberId).preparePreview({ drive: 'public', path: 'shots/a.png' });
+
+    expect(result).toMatchObject({ contentType: 'image/png', fileName: 'a.png', kind: 'file' });
+    expect(result.url).toMatch(/^https:\/\/files\/sandbox-drive-downloads\/.+\?inline$/);
+    expect(packed()).toMatchObject({ fileOnly: true, path: 'shots/a.png' });
+  });
+
+  it('refuses to preview a hidden directory, and a folder in a code the client translates', async () => {
+    await legacyPrivateFolder(ownerId, 'secret');
+
+    await expect(
+      drive(ownerId).preparePreview({ drive: 'public', path: 'secret/a.txt' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'PATH_NOT_FOUND' });
+    expect(downloads.callTool).not.toHaveBeenCalled();
+
+    answer({ code: 'NOT_A_FILE', ok: false });
+    await expect(drive(ownerId).preparePreview({ path: 'projects' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'PREVIEW_NOT_A_FILE',
     });
   });
 });

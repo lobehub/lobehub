@@ -4717,6 +4717,9 @@ When I am ___, I need ___
   'drive.explorer.downloadUnavailable':
     'Downloading from the drive isn’t available on this server.',
   'drive.explorer.downloadZip': 'Download as ZIP',
+  'drive.explorer.preview': 'Preview',
+  'drive.explorer.previewFailed': 'Couldn’t open the preview. Try again.',
+  'drive.explorer.previewPreparing': 'Preparing the preview…',
   'drive.explorer.deleteFolderContent':
     'The folder and everything in it are removed from the drive. Conversations working in it switch to a temporary sandbox.',
   'drive.explorer.deleteFileContent': 'The file is removed from the drive.',

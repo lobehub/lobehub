@@ -27,6 +27,19 @@ export const DRIVE_DOWNLOAD_TIMEOUT_MS = 180_000;
 export const DRIVE_DOWNLOAD_URL_EXPIRES_IN = 15 * 60;
 
 /**
+ * How long a preview link stays valid: longer than a download's, since a
+ * video or PDF keeps fetching ranges for as long as it stays open. Still well
+ * inside the day the sweep keeps every copy for.
+ */
+export const DRIVE_PREVIEW_URL_EXPIRES_IN = 60 * 60;
+
+/**
+ * What the copy is for: `download` saves it — a folder packed as a zip —
+ * and `preview` shows one file in the page, so a folder is refused.
+ */
+export type DriveCopyPurpose = 'download' | 'preview';
+
+/**
  * Where the transient copies go, one folder per UTC day
  * (`sandbox-drive-downloads/2026-11-01/<uuid>`), which is what lets them be
  * swept by date without a record of each one.
@@ -140,6 +153,8 @@ cleanup = None
 try:
     info = os.fstat(target_fd)
     if stat.S_ISDIR(info.st_mode):
+        if params.get("fileOnly"):
+            done(ok=False, code="NOT_A_FILE")
         total = 0
         count = 0
         try:
@@ -255,6 +270,8 @@ finally:
 `;
 
 export interface DriveDownloadCommandParams {
+  /** Refuse a folder instead of packing it — a preview shows one file. */
+  fileOnly?: boolean;
   /** Paths, relative to the drive's root, that must not end up in the download. */
   hidden: string[];
   maxBytes: number;
@@ -271,6 +288,7 @@ export interface DriveDownloadCommandParams {
  * path or a URL contains is ever parsed by the shell.
  */
 export const buildDriveDownloadCommand = ({
+  fileOnly,
   hidden,
   maxBytes,
   maxFiles,
@@ -279,7 +297,15 @@ export const buildDriveDownloadCommand = ({
   uploadUrl,
 }: DriveDownloadCommandParams) => {
   const payload = Buffer.from(
-    JSON.stringify({ headers: uploadHeaders, hidden, maxBytes, maxFiles, path, uploadUrl }),
+    JSON.stringify({
+      fileOnly: fileOnly || undefined,
+      headers: uploadHeaders,
+      hidden,
+      maxBytes,
+      maxFiles,
+      path,
+      uploadUrl,
+    }),
     'utf8',
   ).toString('base64');
 
@@ -290,7 +316,7 @@ export type DriveDownloadOutcome =
   | { contentType: string; kind: 'directory' | 'file'; ok: true; size: number }
   | {
       bytes?: number;
-      code: 'NOT_FOUND' | 'READ_FAILED' | 'TOO_LARGE' | 'UPLOAD_FAILED';
+      code: 'NOT_A_FILE' | 'NOT_FOUND' | 'READ_FAILED' | 'TOO_LARGE' | 'UPLOAD_FAILED';
       ok: false;
     };
 
@@ -312,7 +338,11 @@ export const parseDriveDownloadOutput = (stdout: string): DriveDownloadOutcome |
 /** Why a download could not be prepared, as the code the client translates. */
 export class DriveDownloadError extends Error {
   readonly code:
-    'DOWNLOAD_FAILED' | 'DOWNLOAD_TOO_LARGE' | 'DOWNLOAD_UNAVAILABLE' | 'PATH_NOT_FOUND';
+    | 'DOWNLOAD_FAILED'
+    | 'DOWNLOAD_TOO_LARGE'
+    | 'DOWNLOAD_UNAVAILABLE'
+    | 'PATH_NOT_FOUND'
+    | 'PREVIEW_NOT_A_FILE';
 
   constructor(code: DriveDownloadError['code'], detail?: string) {
     super(detail ? `${code}: ${detail}` : code);
@@ -330,6 +360,7 @@ export const driveDownloadFileName = (path: string, kind: 'directory' | 'file') 
 export interface PrepareDriveDownloadParams {
   fileService: {
     createDownloadUrl: (url: string, fileName: string, expiresIn?: number) => Promise<string>;
+    createPreSignedUrlForPreview: (key: string, expiresIn?: number) => Promise<string>;
     createPreSignedUpload: (
       key: string,
       options?: { private?: boolean },
@@ -341,6 +372,8 @@ export interface PrepareDriveDownloadParams {
   hidden: string[];
   now?: Date;
   path: string;
+  /** Defaults to `download`. */
+  purpose?: DriveCopyPurpose;
   sandbox: Pick<SandboxService, 'callTool' | 'capabilities'>;
 }
 
@@ -401,6 +434,7 @@ export const prepareDriveDownload = async ({
   hidden,
   now = new Date(),
   path,
+  purpose = 'download',
   sandbox,
 }: PrepareDriveDownloadParams) => {
   if (!sandbox.capabilities.shell) throw new DriveDownloadError('DOWNLOAD_UNAVAILABLE');
@@ -415,6 +449,7 @@ export const prepareDriveDownload = async ({
   try {
     const result = await sandbox.callTool('runCommand', {
       command: buildDriveDownloadCommand({
+        fileOnly: purpose === 'preview',
         hidden,
         maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
         maxFiles: DRIVE_DOWNLOAD_MAX_FILES,
@@ -437,13 +472,25 @@ export const prepareDriveDownload = async ({
       log('drive download refused: %O', outcome);
       if (outcome.code === 'NOT_FOUND') throw new DriveDownloadError('PATH_NOT_FOUND');
       if (outcome.code === 'TOO_LARGE') throw new DriveDownloadError('DOWNLOAD_TOO_LARGE');
+      if (outcome.code === 'NOT_A_FILE') throw new DriveDownloadError('PREVIEW_NOT_A_FILE');
       throw new DriveDownloadError('DOWNLOAD_FAILED', outcome.code);
     }
 
     const fileName = driveDownloadFileName(path, outcome.kind);
-    const url = await fileService.createDownloadUrl(key, fileName, DRIVE_DOWNLOAD_URL_EXPIRES_IN);
+    // A preview is shown in the page, so its link answers inline; a download's
+    // answers as an attachment the browser saves.
+    const url =
+      purpose === 'preview'
+        ? await fileService.createPreSignedUrlForPreview(key, DRIVE_PREVIEW_URL_EXPIRES_IN)
+        : await fileService.createDownloadUrl(key, fileName, DRIVE_DOWNLOAD_URL_EXPIRES_IN);
 
-    return { fileName, kind: outcome.kind, size: outcome.size, url };
+    return {
+      contentType: outcome.contentType,
+      fileName,
+      kind: outcome.kind,
+      size: outcome.size,
+      url,
+    };
   } catch (error) {
     // Whatever was uploaded before the failure is unreachable without a link.
     await fileService.deleteFile(key).catch((cause: unknown) => {

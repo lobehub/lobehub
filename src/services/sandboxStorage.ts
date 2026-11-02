@@ -201,6 +201,14 @@ class SandboxStorageService {
   prepareDownload = async (params: { drive?: SandboxDrive; path: string }) =>
     lambdaClient.sandboxStorage.prepareDownload.mutate(params);
 
+  /**
+   * A link one file of the drive is shown from in the page, with the type its
+   * name implies. Copied out through a sandbox session like a download, so it
+   * takes as long; callers show progress until it answers.
+   */
+  preparePreview = async (params: { drive?: SandboxDrive; path: string }) =>
+    lambdaClient.sandboxStorage.preparePreview.mutate(params);
+
   removeFile = async (params: {
     drive?: SandboxDrive;
     instanceId?: string;

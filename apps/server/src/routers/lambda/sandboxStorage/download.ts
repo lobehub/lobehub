@@ -4,7 +4,11 @@ import { z } from 'zod';
 import { router } from '@/libs/trpc/lambda';
 import { FileService } from '@/server/services/file';
 import { createSandboxService } from '@/server/services/sandbox';
-import { DriveDownloadError, prepareDriveDownload } from '@/server/services/sandbox/driveDownload';
+import {
+  type DriveCopyPurpose,
+  DriveDownloadError,
+  prepareDriveDownload,
+} from '@/server/services/sandbox/driveDownload';
 
 import { assertReadable, resolveDriveScope } from './driveScope';
 import { instanceProcedure } from './procedures';
@@ -15,6 +19,7 @@ const ERROR_CODES: Record<DriveDownloadError['code'], TRPCError['code']> = {
   DOWNLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
   DOWNLOAD_UNAVAILABLE: 'NOT_IMPLEMENTED',
   PATH_NOT_FOUND: 'NOT_FOUND',
+  PREVIEW_NOT_A_FILE: 'BAD_REQUEST',
 };
 
 /**
@@ -26,17 +31,17 @@ const ERROR_CODES: Record<DriveDownloadError['code'], TRPCError['code']> = {
  */
 export const driveDownloadTopicId = (storageKey: string) => `sandbox-drive-download:${storageKey}`;
 
-export const downloadRouter = router({
-  /**
-   * A link the browser can download one file or folder of the drive from: the
-   * file as it is, a folder as a zip. Read the way a listing is — a member
-   * downloads whatever they can browse — and a hidden environment directory
-   * is refused when named and left out of any folder that holds it.
-   *
-   * A mutation, not a query: it starts a sandbox session and writes an object
-   * to storage, and a refetch-on-focus must never repeat that.
-   */
-  prepareDownload: instanceProcedure
+/**
+ * Copies one path of the drive to object storage from a sandbox session and
+ * answers with a link to it. Read the way a listing is — a member reaches
+ * whatever they can browse — and a hidden environment directory is refused
+ * when named and left out of any folder that holds it.
+ *
+ * A mutation, not a query: it starts a sandbox session and writes an object
+ * to storage, and a refetch-on-focus must never repeat that.
+ */
+const copyProcedure = (purpose: DriveCopyPurpose) =>
+  instanceProcedure
     .input(z.object({ drive: driveSchema, path: relativePathSchema }))
     .mutation(async ({ ctx, input }) => {
       const scope = await resolveDriveScope(ctx);
@@ -54,6 +59,7 @@ export const downloadRouter = router({
           fileService: new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
           hidden: scope.hidden,
           path: input.path,
+          purpose,
           sandbox,
         });
       } catch (error) {
@@ -62,5 +68,16 @@ export const downloadRouter = router({
         }
         throw error;
       }
-    }),
+    });
+
+export const downloadRouter = router({
+  /** A link that downloads one file of the drive as it is, or one folder as a zip. */
+  prepareDownload: copyProcedure('download'),
+
+  /**
+   * A link one file of the drive can be shown in the page from — answered
+   * inline, with the type the file's name implies, so the viewer can render
+   * it. A folder is refused; it has nothing to show but its listing.
+   */
+  preparePreview: copyProcedure('preview'),
 });

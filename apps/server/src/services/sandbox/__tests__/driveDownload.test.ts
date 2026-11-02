@@ -12,6 +12,7 @@ import {
   buildDriveDownloadCommand,
   DRIVE_DOWNLOAD_MAX_BYTES,
   DRIVE_DOWNLOAD_URL_EXPIRES_IN,
+  DRIVE_PREVIEW_URL_EXPIRES_IN,
   driveDownloadFileName,
   parseDriveDownloadOutput,
   prepareDriveDownload,
@@ -72,9 +73,16 @@ describe.skipIf(!hasPython)('the drive download script', () => {
 
   const run = (
     target: string,
-    options: { hidden?: string[]; maxBytes?: number; maxFiles?: number; url?: string } = {},
+    options: {
+      fileOnly?: boolean;
+      hidden?: string[];
+      maxBytes?: number;
+      maxFiles?: number;
+      url?: string;
+    } = {},
   ) => {
     const command = buildDriveDownloadCommand({
+      fileOnly: options.fileOnly,
       hidden: options.hidden ?? [],
       maxBytes: options.maxBytes ?? DRIVE_DOWNLOAD_MAX_BYTES,
       maxFiles: options.maxFiles ?? 100,
@@ -186,6 +194,21 @@ describe.skipIf(!hasPython)('the drive download script', () => {
     expect(received).toHaveLength(0);
   });
 
+  it('refuses to pack a folder for a preview, and still copies a file', async () => {
+    await expect(run('project', { fileOnly: true })).resolves.toEqual({
+      code: 'NOT_A_FILE',
+      ok: false,
+    });
+    expect(received).toHaveLength(0);
+
+    await expect(run('project/README.md', { fileOnly: true })).resolves.toMatchObject({
+      contentType: 'text/markdown',
+      kind: 'file',
+      ok: true,
+    });
+    expect(received).toHaveLength(1);
+  });
+
   it('refuses a folder over the size limit before packing it', async () => {
     await expect(run('project', { maxBytes: 5 })).resolves.toMatchObject({
       code: 'TOO_LARGE',
@@ -213,6 +236,7 @@ describe('driveDownloadFileName', () => {
 describe('prepareDriveDownload', () => {
   const fileService = {
     createDownloadUrl: vi.fn(async (key: string, name: string) => `https://cdn/${key}?as=${name}`),
+    createPreSignedUrlForPreview: vi.fn(async (key: string) => `https://cdn/${key}?inline`),
     createPreSignedUpload: vi.fn(async (key: string) => ({
       headers: { 'x-amz-acl': 'public-read' },
       url: `https://upload/${key}`,
@@ -232,6 +256,7 @@ describe('prepareDriveDownload', () => {
 
   beforeEach(() => {
     fileService.createDownloadUrl.mockClear();
+    fileService.createPreSignedUrlForPreview.mockClear();
     fileService.createPreSignedUpload.mockClear();
     fileService.deleteFile.mockClear();
     fileService.deleteFiles.mockClear();
@@ -262,6 +287,7 @@ describe('prepareDriveDownload', () => {
       DRIVE_DOWNLOAD_URL_EXPIRES_IN,
     );
     expect(result).toEqual({
+      contentType: 'application/zip',
       fileName: 'project.zip',
       kind: 'directory',
       size: 42,
@@ -280,7 +306,43 @@ describe('prepareDriveDownload', () => {
     });
   });
 
+  it('answers a preview with an inline link, and tells the script to refuse a folder', async () => {
+    const sandbox = sandboxAnswering(
+      'LOBE_DRIVE_DOWNLOAD_RESULT {"ok":true,"kind":"file","size":9,"contentType":"application/pdf"}\n',
+    );
+
+    const result = await prepareDriveDownload({
+      fileService,
+      hidden: [],
+      path: 'docs/report.pdf',
+      purpose: 'preview',
+      sandbox,
+    });
+
+    const [key] = fileService.createPreSignedUpload.mock.calls[0] as unknown as [string];
+    expect(fileService.createPreSignedUrlForPreview).toHaveBeenCalledWith(
+      key,
+      DRIVE_PREVIEW_URL_EXPIRES_IN,
+    );
+    expect(fileService.createDownloadUrl).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      contentType: 'application/pdf',
+      fileName: 'report.pdf',
+      kind: 'file',
+      size: 9,
+      url: `https://cdn/${key}?inline`,
+    });
+
+    const [, params] = sandbox.callTool.mock.calls[0] as unknown as [string, any];
+    const payload = /LOBE_DRIVE_DOWNLOAD='([^']+)'/.exec(params.command)![1];
+    expect(JSON.parse(Buffer.from(payload, 'base64').toString('utf8'))).toMatchObject({
+      fileOnly: true,
+      path: 'docs/report.pdf',
+    });
+  });
+
   it.each([
+    ['NOT_A_FILE', 'PREVIEW_NOT_A_FILE'],
     ['NOT_FOUND', 'PATH_NOT_FOUND'],
     ['TOO_LARGE', 'DOWNLOAD_TOO_LARGE'],
     ['UPLOAD_FAILED', 'DOWNLOAD_FAILED'],
