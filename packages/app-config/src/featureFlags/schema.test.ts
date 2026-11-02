@@ -193,6 +193,19 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
+  it('should keep the new subscription tiers off by default and enable them for listed users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.new_tier_plans).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableNewTierPlans).toBe(
+      false,
+    );
+
+    const config = { new_tier_plans: ['tester-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'tester-123').enableNewTierPlans).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableNewTierPlans).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableNewTierPlans).toBe(false);
+  });
+
   it('should keep topic previews off by default and enable them for listed users', () => {
     expect(DEFAULT_FEATURE_FLAGS.topic_preview).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableTopicPreview).toBe(

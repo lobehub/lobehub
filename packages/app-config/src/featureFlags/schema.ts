@@ -81,6 +81,7 @@ export const FeatureFlagsSchema = z.object({
   auth_captcha: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
   onboarding_v2: FeatureFlagValue.optional(),
+  new_tier_plans: FeatureFlagValue.optional(),
   storage_overage: FeatureFlagValue.optional(),
   workspace: FeatureFlagValue.optional(),
 
@@ -156,6 +157,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   auth_captcha: true,
   cloud_promotion: false,
   onboarding_v2: isDev,
+  // Cloud-only grayscale for the new subscription tiers: off until an admin
+  // publishes a whitelist (array of user IDs) or flips it to true.
+  new_tier_plans: false,
   storage_overage: true,
   workspace: isDev,
 
@@ -206,6 +210,7 @@ export const mapFeatureFlagsEnvToState = (
     enableDevDock: evaluateFeatureFlag(config.dev_dock, userId),
     enableAuthCaptcha: evaluateFeatureFlag(config.auth_captcha, userId),
     enableOnboardingV2: evaluateFeatureFlag(config.onboarding_v2, userId),
+    enableNewTierPlans: evaluateFeatureFlag(config.new_tier_plans, userId),
     enableStorageOverage: evaluateFeatureFlag(config.storage_overage, userId),
 
     showCloudPromotion: evaluateFeatureFlag(config.cloud_promotion, userId),
