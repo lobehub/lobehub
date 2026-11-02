@@ -1,6 +1,6 @@
 'use client';
 
-import { Block, Button, Checkbox, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Block, Button, Checkbox, cssVar, Flexbox, stopPropagation, Tag, Text } from '@lobehub/ui';
 import { SparklesIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -68,7 +68,12 @@ const ProposalPanel = memo<ProposalPanelProps>(
               onClick={() => toggle(index)}
             >
               <Flexbox horizontal align={'center'} gap={6}>
-                <Checkbox checked={selected.includes(index)} onChange={() => toggle(index)} />
+                {/* The row itself toggles on click; the checkbox must not toggle it twice. */}
+                <Checkbox
+                  checked={selected.includes(index)}
+                  onChange={() => toggle(index)}
+                  onClick={stopPropagation}
+                />
                 <Text fontSize={12} style={{ flex: 1, minWidth: 0 }} weight={500}>
                   {draft.title}
                 </Text>
