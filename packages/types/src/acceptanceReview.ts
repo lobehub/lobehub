@@ -21,6 +21,19 @@ export const reviewAnchorSchema = z.object({
     .optional(),
   intent: z.enum(['change', 'comment']),
   region: rectSchema.optional(),
+  regionRefs: z
+    .array(
+      z
+        .object({
+          box: rectSchema,
+          selector: z.string().max(2000),
+          text: z.string().max(200).optional(),
+        })
+        .nullable(),
+    )
+    .max(6)
+    .optional(),
+  route: z.string().max(500).optional(),
   scroll: z.object({ x: z.number().finite(), y: z.number().finite() }),
   targets: z
     .array(

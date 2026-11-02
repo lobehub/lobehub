@@ -1,7 +1,9 @@
 import debug from 'debug';
 
+import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
+import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { TaskService } from '@/server/services/task';
 
 import type { AcceptanceServiceDeps } from './deps';
@@ -57,6 +59,26 @@ const pendingCompletionOperation = (task: { context?: unknown }) =>
  * coordinator (a paused task is its retry signal) and recurring tasks stay
  * on their schedule, so neither follows the acceptance.
  */
+export const resolveRepairComments = async (deps: AcceptanceServiceDeps, subjectId: string) => {
+  try {
+    const task = await new TaskModel(deps.db, deps.userId, deps.workspaceId).resolve(subjectId);
+    const repair = (
+      task?.config as { acceptanceRepair?: { acceptanceId?: unknown; commentIds?: unknown } }
+    )?.acceptanceRepair;
+    if (typeof repair?.acceptanceId !== 'string' || !Array.isArray(repair.commentIds)) return;
+    const ids = repair.commentIds.filter((id): id is string => typeof id === 'string');
+    const resolved = await new AcceptanceCommentModel(deps.db).resolveRoots(
+      repair.acceptanceId,
+      ids,
+      deps.actorUserId,
+    );
+    if (resolved.length) notifyAcceptance(repair.acceptanceId, 'comments', deps.actorUserId);
+    log('acceptance → task %s resolved %d handed-off comments', subjectId, resolved.length);
+  } catch (error) {
+    log('acceptance → task %s comment resolve failed: %O', subjectId, error);
+  }
+};
+
 export const resolveLifecycleTask = async (deps: AcceptanceServiceDeps, subjectId: string) => {
   const task = await new TaskModel(deps.db, deps.userId, deps.workspaceId).resolve(subjectId);
   if (!task || task.automationMode) return null;

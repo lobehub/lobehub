@@ -20,7 +20,9 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as AcceptanceModelModule from '@/database/models/acceptance';
+import type * as AcceptanceEventsModule from '@/server/services/acceptanceReview/events';
 import { ProjectReviewService } from '@/server/services/projectReview';
+import { AcceptanceService } from '@/server/services/verify';
 
 import * as agentGuard from '../_helpers/workspaceAgentGuard';
 import { acceptanceRouter } from '../acceptance';
@@ -59,6 +61,17 @@ vi.mock('@/database/models/acceptance', async (importOriginal) => {
     }
   }
   return { ...actual, AcceptanceModel };
+});
+const notified = vi.hoisted(() => [] as [string, string][]);
+vi.mock('@/server/services/acceptanceReview/events', async (importOriginal) => {
+  const actual = await importOriginal<typeof AcceptanceEventsModule>();
+  return {
+    ...actual,
+    notifyAcceptance: (...args: Parameters<typeof actual.notifyAcceptance>) => {
+      notified.push([args[0], args[1]]);
+      return actual.notifyAcceptance(...args);
+    },
+  };
 });
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(function () {
@@ -156,6 +169,102 @@ describe('acceptance repair handoff', () => {
       where: eq(acceptanceComments.id, commentId),
     });
     expect(original?.resolvedAt).toBeNull();
+  });
+
+  it('records the root comments it hands off on the Task', async () => {
+    await serverDB.insert(acceptanceComments).values({
+      acceptanceId,
+      authorUserId: userId,
+      clientId: randomUUID(),
+      content: 'Still broken on mobile',
+      parentCommentId: commentId,
+    });
+    await acceptanceRouter
+      .createCaller(createTestContext(userId))
+      .requestRepair({ id: acceptanceId });
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId));
+    expect((task.config as any)?.acceptanceRepair).toMatchObject({
+      acceptanceId,
+      commentIds: [commentId],
+    });
+  });
+
+  const handOff = async () => {
+    await acceptanceRouter
+      .createCaller(createTestContext(userId))
+      .requestRepair({ id: acceptanceId });
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId));
+    const delivery = await serverDB.query.acceptances.findFirst({
+      where: eq(acceptances.subjectId, task.id),
+    });
+    await serverDB
+      .update(acceptances)
+      .set({ status: 'delivered' })
+      .where(eq(acceptances.id, delivery!.id));
+    await serverDB.insert(verifyRuns).values({ acceptanceId: delivery!.id, roundIndex: 1, userId });
+    return delivery!.id;
+  };
+  const rootState = () =>
+    serverDB.query.acceptanceComments.findFirst({ where: eq(acceptanceComments.id, commentId) });
+
+  it('resolves the handed-off comments when a person accepts the delivery', async () => {
+    const deliveryId = await handOff();
+    expect((await rootState())?.resolvedAt).toBeNull();
+    await new AcceptanceService(serverDB, userId).accept(deliveryId);
+    const root = await rootState();
+    expect(root?.resolvedAt).not.toBeNull();
+    expect(root?.resolvedByUserId).toBe(userId);
+    expect(notified).toContainEqual([acceptanceId, 'comments']);
+  });
+
+  it('resolves the handed-off comments when a merge accepts the delivery', async () => {
+    const deliveryId = await handOff();
+    await new AcceptanceService(serverDB, userId).acceptFromScmMerge(deliveryId, {
+      number: 7,
+      provider: 'github',
+      repoFullName: 'lobehub/site',
+      url: 'https://github.com/lobehub/site/pull/7',
+    });
+    expect((await rootState())?.resolvedAt).not.toBeNull();
+  });
+
+  it('leaves comments of other acceptances alone even if a Task lists them', async () => {
+    const deliveryId = await handOff();
+    const [other] = await serverDB
+      .insert(acceptances)
+      .values({
+        projectId,
+        subjectId: randomUUID(),
+        subjectType: 'site',
+        status: 'delivered',
+        userId,
+      })
+      .returning();
+    const [foreign] = await serverDB
+      .insert(acceptanceComments)
+      .values({
+        acceptanceId: other.id,
+        authorUserId: userId,
+        clientId: randomUUID(),
+        content: 'Elsewhere',
+      })
+      .returning();
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId));
+    const config = task.config as { acceptanceRepair: { commentIds: string[] } };
+    await serverDB
+      .update(tasks)
+      .set({
+        config: {
+          ...config,
+          acceptanceRepair: { ...config.acceptanceRepair, commentIds: [commentId, foreign.id] },
+        },
+      })
+      .where(eq(tasks.id, task.id));
+    await new AcceptanceService(serverDB, userId).accept(deliveryId);
+    const after = await serverDB.query.acceptanceComments.findFirst({
+      where: eq(acceptanceComments.id, foreign.id),
+    });
+    expect(after?.resolvedAt).toBeNull();
   });
 
   it('deduplicates concurrent requests and does not sweep in feedback posted during execution', async () => {
