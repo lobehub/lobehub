@@ -71,13 +71,6 @@ export async function readAcceptanceRepair(
   return repair;
 }
 
-async function rootCommentIds(db: LobeChatDatabase, acceptanceId: string, ids: string[]) {
-  if (!ids.length) return [];
-  const rows = await new AcceptanceCommentModel(db).listByAcceptance(acceptanceId);
-  const parents = new Map(rows.map((row) => [row.id, row.parentCommentId]));
-  return [...new Set(ids.map((id) => parents.get(id) ?? id))];
-}
-
 async function snapshotFeedback(
   db: LobeChatDatabase,
   service: AcceptanceService,
@@ -273,11 +266,10 @@ export async function dispatchAcceptanceFeedbackRepair(
     });
     const caller = taskRouter.createCaller(projectCtx);
     if (!task) {
-      const commentIds = await rootCommentIds(ctx.serverDB, acceptance.id, request.commentIds);
       ({ data: task } = await caller.create({
         assigneeAgentId: agentId,
         config: {
-          acceptanceRepair: { acceptanceId: acceptance.id, commentIds, requestId: request.id },
+          acceptanceRepair: { acceptanceId: acceptance.id, requestId: request.id },
         },
         instruction: `${buildAcceptanceRepairPrompt(acceptance.id, request.comment, { projectTask: true })}\n\n${feedbackPrompt(request)}`,
         name: `${project.name}: website review`,

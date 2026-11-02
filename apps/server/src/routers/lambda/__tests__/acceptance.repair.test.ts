@@ -171,24 +171,6 @@ describe('acceptance repair handoff', () => {
     expect(original?.resolvedAt).toBeNull();
   });
 
-  it('records the root comments it hands off on the Task', async () => {
-    await serverDB.insert(acceptanceComments).values({
-      acceptanceId,
-      authorUserId: userId,
-      clientId: randomUUID(),
-      content: 'Still broken on mobile',
-      parentCommentId: commentId,
-    });
-    await acceptanceRouter
-      .createCaller(createTestContext(userId))
-      .requestRepair({ id: acceptanceId });
-    const [task] = await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId));
-    expect((task.config as any)?.acceptanceRepair).toMatchObject({
-      acceptanceId,
-      commentIds: [commentId],
-    });
-  });
-
   const handOff = async () => {
     await acceptanceRouter
       .createCaller(createTestContext(userId))
