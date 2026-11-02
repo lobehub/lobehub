@@ -22,7 +22,11 @@ export class FileContentRepository {
    */
   replaceStoredContent = async (file: FileItem, value: Pick<FileItem, 'fileType' | 'size'>) => {
     await this.db.transaction(async (tx) => {
-      const fileModel = new FileModel(tx, this.userId, this.workspaceId);
+      const fileModel = new FileModel(
+        tx as unknown as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      );
 
       await fileModel.deleteFileChunks(tx, [file.id]);
       await tx
