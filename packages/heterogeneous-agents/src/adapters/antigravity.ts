@@ -12,6 +12,7 @@ const IDENTIFIER = 'antigravity';
 
 interface PendingTool {
   payload: ToolCallPayload;
+  started?: boolean;
   stepIndex: number;
 }
 
@@ -212,6 +213,9 @@ export class AntigravityAdapter implements AgentEventAdapter {
         }),
       );
     }
+    // Recorders snapshot arguments from tool_start, so wait until they are known.
+    if (info?.parameters !== undefined || step.state === 'DONE')
+      events.push(...this.startTool(pending));
     if (step.state === 'DONE') {
       const error = toRecord(info?.error);
       const output = stringifyOutput(info?.output ?? subagents);
@@ -223,12 +227,25 @@ export class AntigravityAdapter implements AgentEventAdapter {
     return events;
   }
 
+  private startTool(tool: PendingTool): HeterogeneousAgentEvent[] {
+    if (tool.started) return [];
+    tool.started = true;
+    return [
+      this.event(
+        'tool_start',
+        { toolCalling: { ...tool.payload }, toolCallId: tool.payload.id },
+        tool.stepIndex,
+      ),
+    ];
+  }
+
   private toolResult(
     tool: PendingTool,
     content: string,
     isError: boolean,
   ): HeterogeneousAgentEvent[] {
     return [
+      ...this.startTool(tool),
       this.event('tool_result', { content, isError, toolCallId: tool.payload.id }, tool.stepIndex),
       this.event(
         'tool_end',
@@ -300,13 +317,9 @@ export class AntigravityAdapter implements AgentEventAdapter {
       ...this.settlePendingTools('Antigravity ended before this tool returned a result.'),
       ...this.closeStream(),
     );
-    // Result counters are cumulative across a resumed conversation. Persist
-    // only step_update usage as turn_metadata, never charge this total again.
-    const usage = extractUsage(result.usage);
-    if (usage)
-      events.push(
-        this.event('step_complete', { phase: 'result_usage', provider: IDENTIFIER, usage }),
-      );
+    // Result counters are cumulative across a resumed conversation, so they are
+    // not emitted as `result_usage`: trace recorders treat that phase as the
+    // run total. Step_update usage (turn_metadata) is the only per-run source.
     return events;
   }
 
