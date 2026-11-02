@@ -80,8 +80,11 @@ When the execution environment is Runta, additionally read the
 server route; it is not a third server target.
 
 For FrontierHarness on a local Docker host or SSH worker, use
-`scripts/frontierharness-local.py start` to launch Harbor/Pier queues and
-`collect` to prepare results and usage for reporting. See each subcommand's `--help`.
+`scripts/frontierharness-local.py start` to launch one native Harbor job and one
+native Pier job, with their own concurrency and queues. The launcher only
+prepares tasks/configuration, starts both commands and waits for their exits;
+it does not schedule individual trials or cancel pending tasks on a trial error.
+Use `collect` to prepare results and usage for reporting. See each subcommand's `--help`.
 
 CLI source is orthogonal to the server target and execution environment:
 `checkout` injects the built `apps/cli`; `npm` installs the release package. For
@@ -100,8 +103,9 @@ evidence flow scoped to the operation.
 To publish Harbor/Pier prompts as a LobeHub dataset and execute trials linked
 to an external eval run, read [references/eval.md](references/eval.md). Both
 adapters support `LH_RUN_MODE=eval` with `LH_EVAL_RUN_ID` and a per-trial
-`LH_EVAL_CASE_ID`. The server supplies the case prompt and run's target agent;
-the outer scheduler claims the run and reports verifier results.
+`LH_EVAL_CASE_ID` (or resolve it from the current task's `task.toml`). The server
+supplies the case prompt and run's target agent; the launcher claims the run
+and reports verifier results after both native jobs exit.
 
 The runner exports persisted topic interactions to `agent/trajectory.json` with
 `lh topic export` during cleanup, including interrupted runs. This requires a

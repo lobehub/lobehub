@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 from harbor.agents.installed.base import BaseInstalledAgent
@@ -87,6 +88,12 @@ class LhInstalledAgent(BaseInstalledAgent):
         context: AgentContext,
     ) -> None:
         del context
+        if self._lh.run_mode == "eval" and not self._lh.value(
+            self._lh.eval_case_id, "LH_EVAL_CASE_ID"
+        ):
+            task_dir = environment.environment_dir.parent
+            task = tomllib.loads((task_dir / "task.toml").read_text())
+            self._lh.eval_case_id = task.get("task", {}).get("name") or f"terminal-bench/{task_dir.name}"
         for command in self._lh.run_commands(self.render_instruction(instruction)):
             await self.exec_as_agent(environment, command=command)
 

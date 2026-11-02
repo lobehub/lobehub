@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import shlex
+import tomllib
 from pathlib import Path
 
 from lh.adapter import CHECK_LH_PATH, DEV_CLI_DIR, RUN_AGENT_PATH, LhAdapter
@@ -88,6 +89,12 @@ class LhPierInstalledAgent(BaseInstalledAgent):
         environment: BaseEnvironment,
         context: AgentContext,
     ) -> None:
+        if self._lh.run_mode == "eval" and not self._lh.value(
+            self._lh.eval_case_id, "LH_EVAL_CASE_ID"
+        ):
+            task_dir = environment.environment_dir.parent
+            task = tomllib.loads((task_dir / "task.toml").read_text())
+            self._lh.eval_case_id = task.get("task", {}).get("name") or f"datacurve/{task_dir.name}"
         host_dir = self._lh.host_cli_dir()
         if host_dir is not None:
             await environment.upload_file(

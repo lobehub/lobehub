@@ -12,9 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
-import time
 import tomllib
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -62,8 +60,6 @@ def start(args: argparse.Namespace) -> None:
     concurrency = {"terminal-bench": args.harbor_concurrency, "datacurve": args.pier_concurrency}
     if any(value < 1 for value in concurrency.values()):
         raise ValueError("suite concurrency must be positive")
-    if args.after_run and (args.after_pid is None or args.after_pid < 1):
-        raise ValueError("--after-run requires a positive --after-pid")
     notify_dir = Path.home() / "scripts"
     if args.notify and not all((notify_dir / name).is_file() for name in ("notify-on-exit.sh", ".env")):
         raise FileNotFoundError("notification script or its .env is missing")
@@ -116,6 +112,7 @@ def start(args: argparse.Namespace) -> None:
             prompt_hash = hashlib.sha256((target / "instruction.md").read_text().strip().encode()).hexdigest()
             if prompt_hash != eval_manifest["cases"][task["id"]]["inputSha256"]:
                 raise ValueError(f"Task prompt differs from the published dataset: {task['id']}")
+    for suite in dict.fromkeys(task["suite"] for task in tasks):
         runner, adapter = SUITES[suite]
         agent = {
             "model_name": args.model,
@@ -123,26 +120,26 @@ def start(args: argparse.Namespace) -> None:
                 **{key: "${" + key + "}" for key in creds},
                 "LH_CLI_SOURCE": f"host-dir:{cli_dir}",
                 "LH_RUN_MODE": "eval" if eval_manifest else "agent",
-                **({"LH_EVAL_RUN_ID": "${LH_EVAL_RUN_ID}", "LH_EVAL_CASE_ID": task["id"]} if eval_manifest else {}),
+                **({"LH_EVAL_RUN_ID": "${LH_EVAL_RUN_ID}"} if eval_manifest else {}),
             },
         }
         agent["name" if runner == "harbor" else "import_path"] = adapter
-        job_name = f"{args.run_id}-{name}"
         config = {
-            "job_name": job_name,
+            "job_name": f"{args.run_id}-{suite}",
             "jobs_dir": str(run_dir / "jobs" / suite),
-            "n_concurrent_trials": 1,
+            "n_concurrent_trials": concurrency[suite],
             "retry": {"max_retries": 0},
-            "tasks": [{"path": str(target)}],
+            "tasks": [{"path": str(run_dir / "tasks" / suite / task["dir"])}
+                      for task in tasks if task["suite"] == suite],
             "environment": {"type": "docker"},
             "agents": [agent],
         }
-        save(run_dir / "config" / suite / f"{name}.json", config)
+        save(run_dir / "config" / f"{suite}.json", config)
     record = {
         "run_id": args.run_id,
         "model": args.model,
         "started_at": datetime.now(timezone.utc).isoformat(),
-        "topology": "docker-host-suite-queues",
+        "topology": "docker-host-native-jobs",
         "concurrency": concurrency,
         "eval_commit": subprocess.check_output(["git", "-C", str(eval_dir), "rev-parse", "HEAD"], text=True).strip(),
         "deep_swe_commit": subprocess.check_output(["git", "-C", str(args.deep_swe), "rev-parse", "HEAD"], text=True).strip(),
@@ -154,9 +151,6 @@ def start(args: argparse.Namespace) -> None:
     }
     if eval_manifest:
         record["eval_dataset_id"] = eval_manifest["datasetId"]
-    if args.after_run:
-        record["after_run"] = str(args.after_run.resolve())
-        record["after_pid"] = args.after_pid
     save(run_dir / "run.json", record)
     save(run_dir / "status.json", {"state": "queued", "total": len(tasks)})
     command = [sys.executable, str(Path(__file__).resolve()), "worker", "--run", str(run_dir)]
@@ -179,41 +173,11 @@ def start(args: argparse.Namespace) -> None:
     print(json.dumps({"run": str(run_dir), "pid": process.pid, "tasks": len(tasks)}, indent=2))
 
 
-def run_task(run_dir: Path, record: dict, task: dict, env: dict) -> tuple[int, Path, Path]:
-    suite, name = task["suite"], task["dir"]
-    runner = SUITES[suite][0]
-    config = run_dir / "config" / suite / f"{name}.json"
-    command = (["uv", "run", "--with", "harbor==0.23.0", "harbor"] if runner == "harbor" else ["pier"])
-    command += ["run", "--config", str(config), "--yes"]
-    log_path = run_dir / "logs" / suite / f"{name}.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("w") as log:
-        result = subprocess.run(command, cwd=run_dir, env=env, stdout=log, stderr=subprocess.STDOUT, check=False)
-    result_path = run_dir / "jobs" / suite / f"{record['run_id']}-{name}" / "result.json"
-    return result.returncode, result_path, log_path
-
-
 def worker(args: argparse.Namespace) -> None:
     run_dir = args.run.resolve()
     record = json.loads((run_dir / "run.json").read_text())
-    if "after_run" in record:
-        previous = Path(record["after_run"])
-        while True:
-            state_file = previous / "status.json"
-            state = json.loads(state_file.read_text()).get("state") if state_file.is_file() else ""
-            if state == "complete":
-                break
-            if state == "failed":
-                save(run_dir / "status.json", {"state": "failed", "reason": f"smoke failed: {previous}"})
-                raise SystemExit(1)
-            try:
-                os.kill(record["after_pid"], 0)
-            except ProcessLookupError:
-                save(run_dir / "status.json", {"state": "failed", "reason": f"smoke stopped without completion: {previous}"})
-                raise SystemExit(1)
-            time.sleep(30)
     env = os.environ.copy()
-    for key in ("LH_SERVER_URL", "LOBEHUB_SERVER", "LH_GATEWAY_URL", "AGENT_GATEWAY_URL", "LH_AGENT_SLUG"):
+    for key in ("LH_SERVER_URL", "LOBEHUB_SERVER", "LH_GATEWAY_URL", "AGENT_GATEWAY_URL", "LH_AGENT_SLUG", "LH_EVAL_CASE_ID"):
         env.pop(key, None)
     env.update(credentials(Path(record["env_file"])))
     env["PYTHONPATH"] = str(SCRIPT_DIR) + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
@@ -227,38 +191,39 @@ def worker(args: argparse.Namespace) -> None:
             save(run_dir / "run.json", record)
             client.call("eval", "run", "claim", "--id", run["id"])
         env["LH_EVAL_RUN_ID"] = record["eval_run_id"]
-    completed = 0
-    failure = None
-    save(run_dir / "status.json", {"state": "running", "completed": completed, "total": len(record["tasks"]), "concurrency": record["concurrency"]})
-    with ThreadPoolExecutor(record["concurrency"]["terminal-bench"]) as harbor, ThreadPoolExecutor(record["concurrency"]["datacurve"]) as pier:
-        queues = {"terminal-bench": harbor, "datacurve": pier}
-        futures = {queues[task["suite"]].submit(run_task, run_dir, record, task, env): task for task in record["tasks"]}
-        for future in as_completed(futures):
-            if future.cancelled():
-                continue
-            task = futures[future]
+    processes, jobs, errors = {}, {}, {}
+    save(run_dir / "status.json", {"state": "running", "total": len(record["tasks"]), "concurrency": record["concurrency"]})
+    for suite in dict.fromkeys(task["suite"] for task in record["tasks"]):
+        runner = SUITES[suite][0]
+        command = (["uv", "run", "--with", "harbor==0.23.0", "harbor"] if runner == "harbor" else ["pier"])
+        command += ["run", "--config", str(run_dir / "config" / f"{suite}.json"), "--yes"]
+        jobs[suite] = run_dir / "jobs" / suite / f"{record['run_id']}-{suite}"
+        try:
+            with (run_dir / f"{runner}.log").open("a") as log:
+                processes[suite] = subprocess.Popen(command, cwd=run_dir, env=env, stdout=log, stderr=subprocess.STDOUT)
+        except OSError as error:
+            errors[suite] = str(error)
+    for suite, process in processes.items():
+        exit_code = process.wait()
+        if exit_code or not (jobs[suite] / "result.json").is_file():
+            errors[suite] = f"runner exit={exit_code}; job={jobs[suite]}"
+    if record.get("eval_run_id"):
+        for suite, job in jobs.items():
             try:
-                exit_code, result_path, log_path = future.result()
-                if exit_code or not result_path.is_file():
-                    raise RuntimeError(f"runner exit={exit_code}; result={result_path}; log={log_path}")
-                if record.get("eval_run_id"):
-                    receipt = client.report_job(record["eval_run_id"], task["id"], result_path.parent)
-                    save(result_path.parent / "eval-report.json", receipt)
-                completed += 1
-                print(f"{completed}/{len(record['tasks'])}: {task['id']} -> {result_path}", flush=True)
+                receipt = client.report_batch(record["eval_run_id"], job)
+                if receipt["errors"]:
+                    errors[suite] = receipt["errors"]
             except Exception as error:
-                if failure is None:
-                    failure = {"task": task["id"], "reason": str(error)}
-                    for pending in futures:
-                        pending.cancel()
-            save(run_dir / "status.json", {"state": "draining" if failure else "running", "completed": completed, "total": len(record["tasks"]), "failure": failure})
-    if failure:
-        save(run_dir / "status.json", {"state": "failed", "completed": completed, "total": len(record["tasks"]), **failure})
-        raise SystemExit(1)
-    save(run_dir / "status.json", {
-        "state": "complete", "total": len(record["tasks"]),
+                errors[suite] = str(error)
+    status = {
+        "state": "failed" if errors else "complete", "total": len(record["tasks"]),
+        "completed": sum(len(list(job.glob("*/result.json"))) for job in jobs.values()),
+        "jobs": {suite: str(job) for suite, job in jobs.items()}, "errors": errors,
         "finished_at": datetime.now(timezone.utc).isoformat(),
-    })
+    }
+    save(run_dir / "status.json", status)
+    if errors:
+        raise SystemExit(1)
 
 
 def collect(args: argparse.Namespace) -> None:
@@ -284,10 +249,17 @@ def collect(args: argparse.Namespace) -> None:
     spec.loader.exec_module(calculator)
     pricing = json.loads((scripts / "pricing.json").read_text())
 
+    originals = {}
+    for result in (run_dir / "jobs").glob("*/*/*/result.json"):
+        trial = json.loads(result.read_text())
+        key = (result.parents[2].name, Path(trial["config"]["task"]["path"]).name)
+        if key in originals:
+            raise RuntimeError(f"multiple trials for {key}: {result}")
+        originals[key] = result.parent
     operations = {}
     for task in record["tasks"]:
         name, suite = task["dir"], task["suite"]
-        job = run_dir / "jobs" / suite / f"{record['run_id']}-{name}"
+        job = originals[(suite, name)]
         status_logs = list(job.rglob("operation-status.jsonl"))
         if len(status_logs) != 1:
             raise RuntimeError(f"expected one operation log: {job}")
@@ -317,12 +289,12 @@ def collect(args: argparse.Namespace) -> None:
         name, suite = task["dir"], task["suite"]
         trial_dir = trials / f"{suite}__{name}"
         job_dir = trial_dir / "jobs"
-        original = run_dir / "jobs" / suite / f"{record['run_id']}-{name}"
+        original = originals[(suite, name)]
         trial_dir.mkdir(parents=True, exist_ok=True)
         if job_dir.is_symlink():
             job_dir.unlink()
         if not job_dir.exists():
-            shutil.copytree(original, job_dir)
+            shutil.copytree(original, job_dir / original.name)
         agents = list(job_dir.rglob("operation-status.jsonl"))
         if len(agents) != 1:
             raise RuntimeError(f"expected one agent log: {job_dir}")
@@ -375,8 +347,6 @@ def main() -> None:
     start_parser.add_argument("--task", action="append")
     start_parser.add_argument("--harbor-concurrency", type=int, default=2)
     start_parser.add_argument("--pier-concurrency", type=int, default=1)
-    start_parser.add_argument("--after-run", type=Path, help="wait for a smoke run to finish successfully")
-    start_parser.add_argument("--after-pid", type=int, help="fail if the smoke worker exits without a result")
     start_parser.add_argument("--notify", action="store_true", help="send a notification when the worker exits")
     start_parser.set_defaults(handler=start)
     collect_parser = commands.add_parser("collect", help="prepare results and usage for FrontierHarness reports")

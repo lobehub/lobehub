@@ -67,11 +67,11 @@ class EvalClient:
         trials = list(job.glob("*/result.json"))
         if len(trials) != 1:
             raise ValueError(f"Expected one trial result in {job}, found {len(trials)}")
-        trial = json.loads(trials[0].read_text())
-        starts = list(trials[0].parent.glob("agent/run-start.json"))
-        if len(starts) != 1:
-            raise ValueError(f"Missing eval start receipt for {case_id}: {job}")
-        started = json.loads(starts[0].read_text())
+        return self.report_trial(run_id, case_id, trials[0].parent)
+
+    def report_trial(self, run_id: str, case_id: str, path: Path) -> dict:
+        trial = json.loads((path / "result.json").read_text())
+        started = json.loads((path / "agent/run-start.json").read_text())
         topics = self.call("eval", "run-topic", "list", "--run-id", run_id)
         topic = next((item for item in topics if item["topicId"] == started["topicId"]), None)
         if not topic or topic["testCaseId"] != started["testCaseId"]:
@@ -83,16 +83,45 @@ class EvalClient:
         score = rewards.get("reward")
         if not isinstance(score, (int, float)) or not 0 <= score <= 1:
             raise ValueError(f"Missing or invalid verifier reward for {case_id}: {rewards}")
-        if trial.get("exception_info"):
-            raise ValueError(f"Trial infrastructure error for {case_id}: {trial['exception_info']}")
-        if topic["status"] not in {"external", "passed", "failed"}:
+        exception = trial.get("exception_info") or {}
+        message = exception.get("exception_message", "")
+        idle = (
+            exception.get("exception_type") == "NonZeroAgentExitCodeError"
+            and "No device request for " in message and "agent interrupted" in message
+        )
+        if exception and not idle:
+            raise ValueError(f"Trial infrastructure error for {case_id}: {exception}")
+        allowed = {"external", "passed", "failed"} | ({"error", "timeout"} if idle else set())
+        if topic["status"] not in allowed:
             raise ValueError(f"Eval topic is not ready for scoring: {topic['status']}")
         return self.call(
             "eval", "run-topic", "report-result", "--run-id", run_id,
             "--topic-id", started["topicId"], "--score", str(score),
             "--correct", str(score == 1).lower(),
-            "--result-json", json.dumps({"caseId": case_id, "rewards": rewards}),
+            "--result-json", json.dumps({"caseId": case_id, "rewards": rewards,
+                                         **({"termination": "device_idle"} if idle else {})}),
         )
+
+    def report_batch(self, run_id: str, job: Path) -> dict:
+        results, errors = [], []
+        topics = self.call("eval", "run-topic", "list", "--run-id", run_id)
+        case_ids = {item["testCaseId"]: (item["testCase"].get("metadata") or {}).get("caseId")
+                    or item["testCaseId"] for item in topics}
+        trials = sorted(job.glob("*/result.json"))
+        if not trials:
+            raise ValueError(f"No trial results found in {job}")
+        for path in trials:
+            try:
+                started = json.loads((path.parent / "agent/run-start.json").read_text())
+                case_id = case_ids[started["testCaseId"]]
+                receipt = self.report_trial(run_id, case_id, path.parent)
+                save(path.parent / "eval-report.json", receipt)
+                results.append({"caseId": case_id, **receipt})
+            except Exception as error:
+                errors.append({"trial": path.parent.name, "error": str(error)})
+        result = {"reported": results, "errors": errors}
+        save(job / "eval-report.json", result)
+        return result
 
 
 def save(path: Path, value: dict) -> None:
@@ -202,7 +231,9 @@ def main() -> None:
     creating.add_argument("--output", type=Path, required=True)
     reporting = commands.add_parser("report")
     reporting.add_argument("--run-id", required=True)
-    reporting.add_argument("--case-id", required=True)
+    reporting_selection = reporting.add_mutually_exclusive_group(required=True)
+    reporting_selection.add_argument("--case-id")
+    reporting_selection.add_argument("--all", action="store_true", help="report every trial, retaining individual errors")
     reporting.add_argument("--job", type=Path, required=True)
     args = parser.parse_args()
     client = EvalClient(args.cli_dir)
@@ -222,8 +253,11 @@ def main() -> None:
         result["status"] = claimed["run"]["status"]
         save(args.output, result)
     else:
-        result = client.report_job(args.run_id, args.case_id, args.job)
+        result = (client.report_batch(args.run_id, args.job) if args.all
+                  else client.report_job(args.run_id, args.case_id, args.job))
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    if result.get("errors"):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

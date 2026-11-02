@@ -51,10 +51,14 @@ It checks selected task prompts against the manifest, creates and claims one
 external run before scheduling, and injects the run ID and correct case ID into
 each trial. The run's LobeHub ID and URL are saved in `run.json`.
 
-After each successful verifier execution, the scheduler reads the trial reward
-and reports it to LobeHub. An infrastructure error or missing reward is a
-failure to execute/report, not a fabricated zero score. Local artifacts remain
-available if reporting fails. Re-submit an existing result with:
+The launcher starts one native Harbor job and one native Pier job. Each job
+owns its queue and concurrency. Progress is in `jobs/<suite>/<job>/result.json`;
+logs are `harbor.log` and `pier.log`. After both jobs exit, it reports all trial
+rewards to LobeHub, retaining individual report errors without stopping either
+queue. An infrastructure error or missing reward is a failure to execute/report,
+not a fabricated zero score. Local artifacts remain available if reporting fails.
+Resume through `harbor jobs resume` / `pier jobs resume` using that suite's job
+directory. Re-submit its results with `report --all`, or a legacy one-task job with:
 
 ```bash
 python3 .agents/skills/run-eval-harbor/scripts/lh/eval.py --cli-dir apps/cli report \
@@ -82,25 +86,42 @@ Configure the agent's environment per trial:
 
 ```json
 {
-  "LH_RUN_MODE": "eval",
+  "LH_EVAL_CASE_ID": "<dataset-native-case-id>",
   "LH_EVAL_RUN_ID": "<lobe-run-id>",
-  "LH_EVAL_CASE_ID": "<dataset-native-case-id>"
+  "LH_RUN_MODE": "eval"
 }
 ```
 
 Alternatively supply adapter kwargs `run_mode=eval`, `eval_run_id=...` and
 `eval_case_id=...`. Use `lh.agent:LhInstalledAgent` for Harbor and
 `lh.pier_agent:LhPierInstalledAgent` for Pier. CLI installation, authentication
-and device gateway setup are unchanged. Do not pass one shared case ID to a
-multi-task job: set it per task or provide a task-to-case mapping in the outer
-scheduler.
+and device gateway setup are unchanged. Explicit case IDs must be set per trial;
+do not pass one shared case ID to a multi-task job.
 
-The shared runner invokes `lh eval agent run --run-id ... --case-id ...
---device local --json`, without a prompt override or agent override. It saves
+For a multi-task Harbor/Pier job, omit `LH_EVAL_CASE_ID`: each adapter reads
+`task.name` from the current environment's `task.toml`, falling back to
+`terminal-bench/<task-directory>` or `datacurve/<task-directory>` for legacy tasks.
+For Harbor, run one `harbor run` with
+`--n-concurrent 4` and repeated `--exclude-task-name` flags. Harbor owns the
+queue, trial errors, cleanup and resume; do not create a second queue outside it.
+After the job exits, report all trial rewards with:
+
+```bash
+python3 .agents/skills/run-eval-harbor/scripts/lh/eval.py --cli-dir apps/cli report \
+  --run-id <lobe-run-id> --job /path/to/harbor-job --all
+```
+
+Batch reporting attempts every trial and saves receipts/errors in
+`eval-report.json`. A device idle interruption with a valid verifier reward is
+reported with `termination=device_idle`; other trial exceptions remain errors.
+Reporting runs after scheduling finishes, so a report failure cannot halt the
+Harbor queue. Wrap the Harbor command and the final reporting command together
+with the exit notification script.
+
+The shared runner invokes `lh eval agent run --run-id ... --case-id ... --device local --json`, without a prompt override or agent override. It saves
 `agent/run-start.json`, waits for the operation and eval completion hook, then
 allows the verifier to run. Device cleanup reuses the normal runner.
-Trajectories are exported directly with `lh topic export <topic-id>
---format atif --output /logs/agent/trajectory.json`; there is no format conversion
+Trajectories are exported directly with `lh topic export <topic-id> --format atif --output /logs/agent/trajectory.json`; there is no format conversion
 layer in the adapter. Reporting must happen after verification on the host,
 not inside the agent runner.
 
