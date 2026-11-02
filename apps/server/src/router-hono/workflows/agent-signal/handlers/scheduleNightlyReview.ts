@@ -3,6 +3,7 @@ import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import { isRecord } from '@lobechat/utils';
 import type { Context } from 'hono';
 
+import type { NightlyJob } from '@/server/services/agentSignal/services';
 import {
   AgentSignalNightlyReviewWorkflow,
   type NightlyReviewWorkflowCursor,
@@ -13,6 +14,7 @@ const HARD_MAX_USER_PAGE_SIZE = 200;
 const DEFAULT_TARGET_LIMIT = 20;
 const HARD_MAX_TARGET_LIMIT = 50;
 const CRON_SPAN_NAME = 'agent_signal.cron.hourly_nightly_self_review';
+const NIGHTLY_JOBS: NightlyJob[] = ['self-review', 'bot-retro'];
 
 /**
  * Request body accepted by the Agent Signal nightly review scheduler endpoint.
@@ -25,6 +27,12 @@ export interface ScheduleNightlyReviewPayload {
     /** Stable user id from the last user row in the previous page. */
     id: string;
   };
+  /**
+   * Nightly jobs to start. Each runs in its own local night window.
+   *
+   * @default ['self-review', 'bot-retro']
+   */
+  jobs?: NightlyJob[];
   /**
    * Maximum eligible users read by each pagination workflow.
    *
@@ -55,6 +63,14 @@ const readWhitelist = (value: unknown) => {
   );
 
   return whitelist.length > 0 ? whitelist : undefined;
+};
+
+const readJobs = (value: unknown): NightlyJob[] => {
+  if (!Array.isArray(value)) return NIGHTLY_JOBS;
+
+  const jobs = NIGHTLY_JOBS.filter((job) => value.includes(job));
+
+  return jobs.length > 0 ? jobs : NIGHTLY_JOBS;
 };
 
 const readCursor = (value: unknown): NightlyReviewWorkflowCursor | undefined => {
@@ -127,17 +143,27 @@ export async function scheduleNightlyReview(c: Context) {
           : {}),
       });
 
+      const jobs = readJobs(payload.jobs);
       const startedAt = Date.now();
-      const result = await AgentSignalNightlyReviewWorkflow.publishPaginateUsersEntry(options);
+      const results = await Promise.all(
+        jobs.map((job) =>
+          AgentSignalNightlyReviewWorkflow.publishPaginateUsersEntry({ ...options, job }),
+        ),
+      );
+      const messageIds = results.map((result) => result.messageId);
 
       span.setAttributes({
+        'agent.signal.cron.jobs': jobs.join(','),
         'agent.signal.cron.publish_duration_ms': Date.now() - startedAt,
         'agent.signal.cron.success': true,
-        'agent.signal.cron.message_id': result.messageId,
+        'agent.signal.cron.message_id': messageIds.join(','),
       });
       span.setStatus({ code: SpanStatusCode.OK });
 
-      return c.json({ messageId: result.messageId, scheduled: true, success: true }, 202);
+      return c.json(
+        { messageId: messageIds[0], messageIds, jobs, scheduled: true, success: true },
+        202,
+      );
     } catch (error) {
       // This log is the only trace a failed tick leaves behind: a stalled publish used to be
       // killed by Cloudflare at 100s, which produced a 524 with no body and nothing on the server.

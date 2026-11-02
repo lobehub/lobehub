@@ -2,6 +2,8 @@ import type {
   WidgetManifest,
   WidgetOutput,
   WidgetOutputType,
+  WidgetParamValue,
+  WidgetPresetCategory,
   WidgetRunError,
   WidgetRunStatus,
   WidgetRuntime,
@@ -24,6 +26,7 @@ export const isDashboardIdentifier = (identifier: unknown): boolean =>
 
 export const DashboardApiName = {
   listDashboards: 'listDashboards',
+  listWidgetPresets: 'listWidgetPresets',
   createDashboard: 'createDashboard',
 
   createWidgetDraft: 'createWidgetDraft',
@@ -111,10 +114,25 @@ export interface ListDashboardsState {
 
 // ==================== createWidgetDraft ====================
 
-export interface CreateWidgetDraftParams extends WidgetVersionContent {
-  /** Metric definition (口径): source, filters, window, unit. */
-  description: string;
-  title: string;
+export interface CreateWidgetDraftParams extends Partial<WidgetVersionContent> {
+  /** Metric definition (口径): source, filters, window, unit. Defaults to the preset's. */
+  description?: string;
+  /** With `presetId`: values for the preset's params, by name. */
+  params?: Record<string, WidgetParamValue>;
+  /** Install this preset; explicit content fields override its parts. */
+  presetId?: string;
+  /** Defaults to the preset's title. */
+  title?: string;
+}
+
+// ==================== listWidgetPresets ====================
+
+export interface ListWidgetPresetsParams {
+  category?: WidgetPresetCategory;
+}
+
+export interface ListWidgetPresetsState {
+  presets: { category: WidgetPresetCategory; id: string; title: string }[];
 }
 
 export interface WidgetDraftState {

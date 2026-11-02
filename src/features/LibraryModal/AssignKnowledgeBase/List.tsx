@@ -16,8 +16,8 @@ import Loading from './Loading';
 import MasonrySkeleton from './MasonrySkeleton';
 import { resolvePickerScope } from './resolvePickerScope';
 import { useViewTransition } from './useViewTransition';
-import { type ViewMode } from './ViewSwitcher';
 import ViewSwitcher from './ViewSwitcher';
+import { type ViewMode } from './ViewSwitcher';
 import VisibilityTabs, { type PickerVisibility } from './VisibilityTabs';
 
 /** Stable empty list so an un-loaded surface never hands Virtuoso a new array each render. */

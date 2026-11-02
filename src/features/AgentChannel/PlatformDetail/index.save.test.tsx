@@ -13,6 +13,7 @@ import PlatformDetail, { type CurrentConfig } from './index';
 
 const mocks = vi.hoisted(() => ({
   connectBot: vi.fn(),
+  heterogeneous: false,
   updateBotProvider: vi.fn(),
 }));
 
@@ -51,6 +52,7 @@ vi.mock('@/store/agent', () => ({
     }),
 }));
 vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: { isAgentHeterogeneousById: () => () => mocks.heterogeneous },
   agentSelectors: { getAgentMetaById: () => () => ({ title: 'Nasa' }) },
 }));
 vi.mock('@/store/serverConfig', () => ({
@@ -85,6 +87,7 @@ const openTab = (name: string) =>
 
 describe('PlatformDetail saving', () => {
   beforeEach(() => {
+    mocks.heterogeneous = false;
     vi.clearAllMocks();
     mocks.updateBotProvider.mockResolvedValue(undefined);
     mocks.connectBot.mockResolvedValue({ status: 'connected' });
@@ -228,14 +231,22 @@ describe('PlatformDetail saving', () => {
     expect(mocks.updateBotProvider.mock.calls[0][2].settings.replyStyle).toBe('Short and casual.');
   });
 
-  it('leaves the bottom bar to Remove and Test connection for a saved bot', () => {
+  it('keeps Remove and Test connection on the Connect tab, off the settings tabs', () => {
     render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
       wrapper: MemoryRouter,
     });
+    const remove = () =>
+      screen.queryByRole('button', { name: new RegExp(en['channel.removeChannel']) });
+    const test = () =>
+      screen.queryByRole('button', { name: new RegExp(en['channel.testConnection']) });
 
-    expect(
-      screen.getByRole('button', { name: new RegExp(en['channel.removeChannel']) }),
-    ).toBeVisible();
+    // A saved bot opens on a settings tab.
+    expect(remove()).toBeNull();
+    expect(test()).toBeNull();
+
+    openTab(en['channel.tab.connect']);
+    expect(remove()).toBeVisible();
+    expect(test()).toBeVisible();
     expect(screen.queryByRole('button', { name: en['channel.save'] })).toBeNull();
     expect(screen.queryByRole('button', { name: en['channel.saveAndConnect'] })).toBeNull();
   });

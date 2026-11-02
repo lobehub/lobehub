@@ -362,6 +362,7 @@ export class GatewayMuxClient {
   private connectGeneration = 0;
   private connectInFlight = false;
   private connectWaiters: Array<{ reject: (error: Error) => void; resolve: () => void }> = [];
+  private connectDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
 
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private missedHeartbeats = 0;
@@ -389,6 +390,7 @@ export class GatewayMuxClient {
   private readonly getToken: () => Promise<string>;
   private readonly clientId: string;
   private readonly autoReconnect: boolean;
+  private readonly connectTimeoutMs?: number;
   private readonly heartbeatIntervalMs: number;
   private readonly keepAlive: boolean;
   private readonly maxDialFailures: number;
@@ -398,6 +400,7 @@ export class GatewayMuxClient {
     this.getToken = options.getToken;
     this.clientId = options.clientId ?? randomClientId();
     this.autoReconnect = options.autoReconnect ?? true;
+    this.connectTimeoutMs = options.connectTimeoutMs;
     this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL;
     this.keepAlive = options.keepAlive ?? false;
     this.maxDialFailures = options.maxDialFailures ?? MAX_CONSECUTIVE_DIAL_FAILURES;
@@ -602,6 +605,7 @@ export class GatewayMuxClient {
     // serve v2" case the budget exists for. Left set from the previous socket,
     // those attempts would never count and the page would retry forever.
     this.currentDialReachedReady = false;
+    this.armConnectDeadline(generation);
 
     let token: string;
     try {
@@ -632,6 +636,37 @@ export class GatewayMuxClient {
     }
   }
 
+  /** See `GatewayMuxClientOptions.connectTimeoutMs`. */
+  private armConnectDeadline(generation: number): void {
+    this.clearConnectDeadline();
+    if (!this.connectTimeoutMs) return;
+    this.connectDeadlineTimer = setTimeout(() => {
+      this.connectDeadlineTimer = null;
+      if (generation !== this.connectGeneration || this.currentDialReachedReady) return;
+      const awaitingToken = this.connectInFlight;
+      // Supersede the attempt: a token that still arrives is dropped.
+      this.connectGeneration++;
+      this.connectInFlight = false;
+      this.closeWebSocket();
+      this.listeners.emit(
+        'error',
+        new Error(
+          awaitingToken
+            ? 'Timed out obtaining gateway token'
+            : 'Timed out waiting for the gateway to get ready',
+        ),
+      );
+      this.handleConnectionLost(undefined, awaitingToken);
+    }, this.connectTimeoutMs);
+  }
+
+  private clearConnectDeadline(): void {
+    if (this.connectDeadlineTimer) {
+      clearTimeout(this.connectDeadlineTimer);
+      this.connectDeadlineTimer = null;
+    }
+  }
+
   private buildWsUrl(token: string): string {
     const query = `token=${encodeURIComponent(token)}&clientId=${encodeURIComponent(this.clientId)}`;
     // If the URL already has a ws/wss protocol, use it directly
@@ -657,6 +692,7 @@ export class GatewayMuxClient {
 
     switch (message.type) {
       case 'ready': {
+        this.clearConnectDeadline();
         this.reconnectAttempt = 0;
         this.consecutiveAuthFailures = 0;
         this.consecutiveDialFailures = 0;
@@ -745,6 +781,7 @@ export class GatewayMuxClient {
   };
 
   private handleConnectionLost(delayOverride?: number, tokenFailed = false): void {
+    this.clearConnectDeadline();
     // Once v2 has worked, failed network dials indicate an outage, not missing
     // protocol support. Keep backing off so a Gateway restart can recover.
     // Token minting still has a finite budget: the API may have been removed,
@@ -986,6 +1023,7 @@ export class GatewayMuxClient {
   }
 
   private cleanup(): void {
+    this.clearConnectDeadline();
     this.clearIdleClose();
     this.stopHeartbeat();
     this.clearReconnectTimer();

@@ -2,8 +2,7 @@
 
 import { ReactBlockPlugin, ReactCollapsiblePlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
-import { type CSSProperties, useMemo } from 'react';
-import { memo } from 'react';
+import { type CSSProperties, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';

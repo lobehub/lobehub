@@ -1,9 +1,10 @@
 'use client';
 
-import { cssVar, Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  cssVar,
+  Flexbox,
   Input,
   type ModalInstance,
   Text,

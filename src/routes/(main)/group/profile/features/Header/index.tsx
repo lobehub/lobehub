@@ -1,7 +1,6 @@
 'use client';
 
-import { type DropdownItem, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, type DropdownItem, Flexbox, Icon } from '@lobehub/ui';
 import { Crown, Sparkles, Users, UsersRound } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,8 +18,8 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import AgentBuilderToggle from './AgentBuilderToggle';
-import { type ChromeTabItem } from './ChromeTabs';
 import ChromeTabs from './ChromeTabs';
+import { type ChromeTabItem } from './ChromeTabs';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`

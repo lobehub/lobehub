@@ -1,10 +1,67 @@
 import { z } from 'zod';
 
 import { RequestTrigger } from '../../agentRuntime';
+import type { WorkRegistrationIntent } from '../../work';
 import type { ContextSelection } from './contextSelection';
 import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
+
+const ToolWorkRegistrationSchema: z.ZodType<WorkRegistrationIntent> = z.union([
+  z.object({
+    action: z.enum(['create', 'update', 'delete']),
+    changeType: z.enum(['created', 'updated']).optional(),
+    targets: z.array(
+      z.object({ taskId: z.string().optional(), taskIdentifier: z.string().optional() }),
+    ),
+    type: z.literal('task'),
+  }),
+  z.object({
+    args: z.record(z.string(), z.unknown()).optional(),
+    data: z.unknown(),
+    provider: z.string(),
+    toolName: z.string(),
+    type: z.literal('skill'),
+  }),
+  z.object({
+    action: z.literal('register'),
+    document: z.object({
+      agentDocumentId: z.string().nullish(),
+      agentId: z.string().nullish(),
+      description: z.string().nullish(),
+      documentId: z.string(),
+      changeType: z.enum(['created', 'updated']),
+      toolName: z.string(),
+    }),
+    type: z.literal('document'),
+  }),
+  z.object({
+    action: z.literal('delete'),
+    document: z.object({
+      agentDocumentId: z.string().nullish(),
+      agentId: z.string().nullish(),
+      documentId: z.string(),
+    }),
+    type: z.literal('document'),
+  }),
+  z.object({
+    action: z.literal('register'),
+    canvas: z.object({
+      canvasId: z.string(),
+      description: z.string().nullish(),
+      title: z.string(),
+      toolName: z.string(),
+      metadata: z.object({
+        entry: z.string(),
+        fileCount: z.number(),
+        manifestKey: z.string(),
+        runtimeMajor: z.number(),
+        totalSize: z.number(),
+      }),
+    }),
+    type: z.literal('canvas'),
+  }),
+]);
 
 const LocalSystemToolSnapshotSchema = z.object({
   apiName: z.enum(['readFile', 'listFiles', 'readLocalFile', 'listLocalFiles']),
@@ -386,6 +443,9 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // conversation, and the run outcome. The card header + jump link read this.
   taskCallback: MessageTaskCallbackSchema.optional(),
   toolExecutionTimeMs: z.number().optional(),
+  toolResultSuccess: z.boolean().optional(),
+  toolResultStop: z.boolean().optional(),
+  toolWorkRegistration: ToolWorkRegistrationSchema.optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
   // role='verify' card: which Agent Run (agent_operations.id) it renders.
   verifyOperationId: z.string().optional(),
@@ -690,6 +750,11 @@ export interface MessageMetadata {
    * Tool execution time for tool messages (ms)
    */
   toolExecutionTimeMs?: number;
+  toolResultStop?: boolean;
+  /** Terminal tool-result flags retained for step redelivery. */
+  toolResultSuccess?: boolean;
+  /** Durable registration intent; omitted from runtime conversation contexts. */
+  toolWorkRegistration?: WorkRegistrationIntent;
   /** @deprecated use the top-level message `usage` field instead */
   totalInputTokens?: number;
   /** @deprecated use the top-level message `usage` field instead */

@@ -1,8 +1,17 @@
 'use client';
 
 import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
-import { cx, Divider, Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Tabs, type TabsItem } from '@lobehub/ui';
+import {
+  ActionIcon,
+  confirmModal,
+  cx,
+  Divider,
+  Flexbox,
+  Icon,
+  Markdown,
+  Tabs,
+  type TabsItem,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';

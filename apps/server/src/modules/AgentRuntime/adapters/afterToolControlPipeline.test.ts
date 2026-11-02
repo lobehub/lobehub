@@ -132,6 +132,7 @@ function setup(hooks: AgentHook[], signal?: AbortSignal, restore = false) {
           return persisted;
         }),
         query: vi.fn(async () => rows),
+        getToolMessage: vi.fn(async (id: string) => rows.find((row) => row.id === id)),
         updateToolMessage: vi.fn(async (id, update) => {
           const row = rows.find((row) => row.id === id);
           if (row) Object.assign(row, update);
@@ -484,7 +485,7 @@ describe('afterToolCall control pipeline', () => {
         role: 'tool',
         tool_call_id: 'native-1',
         content: secret,
-        pluginState: { images: [{ url: secret }] },
+        pluginState: { status: 'pending', images: [{ url: secret }] },
       });
       fixture.execute.mockResolvedValue(raw());
       fetchHook.mockImplementation(async () => response('deny'));

@@ -5,8 +5,8 @@ import { ImportStage } from '@lobechat/types';
 import { Button, Center, toast, Upload } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ImportIcon } from 'lucide-react';
-import { type ReactNode } from 'react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
+import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DataStyleModal from '@/components/DataStyleModal';
