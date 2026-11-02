@@ -41,6 +41,11 @@ export const MAX_ISSUES_PER_SYNC = 10_000;
  * the sync again picks up where the previous run stopped.
  */
 export const MAX_TASKS_CREATED_PER_SYNC = 100;
+/**
+ * Closed tasks one sync catches up comments for. Each is marked once synced,
+ * so a long history of legacy links is worked through over the next runs.
+ */
+export const MAX_COMMENT_CATCH_UPS_PER_SYNC = 100;
 /** Tries at creating one task when concurrent creates keep taking its identifier. */
 const MAX_CREATE_ATTEMPTS = 5;
 /** Skipped entries kept in a result, so a stored rule result stays small. */
@@ -355,9 +360,9 @@ export class LinearIssueSyncService {
         // read here: those being closed now, and closed tasks whose comments
         // were never synced (imported before, or a failed read) — once, so a
         // long tail of closed issues is not reread on every run.
-        const catchUp = unseen.filter(
-          (link) => closedTaskIds.has(link.taskId) && !link.metadata?.commentsSynced,
-        );
+        const catchUp = unseen
+          .filter((link) => closedTaskIds.has(link.taskId) && !link.metadata?.commentsSynced)
+          .slice(0, MAX_COMMENT_CATCH_UPS_PER_SYNC);
         await this.syncComments(
           accessToken,
           [...toCheck, ...catchUp].map((link) => link.externalId),

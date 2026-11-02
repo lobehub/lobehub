@@ -12,7 +12,11 @@ import { tasks, users } from '@/database/schemas';
 import { LinearApiError } from '../client';
 import type * as IssuesModule from '../issues';
 import type { LinearIssue, LinearIssueComment } from '../issues';
-import { LinearIssueSyncService, MAX_TASKS_CREATED_PER_SYNC } from '../issueSync';
+import {
+  LinearIssueSyncService,
+  MAX_COMMENT_CATCH_UPS_PER_SYNC,
+  MAX_TASKS_CREATED_PER_SYNC,
+} from '../issueSync';
 
 const linear = vi.hoisted(() => ({
   getLinearIssuesByIds: vi.fn(),
@@ -705,6 +709,41 @@ describe('LinearIssueSyncService comments (real PostgreSQL)', () => {
     );
     expect(again.commentsImported).toBeUndefined();
     expect(linear.listLinearIssueComments).not.toHaveBeenCalled();
+  });
+
+  it('catches up a bounded number of closed tasks per run, the rest on the next', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    const total = MAX_COMMENT_CATCH_UPS_PER_SYNC + 1;
+    const done = Array.from({ length: total }, (_, index) =>
+      issue({ id: `${index + 1}`, state: { name: 'Done', type: 'completed' } }),
+    );
+    serve(done);
+    const ids = done.map((item) => item.id);
+    for (let start = 0; start < ids.length; start += MAX_TASKS_CREATED_PER_SYNC) {
+      await service.importIssues(TOKEN, ids.slice(start, start + MAX_TASKS_CREATED_PER_SYNC));
+    }
+
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    serveComments(done.map((item) => comment({ id: `c${item.id}`, issueId: item.id })));
+    const readIds = () =>
+      linear.listLinearIssueComments.mock.calls.flatMap(([, issueIds]) => issueIds as string[]);
+
+    const first = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(first.commentsImported).toBe(MAX_COMMENT_CATCH_UPS_PER_SYNC);
+    expect(readIds()).toHaveLength(MAX_COMMENT_CATCH_UPS_PER_SYNC);
+
+    linear.listLinearIssueComments.mockClear();
+    const second = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(second.commentsImported).toBe(1);
+    expect(readIds()).toHaveLength(1);
   });
 
   it('retries a closed task whose comments could not be read', async () => {
