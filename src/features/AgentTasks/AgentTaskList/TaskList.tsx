@@ -35,7 +35,7 @@ import {
   groupTaskItems,
   isTaskHiddenByCompletedFilter,
 } from './listViewOptions';
-import SelectableTaskRow from './selection/SelectableTaskRow';
+import SelectableTaskRow, { selectableTaskItemClassName } from './selection/SelectableTaskRow';
 import { useTaskSelectionStore } from './selection/store';
 import TaskBulkActionBar from './selection/TaskBulkActionBar';
 import { isEditableTarget } from './selection/taskSelectionModel';
@@ -335,7 +335,11 @@ const TaskList = memo<TaskListProps>((props) => {
                   .filter(Boolean)
                   .join(' ')}
               >
-                <AgentTaskItem routeScope={routeScope} task={item.row.task} />
+                <AgentTaskItem
+                  className={selectableTaskItemClassName}
+                  routeScope={routeScope}
+                  task={item.row.task}
+                />
               </SelectableTaskRow>
             )}
           </TaskRowIndent>
