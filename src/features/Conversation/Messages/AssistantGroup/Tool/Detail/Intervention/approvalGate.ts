@@ -135,3 +135,20 @@ export const isCoveredByRemember = async ({
     return false;
   }
 };
+
+/**
+ * Whether the card offers "switch to auto approve" (approve this call and
+ * stop asking from now on). Auto approve never skips a call that must always
+ * ask, so the switch is hidden on those — it would not keep its promise. A
+ * share visitor's run is gated by the share, not by the visitor's own mode.
+ */
+export const canSwitchToAutoRun = ({
+  allowListRememberable,
+  approvalMode,
+  isShare,
+}: {
+  allowListRememberable: boolean;
+  approvalMode: string;
+  isShare: boolean;
+}) =>
+  !isShare && allowListRememberable && (approvalMode === 'manual' || approvalMode === 'allow-list');

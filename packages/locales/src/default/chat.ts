@@ -3288,6 +3288,9 @@ export default {
   'tool.intervention.stop': 'Stop',
   'tool.intervention.stopTooltip':
     'Stop here — nothing pending runs and the agent does not continue',
+  'tool.intervention.switchToAutoRun': 'Switch to auto approve',
+  'tool.intervention.switchToAutoRunDesc':
+    'Approve this call and stop asking from now on. Calls that must always ask still ask.',
   'tool.intervention.renderFallback.description':
     'This display was downgraded to raw JSON because the current model was not capable enough to generate a stable interactive payload. Switch to a stronger model and try again.',
   'tool.intervention.renderFallback.rawJson': 'Raw JSON',
