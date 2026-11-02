@@ -6,6 +6,7 @@ import { AgentRuntimeErrorType, isAgentOperationSettled } from '@lobechat/types'
 import debug from 'debug';
 import { and, desc, eq, gt, gte, isNull, lte, ne, or, sql } from 'drizzle-orm';
 
+import type { AgentAbandonmentMark } from '@/database/models/agentOperation';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
@@ -144,7 +145,18 @@ export class AbandonOperationService {
     // delivered its answer, and reports it as a phantom so the gateway can
     // reconcile rather than record one.
     const row = await this.findOperationRow(operationId);
-    if (row && !callerClaimed && isAgentOperationSettled(row.status)) {
+    // A claim that never finished is not a settled run. `claimForAbandonment`
+    // retires the row *before* the side effects that the conversation depends
+    // on, so a host recycled in that window leaves a terminal row with nothing
+    // written: no error bubble, no topic cleanup, no hooks, no parent resume —
+    // and `StaleOperationReaper` only scans live rows, so nothing ever picks it
+    // back up. The `claimed` mark is the difference between "someone else
+    // settled this" and "we started and got cut off", so re-enter instead of
+    // reporting a phantom.
+    const abandonmentMark = (row?.metadata as { abandonment?: AgentAbandonmentMark } | undefined)
+      ?.abandonment;
+    const resumableClaim = abandonmentMark?.phase === 'claimed';
+    if (row && !callerClaimed && !resumableClaim && isAgentOperationSettled(row.status)) {
       log('[%s] abandon skipped: operation already %s', operationId, row.status);
       result.abandoned = false;
       return result;
@@ -164,13 +176,17 @@ export class AbandonOperationService {
     // `abandoned`; this local claim writes `error`, so the hooks must persist
     // `error` — reporting it as `abandoned` would be refused and silently drop
     // `onComplete` / `onError` for every real watchdog abandonment.
-    let claimedStatus: ClaimedStatus | undefined = callerClaimed ? 'abandoned' : undefined;
+    let claimedStatus: ClaimedStatus | undefined = callerClaimed
+      ? 'abandoned'
+      : resumableClaim
+        ? ((row?.status === 'abandoned' ? 'abandoned' : 'error') as ClaimedStatus)
+        : undefined;
     if (row && !claimedStatus) {
       const claimed = await new AgentOperationModel(
         this.db,
         row.userId,
         row.workspaceId ?? undefined,
-      ).settleLive(operationId, 'error');
+      ).claimForAbandonment(operationId, reason);
       if (!claimed) {
         log('[%s] abandon skipped: operation settled before it could be claimed', operationId);
         result.abandoned = false;
@@ -183,6 +199,9 @@ export class AbandonOperationService {
     if (!state) {
       log('[%s] no agent state in coordinator — already cleaned up', operationId);
       await this.finalizeRunningOperationWithoutState(operationId, reason, result, claimedStatus);
+      // Only once the no-state side effects have landed: the mark is what a
+      // retry reads to decide whether it still owes this run any work.
+      await this.markAbandonmentFinalized(operationId, row, callerClaimed);
       return result;
     }
     result.found = true;
@@ -417,8 +436,38 @@ export class AbandonOperationService {
       }
     }
 
+    // Close the claim only after every side effect above has run — hooks last,
+    // so an interruption before this point still looks resumable, and one after
+    // it can never fire them twice (nor re-resume the same parent).
+    await this.markAbandonmentFinalized(operationId, row, callerClaimed);
+
     log('[%s] abandoned op finalized (reason=%s): %O', operationId, reason, result);
     return result;
+  }
+
+  /**
+   * Retire the `claimed` mark written by {@link AgentOperationModel.claimForAbandonment}.
+   *
+   * Skipped for caller-claimed rows: those were retired by another writer
+   * (`settleStaleRunning`), never carried this mark, and are not re-enterable
+   * anyway. A failure here is logged, not thrown — the abandonment itself
+   * already landed, and the worst case is one redundant re-entry later.
+   */
+  private async markAbandonmentFinalized(
+    operationId: string,
+    row: { userId?: string | null; workspaceId?: string | null } | null | undefined,
+    callerClaimed: boolean,
+  ): Promise<void> {
+    if (callerClaimed || !row?.userId) return;
+    try {
+      await new AgentOperationModel(
+        this.db,
+        row.userId,
+        row.workspaceId ?? undefined,
+      ).markAbandonmentFinalized(operationId);
+    } catch (e) {
+      log('[%s] abandonment finalize mark failed (non-fatal): %O', operationId, e);
+    }
   }
 
   private async finalizeRunningOperationWithoutState(

@@ -27,6 +27,21 @@ import { buildWorkspaceWhere } from '../utils/workspace';
  */
 export type VerifyStatus = VerifyRunStatus;
 
+/**
+ * Provenance of an abandonment claim, persisted under `metadata.abandonment`.
+ *
+ * Two phases rather than a boolean because the window that matters is the one
+ * *between* them: `claimed` means a watchdog retired the row and still owes the
+ * conversation its side effects, so a retry must finish the job; `finalized`
+ * means everything landed and a retry must leave the row alone.
+ */
+export interface AgentAbandonmentMark {
+  /** ISO timestamp of the claim; absent on the `finalized` rewrite. */
+  at?: string;
+  phase: 'claimed' | 'finalized';
+  reason?: string;
+}
+
 export interface RecordOperationStartParams {
   agentId?: string | null;
   appContext?: AgentOperationAppContext;
@@ -369,6 +384,62 @@ export class AgentOperationModel {
       'waiting_for_human',
       'waiting_for_async_tool',
     ]);
+  }
+
+  /**
+   * Claim a live row for an abandonment, atomically recording that the claim
+   * exists.
+   *
+   * `settleLive` alone cannot say *who* retired the row, so a finalisation that
+   * dies after the claim but before its side effects leaves a row that looks
+   * exactly like a run which failed on its own — and the second invocation then
+   * reads it as "already settled" and gives up. Stamping `metadata.abandonment`
+   * in the same UPDATE keeps the claim and its provenance inseparable: a retry
+   * can tell a half-finished abandonment (`phase: 'claimed'`) from a foreign or
+   * completed terminal row, and pick the finalisation back up.
+   */
+  async claimForAbandonment(operationId: string, reason: string): Promise<boolean> {
+    const mark: AgentAbandonmentMark = {
+      at: new Date().toISOString(),
+      phase: 'claimed',
+      reason,
+    };
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: 'error',
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ abandonment: mark })}::jsonb`,
+        status: 'error',
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          inArray(agentOperations.status, [
+            'running',
+            'waiting_for_human',
+            'waiting_for_async_tool',
+          ]),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Retire the `claimed` mark once every abandonment side effect has landed, so
+   * a later invocation cannot re-run hooks (or re-resume a parent) for a run
+   * that was already finalised.
+   */
+  async markAbandonmentFinalized(operationId: string): Promise<void> {
+    const mark: AgentAbandonmentMark = { phase: 'finalized' };
+    await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ abandonment: mark })}::jsonb`,
+      })
+      .where(and(eq(agentOperations.id, operationId), this.ownership()));
   }
 
   private async settleFrom(

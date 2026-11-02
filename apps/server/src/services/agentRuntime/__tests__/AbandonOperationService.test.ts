@@ -45,10 +45,14 @@ vi.mock('@/database/models/message', () => ({
 const findOperationMock = vi.fn().mockResolvedValue(null);
 const recordCompletionMock = vi.fn().mockResolvedValue(undefined);
 const settleLiveMock = vi.fn().mockResolvedValue(true);
+const claimForAbandonmentMock = vi.fn().mockResolvedValue(true);
+const markAbandonmentFinalizedMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(function () {
     return {
+      claimForAbandonment: claimForAbandonmentMock,
       findById: findOperationMock,
+      markAbandonmentFinalized: markAbandonmentFinalizedMock,
       recordCompletion: recordCompletionMock,
       settleLive: settleLiveMock,
     };
@@ -127,6 +131,8 @@ describe('AbandonOperationService', () => {
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
     settleLiveMock.mockReset().mockResolvedValue(true);
+    claimForAbandonmentMock.mockReset().mockResolvedValue(true);
+    markAbandonmentFinalizedMock.mockReset().mockResolvedValue(undefined);
     latestSpineMessageIdMock.mockReset().mockResolvedValue(undefined);
     messageCreateMock.mockReset().mockResolvedValue({ id: 'msg_new_failure' });
     topicSettleRunningOperationMock
@@ -511,10 +517,88 @@ describe('AbandonOperationService', () => {
       // The claim is what decides, so it has to land before the irreversible
       // write rather than after it: the trailing `settleLive` cannot undo a
       // message error.
-      expect(settleLiveMock).toHaveBeenCalledWith('op_x', 'error');
-      expect(settleLiveMock.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(claimForAbandonmentMock).toHaveBeenCalledWith('op_x', 'inactivity_watchdog');
+      expect(claimForAbandonmentMock.mock.invocationCallOrder[0]).toBeLessThan(
         messageUpdateMock.mock.invocationCallOrder[0],
       );
+    });
+
+    it('resumes a claim whose finalisation was cut off', async () => {
+      // Regression: the claim retires the row *before* the side effects the
+      // conversation needs. A host recycled in that window — or a throwing
+      // `loadAgentState` — left a terminal row with no error bubble, no topic
+      // cleanup, no hooks and no parent resume. The second invocation read that
+      // row as "already settled" and reported a phantom, and
+      // `StaleOperationReaper` only scans live rows, so nothing else would ever
+      // finish the job.
+      const coord = buildCoordinator({
+        loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+      });
+      const store = buildStore();
+      store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }] });
+
+      const result = await new AbandonOperationService(
+        buildDb({
+          operationRow: {
+            ...settledRow('error'),
+            metadata: {
+              abandonment: {
+                at: '2026-11-03T00:00:00.000Z',
+                phase: 'claimed',
+                reason: 'inactivity_watchdog',
+              },
+            },
+          },
+        }),
+        { coordinator: coord as any, snapshotStore: store as any },
+      ).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(result.found).toBe(true);
+      expect(result.assistantMessageUpdated).toBe(true);
+      expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', {
+        error: expect.objectContaining({
+          message: expect.stringContaining('inactivity_watchdog'),
+        }),
+      });
+      // The mark already says this run is ours, so no second claim is attempted…
+      expect(claimForAbandonmentMock).not.toHaveBeenCalled();
+      // …and the hooks still persist onto the `error` status the claim wrote.
+      expect(dispatchHooksMock).toHaveBeenCalledWith(
+        'op_x',
+        expect.anything(),
+        'error',
+        expect.objectContaining({ settledAsAbandoned: false }),
+      );
+      // Only once everything landed does the claim stop being resumable.
+      expect(markAbandonmentFinalizedMock).toHaveBeenCalledWith('op_x');
+    });
+
+    it('leaves a finalised abandonment alone', async () => {
+      // The other half of the mark: a retry after a *completed* finalisation
+      // must not re-fire hooks or re-resume the same parent.
+      const coord = buildCoordinator({
+        loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+      });
+
+      const result = await new AbandonOperationService(
+        buildDb({
+          operationRow: {
+            ...settledRow('error'),
+            metadata: { abandonment: { phase: 'finalized' } },
+          },
+        }),
+        { coordinator: coord as any, snapshotStore: buildStore() as any },
+      ).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(result).toEqual({
+        abandoned: false,
+        assistantMessageUpdated: false,
+        finalized: false,
+        found: false,
+      });
+      expect(coord.loadAgentState).not.toHaveBeenCalled();
+      expect(dispatchHooksMock).not.toHaveBeenCalled();
+      expect(markAbandonmentFinalizedMock).not.toHaveBeenCalled();
     });
 
     it('fires the hooks onto the error status its own claim wrote', async () => {
@@ -568,11 +652,11 @@ describe('AbandonOperationService', () => {
     it('leaves the turn alone when the run settles before the claim lands', async () => {
       // Interleaving: the read still saw `running`, but the executor committed
       // `done` before the CAS — so not one abandonment side effect may run.
-      settleLiveMock.mockResolvedValueOnce(false);
+      claimForAbandonmentMock.mockResolvedValueOnce(false);
 
       const { coord, result, store } = await abandonWithRow('running');
 
-      expect(settleLiveMock).toHaveBeenCalledWith('op_x', 'error');
+      expect(claimForAbandonmentMock).toHaveBeenCalledWith('op_x', 'inactivity_watchdog');
       expect(result).toEqual({
         abandoned: false,
         assistantMessageUpdated: false,
