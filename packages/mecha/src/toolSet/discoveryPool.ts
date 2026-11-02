@@ -1,4 +1,5 @@
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -178,9 +179,10 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
     if (manifest) manifestMap[tool.identifier] = manifest as LobeToolManifest;
   }
 
-  // Local-system and Computer Use are only `discoverable` on the desktop, so
-  // a gateway server injects them explicitly for a `local` target.
-  for (const manifest of [LocalSystemManifest, AuvManifest]) {
+  // Local-system, the in-app browser and Computer Use are only `discoverable`
+  // on the desktop, so a gateway server injects them explicitly for a `local`
+  // target.
+  for (const manifest of [LocalSystemManifest, BrowserManifest, AuvManifest]) {
     if (
       !request.disableLocalSystem &&
       isManifestIngestAllowed(manifest.identifier) &&

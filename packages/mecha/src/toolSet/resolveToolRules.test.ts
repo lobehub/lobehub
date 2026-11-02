@@ -81,6 +81,29 @@ describe('resolveToolRules', () => {
     }
   });
 
+  it('keeps memory discoverable in agent mode unless pinned, and resident in chat mode', () => {
+    expect(resolveToolRules(request({ memoryEnabled: true })).rules['lobe-user-memory']).toBe(
+      false,
+    );
+    expect(
+      resolveToolRules(
+        request({ agent: { chatConfig: {}, plugins: ['lobe-user-memory'] }, memoryEnabled: true }),
+      ).rules['lobe-user-memory'],
+    ).toBe(true);
+    // A pin cannot override memory being turned off.
+    expect(
+      resolveToolRules(request({ agent: { chatConfig: {}, plugins: ['lobe-user-memory'] } })).rules[
+        'lobe-user-memory'
+      ],
+    ).toBe(false);
+    // Chat mode has no activator, so memory stays resident there.
+    expect(
+      resolveToolRules(
+        request({ agent: { chatConfig: { enableAgentMode: false } }, memoryEnabled: true }),
+      ).rules['lobe-user-memory'],
+    ).toBe(true);
+  });
+
   it('offers image generation only when pinned on a tool-calling model without native output', () => {
     const pinned = { chatConfig: { enableAgentMode: false }, plugins: ['lobe-image-generation'] };
     expect(resolveToolRules(request({ agent: pinned })).rules['lobe-image-generation']).toBe(true);
@@ -111,8 +134,18 @@ describe('resolveToolRules', () => {
       request({ executionTarget: 'local', localExecutionReady: true }),
     );
     expect(localReady.rules['lobe-local-system']).toBe(true);
-    expect(localReady.rules['lobe-browser']).toBe(true);
+    // The in-app browser is discoverable, not resident: only a pin enables it.
+    expect(localReady.rules['lobe-browser']).toBe(false);
     expect(localReady.rules['lobe-cloud-sandbox']).toBe(false);
+
+    const browserPinned = resolveToolRules(
+      request({
+        agent: { chatConfig: {}, plugins: ['lobe-browser'] },
+        executionTarget: 'local',
+        localExecutionReady: true,
+      }),
+    );
+    expect(browserPinned.rules['lobe-browser']).toBe(true);
 
     const disabledLocal = resolveToolRules(
       request({ disableLocalSystem: true, executionTarget: 'local', localExecutionReady: true }),

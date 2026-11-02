@@ -101,9 +101,19 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
       runtimeMode === 'cloud' || executionTarget === 'auto' || !!request.pageScope,
     [KnowledgeBaseManifest.identifier]: kbEnabled,
     [LocalSystemManifest.identifier]: localToolsEnabled,
-    // The in-app browser drives the same machine as local-system.
-    [BrowserManifest.identifier]: runtimeMode === 'local' && request.localExecutionReady,
-    [MemoryManifest.identifier]: memoryEnabled,
+    // The in-app browser drives the same machine as local-system, but unlike
+    // local-system it is not resident: unless pinned it stays discoverable and
+    // the activator enables it when a task needs it, so ordinary turns do not
+    // carry its manifest.
+    [BrowserManifest.identifier]:
+      pinnedPluginIds.includes(BrowserManifest.identifier) &&
+      runtimeMode === 'local' &&
+      !!request.localExecutionReady,
+    // Memory follows the same Pinned/Auto split: `memory.enabled` decides
+    // whether the capability exists at all, the pin decides whether its
+    // (large) manifest rides every turn or waits for the activator.
+    [MemoryManifest.identifier]:
+      memoryEnabled && pinnedPluginIds.includes(MemoryManifest.identifier),
     ...(request.isBotConversation && { [MessageManifest.identifier]: true }),
     ...(request.isGroupSupervisor && enableAll(groupSupervisorToolIds)),
     // The device picker: only for device-capable targets behind a gateway,

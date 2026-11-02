@@ -1,6 +1,7 @@
 import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
 import { DashboardIdentifier, isDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
 import { GoalIdentifier, isGoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -552,7 +553,11 @@ export const discoverTools = async (
       deviceAccess: { canUseDevice, deviceLocked },
       deviceCapable,
       disableLocalSystem,
-      disabledPluginIds,
+      // Memory is discoverable rather than resident; turned off, the
+      // activator must not reach it either.
+      disabledPluginIds: globalMemoryEnabled
+        ? disabledPluginIds
+        : [...disabledPluginIds, MemoryManifest.identifier],
       enabledManifests: manifestMap,
       exclusivePluginIds,
       executionTarget: executionPlan.target,

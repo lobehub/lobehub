@@ -3,6 +3,7 @@ import {
   resolveAgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -113,7 +114,7 @@ describe('resolveDiscoveryPool', () => {
     expect(unrouted.manifestMap[RemoteDeviceManifest.identifier]).toBeDefined();
   });
 
-  it('injects local-system and Computer Use for a local target behind a gateway', () => {
+  it('injects local-system, the browser and Computer Use for a local target behind a gateway', () => {
     const local = resolveDiscoveryPool(
       request({
         device: { supportedTools: [AuvManifest.identifier] },
@@ -123,6 +124,8 @@ describe('resolveDiscoveryPool', () => {
       }),
     );
     expect(local.manifestMap[LocalSystemManifest.identifier]).toBeDefined();
+    // The browser is not resident, so the activator must be able to reach it.
+    expect(local.manifestMap[BrowserManifest.identifier]).toBeDefined();
     expect(local.manifestMap[AuvManifest.identifier]).toBeDefined();
 
     // An older device that does not report Computer Use never sees it.
