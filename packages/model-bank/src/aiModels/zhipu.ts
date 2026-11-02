@@ -24,6 +24,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     family: 'glm',
     generation: 'glm-5.3',
     id: 'glm-5.3',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -57,6 +58,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     family: 'glm',
     generation: 'glm-5.3',
     id: 'glm-5.3-flash',
+    isOfficial: true,
     maxOutput: 131_072,
     // List price; the 50% launch promo ends 2026-09-09, so it is intentionally not encoded here.
     // https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash
@@ -89,6 +91,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     family: 'glm',
     generation: 'glm-5.2',
     id: 'glm-5.2',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -118,6 +121,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     family: 'glm',
     generation: 'glm-5.1',
     id: 'glm-5.1',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',

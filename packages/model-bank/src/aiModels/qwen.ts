@@ -82,6 +82,7 @@ const qwenChatModels: AIChatModelCard[] = [
     family: 'qwen',
     generation: 'qwen3.8',
     id: 'qwen3.8-max-0902',
+    isOfficial: true,
     maxOutput: 131_072,
     /** @see https://www.alibabacloud.com/help/en/model-studio/qwen3-8-max */
     pricing: {
@@ -117,6 +118,7 @@ const qwenChatModels: AIChatModelCard[] = [
     family: 'qwen',
     generation: 'qwen3.8',
     id: 'qwen3.8-max',
+    isOfficial: true,
     maxOutput: 131_072,
     /** @see https://www.alibabacloud.com/help/en/model-studio/qwen3-8-max */
     pricing: {
@@ -1966,6 +1968,7 @@ const qwenChatModels: AIChatModelCard[] = [
     family: 'qwen',
     generation: 'qwen3.7',
     id: 'qwen3.7-plus',
+    isOfficial: true,
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
@@ -2318,6 +2321,7 @@ const qwenChatModels: AIChatModelCard[] = [
     family: 'qwen',
     generation: 'qwen3.7',
     id: 'qwen3.7-max',
+    isOfficial: true,
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {

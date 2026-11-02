@@ -16,6 +16,7 @@ const xaiChatModels: AIChatModelCard[] = [
     displayName: 'Grok 4.7',
     enabled: true,
     id: 'grok-4.7',
+    isOfficial: true,
     /** @see https://docs.x.ai/developers/models/grok-4.7 */
     pricing: {
       units: [
@@ -72,6 +73,7 @@ const xaiChatModels: AIChatModelCard[] = [
     displayName: 'Grok 4.6',
     enabled: true,
     id: 'grok-4.6',
+    isOfficial: true,
     /** @see https://docs.x.ai/developers/models/grok-4.6 */
     pricing: {
       units: [
@@ -130,6 +132,7 @@ const xaiChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-4.5',
     id: 'grok-4.5',
+    isOfficial: true,
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -158,6 +161,7 @@ const xaiChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-4.3',
     id: 'grok-4.3',
+    isOfficial: true,
     knowledgeCutoff: '2025-12',
     pricing: {
       units: [
@@ -362,6 +366,7 @@ const xaiImageModels: AIImageModelCard[] = [
     displayName: 'Grok Imagine Image 2.0',
     enabled: true,
     id: 'grok-imagine-image-2.0',
+    isOfficial: true,
     parameters: {
       aspectRatio: {
         default: 'auto',

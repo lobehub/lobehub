@@ -30,6 +30,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-6.1',
     id: 'gpt-6.1-sol',
+    isOfficial: true,
     knowledgeCutoff: '2026-04',
     maxOutput: 128_000,
     pricing: {
@@ -93,6 +94,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     displayName: 'GPT-6 Astra',
     enabled: true,
     id: 'gpt-6-astra',
+    isOfficial: true,
     maxOutput: 128_000,
     /** @see https://developers.openai.com/api/docs/models/gpt-6-astra */
     pricing: {
@@ -160,6 +162,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-6',
     id: 'gpt-6-sol',
+    isOfficial: true,
     knowledgeCutoff: '2026-04',
     maxOutput: 128_000,
     /** @see https://developers.openai.com/api/docs/models/gpt-6-sol */
@@ -225,6 +228,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-6',
     id: 'gpt-6-luna',
+    isOfficial: true,
     knowledgeCutoff: '2026-05',
     maxOutput: 128_000,
     /** @see https://developers.openai.com/api/docs/models/gpt-6-luna */
@@ -317,6 +321,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.6',
     id: 'gpt-5.6-sol',
+    isOfficial: true,
     knowledgeCutoff: '2026-02',
     maxOutput: 128_000,
     pricing: {
@@ -382,6 +387,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.6',
     id: 'gpt-5.6-terra',
+    isOfficial: true,
     knowledgeCutoff: '2026-02',
     maxOutput: 128_000,
     pricing: {
@@ -447,6 +453,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.6',
     id: 'gpt-5.6-luna',
+    isOfficial: true,
     knowledgeCutoff: '2026-02',
     maxOutput: 128_000,
     pricing: {
@@ -511,6 +518,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.5',
     id: 'gpt-5.5',
+    isOfficial: true,
     knowledgeCutoff: '2025-12',
     maxOutput: 128_000,
     pricing: {
@@ -566,6 +574,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.5',
     id: 'gpt-5.5-pro',
+    isOfficial: true,
     knowledgeCutoff: '2025-12',
     maxOutput: 128_000,
     pricing: {
@@ -606,6 +615,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.4',
     id: 'gpt-5.4',
+    isOfficial: true,
     knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
@@ -660,6 +670,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.4',
     id: 'gpt-5.4-pro',
+    isOfficial: true,
     knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
@@ -706,6 +717,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.4',
     id: 'gpt-5.4-mini',
+    isOfficial: true,
     knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
@@ -737,6 +749,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.4',
     id: 'gpt-5.4-nano',
+    isOfficial: true,
     knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
@@ -824,6 +837,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2',
+    isOfficial: true,
     knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
@@ -907,6 +921,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1',
+    isOfficial: true,
     knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
@@ -967,6 +982,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5',
+    isOfficial: true,
     knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
@@ -998,6 +1014,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-mini',
+    isOfficial: true,
     knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
@@ -1027,6 +1044,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-nano',
+    isOfficial: true,
     knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
@@ -1056,6 +1074,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'o-series',
     generation: 'o4',
     id: 'o4-mini',
+    isOfficial: true,
     knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
@@ -1115,6 +1134,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'o-series',
     generation: 'o3',
     id: 'o3',
+    isOfficial: true,
     knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
@@ -1226,6 +1246,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1',
+    isOfficial: true,
     knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
@@ -1254,6 +1275,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1-mini',
+    isOfficial: true,
     knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
@@ -1280,6 +1302,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1-nano',
+    isOfficial: true,
     knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
@@ -1305,6 +1328,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o-mini',
+    isOfficial: true,
     knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     pricing: {
@@ -1333,6 +1357,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o',
+    isOfficial: true,
     knowledgeCutoff: '2023-10',
     pricing: {
       units: [
@@ -1438,6 +1463,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4',
     id: 'gpt-4-turbo',
+    isOfficial: true,
     knowledgeCutoff: '2023-12',
     pricing: {
       units: [
