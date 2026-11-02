@@ -7,6 +7,7 @@ import { sha256 } from 'js-sha256';
 
 import { serverDBEnv } from '@/config/db';
 import { FileModel } from '@/database/models/file';
+import { FileContentRepository } from '@/database/repositories/fileContent';
 import { type FileItem } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { TempFileManager } from '@/server/utils/tempFileManager';
@@ -31,6 +32,7 @@ export class FileService {
   private db: LobeChatDatabase;
 
   private userId: string;
+  private fileContentRepo: FileContentRepository;
   private fileModel: FileModel;
 
   private impl: FileServiceImpl;
@@ -38,6 +40,7 @@ export class FileService {
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.fileContentRepo = new FileContentRepository(db, userId, workspaceId);
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.impl = createFileServiceModule(db);
   }
@@ -301,7 +304,7 @@ export class FileService {
     const existing = await this.fileModel.findByUrl(url);
     if (!existing) return;
 
-    await this.fileModel.replaceStoredContent(existing, params);
+    await this.fileContentRepo.replaceStoredContent(existing, params);
 
     return {
       fileId: existing.id,

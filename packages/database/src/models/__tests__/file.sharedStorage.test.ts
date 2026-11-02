@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { asyncTasks, documents, files, globalFiles, users, workspaces } from '../../schemas';
+import { files, globalFiles, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { trashStamp } from '../../utils/softDelete';
 import { FileModel } from '../file';
@@ -112,37 +112,5 @@ describe('FileModel shared storage objects', () => {
 
     await expect(ownerModel.delete('file-a')).resolves.toBeUndefined();
     expect(await ownerModel.findByUrl(sharedKey)).toBeUndefined();
-  });
-
-  it('replaceStoredContent drops parsed data so a re-export cannot serve stale text', async () => {
-    const [task] = await serverDB
-      .insert(asyncTasks)
-      .values({ status: 'success', type: 'chunk', userId })
-      .returning();
-    await insertExport('file-a', 'hash-a');
-    await serverDB.update(files).set({ chunkTaskId: task!.id }).where(eq(files.id, 'file-a'));
-    await serverDB.insert(documents).values({
-      content: 'old text',
-      fileId: 'file-a',
-      fileType: 'docx',
-      source: sharedKey,
-      sourceType: 'file',
-      totalCharCount: 8,
-      totalLineCount: 1,
-      userId,
-    });
-
-    const file = await fileModel.findById('file-a');
-    await fileModel.replaceStoredContent(file!, { fileType: 'application/pdf', size: 99 });
-
-    expect(await fileModel.findById('file-a')).toMatchObject({
-      chunkTaskId: null,
-      fileType: 'application/pdf',
-      size: 99,
-    });
-    expect(await serverDB.select().from(documents).where(eq(documents.fileId, 'file-a'))).toEqual(
-      [],
-    );
-    expect(await serverDB.select().from(asyncTasks).where(eq(asyncTasks.id, task!.id))).toEqual([]);
   });
 });

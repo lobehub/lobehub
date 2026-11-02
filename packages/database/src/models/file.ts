@@ -195,9 +195,33 @@ export class FileModel {
 
     const fileHash = file.fileHash;
 
-    await this.deleteDerivedData(tx, file);
+    // 1. Delete related chunks
+    await this.deleteFileChunks(tx as any, [id]);
 
-    // Delete file record
+    // 2. Delete mirror documents whose source is this file. Without this,
+    // documents.fileId would be set null by FK and leave orphan rows behind
+    // (still indexed by BM25, still occupying KB slots).
+    await tx
+      .delete(documents)
+      .where(
+        and(
+          eq(documents.fileId, id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+          eq(documents.sourceType, 'file'),
+        ),
+      );
+
+    // 3. Delete the chunk/embedding asyncTasks tied to this file. files.chunkTaskId
+    // and embeddingTaskId are `set null` on the asyncTasks side, so without this
+    // the task rows would dangle in the DB forever.
+    const taskIds = [file.chunkTaskId, file.embeddingTaskId].filter((taskId): taskId is string =>
+      Boolean(taskId),
+    );
+    if (taskIds.length > 0) {
+      await tx.delete(asyncTasks).where(inArray(asyncTasks.id, taskIds));
+    }
+
+    // 4. Delete file record
     await tx.delete(files).where(and(eq(files.id, id), this.ownership()));
 
     if (!fileHash) {
@@ -226,49 +250,6 @@ export class FileModel {
     }
 
     return undefined;
-  };
-
-  /** Remove what was parsed or embedded from a file's stored content. */
-  private deleteDerivedData = async (tx: Transaction, file: FileItem) => {
-    // 1. Delete related chunks
-    await this.deleteFileChunks(tx as any, [file.id]);
-
-    // 2. Delete mirror documents whose source is this file. Without this,
-    // documents.fileId would be set null by FK and leave orphan rows behind
-    // (still indexed by BM25, still occupying KB slots).
-    await tx
-      .delete(documents)
-      .where(
-        and(
-          eq(documents.fileId, file.id),
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
-          eq(documents.sourceType, 'file'),
-        ),
-      );
-
-    // 3. Delete the chunk/embedding asyncTasks tied to this file. files.chunkTaskId
-    // and embeddingTaskId are `set null` on the asyncTasks side, so without this
-    // the task rows would dangle in the DB forever.
-    const taskIds = [file.chunkTaskId, file.embeddingTaskId].filter((taskId): taskId is string =>
-      Boolean(taskId),
-    );
-    if (taskIds.length > 0) {
-      await tx.delete(asyncTasks).where(inArray(asyncTasks.id, taskIds));
-    }
-  };
-
-  /**
-   * Point a row at the new content of its overwritten storage object, dropping
-   * parsed data so later reads cannot return the previous version.
-   */
-  replaceStoredContent = async (file: FileItem, value: Pick<FileItem, 'fileType' | 'size'>) => {
-    await this.db.transaction(async (tx) => {
-      await this.deleteDerivedData(tx, file);
-      await tx
-        .update(files)
-        .set({ ...value, updatedAt: new Date() })
-        .where(and(eq(files.id, file.id), this.ownership()));
-    });
   };
 
   /**
@@ -916,7 +897,7 @@ export class FileModel {
     });
 
   // Abstract common method for deleting chunks
-  private deleteFileChunks = async (trx: PgTransaction<any>, fileIds: string[]) => {
+  deleteFileChunks = async (trx: PgTransaction<any>, fileIds: string[]) => {
     /* v8 ignore next -- unreachable: both callers pass a non-empty list ([id] in deleteInTransaction; deleteMany returns early when no file matched) */
     if (fileIds.length === 0) return;
 

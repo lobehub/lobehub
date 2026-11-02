@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FileModel } from '@/database/models/file';
+import { FileContentRepository } from '@/database/repositories/fileContent';
 import { TempFileManager } from '@/server/utils/tempFileManager';
 import { FileSource } from '@/types/files';
 
@@ -39,6 +40,11 @@ vi.mock('../impls', () => ({
   }),
 }));
 
+vi.mock('@/database/repositories/fileContent', () => {
+  class FileContentRepository {}
+  (FileContentRepository.prototype as any).replaceStoredContent = vi.fn();
+  return { FileContentRepository };
+});
 vi.mock('@/database/models/file');
 
 vi.mock('@/server/utils/tempFileManager');
@@ -502,7 +508,7 @@ describe('FileService', () => {
   describe('refreshFileRecordByUrl', () => {
     beforeEach(() => {
       mockFileModel.findByUrl = vi.fn();
-      mockFileModel.replaceStoredContent = vi.fn();
+      vi.mocked(FileContentRepository.prototype.replaceStoredContent).mockClear();
     });
 
     it('updates the row that owns the key and returns its access url', async () => {
@@ -513,7 +519,7 @@ describe('FileService', () => {
         size: 42,
       });
 
-      expect(mockFileModel.replaceStoredContent).toHaveBeenCalledWith(
+      expect(FileContentRepository.prototype.replaceStoredContent).toHaveBeenCalledWith(
         { id: 'file-1' },
         { fileType: 'application/docx', size: 42 },
       );
@@ -527,7 +533,7 @@ describe('FileService', () => {
       await expect(
         service.refreshFileRecordByUrl('files/a.docx', { fileType: 'x', size: 1 }),
       ).resolves.toBeUndefined();
-      expect(mockFileModel.replaceStoredContent).not.toHaveBeenCalled();
+      expect(FileContentRepository.prototype.replaceStoredContent).not.toHaveBeenCalled();
     });
   });
 
