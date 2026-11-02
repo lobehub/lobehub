@@ -1,10 +1,12 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import {
   Button,
   Checkbox,
   createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
   type ModalInstance,
   Text,
   toast,

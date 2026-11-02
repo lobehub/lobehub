@@ -42,6 +42,24 @@ describe('TaskExecutor batch references', () => {
     expect(result.content).toContain('Ambiguous task reference');
     expect(mocks.run).not.toHaveBeenCalled();
   });
+  it('passes a replacement model to the run of every batch item', async () => {
+    await taskExecutor.runTasks({
+      identifiers: ['T-1'],
+      model: 'fixed-model',
+      provider: 'working',
+    });
+    expect(mocks.run).toHaveBeenCalledWith('task_1', {
+      model: 'fixed-model',
+      provider: 'working',
+    });
+  });
+  it('passes a replacement model to a single run', async () => {
+    await taskExecutor.runTask({ identifier: 'T-1', model: 'fixed-model', provider: 'working' });
+    expect(mocks.run).toHaveBeenCalledWith(
+      'task_1',
+      expect.objectContaining({ model: 'fixed-model', provider: 'working' }),
+    );
+  });
   it('includes lookup and kickoff failures in the model-visible content', async () => {
     mocks.find.mockRejectedValueOnce(new Error('Task not found: T-9'));
     mocks.run.mockRejectedValueOnce(new Error('Already running'));

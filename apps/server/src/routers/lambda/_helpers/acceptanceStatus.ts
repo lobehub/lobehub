@@ -5,9 +5,12 @@ import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { GoalBriefService } from '@/server/services/goal/goalBriefs';
+import { archiveSignedOffGoalTasks } from '@/server/services/goal/signOffArchive';
 import type { AcceptanceService } from '@/server/services/verify/acceptanceService';
 
 import { assertNotHoldingRelease } from './goalGateAcceptance';
+
+export { archiveSignedOffGoalTasks };
 
 export const acceptanceStatusOverrideSchema = z.enum([
   'delivered',
@@ -54,6 +57,7 @@ export const applyAcceptanceStatus = async (
   if (status === 'accepted') {
     await service.accept(acceptance.id);
     await settleGoalSignOff(db, acceptance, 'signOff');
+    await archiveSignedOffGoalTasks(db, acceptance);
     return;
   }
 

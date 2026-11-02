@@ -21,6 +21,7 @@ import {
   PencilLine,
   Pin,
   PinOff,
+  Share2,
   Trash,
   Wand2,
 } from 'lucide-react';
@@ -79,7 +80,18 @@ const TopicInfoHeader = ({ authorName, title, updatedAtLabel }: TopicInfoHeaderP
   </Block>
 );
 
-export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownItem[] } => {
+interface UseMenuOptions {
+  /**
+   * Share entry for the topic. Passed only where Share is not already a header
+   * button (inside a workspace, where comments take that slot).
+   */
+  share?: { disabled?: boolean; onClick: () => void };
+}
+
+export const useMenu = ({ share }: UseMenuOptions = {}): {
+  menuHeader?: ReactNode;
+  menuItems: () => DropdownItem[];
+} => {
   const { t } = useTranslation(['chat', 'topic', 'common', 'file']);
 
   const { pathname } = useLocation();
@@ -288,6 +300,16 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
         { type: 'divider' as const },
       );
 
+      if (share) {
+        items.push({
+          disabled: share.disabled,
+          icon: <Icon icon={Share2} />,
+          key: 'share',
+          label: t('share', { ns: 'common' }),
+          onClick: share.onClick,
+        });
+      }
+
       if (isDesktop && workingDirectory) {
         items.push({
           icon: <Icon icon={Copy} />,
@@ -377,6 +399,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
     enableTopicBugReport,
     isFavorite,
     favoriteMenuItem,
+    share,
     activeAgentId,
     pathname,
     workingDirectory,

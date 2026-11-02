@@ -1,6 +1,12 @@
 import { type SidebarAgentItem } from '@lobechat/types';
-import { type DropdownItem, Icon, toast } from '@lobehub/ui';
-import { ActionIcon, confirmModal, DropdownMenu } from '@lobehub/ui';
+import {
+  ActionIcon,
+  confirmModal,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+  toast,
+} from '@lobehub/ui';
 import { Check, Copy, ListTree, MoreVertical, Pin, PinOff, Plus, Trash } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

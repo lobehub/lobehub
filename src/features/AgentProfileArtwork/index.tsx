@@ -9,6 +9,7 @@ import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
+  createStaticStyles,
   type DropdownItem,
   DropdownMenu,
   Spin,

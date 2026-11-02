@@ -361,9 +361,10 @@ const buildMoonshotOpenAIPayload = (
 };
 
 /**
- * Kimi's Anthropic-compatible endpoint maps forced tool choices to `specified`,
- * which is incompatible with thinking mode, but accepts `{ type: "any" }`.
- * With a single schema tool this still forces structured output.
+ * Kimi rejects every forced tool choice (`tool` and `any`) while thinking is enabled
+ * (`tool_choice 'required' is incompatible with thinking enabled`), and native thinking
+ * models cannot turn thinking off, so thinking-enabled requests use `tool_choice: auto`
+ * with a prompt instruction to call the schema tool.
  * K2.x thinking models also require an explicit `thinking` parameter on this
  * endpoint, while K3+ uses `reasoning_effort` and must omit it.
  * Thinking-enabled assistant history must use the same placeholder-block
@@ -384,7 +385,6 @@ const createMoonshotAnthropicGenerateObject = async (
   const isThinkingDisabled = isThinkingToggle && thinking?.type === 'disabled';
   const isThinkingModel = isNativeThinking || isThinkingToggle;
   const isThinkingEnabled = isThinkingModel && !isThinkingDisabled;
-  const schemaToolChoice = isThinkingDisabled ? 'tool' : 'any';
   const thinkingParam = isThinkingDisabled
     ? ({ type: 'disabled' } as const)
     : isThinkingEnabled && !isKimiReasoningEffortModel(payload.model)
@@ -416,7 +416,7 @@ const createMoonshotAnthropicGenerateObject = async (
           },
         }
       : {}),
-    ...(isThinkingModel ? { schemaToolChoice } : {}),
+    ...(isThinkingEnabled ? { autoToolChoice: true } : {}),
   });
 };
 
@@ -459,6 +459,36 @@ export const anthropicParams = createAnthropicCompatibleParams({
 export const LobeMoonshotAnthropicAI = createAnthropicCompatibleRuntime(anthropicParams);
 
 /**
+ * Kimi's OpenAI-compatible endpoint rejects `tool_choice: 'required'` (or a named tool) while
+ * thinking is enabled, so tool-based structured output falls back to `auto` plus a prompt
+ * instruction, as on the Anthropic-compatible endpoint.
+ */
+export const relaxMoonshotGenerateObjectToolChoice = (
+  payload: GenerateObjectPayload,
+  requestPayload: any,
+) => {
+  const { model, thinking } = payload;
+  const isThinkingEnabled =
+    isKimiNativeThinkingModel(model) ||
+    (isKimiThinkingToggleModel(model) && thinking?.type !== 'disabled');
+  if (!isThinkingEnabled || !requestPayload.tool_choice || requestPayload.tool_choice === 'auto')
+    return requestPayload;
+
+  return {
+    ...requestPayload,
+    messages: [
+      {
+        content:
+          'You must respond by calling one of the provided tools. Do not reply with plain text.',
+        role: 'system',
+      },
+      ...requestPayload.messages,
+    ],
+    tool_choice: 'auto',
+  };
+};
+
+/**
  * Moonshot OpenAI format runtime
  */
 export const LobeMoonshotOpenAI = createOpenAICompatibleRuntime({
@@ -470,6 +500,7 @@ export const LobeMoonshotOpenAI = createOpenAICompatibleRuntime({
   debug: {
     chatCompletion: () => process.env.DEBUG_MOONSHOT_CHAT_COMPLETION === '1',
   },
+  generateObject: { handlePayload: relaxMoonshotGenerateObjectToolChoice },
   // Kimi models support prompt_cache_key for multi-turn session cache optimization.
   // Docs: https://platform.kimi.com/docs/api/chat#body-one-of-0-prompt-cache-key
   models: fetchMoonshotModels,

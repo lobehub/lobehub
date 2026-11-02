@@ -6,6 +6,7 @@ import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   createModal,
+  createStaticStyles,
   type ModalInstance,
   Segmented,
   Skeleton,

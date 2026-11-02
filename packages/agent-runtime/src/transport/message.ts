@@ -13,6 +13,20 @@ export interface RuntimeMessageRef {
   topicId?: string | null;
 }
 
+/** Durable tool payload, including the fields that distinguish a result from a placeholder. */
+export type RuntimeToolMessage = Pick<
+  UIChatMessage,
+  | 'id'
+  | 'content'
+  | 'parentId'
+  | 'role'
+  | 'tool_call_id'
+  | 'metadata'
+  | 'pluginState'
+  | 'pluginError'
+  | 'pluginIntervention'
+>;
+
 export interface CreateAssistantMessageOptions {
   /**
    * Stable key for one logical assistant output. Persistent transports should
@@ -92,6 +106,8 @@ export interface MessageTransport {
      */
     parentMessageId: string,
   ) => Promise<string | undefined>;
+  /** Read one tool row by primary key, without projecting away its stored result. */
+  getToolMessage: (id: string) => Promise<RuntimeToolMessage | undefined>;
   query: (params?: QueryMessagesInput, options?: QueryMessagesOptions) => Promise<UIChatMessage[]>;
   update: (id: string, params: Partial<UpdateMessageParams>) => Promise<void>;
   updatePluginState: (id: string, state: Record<string, any>) => Promise<void>;

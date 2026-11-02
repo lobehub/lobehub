@@ -27,6 +27,8 @@ const log = debug('lobe-server:bot:wake-duty');
 
 const DutySchema = z.object({
   duty: z.string().optional(),
+  // Optional so a chat model that leaves it out still yields the duty score.
+  helpful: z.number().min(0).max(1).optional(),
   inDuty: z.number().min(0).max(1),
   reason: z.string(),
 });
@@ -48,11 +50,12 @@ const pickDuty = (duties: Record<string, string>, key: string | undefined) => {
  * `createWakeClassify`.
  *
  * Returns:
- * - A `WakeDutyJudge`. With a decision model the score is the probability of "within the duties",
- *   and the matched duty is the listed duty the model chose (the only one, when the owner wrote
- *   one). With a chat model both come from `generateObject`. Rejects on a malformed or refused
- *   score; the policy turns a rejection into a degraded abstain, which never wakes the bot. A
- *   refused or `none` choice of duty only loses the name, not the score.
+ * - A `WakeDutyJudge`. With a decision model the scores are the probabilities of "within the
+ *   duties" and "stepping in would help", and the matched duty is the listed duty the model chose
+ *   (the only one, when the owner wrote one). With a chat model all come from `generateObject`.
+ *   Rejects on a malformed or refused duty score; the policy turns a rejection into a degraded
+ *   abstain, which never wakes the bot. A refused `helpful` leaves it unset (judged on the duty
+ *   alone); a refused or `none` choice of duty only loses the name, not the score.
  */
 export const createWakeDutyJudge = ({
   agentId,
@@ -88,17 +91,22 @@ export const createWakeDutyJudge = ({
           tracing: tracing('bot_wake_duty_decision'),
         },
       );
-      const { duty, inDuty } = response.answers;
+      const { duty, helpful, inDuty } = response.answers;
       if (inDuty.type !== 'boolean') {
         throw new Error(
           `decision model refused: ${(inDuty as { reason?: string }).reason ?? 'no reason'}`,
         );
       }
       const probability = ProbabilitySchema.parse(inDuty.probability);
+      const helpfulProbability =
+        helpful?.type === 'boolean' ? ProbabilitySchema.parse(helpful.probability) : undefined;
       return {
         duty: pickDuty(duties, duty?.type === 'choice' ? duty.choice : undefined),
+        helpful: helpfulProbability,
         inDuty: probability,
-        reason: `${model} p=${probability.toFixed(2)}`,
+        reason: `${model} p=${probability.toFixed(2)}${
+          helpfulProbability === undefined ? '' : ` helpful=${helpfulProbability.toFixed(2)}`
+        }`,
       };
     }
 
@@ -115,7 +123,7 @@ export const createWakeDutyJudge = ({
         tracing: tracing(schema.name),
       },
     );
-    const { duty, inDuty, reason } = DutySchema.parse(result);
-    return { duty: pickDuty(duties, duty), inDuty, reason };
+    const { duty, helpful, inDuty, reason } = DutySchema.parse(result);
+    return { duty: pickDuty(duties, duty), helpful, inDuty, reason };
   };
 };

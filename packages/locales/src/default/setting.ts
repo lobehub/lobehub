@@ -956,6 +956,9 @@ export default {
   'hotkey.errors.NO_MODIFIER': 'Hotkey must include a modifier key (Ctrl, Alt, Shift, etc.)',
   'hotkey.errors.SYSTEM_OCCUPIED': 'Hotkey is occupied by the system or another application',
   'hotkey.errors.UNKNOWN': 'Update failed: Unknown error',
+  'hotkey.group.appMenu': 'App Menu',
+  'hotkey.group.appMenuDesc':
+    'Shortcuts built into the desktop app menu. They follow the system platform and cannot be customized yet.',
   'hotkey.group.conversation': 'Conversation',
   'hotkey.group.desktop': 'Desktop',
   'hotkey.group.essential': 'Essential',

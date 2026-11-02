@@ -734,12 +734,11 @@ export default {
   'channel.records.judge.hint': '{{judge}}: {{verdict}}',
   'channel.records.mark.undo': 'Click again to remove the mark',
   'channel.records.empty.title': 'No records yet',
+  'channel.records.total': '{{count}} records',
   'channel.records.empty.desc':
     'Records show up here once the bot judges a message in a channel it can see.',
   'channel.records.emptyFiltered.title': 'Nothing matches these filters',
   'channel.records.emptyFiltered.clear': 'Clear filters',
-  'channel.records.loadMore': 'Load more',
-  'channel.records.end': "That's everything from the last {{days}} days.",
   'channel.module.save': 'Save',
   'channel.module.unsaved': 'Unsaved changes',
   'channel.group.connection': 'Connection options',
