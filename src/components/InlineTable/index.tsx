@@ -1,7 +1,6 @@
 import './InlineTable.css';
 
-import { Table, type TableProps } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { cx, Table, type TableProps } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 
 import { sx } from '@/styles/sx';

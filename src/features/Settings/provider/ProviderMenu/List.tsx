@@ -1,6 +1,5 @@
 'use client';
 
-import { ContextMenuTrigger, type DropdownItem, Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -9,7 +8,10 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  ContextMenuTrigger,
   cx,
+  type DropdownItem,
+  Flexbox,
   Text,
 } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';

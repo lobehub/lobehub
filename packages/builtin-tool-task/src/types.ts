@@ -59,9 +59,13 @@ export interface CreateTaskParams {
   /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
   assigneeUserId?: string;
   instruction: string;
+  /** Model the task runs with; omitted pins the assignee agent's current model. */
+  model?: string;
   name: string;
   parentIdentifier?: string;
   priority?: number;
+  /** Provider for `model`; omitted is resolved from the assignee agent. */
+  provider?: string;
   sortOrder?: number;
 }
 
@@ -226,9 +230,13 @@ export interface EditTaskParams {
   description?: string;
   identifier: string;
   instruction?: string;
+  /** Task model override; `null` clears it so the task follows the assignee agent again. */
+  model?: string | null;
   name?: string;
   parentIdentifier?: string | null;
   priority?: number;
+  /** Provider for the task model; `null` clears it. */
+  provider?: string | null;
   removeDependencies?: string[];
 }
 
@@ -244,8 +252,12 @@ export interface RunTaskParams {
   /** Optional existing topic to continue (rather than creating a new topic). */
   continueTopicId?: string;
   identifier: string;
+  /** Replaces the task's pinned model, for this run and later ones. */
+  model?: string;
   /** Optional extra prompt prepended to the task instruction for this run. */
   prompt?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTaskState {
@@ -259,6 +271,10 @@ export interface RunTaskState {
 export interface RunTasksParams {
   /** Identifiers of tasks to run, in execution order. */
   identifiers: string[];
+  /** Replaces the pinned model of every task in the batch, for this run and later ones. */
+  model?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTasksItemResult {

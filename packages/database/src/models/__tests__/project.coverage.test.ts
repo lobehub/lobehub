@@ -155,4 +155,58 @@ describe('ProjectModel coverage', () => {
       expect(rows?.map((row) => row.id)).toEqual([task.id]);
     });
   });
+
+  describe('deleteDedicatedCoordinator', () => {
+    /** A coordinator provisioned for one project: virtual and without a slug. */
+    const legacyCoordinator = async (id: string) => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ id, title: 'Legacy coordinator', userId, virtual: true })
+        .returning();
+      return agent;
+    };
+
+    it('takes the virtual coordinator with the project that provisioned it', async () => {
+      const legacy = await legacyCoordinator('t863-legacy-coordinator');
+      const project = await model.create({
+        coordinatorAgentId: legacy.id,
+        identifier: 'LEG01',
+        name: 'Legacy project',
+      });
+
+      await model.delete(project.id);
+
+      expect(await serverDB.select().from(agents).where(eq(agents.id, legacy.id))).toEqual([]);
+    });
+
+    it('keeps a coordinator the user picked, and its sessions with it', async () => {
+      const picked = await new AgentModel(serverDB, userId).create({ title: 'Reusable' });
+      const project = await model.create({
+        coordinatorAgentId: picked.id,
+        identifier: 'LEG02',
+        name: 'Picked project',
+      });
+
+      await model.delete(project.id);
+
+      expect(await serverDB.select().from(agents).where(eq(agents.id, picked.id))).toHaveLength(1);
+    });
+
+    it('does not count the project being handed over as still using the coordinator', async () => {
+      const legacy = await legacyCoordinator('t863-handover-coordinator');
+      const project = await model.create({
+        coordinatorAgentId: legacy.id,
+        identifier: 'LEG03',
+        name: 'Handover project',
+      });
+
+      // The caller asks on behalf of `project` itself, so its own lead and
+      // membership do not make the coordinator look shared.
+      await expect(
+        model.isDedicatedCoordinator(legacy.id, { exceptProjectId: project.id }),
+      ).resolves.toBe(true);
+      // Without the exception the project still holds it.
+      await expect(model.isDedicatedCoordinator(legacy.id)).resolves.toBe(false);
+    });
+  });
 });

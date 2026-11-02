@@ -40,6 +40,9 @@ class DashboardExecutor extends BaseExecutor<typeof DashboardApiName> {
   listDashboards = (params: unknown, ctx?: BuiltinToolContext) =>
     this.run(DashboardApiName.listDashboards, params, ctx);
 
+  listWidgetPresets = (params: unknown, ctx?: BuiltinToolContext) =>
+    this.run(DashboardApiName.listWidgetPresets, params, ctx);
+
   createDashboard = (params: unknown, ctx?: BuiltinToolContext) =>
     this.run(DashboardApiName.createDashboard, params, ctx);
 

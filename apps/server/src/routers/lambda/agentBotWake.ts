@@ -71,7 +71,8 @@ const cursorSchema = z.object({
 
 export const agentBotWakeRouter = router({
   /**
-   * One bot's wake decisions, newest first, from the last {@link SCOPE_READ_DEFAULT_DAYS} days:
+   * One bot's wake decisions, newest first, from the last {@link SCOPE_READ_DEFAULT_DAYS} days, a
+   * numbered page (`offset`) or a keyset page (`cursor`) at a time, with the filtered `total`:
    * the message preview, what the router did and why, the model score behind it (`judge`), the
    * agent's own silence label and the owner's current mark. The raw verdicts stay on the server.
    */
@@ -82,6 +83,7 @@ export const agentBotWakeRouter = router({
         cursor: cursorSchema.optional(),
         followupOnly: z.boolean().optional(),
         limit: z.number().int().min(1).max(SCOPE_READ_MAX_LIMIT).optional(),
+        offset: z.number().int().min(0).optional(),
         outcome: z.enum(SIGNAL_DECISION_OUTCOMES).optional(),
         unmarkedOnly: z.boolean().optional(),
       }),
@@ -95,6 +97,7 @@ export const agentBotWakeRouter = router({
         finalReasons: input.followupOnly ? BOT_WAKE_FOLLOWUP_REASONS : undefined,
         labeled: input.unmarkedOnly ? { by: BOT_WAKE_USER_LABEL_SOURCE, has: false } : undefined,
         limit: input.limit,
+        offset: input.offset,
         outcome: input.outcome,
         scopeKey,
       });
@@ -115,6 +118,7 @@ export const agentBotWakeRouter = router({
           };
         }),
         nextCursor: page.nextCursor,
+        total: page.total,
       };
     }),
 

@@ -313,7 +313,11 @@ const Header = memo<HeaderProps>(
               agentId={agentId}
               extraItems={
                 view.detail
-                  ? [view.platformName ?? <SkeletonBar height={14} width={56} />]
+                  ? [
+                      view.platformName ?? (
+                        <SkeletonBar height={14} key="platform-name" width={56} />
+                      ),
+                    ]
                   : undefined
               }
               title={

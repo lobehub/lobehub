@@ -11,6 +11,7 @@ const { executions, execAgent, notifyChannel } = vi.hoisted(() => ({
     claim: vi.fn(),
     finishDispatch: vi.fn(),
     input: vi.fn(),
+    recentContext: vi.fn(),
   },
   execAgent: vi.fn(),
   notifyChannel: vi.fn(),
@@ -74,6 +75,7 @@ describe('Channel concurrent startup', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     executions.input.mockResolvedValue([]);
+    executions.recentContext.mockResolvedValue([]);
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
     executions.claim.mockImplementation(async (_channelId, id: string) => ({

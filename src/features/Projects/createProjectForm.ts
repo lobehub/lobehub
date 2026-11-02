@@ -48,3 +48,23 @@ export const getCreateProjectInput = (draft: CreateProjectDraft) => {
 
   return { name, ...(identifier ? { identifier } : {}), ...(slug ? { slug } : {}) };
 };
+
+export interface CreateProjectExtras {
+  avatar?: string;
+  /** The picked agent; only sent when the project reuses an existing agent. */
+  mainAgentId?: string;
+  mainAgentMode: 'dedicated' | 'existing';
+}
+
+/**
+ * Leaving `coordinatorAgentId` out is what makes the server create an agent
+ * for the project, named after it and wearing its avatar.
+ */
+export const buildCreateProjectRequest = (
+  input: NonNullable<ReturnType<typeof getCreateProjectInput>>,
+  { avatar, mainAgentId, mainAgentMode }: CreateProjectExtras,
+) => ({
+  ...input,
+  ...(avatar ? { avatar } : {}),
+  ...(mainAgentMode === 'existing' && mainAgentId ? { coordinatorAgentId: mainAgentId } : {}),
+});

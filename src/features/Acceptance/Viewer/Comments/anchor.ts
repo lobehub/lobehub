@@ -20,7 +20,7 @@ export const commentIdFromHash = (hash: string): string | undefined => {
 
 /**
  * The link to hand someone else — this page, this comment. `appOrigin` comes
- * from `useAppOrigin`, not `window.location`: on desktop that is the
+ * from `useAcceptanceOrigin`, not `window.location`: on desktop that is the
  * `app://renderer` shell, which nobody else can open.
  */
 export const commentAnchorUrl = (commentId: string, appOrigin: string) => {

@@ -2,6 +2,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { ForeignLiveRunError } from '../topicStartReservation';
 
 const {
   mockFindOperationById,
@@ -223,6 +224,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     mockFindOperationById.mockImplementation(async (id: string) => ({
       id,
       status: 'running',
+      userId: 'test-user-id',
       topicId: 'topic-1',
       trigger: 'chat',
     }));
@@ -248,7 +250,9 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
 
   it('ignores a replaced operation that is not on this topic', async () => {
     mockFindOperationById.mockImplementation(async (id: string) =>
-      id === 'op-foreign' ? null : { id, status: 'running', topicId: 'topic-1', trigger: 'chat' },
+      id === 'op-foreign'
+        ? null
+        : { id, status: 'running', topicId: 'topic-1', trigger: 'chat', userId: 'test-user-id' },
     );
 
     await service.execAgent({
@@ -313,6 +317,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
       id: 'op-live',
       status: 'running',
       trigger: 'onboarding',
+      userId: 'test-user-id',
     });
 
     await service.execAgent({
@@ -334,6 +339,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
       status: 'running',
       topicId: 'topic-1',
       trigger: 'agent_signal',
+      userId: 'test-user-id',
     });
 
     await service.execAgent({
@@ -366,6 +372,108 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
       interactiveStart: true,
       prompt: 'please hurry',
     });
+
+    expect(interruptTask).not.toHaveBeenCalled();
+  });
+
+  // Workspace topics are shared: a teammate's send used to interrupt the run
+  // its starter was driving, because the holder was retired regardless of owner.
+  it("refuses the send instead of interrupting another member's running holder", async () => {
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-live',
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'chat',
+      updatedAt: new Date(),
+      userId: 'teammate-id',
+    });
+
+    await expect(
+      service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        interactiveStart: true,
+        prompt: 'keep going',
+      }),
+    ).rejects.toBeInstanceOf(ForeignLiveRunError);
+
+    expect(interruptTask).not.toHaveBeenCalled();
+    expect(mockMessageCreate).not.toHaveBeenCalled();
+    expect(mockReleaseReservation).toHaveBeenCalled();
+  });
+
+  it("does not interrupt another member's run named as the replaced operation", async () => {
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-live',
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'chat',
+      updatedAt: new Date(),
+      userId: 'teammate-id',
+    });
+
+    await expect(
+      service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        interactiveStart: true,
+        prompt: 'keep going',
+        replacesOperationId: 'op-live',
+      }),
+    ).rejects.toBeInstanceOf(ForeignLiveRunError);
+
+    expect(interruptTask).not.toHaveBeenCalled();
+  });
+
+  it("retires another member's run whose lease froze, which nothing would otherwise settle", async () => {
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-live',
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'chat',
+      updatedAt: new Date(Date.now() - 10 * 60_000),
+      userId: 'teammate-id',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      interactiveStart: true,
+      prompt: 'keep going',
+    });
+
+    expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
+  });
+
+  it("refuses the send next to another member's live device-hosted run", async () => {
+    mockFindTopicById.mockResolvedValue({
+      id: 'topic-1',
+      metadata: {
+        runningOperation: {
+          assistantMessageId: 'asst-old',
+          heteroType: 'claude-code',
+          operationId: 'op-live',
+        },
+      },
+    });
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-live',
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'chat',
+      updatedAt: new Date(Date.now() - 20 * 60_000),
+      userId: 'teammate-id',
+    });
+
+    await expect(
+      service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        interactiveStart: true,
+        prompt: 'keep going',
+        replacesOperationId: 'op-live',
+      }),
+    ).rejects.toBeInstanceOf(ForeignLiveRunError);
 
     expect(interruptTask).not.toHaveBeenCalled();
   });

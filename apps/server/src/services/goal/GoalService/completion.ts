@@ -89,6 +89,17 @@ export const settleTerminalAcceptance = async (
     });
     if (!achieved) return measurementChanged;
     effects.push({ type: 'goal_status', detail: 'achieved' });
+    // The sign-off is asked for above, before the Goal turned terminal, so the
+    // owner may already have signed it; that sign-off found the Goal not yet
+    // achieved and archived nothing. Best-effort: the Goal is achieved either way.
+    const terminalTaskId = graph.nodes.find(
+      (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE,
+    )?.taskId;
+    if (terminalTaskId) {
+      await ctx
+        .archiveSignedOffTasks(terminalTaskId)
+        .catch((error) => console.error('[goal:sign-off:archive-tasks]', error));
+    }
     return { goalId, message: move.message, outcome: 'achieved' };
   }
 
