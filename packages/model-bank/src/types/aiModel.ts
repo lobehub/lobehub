@@ -320,7 +320,6 @@ export interface AIBaseModelCard {
    * Whether this card is listed by the vendor that makes the model, so its `pricing` is the
    * official list price. Resellers that list another vendor's model (e.g. DeepSeek on Qwen)
    * leave it unset. Unset also means "not checked yet", so treat it as unknown, not as false.
-   * Used to price upstream cost when a gateway reports none.
    */
   isOfficial?: boolean;
   /**

@@ -23,6 +23,7 @@ For a model-only request on an existing provider, follow [model-bank-metadata](.
 - For local servers or desktop applications, read [Local provider integration](references/local-providers.md). Verify launch modes, installed-model discovery, browser access, and capability refresh separately; an OpenAI-compatible model list alone does not establish these behaviors.
 - Compare the latest provider addition and the closest existing implementation by protocol and authentication. Read their diffs, not just file lists. [Integration map and precedents](references/integration-map.md) identifies the registration chain and contrasting examples; historical omissions are not requirements to repeat.
 - Set model metadata from evidence: exact IDs, family/generation, context and output limits, release/cutoff dates when known, capabilities, extend parameters, search behavior, pricing currency and units. Distinguish API usage prices from subscription entitlements, cached input from ordinary input, and current promotions from list prices. Mark unknowns rather than inventing values; preserve existing supported models.
+- Set `isOfficial: true` only on a card whose provider makes the model and whose `pricing` is that vendor's list price (e.g. `glm-5.2` on `zhipu`, not on `qwen`). Cards that resell another vendor's model or reuse a card without its pricing (such as `chatGPT.ts` deriving from OpenAI cards) must not carry it; `src/aiModels/isOfficial.test.ts` fails on an official card without pricing or a second official card for one model.
 
 ## Implement the Provider
 
