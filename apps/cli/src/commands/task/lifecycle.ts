@@ -9,6 +9,7 @@ import { log } from '../../utils/logger';
 import { followAgentRun } from '../agent/followRun';
 import { pollAgentRunStatus, RUN_POLL_INTERVAL_MS } from '../agent/runStatus';
 import { resolveUrlBuilder, resourcePath } from '../resourceUrl';
+import { registerCommentSubcommands } from './comment';
 
 type LifecycleClient = Awaited<ReturnType<typeof getTrpcClient>>;
 
@@ -39,7 +40,7 @@ export function registerLifecycleCommands(task: Command) {
 
   task
     .command('start <id>')
-    .description('Start a task (pending → running)')
+    .description('Start a task (backlog → running)')
     .option('--no-run', 'Only update status, do not trigger agent execution')
     .option('-p, --prompt <text>', 'Additional context for the agent')
     .option('-f, --follow', 'Follow agent output in real-time (default: run in background)')
@@ -265,14 +266,19 @@ export function registerLifecycleCommands(task: Command) {
 
   // ── comment ──────────────────────────────────────────────
 
-  task
+  // `-m` is shared with `comment edit`: Commander hands flags to the parent first,
+  // and checks an ancestor's required options for its subcommands too, so the
+  // parent owns it as optional and each action checks it by hand.
+  const comment = task
     .command('comment <id>')
-    .description('Add a comment to a task')
-    .requiredOption(
+    .description('Add a comment to a task, or list, edit and delete comments')
+    .option(
       '-m, --message <text>',
       'Comment content (markdown). Mention a member with <mention name="Name" id="user_xxx" /> to notify them (ids from `lh workspace members`); a plain "@Name" is only text',
     )
-    .action(async (id: string, options: { message: string }) => {
+    .action(async (id: string, options: { message?: string }, command: Command) => {
+      if (!options.message)
+        command.error("error: required option '-m, --message <text>' not specified");
       const client = await getTrpcClient();
       const topicId = process.env.LOBEHUB_TOPIC_ID?.trim() || undefined;
       const authorAgentId = process.env.LOBEHUB_AGENT_ID?.trim() || undefined;
@@ -287,12 +293,13 @@ export function registerLifecycleCommands(task: Command) {
 
       await client.task.addComment.mutate({
         authorAgentId,
-        content: options.message,
+        content: options.message!,
         id,
         topicId,
       });
       log.info('Comment added.');
     });
+  registerCommentSubcommands(comment);
 
   // ── pause ──────────────────────────────────────────────
 

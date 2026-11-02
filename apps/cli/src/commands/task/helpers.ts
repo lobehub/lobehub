@@ -1,5 +1,16 @@
 import pc from 'picocolors';
 
+/** Mirrors the server's `TASK_STATUSES`; inlined rather than adding a package dependency. */
+export const TASK_STATUSES = [
+  'backlog',
+  'running',
+  'scheduled',
+  'paused',
+  'completed',
+  'failed',
+  'canceled',
+] as const;
+
 export function statusBadge(status: string): string {
   const pad = (s: string) => s.padEnd(9);
   switch (status) {
@@ -11,6 +22,9 @@ export function statusBadge(status: string): string {
     }
     case 'running': {
       return pc.blue(`● ${pad('running')}`);
+    }
+    case 'scheduled': {
+      return pc.cyan(`◷ ${pad('scheduled')}`);
     }
     case 'paused': {
       return pc.yellow(`◐ ${pad('paused')}`);
