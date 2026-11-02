@@ -199,6 +199,33 @@ describe('acceptance repair handoff', () => {
     expect(notified).toContainEqual([acceptanceId, 'comments']);
   });
 
+  it('still resolves an earlier handoff after a later one replaces the source record', async () => {
+    const deliveryId = await handOff();
+    const source = await serverDB.query.acceptances.findFirst({
+      where: eq(acceptances.id, acceptanceId),
+    });
+    await serverDB
+      .update(acceptances)
+      .set({
+        metadata: {
+          ...source!.metadata,
+          repair: {
+            commentIds: [],
+            feedback: 'A later handoff',
+            id: randomUUID(),
+            requestedAt: new Date().toISOString(),
+            requestedBy: userId,
+            state: 'running',
+          },
+        },
+      })
+      .where(eq(acceptances.id, acceptanceId));
+
+    await new AcceptanceService(serverDB, userId).accept(deliveryId);
+
+    expect((await rootState())?.resolvedAt).not.toBeNull();
+  });
+
   it('resolves the handed-off comments when a merge accepts the delivery', async () => {
     const deliveryId = await handOff();
     await new AcceptanceService(serverDB, userId).acceptFromScmMerge(deliveryId, {

@@ -5,6 +5,7 @@ import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { acceptances } from '@/database/schemas';
+import type { AcceptanceItem } from '@/database/schemas/verify';
 import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
 import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { TaskService } from '@/server/services/task';
@@ -58,30 +59,18 @@ const pendingCompletionOperation = (task: { context?: unknown }) =>
 
 export const resolveRepairComments = async (
   deps: AcceptanceServiceDeps,
-  deliveryId: string,
-  subjectId: string,
+  delivery: Pick<AcceptanceItem, 'id' | 'metadata'>,
 ) => {
   try {
-    const task = await new TaskModel(deps.db, deps.userId, deps.workspaceId).resolve(subjectId);
-    if (!task) return;
-    const link = (
-      task.config as { acceptanceRepair?: { acceptanceId?: unknown; requestId?: unknown } } | null
-    )?.acceptanceRepair;
-    if (typeof link?.acceptanceId !== 'string' || typeof link.requestId !== 'string') return;
-
-    // Task config is user-editable, so it only points at the source. The
-    // handoff record the server wrote on the source is what proves the link.
+    // Written only by the feedback handoff, never by user input such as Task config.
+    const link = delivery.metadata?.repairSource;
+    if (!link) return;
     const source = await deps.db.query.acceptances.findFirst({
       where: eq(acceptances.id, link.acceptanceId),
     });
-    const request = source?.metadata?.repair;
-    if (
-      !source ||
-      request?.id !== link.requestId ||
-      request.taskId !== task.id ||
-      request.deliveryAcceptanceId !== deliveryId
-    )
-      return;
+    if (!source) return;
+    const latest = source.metadata?.repair;
+    const handedOff = link.commentIds ?? (latest?.id === link.requestId ? latest.commentIds : []);
 
     // Same rule as resolving a thread by hand: reviewers close any handed-off
     // thread, everyone else only the threads they opened.
@@ -89,7 +78,7 @@ export const resolveRepairComments = async (
     if (!access) return;
     const comments = new AcceptanceCommentModel(deps.db);
     const rows = new Map((await comments.listByAcceptance(source.id)).map((row) => [row.id, row]));
-    const rootIds = new Set(request.commentIds.map((id) => rows.get(id)?.parentCommentId ?? id));
+    const rootIds = new Set(handedOff.map((id) => rows.get(id)?.parentCommentId ?? id));
     const ids = [...rootIds].filter((id) => {
       const root = rows.get(id);
       return root && (access.can.moderate || root.authorUserId === deps.actorUserId);
@@ -97,9 +86,9 @@ export const resolveRepairComments = async (
 
     const resolved = await comments.resolveRoots(source.id, ids, deps.actorUserId);
     if (resolved.length) notifyAcceptance(source.id, 'comments', deps.actorUserId);
-    log('acceptance → task %s resolved %d handed-off comments', subjectId, resolved.length);
+    log('acceptance %s resolved %d handed-off comments', delivery.id, resolved.length);
   } catch (error) {
-    log('acceptance → task %s comment resolve failed: %O', subjectId, error);
+    log('acceptance %s comment resolve failed: %O', delivery.id, error);
   }
 };
 
