@@ -95,11 +95,46 @@ export interface LinearIssueFilter {
   teamId: string;
 }
 
+/**
+ * A project filters by project alone: a Linear project can belong to several
+ * teams, and its issues may all live in a team other than the chosen one.
+ */
 const toIssueFilter = ({ linearProjectId, stateTypes, teamId }: LinearIssueFilter) => ({
   state: { type: { in: stateTypes } },
-  team: { id: { eq: teamId } },
-  ...(linearProjectId ? { project: { id: { eq: linearProjectId } } } : {}),
+  ...(linearProjectId
+    ? { project: { id: { eq: linearProjectId } } }
+    : { team: { id: { eq: teamId } } }),
 });
+
+/** Ids of every team a project belongs to; none when the project does not exist. */
+export const getLinearProjectTeamIds = async (
+  accessToken: string,
+  projectId: string,
+): Promise<string[]> => {
+  const ids: string[] = [];
+  let after: string | undefined;
+  do {
+    const data = await linearGraphql<{
+      project: { teams: Connection<{ id: string }> } | null;
+    }>(
+      accessToken,
+      `query LobeProjectTeams($projectId: String!, $first: Int!, $after: String) {
+        project(id: $projectId) {
+          teams(first: $first, after: $after) {
+            nodes { id }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+      }`,
+      { after, first: LINEAR_PAGE_SIZE, projectId },
+    );
+    if (!data.project) return ids;
+    const page = data.project.teams;
+    ids.push(...page.nodes.map((team) => team.id));
+    after = page.pageInfo.hasNextPage ? (page.pageInfo.endCursor ?? undefined) : undefined;
+  } while (after);
+  return ids;
+};
 
 /** One page of issues matching a filter, most recently updated first. */
 export const listLinearIssues = async (

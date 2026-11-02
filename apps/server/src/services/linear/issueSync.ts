@@ -9,6 +9,7 @@ import type {
   TaskItem,
 } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
 import {
@@ -20,6 +21,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '../task';
 import {
   getLinearIssuesByIds,
+  getLinearProjectTeamIds,
   LINEAR_PAGE_SIZE,
   type LinearIssue,
   type LinearIssueFilter,
@@ -226,8 +228,8 @@ export class LinearIssueSyncService {
 
   /**
    * Sync every issue matching a filter, then close the tasks of linked issues
-   * in the same team that the filter no longer matches because Linear closed
-   * them.
+   * in the filter's teams (for a project, every team it belongs to) that the
+   * filter no longer matches because Linear closed them.
    *
    * With `startAfter`, reading resumes at that cursor (a continuing run), and
    * the closing pass is left to a run that reads from the start, since this
@@ -288,10 +290,24 @@ export class LinearIssueSyncService {
     if (options.startAfter) return result;
 
     // Linked issues the filter missed: closed since, or moved out of the project.
+    // A link is stored under its issue's own team, which for a project filter
+    // can be any team the project belongs to, not just the filter's team.
     const seen = new Set(issues.map((issue) => issue.id));
-    const unseen = (await this.linkModel.findByContainer('linear', filter.teamId)).filter(
-      (link) => !seen.has(link.externalId),
-    );
+    const teamIds = new Set([filter.teamId, ...issues.map((issue) => issue.team.id)]);
+    if (filter.linearProjectId) {
+      // Let a failed lookup fail the run: skipping the project's other teams
+      // would leave their closed issues' tasks open without any sign of it.
+      for (const id of await getLinearProjectTeamIds(accessToken, filter.linearProjectId)) {
+        teamIds.add(id);
+      }
+    }
+    const unseen = (
+      await pMap([...teamIds], (teamId) => this.linkModel.findByContainer('linear', teamId), {
+        concurrency: 5,
+      })
+    )
+      .flat()
+      .filter((link) => !seen.has(link.externalId));
     if (unseen.length > 0) {
       const open = await this.taskModel.findByIds(unseen.map((link) => link.taskId));
       const openTaskIds = new Set(
