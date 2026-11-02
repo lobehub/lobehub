@@ -9,7 +9,7 @@ vi.mock('@/server/services/oidc', () => ({
 
 const SITE = 'urn:lobehub:site:psite_7f3k9q2mAbCd:https%3A%2F%2Ffieldnotes.app';
 
-const URL_BASE = 'http://localhost:3010/oidc/review/callback';
+const URL_BASE = 'http://localhost:3010/oidc/acceptance/callback';
 
 const call = async (query: string) => {
   const { GET } = await import('./route');
@@ -27,7 +27,7 @@ const runPage = (html: string, query: string) => {
   return postMessage.mock.calls;
 };
 
-describe('GET /oidc/review/callback', () => {
+describe('GET /oidc/acceptance/callback', () => {
   beforeEach(() => {
     findAuthorizationCodeResource.mockReset();
   });
@@ -40,10 +40,11 @@ describe('GET /oidc/review/callback', () => {
 
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(html).toContain('<title>LobeHub Acceptance</title>');
     expect(findAuthorizationCodeResource).toHaveBeenCalledWith('abc123');
     expect(runPage(html, query)).toEqual([
       [
-        { code: 'abc123', state: 'st</script>', type: 'lobehub-review:authorized' },
+        { code: 'abc123', state: 'st</script>', type: 'lobehub-acceptance:authorized' },
         'https://fieldnotes.app',
       ],
     ]);
@@ -75,7 +76,7 @@ describe('GET /oidc/review/callback', () => {
     const deny = async (query: string) => runPage(await (await call(query)).text(), query);
 
     expect(await deny('error=access_denied&state=s1')).toEqual([
-      [{ error: 'access_denied', state: 's1', type: 'lobehub-review:denied' }, '*'],
+      [{ error: 'access_denied', state: 's1', type: 'lobehub-acceptance:denied' }, '*'],
     ]);
     expect((await deny('error=invalid_target&state=s2'))[0][0]).toMatchObject({
       error: 'invalid_target',
