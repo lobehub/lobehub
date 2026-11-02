@@ -1,6 +1,6 @@
 import type { OpenAIChatMessage } from '@lobechat/types';
 
-export const BOT_REPLY_OPENER_PROMPT_VERSION = 'v1';
+export const BOT_REPLY_OPENER_PROMPT_VERSION = 'v2';
 
 export const BOT_REPLY_PLACEMENTS = ['channel', 'thread'] as const;
 export type BotReplyPlacement = (typeof BOT_REPLY_PLACEMENTS)[number];
@@ -44,7 +44,7 @@ export interface BotReplyOpenerInput {
   agent?: { name?: string; title?: string };
   /** Names people call the assistant by in this chat. */
   botNames?: string[];
-  /** Whether the reply can move into a new thread; false in a DM or an existing thread. */
+  /** Whether the reply can move into a new thread; false in a DM, an existing thread or a threadless platform. */
   canOpenThread: boolean;
   message: string;
   /** Short transcript of the messages just before this one, oldest first. */
@@ -66,7 +66,7 @@ const buildState = (input: BotReplyOpenerInput): string => {
   sections.push(
     input.canOpenThread
       ? 'You are in the main channel and may move the conversation into a new thread.'
-      : 'A thread is not available here: you are already in a thread or a direct message.',
+      : 'A thread is not available here: you answer where the message was sent.',
   );
   if (input.recentMessages?.length) {
     sections.push(`Earlier messages (oldest first):\n${input.recentMessages.join('\n')}`);

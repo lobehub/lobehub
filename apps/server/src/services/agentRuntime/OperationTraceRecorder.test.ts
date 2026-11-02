@@ -95,6 +95,48 @@ describe('OperationTraceRecorder partial accumulation', () => {
     expect(store.savePartial.mock.calls.at(-1)?.[1].steps).toHaveLength(3);
   });
 
+  it.each(['waiting_for_human', 'waiting_for_async_tool'] as const)(
+    'keeps readable snapshots and the full trajectory across repeated %s resumes',
+    async (completionReason) => {
+      let partial: Partial<ExecutionSnapshot> | null = null;
+      const snapshots: ExecutionSnapshot[] = [];
+      store.loadPartial.mockImplementation(async () => structuredClone(partial));
+      store.savePartial.mockImplementation(async (_id, value) => {
+        partial = structuredClone(value);
+      });
+      store.removePartial.mockImplementation(async () => {
+        partial = null;
+      });
+      store.save.mockImplementation(async (value) => {
+        snapshots.push(structuredClone(value));
+      });
+
+      await recorder.appendStep(OPERATION_ID, stepParams(0));
+      await recorder.finalize(OPERATION_ID, { completionReason, state: {} });
+      expect(snapshots.at(-1)).toMatchObject({
+        completionReason,
+        steps: [{ stepIndex: 0 }],
+      });
+
+      const resumedRecorder = new OperationTraceRecorder(store);
+      await resumedRecorder.appendStep(OPERATION_ID, stepParams(1));
+      await resumedRecorder.finalize(OPERATION_ID, { completionReason, state: {} });
+
+      const finalRecorder = new OperationTraceRecorder(store);
+      await finalRecorder.appendStep(OPERATION_ID, stepParams(2));
+      await finalRecorder.finalize(OPERATION_ID, { completionReason: 'done', state: {} });
+
+      expect(snapshots.map((value) => value.steps.map((step) => step.stepIndex))).toEqual([
+        [0],
+        [0, 1],
+        [0, 1, 2],
+      ]);
+      expect(snapshots.at(-1)?.totalSteps).toBe(3);
+      expect(partial).toBeNull();
+      expect(store.removePartial).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('finalizes from memory and deletes the partial after the final snapshot', async () => {
     await recorder.appendStep(OPERATION_ID, stepParams(0));
     await recorder.finalize(OPERATION_ID, { completionReason: 'done', state: {} });

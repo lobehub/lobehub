@@ -1,5 +1,16 @@
-import { createStaticStyles, Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { Button, Select, type SelectProps, Switch, Tag, Text, toast } from '@lobehub/ui';
+import {
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Select,
+  type SelectProps,
+  Switch,
+  Tag,
+  Text,
+  toast,
+  Tooltip,
+  TooltipGroup,
+} from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

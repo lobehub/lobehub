@@ -98,6 +98,73 @@ describe('executeWidgetRun', () => {
 
     expect((run.mock.calls[0] as any[])[0].network).toEqual({ allow: ['api.github.com'] });
   });
+
+  it('passes params to the script as env without redacting them from the logs', async () => {
+    const run = vi.fn(async () => ({
+      durationMs: 10,
+      exitCode: 0,
+      stderr: 'city=Hangzhou days=3',
+      stdout: '{"type":"stat","value":1}',
+      timedOut: false,
+    }));
+    const withParams = {
+      ...params,
+      version: {
+        ...params.version,
+        manifest: {
+          ...params.version.manifest,
+          params: [
+            { name: 'CITY', type: 'string', value: 'Hangzhou' },
+            { default: 3, name: 'DAYS', type: 'number' },
+            { name: 'UNSET', type: 'string' },
+          ],
+        },
+      },
+    };
+
+    await executeWidgetRun({} as any, withParams, {
+      resolveEnv: vi.fn(async () => ({ env: { GITHUB_TOKEN: 'tok' }, inject: [] })),
+      runner: { run },
+    });
+
+    expect((run.mock.calls[0] as any[])[0].env).toEqual({
+      CITY: 'Hangzhou',
+      DAYS: '3',
+      GITHUB_TOKEN: 'tok',
+    });
+    expect(vi.mocked(WidgetModel.finishRun)).toHaveBeenLastCalledWith(
+      {},
+      'run-1',
+      expect.objectContaining({ stderr: 'city=Hangzhou days=3' }),
+      expect.any(Function),
+    );
+  });
+
+  it('fails a run whose required param has no value, before resolving env or the sandbox', async () => {
+    const resolveEnv = vi.fn();
+    const run = vi.fn();
+    const missing = {
+      ...params,
+      version: {
+        ...params.version,
+        manifest: { params: [{ label: 'City', name: 'CITY', required: true, type: 'string' }] },
+      },
+    };
+
+    await executeWidgetRun({} as any, missing, { resolveEnv, runner: { run } });
+
+    expect(resolveEnv).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+    expect(vi.mocked(WidgetModel.finishRun)).toHaveBeenLastCalledWith(
+      {},
+      'run-1',
+      expect.objectContaining({
+        error: { code: 'MISSING_PARAM', message: 'Set City before running this widget' },
+        status: 'failed',
+      }),
+      expect.any(Function),
+    );
+  });
 });
 
 describe('executeWidgetRun when the sandbox is busy', () => {

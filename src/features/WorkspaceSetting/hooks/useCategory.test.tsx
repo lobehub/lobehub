@@ -85,6 +85,7 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsTabs.Hotkey,
       WorkspaceSettingsTabs.ChatPreference,
       WorkspaceSettingsTabs.Messenger,
+      WorkspaceSettingsTabs.Integrations,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Profile,
@@ -111,7 +112,9 @@ describe('workspace settings useCategory', () => {
     ]);
   });
 
-  it('groups devices, subscription accounts and environments under Resources', () => {
+  // The drives need no opt-in: every member sees the tab, which shows the
+  // public drive, their own, and the way to a plan when the workspace has none.
+  it('groups devices, subscription accounts, environments and drives under Resources', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const keys = result.current.map((group) => group.key);
     const resourceGroup = result.current.find(
@@ -128,6 +131,7 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsTabs.Devices,
       WorkspaceSettingsTabs.SubscriptionAccounts,
       WorkspaceSettingsTabs.Environments,
+      WorkspaceSettingsTabs.Drive,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Devices,
@@ -255,15 +259,7 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
   });
 
-  it('hides Integrations until the Labs flag is on, then lists it with the account tabs', () => {
-    expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.Integrations);
-
-    useUserStore.setState({
-      preference: {
-        ...initialUserStoreState.preference,
-        lab: { ...initialUserStoreState.preference.lab, enableIntegrations: true },
-      },
-    });
+  it('lists Integrations with the account tabs without any Labs flag', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const accountGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Account,

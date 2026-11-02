@@ -1,4 +1,5 @@
-import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type { AgentStreamEvent, OperationSubscription } from '@lobechat/agent-gateway-client';
+import { GatewayMuxClient } from '@lobechat/agent-gateway-client';
 import urlJoin from 'url-join';
 
 import { log } from './logger';
@@ -25,6 +26,13 @@ export interface AgentStreamTransportOptions {
   gatewayUrl: string;
   /** Called for every (re)connect so a long run picks up refreshed credentials. */
   getAuth: () => Promise<AgentStreamAuth>;
+  /**
+   * Mints a user JWT for the multiplexed `/v2/ws` socket, called before every
+   * dial. Pass it only when the server advertises protocol 2 for this Gateway;
+   * without it the run is followed over the per-operation `/ws` socket, which
+   * is all a self-hosted Gateway serves.
+   */
+  getGatewayUserToken?: () => Promise<string>;
   maxRetries?: number;
   /**
    * Stream events the Gateway delivers for another operation on this socket — a
@@ -90,6 +98,12 @@ const HISTORY_REQUEST_TIMEOUT_MS = 10_000;
 const WAKE_COALESCE_WINDOW_MS = 500;
 /** Gateway frame ids remembered so a resume replay cannot re-render a member event. */
 const MIRRORED_ID_MEMORY = 200;
+/**
+ * Dials of `/v2/ws` that never reach `ready` before the run moves to `/ws`. A
+ * deployment advertising protocol 2 in front of a Gateway without it (404) or a
+ * hub that keeps refusing the token gets the same bounded probe the web uses.
+ */
+const MUX_MAX_DIAL_FAILURES = 3;
 const FATAL_TRPC_CODES = new Set(['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND']);
 const REDIS_ID = /^\d+-\d+$/;
 
@@ -214,12 +228,40 @@ class AgentEventJournal {
   }
 }
 
+/** Wake-up source for the journal: either Gateway protocol, same contract. */
+interface WakeChannel {
+  close: () => void;
+  connect: () => void;
+  /** Real progress proves the run is reachable, so the reconnect budget starts over. */
+  resetRetries: () => void;
+}
+
+type WakeChannelOptions = AgentStreamTransportOptions & { maxRetries: number };
+
 /**
- * Gateway WebSocket used purely as a wake-up signal: every notification asks
- * the journal to catch up. Owns auth, heartbeat and bounded reconnects.
+ * Whether a frame is a group member's event mirrored onto this operation's
+ * channel. A member's events ride the supervisor's channel, but their journal
+ * entries stay under the member's own operation id — so no read of the
+ * supervisor's history can replay them: this wire is their only source, hence
+ * they are handed to the consumer instead of only waking the journal.
+ *
+ * Delivered non-terminal by contract: the server renames a mirrored member
+ * terminal to `member_runtime_end` precisely so the supervisor keeps running.
  */
-class GatewayWakeChannel {
-  private gatewayCursor = '';
+const isMirroredEvent = (
+  operationId: string,
+  event?: AgentStreamEvent,
+): event is AgentStreamEvent =>
+  // Legacy gateways omit `operationId`; those events are this op's, and the
+  // journal already covers them.
+  !!event?.operationId && event.operationId !== operationId;
+
+/**
+ * Per-operation Gateway WebSocket (`/ws`, protocol 1) used purely as a wake-up
+ * signal: every notification asks the journal to catch up. Owns auth,
+ * heartbeat and bounded reconnects.
+ */
+class GatewayWakeChannel implements WakeChannel {
   private heartbeat?: ReturnType<typeof setInterval>;
   private heartbeatPending = false;
   private connectTimer?: ReturnType<typeof setTimeout>;
@@ -230,13 +272,18 @@ class GatewayWakeChannel {
   private ws?: WebSocket;
 
   constructor(
-    private readonly options: AgentStreamTransportOptions & { maxRetries: number },
+    private readonly options: WakeChannelOptions,
     /** `immediate` skips the coalescing window (terminal / reconnect wakes). */
     private readonly onWake: (immediate?: boolean) => void,
     private readonly onFatal: (error: Error) => void,
+    /**
+     * Gateway event id to resume after. Both protocols number an operation's
+     * events from the same sequence, so a run handed over from `/v2/ws` resumes
+     * where it left off instead of replaying mirrored member frames.
+     */
+    private gatewayCursor = '',
   ) {}
 
-  /** Real progress proves the run is reachable, so the reconnect budget starts over. */
   resetRetries() {
     this.retries = 0;
   }
@@ -320,6 +367,7 @@ class GatewayWakeChannel {
         return;
       }
       case 'auth_success': {
+        log.debug('Agent gateway: following the run over /ws');
         clearTimeout(this.connectTimer);
         socket.send(JSON.stringify({ lastEventId: this.gatewayCursor, type: 'resume' }));
         this.startHeartbeat(socket);
@@ -346,22 +394,11 @@ class GatewayWakeChannel {
     }
   }
 
-  /**
-   * A group member's events are delivered on the supervisor's socket, but their
-   * journal entries stay under the member's own operation id — so no read of the
-   * supervisor's history can replay them. This wire is their only source, hence
-   * they are handed to the consumer instead of only waking the journal.
-   *
-   * Delivered non-terminal by contract: the server renames a mirrored member
-   * terminal to `member_runtime_end` precisely so the supervisor keeps running.
-   */
+  /** See {@link isMirroredEvent}. */
   private deliverMirrored(message: { event?: AgentStreamEvent; id?: string }) {
     const mirrored = message.event;
     const deliver = this.options.onMirroredEvent;
-    if (!deliver || !mirrored?.operationId) return;
-    // Legacy gateways omit `operationId`; those events are this op's, and the
-    // journal already covers them.
-    if (mirrored.operationId === this.options.operationId) return;
+    if (!deliver || !isMirroredEvent(this.options.operationId, mirrored)) return;
     // A reconnect resumes from `gatewayCursor`, so the same mirrored frame can
     // legitimately arrive twice.
     if (message.id) {
@@ -418,6 +455,143 @@ class GatewayWakeChannel {
     ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
     if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
     this.ws = undefined;
+  }
+}
+
+/** A tRPC refusal that no retry can turn into a token (restricted key, old server). */
+const isPermanentMintFailure = (error: unknown) =>
+  FATAL_TRPC_CODES.has((error as { data?: { code?: string } })?.data?.code ?? '');
+
+/**
+ * The run's subscription on the per-user multiplexed socket (`/v2/ws`,
+ * protocol 2), again used purely as a wake-up signal.
+ *
+ * Owns the CLI's retry budget on top of the mux's own backoff: the mux retries
+ * a lost socket forever once it has worked, but a run whose Gateway stays away
+ * must reach the caller as `AgentGatewayUnavailableError` so it can poll.
+ *
+ * When protocol 2 turns out to be unusable here — the dials never reach
+ * `ready`, the hub keeps refusing the token, or the token cannot be minted at
+ * all — the run moves to `/ws`, which authenticates on its own and resumes
+ * from the same event id.
+ */
+class MuxWakeChannel implements WakeChannel {
+  private fallback?: WakeChannel;
+  private mux?: GatewayMuxClient;
+  private offs: Array<() => void> = [];
+  private retries = 0;
+  private stopped = false;
+  private subscription?: OperationSubscription;
+
+  constructor(
+    private readonly options: WakeChannelOptions,
+    private readonly getToken: () => Promise<string>,
+    private readonly onWake: (immediate?: boolean) => void,
+    private readonly onFatal: (error: Error) => void,
+    private readonly createFallback: (gatewayCursor: string) => WakeChannel,
+  ) {}
+
+  resetRetries() {
+    this.retries = 0;
+    this.fallback?.resetRetries();
+  }
+
+  connect() {
+    if (this.stopped) return;
+    const mux = new GatewayMuxClient({
+      // Same per-attempt bound as `/ws`: a token mint that hangs or a socket
+      // that never gets `ready` is a failed dial, retried and counted toward
+      // the fallback — mirrored member events only ever arrive on this wire.
+      connectTimeoutMs: CONNECT_TIMEOUT_MS,
+      gatewayUrl: this.options.gatewayUrl,
+      getToken: this.mintToken,
+      maxDialFailures: MUX_MAX_DIAL_FAILURES,
+    });
+    this.mux = mux;
+    this.offs.push(mux.on('unavailable', (reason) => this.fallBack(reason)));
+
+    // Not an executor: the CLI runs no client-side tools for this operation.
+    const subscription = mux.subscribe(this.options.operationId);
+    this.subscription = subscription;
+    this.offs.push(
+      // Sent on every (re)subscribe; the hub replays newer events right after.
+      subscription.on('connected', () => {
+        log.debug('Agent gateway: following the run over /v2/ws');
+        this.onWake(true);
+      }),
+      subscription.on('agent_event', (event) => {
+        if (this.options.onMirroredEvent && isMirroredEvent(this.options.operationId, event))
+          this.options.onMirroredEvent(event);
+        this.onWake();
+      }),
+      // Not a success signal: only a terminal event in the journal ends the run.
+      subscription.on('session_complete', () => this.onWake(true)),
+      subscription.on('reconnecting', (delay) => this.reconnecting(delay)),
+      // The hub refused this operation to this user: retrying cannot help, but
+      // the journal and the status endpoint may still answer.
+      subscription.on('auth_failed', (reason) =>
+        this.onFatal(new AgentGatewayUnavailableError(`Gateway auth failed: ${reason}`)),
+      ),
+    );
+  }
+
+  close() {
+    this.stopped = true;
+    this.closeMux();
+    this.fallback?.close();
+  }
+
+  private mintToken = async () => {
+    try {
+      return await this.getToken();
+    } catch (error) {
+      // No retry turns this into a token; `/ws` authenticates with the CLI's
+      // own credential instead. Deferred: the mux is still inside its dial.
+      if (isPermanentMintFailure(error))
+        queueMicrotask(() => this.fallBack(`gateway token refused: ${toError(error).message}`));
+      throw error;
+    }
+  };
+
+  private reconnecting(delay: number) {
+    if (this.stopped) return;
+    // Recover the terminal from the server even when the Gateway is down.
+    this.onWake(true);
+    if (++this.retries > this.options.maxRetries) {
+      // Deferred: the mux announces `reconnecting` before it arms the timer,
+      // so shutting it down from inside the notification would leave that
+      // timer live and hold the process open after the caller moved to polling.
+      queueMicrotask(() =>
+        this.onFatal(
+          new AgentGatewayUnavailableError(
+            'Reconnect attempts exhausted; complete history not confirmed: agent gateway (/v2/ws) unreachable',
+          ),
+        ),
+      );
+      return;
+    }
+    log.debug(
+      `Agent gateway (/v2/ws) reconnect ${this.retries}/${this.options.maxRetries} in ${delay}ms`,
+    );
+  }
+
+  private fallBack(reason: string) {
+    if (this.stopped || this.fallback) return;
+    log.debug(`Agent gateway protocol v2 unavailable (${reason}); following the run over /ws`);
+    const gatewayCursor = this.subscription?.lastEventId ?? '';
+    this.closeMux();
+    this.retries = 0;
+    this.fallback = this.createFallback(gatewayCursor);
+    this.fallback.connect();
+  }
+
+  private closeMux() {
+    for (const off of this.offs) off();
+    this.offs = [];
+    this.subscription?.unsubscribe();
+    this.subscription = undefined;
+    this.mux?.disconnect();
+    this.mux = undefined;
   }
 }
 
@@ -537,11 +711,22 @@ export const consumeAgentStream = (
       wake();
     }, WAKE_COALESCE_WINDOW_MS);
   };
-  const gateway = new GatewayWakeChannel(
-    { ...resolved, onMirroredEvent: resolved.onMirroredEvent ? deliverMirrored : undefined },
-    wake,
-    (error) => fail(error),
-  );
+  const channelOptions: WakeChannelOptions = {
+    ...resolved,
+    onMirroredEvent: resolved.onMirroredEvent ? deliverMirrored : undefined,
+  };
+  const onFatal = (error: Error) => fail(error);
+  const createV1Channel = (gatewayCursor?: string) =>
+    new GatewayWakeChannel(channelOptions, wake, onFatal, gatewayCursor);
+  const gateway: WakeChannel = resolved.getGatewayUserToken
+    ? new MuxWakeChannel(
+        channelOptions,
+        resolved.getGatewayUserToken,
+        wake,
+        onFatal,
+        createV1Channel,
+      )
+    : createV1Channel();
   const poll = setInterval(() => void runCatchUp(), HISTORY_POLL_INTERVAL_MS);
 
   const close = () => {

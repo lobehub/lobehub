@@ -6,6 +6,7 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Badge,
+  createStaticStyles,
   Input,
   Select,
   Table,
