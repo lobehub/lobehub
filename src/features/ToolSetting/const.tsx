@@ -20,6 +20,7 @@ const CHANNEL_DISPLAY_NAME: Record<string, string> = {
   jina: 'Jina',
   kagi: 'Kagi',
   naive: 'Naive',
+  outcrawl: 'Outcrawl',
   search1api: 'Search1API',
   searxng: 'SearXNG',
   tavily: 'Tavily',

@@ -59,9 +59,9 @@ View details of a single result: a URL crawls the page (web result); `type:id` (
 lh search view <target> [-i <impls>] [--json [fields]]
 ```
 
-| Option               | Description                                                                                                          |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `-i, --impl <impls>` | Crawler implementations for web URLs (comma-separated: browserless, exa, firecrawl, jina, naive, search1api, tavily) |
+| Option               | Description                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `-i, --impl <impls>` | Crawler implementations for web URLs (comma-separated: browserless, exa, firecrawl, jina, naive, outcrawl, search1api, tavily) |
 
 **Local view support**: only `agent`, `file`, and `knowledgeBase` types are implemented; other
 `type:id` values error with "View not supported for type".
