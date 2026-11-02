@@ -28,12 +28,35 @@ export const getAppSignInFilePath = (appStoragePath: string): string =>
 /** The file a run asked for, so a refresh or sign-out knows what to touch. */
 let publishedPath: string | undefined;
 
+/**
+ * File work runs one task at a time, in call order. Concurrent local sessions
+ * publish together, and a sign-out can overlap a token refresh: without this,
+ * a refresh that started earlier could rename its replacement into place after
+ * the sign-out removed the file, leaving a usable credential behind a logout.
+ */
+let pendingWrite: Promise<unknown> = Promise.resolve();
+
+const serially = <T>(task: () => Promise<T>): Promise<T> => {
+  const run = pendingWrite.then(task, task);
+  pendingWrite = run.then(
+    () => {},
+    () => {},
+  );
+  return run;
+};
+
+/** Distinguishes the temporary files of concurrent writes in this process. */
+let tempFileCounter = 0;
+
 const writeAtomically = async (filePath: string, token: string) => {
   const dir = path.dirname(filePath);
   await mkdir(dir, { mode: 0o700, recursive: true });
   // `mkdir` applies the mode only to a directory it creates.
   await chmod(dir, 0o700);
-  const tmpPath = `${filePath}.${process.pid}.tmp`;
+  // A pid alone is not unique: two sessions can publish in the same process,
+  // and one writer would then rename or remove the other's temporary file.
+  tempFileCounter += 1;
+  const tmpPath = `${filePath}.${process.pid}.${tempFileCounter}.tmp`;
   try {
     await writeFile(tmpPath, token, { encoding: 'utf8', mode: 0o600 });
     await rename(tmpPath, filePath);
@@ -45,17 +68,18 @@ const writeAtomically = async (filePath: string, token: string) => {
 
 /** Write the token for runs to read, and remember the file for later refreshes. */
 export const publishAppSignIn = async (filePath: string, token: string): Promise<void> => {
-  await writeAtomically(filePath, token);
-  if (publishedPath === filePath) return;
+  if (publishedPath !== filePath) {
+    publishedPath = filePath;
+    process.once('exit', () => {
+      try {
+        rmSync(filePath, { force: true });
+      } catch {
+        // best-effort
+      }
+    });
+  }
 
-  publishedPath = filePath;
-  process.once('exit', () => {
-    try {
-      rmSync(filePath, { force: true });
-    } catch {
-      // best-effort
-    }
-  });
+  await serially(() => writeAtomically(filePath, token));
 };
 
 /**
@@ -64,7 +88,10 @@ export const publishAppSignIn = async (filePath: string, token: string): Promise
  */
 export const refreshAppSignIn = async (token: string): Promise<void> => {
   if (!publishedPath) return;
-  await writeAtomically(publishedPath, token).catch(() => {});
+  // Captured here, so a concurrent first run pointing at another file cannot
+  // redirect a renewal that was already on its way.
+  const filePath = publishedPath;
+  await serially(() => writeAtomically(filePath, token)).catch(() => {});
 };
 
 /**
@@ -73,7 +100,10 @@ export const refreshAppSignIn = async (token: string): Promise<void> => {
  */
 export const withdrawAppSignIn = async (): Promise<void> => {
   if (!publishedPath) return;
-  await rm(publishedPath, { force: true }).catch(() => {});
+  const filePath = publishedPath;
+  // Queued behind any renewal that was requested first, so a refresh requested
+  // before the sign-out cannot land after it.
+  await serially(() => rm(filePath, { force: true })).catch(() => {});
 };
 
 /**

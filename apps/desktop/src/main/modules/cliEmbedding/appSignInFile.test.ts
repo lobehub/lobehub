@@ -70,4 +70,25 @@ describe('app sign-in file', () => {
 
     await expect(stat(path.join(appStoragePath, 'cli-auth', 'jwt'))).rejects.toThrow();
   });
+
+  /** Local sessions can start together; one writer must not eat the others' temp file. */
+  it('lets concurrent first runs publish without losing the sign-in', async () => {
+    const envs = await Promise.all(
+      [1, 2, 3].map((i) => prepareAppSignInEnv({ appStoragePath, auth: signedIn(`token-${i}`) })),
+    );
+
+    expect(envs.every(Boolean)).toBe(true);
+    const filePath = path.join(appStoragePath, 'cli-auth', 'jwt');
+    expect(['token-1', 'token-2', 'token-3']).toContain(await readFile(filePath, 'utf8'));
+  });
+
+  /** Sign-out must win over a renewal that was already on its way. */
+  it('does not leave the credential behind when sign-out overlaps a refresh', async () => {
+    await prepareAppSignInEnv({ appStoragePath, auth: signedIn('first') });
+    const filePath = path.join(appStoragePath, 'cli-auth', 'jwt');
+
+    await Promise.all([refreshAppSignIn('renewed'), withdrawAppSignIn()]);
+
+    await expect(stat(filePath)).rejects.toThrow();
+  });
 });
