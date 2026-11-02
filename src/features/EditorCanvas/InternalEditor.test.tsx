@@ -8,8 +8,8 @@ import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { memo, useEffect, useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type InternalEditorProps } from './InternalEditor';
 import InternalEditor from './InternalEditor';
+import { type InternalEditorProps } from './InternalEditor';
 import { registerBlockDecoratorCaretGuard } from './registerBlockDecoratorCaretGuard';
 
 vi.mock('./registerBlockDecoratorCaretGuard', () => ({

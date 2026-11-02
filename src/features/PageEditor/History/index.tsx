@@ -1,7 +1,16 @@
 'use client';
 
-import { createStaticStyles, cssVar, Empty, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, type ModalInstance, Text, toast } from '@lobehub/ui';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  type ModalInstance,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ArrowLeftIcon, Clock3Icon } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';

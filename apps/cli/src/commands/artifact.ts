@@ -37,6 +37,7 @@ interface DeploymentRecord {
   slug?: string;
   status?: string;
   subdomainLabel?: string | null;
+  title?: string | null;
 }
 
 /**
@@ -51,6 +52,9 @@ interface MarketDeploymentClient {
     deployments: {
       commitWorkspaceHtmlUpload: {
         mutate: (input: { uploadId: string }) => Promise<{ data: DeploymentRecord }>;
+      };
+      unpublish: {
+        mutate: (input: { id: string }) => Promise<{ data: DeploymentRecord }>;
       };
       prepareWorkspaceHtmlUpload: {
         mutate: (input: {
@@ -347,6 +351,59 @@ export function registerArtifactCommand(program: Command) {
         if (payload.publicUrl) console.log(`  URL: ${pc.dim(payload.publicUrl)}`);
         if (shareUrl) console.log(`  Share: ${pc.dim(shareUrl)}`);
         console.log(`  Deployment: ${pc.dim(result.data.id ?? '')}`);
+      },
+    );
+
+  artifact
+    .command('unpublish [file]')
+    .description('Take a published artifact offline, keeping the deployment and its releases')
+    .option('--deployment <id>', 'Unpublish this deployment instead of the one bound to the file')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(
+      async (
+        file: string | undefined,
+        options: { deployment?: string; json?: string | boolean },
+      ) => {
+        let deploymentId = options.deployment;
+
+        if (!deploymentId) {
+          if (!file) {
+            fail('Pass the published file, or --deployment <id>.');
+            return;
+          }
+
+          const manifest = resolveManifest(path.resolve(file), process.cwd());
+          deploymentId = readBinding(manifest).deploymentId;
+          if (!deploymentId) {
+            fail(
+              `${file} is not bound to a deployment. Pass --deployment <id> to unpublish one.`,
+            );
+            return;
+          }
+        }
+
+        const deployments = deploymentClient(await getTrpcClient()).market.deployments;
+        let data: DeploymentRecord;
+        try {
+          ({ data } = await deployments.unpublish.mutate({ id: deploymentId }));
+        } catch (error) {
+          if (options.json !== undefined)
+            outputJson({ error: formatError(error), success: false });
+          fail(formatError(error));
+          return;
+        }
+
+        if (options.json !== undefined) {
+          outputJson(data, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+
+        console.log(
+          `${pc.green('✓')} Unpublished ${pc.bold(data.title ?? deploymentId)} (${deploymentId})`,
+        );
+        // The record survives so republishing the same file brings the same
+        // address back, which is also why this is not a delete.
+        if (file) console.log(`  Republish: ${pc.dim(`lh artifact publish ${file}`)}`);
       },
     );
 }

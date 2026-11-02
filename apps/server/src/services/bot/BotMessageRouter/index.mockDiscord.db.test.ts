@@ -368,7 +368,7 @@ run('mock Discord gateway + REST drive the real router, bridge and bot-wake pipe
     editsOrDeletes: calls.filter(
       (call) => /^\/channels\/[^/]+\/messages\/[^/]+$/.test(call.path) && call.method !== 'GET',
     ),
-    messages: calls.filter((call) => call.method === 'POST' && /\/messages$/.test(call.path)),
+    messages: calls.filter((call) => call.method === 'POST' && call.path.endsWith('/messages')),
     reactions: calls.filter((call) => /\/reactions\//.test(call.path)),
     typing: calls.filter((call) => call.path.endsWith('/typing')),
   });

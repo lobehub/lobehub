@@ -208,9 +208,24 @@ describe('ProjectModel', () => {
   });
 
   it('tells whether replacing a main agent retires it', async () => {
-    const project = await createProject(model, { name: 'Disposition' });
+    // Earlier projects were led by a virtual coordinator created for them.
+    const legacy = await new AgentModel(serverDB, userId).create({
+      title: 'Disposition Coordinator',
+      virtual: true,
+    });
+    const project = await createProject(model, {
+      coordinatorAgentId: legacy.id,
+      name: 'Disposition',
+    });
     const inbox = (await new AgentModel(serverDB, userId).getBuiltinAgent(INBOX_SESSION_ID))!;
     const user = await new AgentModel(serverDB, userId).create({ title: 'Planner' });
+    // The agent a project creates now is the user's to keep.
+    const created = await createProject(model, { name: 'Created' });
+    expect(
+      await model.isDedicatedCoordinator(created.coordinatorAgentId, {
+        exceptProjectId: created.id,
+      }),
+    ).toBe(false);
 
     // The project's own lead is ignored only when asked about handing it over.
     expect(
@@ -286,8 +301,8 @@ describe('ProjectModel', () => {
     expect(project.coordinatorAgentId).toBeTruthy();
     expect(
       await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
-    ).toEqual([expect.objectContaining({ virtual: true })]);
-    expect(await new AgentModel(serverDB, userId).queryAgents()).not.toContainEqual(
+    ).toEqual([expect.objectContaining({ title: 'Apollo Project Agent', virtual: false })]);
+    expect(await new AgentModel(serverDB, userId).queryAgents()).toContainEqual(
       expect.objectContaining({ id: project.coordinatorAgentId }),
     );
     expect(await model.listAgents(project.id)).toEqual([
@@ -302,9 +317,10 @@ describe('ProjectModel', () => {
     expect(updated?.name).toBe('Apollo 2');
     expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
     expect(await model.findById(project.id)).toBeNull();
+    // The main agent is an ordinary agent and stays with the user.
     expect(
       await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
 
   it('resolves a project by slug without escaping the current scope', async () => {
@@ -505,7 +521,7 @@ describe('ProjectModel', () => {
     expect(await owner.findById(project.id)).toBeNull();
     expect(
       await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
 
   it('lists the main agent first whatever order the other members carry', async () => {

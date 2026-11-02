@@ -567,7 +567,7 @@ account has been checked; do not debug it as product behaviour.
 `since 2026-09-18` · `holds-while: pnpm-workspace.yaml sets lockfile: false, and Turbopack resolves next/package.json from the workspace root it detects`
 
 **Trap:** a new worktree has no `node_modules`, and a farm of symlinks into a
-working checkout is quick and makes `vitest` and `tsgo` pass — so the tree looks
+working checkout is quick and makes `vitest` and `tsrs` pass — so the tree looks
 ready. The dev server then dies on `Could not find the Next.js package
 (next/package.json)`, every route 500s, and the visible errors point elsewhere
 (`Failed to resolve import "anser"` from a package-level dependency the farm

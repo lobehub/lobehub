@@ -38,7 +38,7 @@ export const MAX_TASKS_CREATED_PER_SYNC = 100;
 /** Tries at creating one task when concurrent creates keep taking its identifier. */
 const MAX_CREATE_ATTEMPTS = 5;
 /** Skipped entries kept in a result, so a stored rule result stays small. */
-const MAX_SKIPPED_ENTRIES = 100;
+export const MAX_SKIPPED_ENTRIES = 100;
 
 const CLOSED_STATE_TYPES = new Set<LinearIssueStateType>(['completed', 'canceled']);
 const CLOSED_TASK_STATUSES = new Set(['completed', 'canceled']);
@@ -58,9 +58,22 @@ interface SyncOptions {
   closeOnly?: boolean;
   /** Import an issue that is already completed or canceled (as a closed task). */
   createClosed?: boolean;
+  /** Collects issues left uncreated because the run reached its task cap. */
+  deferred?: Set<string>;
+  /** Update and close linked tasks, but create none (a run past its task cap). */
+  noCreate?: boolean;
   /** LobeHub project new tasks land in. */
   targetProjectId?: string | null;
 }
+
+/** A filtered sync's outcome, plus where a run that stopped at its cap resumes. */
+export type LinearFilterSyncResult = LinearSyncResult & {
+  /**
+   * The Linear cursor to read from next, when `truncated`: the start of the
+   * first page holding an issue this run left for later. Absent: from the start.
+   */
+  resumeAfter?: string;
+};
 
 export const linearIssueToTaskFields = (issue: LinearIssue): SyncedFields => {
   const source = `> Linear: [${issue.identifier}](${issue.url})`;
@@ -215,41 +228,64 @@ export class LinearIssueSyncService {
    * Sync every issue matching a filter, then close the tasks of linked issues
    * in the same team that the filter no longer matches because Linear closed
    * them.
+   *
+   * With `startAfter`, reading resumes at that cursor (a continuing run), and
+   * the closing pass is left to a run that reads from the start, since this
+   * one does not see the issues before the cursor. With `noCreate`, every
+   * matching issue is read and linked tasks are reconciled, but no task is
+   * created; an unimported issue only marks the result `truncated`.
    */
   async syncByFilter(
     accessToken: string,
     filter: LinearIssueFilter,
-    options: { targetProjectId?: string | null } = {},
-  ): Promise<LinearSyncResult> {
-    const result = emptyResult();
+    options: { noCreate?: boolean; startAfter?: string; targetProjectId?: string | null } = {},
+  ): Promise<LinearFilterSyncResult> {
+    const result: LinearFilterSyncResult = emptyResult();
     const issues: LinearIssue[] = [];
+    const pages: { ids: string[]; startCursor?: string }[] = [];
     // Read until this run has as many not-yet-imported issues as it may create.
     // Already linked issues do not count, so the next run reaches further.
     let unlinked = 0;
-    let after: string | undefined;
+    let after = options.startAfter;
     do {
+      const startCursor = after;
       const page = await listLinearIssues(accessToken, filter, {
         after,
         first: Math.min(LINEAR_PAGE_SIZE, MAX_ISSUES_PER_SYNC - issues.length),
       });
       issues.push(...page.issues);
+      pages.push({ ids: page.issues.map((issue) => issue.id), startCursor });
       after = page.cursor;
       const linked = await this.linkModel.findByExternalIds(
         'linear',
         page.issues.map((issue) => issue.id),
       );
       unlinked += page.issues.length - linked.length;
-    } while (after && issues.length < MAX_ISSUES_PER_SYNC && unlinked < MAX_TASKS_CREATED_PER_SYNC);
+    } while (
+      after &&
+      issues.length < MAX_ISSUES_PER_SYNC &&
+      (options.noCreate || unlinked < MAX_TASKS_CREATED_PER_SYNC)
+    );
     result.truncated = !!after;
 
+    const deferred = new Set<string>();
     await this.syncIssues(
       issues,
       {
         createClosed: filter.stateTypes.some((type) => CLOSED_STATE_TYPES.has(type)),
+        deferred,
+        noCreate: options.noCreate,
         targetProjectId: options.targetProjectId,
       },
       result,
     );
+    if (result.truncated) {
+      // Resume where the first issue left for later is, so none is skipped;
+      // past every page read when the cap was not what stopped this run.
+      const firstDeferred = pages.find((page) => page.ids.some((id) => deferred.has(id)));
+      result.resumeAfter = firstDeferred ? firstDeferred.startCursor : after;
+    }
+    if (options.startAfter) return result;
 
     // Linked issues the filter missed: closed since, or moved out of the project.
     const seen = new Set(issues.map((issue) => issue.id));
@@ -328,8 +364,9 @@ export class LinearIssueSyncService {
       skip(result, issue.identifier, 'closed');
       return;
     }
-    if (result.created >= MAX_TASKS_CREATED_PER_SYNC) {
+    if (options.noCreate || result.created >= MAX_TASKS_CREATED_PER_SYNC) {
       result.truncated = true;
+      options.deferred?.add(issue.id);
       return;
     }
 
