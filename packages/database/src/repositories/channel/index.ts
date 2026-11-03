@@ -306,15 +306,23 @@ export class ChannelRepository {
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list.
    */
-  list = async (): Promise<Array<ChannelItem & { canDelete: boolean }>> => {
+  list = async (): Promise<Array<ChannelItem & { canDelete: boolean; unreadCount: number }>> => {
     const rows = await this.db
-      .select({ channel: channels, role: channelMembers.role })
+      .select({
+        channel: channels,
+        lastReadSequence: channelMembers.lastReadSequence,
+        role: channelMembers.role,
+      })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
 
-    return rows.map(({ channel, role }) => ({ ...channel, canDelete: hasRole(role, 'admin') }));
+    return rows.map(({ channel, lastReadSequence, role }) => ({
+      ...channel,
+      canDelete: hasRole(role, 'admin'),
+      unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+    }));
   };
 
   /** Read access. Returns undefined when the channel is missing or the caller is no member. */
@@ -328,6 +336,10 @@ export class ChannelRepository {
 
     return row;
   };
+
+  /** The caller's direct conversation with an Agent in this scope, trashed or not. */
+  findDirectAccess = (agentId: string): Promise<ChannelAccess | undefined> =>
+    this.findDirect(this.db, agentId);
 
   /**
    * Runs `fn` while holding the channel row lock, after checking that the caller is an
@@ -562,7 +574,7 @@ export class ChannelRepository {
   };
 
   private findDirect = async (
-    tx: Transaction,
+    tx: LobeChatDatabase | Transaction,
     agentId: string,
   ): Promise<ChannelAccess | undefined> => {
     const [row] = await tx

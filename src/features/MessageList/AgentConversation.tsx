@@ -1,11 +1,10 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDropdownMenu } from '@/features/HomeSidebar/Body/Agent/List/AgentItem/useDropdownMenu';
 import { usePreservedAgentUrl } from '@/features/HomeSidebar/Body/Agent/List/usePreservedAgentUrl';
 import { useAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
@@ -16,6 +15,7 @@ import { operationSelectors } from '@/store/chat/selectors';
 import ConversationRow from './ConversationRow';
 import { type Conversation } from './conversations';
 import { AVATAR_SIZE } from './style';
+import { useAgentConversationLink } from './useAgentConversationLink';
 
 interface AgentConversationProps {
   active: boolean;
@@ -29,7 +29,8 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
   const { openCreateGroupModal } = useAgentModal();
   const prefetchAgent = usePrefetchAgent();
   const running = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
-  const url = usePreservedAgentUrl(id);
+  const agentUrl = usePreservedAgentUrl(id);
+  const { onClick, url } = useAgentConversationLink(id, agentUrl);
   const title = agentDisplayName(item, t('untitledAgent'));
   const avatarSrc = typeof avatar === 'string' ? avatar : undefined;
 
@@ -66,15 +67,17 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
       unread={item.unreadCount}
       url={url}
       avatar={
-        <Avatar
-          emojiScaleWithBackground
-          avatar={avatarSrc || DEFAULT_AVATAR}
+        // Same avatar the agent has everywhere else, including its direct Channel: its own
+        // image or emoji, else the character generated from its id.
+        <AgentAvatar
+          agentId={id}
+          avatar={avatarSrc}
           background={backgroundColor || undefined}
           name={title}
-          shape={'square'}
           size={AVATAR_SIZE}
         />
       }
+      onClick={onClick}
       onMouseEnter={() => prefetchAgent(id)}
     />
   );

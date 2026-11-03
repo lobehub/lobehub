@@ -1,4 +1,4 @@
-import type { RecentItem, SidebarAgentItem } from '@lobechat/types';
+import type { ChannelListItem, RecentItem, SidebarAgentItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -109,7 +109,16 @@ describe('buildConversationEntries', () => {
     undefined,
   );
   const ids = (entries: ReturnType<typeof buildConversationEntries>) =>
-    entries.map((e) => (e.type === 'inbox' ? 'inbox' : e.item.id));
+    entries.map((e) =>
+      e.type === 'inbox' ? 'inbox' : e.type === 'channel' ? e.channel.id : e.item.id,
+    );
+  const channel = (id: string, title: string, updatedAt: string) =>
+    ({
+      createdAt: new Date('2026-01-01'),
+      id,
+      title,
+      updatedAt: new Date(updatedAt),
+    }) as ChannelListItem;
 
   it('places Lobe AI by its own activity instead of pinning it on top', () => {
     expect(
@@ -148,6 +157,24 @@ describe('buildConversationEntries', () => {
 
     expect(ids(buildConversationEntries(named, undefined, 'alice'))).toEqual(['n']);
     expect(ids(buildConversationEntries(named, undefined, 'health'))).toEqual(['n']);
+  });
+
+  it('orders group Channels with the other conversations by their latest message', () => {
+    const channels = [
+      channel('chn_team', 'Team', '2026-10-03'),
+      channel('chn_old', 'Archive talk', '2026-08-01'),
+    ];
+
+    expect(ids(buildConversationEntries(sections, undefined, '', channels))).toEqual([
+      'p',
+      'a',
+      'chn_team',
+      'b',
+      'chn_old',
+    ]);
+    expect(ids(buildConversationEntries(sections, undefined, 'team', channels))).toEqual([
+      'chn_team',
+    ]);
   });
 });
 

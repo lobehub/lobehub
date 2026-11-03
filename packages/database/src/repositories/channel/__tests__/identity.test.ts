@@ -40,6 +40,21 @@ const publish = async (channelId: string, messageId: string) => {
 };
 
 describe('direct Channel identity', () => {
+  it('finds the caller’s direct conversation with an Agent only in its own scope', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    await expect(repository.findDirectAccess(agent.id)).resolves.toBeUndefined();
+
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    await expect(repository.findDirectAccess(agent.id)).resolves.toMatchObject({
+      channel: { id: channel.id },
+      member: { actorType: 'user', userId: fixture.ownerId },
+    });
+    await expect(
+      new ChannelRepository(db, fixture.ownerId, null).findDirectAccess(agent.id),
+    ).resolves.toBeUndefined();
+  });
+
   it.each([null, fixture.workspaceId])(
     'creates a private user/Agent conversation in scope %s',
     async (workspaceId) => {

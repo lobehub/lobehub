@@ -10,18 +10,22 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
-import ChannelList from '@/features/Channels/ChannelList';
+import { matchChannel } from '@/features/Channels/paths';
+import { useChannelEvents } from '@/features/Channels/useChannelEvents';
+import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors, homeRecentSelectors } from '@/store/home/selectors';
 import { ALL_RECENTS_LIMIT } from '@/store/home/slices/recent/action';
 import { createConversationRecentQueryKey } from '@/store/home/slices/recent/projection';
 
 import AgentConversation from './AgentConversation';
+import ChannelConversation from './ChannelConversation';
 import {
   buildConversationEntries,
   buildConversationSections,
@@ -36,10 +40,21 @@ import { styles } from './style';
 
 const RECENTS_QUERY_KEY = createConversationRecentQueryKey(ALL_RECENTS_LIMIT);
 
-/** `/agent/:id/...` or `/group/:id/...` → the routed conversation id. */
+/**
+ * `/agent/:id/...`, `/group/:id/...` or `/channels/:id` → the routed conversation id. A direct
+ * Channel stands for its Agent, so opening one highlights that Agent's row.
+ */
 const useActiveRouteId = () => {
   const { pathname } = useActiveLocation();
   const slug = useActiveWorkspaceSlug();
+  const channelId = matchChannel(pathname);
+  const directAgentId = useChannelStore((s) =>
+    channelId
+      ? channelSelectors.list(s)?.find((channel) => channel.id === channelId)?.agentId
+      : undefined,
+  );
+  if (channelId) return directAgentId ?? channelId;
+
   const segments = pathname.split('/').filter(Boolean);
   const [root, id] = slug && segments[0] === slug ? segments.slice(1) : segments;
 
@@ -60,6 +75,18 @@ const ConversationItem = memo<{ activeRouteId?: string; conversation: Conversati
 
 ConversationItem.displayName = 'ConversationItem';
 
+/** Keeps the Channel list fresh while Channels are on; it has no row of its own. */
+const ChannelSync = memo(() => {
+  const { error } = channelActions.useFetchList();
+  useChannelEvents();
+
+  return error ? (
+    <AsyncError error={error} variant="inline" onRetry={() => void channelActions.refreshList()} />
+  ) : null;
+});
+
+ChannelSync.displayName = 'MessageListChannelSync';
+
 const Body = memo(() => {
   const { t } = useTranslation('common');
   const { error: agentsError, mutate: retryAgents } = useFetchAgentList();
@@ -69,6 +96,22 @@ const Body = memo(() => {
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const recents = useHomeStore(homeRecentSelectors.conversationRecents(RECENTS_QUERY_KEY));
   const activeRouteId = useActiveRouteId();
+  const channelsEnabled = useChannelsEnabled();
+  const allChannels = useChannelStore(channelSelectors.list);
+  // Group Channels outside any project; a direct Channel opens from its Agent's row, and an
+  // archived one stays listed only while it is open.
+  const channels = useMemo(
+    () =>
+      channelsEnabled
+        ? (allChannels ?? []).filter(
+            (channel) =>
+              !channel.projectId &&
+              !channel.agentId &&
+              (channel.status !== 'archived' || channel.id === activeRouteId),
+          )
+        : [],
+    [activeRouteId, allChannels, channelsEnabled],
+  );
 
   const { query } = useMessageSearch();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
@@ -95,8 +138,9 @@ const Body = memo(() => {
         buildConversationSections(items, recents),
         { activeAt: latestActivity(inboxUpdatedAt, inboxTopic), title: inboxTitle },
         query,
+        channels,
       ),
-    [items, recents, inboxUpdatedAt, inboxTitle, inboxTopic, query],
+    [items, recents, inboxUpdatedAt, inboxTitle, inboxTopic, query, channels],
   );
 
   // Only the agent rows wait on the agent list: Lobe AI and Channels load on
@@ -108,6 +152,13 @@ const Body = memo(() => {
       {entries.map((entry) =>
         entry.type === 'inbox' ? (
           <InboxConversation activeRouteId={activeRouteId} key={'inbox'} />
+        ) : entry.type === 'channel' ? (
+          <ChannelConversation
+            active={entry.channel.id === activeRouteId}
+            activeAt={entry.activeAt}
+            channel={entry.channel}
+            key={entry.channel.id}
+          />
         ) : (
           <ConversationItem
             activeRouteId={activeRouteId}
@@ -129,8 +180,7 @@ const Body = memo(() => {
           </div>
         )
       )}
-      {/* Non-project Channels (and their create entry) have no other home in the rail layout. */}
-      <ChannelList />
+      {channelsEnabled && <ChannelSync />}
     </Flexbox>
   );
 });

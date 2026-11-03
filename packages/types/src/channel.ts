@@ -183,6 +183,7 @@ export type ChannelJobStatus = 'cancelled' | 'completed' | 'failed' | 'queued' |
 export type ChannelJobBlockCode =
   | 'device_approval_pending'
   | 'device_offline'
+  | 'device_required'
   | 'directory_locked'
   | 'member_busy'
   | 'unavailable'
@@ -269,6 +270,10 @@ export interface ChannelListItem {
   sequence: number;
   status: ChannelStatus;
   title: string;
+  /** Main-channel messages the caller has not read; set by the Channel list. */
+  unreadCount?: number;
+  /** Bumped by every new message, so it orders conversations by latest activity. */
+  updatedAt?: Date;
   workspaceId: string | null;
 }
 

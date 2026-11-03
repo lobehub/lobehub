@@ -1,4 +1,4 @@
-import type { RecentItem, SidebarAgentItem } from '@lobechat/types';
+import type { ChannelListItem, RecentItem, SidebarAgentItem } from '@lobechat/types';
 
 export interface Conversation {
   /** Latest activity: the newer of the item itself and its latest topic. */
@@ -97,17 +97,20 @@ export const buildConversationSections = (
 };
 
 export type ConversationEntry =
-  { activeAt: Date; type: 'inbox' } | (Conversation & { type: 'item' });
+  | { activeAt: Date; type: 'inbox' }
+  | { activeAt: Date; channel: ChannelListItem; type: 'channel' }
+  | (Conversation & { type: 'item' });
 
 /**
  * One IM list like WeChat's: pinned rows first, then everything else by latest
- * activity. Lobe AI is an ordinary row placed by its own activity, not pinned
- * to the top; a name / title filter narrows the whole list.
+ * activity. Lobe AI and group Channels are ordinary rows placed by their own
+ * activity, not pinned to the top; a name / title filter narrows the whole list.
  */
 export const buildConversationEntries = (
   { pinned, recent }: ConversationSections,
   inbox: { activeAt?: Date; title: string } | undefined,
   query = '',
+  channels: ChannelListItem[] = [],
 ): ConversationEntry[] => {
   const keyword = query.trim().toLowerCase();
   const matches = (...names: (string | null | undefined)[]) =>
@@ -120,7 +123,16 @@ export const buildConversationEntries = (
       .filter((c) => matches(c.item.name, c.item.title))
       .map((c) => ({ ...c, type: 'item' as const }));
 
-  const rest = items(recent);
+  const rest = [
+    ...items(recent),
+    ...channels
+      .filter((channel) => matches(channel.title))
+      .map((channel) => ({
+        activeAt: new Date(channel.updatedAt ?? channel.createdAt),
+        channel,
+        type: 'channel' as const,
+      })),
+  ].sort((a, b) => b.activeAt.getTime() - a.activeAt.getTime());
   if (inbox && matches(inbox.title)) {
     const activeAt = inbox.activeAt ?? new Date(0);
     const index = rest.findIndex((entry) => entry.activeAt.getTime() < activeAt.getTime());

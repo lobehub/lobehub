@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import type { ChannelPublicThread, ChannelStatus, ChannelThreadStatus } from '@lobechat/types';
 
 import { cacheScope } from '@/libs/replica';
@@ -8,6 +9,7 @@ import {
   channelService,
   type ChannelViewParams,
 } from '@/services/channel';
+import { getElectronStoreState } from '@/store/electron';
 
 import { ChannelPrivateAction } from './privateAction';
 import { channelThreadEntityId } from './projection';
@@ -62,6 +64,21 @@ class ChannelActionImpl {
     const result = await channelService.createGroupFromDirect(input);
     await this.#refreshAfterWrite(this.refreshList);
     return result.data.channel.id;
+  };
+  /**
+   * The caller's direct Channel with an Agent, opening it for an Agent that predates direct
+   * Channels. Undefined when the Agent cannot answer in a Channel.
+   */
+  openDirect = async (agentId: string) => {
+    const existing = channelSelectors.directByAgent(agentId)(useChannelStore.getState());
+    if (existing) return existing.id;
+    // On desktop, name this machine so a direct Channel to a local Agent can run here.
+    const localDeviceId = isDesktop
+      ? await getElectronStoreState().resolveGatewayDeviceId()
+      : undefined;
+    const channelId = await channelService.openDirect({ agentId, localDeviceId });
+    if (channelId) await this.#refreshAfterWrite(this.refreshList);
+    return channelId ?? undefined;
   };
   remove = async (channelId: string) => {
     const scope = cacheScope.get();
