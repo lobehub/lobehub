@@ -833,7 +833,8 @@ export default defineConfig(
           {
             message:
               'style-equivalence is project-agnostic; pass lobe-chat specifics through its config.',
-            regex: '^(?:\\.\\./)+(?:src|apps|scripts)/',
+            regex:
+              '^(?:\\.\\./)+(?:apps|scripts|src/(?:app|business|components|config|const|envs|features|helpers|hooks|layout|libs|locales|routes|server|services|spa|store|styles|types|utils))/',
           },
         ],
       },
