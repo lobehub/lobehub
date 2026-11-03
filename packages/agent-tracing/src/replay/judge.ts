@@ -1,5 +1,7 @@
 import { type MatchContext } from '@lobechat/eval-rubric';
 
+import { readReplayCompletion } from './response';
+
 const JUDGE_SCHEMA_NAME = 'eval_judge_score';
 
 /**
@@ -34,16 +36,8 @@ export const createJudgeContext = ({
 
     if (!res.ok) throw new Error(`Judge request failed: ${res.status} ${await res.text()}`);
 
-    const body = (await res.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>;
-      content?: Array<{ text?: unknown }>;
-    };
-    const raw =
-      (typeof body?.choices?.[0]?.message?.content === 'string'
-        ? (body.choices[0].message.content as string)
-        : undefined) ??
-      body?.content?.map((part) => (typeof part?.text === 'string' ? part.text : '')).join('') ??
-      '';
+    const { content: raw, error } = await readReplayCompletion(res);
+    if (error) throw new Error(`Judge request failed: ${error}`);
 
     return parseJudgeResponse(raw);
   },
