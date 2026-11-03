@@ -91,12 +91,20 @@ describe('ModelRuntime', () => {
     const providers = Object.values(ModelProvider).filter((i) => i !== 'lobehub');
     const specialProviderIds = [ModelProvider.VertexAI, ...specialProviders.map((p) => p.id)];
 
+    // Registered in model-bank ahead of their runtime. Remove an id once its runtime lands.
+    const providersAwaitingRuntime: string[] = [ModelProvider.ElevenLabs];
+
     const generalTestProviders = providers.filter(
-      (provider) => !specialProviderIds.includes(provider),
+      (provider) =>
+        !specialProviderIds.includes(provider) && !providersAwaitingRuntime.includes(provider),
     );
 
     generalTestProviders.forEach((provider) => {
       testRuntime(provider);
+    });
+
+    it.each(providersAwaitingRuntime)('%s has no runtime yet, so it is excluded above', (id) => {
+      expect(providerRuntimeMap[id as keyof typeof providerRuntimeMap]).toBeUndefined();
     });
 
     specialProviders.forEach(({ id, payload, runtimeBaseURL }) =>
