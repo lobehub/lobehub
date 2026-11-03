@@ -12,6 +12,7 @@ import { useFetchGitBranch } from '@/store/device';
 
 import BranchSwitcher from './BranchSwitcher';
 import { gitChipStyles } from './gitChipStyles';
+import { getStagedBranchState } from './stagedBranchState';
 import { useStagedProjectGitTarget } from './useStagedProjectGitTarget';
 
 const styles = stylex.create({
@@ -50,7 +51,7 @@ interface StagedBranchStatusProps {
 const StagedBranchStatus = memo<StagedBranchStatusProps>(({ agentId }) => {
   const { t } = useTranslation('device');
   const target = useStagedProjectGitTarget(agentId);
-  const { data, mutate } = useFetchGitBranch(target?.deviceId, target?.path);
+  const { data, isConfirmed, mutate } = useFetchGitBranch(target?.deviceId, target?.path);
   const [open, setOpen] = useState(false);
 
   const handleOptimisticCheckout = useCallback(
@@ -60,8 +61,9 @@ const StagedBranchStatus = memo<StagedBranchStatusProps>(({ agentId }) => {
     [mutate],
   );
 
-  const branch = data?.branch;
-  if (!target || !branch) return null;
+  const state = getStagedBranchState(data, isConfirmed);
+  if (!target || state === 'hidden') return null;
+  const branch = data!.branch!;
 
   const trigger = (
     <div {...stylex.props(gitChipStyles.trigger)}>
@@ -76,8 +78,10 @@ const StagedBranchStatus = memo<StagedBranchStatusProps>(({ agentId }) => {
         <span {...stylex.props(styles.branchIcon)}>
           <Icon icon={GitBranchIcon} size={13} />
         </span>
-        {data.detached ? (
+        {state === 'detached' ? (
           <Tooltip title={t('workingDirectory.detachedHead', { sha: branch })}>{trigger}</Tooltip>
+        ) : state === 'confirming' ? (
+          <Tooltip title={t('workingDirectory.branchConfirming')}>{trigger}</Tooltip>
         ) : (
           <BranchSwitcher
             agentId={agentId}

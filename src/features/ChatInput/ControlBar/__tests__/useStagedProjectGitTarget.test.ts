@@ -59,12 +59,14 @@ describe('useStagedProjectGitTarget', () => {
     expect(result.current).toEqual({ deviceId: undefined, isGithub: true, path: '/Users/me/repo' });
   });
 
-  it('has no target until the directory is known to be a repo', () => {
+  it('still targets a directory whose repo type no picker cache recorded', () => {
+    // A directory bound in Project Settings on a remote device never enters that
+    // device's picker cache; the branch probe decides whether it is a repo.
     testState.repoType = undefined;
 
     const { result } = renderHook(() => useStagedProjectGitTarget('agent-1'));
 
-    expect(result.current).toBeUndefined();
+    expect(result.current).toEqual({ deviceId: 'm4-pro', isGithub: false, path: '/Users/me/repo' });
   });
 
   it('has no target when nothing is staged', () => {
