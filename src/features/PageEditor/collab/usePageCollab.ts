@@ -1,7 +1,7 @@
 import { IYjsService, ReactYjsPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
 import { confirmModal } from '@lobehub/ui';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as Y from 'yjs';
 
@@ -17,6 +17,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { usePageEditorStore, useStoreApi } from '../store';
 import { getPresenceColor, type PresenceAwarenessData } from './presence';
 import { PageCollabProvider } from './provider';
+import { usePresenceColor } from './usePresenceColor';
 import { useTabAway } from './useTabAway';
 import { whenBodyFilled } from './whenBodyFilled';
 
@@ -124,7 +125,7 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
     // The previous page's session state is still in the store at this point.
     setCollab({ bodyReady: false, retry: () => provider.retry(), status: 'connecting' });
 
-    return { doc, provider, stopBodyWait: () => stopBodyWait?.() };
+    return { doc, joinedAt: Date.now(), provider, stopBodyWait: () => stopBodyWait?.() };
   }, [enabled, gatewayUrl, documentId, storeApi, onReset]);
 
   useEffect(() => {
@@ -202,9 +203,10 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
   const awarenessData = useMemo<PresenceAwarenessData>(
     () => ({
       avatar: avatar && avatar.length <= MAX_AWARENESS_AVATAR_LENGTH ? avatar : undefined,
+      joinedAt: session?.joinedAt,
       userId,
     }),
-    [avatar, userId],
+    [avatar, session, userId],
   );
   const cursorColor = userId ? getPresenceColor(userId) : undefined;
 
@@ -215,6 +217,18 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
     if (!awareness || !local) return;
     awareness.setLocalState({ ...local, awarenessData: { ...awarenessData, away } });
   }, [session, away, awarenessData]);
+
+  const getCursors = useCallback(
+    () => storeApi.getState().editor?.requireService(IYjsService)?.getState()?.binding.cursors,
+    [storeApi],
+  );
+  usePresenceColor({
+    awareness: session?.provider.awareness,
+    clientId: session?.doc.clientID,
+    getCursors,
+    joinedAt: session?.joinedAt,
+    userId,
+  });
 
   return useMemo(() => {
     if (!session) return undefined;

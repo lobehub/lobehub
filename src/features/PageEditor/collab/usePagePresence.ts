@@ -6,20 +6,10 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { usePageEditorStore } from '../store';
-import { type PresencePeer, toPresencePeers } from './presence';
+import { type PresencePeer, samePresencePeers, toPresencePeers } from './presence';
 import { getSectionTitle } from './presenceSection';
 
 const FLASH_DURATION_MS = 1600;
-
-const samePeers = (a: PresencePeer[], b: PresencePeer[]) =>
-  a.length === b.length &&
-  a.every(
-    (peer, index) =>
-      peer.clientId === b[index].clientId &&
-      peer.away === b[index].away &&
-      peer.name === b[index].name &&
-      peer.avatar === b[index].avatar,
-  );
 
 export const usePagePresence = () => {
   const editor = usePageEditorStore((s) => s.editor);
@@ -36,7 +26,7 @@ export const usePagePresence = () => {
     return service.subscribeAwarenessUsers((users) => {
       const clientId = service.getState()?.doc?.clientID ?? -1;
       const next = toPresencePeers(users, { clientId, userId });
-      setPeers((prev) => (samePeers(prev, next) ? prev : next));
+      setPeers((prev) => (samePresencePeers(prev, next) ? prev : next));
     });
   }, [editor, collabStatus, userId]);
 
