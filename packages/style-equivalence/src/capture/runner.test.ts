@@ -37,6 +37,10 @@ beforeAll(async () => {
     page('.t { color: black; } @media (max-width: 600px) { .t { color: red; } }'),
   );
   await write('head-media', page('.t { color: black; }'));
+  await write(
+    'unrelated-media',
+    page('.t { color: black; } @media (max-width: 900px) { .elsewhere { color: red; } }'),
+  );
   await write('base-dark', page('.t { color: black; } [data-theme="dark"] .t { color: white; }'));
   await write('head-dark', page('.t { color: black; }'));
   await write(
@@ -46,6 +50,12 @@ beforeAll(async () => {
       "document.querySelector('.t').style.width = Math.random() * 100 + 'px';",
     ),
   );
+  const fade = (name: string) =>
+    page(
+      `.t { color: black; animation: ${name} 1ms; } @keyframes ${name} { from { opacity: 0; } to { opacity: 1; } }`,
+    );
+  await write('base-fade', fade('enter'));
+  await write('head-fade', fade('lobe-x-enter'));
   server = await serveDirectories(root);
   browser = await launchBrowser();
 }, 60_000);
@@ -85,6 +95,16 @@ describe('captureRun + analyzeRun', () => {
     expect(result.differingConditions).toContain('light/600/default');
   });
 
+  it('ignores media rules that match nothing inside a case', async () => {
+    const capture = await captureRun({
+      browser,
+      conditions: { themeAttribute: 'data-theme', themes: ['light'], widths: [1280] },
+      states: ['default'],
+      urls: { base: `${server.url}/unrelated-media/`, head: `${server.url}/head-media/` },
+    });
+    expect(capture.widths).toEqual([1280]);
+  });
+
   it('reports a theme-only difference only in that theme', async () => {
     const [result] = await run('base-dark', 'head-dark');
     expect(result.differingConditions.every((condition) => condition.startsWith('dark/'))).toBe(
@@ -102,6 +122,11 @@ describe('captureRun + analyzeRun', () => {
   it('marks a case whose base disagrees with itself as unstable', async () => {
     const [result] = await run('noisy', 'head-hover');
     expect(result.status).toBe('unstable');
+  });
+
+  it('treats renamed keyframes with the same frames as equal after the animation ends', async () => {
+    const [result] = await run('base-fade', 'head-fade');
+    expect(result).toMatchObject({ differingConditions: [], status: 'equal' });
   });
 
   it('reports equal pages as equal', async () => {

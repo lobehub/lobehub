@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { rootCausesOf } from './diff';
+import { ownDifferences, rootCausesOf } from './diff';
 
 const diff = (property: string, before: string, after: string, key = 'root.0') => ({
   after,
@@ -44,5 +44,30 @@ describe('rootCausesOf', () => {
     expect(rootCausesOf([diff('box', '[0,0,10,10]', '[0,0,12,10]', 'root.0.0')])).toEqual([
       diff('box', '[0,0,10,10]', '[0,0,12,10]', 'root.0.0'),
     ]);
+  });
+});
+
+describe('ownDifferences', () => {
+  it('keeps only what happens at or under the target element', () => {
+    expect(
+      ownDifferences(
+        [
+          diff('padding-block-start', '8px', '10px', 'root.0'),
+          diff('box', '[8,8,100,20]', '[8,10,100,20]', 'root.0.0'),
+          diff('color', 'red', 'blue', 'root.0.0.0'),
+          diff('content', 'none', '"x"', 'root.0.0::before'),
+        ],
+        'root.0.0',
+      ),
+    ).toEqual([
+      diff('color', 'red', 'blue', 'root.0.0.0'),
+      diff('content', 'none', '"x"', 'root.0.0::before'),
+    ]);
+  });
+
+  it('keeps a size change of the target even though its position is ignored', () => {
+    expect(
+      ownDifferences([diff('box', '[8,8,100,20]', '[8,10,120,20]', 'root.0.0')], 'root.0.0'),
+    ).toEqual([diff('box', '[8,8,100,20]', '[8,10,120,20]', 'root.0.0')]);
   });
 });

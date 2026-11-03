@@ -72,6 +72,16 @@ describe('extractFile', () => {
     expect(prelude).not.toContain('indicator');
   });
 
+  it('imports the stylex namespace when the styles come from another module', () => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+import { styles } from './a.styles';
+export const A = () => <span {...stylex.props(styles.a)} />;
+`;
+    expect(extractFile(code, 'a.tsx', options).prelude).toContain(
+      "import * as stylex from '@stylexjs/stylex';",
+    );
+  });
+
   it('imports JSX tags used by a kept top-level statement', () => {
     const code = `import { Spin } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';

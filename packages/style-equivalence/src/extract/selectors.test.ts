@@ -41,6 +41,17 @@ export const Plain = () => <div className={styles.row} />;
     expect(flagsById(code)).toEqual({ 'Plain#0': [], 'Row#0': ['CROSS_COMPONENT'] });
   });
 
+  it("flags an element whose class is the target of another element's cross-component rule", () => {
+    const code = `import { createStaticStyles, cx } from '@lobehub/ui';
+const styles = createStaticStyles(({ css }) => ({
+  label: css\`color: black;\`,
+  muted: css\`.control-label { color: gray; }\`,
+}));
+export const Row = ({ muted }) => <div className={cx(muted && styles.muted)}><span className={cx(styles.label, 'control-label')} /></div>;
+`;
+    expect(flagsById(code)).toEqual({ 'Row#0': ['CROSS_COMPONENT'], 'Row#1': ['CROSS_COMPONENT'] });
+  });
+
   it('flags a descendant selector that reaches into a child type', () => {
     const code = `import { createStaticStyles } from '@lobehub/ui';
 const styles = createStaticStyles(({ css }) => ({
@@ -66,6 +77,15 @@ export const Tray = () => (
       ['Tray#0', 'Image', ['global.queue-tray-thumb'], ['INNER_TARGET']],
     ]);
     expect(result.prelude).toContain("import './QueueTray.css';");
+  });
+
+  it('reads a global className written as a braced string literal', () => {
+    const code = `import './QueueTray.css';
+export const Tray = () => <Image className={'queue-tray-thumb'} />;
+`;
+    expect(extractFile(code, 'feature/A.tsx', options).elements.map((e) => e.slots)).toEqual([
+      ['global.queue-tray-thumb'],
+    ]);
   });
 
   it('reads CSS module classes as owned slots and flags :global targets', () => {
