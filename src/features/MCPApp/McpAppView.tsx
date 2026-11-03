@@ -20,14 +20,13 @@ import { anySignal } from './abortSignal';
 import { mcpAppNameSelector } from './appName';
 import { buildHostContext, connectMcpAppBridge } from './bridge';
 import { confirmAppMessage, confirmAppToolCall } from './confirm';
+import { sendAppMessage } from './sendAppMessage';
 import { getAppToolCallPolicy } from './toolCallPolicy';
-import { createViewGestureGate } from './userGesture';
 import {
   APP_IFRAME_ALLOW,
   buildAppCsp,
   injectCsp,
   pickAppResource,
-  toAppMessage,
   toCallToolResult,
 } from './utils';
 
@@ -110,7 +109,6 @@ const McpAppView = memo<McpAppViewProps>(
       const target = iframe?.contentWindow;
       if (!srcDoc || !iframe || !target) return;
 
-      const gestures = createViewGestureGate();
       // One message at a time, so a view can't line up runs behind a pending one
       let sending = false;
       // Approvals queue up and open one at a time; a few per view, so a view
@@ -192,18 +190,15 @@ const McpAppView = memo<McpAppViewProps>(
         },
         hostContext: buildHostContext(latest.current.isDark),
         onSizeChange: (nextHeight) => setHeight(Math.min(nextHeight, MAX_HEIGHT)),
-        // A message starts a billed run, and a view can post one on load (every
-        // time the topic reopens). Without a fresh gesture in the view just
-        // before, the user confirms it first. One gesture covers one message.
+        // A message starts a billed run. Parent activation and iframe focus
+        // cannot prove which opaque-origin view the user acted in, so every
+        // message needs consent in the host.
         sendMessage: async (text, request) => {
           if (sending) return false;
-          // Read before anything async: the activation expires
-          const fromUser = gestures.takeGestureIn(iframe);
           sending = true;
           try {
             const { agentId: currentAgentId, identifier: currentIdentifier } = latest.current;
             if (
-              !fromUser &&
               !(await awaitApproval(request, (signal) =>
                 confirmAppMessage({
                   appName: getAppName(currentIdentifier, currentAgentId),
@@ -215,8 +210,7 @@ const McpAppView = memo<McpAppViewProps>(
               return false;
             }
 
-            await latest.current.sendMessage(toAppMessage(text, currentIdentifier));
-            return true;
+            return await sendAppMessage(latest.current.sendMessage, text, currentIdentifier);
           } finally {
             sending = false;
           }
@@ -232,7 +226,6 @@ const McpAppView = memo<McpAppViewProps>(
       return () => {
         bridgeRef.current = undefined;
         approvals.abort();
-        gestures.dispose();
         dispose();
       };
     }, [latest, srcDoc, toolCallId]);

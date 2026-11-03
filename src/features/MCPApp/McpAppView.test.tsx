@@ -6,14 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import McpAppView from './McpAppView';
 
-const { confirmAppMessage, confirmAppToolCall, gesture, invokeMcpToolCall, sendMessage } =
-  vi.hoisted(() => ({
+const { confirmAppMessage, confirmAppToolCall, invokeMcpToolCall, sendMessage } = vi.hoisted(
+  () => ({
     confirmAppMessage: vi.fn(),
     confirmAppToolCall: vi.fn(),
-    gesture: { value: false },
     invokeMcpToolCall: vi.fn(),
     sendMessage: vi.fn(),
-  }));
+  }),
+);
 
 vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -53,9 +53,7 @@ vi.mock('./confirm', () => ({ confirmAppMessage, confirmAppToolCall }));
 
 vi.mock('./toolCallPolicy', () => ({ getAppToolCallPolicy: () => 'confirm' }));
 
-vi.mock('./userGesture', () => ({
-  createViewGestureGate: () => ({ dispose: vi.fn(), takeGestureIn: () => gesture.value }),
-}));
+const originalUserActivation = Object.getOwnPropertyDescriptor(navigator, 'userActivation');
 
 const setup = () => {
   const { container } = render(
@@ -109,12 +107,17 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('McpAppView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    gesture.value = false;
+    sendMessage.mockImplementation(async ({ onMessageAccepted }) => onMessageAccepted?.());
   });
 
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    if (originalUserActivation) {
+      Object.defineProperty(navigator, 'userActivation', originalUserActivation);
+    } else {
+      Reflect.deleteProperty(navigator, 'userActivation');
+    }
   });
 
   it('keeps powerful features off whatever permissions the view declares', () => {
@@ -127,18 +130,27 @@ describe('McpAppView', () => {
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
   });
 
-  it('sends a message the user just sent from the view', async () => {
-    gesture.value = true;
-    const { message, response } = setup();
-
-    await message(1, 'What should I wear?');
-
-    expect(confirmAppMessage).not.toHaveBeenCalled();
-    expect(sendMessage).toHaveBeenCalledWith({
-      message: 'What should I wear?',
-      metadata: { mcpAppSource: { identifier: 'weather-demo' } },
+  it('requires consent when another view activates the parent and the sender focuses itself', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0);
+    Object.defineProperty(navigator, 'userActivation', {
+      configurable: true,
+      value: { isActive: true },
     });
-    expect(response(1)?.result).toEqual({});
+    confirmAppMessage.mockResolvedValue(false);
+    const first = setup();
+    const second = setup();
+    clock.mockReturnValue(5000);
+    first.iframe.focus();
+    // Focus can be stolen by a view that did not receive the user's click.
+    second.iframe.focus();
+
+    await second.message(1, 'What should I wear?');
+
+    expect(confirmAppMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'What should I wear?' }),
+    );
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(second.response(1)?.result).toEqual({ isError: true });
   });
 
   it('asks before sending a message posted without a gesture, and drops it when declined', async () => {
