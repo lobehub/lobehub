@@ -1,5 +1,6 @@
 import type { IEditor } from '@lobehub/editor';
-import { KEY_ESCAPE_COMMAND } from 'lexical';
+import { CommonPlugin, Kernel, MarkdownPlugin } from '@lobehub/editor';
+import { $createParagraphNode, $createTextNode, $getRoot, KEY_ESCAPE_COMMAND } from 'lexical';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAgentStore } from '@/store/agent';
@@ -288,5 +289,37 @@ describe('ChatInput store actions', () => {
     store.getState().handleSendButton();
 
     expect(getInputHistory()).toEqual([]);
+  });
+
+  it('sends a prompt pasted as plain text verbatim instead of reformatting it as markdown', () => {
+    const prompt = [
+      '# Role',
+      'You are a **terse** reviewer.',
+      '* Compute 2 * 3 and cite [the answer]',
+      '    keep this indented line',
+      '1. Read the diff.',
+    ].join('\n');
+    const editor = new Kernel();
+    editor.registerPlugins([CommonPlugin, MarkdownPlugin]);
+    editor.initNodeEditor();
+    editor.getLexicalEditor()!.update(
+      () => {
+        const paragraph = $createParagraphNode();
+        paragraph.append($createTextNode(prompt));
+        $getRoot().clear().append(paragraph);
+      },
+      { discrete: true },
+    );
+    let sent: string | undefined;
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend: ({ getMarkdownContent }) => {
+        sent = getMarkdownContent();
+      },
+    });
+
+    store.getState().handleSendButton();
+
+    expect(sent).toBe(prompt);
   });
 });
