@@ -692,6 +692,29 @@ describe('GoalService.archiveSignedOffTasks', () => {
     expect((await taskModel.findById(acceptanceTaskId))?.status).toBe('completed');
   });
 
+  it('writes nothing when an archive lands between the reopen’s read and its lock', async () => {
+    const { acceptanceTaskId, goalId, service, taskModel } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    const goals = new GoalModel(serverDB, userId);
+    const unarchived = await goals.findByGraphTask(acceptanceTaskId);
+    expect(await new GoalArchiveModel(serverDB, userId).archive(goalId)).not.toBeNull();
+    // The reopen read the goal before the archive committed.
+    const serviceGoals = (service as unknown as { goalModel: GoalModel }).goalModel;
+    vi.spyOn(serviceGoals, 'findByGraphTask').mockResolvedValueOnce(unarchived);
+
+    expect(
+      await service.reopenForChanges(acceptanceTaskId, 'Add a day-one agenda'),
+    ).toBeUndefined();
+
+    const goal = await goals.findById(goalId);
+    expect(goal?.status).toBe('achieved');
+    expect(goal?.config?.changeRequest).toBeUndefined();
+    expect((await taskModel.findById(acceptanceTaskId))?.status).toBe('completed');
+    const graph = await service.graph(goalId);
+    const node = graph.nodes.find((candidate) => candidate.taskId === acceptanceTaskId);
+    expect(node?.status).toBe('resolved');
+  });
+
   it('restores the reworked Task when a signed-off goal is sent back for changes', async () => {
     const { acceptanceTaskId, service, taskModel, workTaskId } = await achieveGoal();
     await signOff(acceptanceTaskId);
