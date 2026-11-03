@@ -74,7 +74,10 @@ import {
   topicSelectors,
 } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
-import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
+import {
+  executeDirectMention,
+  toDirectMentionThreadTitle,
+} from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import {
@@ -1584,7 +1587,7 @@ export class ConversationLifecycleActionImpl {
           assistantMessage: { provider: heterogeneousProvider.type },
           instruction: message,
           parentMessageId: heteroData.assistantMessageId,
-          title: message.slice(0, 50),
+          title: toDirectMentionThreadTitle(message),
           topicId: heteroTopicId,
         });
         if (!task.assistantMessageId) {

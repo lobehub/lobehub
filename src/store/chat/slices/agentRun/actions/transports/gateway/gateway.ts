@@ -87,6 +87,7 @@ import { flagQueuedMessagesOnRunStart, syncQueuedMessagesFlag } from './queuedMe
 import { gatewayRunOperationMetadata } from './runOperationMetadata';
 import { isCompletedRuntimeEnd } from './runtimeEndReason';
 import * as serverSteerQueue from './serverSteerQueue';
+import { watchSubAgentRun, type WatchSubAgentRunParams } from './watchSubAgentRun';
 
 const getGatewayServerConfig = () =>
   (typeof window !== 'undefined'
@@ -1748,6 +1749,13 @@ export class GatewayActionImpl {
     }
     return resumed;
   };
+
+  /** Stream a sub-agent run this tab dispatched but does not drive; see `watchSubAgentRun`. */
+  watchSubAgentRun = (params: WatchSubAgentRunParams): (() => void) =>
+    watchSubAgentRun(this.#get, params, {
+      disconnect: this.disconnectFromGateway,
+      gatewayUrl: getGatewayServerConfig()?.agentGatewayUrl,
+    });
 
   /**
    * Reconnect to an existing Gateway operation after page reload.
