@@ -1,4 +1,4 @@
-// Contract for the embeddable review toolbar (`@lobehub/review-sdk`, `src/protocol.ts`).
+// Contract for the embeddable acceptance toolbar (`@lobehub/acceptance-sdk`, `src/protocol.ts`).
 import { z } from 'zod';
 
 const rectSchema = z.object({
@@ -8,7 +8,7 @@ const rectSchema = z.object({
   y: z.number().finite(),
 });
 
-export const reviewAnchorSchema = z.object({
+export const acceptanceReviewAnchorSchema = z.object({
   commit: z.string().max(200).optional(),
   context: z
     .record(z.string().max(100), z.union([z.string().max(500), z.number(), z.boolean()]))
@@ -21,6 +21,19 @@ export const reviewAnchorSchema = z.object({
     .optional(),
   intent: z.enum(['change', 'comment']),
   region: rectSchema.optional(),
+  regionRefs: z
+    .array(
+      z
+        .object({
+          box: rectSchema,
+          selector: z.string().max(2000),
+          text: z.string().max(200).optional(),
+        })
+        .nullable(),
+    )
+    .max(6)
+    .optional(),
+  route: z.string().max(500).optional(),
   scroll: z.object({ x: z.number().finite(), y: z.number().finite() }),
   targets: z
     .array(
@@ -58,13 +71,13 @@ export const reviewAnchorSchema = z.object({
   }),
 });
 
-export type ReviewAnchor = z.infer<typeof reviewAnchorSchema>;
+export type AcceptanceReviewAnchor = z.infer<typeof acceptanceReviewAnchorSchema>;
 
-export const REVIEW_ANCHOR_MAX_BYTES = 32 * 1024;
+export const ACCEPTANCE_REVIEW_ANCHOR_MAX_BYTES = 32 * 1024;
 
-export const createReviewCommentSchema = z
+export const createAcceptanceReviewCommentSchema = z
   .object({
-    anchor: reviewAnchorSchema.optional(),
+    anchor: acceptanceReviewAnchorSchema.optional(),
     clientId: z.string().trim().min(1).max(255),
     content: z.string().trim().min(1).max(4000),
     parentId: z.string().trim().min(1).max(64).optional(),
@@ -76,26 +89,29 @@ export const createReviewCommentSchema = z
     message: 'A reply cannot carry an anchor or a screenshot',
   })
   .refine(
-    (value) => !value.anchor || JSON.stringify(value.anchor).length <= REVIEW_ANCHOR_MAX_BYTES,
+    (value) =>
+      !value.anchor || JSON.stringify(value.anchor).length <= ACCEPTANCE_REVIEW_ANCHOR_MAX_BYTES,
     {
       message: 'Anchor is too large',
     },
   );
 
-export type CreateReviewCommentInput = z.infer<typeof createReviewCommentSchema>;
+export type CreateAcceptanceReviewCommentInput = z.infer<
+  typeof createAcceptanceReviewCommentSchema
+>;
 
-export const reviewDecisionSchema = z.object({
+export const acceptanceReviewDecisionSchema = z.object({
   note: z.string().trim().max(2000).optional(),
   verdict: z.enum(['accept', 'send_back']),
 });
 
-export interface ReviewUser {
+export interface AcceptanceReviewUser {
   avatar?: string;
   id: string;
   name: string;
 }
 
-export interface ReviewSession {
+export interface AcceptanceReviewSession {
   acceptance: {
     id: string;
     previewUrl?: string;
@@ -108,19 +124,19 @@ export interface ReviewSession {
   /** `reject` without `decide`: a decider granted this reviewer reject access. */
   can: { comment: boolean; decide: boolean; moderate: boolean; reject: boolean };
   expiresAt: string;
-  user: ReviewUser;
+  user: AcceptanceReviewUser;
 }
 
-export interface ReviewComment {
-  anchor: ReviewAnchor | null;
-  author: ReviewUser;
+export interface AcceptanceReviewComment {
+  anchor: AcceptanceReviewAnchor | null;
+  author: AcceptanceReviewUser;
   clientId?: string;
   content: string;
   createdAt: string;
   id: string;
   mine: boolean;
   parentId: string | null;
-  replies: ReviewComment[];
+  replies: AcceptanceReviewComment[];
   resolvedAt: string | null;
   round: number | null;
   screenshot: { url: string } | null;

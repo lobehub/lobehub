@@ -9,6 +9,7 @@ import type {
   TaskItem,
 } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
 import {
@@ -18,11 +19,16 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from '../task';
+import { LinearApiError } from './client';
+import { linearCommentToContent } from './issueComments';
 import {
   getLinearIssuesByIds,
+  getLinearProjectTeamIds,
   LINEAR_PAGE_SIZE,
   type LinearIssue,
+  type LinearIssueComment,
   type LinearIssueFilter,
+  listLinearIssueComments,
   listLinearIssues,
 } from './issues';
 
@@ -35,10 +41,15 @@ export const MAX_ISSUES_PER_SYNC = 10_000;
  * the sync again picks up where the previous run stopped.
  */
 export const MAX_TASKS_CREATED_PER_SYNC = 100;
+/**
+ * Closed tasks one sync catches up comments for. Each is marked once synced,
+ * so a long history of legacy links is worked through over the next runs.
+ */
+export const MAX_COMMENT_CATCH_UPS_PER_SYNC = 100;
 /** Tries at creating one task when concurrent creates keep taking its identifier. */
 const MAX_CREATE_ATTEMPTS = 5;
 /** Skipped entries kept in a result, so a stored rule result stays small. */
-const MAX_SKIPPED_ENTRIES = 100;
+export const MAX_SKIPPED_ENTRIES = 100;
 
 const CLOSED_STATE_TYPES = new Set<LinearIssueStateType>(['completed', 'canceled']);
 const CLOSED_TASK_STATUSES = new Set(['completed', 'canceled']);
@@ -58,9 +69,22 @@ interface SyncOptions {
   closeOnly?: boolean;
   /** Import an issue that is already completed or canceled (as a closed task). */
   createClosed?: boolean;
+  /** Collects issues left uncreated because the run reached its task cap. */
+  deferred?: Set<string>;
+  /** Update and close linked tasks, but create none (a run past its task cap). */
+  noCreate?: boolean;
   /** LobeHub project new tasks land in. */
   targetProjectId?: string | null;
 }
+
+/** A filtered sync's outcome, plus where a run that stopped at its cap resumes. */
+export type LinearFilterSyncResult = LinearSyncResult & {
+  /**
+   * The Linear cursor to read from next, when `truncated`: the start of the
+   * first page holding an issue this run left for later. Absent: from the start.
+   */
+  resumeAfter?: string;
+};
 
 export const linearIssueToTaskFields = (issue: LinearIssue): SyncedFields => {
   const source = `> Linear: [${issue.identifier}](${issue.url})`;
@@ -186,7 +210,7 @@ export class LinearIssueSyncService {
   async importIssues(
     accessToken: string,
     issueIds: string[],
-    options: { targetProjectId?: string | null } = {},
+    options: { syncComments?: boolean; targetProjectId?: string | null } = {},
   ): Promise<LinearSyncResult> {
     const issues = await getLinearIssuesByIds(accessToken, issueIds);
     const result = emptyResult();
@@ -208,66 +232,149 @@ export class LinearIssueSyncService {
       { createClosed: true, targetProjectId: options.targetProjectId },
       result,
     );
+    if (options.syncComments) {
+      await this.syncComments(
+        accessToken,
+        issues.map((issue) => issue.id),
+        result,
+      );
+    }
     return result;
   }
 
   /**
    * Sync every issue matching a filter, then close the tasks of linked issues
-   * in the same team that the filter no longer matches because Linear closed
-   * them.
+   * in the filter's teams (for a project, every team it belongs to) that the
+   * filter no longer matches because Linear closed them.
+   *
+   * With `startAfter`, reading resumes at that cursor (a continuing run), and
+   * the closing pass is left to a run that reads from the start, since this
+   * one does not see the issues before the cursor. With `noCreate`, every
+   * matching issue is read and linked tasks are reconciled, but no task is
+   * created; an unimported issue only marks the result `truncated`.
+   *
+   * With `syncComments`, the comments of every issue read are copied onto its
+   * task, so running again also fills in tasks imported without them.
    */
   async syncByFilter(
     accessToken: string,
     filter: LinearIssueFilter,
-    options: { targetProjectId?: string | null } = {},
-  ): Promise<LinearSyncResult> {
-    const result = emptyResult();
+    options: {
+      noCreate?: boolean;
+      startAfter?: string;
+      syncComments?: boolean;
+      targetProjectId?: string | null;
+    } = {},
+  ): Promise<LinearFilterSyncResult> {
+    const result: LinearFilterSyncResult = emptyResult();
     const issues: LinearIssue[] = [];
+    const pages: { ids: string[]; startCursor?: string }[] = [];
     // Read until this run has as many not-yet-imported issues as it may create.
     // Already linked issues do not count, so the next run reaches further.
     let unlinked = 0;
-    let after: string | undefined;
+    let after = options.startAfter;
     do {
+      const startCursor = after;
       const page = await listLinearIssues(accessToken, filter, {
         after,
         first: Math.min(LINEAR_PAGE_SIZE, MAX_ISSUES_PER_SYNC - issues.length),
       });
       issues.push(...page.issues);
+      pages.push({ ids: page.issues.map((issue) => issue.id), startCursor });
       after = page.cursor;
       const linked = await this.linkModel.findByExternalIds(
         'linear',
         page.issues.map((issue) => issue.id),
       );
       unlinked += page.issues.length - linked.length;
-    } while (after && issues.length < MAX_ISSUES_PER_SYNC && unlinked < MAX_TASKS_CREATED_PER_SYNC);
+    } while (
+      after &&
+      issues.length < MAX_ISSUES_PER_SYNC &&
+      (options.noCreate || unlinked < MAX_TASKS_CREATED_PER_SYNC)
+    );
     result.truncated = !!after;
 
+    const deferred = new Set<string>();
     await this.syncIssues(
       issues,
       {
         createClosed: filter.stateTypes.some((type) => CLOSED_STATE_TYPES.has(type)),
+        deferred,
+        noCreate: options.noCreate,
         targetProjectId: options.targetProjectId,
       },
       result,
     );
+    if (options.syncComments) {
+      await this.syncComments(
+        accessToken,
+        issues.map((issue) => issue.id),
+        result,
+      );
+    }
+    if (result.truncated) {
+      // Resume where the first issue left for later is, so none is skipped;
+      // past every page read when the cap was not what stopped this run.
+      const firstDeferred = pages.find((page) => page.ids.some((id) => deferred.has(id)));
+      result.resumeAfter = firstDeferred ? firstDeferred.startCursor : after;
+    }
+    if (options.startAfter) return result;
 
     // Linked issues the filter missed: closed since, or moved out of the project.
+    // A link is stored under its issue's own team, which for a project filter
+    // can be any team the project belongs to, not just the filter's team.
     const seen = new Set(issues.map((issue) => issue.id));
-    const unseen = (await this.linkModel.findByContainer('linear', filter.teamId)).filter(
-      (link) => !seen.has(link.externalId),
-    );
+    const teamIds = new Set([filter.teamId, ...issues.map((issue) => issue.team.id)]);
+    if (filter.linearProjectId) {
+      // Let a failed lookup fail the run: skipping the project's other teams
+      // would leave their closed issues' tasks open without any sign of it.
+      for (const id of await getLinearProjectTeamIds(accessToken, filter.linearProjectId)) {
+        teamIds.add(id);
+      }
+    }
+    const unseen = (
+      await pMap([...teamIds], (teamId) => this.linkModel.findByContainer('linear', teamId), {
+        concurrency: 5,
+      })
+    )
+      .flat()
+      .filter((link) => !seen.has(link.externalId));
     if (unseen.length > 0) {
-      const open = await this.taskModel.findByIds(unseen.map((link) => link.taskId));
-      const openTaskIds = new Set(
-        open.filter((task) => !CLOSED_TASK_STATUSES.has(task.status)).map((task) => task.id),
+      const visible = await this.taskModel.findByIds(unseen.map((link) => link.taskId));
+      const closedTaskIds = new Set(
+        visible.filter((task) => CLOSED_TASK_STATUSES.has(task.status)).map((task) => task.id),
       );
-      const toCheck = unseen.filter((link) => openTaskIds.has(link.taskId));
+      const visibleTaskIds = new Set(visible.map((task) => task.id));
+      const toCheck = unseen.filter(
+        (link) => visibleTaskIds.has(link.taskId) && !closedTaskIds.has(link.taskId),
+      );
+      // Issues Linear closed: this run closes their tasks.
+      const closing: string[] = [];
       if (toCheck.length > 0) {
         const fetched = await getLinearIssuesByIds(
           accessToken,
           toCheck.map((link) => link.externalId),
         );
         await this.syncIssues(fetched, { closeOnly: true }, result);
+        for (const issue of fetched) {
+          if (CLOSED_STATE_TYPES.has(issue.state.type)) closing.push(issue.id);
+        }
+      }
+      if (options.syncComments) {
+        // The filter no longer reaches these issues, so their comments are
+        // read here: those being closed now, and closed tasks whose comments
+        // were never synced (imported before, or a failed read) — once, so a
+        // long tail of closed issues is not reread on every run. An open
+        // issue the filter misses (moved to another rule's project, say) is
+        // left to the rule that lists it.
+        const catchUp = unseen
+          .filter((link) => closedTaskIds.has(link.taskId) && !link.metadata?.commentsSynced)
+          .slice(0, MAX_COMMENT_CATCH_UPS_PER_SYNC);
+        await this.syncComments(
+          accessToken,
+          [...closing, ...catchUp.map((link) => link.externalId)],
+          result,
+        );
       }
     }
 
@@ -328,8 +435,9 @@ export class LinearIssueSyncService {
       skip(result, issue.identifier, 'closed');
       return;
     }
-    if (result.created >= MAX_TASKS_CREATED_PER_SYNC) {
+    if (options.noCreate || result.created >= MAX_TASKS_CREATED_PER_SYNC) {
       result.truncated = true;
+      options.deferred?.add(issue.id);
       return;
     }
 
@@ -505,6 +613,108 @@ export class LinearIssueSyncService {
       { userId: this.userId },
     );
     return skippedRunning ? undefined : updated;
+  }
+
+  /**
+   * Copy the Linear comments of these issues onto their tasks, oldest first,
+   * skipping those copied before. Only tasks the caller can see get comments;
+   * an issue never imported (skipped, or left for a later run) gets none yet.
+   * Comments are read a batch of issues at a time. A revoked token fails the
+   * run like reading issues does. Any other read failure (Linear throttling,
+   * say) stops reading for this run, and a failed write skips only its task;
+   * either way the tasks are reported `commentsFailed` and the next run
+   * retries them, while the task writes of this run still count.
+   */
+  private async syncComments(
+    accessToken: string,
+    issueIds: string[],
+    result: LinearSyncResult,
+  ): Promise<void> {
+    if (issueIds.length === 0) return;
+    const links = [...(await this.visibleLinks(issueIds)).values()];
+
+    for (let start = 0; start < links.length; start += LINEAR_PAGE_SIZE) {
+      const batch = links.slice(start, start + LINEAR_PAGE_SIZE);
+      let comments: LinearIssueComment[];
+      try {
+        comments = await listLinearIssueComments(
+          accessToken,
+          batch.map((link) => link.externalId),
+        );
+      } catch (error) {
+        if (error instanceof LinearApiError && error.status === 401) throw error;
+        log('read comments failed: %O', error);
+        // Further reads would most likely fail the same way.
+        for (const link of links.slice(start)) {
+          skip(result, link.externalIdentifier, 'commentsFailed');
+        }
+        return;
+      }
+
+      const byIssue = new Map<string, LinearIssueComment[]>();
+      for (const comment of comments) {
+        if (!comment.issueId) continue;
+        const list = byIssue.get(comment.issueId) ?? [];
+        list.push(comment);
+        byIssue.set(comment.issueId, list);
+      }
+
+      for (const link of batch) {
+        const issueComments = byIssue.get(link.externalId) ?? [];
+        const known = new Set(link.metadata?.syncedCommentIds ?? []);
+        const hasNew = issueComments.some((comment) => !known.has(comment.id));
+        if (!hasNew && link.metadata?.commentsSynced) continue;
+        try {
+          const added = await this.appendComments(link, issueComments);
+          if (added > 0) result.commentsImported = (result.commentsImported ?? 0) + added;
+        } catch (error) {
+          log('sync comments of %s failed: %O', link.externalIdentifier, error);
+          skip(result, link.externalIdentifier, 'commentsFailed');
+        }
+      }
+    }
+  }
+
+  /**
+   * Add the comments not copied yet and record them on the link in one
+   * transaction, under the task's row lock: a run cut off part-way never
+   * leaves a copied comment unrecorded, and two runs never copy the same one.
+   */
+  private async appendComments(
+    link: TaskExternalLinkWithTask,
+    comments: LinearIssueComment[],
+  ): Promise<number> {
+    return this.db.transaction(async (tx) => {
+      const tasks = new TaskModel(tx, this.userId, this.workspaceId);
+      if (!(await tasks.lockForUpdate(link.taskId))) return 0;
+      const linkModel = new TaskExternalLinkModel(tx, this.userId, this.workspaceId);
+      const [current] = await linkModel.findByExternalIds('linear', [link.externalId]);
+      if (!current || current.taskId !== link.taskId) return 0;
+
+      const known = new Set(current.metadata?.syncedCommentIds ?? []);
+      const fresh = comments.filter((comment) => !known.has(comment.id));
+      // Straight to the model: a bulk copy of history notifies no one, unlike
+      // a comment posted in LobeHub.
+      await tasks.addComments(
+        link.taskId,
+        fresh.map((comment) => {
+          // Linear's time, so the task's activity reads in the order it happened.
+          const createdAt = new Date(comment.createdAt);
+          return {
+            authorUserId: this.userId,
+            content: linearCommentToContent(comment),
+            createdAt,
+            updatedAt: createdAt,
+            userId: this.userId,
+          };
+        }),
+      );
+      await linkModel.recordSyncedComments(
+        current.id,
+        fresh.map((comment) => comment.id),
+      );
+      return fresh.length;
+    });
   }
 
   /** Links in this scope whose task the caller can still see. */

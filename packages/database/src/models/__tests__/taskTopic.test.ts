@@ -206,6 +206,8 @@ describe('TaskTopicModel', () => {
 
       const outside = await topicModel.findByTaskId(taskOutside.id);
       expect(outside[0]!.status).toBe('running');
+      // The set-based topic write only touches the canceled runs' topics.
+      expect((await getTopic('tpc_bulk_outside')).completedAt).toBeNull();
     });
 
     it('returns an empty list for an empty id set', async () => {

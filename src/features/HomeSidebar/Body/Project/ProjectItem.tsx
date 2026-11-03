@@ -1,9 +1,9 @@
 'use client';
 
 import type { DropdownItem } from '@lobehub/ui';
-import { ActionIcon, confirmModal, DropdownMenu, Icon, toast } from '@lobehub/ui';
-import { MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
+import { MoreHorizontalIcon, PencilIcon } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFavoriteMenuItem } from '@/features/Favorites';
@@ -13,7 +13,6 @@ import { openRenameProjectModal } from '@/features/Projects/RenameProjectModal';
 import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import type { ProjectListItem } from '@/store/project';
-import { useProjectStore } from '@/store/project';
 
 // `avatar` is an emoji or image URL, not a component: `Icon` would pass it to
 // createElement as a tag name and crash the whole page.
@@ -26,9 +25,7 @@ interface ProjectItemProps {
 }
 
 const ProjectItem = memo<ProjectItemProps>(({ project }) => {
-  const { t } = useTranslation(['project', 'common']);
-  const [deleting, setDeleting] = useState(false);
-  const deleteProject = useProjectStore((s) => s.deleteProject);
+  const { t } = useTranslation('project');
   const canManage = useCanManageProject();
   const projectPath = `/project/${project.slug ?? project.id}`;
   const favoriteMenuItem = useFavoriteMenuItem(
@@ -44,18 +41,6 @@ const ProjectItem = memo<ProjectItemProps>(({ project }) => {
     { showHotkey: false },
   );
 
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await deleteProject(project.id);
-      toast.success(t('list.deleteSuccess', { name: project.name }));
-    } catch (error) {
-      console.error('Failed to delete project', error);
-      toast.error(t('list.deleteError'));
-      setDeleting(false);
-    }
-  };
-
   const menuItems: DropdownItem[] = [
     ...(favoriteMenuItem ? [favoriteMenuItem] : []),
     ...(canManage
@@ -67,22 +52,6 @@ const ProjectItem = memo<ProjectItemProps>(({ project }) => {
             label: t('rename.action'),
             onClick: () => openRenameProjectModal(project),
           },
-          { type: 'divider' },
-          {
-            danger: true,
-            icon: <Icon icon={TrashIcon} />,
-            key: 'delete',
-            label: t('list.deleteAction'),
-            onClick: () =>
-              confirmModal({
-                cancelText: t('cancel', { ns: 'common' }),
-                content: t('list.deleteConfirmDescription', { name: project.name }),
-                okButtonProps: { danger: true },
-                okText: t('delete', { ns: 'common' }),
-                onOk: () => void handleDelete(),
-                title: t('list.deleteConfirmTitle'),
-              }),
-          },
         ] satisfies DropdownItem[])
       : []),
   ];
@@ -91,12 +60,11 @@ const ProjectItem = memo<ProjectItemProps>(({ project }) => {
     <WorkspaceLink to={projectPath}>
       <NavItem
         contextMenuItems={menuItems}
-        disabled={deleting}
         icon={projectIcon(project)}
         title={project.name}
         actions={
           <DropdownMenu items={menuItems}>
-            <ActionIcon icon={MoreHorizontalIcon} loading={deleting} size={'small'} />
+            <ActionIcon icon={MoreHorizontalIcon} size={'small'} />
           </DropdownMenu>
         }
       />

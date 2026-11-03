@@ -1,5 +1,4 @@
-import { Flexbox, Popover } from '@lobehub/ui';
-import { ActionIcon, type PopoverPlacement } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Popover, type PopoverPlacement } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { XIcon } from 'lucide-react';
 import { type CSSProperties, type FC, type ReactNode } from 'react';

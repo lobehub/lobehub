@@ -4,6 +4,7 @@ import type {
   TaskAutomationMode,
   TaskInstructionSynthesis,
   TaskIntentAnalysis,
+  TaskListFilter,
   TaskStatus,
 } from '@lobechat/types';
 
@@ -29,6 +30,8 @@ class TaskService {
     automated?: boolean;
     /** Keep completed / canceled tasks only when closed within this window. */
     completedWithin?: TaskCompletedWindow;
+    /** The Tasks page filter, applied server-side before paging. */
+    filter?: TaskListFilter;
     /** Archived tasks are left out unless this is set. */
     includeArchived?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
@@ -49,6 +52,7 @@ class TaskService {
     automated?: boolean;
     completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
+    filter?: TaskListFilter;
     groupBy?: 'assignee' | 'member' | 'priority';
     groups?: Array<{
       key: string;
@@ -173,6 +177,27 @@ class TaskService {
       scheduleTimezone?: string | null;
     },
   ) => lambdaClient.task.update.mutate({ id, ...data });
+
+  // ── Batch (list multi-select) ──
+  // One request per action for the whole selection; the server answers with a
+  // per-task outcome (`updated` / `skipped` / `failed`).
+
+  batchUpdate = async (params: {
+    assigneeAgentId?: string | null;
+    assigneeUserId?: string | null;
+    ids: string[];
+    priority?: number;
+  }) => lambdaClient.task.batchUpdate.mutate(params);
+
+  batchUpdateStatus = async (
+    ids: string[],
+    status: 'backlog' | 'canceled' | 'completed' | 'paused',
+  ) => lambdaClient.task.batchUpdateStatus.mutate({ ids, status });
+
+  batchArchive = async (ids: string[], archived: boolean) =>
+    lambdaClient.task.batchArchive.mutate({ archived, ids });
+
+  batchDelete = async (ids: string[]) => lambdaClient.task.batchDelete.mutate({ ids });
 
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
 

@@ -19,6 +19,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
 
+  // `flush`: the rail wrap owns border, radius and spacing.
+  innerFlush: css`
+    border: none;
+    border-radius: 0;
+  `,
+
   // Outer container
   outerContainer: css`
     position: relative;
@@ -29,5 +35,11 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline-start: var(--container-padding-left, 8px);
 
     background: ${isDesktop ? 'transparent' : cssVar.colorBgLayout};
+  `,
+
+  outerFlush: css`
+    min-width: 0;
+    padding: 0;
+    background: transparent;
   `,
 }));

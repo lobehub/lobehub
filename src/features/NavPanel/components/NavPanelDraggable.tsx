@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cssVar, DraggablePanel } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, DraggablePanel } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { Activity, memo, Suspense, useMemo, useRef } from 'react';
 
@@ -10,6 +10,8 @@ import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFul
 import Footer from '@/features/HomeSidebar/Footer';
 import { USER_DROPDOWN_ICON_ID } from '@/features/NavPanel/constants';
 import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
+import { LIST_COLUMN_BACKGROUND } from '@/features/NavRail/const';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useGlobalStore } from '@/store/global';
 import {
   NAV_PANEL_MAX_WIDTH,
@@ -22,6 +24,11 @@ import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
 import { BACK_BUTTON_ID } from './BackButton';
 
 const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
+  // `im_layout`: the list column inside the rail wrap, divided from the content.
+  imPanel: css`
+    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+    background: ${LIST_COLUMN_BACKGROUND};
+  `,
   content: css`
     position: relative;
 
@@ -128,12 +135,17 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
     defaultWidthRef.current = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
   }
 
+  const imLayout = useImLayout();
   const styles = useMemo(
     () => ({
-      background: isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout,
+      background: imLayout
+        ? LIST_COLUMN_BACKGROUND
+        : isDesktop && isMacOS()
+          ? MAC_VIBRANCY_BACKGROUND
+          : cssVar.colorBgLayout,
       zIndex: 11,
     }),
-    [],
+    [imLayout],
   );
 
   if (defaultWidthRef.current === 0) {
@@ -146,7 +158,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
 
   return (
     <DraggablePanel
-      className={draggableStyles.panel}
+      className={cx(draggableStyles.panel, imLayout && draggableStyles.imPanel)}
       classNames={classNames}
       defaultSize={defaultSize}
       expand={expand}
@@ -182,9 +194,12 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       <Suspense fallback={null}>
         <NavPanelUpgradeEntry />
       </Suspense>
-      <Suspense>
-        <Footer />
-      </Suspense>
+      {/* The rail owns settings and help under `im_layout`. */}
+      {!imLayout && (
+        <Suspense>
+          <Footer />
+        </Suspense>
+      )}
     </DraggablePanel>
   );
 });

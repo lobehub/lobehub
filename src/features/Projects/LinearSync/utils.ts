@@ -24,6 +24,8 @@ export const formatLinearSyncResult = (
     result.created && t('linear.sync.result.created', { count: result.created }),
     result.updated && t('linear.sync.result.updated', { count: result.updated }),
     result.closed && t('linear.sync.result.closed', { count: result.closed }),
+    result.commentsImported &&
+      t('linear.sync.result.commentsImported', { count: result.commentsImported }),
     result.keptLocalEdits &&
       t('linear.sync.result.keptLocalEdits', { count: result.keptLocalEdits }),
     skipped && t('linear.sync.result.skipped', { count: skipped }),
@@ -35,6 +37,18 @@ export const formatLinearSyncResult = (
 
 export const isActiveLinearSyncJob = (job: Pick<LinearSyncJobView, 'status'>) =>
   job.status === 'pending' || job.status === 'processing';
+
+/**
+ * Progress of a running sync. A rule run that goes on by itself carries the
+ * total of its finished rounds, so the count grows while it runs.
+ */
+export const linearSyncJobProgress = (
+  job: Pick<LinearSyncJobView, 'result'>,
+  t: TFunction<'integration'>,
+): string =>
+  job.result?.created
+    ? t('linear.sync.job.inProgressCreated', { count: job.result.created })
+    : t('linear.sync.job.inProgress');
 
 /** Why a background sync did not finish, for the user. */
 export const linearSyncJobErrorMessage = (
@@ -50,6 +64,9 @@ export const linearSyncJobErrorMessage = (
     }
     case 'timeout': {
       return t('linear.sync.job.error.timeout');
+    }
+    case 'canceled': {
+      return t('linear.sync.job.error.canceled');
     }
     default: {
       return t('linear.sync.error.generic');

@@ -1,6 +1,6 @@
 import { type ProviderConfig } from '@lobechat/types';
-import { type AiFullModelCard, type LobeDefaultAiModelListItem, ModelProvider } from 'model-bank';
 import * as AiModels from 'model-bank';
+import { type AiFullModelCard, type LobeDefaultAiModelListItem, ModelProvider } from 'model-bank';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { getLLMConfig } from '@/envs/llm';

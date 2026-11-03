@@ -30,8 +30,6 @@
   "features.inAppBrowser.title": "Navegador Integrado",
   "features.inputMarkdown.desc": "Renderiza Markdown en el área de entrada en tiempo real (texto en negrita, bloques de código, tablas, etc.).",
   "features.inputMarkdown.title": "Renderizado de Markdown en la Entrada",
-  "features.integrations.desc": "Muestra la página de configuración de Integraciones: conecta la aplicación de GitHub para que las solicitudes de extracción fusionadas acepten entregas y los errores en verificaciones o revisiones lleguen al agente que las abrió. Oculto por defecto.",
-  "features.integrations.title": "Integraciones",
   "features.messageTextSelectionActions.desc": "Mostrar una acción rápida al seleccionar texto en mensajes de chat para que el texto seleccionado se pueda agregar al contexto de la próxima conversación.",
   "features.messageTextSelectionActions.title": "Acciones de Selección de Texto en Mensajes",
   "features.oauthApps.desc": "Mostrar la gestión de aplicaciones OAuth en la configuración personal y del espacio de trabajo. Esta función está oculta por defecto.",

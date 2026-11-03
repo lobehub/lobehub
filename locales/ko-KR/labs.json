@@ -30,8 +30,6 @@
   "features.inAppBrowser.title": "인앱 브라우저",
   "features.inputMarkdown.desc": "입력 영역에서 실시간으로 Markdown을 렌더링합니다 (굵은 글씨, 코드 블록, 표 등).",
   "features.inputMarkdown.title": "입력창 Markdown 렌더링",
-  "features.integrations.desc": "통합 설정 페이지를 표시합니다: GitHub 앱을 연결하여 병합된 풀 리퀘스트가 전달을 수락하고 실패한 체크 또는 리뷰가 이를 연 에이전트에 도달하도록 합니다. 기본적으로 숨겨져 있습니다.",
-  "features.integrations.title": "통합",
   "features.messageTextSelectionActions.desc": "채팅 메시지에서 텍스트를 선택할 때 빠른 작업을 표시하여 선택한 텍스트를 다음 대화 컨텍스트에 추가할 수 있습니다.",
   "features.messageTextSelectionActions.title": "메시지 텍스트 선택 작업",
   "features.oauthApps.desc": "개인 및 워크스페이스 설정에서 OAuth 앱 관리를 표시합니다. 이 기능은 기본적으로 숨겨져 있습니다.",

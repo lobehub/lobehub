@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { FileSource } from '@lobechat/types';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -10,6 +11,7 @@ import { CanvasFileModel } from '../canvasFile';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'canvascov-user';
+const otherUserId = 'canvascov-user-2';
 const hash = 'canvascov-hash-1';
 const blob = {
   contentType: 'image/png',
@@ -22,9 +24,9 @@ const blob = {
 const cleanup = async () => {
   // files cascade from the owning user; `global_files.creator` is NOT NULL with
   // ON DELETE SET NULL, so its row has to go first.
-  await serverDB.delete(files).where(eq(files.userId, userId));
-  await serverDB.delete(globalFiles).where(eq(globalFiles.hashId, hash));
-  await serverDB.delete(users).where(eq(users.id, userId));
+  await serverDB.delete(files).where(inArray(files.userId, [userId, otherUserId]));
+  await serverDB.delete(globalFiles).where(inArray(globalFiles.hashId, [hash]));
+  await serverDB.delete(users).where(inArray(users.id, [userId, otherUserId]));
 };
 
 describe('CanvasFileModel coverage edges', () => {
@@ -61,5 +63,38 @@ describe('CanvasFileModel coverage edges', () => {
 
     expect(await model.deleteByCanvas('canvas-unknown')).toEqual([]);
     expect(await serverDB.select().from(files).where(eq(files.userId, userId))).toHaveLength(1);
+  });
+
+  it('reports whether the caller still holds files of a canvas', async () => {
+    const model = new CanvasFileModel(serverDB, userId);
+    await model.insertFiles('canvas-1', [blob]);
+
+    expect(await model.hasCanvasFiles('canvas-1')).toBe(true);
+    expect(await model.hasCanvasFiles('canvas-2')).toBe(false);
+  });
+
+  it('does not treat another owner’s canvas files as the caller’s', async () => {
+    await serverDB.insert(users).values({ id: otherUserId });
+    await new CanvasFileModel(serverDB, otherUserId).insertFiles('canvas-shared', [blob]);
+
+    expect(await new CanvasFileModel(serverDB, userId).hasCanvasFiles('canvas-shared')).toBe(false);
+    expect(await new CanvasFileModel(serverDB, otherUserId).hasCanvasFiles('canvas-shared')).toBe(
+      true,
+    );
+  });
+
+  it('ignores files that carry a canvasId but were not stored as canvas files', async () => {
+    await serverDB.insert(files).values({
+      fileHash: hash,
+      fileType: 'image/png',
+      metadata: { canvasId: 'canvas-1' },
+      name: 'page-editor.png',
+      size: 1,
+      source: FileSource.PageEditor,
+      url: 'files/canvascov-page-editor.png',
+      userId,
+    });
+
+    expect(await new CanvasFileModel(serverDB, userId).hasCanvasFiles('canvas-1')).toBe(false);
   });
 });

@@ -30,8 +30,6 @@
   "features.inAppBrowser.title": "مرورگر داخلی",
   "features.inputMarkdown.desc": "نمایش زنده Markdown در ناحیه ورودی (متن پررنگ، بلوک‌های کد، جدول‌ها و غیره).",
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
-  "features.integrations.desc": "صفحه تنظیمات یکپارچه‌سازی‌ها را نمایش دهید: برنامه GitHub را متصل کنید تا درخواست‌های ادغام شده تحویل‌ها را بپذیرند و بررسی‌ها یا بازبینی‌های ناموفق به عاملی که آنها را باز کرده است برسند. به طور پیش‌فرض مخفی است.",
-  "features.integrations.title": "یکپارچه‌سازی‌ها",
   "features.messageTextSelectionActions.desc": "نمایش یک اقدام سریع هنگام انتخاب متن در پیام‌های چت تا متن انتخاب شده به زمینه مکالمه بعدی اضافه شود.",
   "features.messageTextSelectionActions.title": "اقدامات انتخاب متن پیام",
   "features.oauthApps.desc": "نمایش مدیریت برنامه‌های OAuth در تنظیمات شخصی و فضای کاری. این ویژگی به‌طور پیش‌فرض مخفی است.",

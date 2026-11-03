@@ -47,6 +47,7 @@ describe('TaskModel public surface', () => {
       'addActivities',
       'addActivity',
       'addComment',
+      'addComments',
       'addDependency',
       'areAllDependenciesCompleted',
       'areAllSubtasksCompleted',
@@ -124,6 +125,7 @@ describe('TaskModel public surface', () => {
   it('keeps the static methods', () => {
     expect(
       [
+        'findInterruptedRunningTopics',
         'findOrphanedRunningTopics',
         'findStuckTasks',
         'getScheduledTasks',

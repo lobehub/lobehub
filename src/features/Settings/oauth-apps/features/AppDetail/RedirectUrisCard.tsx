@@ -164,6 +164,11 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
                   >
                     {t('oauthApp.redirectUris.add')}
                   </Button>
+                  {fields.length >= MAX_OAUTH_REDIRECT_URIS && (
+                    <Text style={{ fontSize: 12 }} type={'secondary'}>
+                      {t('oauthApp.redirectUris.limitReached', { count: MAX_OAUTH_REDIRECT_URIS })}
+                    </Text>
+                  )}
                 </Flexbox>
               )}
             </Form.List>

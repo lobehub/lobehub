@@ -6,6 +6,10 @@ import { useElectronStore } from '@/store/electron';
 
 import { useActiveNavKey } from './useActiveNavKey.desktop';
 
+const layout = vi.hoisted(() => ({ imLayout: false }));
+
+vi.mock('@/features/NavRail/useImLayout', () => ({ useImLayout: () => layout.imLayout }));
+
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => null,
 }));
@@ -13,6 +17,7 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
 const tab = (id: string, url: string) => ({ id, lastVisited: 0, url });
 
 afterEach(() => {
+  layout.imLayout = false;
   useElectronStore.setState({ activeTabId: null, tabs: [] });
   useDisplayedTabStore.setState({ tabId: null });
 });
@@ -48,5 +53,17 @@ describe('useActiveNavKey (desktop)', () => {
     const { result } = renderHook(() => useActiveNavKey());
 
     expect(result.current).toBe('discover');
+  });
+
+  // The rail moves the all-agents page to the Contacts list under `im_layout`.
+  it('resolves with the rail mapping under the im_layout trial', () => {
+    layout.imLayout = true;
+    useElectronStore.setState({ activeTabId: 'only', tabs: [tab('only', '/agents')] });
+    useDisplayedTabStore.setState({ tabId: 'only' });
+
+    expect(renderHook(() => useActiveNavKey()).result.current).toBe('contacts');
+
+    layout.imLayout = false;
+    expect(renderHook(() => useActiveNavKey()).result.current).toBe('home');
   });
 });

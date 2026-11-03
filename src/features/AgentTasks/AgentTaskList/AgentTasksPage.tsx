@@ -34,6 +34,14 @@ import Breadcrumb from '../shared/Breadcrumb';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import EmptyState from './EmptyState';
+import {
+  pickOfferedTaskFilter,
+  TaskFilterBar,
+  TaskFilterButton,
+  taskListFilterScopeKey,
+  useTaskFilterFields,
+  useTaskListFilter,
+} from './filter';
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
 import {
@@ -229,8 +237,29 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // gated off while it is up.
   const isBoardView = resolveTaskCollectionView(collection, viewMode) === 'board';
   const isMineBoard = isMineCollection && isBoardView;
+  // The Linear-style filter is kept per list scope (workspace + page) and
+  // applied server-side by every collection, so paginated pages and board
+  // columns count only the matching tasks.
+  const filterFields = useTaskFilterFields({ agentId, projectId });
+  const [storedFilter, setFilter] = useTaskListFilter(
+    taskListFilterScopeKey({ agentId, projectId, workspaceId: activeWorkspaceId }),
+  );
+  const filter = useMemo(
+    () =>
+      pickOfferedTaskFilter(
+        storedFilter,
+        filterFields.map((field) => field.key),
+      ),
+    [filterFields, storedFilter],
+  );
+  const hasFilter = !!filter;
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
+  // Group headers of the ordinary list offer the board's column create entry.
+  const groupCreateScope = useMemo(
+    () => (canCreateTask ? { agentId, projectId } : undefined),
+    [agentId, canCreateTask, projectId],
+  );
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
   // `queryKey` the rows are read by. Every scope splits automated work out of the ordinary tab — it is the
@@ -252,6 +281,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
     automated: false,
     complete: isListView,
     enabled: isOrdinaryCollection,
+    filter,
     includeArchived: viewOptions.showArchived,
   });
   // Drive the loading/empty boundary off the store entry of this exact query:
@@ -261,10 +291,13 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   const setActiveTaskListKey = useTaskStore((s) => s.setActiveTaskListKey);
   // The task manager agent reads this page's list as "the viewed list".
   useEffect(() => {
-    setActiveTaskListKey(queryKey);
+    setActiveTaskListKey(queryKey, hasFilter);
     return () => setActiveTaskListKey(undefined);
-  }, [queryKey, setActiveTaskListKey]);
-  const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty(queryKey));
+  }, [hasFilter, queryKey, setActiveTaskListKey]);
+  // An empty result under a filter is "nothing matches", not a fresh
+  // workspace: keep the header (and the way out of the filter) on screen.
+  const isListEmpty = useTaskStore(taskListSelectors.isListEmpty(queryKey));
+  const isEmptyHero = isListEmpty && !hasFilter;
   // The empty hero hides the view options, and with them "Show archived". When
   // only archived tasks remain, keep the options reachable so they can come back.
   const { queryKey: archivedProbeKey } = useFetchTaskList({
@@ -283,6 +316,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   const scheduledSWR = useFetchScheduledTaskList({
     agentId,
     enabled: isScheduledCollection,
+    filter,
     limit: COLLECTION_PAGE_SIZE,
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
     projectId,
@@ -291,6 +325,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   const mineSWR = useFetchMyTaskList({
     completedWithin: getCompletedWithin(viewOptions),
     enabled: isMineCollection && !isMineBoard,
+    filter,
     limit: COLLECTION_PAGE_SIZE,
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
     includeArchived: viewOptions.showArchived,
@@ -313,6 +348,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
     [viewOptions],
   );
   const myTaskViewOptions = useMemo(() => getMyTaskViewOptions(viewOptions), [viewOptions]);
+  const filterKey = JSON.stringify(filter ?? null);
+  useEffect(() => {
+    setCollectionPage(1);
+  }, [filterKey]);
   useEffect(() => {
     if (!isCollectionListInit) return;
     setCollectionPage((page) => clampCollectionPage(page, collectionTasksTotal));
@@ -381,6 +420,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
       },
     });
   }, [agentId, canCreateTask, navigate, projectId]);
+
+  const handleClearFilter = useCallback(() => setFilter(() => undefined), [setFilter]);
+  const filterEmptyAction = hasFilter ? (
+    <Button onClick={handleClearFilter}>{t('taskList.filter.clearAll')}</Button>
+  ) : undefined;
+  const filterEmptyDescription = hasFilter ? t('taskList.filter.empty') : undefined;
 
   const handleShowHiddenCompleted = useCallback(() => {
     setViewOptions((prev) => ({ ...prev, completedTasks: 'all' }));
@@ -457,6 +502,9 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
         left={headerLeft}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
+            {(headerVisibility.showViewOptions || hasFilter) && (
+              <TaskFilterButton fields={filterFields} filter={filter} setFilter={setFilter} />
+            )}
             {isOrdinaryCollection && !agentId && !projectId && <TaskListVisibilityFilter />}
             {isOrdinaryCollection && headerActions}
             {isOrdinaryCollection && (inlineCollapsed || viewMode === 'kanban') && (
@@ -500,17 +548,22 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
           },
         }}
       />
+      <TaskFilterBar fields={filterFields} filter={filter} setFilter={setFilter} />
       {isMineBoard ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
           <KanbanBoard
+            filter={filter}
             myTaskScope={myTaskScope}
             options={viewOptions}
             routeScope={routeScope}
-            emptyDescription={t(
-              myTaskScope === 'created'
-                ? 'taskList.mine.emptyCreated'
-                : 'taskList.mine.emptyAssigned',
-            )}
+            emptyDescription={
+              filterEmptyDescription ??
+              t(
+                myTaskScope === 'created'
+                  ? 'taskList.mine.emptyCreated'
+                  : 'taskList.mine.emptyAssigned',
+              )
+            }
           />
         </Flexbox>
       ) : !isOrdinaryCollection ? (
@@ -524,26 +577,36 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
           <TaskList
             data={isCollectionListInit || undefined}
             error={collectionSWR.error}
+            filter={filter}
             isLoading={collectionSWR.isLoading || (!isCollectionListInit && !collectionSWR.error)}
             items={collectionTasks}
             options={isMineCollection ? myTaskViewOptions : scheduledViewOptions}
             routeScope={routeScope}
             emptyAction={
-              showScheduledEmptyCreate ? (
+              filterEmptyAction ??
+              (showScheduledEmptyCreate ? (
                 <Button icon={Plus} onClick={handleCreateScheduledTask}>
                   {t('createTask.submitScheduled')}
                 </Button>
-              ) : undefined
+              ) : undefined)
             }
             emptyDescription={
-              isMineCollection
+              filterEmptyDescription ??
+              (isMineCollection
                 ? t(
                     myTaskScope === 'created'
                       ? 'taskList.mine.emptyCreated'
                       : 'taskList.mine.emptyAssigned',
                   )
-                : t('taskList.scheduled.empty')
+                : t('taskList.scheduled.empty'))
             }
+            selectionScope={[
+              collection,
+              isMineCollection ? myTaskScope : '',
+              collectionPage,
+              agentId ?? '',
+              projectId ?? '',
+            ].join(':')}
             onRetry={() => collectionSWR.mutate()}
           />
           {(collectionTasksTotal > COLLECTION_PAGE_SIZE || collectionPage > 1) && (
@@ -564,6 +627,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
           <KanbanBoard
             agentId={agentId}
+            emptyDescription={filterEmptyDescription}
+            filter={filter}
             options={viewOptions}
             projectId={projectId}
             routeScope={routeScope}
@@ -585,8 +650,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
             />
           )}
           <TaskList
+            createScope={groupCreateScope}
             data={isTaskListInit || undefined}
+            emptyAction={filterEmptyAction}
+            emptyDescription={filterEmptyDescription}
             error={error}
+            filter={filter}
             isLoading={isLoading || (!isTaskListInit && !error)}
             options={viewOptions}
             queryKey={queryKey}

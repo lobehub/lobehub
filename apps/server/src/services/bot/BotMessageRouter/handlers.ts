@@ -279,7 +279,8 @@ export function registerHandlers(
 
   /**
    * How the bot opens a reply: an acknowledgement before the run, and the channel or a thread
-   * under the message, on any platform that offers the choice (`PlatformClient.getReplyTargets`).
+   * under the message, on any platform that offers the choice (`PlatformClient.getReplyTargets`);
+   * the acknowledgement alone on a threadless platform that opts in (`decidesReplyOpening`).
    * Decided by the bot only while the owner leaves the placement to it (see `./replyOpening`);
    * otherwise the previous behaviour.
    */

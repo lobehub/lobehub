@@ -153,6 +153,8 @@ export const linearRouter = router({
       projectInput.extend({
         connectionId: z.string().uuid(),
         issueIds: z.array(z.string().min(1)).min(1).max(MAX_IMPORT_ISSUES),
+        /** Also copy each issue's Linear comments onto its task. */
+        syncComments: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -165,11 +167,31 @@ export const linearRouter = router({
         issueIds: [...new Set(input.issueIds)],
         kind: 'issues',
         projectId: input.projectId,
+        syncComments: input.syncComments || undefined,
       });
       return { id };
     }),
 
   /** The project's recent background syncs, newest first. */
+  /**
+   * Stop a background sync of this project. A round already running finishes
+   * the tasks it is writing; no further round starts, and tasks already
+   * written are kept.
+   */
+  cancelSync: linearTaskWriteProcedure
+    .input(projectInput.extend({ jobId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireProject(ctx, input.projectId);
+      await requireWritableScope(ctx);
+      const canceled = await LinearSyncJobModel.cancel(
+        ctx.serverDB,
+        ctx.scope,
+        input.projectId,
+        input.jobId,
+      );
+      return { canceled };
+    }),
+
   listSyncJobs: linearProcedure.input(projectInput).query(async ({ ctx, input }) => {
     await requireProject(ctx, input.projectId);
     const rows = await LinearSyncJobModel.listByProject(ctx.serverDB, ctx.scope, input.projectId);
@@ -222,7 +244,13 @@ export const linearRouter = router({
    * still going is returned instead of starting a second one.
    */
   startRuleSync: linearTaskWriteProcedure
-    .input(z.object({ ruleId: z.string().uuid() }))
+    .input(
+      z.object({
+        ruleId: z.string().uuid(),
+        /** Also copy each issue's Linear comments onto its task. */
+        syncComments: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const rule = await requireSyncRule(ctx, input.ruleId);
       // The rule is in the caller's scope, and so is the connection it was
@@ -242,6 +270,7 @@ export const linearRouter = router({
           kind: 'rule',
           projectId: rule.projectId,
           ruleId: rule.id,
+          syncComments: input.syncComments || undefined,
         },
       );
       return { id };

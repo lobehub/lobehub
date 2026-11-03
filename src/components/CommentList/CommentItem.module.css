@@ -21,7 +21,7 @@
   color: var(--lobe-color-text);
 }
 
-@media (max-width: 575.98px) {
+@media (width <= 575.98px) {
   .content {
     font-size: 15px;
   }
