@@ -1,10 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
-
-import ts from 'typescript';
 
 import type { FileExtraction } from '../extract';
 import type { Side } from '../plan/planFile';
+import { resolveSlot } from '../source/declarations';
 import type { ScopeFile } from '../source/scope';
 import type { CaseCategory } from '../verdict/categorize';
 import {
@@ -46,7 +45,6 @@ export interface PlanMutationsInput {
 }
 
 export const OVERSAMPLE = 3;
-const EXTENSIONS = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
 
 const random = (seed: string) => {
   let state = [...seed].reduce(
@@ -70,100 +68,24 @@ const shuffled = <T>(items: T[], seed: string) => {
   return copy;
 };
 
-const resolveSpecifier = (
-  root: string,
-  from: string,
-  specifier: string,
-  aliases: Record<string, string>,
-) => {
-  const alias = Object.entries(aliases).find(([prefix]) => specifier.startsWith(prefix));
-  const base = specifier.startsWith('.')
-    ? path.join(path.dirname(from), specifier)
-    : alias
-      ? alias[1] + specifier.slice(alias[0].length)
-      : undefined;
-  if (!base) return undefined;
-  return EXTENSIONS.map((extension) => path.normalize(base + extension)).find((candidate) => {
-    const absolute = path.join(root, candidate);
-    return existsSync(absolute) && !absolute.endsWith(path.sep) && path.extname(candidate) !== '';
-  });
-};
-
-interface ImportedName {
-  imported: string;
-  specifier: string;
-}
-
-const importsOf = (code: string) => {
-  const sf = ts.createSourceFile(
-    'source.tsx',
-    code,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  const named = new Map<string, ImportedName>();
-  const sideEffects: string[] = [];
-  const locals = new Set<string>();
-  for (const statement of sf.statements) {
-    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
-      const specifier = statement.moduleSpecifier.text;
-      const clause = statement.importClause;
-      if (!clause) {
-        sideEffects.push(specifier);
-        continue;
-      }
-      if (clause.name) named.set(clause.name.text, { imported: 'default', specifier });
-      const bindings = clause.namedBindings;
-      if (bindings && ts.isNamedImports(bindings))
-        for (const element of bindings.elements)
-          named.set(element.name.text, {
-            imported: (element.propertyName ?? element.name).text,
-            specifier,
-          });
-      continue;
-    }
-    if (ts.isVariableStatement(statement))
-      for (const declaration of statement.declarationList.declarations)
-        if (ts.isIdentifier(declaration.name)) locals.add(declaration.name.text);
-  }
-  return { locals, named, sideEffects };
-};
-
 const slotMutations = (
   input: PlanMutationsInput,
   source: string,
   code: string,
   slot: string,
-): Array<{ mutation: Mutation; site: MutationSite }> => {
-  const dot = slot.indexOf('.');
-  const [symbol, member] = [slot.slice(0, dot), slot.slice(dot + 1)];
-  const { locals, named, sideEffects } = importsOf(code);
-  const read = (file: string) => readFileSync(path.join(input.headRoot, file), 'utf8');
-  if (symbol === 'global')
-    return sideEffects.flatMap((specifier) => {
-      const file = resolveSpecifier(input.headRoot, source, specifier, input.aliases);
-      if (!file?.endsWith('.css')) return [];
-      return stylesheetMutations(read(file), member).map((mutation) => ({
-        mutation,
-        site: { kind: 'import' as const, path: file, specifier },
-      }));
-    });
-  if (locals.has(symbol))
-    return declarationMutations(code, symbol, member).map((mutation) => ({
+): Array<{ mutation: Mutation; site: MutationSite }> =>
+  resolveSlot(input.headRoot, source, code, slot, input.aliases).flatMap((site) =>
+    (site.css
+      ? stylesheetMutations(site.code, site.member)
+      : declarationMutations(site.code, site.symbol, site.member)
+    ).map((mutation) => ({
       mutation,
-      site: { kind: 'source' as const, path: source },
-    }));
-  const imported = named.get(symbol);
-  if (!imported) return [];
-  const file = resolveSpecifier(input.headRoot, source, imported.specifier, input.aliases);
-  if (!file) return [];
-  const site = { kind: 'import' as const, path: file, specifier: imported.specifier };
-  const mutations = file.endsWith('.css')
-    ? stylesheetMutations(read(file), member)
-    : declarationMutations(read(file), imported.imported, member);
-  return mutations.map((mutation) => ({ mutation, site }));
-};
+      site:
+        site.kind === 'source'
+          ? { kind: 'source' as const, path: site.path }
+          : { kind: 'import' as const, path: site.path, specifier: site.specifier! },
+    })),
+  );
 
 export const planMutations = (input: PlanMutationsInput): MutationCandidate[] => {
   const operators = input.operators ?? MUTATION_OPERATORS;

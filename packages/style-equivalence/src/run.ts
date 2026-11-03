@@ -20,6 +20,8 @@ import { synthesize, writeHost } from './pipeline/synthesize';
 import type { FilePlan, PlanCase } from './plan/planFile';
 import { resolveScope } from './source/scope';
 import { prepareRevisions } from './source/worktrees';
+import type { Verdict } from './verdict';
+import { assembleVerdict } from './verdict/assemble';
 import { type CaseCategory, categorizeCase } from './verdict/categorize';
 
 const run = promisify(execFile);
@@ -60,6 +62,7 @@ export interface RunResult {
   runDir: string;
   runId: string;
   unpaired: number;
+  verdict: Verdict;
 }
 
 const resolveSha = async (repo: string, revision: string) =>
@@ -167,6 +170,17 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       { base, cases, head, repo: options.repo, runDir },
       options.calibrate === false ? undefined : config.calibration,
     );
+    const verdict = await assembleVerdict({
+      aliases: config.aliases,
+      calibration,
+      cases,
+      extractions: synthesis.extractions,
+      mutation,
+      plans: synthesis.plans,
+      roots,
+      scope,
+      verifierVersion: VERIFIER_VERSION,
+    });
     const comparisons = capture.conditions.reduce(
       (total, condition) => total + Object.keys(condition.head).length,
       0,
@@ -184,6 +198,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       runDir,
       runId,
       unpaired: synthesis.plans.reduce((total, plan) => total + plan.unpaired.length, 0),
+      verdict,
     };
     await writeEvidence(runDir, 'run.json', {
       base,
@@ -203,6 +218,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
     await writeEvidence(runDir, 'extractions.json', synthesis.extractions);
     await writeEvidence(runDir, 'mutation.json', mutation);
     await writeEvidence(runDir, 'calibration.json', calibration);
+    await writeEvidence(runDir, 'verdict.json', verdict);
     await writeEvidence(runDir, 'results.json', { cases, comparisons, unpaired: result.unpaired });
     return result;
   } finally {

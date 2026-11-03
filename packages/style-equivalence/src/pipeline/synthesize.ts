@@ -7,6 +7,7 @@ import { extractFile, type FileExtraction } from '../extract';
 import { generateHost, HOST_HTML } from '../generate/host';
 import { generateModule } from '../generate/module';
 import { type FilePlan, planFile, type Side } from '../plan/planFile';
+import { resolveSpecifier } from '../source/declarations';
 import type { ScopeFile } from '../source/scope';
 
 export const HOST_DIR = '.style-equivalence-host';
@@ -21,6 +22,14 @@ const empty = (file: string): FileExtraction => ({
   rules: [],
   styleSymbols: [],
 });
+
+export const moduleReader =
+  (root: string, aliases: Record<string, string>) => (fromFile: string, specifier: string) => {
+    const file = resolveSpecifier(root, fromFile, specifier, aliases);
+    return file && /\.[cm]?[jt]sx?$/.test(file)
+      ? readFileSync(path.join(root, file), 'utf8')
+      : undefined;
+  };
 
 export const stylesheetReader = (root: string) => (fromFile: string, specifier: string) => {
   if (!specifier.startsWith('.')) return undefined;
@@ -49,6 +58,7 @@ export const synthesize = async (
       return extractFile(code, source, {
         adapters: config.adapters,
         layoutComponents: config.layoutComponents,
+        readModule: moduleReader(roots[side], config.aliases),
         readStylesheet: stylesheetReader(roots[side]),
       });
     };

@@ -1,0 +1,79 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
+import type { FileExtraction, LiteralValue, StyleBinding } from '../extract';
+import { chainOf, type PlanCase, type Side } from '../plan/planFile';
+import { declarationText, resolveSlot } from '../source/declarations';
+
+export interface HashedElement {
+  bindings: StyleBinding[];
+  literalProps: Record<string, LiteralValue>;
+  slots: string[];
+  tag: string;
+}
+
+export interface CaseHashInput {
+  declarations: Partial<Record<Side, Record<string, string>>>;
+  elements: Partial<Record<Side, HashedElement[]>>;
+  plan?: Pick<PlanCase, 'combos' | 'flags' | 'variables'>;
+  verifierMajor: string;
+}
+
+const sortKeys = (_key: string, value: unknown) =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
+      )
+    : value;
+
+export const contentHash = (input: CaseHashInput) =>
+  createHash('sha256').update(JSON.stringify(input, sortKeys)).digest('hex');
+
+export interface CollectHashInput {
+  aliases: Record<string, string>;
+  elementIds?: Partial<Record<Side, string>>;
+  extractions: Partial<Record<Side, FileExtraction>>;
+  plan?: PlanCase;
+  roots: Record<Side, string>;
+  sources: Partial<Record<Side, string>>;
+  verifierVersion: string;
+}
+
+export const collectCaseHashInput = (input: CollectHashInput): CaseHashInput => {
+  const result: CaseHashInput = {
+    declarations: {},
+    elements: {},
+    plan: input.plan && {
+      combos: input.plan.combos,
+      flags: input.plan.flags,
+      variables: input.plan.variables,
+    },
+    verifierMajor: input.verifierVersion.split('.')[0],
+  };
+  for (const side of ['base', 'head'] as const) {
+    const extraction = input.extractions[side];
+    const source = input.sources[side];
+    const id = input.elementIds?.[side] ?? input.plan?.elementIds[side];
+    if (!extraction || !source || !id) continue;
+    const byId = new Map(extraction.elements.map((element) => [element.id, element]));
+    const element = byId.get(id);
+    if (!element) continue;
+    const chain = chainOf(element, byId);
+    result.elements[side] = chain.map(({ bindings, literalProps, slots, tag }) => ({
+      bindings,
+      literalProps,
+      slots,
+      tag,
+    }));
+    const code = readFileSync(path.join(input.roots[side], source), 'utf8');
+    const slots = [...new Set(chain.flatMap((item) => item.slots))].sort();
+    result.declarations[side] = Object.fromEntries(
+      slots.map((slot) => {
+        const sites = resolveSlot(input.roots[side], source, code, slot, input.aliases);
+        return [slot, sites.length ? sites.map(declarationText).join('\n') : `UNRESOLVED:${slot}`];
+      }),
+    );
+  }
+  return result;
+};

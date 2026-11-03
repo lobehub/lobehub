@@ -91,16 +91,16 @@ const main = async () => {
     repo,
   });
   console.log(formatSummary(result));
-  const has = (category: string) => result.cases.some((entry) => entry.category === category);
+  const open = (category: string) =>
+    result.verdict.items.some((item) => item.category === category && item.signoff !== 'valid');
   const mismatch = result.calibration.some((entry) => entry.status === 'mismatch');
-  process.exitCode =
-    has('blocking') || !result.mutation.passed || mismatch
+  process.exitCode = result.verdict.mergeable
+    ? 0
+    : open('blocking') || !result.mutation.passed || mismatch
       ? 3
-      : has('difference')
+      : open('difference')
         ? 1
-        : has('needs-signoff') || result.unpaired
-          ? 2
-          : 0;
+        : 2;
 };
 
 main().catch((error) => {

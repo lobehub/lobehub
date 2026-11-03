@@ -2,6 +2,7 @@ import postcss, { type Declaration, type Rule } from 'postcss';
 import ts from 'typescript';
 
 import { classNamesIn } from '../extract/selectors';
+import { findStyleMember, parseSource, propertyNameOf } from '../source/declarations';
 
 export type MutationOperator =
   'delete-declaration' | 'delete-state' | 'invert-condition' | 'numeric' | 'swap-token';
@@ -43,13 +44,6 @@ const firstOf = (mutations: Array<Mutation | undefined>) => {
     return true;
   });
 };
-
-const nameOf = (name: ts.PropertyName) =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)
-    ? name.text
-    : ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)
-      ? name.expression.text
-      : undefined;
 
 const removal = (code: string, node: ts.Node, operator: MutationOperator): Mutation => {
   let start = node.getFullStart();
@@ -112,7 +106,7 @@ const objectMutations = (code: string, sf: ts.SourceFile, object: ts.ObjectLiter
   const walk = (node: ts.ObjectLiteralExpression) => {
     for (const property of node.properties) {
       if (!ts.isPropertyAssignment(property)) continue;
-      if (/^[:@]/.test(nameOf(property.name) ?? '')) states.push(property);
+      if (/^[:@]/.test(propertyNameOf(property.name) ?? '')) states.push(property);
       if (ts.isObjectLiteralExpression(property.initializer)) walk(property.initializer);
       else leaves.push(property);
     }
@@ -215,44 +209,9 @@ const templateMutations = (code: string, sf: ts.SourceFile, template: ts.Templat
   ];
 };
 
-const findMember = (call: ts.CallExpression, member: string) => {
-  let queue: ts.Node[] = [...call.arguments];
-  while (queue.length) {
-    const next: ts.Node[] = [];
-    for (const node of queue) {
-      if (ts.isPropertyAssignment(node) && nameOf(node.name) === member) return node;
-      ts.forEachChild(node, (child) => {
-        next.push(child);
-      });
-    }
-    queue = next;
-  }
-  return undefined;
-};
-
 export const declarationMutations = (code: string, symbol: string, member: string): Mutation[] => {
-  const sf = ts.createSourceFile(
-    'styles.tsx',
-    code,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  let call: ts.CallExpression | undefined;
-  const visit = (node: ts.Node) => {
-    if (
-      !call &&
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === symbol &&
-      node.initializer &&
-      ts.isCallExpression(node.initializer)
-    )
-      call = node.initializer;
-    ts.forEachChild(node, visit);
-  };
-  visit(sf);
-  const property = call && findMember(call, member);
+  const sf = parseSource(code, 'styles.tsx');
+  const property = findStyleMember(sf, symbol, member);
   if (!property) return [];
   const value = property.initializer;
   if (ts.isObjectLiteralExpression(value)) return firstOf(objectMutations(code, sf, value));

@@ -1,6 +1,7 @@
 import type { CalibrationResult } from '../calibration';
 import type { StyleDifference } from '../capture/snapshot';
 import type { MutantResult, MutationReport } from '../mutation/run';
+import type { Verdict } from '../verdict';
 import type { CaseCategory } from '../verdict/categorize';
 
 export interface SummaryInput {
@@ -20,6 +21,7 @@ export interface SummaryInput {
   };
   runDir: string;
   unpaired: number;
+  verdict: Pick<Verdict, 'mergeable' | 'reasons'>;
 }
 
 const TOP = 10;
@@ -58,6 +60,9 @@ export const formatSummary = (input: SummaryInput) => {
   const count = (category: CaseCategory) =>
     input.cases.filter((entry) => entry.category === category).length;
   const lines = [
+    input.verdict.mergeable
+      ? 'verdict mergeable'
+      : `verdict not mergeable: ${input.verdict.reasons.join(' · ')}`,
     `style-equivalence ${input.base.slice(0, 7)}..${input.head.slice(0, 7)} · ${input.files.length} files · ${input.cases.length} cases · ${input.comparisons} comparisons · ${Math.round(input.durationMs / 1000)}s`,
     `difference ${count('difference')} · needs sign-off ${count('needs-signoff') + input.unpaired} · blocking ${count('blocking')} · equal ${count('equal')}`,
     ...mutationLines(input),
