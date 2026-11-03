@@ -90,6 +90,12 @@ export const resolveDocumentWrite = async ({
 };
 
 /**
+ * Node fields that carry body text: `text` on text nodes, `code` on code blocks
+ * and math nodes, which keep their body there instead of in text children.
+ */
+const BODY_TEXT_FIELDS = ['text', 'code'] as const;
+
+/**
  * Counts the visible text carried by Lexical editor data. Callers may send editor
  * data without a matching Markdown `content`, so length limits measure both and
  * keep the larger one instead of trusting the client-supplied Markdown alone.
@@ -103,9 +109,12 @@ export const countEditorDataText = (editorData: unknown): number => {
     const node = stack.pop();
     if (typeof node !== 'object' || node === null) continue;
 
-    const { children, text } = node as { children?: unknown; text?: unknown };
-    if (typeof text === 'string') count += text.length;
-    if (Array.isArray(children)) stack.push(...children);
+    const record = node as Record<string, unknown>;
+    for (const field of BODY_TEXT_FIELDS) {
+      const value = record[field];
+      if (typeof value === 'string') count += value.length;
+    }
+    if (Array.isArray(record.children)) stack.push(...record.children);
   }
 
   return count;
