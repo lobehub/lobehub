@@ -303,6 +303,10 @@ export const reopenForChanges = async (
 ): Promise<string | undefined> => {
   const goal = await ctx.goalModel.findByGraphTask(taskId);
   if (!goal || !REOPENABLE_GOAL_STATUSES.has(goal.status)) return undefined;
+  // An archived goal stays put: the reject is recorded, but nothing reworks it
+  // until the owner restores the goal. (`updateStatus` refuses the reopen too,
+  // should an archive land after this read.)
+  if (goal.archivedAt) return undefined;
   const graph = await ctx.requireGraph(goal.id);
   const node = graph.nodes.find(
     (candidate) =>

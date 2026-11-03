@@ -353,11 +353,18 @@ export class GoalActionImpl {
   archiveGoal = async (goalId: string, archived: boolean): Promise<void> => {
     await goalService.archive(goalId, archived);
     this.#goalListRows.remove(goalId);
-    await Promise.all([
+    // The archive has landed; a refresh that fails afterwards is a stale view,
+    // not a failed archive, so it is logged rather than reported as one.
+    const refreshes = await Promise.allSettled([
       this.refreshGoalGraph(goalId),
       revalidateReplica(goalListResource),
       revalidateReplica(homeGoalListResource),
+      revalidateReplica(topicGoalListResource),
     ]);
+    for (const result of refreshes) {
+      if (result.status === 'rejected')
+        console.error('[goal:archive] refresh failed after archiving', result.reason);
+    }
   };
 
   closeGoal = async (goalId: string, status: 'achieved' | 'canceled'): Promise<void> => {

@@ -6,6 +6,21 @@ import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
+ * Thrown when a write would move an archived goal back into a status in which
+ * it can move on its own (`isGoalArchiveBlocked`). Archived goals are hidden
+ * from every list, so they stay put until restored.
+ */
+export class GoalArchivedError extends Error {
+  readonly goalId: string;
+
+  constructor(goalId: string) {
+    super(`Goal is archived; restore it first with lh goal unarchive ${goalId}`);
+    this.name = 'GoalArchivedError';
+    this.goalId = goalId;
+  }
+}
+
+/**
  * Archive writes for `goals`, kept out of `GoalModel` the way `TaskArchiveModel`
  * is: the "nothing can still move" check is part of the UPDATE that sets
  * `archived_at`, so a resume or start racing it either lands first (and the

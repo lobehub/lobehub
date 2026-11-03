@@ -173,22 +173,29 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
     goalSelectors.goalListView(goalListKey({ agentId, filter: 'review', projectId })),
   );
   const goals = useMemo(() => listView?.goals ?? [], [listView]);
-  const agentFilterOptions = useMemo(
-    () => (isGlobal ? goalAgentFilterOptions(allGoalsView?.goals ?? []) : []),
-    [allGoalsView, isGlobal],
-  );
   // Whether the scope has any goal at all — on the cross-agent page that is
   // every agent's list, so narrowing to one agent shows the filtered-empty
   // state rather than the first-goal onboarding.
   const isScopeEmpty =
     (isGlobal ? (allGoalsView?.goals.length ?? 0) : goals.length) === 0 && !isLoading;
+  // The cross-agent Archived tab also lists its agent options from the scope's
+  // archived goals: `all` leaves them out, so an agent whose every goal was
+  // archived would otherwise be missing from the picker of the tab holding them.
+  const readsArchivedScope = isScopeEmpty || (isGlobal && filter === 'archived');
   const archivedSync = useFetchGoals(
-    isScopeEmpty ? archivedProbe.agentId : undefined,
-    isScopeEmpty ? archivedProbe.projectId : undefined,
+    readsArchivedScope ? archivedProbe.agentId : undefined,
+    readsArchivedScope ? archivedProbe.projectId : undefined,
     'archived',
-    isScopeEmpty ? archivedProbe.globalScope : undefined,
+    readsArchivedScope ? archivedProbe.globalScope : undefined,
   );
   const archivedView = useGoalStore(goalSelectors.goalListView(goalListKey(archivedProbe)));
+  const agentFilterOptions = useMemo(
+    () =>
+      isGlobal
+        ? goalAgentFilterOptions((filter === 'archived' ? archivedView : allGoalsView)?.goals ?? [])
+        : [],
+    [allGoalsView, archivedView, filter, isGlobal],
+  );
   // Onboarding only once the probe has answered "nothing archived either":
   // while it is in flight the page holds its skeleton, and a failed probe keeps
   // the tabs (the Archived tab then reads and reports its own failure) rather

@@ -6,7 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
-import { GoalArchiveModel } from '../goalArchive';
+import { GoalArchivedError, GoalArchiveModel } from '../goalArchive';
 import { GoalGraphModel } from '../goalGraph';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -83,6 +83,33 @@ describe('GoalArchiveModel', () => {
     const restored = await archiveModel.unarchive(goal.id);
 
     expect(restored?.archivedAt).toBeNull();
+  });
+});
+
+describe('GoalModel.updateStatus on an archived goal', () => {
+  it('refuses to put it back in motion, whichever path asks', async () => {
+    const goal = await createListedGoal('Put away', 'achieved');
+    await archiveModel.archive(goal.id);
+
+    for (const status of ['running', 'paused', 'planning', 'review', 'verifying'] as const) {
+      await expect(goalModel.updateStatus(goal.id, status)).rejects.toBeInstanceOf(
+        GoalArchivedError,
+      );
+    }
+    expect((await goalModel.findById(goal.id))?.status).toBe('achieved');
+  });
+
+  it('still lets it move between ended statuses', async () => {
+    const goal = await createListedGoal('Put away', 'achieved');
+    await archiveModel.archive(goal.id);
+
+    expect((await goalModel.updateStatus(goal.id, 'canceled'))?.status).toBe('canceled');
+  });
+
+  it('moves an unarchived goal as before', async () => {
+    const goal = await createListedGoal('Live', 'achieved');
+
+    expect((await goalModel.updateStatus(goal.id, 'running'))?.status).toBe('running');
   });
 });
 

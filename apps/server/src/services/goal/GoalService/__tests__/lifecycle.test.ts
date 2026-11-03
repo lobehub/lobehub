@@ -6,6 +6,7 @@ import { getTestDB } from '@/database/core/getTestDB';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
+import { GoalArchiveModel } from '@/database/models/goalArchive';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskArchiveModel } from '@/database/models/taskArchive';
@@ -675,6 +676,19 @@ describe('GoalService.archiveSignedOffTasks', () => {
     expect(await service.archiveSignedOffTasks(workTaskId)).toEqual([]);
     expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
     expect(await service.archiveSignedOffTasks('task_not_in_any_goal')).toEqual([]);
+  });
+
+  it('leaves an archived goal put when its sign-off is sent back for changes', async () => {
+    const { acceptanceTaskId, goalId, service, taskModel } = await achieveGoal();
+    expect(await new GoalArchiveModel(serverDB, userId).archive(goalId)).not.toBeNull();
+
+    expect(
+      await service.reopenForChanges(acceptanceTaskId, 'Add a day-one agenda'),
+    ).toBeUndefined();
+
+    // Nothing reworks it out of sight: the goal stays achieved, the Task done.
+    expect((await new GoalModel(serverDB, userId).findById(goalId))?.status).toBe('achieved');
+    expect((await taskModel.findById(acceptanceTaskId))?.status).toBe('completed');
   });
 
   it('restores the reworked Task when a signed-off goal is sent back for changes', async () => {

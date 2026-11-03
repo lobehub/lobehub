@@ -2,6 +2,8 @@ import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ReplicaModule from '@/libs/replica';
+import { revalidateReplica } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiChatService } from '@/services/aiChat';
 import { goalService } from '@/services/goal';
@@ -19,6 +21,11 @@ vi.mock('@/libs/swr/useCacheScope', () => ({
   isScopeTrusted: () => true,
   useCacheScope: () => 'user-1:personal',
 }));
+
+vi.mock('@/libs/replica', async (importOriginal) => {
+  const actual = await importOriginal<typeof ReplicaModule>();
+  return { ...actual, revalidateReplica: vi.fn(actual.revalidateReplica) };
+});
 
 vi.mock('@/services/goal', () => ({
   goalService: {
@@ -418,6 +425,17 @@ describe('GoalAction', () => {
     expect(goalService.archive).toHaveBeenCalledWith('goal-1', true);
     const list = useGoalStore.getState().goalListByAgentId['agent-1'];
     expect(list?.goals.map((item) => item.goal.id)).toEqual(['goal-2']);
+  });
+
+  it('reports an archive that landed as done even when the refresh after it fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(revalidateReplica).mockRejectedValueOnce(new Error('offline'));
+
+    await expect(useGoalStore.getState().archiveGoal('goal-1', true)).resolves.toBeUndefined();
+
+    expect(goalService.archive).toHaveBeenCalledWith('goal-1', true);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 
   it('relays the provider the goal actually plans on when advancing it', async () => {

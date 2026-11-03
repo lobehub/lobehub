@@ -10,6 +10,7 @@ import type {
   GoalSupervisionState,
   GoalUnderstanding,
 } from '@lobechat/types';
+import { isGoalArchiveBlocked } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
@@ -20,6 +21,7 @@ import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { GoalArchivedError } from './goalArchive';
 
 /** States after which a goal's loop no longer advances. */
 const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
@@ -340,7 +342,12 @@ export class GoalModel {
     return row ? next : undefined;
   };
 
-  update = async (id: string, value: Partial<Omit<GoalItem, 'id' | 'userId'>>) => {
+  update = async (
+    id: string,
+    value: Partial<Omit<GoalItem, 'id' | 'userId'>>,
+    /** Match only a goal that is not archived (see `updateStatus`). */
+    options: { unlessArchived?: boolean } = {},
+  ) => {
     // Policy editors may carry a pre-claim or pre-release snapshot. Runtime
     // ownership always comes from the current row, never that snapshot, and
     // policy edits cannot replace the concurrently written incident ledger.
@@ -375,7 +382,13 @@ export class GoalModel {
           : {}),
         updatedAt: new Date(),
       })
-      .where(and(eq(goals.id, id), this.ownership()))
+      .where(
+        and(
+          eq(goals.id, id),
+          this.ownership(),
+          options.unlessArchived ? isNull(goals.archivedAt) : undefined,
+        ),
+      )
       .returning();
     return row as GoalItem | undefined;
   };
@@ -459,11 +472,25 @@ export class GoalModel {
     const existing = await this.findById(id);
     if (!existing) return undefined;
 
-    return this.update(id, {
-      completedAt: TERMINAL_GOAL_STATUSES.has(status) ? (existing.completedAt ?? new Date()) : null,
-      startedAt: existing.startedAt ?? (status === 'running' ? new Date() : null),
-      status,
-    });
+    // Every path that puts a goal back in motion — resume, pause, a sign-off
+    // sent back, the coordinator — lands here, so this is where an archived
+    // goal is kept put. The archive check is part of the UPDATE, which
+    // serializes with the guarded archive write (`GoalArchiveModel`).
+    const unlessArchived = isGoalArchiveBlocked(status);
+    const row = await this.update(
+      id,
+      {
+        completedAt: TERMINAL_GOAL_STATUSES.has(status)
+          ? (existing.completedAt ?? new Date())
+          : null,
+        startedAt: existing.startedAt ?? (status === 'running' ? new Date() : null),
+        status,
+      },
+      { unlessArchived },
+    );
+    if (!row && unlessArchived && (await this.findById(id))?.archivedAt)
+      throw new GoalArchivedError(id);
+    return row;
   };
 
   /**
