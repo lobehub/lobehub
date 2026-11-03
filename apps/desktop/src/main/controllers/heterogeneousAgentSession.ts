@@ -458,8 +458,16 @@ const runInteractiveAcpSession = async (
     });
   } finally {
     await cleanup?.();
-    if (session[activeSessionKey] === acpSession) {
-      session[activeSessionKey] = undefined;
+    if (activeSessionKey === 'copilotAcpSession' && session.copilotAcpSession === acpSession) {
+      session.copilotAcpSession = undefined;
+    } else if (activeSessionKey === 'cursorAcpSession' && session.cursorAcpSession === acpSession) {
+      session.cursorAcpSession = undefined;
+    } else if (activeSessionKey === 'devinAcpSession' && session.devinAcpSession === acpSession) {
+      session.devinAcpSession = undefined;
+    } else if (activeSessionKey === 'droidAcpSession' && session.droidAcpSession === acpSession) {
+      session.droidAcpSession = undefined;
+    } else if (activeSessionKey === 'traeAcpSession' && session.traeAcpSession === acpSession) {
+      session.traeAcpSession = undefined;
     }
   }
 };
