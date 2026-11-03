@@ -13,7 +13,7 @@ export const attemptWhere = (
   and(
     eq(agentEvalMemories.userId, userId),
     eq(agentEvalMemories.runId, reference.runId),
-    // Deleted thread links become null; their evidence still belongs to that attempt.
+    // Keep deleted-thread evidence out of the parent attempt's null-thread scope.
     eq(agentEvalMemories.attemptId, getEvalAttemptId(reference)),
     eq(agentEvalMemories.topicId, reference.topicId),
     reference.threadId
