@@ -395,6 +395,8 @@ export const OAuthAccountSchema = z.object({
  * SSO Provider info displayed in profile page
  */
 export interface SSOProvider {
+  /** Local Better Auth account row ID, used for account operations (not the provider subject). */
+  accountId?: string;
   email?: string;
   /** Expiration time - Date for better-auth */
   expiresAt?: Date | number | null;

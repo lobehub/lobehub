@@ -1,9 +1,4 @@
-import {
-  adminClient,
-  genericOAuthClient,
-  inferAdditionalFields,
-  magicLinkClient,
-} from 'better-auth/client/plugins';
+import { adminClient, inferAdditionalFields, magicLinkClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 
 import { type auth } from '@/auth';
@@ -23,12 +18,7 @@ function getClient() {
       fetchOptions: {
         customFetchImpl: desktopAuthFetch,
       },
-      plugins: [
-        adminClient(),
-        inferAdditionalFields<typeof auth>(),
-        genericOAuthClient(),
-        magicLinkClient(),
-      ],
+      plugins: [adminClient(), inferAdditionalFields<typeof auth>(), magicLinkClient()],
     });
   }
   return _client;
@@ -43,14 +33,14 @@ function lazyProp(key: string): any {
     get(_t, prop, receiver) {
       const target = getClient()[key];
       const value = Reflect.get(target, prop, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
+      // Nested Better Auth proxies treat `.bind` as an endpoint, not Function.bind.
+      return typeof value === 'function' ? Function.prototype.bind.call(value, target) : value;
     },
   });
 }
 
 export const changeEmail = lazyProp('changeEmail');
 export const linkSocial = lazyProp('linkSocial');
-export const oauth2 = lazyProp('oauth2');
 export const accountInfo = lazyProp('accountInfo');
 export const listAccounts = lazyProp('listAccounts');
 export const requestPasswordReset = lazyProp('requestPasswordReset');

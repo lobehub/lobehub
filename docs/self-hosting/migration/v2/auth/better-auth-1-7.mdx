@@ -1,0 +1,52 @@
+---
+title: Upgrading Better Auth to 1.7
+description: Deployment checks for the Better Auth 1.6.33 to 1.7.16 upgrade, including Microsoft account identifiers and Redis.
+tags:
+  - Authentication
+  - Migration
+---
+
+# Upgrading Better Auth to 1.7
+
+This guide covers LobeHub's upgrade from Better Auth **1.6.33 to 1.7.16**. Read the [upstream 1.7 upgrade guide](https://github.com/better-auth/better-auth/blob/v1.7.16/docs/content/docs/guides/1-7-upgrade-guide.mdx) and [1.7.16 release](https://github.com/better-auth/better-auth/releases/tag/v1.7.16) before deployment.
+
+## Before deployment
+
+- Back up the database and record the deployed application version. Rehearse the upgrade against a private copy of the database.
+- Upgrade the server and browser assets together. The removed generic OAuth endpoints are not compatible with old clients. Ask users to reload open tabs after deployment.
+- If Redis is enabled, its application credentials must permit `EVAL`, `GET`, `DEL`, `INCR`, and `EXPIRE`, in addition to the existing operations. The adapter now consumes one-time values atomically and creates rate-limit counters without extending an existing counter's TTL.
+- Check for duplicate provider identities. Resolve each duplicate by verifying ownership; do not automatically merge users or delete accounts:
+
+```sql
+SELECT provider_id, account_id, count(*)
+FROM accounts
+GROUP BY provider_id, account_id
+HAVING count(*) > 1;
+```
+
+This direct upgrade does **not** require an `issuer` column or a generic schema migration. The issuer schema introduced in Better Auth 1.7.0–1.7.2 was reverted in 1.7.3. Deployments that installed those intermediate versions need a separate schema review. LobeHub's own OIDC server uses `oidc-provider`, not Better Auth's removed `oidcProvider` plugin.
+
+## Microsoft: migrate existing identities before sign-in
+
+The built-in Microsoft provider changes its account identifier from the ID token's `sub` claim to `oid`. This also applies when `AUTH_SSO_PROVIDERS` uses LobeHub's `microsoft-entra-id` alias, which resolves to the built-in `microsoft` provider.
+
+If the `accounts` table contains Microsoft accounts, **do not enable Microsoft sign-in or linking on the upgraded application until their identifiers have been mapped**. Otherwise an existing user may no longer match their account, and automatic linking or a new account can hide the mismatch.
+
+1. Inventory rows with `provider_id = 'microsoft'`. Keep each local `id`, `user_id`, and existing `account_id` in the private migration record.
+2. Build a reviewed mapping from each local account ID and old `sub` to its verified Entra `oid`. Establish the tenant and client/application context as well. Use verified identity-provider records or correctly validated tokens. An email address or an unverified decoded JWT is not sufficient proof of identity. Do not put tokens or the identity map in a PR.
+3. Check that the mapping covers every affected account exactly once, that each old value still matches the database, and that no new `(provider_id, account_id)` pair collides. Stop for missing or ambiguous identities.
+4. Stop Microsoft sign-in and account linking during the cutover, including on old application instances. In a reviewed database transaction, update **only** `accounts.account_id` for the matching local row and old value. Preserve `accounts.id`, `accounts.user_id`, and the other account fields. Check the updated row count before committing.
+5. Deploy the upgraded application consistently across instances, then test an existing Microsoft user. Confirm that the same local user and account rows are used, and that no duplicate user or account is created. Test a new user separately before reopening normal traffic.
+
+There is no automatic SQL migration in this change: the application cannot safely derive a trusted `sub` → `oid` mapping from the account identifier alone. For rollback, restore the matching application and account-ID mapping together. If new logins or account links have already occurred, reconcile those new rows before reversing the mapping; restoring an old backup blindly can lose unrelated data.
+
+## Other provider checks
+
+- **Generic OAuth/OIDC:** sign-in and linking now use the common social endpoints. LobeHub already sets `/api/auth/callback/<provider>` explicitly, so its registered callback URLs do not need to change for this upgrade. Verify the actual deployed URL and provider configuration in staging.
+- **OIDC discovery:** verify discovery availability, issuer, JWKS, audience, nonce, and ID-token validity with your provider. Do not disable token verification to work around a failed login.
+- **Feishu and WeChat:** test sign-in and linking with the existing custom profile/token handling. Their generic provider callbacks continue to return the raw profile; do not replace it with the built-in provider `{ user, data }` shape.
+- **Email OTP and magic links:** test an existing verified user and an unverified password account. Upstream now removes unproven credentials/accounts and revokes existing sessions when first establishing verified email ownership. Plan for affected users to sign in again.
+- **Sessions and account settings:** check deferred session refresh, sign-out, account listing, linking, and unlinking. Account operations now use the local account row ID, not the provider subject.
+- **Passkeys and mobile:** test browser and Android passkeys and mobile deep links. Keep explicit WebAuthn origins and trusted custom schemes. Separately maintained Expo clients must await the now-async `getCookie()` API before sending its value as a header.
+
+These checks require your staging identity providers and client applications. Automated unit/integration tests do not establish that a particular deployment or production identity mapping is safe.

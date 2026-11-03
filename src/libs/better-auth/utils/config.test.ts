@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { initializeRedis, isRedisEnabled } from '@/server/modules/Redis';
+
 const mocks = vi.hoisted(() => ({
   appEnv: { APP_URL: 'https://app.example.com' },
   authEnv: {
@@ -16,6 +18,77 @@ vi.mock('@/server/modules/Redis', () => ({
   isRedisEnabled: vi.fn(() => false),
 }));
 vi.mock('@/utils/env', () => ({ isDev: false }));
+
+describe('createSecondaryStorage', () => {
+  const redis = {
+    del: vi.fn(),
+    eval: vi.fn(),
+    get: vi.fn(),
+    set: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(isRedisEnabled).mockReturnValue(true);
+    vi.mocked(initializeRedis).mockResolvedValue(redis as any);
+  });
+
+  afterEach(() => {
+    vi.mocked(isRedisEnabled).mockReturnValue(false);
+  });
+
+  it('does not configure secondary storage when Redis is disabled', async () => {
+    vi.mocked(isRedisEnabled).mockReturnValue(false);
+    const { createSecondaryStorage } = await import('./config');
+
+    expect(createSecondaryStorage()).toBeUndefined();
+    expect(initializeRedis).not.toHaveBeenCalled();
+  });
+
+  it('consumes a namespaced value in one atomic operation', async () => {
+    const { createSecondaryStorage } = await import('./config');
+    const storage = createSecondaryStorage()!;
+    redis.eval.mockResolvedValueOnce('one-time-value').mockResolvedValueOnce(null);
+
+    expect(await storage.getAndDelete!('verification-token')).toBe('one-time-value');
+    expect(await storage.getAndDelete!('verification-token')).toBeNull();
+
+    const [script, keys, key] = redis.eval.mock.calls[0];
+    expect(script).toContain("redis.call('GET', KEYS[1])");
+    expect(script).toContain("redis.call('DEL', KEYS[1])");
+    expect(keys).toBe(1);
+    expect(key).toBe('better-auth:verification-token');
+    expect(redis.get).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
+  });
+
+  it('increments atomically and only sets the counter TTL on creation', async () => {
+    const { createSecondaryStorage } = await import('./config');
+    const storage = createSecondaryStorage()!;
+    redis.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+
+    expect(await storage.increment!('rate-limit', 60)).toBe(1);
+    expect(await storage.increment!('rate-limit', 60)).toBe(2);
+
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining("if value == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end"),
+      1,
+      'better-auth:rate-limit',
+      60,
+    );
+    expect(redis.set).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the enabled Redis client cannot initialize', async () => {
+    vi.mocked(initializeRedis).mockResolvedValue(null);
+    const { createSecondaryStorage } = await import('./config');
+    const storage = createSecondaryStorage()!;
+
+    await expect(storage.getAndDelete!('token')).rejects.toThrow('failed to initialize');
+    await expect(storage.increment!('counter', 60)).rejects.toThrow('failed to initialize');
+    expect(redis.eval).not.toHaveBeenCalled();
+  });
+});
 
 describe('getTrustedOrigins', () => {
   const originalEnv = process.env;

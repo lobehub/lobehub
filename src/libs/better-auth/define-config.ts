@@ -216,17 +216,10 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     session: sessionOptions,
     database: drizzleAdapter(serverDB, {
       provider: 'pg',
-      // experimental joins feature needs schema to pass full relation
+      // Joined account/session queries need the complete relation schema.
       schema,
     }),
     secondaryStorage: createSecondaryStorage(),
-    /**
-     * Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
-     * Endpoints like /get-session, /get-full-organization and many others benefit greatly from this feature,
-     * seeing upwards of 2x to 3x performance improvements depending on database latency.
-     * Ref: https://www.better-auth.com/docs/adapters/drizzle#joins-experimental
-     */
-    experimental: { joins: true },
     /**
      * Run user bootstrap for every newly created account (email, magic link, OAuth/social, etc.).
      * Using Better Auth database hooks ensures we catch social flows that bypass /sign-up/* routes.
@@ -288,6 +281,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       }),
       ...(customOptions.cookiePrefix && { cookiePrefix: customOptions.cookiePrefix }),
       database: {
+        joins: true,
         /**
          * Align Better Auth user IDs with our shared idGenerator for consistency.
          * Other models use the shared nanoid generator (12 chars) to keep IDs consistent project-wide.
