@@ -14,6 +14,7 @@ const { client } = vi.hoisted(() => ({
   client: {
     task: {
       create: { mutate: vi.fn() },
+      detail: { query: vi.fn() },
       list: { query: vi.fn() },
       update: { mutate: vi.fn() },
       updateStatus: { mutate: vi.fn() },
@@ -25,6 +26,7 @@ const { client } = vi.hoisted(() => ({
       delete: { mutate: vi.fn() },
       list: { query: vi.fn() },
       removeFromTask: { mutate: vi.fn() },
+      setForTask: { mutate: vi.fn() },
       update: { mutate: vi.fn() },
     },
   },
@@ -106,6 +108,42 @@ describe('lh task --label', () => {
     expect(client.taskLabel.changeForTask.mutate).not.toHaveBeenCalled();
     expect(client.task.update.mutate).not.toHaveBeenCalled();
     expect(client.task.updateStatus.mutate).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('edit puts the previous labels back when the field edit fails', async () => {
+    client.task.detail.query.mockResolvedValue({
+      data: {
+        labels: [
+          { id: 'bug', name: 'Bug' },
+          { id: 'fe', name: 'Frontend' },
+        ],
+      },
+    });
+    client.taskLabel.changeForTask.mutate.mockResolvedValue([{ id: 'feat', name: 'Feature' }]);
+    client.taskLabel.setForTask.mutate.mockResolvedValue([]);
+    client.task.update.mutate.mockRejectedValue(new Error('heartbeatInterval too small'));
+
+    await expect(
+      run('edit', 'T-1', '--label', 'Type/Feature', '--heartbeat-interval', '1'),
+    ).rejects.toThrow('heartbeatInterval too small');
+
+    expect(client.taskLabel.changeForTask.mutate).toHaveBeenCalled();
+    expect(client.taskLabel.setForTask.mutate).toHaveBeenCalledWith({
+      labelIds: ['bug', 'fe'],
+      taskId: 'T-1',
+    });
+  });
+
+  it('edit does not touch labels again when the combined edit succeeds', async () => {
+    client.task.detail.query.mockResolvedValue({ data: { labels: [] } });
+    client.taskLabel.changeForTask.mutate.mockResolvedValue([{ id: 'bug', name: 'Bug' }]);
+    client.task.update.mutate.mockResolvedValue({ data: { id: 'task_1', identifier: 'T-1' } });
+
+    await run('edit', 'T-1', '--label', 'Bug', '--heartbeat-interval', '600');
+
+    expect(client.task.update.mutate).toHaveBeenCalled();
+    expect(client.taskLabel.setForTask.mutate).not.toHaveBeenCalled();
   });
 
   it('list filters by label, by group and by "no labels"', async () => {
