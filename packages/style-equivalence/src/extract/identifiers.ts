@@ -52,39 +52,51 @@ export const valueIdentifierNodes = (root: ts.Node, options: IdentifierOptions =
 export const valueIdentifiers = (root: ts.Node, options: IdentifierOptions = {}) =>
   new Set(valueIdentifierNodes(root, options).map((node) => node.text));
 
-const usageOf = (node: ts.Identifier): VariableKind => {
-  const parent = node.parent;
-  if (ts.isCallExpression(parent) && parent.expression === node) return 'call';
-  if (
-    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
-    parent.expression === node
-  )
-    return 'member';
+const outerOf = (node: ts.Expression) => {
+  let current: ts.Node = node;
+  while (ts.isParenthesizedExpression(current.parent)) current = current.parent;
+  return current;
+};
+
+const isBooleanContext = (node: ts.Node): boolean => {
+  const expression = outerOf(node as ts.Expression);
+  const parent = expression.parent;
   if (ts.isPrefixUnaryExpression(parent) && parent.operator === ts.SyntaxKind.ExclamationToken)
-    return 'boolean';
-  if (ts.isConditionalExpression(parent) && parent.condition === node) return 'boolean';
+    return true;
+  if (ts.isConditionalExpression(parent) && parent.condition === expression) return true;
   if (
     ts.isBinaryExpression(parent) &&
-    parent.left === node &&
     [
       ts.SyntaxKind.AmpersandAmpersandToken,
       ts.SyntaxKind.BarBarToken,
       ts.SyntaxKind.QuestionQuestionToken,
     ].includes(parent.operatorToken.kind)
   )
-    return 'boolean';
-  return 'unknown';
+    return parent.left === expression || isBooleanContext(parent);
+  return false;
 };
 
-const RANK: Record<VariableKind, number> = { boolean: 1, call: 3, member: 2, unknown: 0 };
+const usageOf = (node: ts.Identifier): VariableKind => {
+  const parent = node.parent;
+  if (ts.isCallExpression(parent) && parent.expression === node) return 'call';
+  if (
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
+  ) {
+    let top: ts.Expression = parent;
+    while (
+      (ts.isPropertyAccessExpression(top.parent) || ts.isElementAccessExpression(top.parent)) &&
+      top.parent.expression === top
+    )
+      top = top.parent;
+    return isBooleanContext(top) ? 'member' : 'unknown';
+  }
+  return isBooleanContext(node) ? 'boolean' : 'unknown';
+};
 
 export const mergeKinds = (kinds: VariableKind[]): VariableKind => {
   const unique = [...new Set(kinds)];
-  if (unique.includes('call') && unique.includes('member')) return 'unknown';
-  if (unique.includes('unknown') && unique.length === 1) return 'unknown';
-  return (
-    unique.filter((kind) => kind !== 'unknown').sort((a, b) => RANK[b] - RANK[a])[0] ?? 'unknown'
-  );
+  return unique.length === 1 ? unique[0] : 'unknown';
 };
 
 export const usageKinds = (root: ts.Node, names: Set<string>) => {
@@ -94,4 +106,29 @@ export const usageKinds = (root: ts.Node, names: Set<string>) => {
     kinds.set(node.text, [...(kinds.get(node.text) ?? []), usageOf(node)]);
   }
   return kinds;
+};
+
+const bindingNames = (name: ts.BindingName): string[] =>
+  ts.isIdentifier(name)
+    ? [name.text]
+    : name.elements.flatMap((element) =>
+        ts.isOmittedExpression(element) ? [] : bindingNames(element.name),
+      );
+
+export const declaredLocally = (node: ts.Identifier) => {
+  for (let scope: ts.Node = node.parent; !ts.isSourceFile(scope); scope = scope.parent) {
+    if (ts.isFunctionLike(scope))
+      for (const parameter of scope.parameters)
+        if (bindingNames(parameter.name).includes(node.text)) return true;
+    if (ts.isBlock(scope))
+      for (const statement of scope.statements)
+        if (
+          ts.isVariableStatement(statement) &&
+          statement.declarationList.declarations.some((declaration) =>
+            bindingNames(declaration.name).includes(node.text),
+          )
+        )
+          return true;
+  }
+  return false;
 };

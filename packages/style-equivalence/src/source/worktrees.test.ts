@@ -55,6 +55,26 @@ describe('prepareRevisions', () => {
     expect(worktreeList()).not.toContain(revisions.head.root);
   });
 
+  it("shares each workspace package's own dependencies too", async () => {
+    await mkdir(path.join(repo, 'packages/runtime/node_modules'), { recursive: true });
+    await writeFile(path.join(repo, 'packages/runtime/package.json'), '{"name":"runtime"}\n');
+    git('add', 'packages/runtime/package.json');
+    git('commit', '-qm', 'workspace');
+    await writeFile(path.join(repo, 'index.tsx'), 'export const A = 3;\n');
+    git('commit', '-qam', 'head');
+    const revisions = await prepareRevisions({
+      base: 'HEAD~1',
+      head: 'HEAD',
+      install: async () => undefined,
+      repo,
+      runDir,
+    });
+    expect(await readlink(path.join(revisions.base.root, 'packages/runtime/node_modules'))).toBe(
+      path.join(repo, 'packages/runtime/node_modules'),
+    );
+    await revisions.cleanup();
+  });
+
   it('installs each side separately when a manifest changed', async () => {
     await writeFile(path.join(repo, 'package.json'), '{"dependencies":{"a":"2.0.0"}}\n');
     git('commit', '-qam', 'head');

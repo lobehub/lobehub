@@ -17,6 +17,7 @@ export interface ViteSetup {
   dedupe?: string[];
   define?: Record<string, string>;
   plugins: PluginOption[];
+  tsconfigPaths?: boolean;
 }
 
 export interface ProjectConfig {

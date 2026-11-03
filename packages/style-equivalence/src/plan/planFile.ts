@@ -1,4 +1,5 @@
 import type { FileExtraction, StyleElement, VariableKind } from '../extract';
+import { mergeKinds } from '../extract/identifiers';
 import { type Combo, combosFor } from './combos';
 import { alignElements } from './pair';
 
@@ -103,7 +104,7 @@ export const planFile = (
         for (const variable of item.variables) {
           if (PASS_THROUGH_VARIABLES.has(variable.name)) continue;
           const entry = variables.get(variable.name) ?? { kinds: {}, name: variable.name };
-          entry.kinds[side] = entry.kinds[side] === 'unknown' ? 'unknown' : variable.kind;
+          entry.kinds[side] = mergeKinds([entry.kinds[side] ?? variable.kind, variable.kind]);
           variables.set(variable.name, entry);
         }
     const modeled: PlanVariable[] = [];

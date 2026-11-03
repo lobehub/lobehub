@@ -23,7 +23,13 @@ export const planStates = (
 ): CaptureState[] => {
   const extra = new Set<CaptureState>();
   for (const key of new Set([...Object.keys(base), ...Object.keys(head)])) {
-    if (key === 'hover' || key === 'focus-visible' || !differs(base[key], head[key])) continue;
+    if (!differs(base[key], head[key])) continue;
+    if (key.startsWith('chain:')) {
+      const states = key.slice('chain:'.length);
+      if (states !== 'hover') extra.add(`force-chain:${states}`);
+      continue;
+    }
+    if (key === 'hover' || key === 'focus-visible') continue;
     extra.add(key === 'focus-within' ? 'force-chain:focus-within' : `force:${key}`);
   }
   return [...STATES, ...[...extra].sort()];

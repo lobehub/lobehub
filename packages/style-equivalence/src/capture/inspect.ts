@@ -96,13 +96,17 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
               candidates.push(rule);
               rules.push(`PSEUDO_UNMODELED|${rule.cssText}`);
             }
-            for (const compound of rule.selectorText.split(/[\s>+~,]+/)) {
-              const states = [...compound.matchAll(/:([a-z-]+)/gi)]
-                .map((match) => match[1])
-                .filter((name) => forceable.includes(name));
-              if (!states.length) continue;
-              const key = [...new Set(states)].sort().join('+');
-              (pseudoRules[key] ??= []).push(rule.cssText);
+            for (const part of rule.selectorText.split(',')) {
+              const compounds = part.trim().split(/\s*[\s>+~]\s*/);
+              compounds.forEach((compound, index) => {
+                const states = [...compound.matchAll(/:([a-z-]+)/gi)]
+                  .map((match) => match[1])
+                  .filter((name) => forceable.includes(name));
+                if (!states.length) return;
+                const key = [...new Set(states)].sort().join('+');
+                const scoped = index < compounds.length - 1 ? `chain:${key}` : key;
+                (pseudoRules[scoped] ??= []).push(rule.cssText);
+              });
             }
           }
           if ('cssRules' in rule) visit((rule as CSSGroupingRule).cssRules);

@@ -51,6 +51,18 @@ const manifestsDiffer = async (repo: string, base: string, head: string) => {
   }
 };
 
+const shareDependencies = async (repo: string, root: string) => {
+  const manifests = (await git(root, ['ls-files', '--', 'package.json', '**/package.json'])).stdout
+    .split('\n')
+    .filter(Boolean);
+  for (const manifest of manifests) {
+    const directory = path.dirname(manifest);
+    const source = path.join(repo, directory, 'node_modules');
+    const target = path.join(root, directory, 'node_modules');
+    if (existsSync(source) && !existsSync(target)) await symlink(source, target);
+  }
+};
+
 export const prepareRevisions = async ({
   base,
   head,
@@ -79,8 +91,7 @@ export const prepareRevisions = async ({
       ? 'isolated'
       : 'shared';
     for (const side of Object.values(sides)) {
-      if (dependencyMode === 'shared')
-        await symlink(path.join(repo, 'node_modules'), path.join(side.root, 'node_modules'));
+      if (dependencyMode === 'shared') await shareDependencies(repo, side.root);
       else await install(side.root);
     }
     return { ...sides, cleanup, dependencyMode };

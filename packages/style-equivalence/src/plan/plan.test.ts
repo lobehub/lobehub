@@ -111,6 +111,18 @@ describe('planFile conditions and flags', () => {
     expect(entry.flags).toEqual(['VARIABLE_UNMODELED']);
   });
 
+  it('merges the kinds a variable has along the chain', () => {
+    const chain = () =>
+      extraction([
+        element('A#0', 'div', ['styles.row'], [{ kind: 'boolean', name: 'item' }]),
+        element('A#1', 'span', ['styles.label'], [{ kind: 'member', name: 'item' }], {
+          parent: 'A#0',
+        }),
+      ]);
+    const inner = planFile('a.tsx', chain(), chain(), config).cases[1];
+    expect(inner.flags).toEqual(['VARIABLE_UNMODELED']);
+  });
+
   it('flags substituted tags, neutral props and changed tags along the chain', () => {
     const [outer, inner] = planFile(
       'a.tsx',

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { type CaseDetail, fetchCase, type RunPayload } from '../api';
 import { conditionColumns } from '../data';
 import { declaredProperties } from '../declared';
-import { CATEGORY_LABELS, shortKey } from '../labels';
+import { CATEGORY_LABELS, flagLabel, shortKey } from '../labels';
 import { hrefOf } from '../route';
 import { CATEGORY_TONES, Chip } from './Chip';
 import { EvidenceChain } from './EvidenceChain';
@@ -90,7 +90,9 @@ export const CaseView = ({ caseKey, payload }: { caseKey: string; payload: RunPa
           />
         ) : (
           <div {...stylex.props(styles.muted)}>
-            这个元素两侧配不上，没有可以对照的渲染。到签收页逐条确认。
+            {category === 'unpaired'
+              ? '这个元素两侧配不上，没有可以对照的渲染。到签收页逐条确认。'
+              : `这个文件有合成环境比较不了的样式用法：${(detail.item?.flags ?? []).map(flagLabel).join('、')}。到签收页确认。`}
           </div>
         )}
       </div>

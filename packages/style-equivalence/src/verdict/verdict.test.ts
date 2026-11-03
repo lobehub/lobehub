@@ -102,3 +102,39 @@ describe('decideVerdict', () => {
     expect(result.items.find((entry) => entry.key === 'src/A.tsx|A#1')?.signoff).toBe('stale');
   });
 });
+
+describe('sign-off coverage', () => {
+  const twoFlags = [
+    item('src/A.tsx|C#0', 'needs-signoff', ['CROSS_COMPONENT', 'PLACEMENT_SUBSTITUTED']),
+  ];
+  const state = (records: ReturnType<typeof sign>) =>
+    decideVerdict({
+      calibration: [],
+      items: twoFlags,
+      mutation: { passed: true },
+      signoffs: new Map(records.map((record) => [record.key, record])),
+    }).items[0];
+
+  it('stays unsigned until every flag on the case has been signed', () => {
+    const first = sign(['src/A.tsx|C#0'], 'PLACEMENT_SUBSTITUTED', twoFlags);
+    expect(state(first)).toMatchObject({
+      signedReasons: ['PLACEMENT_SUBSTITUTED'],
+      signoff: 'missing',
+    });
+  });
+
+  it('adds a reason to the existing record when the hash still matches', () => {
+    const first = sign(['src/A.tsx|C#0'], 'PLACEMENT_SUBSTITUTED', twoFlags);
+    const second = signCases({
+      existing: new Map(first.map((record) => [record.key, record])),
+      items: twoFlags,
+      keys: ['src/A.tsx|C#0'],
+      note: 'checked the outer row',
+      now: '2026-11-04T01:00:00.000Z',
+      reason: 'CROSS_COMPONENT',
+      signer: 'innei',
+    });
+    expect(second[0].reasons).toEqual(['CROSS_COMPONENT', 'PLACEMENT_SUBSTITUTED']);
+    expect(state(second).signoff).toBe('valid');
+  });
+});

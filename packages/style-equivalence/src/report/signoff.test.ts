@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { VerdictEntry } from './api';
-import { signoffGroups, signoffProgress, submission } from './signoff';
+import { signedFor, signoffGroups, signoffProgress, submission } from './signoff';
 
 const item = (
   key: string,
@@ -59,5 +59,16 @@ describe('submission', () => {
     expect(submission(unpaired, ['src/U.tsx|U#0', 'src/U.tsx|U#1'], 'ok')).toEqual({
       error: 'UNPAIRED_ONE_BY_ONE',
     });
+  });
+});
+
+describe('signedFor', () => {
+  it('shows a case as signed in the group whose reason it already carries, not in the others', () => {
+    const entry = {
+      ...item('src/A.tsx|C#0', 'needs-signoff', ['CROSS_COMPONENT', 'PLACEMENT_SUBSTITUTED']),
+      signedReasons: ['PLACEMENT_SUBSTITUTED'],
+    };
+    expect(signedFor(entry, 'PLACEMENT_SUBSTITUTED')).toBe(true);
+    expect(signedFor(entry, 'CROSS_COMPONENT')).toBe(false);
   });
 });

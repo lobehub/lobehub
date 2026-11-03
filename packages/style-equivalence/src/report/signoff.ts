@@ -30,6 +30,9 @@ export const signoffGroups = (items: VerdictEntry[]): SignoffGroup[] => {
     );
 };
 
+export const signedFor = (item: VerdictEntry, reason: string) =>
+  item.signoff === 'valid' || (item.signedReasons ?? []).includes(reason);
+
 export const signoffProgress = (items: VerdictEntry[]) => {
   const signable = items.filter((item) => reasonsOf(item).length);
   return {

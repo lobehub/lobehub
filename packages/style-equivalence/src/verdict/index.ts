@@ -26,18 +26,24 @@ const needsSignoff = (item: VerdictItem) =>
   item.category === 'needs-signoff' ||
   item.category === 'difference';
 
+const coveredReasons = (item: VerdictItem, record: SignoffRecord | undefined) =>
+  record && record.hash === item.hash ? (record.reasons ?? [record.reason]) : [];
+
 export const signoffState = (
   item: VerdictItem,
   record: SignoffRecord | undefined,
 ): SignoffState => {
   if (!needsSignoff(item)) return 'not-needed';
   if (!record) return 'missing';
-  return record.hash === item.hash && allowedReasons(item).includes(record.reason)
-    ? 'valid'
-    : 'stale';
+  if (record.hash !== item.hash) return 'stale';
+  const allowed = allowedReasons(item);
+  const covered = coveredReasons(item, record);
+  if (allowed.length && allowed.every((reason) => covered.includes(reason))) return 'valid';
+  return covered.some((reason) => allowed.includes(reason)) ? 'missing' : 'stale';
 };
 
 export interface SignRequest {
+  existing?: Map<string, SignoffRecord>;
   items: VerdictItem[];
   keys: string[];
   note: string;
@@ -46,7 +52,7 @@ export interface SignRequest {
   signer: string;
 }
 
-export const signCases = ({ items, keys, note, now, reason, signer }: SignRequest) => {
+export const signCases = ({ existing, items, keys, note, now, reason, signer }: SignRequest) => {
   const byKey = new Map(items.map((item) => [item.key, item]));
   const selected = keys.map((key) => {
     const item = byKey.get(key);
@@ -67,6 +73,7 @@ export const signCases = ({ items, keys, note, now, reason, signer }: SignReques
     key: item.key,
     note,
     reason,
+    reasons: [...new Set([...coveredReasons(item, existing?.get(item.key)), reason])].sort(),
     signedAt: now,
     signer,
   }));
@@ -80,7 +87,7 @@ export interface VerdictInput {
 }
 
 export interface Verdict {
-  items: Array<VerdictItem & { signoff: SignoffState }>;
+  items: Array<VerdictItem & { signedReasons: string[]; signoff: SignoffState }>;
   mergeable: boolean;
   reasons: string[];
 }
@@ -93,6 +100,9 @@ export const decideVerdict = ({
 }: VerdictInput): Verdict => {
   const states = items.map((item) => ({
     ...item,
+    signedReasons: coveredReasons(item, signoffs.get(item.key)).filter((reason) =>
+      allowedReasons(item).includes(reason),
+    ),
     signoff: signoffState(item, signoffs.get(item.key)),
   }));
   const open = (predicate: (item: (typeof states)[number]) => boolean) =>

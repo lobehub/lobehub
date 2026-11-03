@@ -23,7 +23,9 @@ const stylesFile = (padding: number) => `import * as stylex from '@stylexjs/styl
 export const styles = stylex.create({ box: { padding: ${padding} }, other: { margin: 1 } });
 `;
 
-const hashOf = async () => {
+const hashOf = async (
+  outcome?: Array<{ after?: string; before?: string; key: string; property: string }>,
+) => {
   const code = await readFile(path.join(root, 'src/A.tsx'), 'utf8');
   const extraction = extractFile(code, 'src/A.tsx', {
     ...options,
@@ -37,6 +39,7 @@ const hashOf = async () => {
       plan: plan.cases[0],
       roots: { base: root, head: root },
       sources: { base: 'src/A.tsx', head: 'src/A.tsx' },
+      outcome,
       verifierVersion: '1.2.3',
     }),
   );
@@ -62,6 +65,20 @@ describe('contentHash', () => {
     expect(await hashOf()).toBe(before);
     await writeFile(path.join(root, 'src/A.styles.ts'), stylesFile(6));
     expect(await hashOf()).not.toBe(before);
+  });
+});
+
+describe('contentHash outcome', () => {
+  it('changes when what differs changes, so a false-positive sign-off does not carry over', async () => {
+    const cause = {
+      after: 'normal',
+      before: '"tnum"',
+      key: 'root.0',
+      property: 'font-feature-settings',
+    };
+    const signed = await hashOf([cause]);
+    expect(await hashOf([cause])).toBe(signed);
+    expect(await hashOf([{ ...cause, property: 'color' }])).not.toBe(signed);
   });
 });
 

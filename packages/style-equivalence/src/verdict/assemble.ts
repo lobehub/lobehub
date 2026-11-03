@@ -1,10 +1,16 @@
 import type { CaseResult } from '../analyze/diff';
 import type { FileExtraction } from '../extract';
 import type { FilePlan, PlanCase, Side } from '../plan/planFile';
-import { type CaseHashInput, collectCaseHashInput, contentHash } from '../signoff/hash';
+import {
+  type CaseHashInput,
+  collectCaseHashInput,
+  collectFileHashInput,
+  contentHash,
+} from '../signoff/hash';
 import { readSignoffs } from '../signoff/store';
 import type { ScopeFile } from '../source/scope';
 import type { CaseCategory } from './categorize';
+import { fileFlags, fileItemKey } from './fileItems';
 import { decideVerdict, type Verdict, type VerdictItem } from './index';
 
 export interface AssembleInput {
@@ -14,7 +20,7 @@ export interface AssembleInput {
     category: CaseCategory;
     key: string;
     plan: PlanCase;
-    result: Pick<CaseResult, 'gaps'>;
+    result: Pick<CaseResult, 'gaps' | 'rootCauses'>;
   }>;
   extractions: Record<string, Record<Side, FileExtraction>>;
   mutation: { passed: boolean };
@@ -53,7 +59,10 @@ export const assembleVerdict = async (input: AssembleInput) => {
       category: entry.category,
       file: entry.plan.file,
       flags: [...entry.plan.flags, ...entry.result.gaps],
-      hash: hashFor(entry.key, entry.plan.file, { plan: entry.plan }),
+      hash: hashFor(entry.key, entry.plan.file, {
+        outcome: entry.category === 'difference' ? entry.result.rootCauses : undefined,
+        plan: entry.plan,
+      }),
       key: entry.key,
     })),
     ...input.plans.flatMap((plan) =>
@@ -68,6 +77,23 @@ export const assembleVerdict = async (input: AssembleInput) => {
       })),
     ),
   ];
+  for (const plan of input.plans) {
+    const flags = fileFlags(plan, input.extractions[plan.file] ?? {});
+    if (!flags.length) continue;
+    const key = fileItemKey(plan.file);
+    evidence[key] = collectFileHashInput({
+      roots: input.roots,
+      sources: sourcesOf(plan.file),
+      verifierVersion: input.verifierVersion,
+    });
+    items.push({
+      category: 'needs-signoff',
+      file: plan.file,
+      flags,
+      hash: contentHash(evidence[key]),
+      key,
+    });
+  }
   const signoffs = await readSignoffs(
     input.roots.head,
     items.map((item) => item.file),

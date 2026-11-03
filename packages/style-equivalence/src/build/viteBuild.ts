@@ -25,7 +25,13 @@ export const buildSide = async ({ configFile, hostDir, logFile, outDir, root }: 
     child.stderr.on('data', (chunk) => (output += chunk));
     child.on('error', reject);
     child.on('exit', (code) =>
-      code === 0 ? resolve(output) : reject(new Error(`BUILD_FAILED\n${output.slice(-6000)}`)),
+      code === 0
+        ? resolve(output)
+        : reject(
+            new Error(
+              `BUILD_FAILED\n${output.length > 8000 ? `${output.slice(0, 4000)}\n…\n${output.slice(-4000)}` : output}`,
+            ),
+          ),
     );
   });
   if (logFile) await writeFile(logFile, log);

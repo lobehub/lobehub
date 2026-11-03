@@ -198,3 +198,38 @@ export const Header = ({ title }) => (
     ]);
   });
 });
+
+describe('extractFile variable modeling', () => {
+  const kindsOf = (body: string, imports = '') => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+${imports}
+const styles = stylex.create({ a: { color: 'red' }, b: { color: 'blue' }, c: { color: 'green' } });
+${body}
+`;
+    const result = extractFile(code, 'a.tsx', options);
+    return { prelude: result.prelude, variables: result.elements[0].variables };
+  };
+
+  it('models a parameter that shadows an import instead of pulling the import in', () => {
+    const { prelude, variables } = kindsOf(
+      'export const A = ({ active }) => <div {...stylex.props(styles.a, active && styles.b)} />;',
+      "import { active } from '@/store/chat/selectors';",
+    );
+    expect(variables).toEqual([{ kind: 'boolean', name: 'active' }]);
+    expect(prelude).not.toContain('@/store/chat/selectors');
+  });
+
+  it('does not model a member compared with a literal', () => {
+    const { variables } = kindsOf(
+      "export const A = ({ state }) => <div {...stylex.props(styles.a, state.kind === 'off' && styles.b)} />;",
+    );
+    expect(variables).toEqual([{ kind: 'unknown', name: 'state' }]);
+  });
+
+  it('does not model a value used both as a boolean and as an object', () => {
+    const { variables } = kindsOf(
+      'export const A = ({ item }) => <div {...stylex.props(styles.a, item && styles.b, item.done && styles.c)} />;',
+    );
+    expect(variables).toEqual([{ kind: 'unknown', name: 'item' }]);
+  });
+});
