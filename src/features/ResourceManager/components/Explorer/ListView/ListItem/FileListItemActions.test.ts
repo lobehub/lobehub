@@ -5,18 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FileListItemActions, { appendTransferMenuItemsBeforeDelete } from './FileListItemActions';
 
-const mocks = vi.hoisted(() => ({
-  useFileTransferMenuItem: vi.fn(),
-}));
-
-vi.mock('@/business/client/hooks/useFileTransferMenuItem', () => ({
-  useFileTransferMenuItem: mocks.useFileTransferMenuItem,
-}));
-
-vi.mock('../../ItemDropdown/DropdownMenu', () => ({
-  default: () => null,
-}));
-
 describe('appendTransferMenuItemsBeforeDelete', () => {
   it('keeps delete as the final menu action', () => {
     const baseItems = [
@@ -51,22 +39,24 @@ describe('FileListItemActions', () => {
     isFolder: false,
     isPage: false,
     isSupportedForChunking: false,
-    menuItems: [],
+    menu: null,
     parseFiles: vi.fn(),
     t: (key: string) => key,
   };
 
-  it('passes document entity type for page resources', () => {
-    mocks.useFileTransferMenuItem.mockReturnValue([]);
+  it('renders the menu node it is given', () => {
+    render(
+      React.createElement(FileListItemActions, {
+        ...baseProps,
+        menu: React.createElement('span', { 'data-testid': 'row-menu' }),
+      }),
+    );
 
-    render(React.createElement(FileListItemActions, { ...baseProps, isPage: true }));
-
-    expect(mocks.useFileTransferMenuItem).toHaveBeenCalledWith('resource-1', 'document');
+    expect(screen.getByTestId('row-menu')).toBeInTheDocument();
   });
 
   it('uses fileId for initial chunk parsing when the resource id is a document id', () => {
     const parseFiles = vi.fn();
-    mocks.useFileTransferMenuItem.mockReturnValue([]);
 
     render(
       React.createElement(FileListItemActions, {

@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/lobehub",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "LobeHub - an open-source,comprehensive AI Agent framework that supports speech synthesis, multimodal, and extensible Function Call plugin system. Supports one-click free deployment of your private ChatGPT/LLM web application.",
   "keywords": [
     "framework",
@@ -72,9 +72,9 @@
     "desktop:build:main": "npm run build:main --prefix=./apps/desktop",
     "desktop:build-channel": "tsx scripts/electronWorkflow/buildDesktopChannel.ts",
     "desktop:main:build": "npm run desktop:main:build --prefix=./apps/desktop",
-    "desktop:package:app": "npm run desktop:build:all && npm run desktop:package:app:platform",
+    "desktop:package:app": "npm run desktop:package:app:platform",
     "desktop:package:app:platform": "tsx scripts/electronWorkflow/buildElectron.ts",
-    "desktop:package:local": "npm run desktop:build:all && npm run package:local --prefix=./apps/desktop",
+    "desktop:package:local": "npm run package:local --prefix=./apps/desktop",
     "desktop:package:local:reuse": "npm run package:local:reuse --prefix=./apps/desktop",
     "dev": "tsx scripts/devStartupSequence.mts",
     "dev:bun": "bun --bun next dev -p 3010",
@@ -107,9 +107,9 @@
     "lint:circular:packages": "dpdm packages/**/src/**/*.ts  --no-warning --no-tree --exit-code circular:1 --no-progress -T true --skip-dynamic-imports circular",
     "lint:console": "tsx scripts/checkConsoleLog.mts",
     "lint:md": "remark . --silent --output",
-    "lint:mdx": "npm run workflow:mdx && remark \"docs/**/*.mdx\" -r ./.remarkrc.mdx.mjs --silent --output && eslint \"docs/**/*.mdx\" --quiet --fix",
-    "lint:style": "stylelint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
-    "lint:ts": "eslint src/ tests/ apps/server/src/ --concurrency=auto",
+    "lint:mdx": "npm run workflow:mdx && remark \"docs/**/*.mdx\" -r ./.remarkrc.mdx.mjs --silent --output",
+    "lint:style": "stylelint \"{src,tests}/**/*.{css,less}\" --fix --allow-empty-input",
+    "lint:ts": "oxlint src/ tests/ apps/server/src/",
     "lint:unused": "knip --include files,exports,types,enumMembers,duplicates",
     "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "prettier": "prettier -c --write \"**/**\"",
@@ -123,7 +123,7 @@
     "self-hosting:docker": "docker build -t lobehub:local .",
     "self-hosting:docker-cn": "docker build -t lobehub-local --build-arg USE_CN_MIRROR=true .",
     "start": "next start -p 3210",
-    "stylelint": "stylelint \"src/**/*.{js,jsx,ts,tsx}\" --fix",
+    "stylelint": "stylelint \"src/**/*.{css,less}\" --fix --allow-empty-input",
     "stylex:migration": "tsx scripts/stylexMigration/index.ts",
     "stylex:verify": "bun scripts/stylexMigration/verification/run.ts",
     "stylex:verify:test": "vitest run --config scripts/stylexMigration/verification/vitest.config.ts --silent='passed-only'",
@@ -135,7 +135,7 @@
     "test-app:coverage": "vitest --coverage --silent='passed-only'",
     "tunnel:cloudflare": "cloudflared tunnel --url http://localhost:3010 --protocol http2",
     "tunnel:ngrok": "ngrok http http://localhost:3010",
-    "type-check": "bun --check --tsconfig-override tsconfig.type-check.json",
+    "type-check": "tsrs --noEmit -p tsconfig.type-check.json --checkers 4",
     "type-check:tsc": "tsc --noEmit",
     "widget:tick": "tsx ./scripts/widgetTick/index.mts",
     "workflow:cdn": "tsx ./scripts/cdnWorkflow/index.ts",
@@ -159,28 +159,26 @@
       "prettier --write --no-error-on-unmatched-pattern"
     ],
     "*.mdx": [
-      "remark -r ./.remarkrc.mdx.mjs --silent --output --",
-      "eslint --quiet --fix"
+      "remark -r ./.remarkrc.mdx.mjs --silent --output --"
     ],
     "*.json": [
       "prettier --write --no-error-on-unmatched-pattern"
     ],
     "*.{mjs,cjs}": [
-      "eslint --fix",
+      "oxlint --fix",
       "prettier --write"
     ],
     "*.{js,jsx}": [
-      "eslint --fix",
-      "stylelint --fix",
+      "oxlint --fix",
       "prettier --write"
     ],
     "*.{ts,tsx}": [
-      "stylelint --fix",
-      "eslint --fix",
+      "oxlint --fix",
       "prettier --parser=typescript --write"
     ],
-    "*.{yml,yaml}": [
-      "eslint --fix"
+    "*.{css,less}": [
+      "stylelint --fix",
+      "prettier --write"
     ]
   },
   "overrides": {
@@ -510,17 +508,21 @@
     "@inquirer/prompts": "^8.5.2",
     "@lobechat/agent-tracing": "workspace:*",
     "@lobechat/types": "workspace:*",
+    "@lobehub/commitlint-config": "^3.0.0",
     "@lobehub/i18n-cli": "^1.27.0",
-    "@lobehub/lint": "2.1.5",
     "@lobehub/market-types": "^1.19.0",
+    "@lobehub/oxlint-config": "^3.0.0",
+    "@lobehub/prettier-config": "^3.0.0",
+    "@lobehub/remarklint-config": "^3.0.0",
+    "@lobehub/semantic-release-config": "^3.0.0",
     "@lobehub/seo-cli": "^1.7.0",
+    "@lobehub/stylelint-config": "^3.0.0",
     "@modelcontextprotocol/server": "~2.4.0",
     "@peculiar/webcrypto": "^1.7.1",
     "@playwright/test": "^1.62.1",
     "@prettier/sync": "^0.6.1",
     "@rolldown/plugin-transform-imports": "0.1.1",
     "@semantic-release/exec": "^6.0.3",
-    "@stylexjs/eslint-plugin": "0.19.1",
     "@stylexjs/unplugin": "0.19.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -551,7 +553,6 @@
     "@types/unist": "^3.0.3",
     "@types/ws": "^8.18.1",
     "@types/xast": "^2.0.4",
-    "@typescript/native-preview": "7.0.0-dev.20260630.1",
     "@vitejs/devtools": "0.2.0",
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "5.0.0",
@@ -569,8 +570,6 @@
     "drizzle-dbml-generator": "^0.10.0",
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.28.2",
-    "eslint": "10.0.2",
-    "eslint-plugin-mdx": "^3.8.1",
     "fake-indexeddb": "^6.2.5",
     "fs-extra": "^11.4.0",
     "glob": "^13.0.6",
@@ -586,6 +585,7 @@
     "node-fetch": "^3.3.2",
     "node-gyp": "^12.4.0",
     "openapi-typescript": "^7.13.0",
+    "oxlint": "1.90.0",
     "p-map": "^7.0.6",
     "postcss": "8.5.23",
     "postcss-selector-parser": "7.1.7",
@@ -601,6 +601,7 @@
     "s3rver": "3.7.1",
     "semantic-release": "^21.1.2",
     "stylelint": "^16.26.1",
+    "tsrs": "0.20.1-ts7.1.0-beta",
     "tsx": "^4.23.12",
     "type-fest": "^5.8.0",
     "typescript": "6.0.3",

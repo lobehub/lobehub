@@ -448,9 +448,9 @@ export default {
   'acceptance.origin.agentFallback': 'Agent',
   'acceptance.origin.backToRuns': 'Back to runs',
   'acceptance.origin.openTopic': 'Open topic',
-  'acceptance.preview.review': 'Review on preview',
+  'acceptance.preview.review': 'Accept on preview',
   'acceptance.preview.reviewHint':
-    'Open the deployed preview with the review toolbar to comment on the live page',
+    'Open the deployed preview with the acceptance toolbar to comment on the live page',
   'acceptance.reject.descriptionCopy':
     'No agent is attached to this delivery. Rejecting copies the repair prompt, including any reason you add — paste it to any agent to start the next round.',
   'acceptance.reject.description':

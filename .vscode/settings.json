@@ -1,25 +1,10 @@
 {
   "editor.codeActionsOnSave": {
     "source.addMissingImports": "explicit",
-    "source.fixAll.eslint": "explicit",
+    "source.fixAll.oxc": "explicit",
     "source.fixAll.stylelint": "explicit"
   },
   "editor.formatOnSave": true,
-  // don't show errors, but fix when save and git pre commit
-  "eslint.rules.customizations": [
-    { "rule": "simple-import-sort/exports", "severity": "off" },
-    { "rule": "perfectionist/sort-interfaces", "severity": "off" },
-    { "rule": "simple-import-sort/imports", "severity": "off" }
-  ],
-  "eslint.validate": [
-    "json",
-    "javascript",
-    "javascriptreact",
-    "typescript",
-    "typescriptreact",
-    // support mdx
-    "mdx"
-  ],
   "files.watcherExclude": {
     "**/.git/objects/**": true,
     "**/.git/subtree-cache/**": true,
@@ -55,12 +40,7 @@
     "locales/vi-VN/**": true,
     "locales/zh-TW/**": true
   },
-  "stylelint.validate": [
-    "css",
-    "postcss",
-    // make stylelint work with tsx css template strings
-    "typescriptreact"
-  ],
+  "stylelint.validate": ["css", "less", "postcss"],
   "vitest.disableWorkspaceWarning": true,
   "workbench.editor.customLabels.patterns": {
     "**/app/**/[[]*[]]/[[]*[]]/page.tsx": "${dirname(2)}/${dirname(1)}/${dirname} • page component",

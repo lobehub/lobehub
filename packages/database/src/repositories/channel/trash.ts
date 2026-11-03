@@ -18,20 +18,22 @@ export class ChannelTrashRepository {
     private readonly workspaceId?: string,
   ) {}
 
+  /**
+   * Scope only, without the visibility filter: `userId` is the deleting user from the registry,
+   * who may be a channel admin other than the creator of a private workspace channel. The
+   * trash router has already authorized the registry row.
+   */
+  private scopeWhere = () =>
+    buildWorkspaceWhere(
+      { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
+      { userId: channels.userId, workspaceId: channels.workspaceId },
+    );
+
   private lockTrashed = async (tx: Transaction, id: string) => {
     const [channel] = await tx
       .select()
       .from(channels)
-      .where(
-        and(
-          eq(channels.id, id),
-          isTrashed(channels.isDeleted),
-          buildWorkspaceWhere(
-            { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
-            channels,
-          ),
-        ),
-      )
+      .where(and(eq(channels.id, id), isTrashed(channels.isDeleted), this.scopeWhere()))
       .for('update');
     return channel;
   };
@@ -46,14 +48,7 @@ export class ChannelTrashRepository {
       .from(channelThreads)
       .innerJoin(channels, eq(channels.id, channelThreads.channelId))
       .where(
-        and(
-          eq(channelThreads.id, id),
-          isTrashed(channelThreads.isDeleted),
-          buildWorkspaceWhere(
-            { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
-            channels,
-          ),
-        ),
+        and(eq(channelThreads.id, id), isTrashed(channelThreads.isDeleted), this.scopeWhere()),
       );
     if (!found) return;
     const channel = await lockChannel(tx, found.channelId);
@@ -67,11 +62,11 @@ export class ChannelTrashRepository {
 
   private unregister = (
     tx: Transaction,
-    id: string,
+    ids: string[],
     resourceType: Extract<TrashResourceType, 'channel' | 'channelThread'> = 'channel',
   ) =>
     new TrashModel(this.db, this.userId, this.workspaceId).removeByResources(
-      [{ resourceId: id, resourceType }],
+      ids.map((resourceId) => ({ resourceId, resourceType })),
       tx,
     );
 
@@ -81,7 +76,7 @@ export class ChannelTrashRepository {
       if (!(await this.lockTrashed(tx, id))) return false;
       await tx.update(channels).set(restoreStamp()).where(eq(channels.id, id));
       await audit(tx, id, 'restored', id);
-      await this.unregister(tx, id);
+      await this.unregister(tx, [id]);
       return true;
     });
 
@@ -98,9 +93,19 @@ export class ChannelTrashRepository {
         .where(and(eq(channelJobs.channelId, id), eq(channelJobs.writerHeld, true)))
         .limit(1);
       if (writer) return 'busy';
+      // Threads trashed on their own are separate roots; the cascade takes their rows with it.
+      const threads = await tx
+        .select({ id: channelThreads.id })
+        .from(channelThreads)
+        .where(and(eq(channelThreads.channelId, id), isTrashed(channelThreads.isDeleted)));
       // Only Channel-owned records cascade; the referenced Agents, files and topics remain.
       await tx.delete(channels).where(eq(channels.id, id));
-      await this.unregister(tx, id);
+      await this.unregister(tx, [id]);
+      await this.unregister(
+        tx,
+        threads.map((thread) => thread.id),
+        'channelThread',
+      );
       return 'purged';
     });
 
@@ -129,7 +134,7 @@ export class ChannelTrashRepository {
       if (live) return 'conflict';
       await tx.update(channelThreads).set(restoreStamp()).where(eq(channelThreads.id, id));
       await audit(tx, thread.channelId, 'thread_restored', id);
-      await this.unregister(tx, id, 'channelThread');
+      await this.unregister(tx, [id], 'channelThread');
       return 'restored';
     });
 
@@ -163,7 +168,7 @@ export class ChannelTrashRepository {
         .where(and(eq(channelMessages.channelId, channelId), eq(channelMessages.threadId, id)));
       await tx.delete(channelThreads).where(eq(channelThreads.id, id));
       await audit(tx, channelId, 'thread_purged', id);
-      await this.unregister(tx, id, 'channelThread');
+      await this.unregister(tx, [id], 'channelThread');
       return 'purged';
     });
 }

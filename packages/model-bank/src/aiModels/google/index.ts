@@ -175,6 +175,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-4',
     id: 'gemini-4-argon',
+    isOfficial: true,
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     /** Introductory rates through 2026-11-30; they double afterward ($4 input, $0.20 cached input,
@@ -220,6 +221,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.8',
     id: 'gemini-3.8-flash',
+    isOfficial: true,
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     /** Introductory rates through 2026-12-31; standard token rates double afterward.
@@ -267,6 +269,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.7',
     id: 'gemini-3.7-flash',
+    isOfficial: true,
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
@@ -314,6 +317,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.6',
     id: 'gemini-3.6-flash',
+    isOfficial: true,
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
@@ -361,6 +365,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.5',
     id: 'gemini-3.5-flash',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
@@ -405,6 +410,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.5',
     id: 'gemini-3.5-flash-lite',
+    isOfficial: true,
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     pricing: {
@@ -448,6 +454,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-nano-banana-2.1',
+    isOfficial: true,
     maxOutput: 32_768,
     // https://ai.google.dev/gemini-api/docs/pricing ($0.0336 per 1K image)
     pricing: {
@@ -483,6 +490,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-image',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
@@ -551,6 +559,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-lite-image',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 4_096,
     pricing: {
@@ -587,6 +596,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-pro-preview',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
@@ -794,6 +804,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3',
     id: 'gemini-3-pro-image-preview',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
@@ -885,6 +896,7 @@ const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana 2.1',
     id: 'gemini-nano-banana-2.1:image',
+    isOfficial: true,
     type: 'image',
     enabled: true,
     description:
@@ -908,6 +920,7 @@ const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana 2',
     id: 'gemini-3.1-flash-image:image',
+    isOfficial: true,
     type: 'image',
     enabled: true,
     description:
@@ -944,6 +957,7 @@ const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana 2 Lite',
     id: 'gemini-3.1-flash-lite-image:image',
+    isOfficial: true,
     type: 'image',
     enabled: true,
     description:
@@ -963,6 +977,7 @@ const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana Pro',
     id: 'gemini-3-pro-image-preview:image',
+    isOfficial: true,
     type: 'image',
     enabled: true,
     description:
@@ -981,6 +996,7 @@ const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana',
     id: 'gemini-2.5-flash-image:image',
+    isOfficial: true,
     type: 'image',
     description:
       'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
@@ -1068,6 +1084,7 @@ const googleVideoModels: AIVideoModelCard[] = [
     displayName: 'Gemini Omni 1.1 Flash',
     enabled: true,
     id: 'gemini-omni-1.1-flash',
+    isOfficial: true,
     parameters: {
       aspectRatio: {
         default: '16:9',

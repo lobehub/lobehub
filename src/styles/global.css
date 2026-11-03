@@ -113,9 +113,11 @@ button {
   html:has(> body > .conversation-print-root),
   body:has(> .conversation-print-root) {
     overflow: visible;
+
     height: auto;
     min-height: 0;
     max-height: none;
+
     color-scheme: light !important;
     background: none !important;
   }

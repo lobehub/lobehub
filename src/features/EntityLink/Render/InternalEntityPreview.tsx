@@ -24,11 +24,8 @@ import {
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';
@@ -38,6 +35,7 @@ import { verifyService } from '@/services/verify';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import type { InternalLinkReference } from '../internalLink';
+import { useAcceptanceBrowserUrl } from './useAcceptanceBrowserUrl';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
@@ -247,15 +245,9 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     const { t } = useTranslation('chat');
     const { t: tVerify } = useTranslation('verify');
     const [open, setOpen] = useState(false);
-    const appOrigin = useAppOrigin();
-    const activeWorkspaceSlug = useActiveWorkspaceSlug();
     // A click on the link opens the acceptance in the side panel; this is the
-    // explicit way out to a full browser page. Without an origin the URL would
-    // be relative, which the desktop system browser cannot resolve.
-    const browserUrl =
-      reference.type === 'acceptance' && appOrigin
-        ? `${appOrigin}${buildWorkspaceAwarePath(reference.pathname, activeWorkspaceSlug)}`
-        : undefined;
+    // explicit way out to a full browser page.
+    const browserUrl = useAcceptanceBrowserUrl(reference);
     const { data, isLoading } = useClientDataSWR(
       open ? internalEntityPreviewKey(reference) : null,
       () => getPreviewData(reference, t),

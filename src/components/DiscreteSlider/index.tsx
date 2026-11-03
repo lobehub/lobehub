@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Slider, type SliderProps, Tooltip } from '@lobehub/ui';
+import { Flexbox, Slider, type SliderProps, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode } from 'react';

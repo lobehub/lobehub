@@ -9,7 +9,7 @@ import {
 } from '@/libs/replica';
 import { documentService } from '@/services/document';
 import { fileService } from '@/services/file';
-import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
+import { RECENT_CONVERSATION_TYPES, RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 import type { HomeStore } from '@/store/home/store';
@@ -18,6 +18,7 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type RecentEntityRef, toRecentEntityRef } from './initialState';
 import {
+  conversationRecentResource,
   DOCS_HOME_LIMIT,
   docsHomeListResource,
   type DocsHomeRow,
@@ -69,9 +70,10 @@ export class RecentActionImpl {
   readonly #set: Setter;
   /** Server writes per entity run in order; the newest optimistic title stays on top. */
   readonly #renameQueues = new Map<RecentEntityRef, Promise<unknown>>();
+  readonly #conversationRecents;
+  readonly #docsHome;
   readonly #recentList;
   readonly #recents;
-  readonly #docsHome;
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -85,7 +87,17 @@ export class RecentActionImpl {
       stateKey: 'recentListReplica',
       view: recordLens<HomeStore, RecentItem[]>('recentListMap'),
     });
-    this.#recents = linkReplicaEntity<RecentItem>([this.#recentList]);
+    this.#conversationRecents = createReplicaSlice(conversationRecentResource, {
+      actionPrefix: n('conversationRecents'),
+      entity: recentEntity,
+      // Topics only, with previews: the IM list shows the latest reply per row.
+      fetcher: ({ limit }) => recentService.getAll(limit, RECENT_CONVERSATION_TYPES, true),
+      get,
+      set,
+      stateKey: 'conversationRecentReplica',
+      view: recordLens<HomeStore, RecentItem[]>('conversationRecentMap'),
+    });
+    this.#recents = linkReplicaEntity<RecentItem>([this.#recentList, this.#conversationRecents]);
     this.#docsHome = createReplicaSlice(docsHomeListResource, {
       actionPrefix: n('docsHome'),
       fetcher: async ({ tab }) =>
@@ -124,7 +136,7 @@ export class RecentActionImpl {
 
   /** Revalidate every recents query of the active identity. */
   refreshRecents = async (): Promise<void> => {
-    await this.#recentList.revalidate();
+    await Promise.all([this.#recentList.revalidate(), this.#conversationRecents.revalidate()]);
   };
 
   /**
@@ -151,6 +163,13 @@ export class RecentActionImpl {
   /** "All recents" drawer. Read the rows with `homeRecentSelectors.query`. */
   useFetchAllRecents = (open: boolean): ReplicaSyncResult =>
     this.#recentList.useSync({ limit: ALL_RECENTS_LIMIT }, { enabled: open });
+
+  /**
+   * Latest topic per owner for the IM conversation list. Read the rows with
+   * `homeRecentSelectors.conversationRecents`.
+   */
+  useFetchConversationRecents = (limit: number = ALL_RECENTS_LIMIT): ReplicaSyncResult =>
+    this.#conversationRecents.useSync({ limit }, { enabled: true });
 
   /** Refetch every loaded Docs home tab, e.g. after a page or file was added. */
   refreshDocsHome = async (): Promise<void> => {

@@ -5,6 +5,7 @@ import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 
 import { getAgentDocumentContentType } from '../agentDocuments/contentFormat';
+import { assertDocumentWriteWithinLimit } from '../document/writeLimit';
 import { FileService } from '../file';
 import { writePageBodyThroughRoom } from '../pageCollab/bodyWriter';
 import type { AgentDocumentVfsDeps } from './deps';
@@ -98,14 +99,17 @@ export class AgentDocumentVfsService {
     this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
     this.skillMount = createSkillMount(db, userId, workspaceId);
     this.deps = {
+      assertWithinCharLimit: (params) =>
+        assertDocumentWriteWithinLimit({ ...params, userId, workspaceId }),
       agentDocumentModel: this.agentDocumentModel,
       getFileService: () => this.fileService,
       skillMount: this.skillMount,
-      writeThroughRoom: (documentId, body) =>
+      writeThroughRoom: (documentId, body, writeSource) =>
         writePageBodyThroughRoom(db, documentId, body, {
           saveSource: 'llm_call',
           userId,
           workspaceId,
+          writeSource,
         }),
     };
   }
@@ -299,6 +303,7 @@ export class AgentDocumentVfsService {
       ctx,
       createMode,
       options.contentFormat ?? 'markdown',
+      options.source ?? 'user',
     );
   }
 
@@ -484,6 +489,8 @@ export class AgentDocumentVfsService {
     const { content } = await this.read(resolveReadablePath(sourcePath), ctx);
     return this.write(destinationPath, content, ctx, {
       createMode: options.overwrite ? 'if-missing' : 'always-new',
+      // A copy has the length of its source, so it is exempt from the character limit.
+      source: 'system',
     });
   }
 

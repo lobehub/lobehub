@@ -127,6 +127,35 @@ describe('CliMessageTransport driving the real runtime executors', () => {
     expect(result.nextContext?.phase).toBe('tool_result');
   });
 
+  it.each(['single', 'batch'])(
+    'replays a committed %s tool step against the local store',
+    async (mode) => {
+      const assistant = await transport.createAssistantMessage({
+        content: 'call',
+        role: 'assistant',
+        topicId: 'topic-1',
+      });
+      const instruction =
+        mode === 'single'
+          ? {
+              type: 'call_tool',
+              payload: { parentMessageId: assistant.id, toolCalling: createToolCall() },
+            }
+          : {
+              type: 'call_tools_batch',
+              payload: { parentMessageId: assistant.id, toolsCalling: [createToolCall()] },
+            };
+      const execute = mode === 'single' ? callTool(host) : callToolsBatch(host);
+      await execute(instruction as never, createState());
+      const replay = await execute(instruction as never, createState());
+      expect(host.transports.tools!.run).toHaveBeenCalledTimes(1);
+      expect(replay.newState.messages.filter((row) => row.role === 'tool')).toHaveLength(1);
+      expect(replay.newState.messages).toContainEqual(
+        expect.objectContaining({ content: 'Tool result' }),
+      );
+    },
+  );
+
   it('answers the runtime read-back without waiting on the sink', async () => {
     // A sink that never settles stands in for an unreachable network.
     const stalled = new MessageWriteQueue({ sink: { flush: () => new Promise<void>(() => {}) } });

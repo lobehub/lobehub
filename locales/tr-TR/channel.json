@@ -97,7 +97,6 @@
   "moveToTrash": "Kanalı çöp kutusuna taşı",
   "moveToTrashConfirm": "“{{title}}” çöp kutusuna taşınsın mı? Yanıtlar duracak. Kanalı ve geçmişini Çöp Kutusu'ndan geri yükleyebilirsiniz. Ajanlar ve dosyalar korunacak.",
   "moveToTrashSuccess": "Kanal çöp kutusuna taşındı",
-  "nameAutoPlaceholder": "Üyelerine göre adlandırmak için boş bırakın",
   "nameOptional": "Kanal adı (isteğe bağlı)",
   "noDevice": "Cihaz yok",
   "noDevices": "Hiçbir cihaz bağlı değil. Birini bağlayın, ardından burada seçin.",

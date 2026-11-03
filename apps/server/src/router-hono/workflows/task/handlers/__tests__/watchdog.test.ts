@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   findStuckTasks: vi.fn(),
   getServerDB: vi.fn(),
   notifyTaskRunFailed: vi.fn(),
+  reconcileInterruptedTaskRuns: vi.fn(),
   reconcileOrphanedTaskRuns: vi.fn(),
   updateStatus: vi.fn(),
 }));
@@ -38,6 +39,10 @@ vi.mock('@/server/services/taskLifecycle/reconcile', () => ({
   reconcileOrphanedTaskRuns: mocks.reconcileOrphanedTaskRuns,
 }));
 
+vi.mock('@/server/services/taskLifecycle/reconcileInterrupted', () => ({
+  reconcileInterruptedTaskRuns: mocks.reconcileInterruptedTaskRuns,
+}));
+
 vi.mock('@/server/services/taskResultBridge', () => ({ TaskResultBridgeService: vi.fn() }));
 
 vi.mock('@/server/services/taskResultBridge/redisStore', () => ({
@@ -58,6 +63,18 @@ describe('task watchdog', () => {
     mocks.findRecoverableScopes.mockResolvedValue([]);
     mocks.notifyTaskRunFailed.mockResolvedValue(undefined);
     mocks.reconcileOrphanedTaskRuns.mockResolvedValue({ converged: [] });
+    mocks.reconcileInterruptedTaskRuns.mockResolvedValue({ paused: [] });
+  });
+
+  it('parks interrupted runs nothing took over on every tick', async () => {
+    mocks.findStuckTasks.mockResolvedValue([]);
+    mocks.reconcileInterruptedTaskRuns.mockResolvedValue({ paused: ['tpc-1'] });
+
+    const { body, status } = await runWatchdog();
+
+    expect(status).toBe(200);
+    expect(mocks.reconcileInterruptedTaskRuns).toHaveBeenCalledTimes(1);
+    expect(body.interrupted).toEqual({ paused: ['tpc-1'] });
   });
 
   // A heartbeat timeout is a failure, not a decision: it goes to the

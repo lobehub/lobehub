@@ -9,6 +9,7 @@ import {
   NavSideBarSkeleton,
 } from './components/SideBarSkeleton';
 import { NAV_PANEL_RIGHT_DRAWER_ID } from './constants';
+import { NAV_PANEL_HIDDEN_KEY } from './railRouteKey';
 import { getNavPanelRegistrySnapshot, subscribeNavPanelRegistry } from './registry';
 import { useActiveNavKey } from './useActiveNavKey';
 
@@ -34,9 +35,12 @@ const NavPanel = memo(() => {
     getHomeContent,
   );
 
+  // Full-page tabs (tasks, goals, project index) render without a list column.
+  const hidden = activeNavKey === NAV_PANEL_HIDDEN_KEY;
+
   return (
     <>
-      <NavPanelDraggable activeContent={activeContent} homeContent={homeContent} />
+      {!hidden && <NavPanelDraggable activeContent={activeContent} homeContent={homeContent} />}
       <div
         id={NAV_PANEL_RIGHT_DRAWER_ID}
         style={{

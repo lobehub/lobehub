@@ -12,6 +12,10 @@ const {
   mockMessageCreate,
   mockMessageQuery,
   mockLoadInterventionContinuationState,
+  mockLoadGroupMemberBridge,
+  mockCompleteGroupActionMember,
+  mockThreadFindById,
+  mockThreadUpdate,
   mockResolveHumanApproval,
   mockRestoreHumanApproval,
   mockUpdateMessagePlugin,
@@ -25,6 +29,10 @@ const {
   mockMessageCreate: vi.fn(),
   mockMessageQuery: vi.fn(),
   mockLoadInterventionContinuationState: vi.fn(),
+  mockLoadGroupMemberBridge: vi.fn(),
+  mockCompleteGroupActionMember: vi.fn(),
+  mockThreadFindById: vi.fn(),
+  mockThreadUpdate: vi.fn(),
   mockResolveHumanApproval: vi.fn(),
   mockRestoreHumanApproval: vi.fn(),
   mockUpdateMessagePlugin: vi.fn(),
@@ -80,6 +88,15 @@ vi.mock('@/server/services/agent', () => ({
   }),
 }));
 
+vi.mock('@/database/models/chatGroup', () => ({
+  ChatGroupModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: vi.fn().mockResolvedValue({ id: 'group-1', title: 'Team' }),
+      getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
 vi.mock('@/database/models/plugin', () => ({
   PluginModel: vi.fn().mockImplementation(function () {
     return { query: vi.fn().mockResolvedValue([]) };
@@ -89,6 +106,7 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(function () {
     return {
+      appendRunningOperationChild: vi.fn().mockResolvedValue(true),
       releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
       tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
       create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
@@ -102,8 +120,8 @@ vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(function () {
     return {
       create: vi.fn(),
-      findById: vi.fn(),
-      update: vi.fn(),
+      findById: mockThreadFindById,
+      update: mockThreadUpdate,
     };
   }),
 }));
@@ -127,6 +145,12 @@ vi.mock('@/database/models/userMemory/persona', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(function () {
     return {
+      acceptsFileWorks: vi.fn().mockResolvedValue(false),
+      acceptsMemberRuntimeEnd: vi.fn().mockResolvedValue(false),
+      getLlmExecutor: vi.fn().mockResolvedValue(undefined),
+      getOperationEditingGroupId: vi.fn().mockResolvedValue(undefined),
+      loadGroupMemberBridge: mockLoadGroupMemberBridge,
+      completeGroupActionMember: mockCompleteGroupActionMember,
       controlCompletedToolResult: mockControlToolResult,
       createOperation: mockCreateOperation,
       ensureInterventionContinuationStarted: vi.fn().mockResolvedValue('scheduled'),
@@ -209,6 +233,9 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLoadGroupMemberBridge.mockResolvedValue(undefined);
+    mockThreadFindById.mockResolvedValue(undefined);
+    mockThreadUpdate.mockResolvedValue(true);
     mockControlToolResult.mockImplementation(async ({ result }) => ({
       result,
       blocked: false,
@@ -284,6 +311,95 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
     const call = mockCreateOperation.mock.calls[0][0];
     expect(call.initialContext.phase).not.toBe('human_approved_tool');
   });
+
+  it.each(['submitted', 'skipped'] as const)(
+    'restores the isolated member bridge after a Web %s answer without groupId',
+    async (outcome) => {
+      const bridge = {
+        anchorMessageId: 'member-anchor',
+        expectedMembers: 1,
+        groupToolMessageId: 'group-tool',
+        mode: 'isolated' as const,
+        onComplete: 'resume' as const,
+        parentOperationId: 'supervisor-op',
+        threadId: 'thread-1',
+      };
+      mockFindById.mockImplementation(async (id: string) =>
+        id === pendingToolMessage.id ? { ...pendingToolMessage, sessionId: null } : undefined,
+      );
+      mockFindMessagePlugin.mockResolvedValue({
+        ...pendingToolPlugin,
+        intervention: { operationId: 'parked-member-op', status: 'pending' },
+      });
+      mockLoadGroupMemberBridge.mockResolvedValue({
+        agentId: 'agent-1',
+        bridge,
+        groupId: 'group-1',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      });
+      mockThreadFindById.mockResolvedValue({
+        id: 'thread-1',
+        sourceMessageId: 'member-anchor',
+        status: 'inReview',
+        metadata: { operationId: 'parked-member-op', startedAt: '2026-11-01T00:00:00Z' },
+      });
+      vi.spyOn(service, 'retirePendingApprovalOperation').mockResolvedValue(undefined);
+
+      const result = await service.execAgent({
+        ...baseParams,
+        appContext: { scope: 'thread', threadId: 'thread-1', topicId: 'topic-1' },
+        resumeToolResult: {
+          content: outcome === 'submitted' ? 'Yes' : 'User skipped',
+          outcome,
+          parentMessageId: 'tool-msg-1',
+          toolCallId: 'call_ask',
+        },
+      });
+
+      expect(result).toMatchObject({
+        success: true,
+        groupMemberContinuation: true,
+        supervisorOperationId: 'supervisor-op',
+      });
+      expect(mockLoadGroupMemberBridge).toHaveBeenCalledWith('parked-member-op');
+      expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+      const operation = mockCreateOperation.mock.calls[0][0];
+      expect(operation).toMatchObject({
+        appContext: {
+          agentId: 'agent-1',
+          groupId: 'group-1',
+          threadId: 'thread-1',
+          orchestrationRole: 'member',
+        },
+        initialContext: { phase: 'tool_result' },
+        parentOperationId: 'supervisor-op',
+      });
+      expect(operation.hooks.map((hook: { id: string }) => hook.id)).toEqual([
+        'thread-metadata-update',
+        'thread-completion',
+        'group-member-bridge',
+      ]);
+      const completionHook = operation.hooks.find(
+        (hook: { id: string }) => hook.id === 'thread-completion',
+      );
+      // Execute the real restored bridge: completion must reach the parked supervisor.
+      const finalState = { messages: [{ content: 'Member finished', role: 'assistant' }] };
+      const completionEvent = { finalState, operationId: result.operationId, reason: 'done' };
+      await completionHook.handler(completionEvent);
+      expect(mockThreadUpdate).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ status: 'completed' }),
+      );
+      await operation.hooks.at(-1).handler(completionEvent);
+      expect(mockCompleteGroupActionMember).toHaveBeenCalledWith({
+        ...bridge,
+        finalState,
+        operationId: result.operationId,
+        reason: 'done',
+      });
+    },
+  );
 
   it('withholds a human tool answer before loading continuation history', async () => {
     const secret = 'synthetic-private-answer';

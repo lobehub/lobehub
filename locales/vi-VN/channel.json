@@ -97,7 +97,6 @@
   "moveToTrash": "Chuyển kênh vào thùng rác",
   "moveToTrashConfirm": "Chuyển “{{title}}” vào thùng rác? Các trả lời sẽ dừng lại. Bạn có thể khôi phục kênh và lịch sử của nó từ Thùng rác. Các Ajan và tệp sẽ được giữ lại.",
   "moveToTrashSuccess": "Kênh đã được chuyển vào thùng rác",
-  "nameAutoPlaceholder": "Để trống để đặt tên theo các thành viên",
   "nameOptional": "Tên kênh (tùy chọn)",
   "noDevice": "Không có thiết bị",
   "noDevices": "Không có thiết bị nào được kết nối. Kết nối một thiết bị, sau đó chọn nó ở đây.",

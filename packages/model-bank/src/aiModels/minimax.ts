@@ -29,6 +29,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     family: 'minimax',
     generation: 'minimax-m3.1',
     id: 'MiniMax-M3.1-Flash',
+    isOfficial: true,
     maxOutput: 524_288,
     pricing: {
       currency: 'USD',
@@ -60,6 +61,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     family: 'minimax',
     generation: 'minimax-m3',
     id: 'MiniMax-M3',
+    isOfficial: true,
     maxOutput: 524_288,
     pricing: {
       currency: 'USD',
@@ -112,6 +114,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     family: 'minimax',
     generation: 'minimax-m2.7',
     id: 'MiniMax-M2.7',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -136,6 +139,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     family: 'minimax',
     generation: 'minimax-m2.7',
     id: 'MiniMax-M2.7-highspeed',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -161,6 +165,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     family: 'minimax',
     generation: 'minimax-m2.5',
     id: 'MiniMax-M2.5',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -185,6 +190,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     family: 'minimax',
     generation: 'minimax-m2.5',
     id: 'MiniMax-M2.5-highspeed',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',

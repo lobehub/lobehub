@@ -324,6 +324,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         <div style={{ minHeight: 0, overflowY: 'auto' }}>
           <div style={{ minHeight: 144, padding: '0 24px' }}>
             <EditorCanvas
+              blockImageCaretGuard
               disabled={!canCreateTask}
               editor={editor}
               floatingToolbar={false}

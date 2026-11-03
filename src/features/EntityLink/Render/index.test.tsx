@@ -156,6 +156,14 @@ const renderLinkInHost = (properties: Record<string, unknown>, portal: EntityLin
     </EntityLinkHostProvider>,
   );
 
+/** Hover the link's preview trigger (the Popover mock), not the outer action wrapper. */
+const hoverPreview = (container: HTMLElement) =>
+  fireEvent.mouseEnter(container.querySelector('a')!.parentElement!);
+
+/** The open-in-browser action inside the hover preview card. */
+const previewBrowserAction = (container: HTMLElement) =>
+  container.querySelector<HTMLElement>('a ~ * button[aria-label="report.actions.openInBrowser"]');
+
 afterEach(() => {
   mockShowIcon = true;
   mockConst.isDesktop = false;
@@ -278,19 +286,38 @@ describe('Link Render — internal entities', () => {
     // full page as an explicit alternative, as an absolute URL so the desktop
     // system browser can resolve it.
     mockEntityPreview = { title: 'Workspace publishing' };
-    const { container, getByRole } = renderLink({
+    const { container } = renderLink({
       linkHref: '/acceptance/acceptance-1',
       linkKind: 'generic',
       linkLabel: 'Acceptance',
     });
-    fireEvent.mouseEnter(container.firstElementChild!);
+    hoverPreview(container);
 
-    fireEvent.click(getByRole('button', { name: 'report.actions.openInBrowser' }));
+    fireEvent.click(previewBrowserAction(container)!);
 
     expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
       'https://app.lobehub.com/acceptance/acceptance-1',
     );
     expect(mockOpenAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('opens the app, not the gateway apex, from the desktop cloud preview', () => {
+    // Desktop in cloud mode reports `https://lobehub.com` as its origin, where
+    // `/acceptance/<id>` is the marketing site's page rather than the report.
+    mockAppOrigin = 'https://lobehub.com';
+    mockEntityPreview = { title: 'Workspace publishing' };
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+    hoverPreview(container);
+
+    fireEvent.click(previewBrowserAction(container)!);
+
+    expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.lobehub.com/acceptance/acceptance-1',
+    );
   });
 
   it('offers no browser action without an app origin to resolve against', () => {
@@ -314,6 +341,73 @@ describe('Link Render — internal entities', () => {
     fireEvent.mouseEnter(container.firstElementChild!);
 
     expect(queryByRole('button', { name: 'report.actions.openInBrowser' })).toBeNull();
+  });
+
+  it('opens an acceptance in the browser from beside the link, without hovering', () => {
+    // The side panel a click opens can sit under another surface (a session
+    // overlay), so the browser page is one click away right next to the link.
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+
+    const action = container.querySelector<HTMLElement>('[data-acceptance-browser]')!;
+    expect(action).toHaveAttribute('aria-label', 'report.actions.openInBrowser');
+    // Outside the anchor: the desktop preload claims clicks via closest('a').
+    expect(action.closest('a')).toBeNull();
+
+    fireEvent.click(action);
+
+    expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.lobehub.com/acceptance/acceptance-1',
+    );
+    expect(mockOpenAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('keeps a workspace-qualified acceptance link scoped when opening it in the browser', () => {
+    const { container } = renderLink({
+      linkHref: '/lobe-team/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+
+    fireEvent.click(container.querySelector('[data-acceptance-browser]')!);
+
+    expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.lobehub.com/lobe-team/acceptance/acceptance-1',
+    );
+  });
+
+  it('offers no inline browser action without an origin or on other entities', () => {
+    for (const linkHref of ['/task/T-198', '/verify/run-1']) {
+      const { container } = renderLink({ linkHref, linkKind: 'generic', linkLabel: 'Entity' });
+      expect(container.querySelector('[data-acceptance-browser]')).toBeNull();
+    }
+
+    mockAppOrigin = '';
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+    expect(container.querySelector('[data-acceptance-browser]')).toBeNull();
+  });
+
+  it('keeps the inline browser action off mobile, where a tap beside the link would misfire', () => {
+    vi.stubGlobal('__MOBILE__', true);
+
+    try {
+      const { container } = renderLink({
+        linkHref: '/acceptance/acceptance-1',
+        linkKind: 'generic',
+        linkLabel: 'Acceptance',
+      });
+
+      expect(container.querySelector('[data-acceptance-browser]')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('replaces a pasted URL label with the resolved entity title', () => {

@@ -4,8 +4,10 @@ import type {
   QueryMessagesInput,
   QueryMessagesOptions,
   RuntimeMessageRef,
+  RuntimeToolMessage,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
+import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
 import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
 
@@ -72,7 +74,12 @@ export class ServerMessageTransport implements MessageTransport {
 
   async createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
     try {
-      return await this.messageModel.create(params);
+      return await this.messageModel.create({
+        ...params,
+        ...(params.pluginIntervention && {
+          pluginIntervention: { ...params.pluginIntervention, runtimeType: 'server' },
+        }),
+      });
     } catch (error) {
       if (typeof params.parentId === 'string' && isMidOperationReferenceMissingError(error)) {
         throw createConversationParentMissingError(params.parentId, error);
@@ -103,8 +110,10 @@ export class ServerMessageTransport implements MessageTransport {
     return message
       ? {
           agentId: message.agentId,
+          content: message.content,
           groupId: message.groupId,
           id: message.id,
+          metadata: message.metadata,
           model: message.model,
           parentId: message.parentId,
           provider: message.provider,
@@ -115,19 +124,40 @@ export class ServerMessageTransport implements MessageTransport {
       : undefined;
   }
 
+  async getToolMessage(id: string): Promise<RuntimeToolMessage | undefined> {
+    const [message, plugin] = await Promise.all([
+      this.messageModel.findById(id),
+      this.messageModel.findMessagePlugin(id),
+    ]);
+    if (!message || message.role !== 'tool' || !plugin) return undefined;
+    return {
+      content: message.content ?? '',
+      id: message.id,
+      metadata: message.metadata ?? undefined,
+      parentId: message.parentId,
+      pluginError: plugin.error,
+      pluginIntervention: plugin.intervention,
+      pluginState: plugin.state,
+      role: 'tool',
+      tool_call_id: plugin.toolCallId,
+    };
+  }
+
   async query(
     params?: QueryMessagesInput,
     options?: QueryMessagesOptions,
   ): Promise<UIChatMessage[]> {
-    const messages = await this.messageModel.query(params, {
-      // Executors only ever read the operation's own, already-authorized topic.
-      // An agent-share visitor run executes under the CREATOR's identity, so
-      // without this opt-in `query()`'s creator-facing agent-share exclusion
-      // would blank the visitor's conversation mid-run (see `tool.ts`, which
-      // re-reads `state.messages` from the DB after every tool call).
-      allowShareVisitor: true,
-      postProcessUrl: options?.resolveAssetUrls ? this.options.postProcessUrl : undefined,
-    });
+    const messages = (
+      await this.messageModel.query(params, {
+        // Executors only ever read the operation's own, already-authorized topic.
+        // An agent-share visitor run executes under the CREATOR's identity, so
+        // without this opt-in `query()`'s creator-facing agent-share exclusion
+        // would blank the visitor's conversation mid-run (see `tool.ts`, which
+        // re-reads `state.messages` from the DB after every tool call).
+        allowShareVisitor: true,
+        postProcessUrl: options?.resolveAssetUrls ? this.options.postProcessUrl : undefined,
+      })
+    ).map(omitToolWorkRegistration);
 
     if (!options?.flatten) return messages;
 

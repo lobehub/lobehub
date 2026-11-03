@@ -121,11 +121,10 @@ describe('Labs settings page', () => {
     expect(screen.getByText('features.oauthApps.title')).toBeDefined();
   });
 
-  it('renders Integrations as an alpha lab toggle', () => {
+  it('does not render released Integrations as a lab toggle', () => {
     renderPage();
 
-    const integrations = screen.getByText('features.integrations.title');
-    expect(within(integrations).getByText('stage.alpha.label')).toBeDefined();
+    expect(screen.queryByText('features.integrations.title')).toBeNull();
   });
 
   it('renders the topic acceptance (tray) lab toggle', () => {
