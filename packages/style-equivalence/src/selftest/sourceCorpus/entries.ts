@@ -114,8 +114,8 @@ export const SOURCE_CORPUS: SourceCorpusEntry[] = [
         "  <div className={styles.row}>\n    <span className={cx(styles.action, 'row-action')}>A</span>\n  </div>",
       ),
     },
-    expected: 'flagged',
-    feature: '后代选择器改写成 when.ancestor',
+    expected: 'equivalent',
+    feature: '同组件后代选择器改写成 when.ancestor',
     head: {
       'when-ancestor.tsx': stylexSource(
         "  row: { padding: 4 },\n  action: { opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 } },",

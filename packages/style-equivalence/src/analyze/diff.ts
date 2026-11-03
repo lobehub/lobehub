@@ -132,6 +132,8 @@ export const createRunAnalyzer = () => {
     return created;
   };
   const add = (condition: ConditionCapture) => {
+    for (const section of condition.identical ?? [])
+      resultFor(section.slice(0, section.lastIndexOf('|')));
     for (const [section, base] of Object.entries(condition.base)) {
       const separator = section.lastIndexOf('|');
       const result = resultFor(section.slice(0, separator));

@@ -120,7 +120,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
         browser,
         conditions: config.conditions,
         onCondition: (condition) => {
-          comparisons += Object.keys(condition.head).length;
+          comparisons += Object.keys(condition.head).length + (condition.identical?.length ?? 0);
           analyzer.add(condition);
         },
         urls: { base: `${server.url}/dist-base/`, head: `${server.url}/dist-head/` },

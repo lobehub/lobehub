@@ -6,7 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { analyzeRun, createRunAnalyzer } from '../analyze/diff';
 import { launchBrowser } from './browser';
-import { captureRun, conditionFromLabel } from './runner';
+import { capturePage, captureRun, conditionFromLabel } from './runner';
+import type { StyleSnapshot } from './snapshot';
 import { serveDirectories } from './staticServer';
 
 let root: string;
@@ -43,6 +44,15 @@ beforeAll(async () => {
   );
   await write('base-dark', page('.t { color: black; } [data-theme="dark"] .t { color: white; }'));
   await write('head-dark', page('.t { color: black; }'));
+  const pair = (css: string) => `<!doctype html><html><head><style>
+body { margin: 0; font: 14px Arial; }
+${css}
+</style></head><body><div id="app" data-synthetic-ready="true"><main data-synthetic-cases="">
+<section data-case="a.tsx|A#0|0"><div data-synthetic-element="A#0" class="same">Same</div></section>
+<section data-case="b.tsx|B#0|0"><div data-synthetic-element="B#0" class="moved">Moved</div></section>
+</main></div></body></html>`;
+  await write('base-pair', pair('.same { color: black; --tone: 1; } .moved { color: red; }'));
+  await write('head-pair', pair('.same { color: black; --tone: 2; } .moved { color: blue; }'));
   await write(
     'noisy',
     page(
@@ -158,6 +168,43 @@ describe('captureRun + analyzeRun', () => {
       'dark/375/hover-target',
     ]);
     expect(analyzeRun(capture)[0].differingConditions).toEqual(['dark/375/hover-target']);
+  });
+
+  it('transfers full snapshots only for sections whose loads differ beyond custom properties', async () => {
+    const capture = await captureRun({
+      browser,
+      conditions: { themeAttribute: 'data-theme', themes: ['light'], widths: [1280] },
+      states: ['default'],
+      urls: { base: `${server.url}/base-pair/`, head: `${server.url}/head-pair/` },
+    });
+    const condition = capture.conditions.find((item) => item.condition === 'light/1280/default')!;
+    expect(condition.identical).toEqual(['a.tsx|A#0|0']);
+    expect(Object.keys(condition.head)).toEqual(['b.tsx|B#0|0']);
+    expect(
+      Object.fromEntries(analyzeRun(capture).map((result) => [result.key, result.status])),
+    ).toEqual({ 'a.tsx|A#0': 'equal', 'b.tsx|B#0': 'difference' });
+  });
+
+  it('transfers differing sections with the same styles a direct capture reads', async () => {
+    const capture = await captureRun({
+      browser,
+      conditions: { themeAttribute: 'data-theme', themes: ['light'], widths: [1280] },
+      plan: [conditionFromLabel('light/1280/default')],
+      urls: { base: `${server.url}/base-pair/`, head: `${server.url}/head-pair/` },
+    });
+    const { page, snapshots } = await capturePage(
+      browser,
+      `${server.url}/head-pair/`,
+      conditionFromLabel('light/1280/default'),
+      [],
+    );
+    await page.close();
+    const direct = snapshots['b.tsx|B#0|0'] as StyleSnapshot;
+    const transferred = capture.conditions[0].head['b.tsx|B#0|0'] as StyleSnapshot;
+    const standard = (style: Record<string, string>) =>
+      Object.fromEntries(Object.entries(style).filter(([name]) => !name.startsWith('--')));
+    expect(transferred.styles).toEqual(direct.styles.map(standard));
+    expect(transferred.nodes).toEqual(direct.nodes);
   });
 
   it('reports equal pages as equal', async () => {

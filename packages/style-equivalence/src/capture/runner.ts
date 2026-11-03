@@ -1,4 +1,6 @@
-import type { Browser } from '@playwright/test';
+import { availableParallelism } from 'node:os';
+
+import type { Browser, Page } from '@playwright/test';
 
 import type { ConditionConfig, ConditionVariant } from '../config';
 import type { Side } from '../plan/planFile';
@@ -18,6 +20,7 @@ export interface ConditionCapture {
   baseAgain: SectionSnapshots;
   condition: string;
   head: SectionSnapshots;
+  identical?: string[];
   state: CaptureState;
   theme: string;
   variant?: ConditionVariant;
@@ -43,7 +46,7 @@ export interface CaptureOptions {
   urls: Record<Side, string>;
 }
 
-const CAPTURE_ALL = `(() => {
+const COLLECT = `
   const __name = (target) => target;
   const capture = ${captureInPage.toString()};
   const result = {};
@@ -63,8 +66,44 @@ const CAPTURE_ALL = `(() => {
     try { result[key] = { ...capture({ selector: '[data-case="' + CSS.escape(key) + '"]' }), targetKey: targets[0] ? keyOf(targets[0]) : 'root' }; }
     catch (error) { result[key] = { error: String((error && error.message) || error) }; }
   }
-  return result;
+`;
+
+const CAPTURE_ALL = `(() => {${COLLECT} return result; })()`;
+
+// Custom-property differences are always diagnostic in compareSnapshots, so they carry no verdict weight here.
+const CAPTURE_DIGESTS = `(() => {${COLLECT}
+  const hash = (text, seed) => {
+    let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+    for (let index = 0; index < text.length; index++) {
+      const code = text.charCodeAt(index);
+      h1 = Math.imul(h1 ^ code, 2654435761);
+      h2 = Math.imul(h2 ^ code, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+  };
+  for (const value of Object.values(result)) {
+    if ('error' in value) continue;
+    value.styles = value.styles.map((style) => {
+      const kept = {};
+      for (const name in style) if (!name.startsWith('--')) kept[name] = style[name];
+      return kept;
+    });
+  }
+  window.__styleEquivalence = result;
+  const digests = {};
+  for (const [key, value] of Object.entries(result)) {
+    if ('error' in value) { digests[key] = value; continue; }
+    const text = JSON.stringify({ ...value, durationMs: 0 });
+    digests[key] = { digest: hash(text, 1) + ':' + hash(text, 2) + ':' + text.length };
+  }
+  return digests;
 })()`;
+
+const CONDITION_CONCURRENCY = Math.max(1, Math.min(4, Math.floor(availableParallelism() / 4)));
+
+type Digest = { digest: string } | { error: string };
 
 export interface PageCondition {
   state: CaptureState;
@@ -83,7 +122,7 @@ const urlFor = (url: string, { theme, variant }: PageCondition) => {
 export const conditionLabel = ({ state, theme, variant, width }: PageCondition) =>
   [theme, width, state, variant].filter((part) => part !== undefined).join('/');
 
-export const capturePage = async (
+const openPage = async (
   browser: Browser,
   url: string,
   options: PageCondition,
@@ -102,10 +141,166 @@ export const capturePage = async (
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     );
-    return { page, snapshots: (await page.evaluate(CAPTURE_ALL)) as SectionSnapshots };
+    return page;
   } catch (error) {
     await page.close();
     throw error;
+  }
+};
+
+const evaluateOpen = async <T>(
+  browser: Browser,
+  url: string,
+  options: PageCondition,
+  pageErrors: string[],
+  script: string,
+) => {
+  const page = await openPage(browser, url, options, pageErrors);
+  try {
+    return { page, value: (await page.evaluate(script)) as T };
+  } catch (error) {
+    await page.close();
+    throw error;
+  }
+};
+
+export const capturePage = async (
+  browser: Browser,
+  url: string,
+  options: PageCondition,
+  pageErrors: string[],
+) => {
+  const { page, value } = await evaluateOpen<SectionSnapshots>(
+    browser,
+    url,
+    options,
+    pageErrors,
+    CAPTURE_ALL,
+  );
+  return { page, snapshots: value };
+};
+
+const sameDigest = (left?: Digest, right?: Digest) =>
+  Boolean(left && right && 'digest' in left && 'digest' in right && left.digest === right.digest);
+
+interface DeltaSnapshots {
+  reference: Record<string, string>;
+  sections: Record<string, SectionSnapshot & { deltas?: Array<Record<string, string | null>> }>;
+}
+
+const expand = ({ reference, sections }: DeltaSnapshots): SectionSnapshots =>
+  Object.fromEntries(
+    Object.entries(sections).map(([key, section]) => {
+      if (!('deltas' in section) || !section.deltas) return [key, section];
+      const { deltas, ...rest } = section;
+      const styles = deltas.map((delta) => {
+        const style: Record<string, string> = {};
+        for (const name in reference)
+          if (!(name in delta)) style[name] = reference[name];
+          else if (delta[name] !== null) style[name] = delta[name]!;
+        for (const name in delta)
+          if (!(name in reference) && delta[name] !== null) style[name] = delta[name]!;
+        return style;
+      });
+      return [key, { ...rest, styles }];
+    }),
+  );
+
+const snapshotsOf = async (page: Page, keys: string[]): Promise<SectionSnapshots> => {
+  if (!keys.length) return {};
+  const delta = await page.evaluate((wanted) => {
+    const stored = (
+      window as unknown as {
+        __styleEquivalence: Record<string, { error?: string; styles?: Record<string, string>[] }>;
+      }
+    ).__styleEquivalence;
+    const present = wanted.filter((key) => key in stored);
+    const counts = new Map<string, Map<string, number>>();
+    for (const key of present)
+      for (const style of stored[key].styles ?? [])
+        for (const name in style) {
+          const values = counts.get(name) ?? new Map<string, number>();
+          values.set(style[name], (values.get(style[name]) ?? 0) + 1);
+          counts.set(name, values);
+        }
+    const reference: Record<string, string> = {};
+    for (const [name, values] of counts) {
+      let best = '';
+      let most = 0;
+      for (const [value, count] of values)
+        if (count > most) {
+          best = value;
+          most = count;
+        }
+      reference[name] = best;
+    }
+    const sections: Record<string, unknown> = {};
+    for (const key of present) {
+      const { styles, ...rest } = stored[key];
+      if (!styles) {
+        sections[key] = stored[key];
+        continue;
+      }
+      sections[key] = {
+        ...rest,
+        deltas: styles.map((style) => {
+          const changed: Record<string, string | null> = {};
+          for (const name in reference)
+            if (!(name in style)) changed[name] = null;
+            else if (style[name] !== reference[name]) changed[name] = style[name];
+          return changed;
+        }),
+      };
+    }
+    return { reference, sections };
+  }, keys);
+  return expand(delta as DeltaSnapshots);
+};
+
+const captureCondition = async (
+  browser: Browser,
+  urls: Record<Side, string>,
+  options: PageCondition,
+  pageErrors: string[],
+): Promise<ConditionCapture> => {
+  const settled = await Promise.allSettled(
+    [urls.base, urls.base, urls.head].map((url) =>
+      evaluateOpen<Record<string, Digest>>(browser, url, options, pageErrors, CAPTURE_DIGESTS),
+    ),
+  );
+  const loads = settled.flatMap((item) => (item.status === 'fulfilled' ? [item.value] : []));
+  try {
+    const failed = settled.find((item) => item.status === 'rejected');
+    if (failed) throw failed.reason;
+    const [base, again, head] = loads;
+    const keys = [...new Set([...Object.keys(base.value), ...Object.keys(head.value)])];
+    const identical = keys.filter(
+      (key) =>
+        sameDigest(base.value[key], again.value[key]) &&
+        sameDigest(base.value[key], head.value[key]),
+    );
+    const skipped = new Set(identical);
+    const rest = keys.filter((key) => !skipped.has(key));
+    const unstable = rest.filter((key) => !sameDigest(base.value[key], again.value[key]));
+    const [baseSnapshots, unstableSnapshots, headSnapshots] = await Promise.all([
+      snapshotsOf(base.page, rest),
+      snapshotsOf(again.page, unstable),
+      snapshotsOf(head.page, rest),
+    ]);
+    const againSnapshots: SectionSnapshots = {};
+    for (const key of rest)
+      if (key in unstableSnapshots) againSnapshots[key] = unstableSnapshots[key];
+      else if (key in baseSnapshots && key in again.value) againSnapshots[key] = baseSnapshots[key];
+    return {
+      base: baseSnapshots,
+      baseAgain: againSnapshots,
+      condition: conditionLabel(options),
+      head: headSnapshots,
+      identical,
+      ...options,
+    };
+  } finally {
+    await Promise.all(loads.map(({ page }) => page.close()));
   }
 };
 
@@ -129,26 +324,25 @@ const captureConditions = async ({
 }): Promise<RunCapture> => {
   const pageErrors: string[] = [];
   const captures: ConditionCapture[] = [];
-  for (const options of plan) {
-    const loads = await Promise.all([
-      capturePage(browser, urls.base, options, pageErrors),
-      capturePage(browser, urls.base, options, pageErrors),
-      capturePage(browser, urls.head, options, pageErrors),
-    ]);
-    await Promise.all(loads.map(({ page }) => page.close()));
-    const captured: ConditionCapture = {
-      base: loads[0].snapshots,
-      baseAgain: loads[1].snapshots,
-      condition: conditionLabel(options),
-      head: loads[2].snapshots,
-      ...options,
-    };
+  const pending: Array<Promise<ConditionCapture> | undefined> = [];
+  const start = () => {
+    const index = pending.length;
+    if (index >= plan.length) return;
+    const task = captureCondition(browser, urls, plan[index], pageErrors);
+    task.catch(() => undefined);
+    pending.push(task);
+  };
+  for (let slot = 0; slot < CONDITION_CONCURRENCY; slot++) start();
+  for (let index = 0; index < plan.length; index++) {
+    const captured = await pending[index]!;
+    pending[index] = undefined;
+    start();
     if (!onCondition) {
       captures.push(captured);
       continue;
     }
     onCondition(captured);
-    captures.push({ ...captured, base: {}, baseAgain: {}, head: {} });
+    captures.push({ ...captured, base: {}, baseAgain: {}, head: {}, identical: [] });
   }
   return {
     conditions: captures,
@@ -174,7 +368,7 @@ export const captureRun = async ({
   const unmodeled: Partial<Record<Side, Record<string, string[]>>> = {};
   let containerRules = 0;
   for (const side of ['base', 'head'] as const) {
-    const { page } = await capturePage(
+    const page = await openPage(
       browser,
       urls[side],
       { state: 'default', theme: conditions.themes[0], width: conditions.widths[0] },
