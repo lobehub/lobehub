@@ -273,7 +273,6 @@ export const planConditionProbes = (options: {
   const scheduled = ordered.slice(0, Math.max(0, options.remaining));
   return {
     blocked,
-    gateEligible: false as const,
     gaps: [
       ...new Set([
         ...blocked.map((entry) => entry.reason),

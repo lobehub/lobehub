@@ -68,7 +68,6 @@ describe('local StyleX verification test discovery', () => {
     expect(files).toEqual(
       expect.arrayContaining([
         'scripts/stylexMigration/verification/__tests__/cliIntegration.test.ts',
-        'scripts/stylexMigration/verification/gate/gate.test.ts',
         'scripts/stylexMigration/verification/vitest.config.test.ts',
         'scripts/stylexMigration/verification/browser/screenshotEvidence.test.ts',
         'scripts/stylexMigration/verification/__tests__/sxArguments.test.ts',
