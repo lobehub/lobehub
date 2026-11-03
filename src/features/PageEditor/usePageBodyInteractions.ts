@@ -34,6 +34,8 @@ export const usePageBodyInteractions = (
         registerClickBelowContentOnLexical(lexicalEditor),
         registerTitleBodyNavigationOnLexical(lexicalEditor, {
           getTitleInput: () => findPageTitleInput(hostRef.current),
+          registerHighCommand: (command, listener, priority) =>
+            editor.registerHighCommand(command, listener, priority),
         }),
       );
     };

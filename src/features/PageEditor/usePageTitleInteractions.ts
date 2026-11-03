@@ -77,16 +77,58 @@ export const isUnstartedPage = (
   return trimmed === untitledTitle || trimmed === DEFAULT_UNTITLED_TITLE;
 };
 
-/** Another text field, or the body, already has the user's keyboard. */
-const isTypingElsewhere = (input: HTMLTextAreaElement) => {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLElement) || active === input) return false;
-  return (
-    active instanceof HTMLInputElement ||
-    active instanceof HTMLTextAreaElement ||
-    active instanceof HTMLSelectElement ||
-    active.isContentEditable
-  );
+const isEditableElement = (element: Element | null): element is HTMLElement =>
+  element instanceof HTMLInputElement ||
+  element instanceof HTMLTextAreaElement ||
+  element instanceof HTMLSelectElement ||
+  (element instanceof HTMLElement && element.isContentEditable);
+
+/** What had focus when a page was opened, and whether the user acted since. */
+export interface PageOpenState {
+  documentId: string;
+  focusedAtOpen: Element | null;
+  interacted: boolean;
+}
+
+/** How long a just-opened page keeps its title focus against programmatic moves. */
+export const TITLE_FOCUS_HOLD_MS = 1500;
+
+/**
+ * Focus and select the title, and hold that focus for a moment: while the page
+ * settles, other code may move focus programmatically — a menu handing focus
+ * back to the "New page" button it closed from, a side panel auto-focusing its
+ * input. Until the user presses a key or a pointer, such a move is undone.
+ * Returns a function that stops holding.
+ */
+export const holdTitleFocus = (
+  input: HTMLTextAreaElement,
+  open: PageOpenState,
+  durationMs = TITLE_FOCUS_HOLD_MS,
+) => {
+  let released = false;
+  const claim = () => {
+    input.focus();
+    input.select();
+  };
+
+  const onFocusOut = () => {
+    // Look once the focus has landed wherever it is going.
+    setTimeout(() => {
+      if (released || open.interacted || !input.isConnected) return;
+      if (document.activeElement !== input) claim();
+    }, 0);
+  };
+
+  const release = () => {
+    released = true;
+    input.removeEventListener('focusout', onFocusOut);
+    clearTimeout(timer);
+  };
+
+  claim();
+  input.addEventListener('focusout', onFocusOut);
+  const timer = setTimeout(release, durationMs);
+  return release;
 };
 
 /**
@@ -130,6 +172,33 @@ export const usePageTitleInteractions = (containerRef: RefObject<HTMLElement | n
   // writing the cleaned value into the textarea moves its caret to the end.
   const pendingCaretRef = useRef<number | null>(null);
   const autoFocusCheckedRef = useRef<string | undefined>(undefined);
+  const pageOpenRef = useRef<PageOpenState | undefined>(undefined);
+  const releaseTitleFocusRef = useRef<(() => void) | undefined>(undefined);
+
+  // Record what had focus when this page was opened, and whether the user has
+  // pressed a key or a pointer since: the user's own focus is never taken.
+  useEffect(() => {
+    if (!documentId) return;
+
+    const open: PageOpenState = {
+      documentId,
+      focusedAtOpen: document.activeElement,
+      interacted: false,
+    };
+    pageOpenRef.current = open;
+    const markInteracted = () => {
+      open.interacted = true;
+    };
+    document.addEventListener('pointerdown', markInteracted, true);
+    document.addEventListener('keydown', markInteracted, true);
+
+    return () => {
+      document.removeEventListener('pointerdown', markInteracted, true);
+      document.removeEventListener('keydown', markInteracted, true);
+      releaseTitleFocusRef.current?.();
+      releaseTitleFocusRef.current = undefined;
+    };
+  }, [documentId]);
 
   useLayoutEffect(() => {
     const caret = pendingCaretRef.current;
@@ -141,10 +210,10 @@ export const usePageTitleInteractions = (containerRef: RefObject<HTMLElement | n
   // A page nobody has started yet (just created: default title, empty body)
   // opens with its title focused and selected, so typing names it straight
   // away instead of first deleting the placeholder title. Decided once, the
-  // first moment the page is loaded and writable — never later, when the user
-  // may be typing.
+  // first moment the page and its title are loaded and writable — never later,
+  // when the user may be typing.
   useEffect(() => {
-    if (!documentId || isDocumentLoading || !canEdit) return;
+    if (!documentId || isDocumentLoading || !canEdit || title === undefined) return;
     if (autoFocusCheckedRef.current === documentId) return;
 
     const input = findPageTitleInput(containerRef.current);
@@ -152,10 +221,14 @@ export const usePageTitleInteractions = (containerRef: RefObject<HTMLElement | n
     autoFocusCheckedRef.current = documentId;
 
     if (!isUnstartedPage(title, content, t('pageList.untitled'))) return;
-    if (isTypingElsewhere(input)) return;
 
-    input.focus();
-    input.select();
+    const open = pageOpenRef.current;
+    if (!open || open.documentId !== documentId || open.interacted) return;
+    // The user was in another field when they opened the page, and still is.
+    const active = document.activeElement;
+    if (active !== input && active === open.focusedAtOpen && isEditableElement(active)) return;
+
+    releaseTitleFocusRef.current = holdTitleFocus(input, open);
   }, [canEdit, containerRef, content, documentId, isDocumentLoading, t, title]);
 
   const handleTitleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {

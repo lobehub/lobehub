@@ -6,9 +6,15 @@ import {
   $createTextNode,
   $getRoot,
   $getSelection,
+  $isRangeSelection,
+  COMMAND_PRIORITY_CRITICAL,
+  COMMAND_PRIORITY_NORMAL,
+  type CommandListener,
+  type CommandListenerPriority,
   createEditor,
   KEY_ARROW_UP_COMMAND,
   KEY_BACKSPACE_COMMAND,
+  type LexicalCommand,
   type LexicalEditor,
   type ParagraphNode,
 } from 'lexical';
@@ -39,13 +45,77 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+type HighCommandRegistrar = <P>(
+  command: LexicalCommand<P>,
+  listener: CommandListener<P>,
+  priority: CommandListenerPriority,
+) => () => void;
+
+/**
+ * The editor kernel's high-command lane: listeners kept in its own priority
+ * sets and run, highest priority first, from one Lexical listener registered
+ * at CRITICAL — so all of them run before any plain Lexical listener.
+ */
+const createKernelHighCommands = (editor: LexicalEditor): HighCommandRegistrar => {
+  const lanes = new Map<LexicalCommand<unknown>, Set<CommandListener<unknown>>[]>();
+  return (command, listener, priority) => {
+    const key = command as LexicalCommand<unknown>;
+    if (!lanes.has(key)) {
+      const sets = [0, 1, 2, 3, 4].map(() => new Set<CommandListener<unknown>>());
+      lanes.set(key, sets);
+      editor.registerCommand(
+        command,
+        (payload, lexicalEditor) => {
+          for (let i = 4; i >= 0; i--) {
+            for (const run of sets[i]) if (run(payload, lexicalEditor)) return true;
+          }
+          return false;
+        },
+        COMMAND_PRIORITY_CRITICAL,
+      );
+    }
+    const set = lanes.get(key)![priority];
+    set.add(listener as CommandListener<unknown>);
+    return () => set.delete(listener as CommandListener<unknown>);
+  };
+};
+
+/**
+ * Stand-in for @lobehub/editor's virtual-block plugin: ArrowUp anywhere in a
+ * non-empty first block opens a temporary empty line above it.
+ */
+const registerFakeVirtualBlock = (registerHighCommand: HighCommandRegistrar) =>
+  registerHighCommand(
+    KEY_ARROW_UP_COMMAND,
+    (event) => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) return false;
+      const block = selection.focus.getNode().getTopLevelElement();
+      if (!block || !block.is($getRoot().getFirstChild()) || block.getTextContentSize() === 0)
+        return false;
+      event?.preventDefault();
+      const line = $createParagraphNode();
+      block.insertBefore(line);
+      line.selectStart();
+      return true;
+    },
+    COMMAND_PRIORITY_NORMAL,
+  );
+
 interface SetupOptions {
   isCaretOnFirstLine?: (blockElement: HTMLElement | null) => boolean;
   lines: string[];
   titleReadOnly?: boolean;
+  /** Register like the page does: through the kernel's high-command lane. */
+  withKernel?: boolean;
 }
 
-const setup = async ({ lines, titleReadOnly = false, isCaretOnFirstLine }: SetupOptions) => {
+const setup = async ({
+  lines,
+  titleReadOnly = false,
+  isCaretOnFirstLine,
+  withKernel = false,
+}: SetupOptions) => {
   const host = document.createElement('div');
   const title = document.createElement('textarea');
   title.setAttribute(PAGE_TITLE_INPUT_ATTRIBUTE, 'true');
@@ -74,10 +144,15 @@ const setup = async ({ lines, titleReadOnly = false, isCaretOnFirstLine }: Setup
     );
   });
 
+  const registerHighCommand = withKernel ? createKernelHighCommands(editor) : undefined;
+  // Editor plugins register before the page's own interactions do.
+  if (registerHighCommand) cleanups.push(registerFakeVirtualBlock(registerHighCommand));
+
   cleanups.push(
     registerTitleBodyNavigationOnLexical(editor, {
       getTitleInput: () => findPageTitleInput(host),
       isCaretOnFirstLine: isCaretOnFirstLine ?? (() => false),
+      registerHighCommand,
     }),
   );
 
@@ -135,6 +210,44 @@ describe('registerTitleBodyNavigationOnLexical — ArrowUp', () => {
     expectCaretAtTitleEnd(title);
     // The body lets go of its caret so committing it cannot pull focus back.
     expect(editor.getEditorState().read(() => $getSelection())).toBeNull();
+  });
+
+  it("gets in before the editor's own ArrowUp handling of the first block", async () => {
+    const { editor, title } = await setup({
+      isCaretOnFirstLine: () => true,
+      lines: ['first line', 'second'],
+      withKernel: true,
+    });
+    await placeCaret(editor, 0, 4);
+
+    expect(press(editor, 'up').handled).toBe(true);
+    await settle();
+
+    // No temporary line is opened above the first block, and none is saved.
+    expect(readLines(editor)).toEqual(['first line', 'second']);
+    expectCaretAtTitleEnd(title);
+  });
+
+  it('drops an empty first line it leaves, unless it is the only line', async () => {
+    const { editor, title } = await setup({ lines: ['', 'second'], withKernel: true });
+    await placeCaret(editor, 0, 0);
+
+    expect(press(editor, 'up').handled).toBe(true);
+    await settle();
+
+    expect(readLines(editor)).toEqual(['second']);
+    expectCaretAtTitleEnd(title);
+  });
+
+  it('keeps the only line of the body when leaving it upward', async () => {
+    const { editor, title } = await setup({ lines: [''], withKernel: true });
+    await placeCaret(editor, 0, 0);
+
+    expect(press(editor, 'up').handled).toBe(true);
+    await settle();
+
+    expect(readLines(editor)).toEqual(['']);
+    expectCaretAtTitleEnd(title);
   });
 
   it('moves to the title from anywhere on the first visual line', async () => {

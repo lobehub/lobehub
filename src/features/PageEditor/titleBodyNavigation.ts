@@ -4,10 +4,14 @@ import {
   $isParagraphNode,
   $isRangeSelection,
   $setSelection,
+  COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
+  type CommandListener,
+  type CommandListenerPriority,
   type ElementNode,
   KEY_ARROW_UP_COMMAND,
   KEY_BACKSPACE_COMMAND,
+  type LexicalCommand,
   type LexicalEditor,
   mergeRegister,
   type RangeSelection,
@@ -119,25 +123,46 @@ export const isDomCaretOnFirstLine = (blockElement: HTMLElement | null): boolean
   return caretRect.top - blockElement.getBoundingClientRect().top < caretRect.height;
 };
 
+type CommandRegistrar = <P>(
+  command: LexicalCommand<P>,
+  listener: CommandListener<P>,
+  priority: CommandListenerPriority,
+) => () => void;
+
 interface TitleBodyNavigationOptions {
   /** The title input, or null when there is none or it cannot be written. */
   getTitleInput: () => HTMLTextAreaElement | null;
   /** Injected by tests; defaults to measuring the DOM caret. */
   isCaretOnFirstLine?: (blockElement: HTMLElement | null) => boolean;
+  /**
+   * Where ArrowUp registers. The editor kernel's own ArrowUp handlers (the
+   * virtual-block plugin opens a temporary line above the first block) run in
+   * its high-command lane, ahead of any plain Lexical listener, so the page
+   * passes `editor.registerHighCommand` to get in before them. Defaults to the
+   * Lexical editor itself (tests).
+   */
+  registerHighCommand?: CommandRegistrar;
 }
 
 /**
  * Body side of the title ⇄ body walk:
  * - ArrowUp on the first line of the first block moves to the end of the title.
  * - Backspace at the very start of a plain first paragraph moves to the end of
- *   the title, dropping the paragraph when it is empty and not the last line.
- *   Its text is never merged into the title, which doubles as the filename.
+ *   the title. Its text is never merged into the title, which doubles as the
+ *   filename.
+ * Either way, an empty first line is dropped on the way out unless it is the
+ * body's only line — nothing is left behind that the user did not write.
  *
  * Exported for tests, which drive a bare Lexical editor without the kernel.
  */
 export const registerTitleBodyNavigationOnLexical = (
   lexicalEditor: LexicalEditor,
-  { getTitleInput, isCaretOnFirstLine = isDomCaretOnFirstLine }: TitleBodyNavigationOptions,
+  {
+    getTitleInput,
+    isCaretOnFirstLine = isDomCaretOnFirstLine,
+    registerHighCommand = (command, listener, priority) =>
+      lexicalEditor.registerCommand(command, listener, priority),
+  }: TitleBodyNavigationOptions,
 ) => {
   const takeTitleInput = () => {
     const input = getTitleInput();
@@ -146,7 +171,15 @@ export const registerTitleBodyNavigationOnLexical = (
 
   // The caret leaves the editor, so drop its selection: committing a body
   // selection after the title took focus would pull the DOM caret back.
-  const $moveCaretToTitle = (event: KeyboardEvent | null, input: HTMLTextAreaElement) => {
+  const $moveCaretToTitle = (
+    event: KeyboardEvent | null,
+    input: HTMLTextAreaElement,
+    block: ElementNode,
+  ) => {
+    // The last line stays so the body keeps somewhere to click back into.
+    if ($isParagraphNode(block) && block.getChildrenSize() === 0 && block.getNextSibling()) {
+      block.remove();
+    }
     event?.preventDefault();
     $setSelection(null);
     focusTitleInputEnd(input);
@@ -154,7 +187,7 @@ export const registerTitleBodyNavigationOnLexical = (
   };
 
   return mergeRegister(
-    lexicalEditor.registerCommand(
+    registerHighCommand(
       KEY_ARROW_UP_COMMAND,
       (event) => {
         if (!lexicalEditor.isEditable()) return false;
@@ -171,9 +204,9 @@ export const registerTitleBodyNavigationOnLexical = (
         const input = takeTitleInput();
         if (!input) return false;
 
-        return $moveCaretToTitle(event, input);
+        return $moveCaretToTitle(event, input, caret.block);
       },
-      COMMAND_PRIORITY_LOW,
+      COMMAND_PRIORITY_HIGH,
     ),
     lexicalEditor.registerCommand(
       KEY_BACKSPACE_COMMAND,
@@ -190,11 +223,7 @@ export const registerTitleBodyNavigationOnLexical = (
         const input = takeTitleInput();
         if (!input) return false;
 
-        const paragraph = caret.block;
-        // The last line stays so the body keeps somewhere to click back into.
-        if (paragraph.getChildrenSize() === 0 && paragraph.getNextSibling()) paragraph.remove();
-
-        return $moveCaretToTitle(event, input);
+        return $moveCaretToTitle(event, input, caret.block);
       },
       COMMAND_PRIORITY_LOW,
     ),

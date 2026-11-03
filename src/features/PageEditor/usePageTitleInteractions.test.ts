@@ -12,6 +12,7 @@ import {
 import { createStore, Provider } from './store';
 import { PAGE_TITLE_INPUT_ATTRIBUTE } from './titleBodyNavigation';
 import {
+  holdTitleFocus,
   isUnstartedPage,
   splitTitleAtSelection,
   usePageTitleInteractions,
@@ -62,14 +63,23 @@ const setup = ({
   content = 'Some body',
   documentLoaded = true,
   metaReadOnly = false,
-  title = 'My page',
-}: { content?: string; documentLoaded?: boolean; metaReadOnly?: boolean; title?: string } = {}) => {
+  title: titleOption = 'My page',
+  titleUnknown = false,
+}: {
+  content?: string;
+  documentLoaded?: boolean;
+  metaReadOnly?: boolean;
+  title?: string;
+  /** The page's title has not arrived yet (store title `undefined`). */
+  titleUnknown?: boolean;
+} = {}) => {
+  const title = titleUnknown ? undefined : titleOption;
   mockDocumentState.current = { documents: documentLoaded ? { 'doc-1': { content } } : {} };
 
   const container = document.createElement('div');
   const input = document.createElement('textarea');
   input.setAttribute(PAGE_TITLE_INPUT_ATTRIBUTE, 'true');
-  input.value = title;
+  input.value = title ?? '';
   container.append(input);
   document.body.append(container);
 
@@ -78,11 +88,23 @@ const setup = ({
   store.setState({ flushMetaSave });
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(Provider, { createStore: () => store }, children);
-  const { result } = renderHook(() => usePageTitleInteractions({ current: container }), {
+  const { rerender, result } = renderHook(() => usePageTitleInteractions({ current: container }), {
     wrapper,
   });
 
-  return { flushMetaSave, input, result, store };
+  return { flushMetaSave, input, rerender, result, store };
+};
+
+/** Let focus events and the hold's deferred check run. */
+const settle = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  });
+
+const createButton = () => {
+  const button = document.createElement('button');
+  document.body.append(button);
+  return button;
 };
 
 const keyDown = (
@@ -287,6 +309,72 @@ describe('usePageTitleInteractions — opening a new page', () => {
     setup({ content: '', title: 'Untitled' });
 
     expect(document.activeElement).toBe(other);
+  });
+
+  // The sidebar's "New page" entry closes its menu after the page opens, and
+  // the menu hands focus back to the button it was opened from.
+  it('takes the title back when focus is handed to the button it was opened from', async () => {
+    const { input } = setup({ content: '', title: 'Untitled' });
+
+    createButton().focus();
+    await settle();
+
+    expect(document.activeElement).toBe(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'Untitled'.length]);
+  });
+
+  it('lets the user move the focus away', async () => {
+    setup({ content: '', title: 'Untitled' });
+    const button = createButton();
+
+    button.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    button.focus();
+    await settle();
+
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('takes the title from a field that focused itself after the page opened', async () => {
+    const { input, rerender } = setup({ content: '', documentLoaded: false, title: 'Untitled' });
+    // A side panel auto-focuses its input while the page is still loading.
+    const panelInput = document.createElement('input');
+    document.body.append(panelInput);
+    panelInput.focus();
+
+    mockDocumentState.current = { documents: { 'doc-1': { content: '' } } };
+    rerender();
+    await settle();
+
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('decides only once the title has arrived', async () => {
+    const { input, store } = setup({ content: '', titleUnknown: true });
+    expect(document.activeElement).not.toBe(input);
+
+    input.value = 'Untitled';
+    act(() => store.getState().initMeta('Untitled'));
+    await settle();
+
+    expect(document.activeElement).toBe(input);
+  });
+});
+
+describe('holdTitleFocus', () => {
+  it('stops holding the title after a moment', async () => {
+    const input = document.createElement('textarea');
+    document.body.append(input);
+    const open = { documentId: 'doc-1', focusedAtOpen: null, interacted: false };
+
+    holdTitleFocus(input, open, 1);
+    expect(document.activeElement).toBe(input);
+    await settle();
+
+    const button = createButton();
+    button.focus();
+    await settle();
+
+    expect(document.activeElement).toBe(button);
   });
 });
 
