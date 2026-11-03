@@ -135,11 +135,21 @@ export class TaskLabelModel {
   };
 
   /** Groups nest one level only, and only a group can be a parent. */
-  private assertValidParent = async (parentId: string | null | undefined, isGroup: boolean) => {
+  private assertValidParent = async (
+    parentId: string | null | undefined,
+    isGroup: boolean,
+    db: LobeChatDatabase | Transaction = this.db,
+  ) => {
     if (!parentId) return;
     if (isGroup) throw new TaskLabelError('INVALID_PARENT', 'A label group cannot be nested');
 
-    const parent = await this.findById(parentId);
+    const [parent] = isUuid(parentId)
+      ? await db
+          .select({ isGroup: taskLabels.isGroup })
+          .from(taskLabels)
+          .where(and(eq(taskLabels.id, parentId), this.ownership()))
+          .limit(1)
+      : [];
     if (!parent || !parent.isGroup) {
       throw new TaskLabelError('INVALID_PARENT', `Label group not found: ${parentId}`);
     }
@@ -183,38 +193,43 @@ export class TaskLabelModel {
       return row;
     };
 
-    const isRegrouping = value.parentId !== undefined && value.parentId !== current.parentId;
-    if (isRegrouping) await this.assertValidParent(value.parentId, current.isGroup);
-    if (!isRegrouping || !value.parentId) return write(this.db);
+    // No parent in the patch, or moving out of a group: nothing to check.
+    if (!value.parentId) return write(this.db);
 
     // Moving into a group would break "one label per group" on tasks that
     // already carry a sibling, so refuse rather than silently dropping one.
-    // The check and the move must not interleave with assignments: lock this
-    // label (assignments hold FOR SHARE on the labels they attach) and every
-    // task carrying it (assignments hold the task row), in the same
-    // label → task order assignments use, then check and write.
+    // The check and the move must not interleave with assignments or another
+    // regroup: lock this label (assignments hold FOR SHARE on the labels they
+    // attach), decide from its parent *under the lock* (a pre-lock read may be
+    // stale), then lock every task carrying it (assignments hold the task row)
+    // in the same label → task order assignments use, check, and write.
     const groupId = value.parentId;
     return this.db.transaction(async (tx) => {
-      await tx
-        .select({ id: taskLabels.id })
+      const [locked] = await tx
+        .select({ parentId: taskLabels.parentId })
         .from(taskLabels)
         .where(and(eq(taskLabels.id, id), this.ownership()))
         .for('update');
-      await tx
-        .select({ id: tasks.id })
-        .from(tasks)
-        .where(
-          inArray(
-            tasks.id,
-            tx
-              .select({ taskId: taskLabelLinks.taskId })
-              .from(taskLabelLinks)
-              .where(eq(taskLabelLinks.labelId, id)),
-          ),
-        )
-        .orderBy(asc(tasks.id))
-        .for('update');
-      await this.assertNoGroupConflict(id, groupId, tx);
+      if (!locked) throw new TaskLabelError('LABEL_NOT_FOUND', `Label not found: ${id}`);
+
+      if (locked.parentId !== groupId) {
+        await this.assertValidParent(groupId, current.isGroup, tx);
+        await tx
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(
+            inArray(
+              tasks.id,
+              tx
+                .select({ taskId: taskLabelLinks.taskId })
+                .from(taskLabelLinks)
+                .where(eq(taskLabelLinks.labelId, id)),
+            ),
+          )
+          .orderBy(asc(tasks.id))
+          .for('update');
+        await this.assertNoGroupConflict(id, groupId, tx);
+      }
       return write(tx);
     });
   };

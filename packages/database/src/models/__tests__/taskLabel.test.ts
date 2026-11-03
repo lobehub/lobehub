@@ -102,6 +102,25 @@ describe('TaskLabelModel registry', () => {
     expect((await member.query())[0].usageCount).toBe(2);
   });
 
+  it('checks a regroup against the parent under the lock, not a stale read', async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const groupA = await workspace.create({ isGroup: true, name: 'A' });
+    const groupB = await workspace.create({ isGroup: true, name: 'B' });
+    const label = await workspace.create({ name: 'L', parentId: groupA.id });
+    const sibling = await workspace.create({ name: 'S', parentId: groupA.id });
+    const staleRead = await workspace.findById(label.id);
+
+    // Meanwhile: L moves to B and the task gains L plus A's sibling.
+    await workspace.update(label.id, { parentId: groupB.id });
+    await workspace.addTaskLabels(task.id, [label.id, sibling.id]);
+
+    // A writer that read L while it was still in A submits "parent A".
+    const stale = new TaskLabelModel(serverDB, userId, workspaceId);
+    stale.findById = async () => staleRead;
+    await expectCode(stale.update(label.id, { parentId: groupA.id }), 'GROUP_CONFLICT');
+    expect((await workspace.findById(label.id))?.parentId).toBe(groupB.id);
+  });
+
   it('refuses to move a label into a group when a task would end up with two', async () => {
     const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
     const group = await workspace.create({ isGroup: true, name: 'Type' });
