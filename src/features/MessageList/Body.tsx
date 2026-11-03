@@ -4,7 +4,8 @@ import { agentDisplayName } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { memo, useMemo } from 'react';
+import { Archive } from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -13,6 +14,7 @@ import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgent
 import { matchChannel } from '@/features/Channels/paths';
 import { useChannelEvents } from '@/features/Channels/useChannelEvents';
 import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
+import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -88,7 +90,7 @@ const ChannelSync = memo(() => {
 ChannelSync.displayName = 'MessageListChannelSync';
 
 const Body = memo(() => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'channel']);
   const { error: agentsError, mutate: retryAgents } = useFetchAgentList();
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   useHomeStore((s) => s.useFetchConversationRecents)(ALL_RECENTS_LIMIT);
@@ -98,22 +100,29 @@ const Body = memo(() => {
   const activeRouteId = useActiveRouteId();
   const channelsEnabled = useChannelsEnabled();
   const allChannels = useChannelStore(channelSelectors.list);
-  // Group Channels outside any project; a direct Channel opens from its Agent's row, and an
-  // archived one stays listed only while it is open.
-  const channels = useMemo(
-    () =>
-      channelsEnabled
-        ? (allChannels ?? []).filter(
-            (channel) =>
-              !channel.projectId &&
-              !channel.agentId &&
-              (channel.status !== 'archived' || channel.id === activeRouteId),
-          )
-        : [],
-    [activeRouteId, allChannels, channelsEnabled],
-  );
-
   const { query } = useMessageSearch();
+  const [showArchived, setShowArchived] = useState(false);
+  // Group Channels outside any project; a direct Channel opens from its Agent's row. An archived
+  // one leaves the list unless it is open, but search still finds it and the archived group at
+  // the end lists it.
+  const { archived, channels } = useMemo(() => {
+    const groups = channelsEnabled
+      ? (allChannels ?? []).filter((channel) => !channel.projectId && !channel.agentId)
+      : [];
+    const isHidden = (channel: (typeof groups)[number]) =>
+      channel.status === 'archived' && channel.id !== activeRouteId;
+    return {
+      archived: groups
+        .filter(isHidden)
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt ?? b.createdAt).getTime() -
+            new Date(a.updatedAt ?? a.createdAt).getTime(),
+        ),
+      channels: query.trim() ? groups : groups.filter((channel) => !isHidden(channel)),
+    };
+  }, [activeRouteId, allChannels, channelsEnabled, query]);
+
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const inboxUpdatedAt = useAgentStore((s) =>
     inboxAgentId ? s.agentMap[inboxAgentId]?.updatedAt : undefined,
@@ -179,6 +188,25 @@ const Body = memo(() => {
             {query ? t('navPanel.searchResultEmpty') : t('messageList.empty')}
           </div>
         )
+      )}
+      {!query.trim() && archived.length > 0 && (
+        <>
+          <NavItem
+            aria-expanded={showArchived}
+            icon={Archive}
+            title={t('archivedGroup', { count: archived.length, ns: 'channel' })}
+            onClick={() => setShowArchived(!showArchived)}
+          />
+          {showArchived &&
+            archived.map((channel) => (
+              <ChannelConversation
+                active={false}
+                activeAt={new Date(channel.updatedAt ?? channel.createdAt)}
+                channel={channel}
+                key={channel.id}
+              />
+            ))}
+        </>
       )}
       {channelsEnabled && <ChannelSync />}
     </Flexbox>

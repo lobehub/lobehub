@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +12,7 @@ const home = vi.hoisted(() => ({
   channelsEnabled: true,
   channelsError: undefined as unknown,
   pathname: '/',
+  query: '',
   error: undefined as unknown,
   isInit: false,
   items: [] as unknown[],
@@ -39,6 +40,13 @@ vi.mock('@/features/Channels/useChannelsEnabled', () => ({
   useChannelsEnabled: () => home.channelsEnabled,
 }));
 vi.mock('@/features/Channels/useChannelEvents', () => ({ useChannelEvents: () => {} }));
+vi.mock('./SearchContext', () => ({
+  useMessageSearch: () => ({ query: home.query, setQuery: () => {} }),
+}));
+vi.mock('@/features/NavPanel/components/NavItem', () => ({
+  default: ({ onClick, title }: { onClick: () => void; title: string }) =>
+    createElement('button', { onClick }, title),
+}));
 vi.mock('@/hooks/useFetchAgentList', () => ({
   useFetchAgentList: () => ({ error: home.error, mutate: home.mutate }),
 }));
@@ -101,6 +109,7 @@ beforeEach(() => {
   home.channelsEnabled = true;
   home.channelsError = undefined;
   home.pathname = '/';
+  home.query = '';
   home.error = undefined;
   home.isInit = false;
   home.items = [];
@@ -173,6 +182,30 @@ describe('MessageList Body Channel rows', () => {
     render(createElement(Body));
 
     expect(screen.getByText('# Old')).toHaveAttribute('aria-current', 'page');
+  });
+
+  // Archiving a group Channel left the IM layout with no way back to it.
+  it('lists archived Channels behind the archived group at the end', () => {
+    home.channels = [
+      channel({ id: 'chn_team', title: 'Team' }),
+      channel({ id: 'chn_archived', status: 'archived', title: 'Old' }),
+    ];
+
+    render(createElement(Body));
+    expect(screen.queryByText('# Old')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('archivedGroup'));
+    expect(screen.getByText('# Old')).toBeInTheDocument();
+  });
+
+  it('finds archived Channels by search', () => {
+    home.query = 'old';
+    home.channels = [channel({ id: 'chn_archived', status: 'archived', title: 'Old' })];
+
+    render(createElement(Body));
+
+    expect(screen.getByText('# Old')).toBeInTheDocument();
+    expect(screen.queryByText('archivedGroup')).not.toBeInTheDocument();
   });
 
   it('shows no Channel rows while Channels are off', () => {
