@@ -1238,6 +1238,7 @@
   "goalProcess.signOff.accept": "签收",
   "goalProcess.signOff.acceptEffect": "目标按已交付结束",
   "goalProcess.signOff.accepted": "已签收",
+  "goalProcess.signOff.archivedBlocked": "请先取消归档，再提出修改",
   "goalProcess.signOff.description": "目标验收已通过，你签收后目标正式结束。",
   "goalProcess.signOff.islandSubtitle": "已完成，等你签收",
   "goalProcess.signOff.islandSummary": "目标验收已通过。先看交付报告，再决定签收或提出修改。",

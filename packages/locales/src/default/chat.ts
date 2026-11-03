@@ -2766,6 +2766,7 @@ export default {
     'Fork a fresh recipe for the units that broke; the rest of the batch continues once the new gate passes.',
   'goalProcess.decision.effect.releaseBatch':
     'Release the next wave on the current recipe. Each later wave goes to the main Agent, which releases it or brings it back to you.',
+  'goalProcess.signOff.archivedBlocked': 'Restore this archived goal before requesting changes',
   'goalProcess.signOff.islandSubtitle': 'is done and waiting for your sign-off',
   'goalProcess.signOff.islandSummary':
     'Goal-level acceptance passed. Read the delivery report, then sign off or request changes.',

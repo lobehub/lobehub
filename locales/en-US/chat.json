@@ -1238,6 +1238,7 @@
   "goalProcess.signOff.accept": "Sign off",
   "goalProcess.signOff.acceptEffect": "Close the goal as delivered.",
   "goalProcess.signOff.accepted": "Signed off",
+  "goalProcess.signOff.archivedBlocked": "Restore this archived goal before requesting changes",
   "goalProcess.signOff.description": "Goal-level acceptance passed. Your sign-off closes the goal.",
   "goalProcess.signOff.islandSubtitle": "is done and waiting for your sign-off",
   "goalProcess.signOff.islandSummary": "Goal-level acceptance passed. Read the delivery report, then sign off or request changes.",

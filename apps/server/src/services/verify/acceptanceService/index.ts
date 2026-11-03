@@ -8,9 +8,11 @@ import type {
   VerifyRunDecisionDetail,
 } from '@lobechat/types';
 import { statusFromRound } from '@lobechat/utils/verify/acceptanceStatus';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
+import { GoalModel } from '@/database/models/goal';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyReportModel } from '@/database/models/verifyReport';
@@ -555,6 +557,19 @@ export class AcceptanceService {
    */
   reject = async (acceptanceId: string, comment?: string): Promise<AcceptanceItem> => {
     const acceptance = await requireDecidableAcceptance(this.acceptanceModel, acceptanceId);
+    // A rejected Goal Task is reworked by its goal's coordinator; an archived
+    // goal stays put, so the rejection would be recorded and then lost.
+    if (acceptance.subjectType === 'task') {
+      const goal = await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
+        acceptance.subjectId,
+      );
+      if (goal?.archivedAt) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `This goal is archived; restore it before requesting changes (lh goal unarchive ${goal.id})`,
+        });
+      }
+    }
 
     const settled = await this.stampDecision(acceptanceId, 'reject', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');

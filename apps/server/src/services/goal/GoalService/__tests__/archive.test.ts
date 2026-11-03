@@ -3,11 +3,13 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
+import { AcceptanceModel } from '@/database/models/acceptance';
 import { GoalModel } from '@/database/models/goal';
 import { GoalArchiveModel } from '@/database/models/goalArchive';
 import { goals } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { AcceptanceService } from '../../../verify/acceptanceService';
 import { GoalStartService } from '../../start';
 import { registerGoalServiceTestCleanup } from '../../testUtils';
 import { GoalService } from '../index';
@@ -57,6 +59,22 @@ describe('archived goals stay put', () => {
     await service.close(graph.goal.id, 'achieved');
 
     expect(await new GoalArchiveModel(serverDB, userId).archive(graph.goal.id)).toBeNull();
+  });
+
+  it('refuses a change request on a Task of an archived goal until it is restored', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['Only'], title: 'Put away' });
+    const { taskId } = await service.tick(graph.goal.id);
+    const acceptanceModel = new AcceptanceModel(serverDB, userId);
+    const acceptance = await acceptanceModel.ensureForSubject('task', taskId!);
+    await acceptanceModel.updateStatus(acceptance.id, 'delivered');
+    await service.close(graph.goal.id, 'canceled');
+    expect(await new GoalArchiveModel(serverDB, userId).archive(graph.goal.id)).not.toBeNull();
+
+    await expect(
+      new AcceptanceService(serverDB, userId).reject(acceptance.id, 'Redo it'),
+    ).rejects.toMatchObject(archived);
+    expect((await acceptanceModel.findById(acceptance.id))?.status).toBe('delivered');
   });
 
   it('does not archive a goal that is still running', async () => {
