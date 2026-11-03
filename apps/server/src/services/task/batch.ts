@@ -24,8 +24,6 @@ const FINISHED_STATUSES = new Set(['canceled', 'completed']);
 
 /** Remote operation interrupts / per-task fallbacks issued by one batch. */
 const BATCH_SIDE_EFFECT_CONCURRENCY = 5;
-/** Cheap per-task checks (Redis edit lock, goal ownership). */
-const BATCH_CHECK_CONCURRENCY = 20;
 
 export type TaskBatchSkipReason =
   /** The task is part of an open goal and cannot be archived. */
@@ -107,14 +105,13 @@ export class TaskBatchService {
   /** Drop tasks another workspace member is editing (inert in personal mode). */
   private async withoutEditLocked(tasks: TaskItem[], result: TaskBatchResult) {
     if (!this.workspaceId || tasks.length === 0) return tasks;
-    const editLock = new EditLockService(this.userId);
-    const blocked = await pMap(
-      tasks,
-      async (task) => !!(await editLock.getBlockingHolder('task', task.id)),
-      { concurrency: BATCH_CHECK_CONCURRENCY },
+    // One MGET for the whole selection, not one GET per task.
+    const blocked = await new EditLockService(this.userId).getBlockingHolders(
+      'task',
+      tasks.map((task) => task.id),
     );
-    return tasks.filter((task, index) => {
-      if (!blocked[index]) return true;
+    return tasks.filter((task) => {
+      if (!blocked.has(task.id)) return true;
       result.skipped.push({ id: task.id, reason: 'locked' });
       return false;
     });

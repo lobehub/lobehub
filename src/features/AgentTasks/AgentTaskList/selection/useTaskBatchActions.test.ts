@@ -5,20 +5,28 @@ import { useTaskSelectionStore } from './store';
 import { useTaskBatchActions } from './useTaskBatchActions';
 
 const batchUpdate = vi.fn();
+const batchDelete = vi.fn();
 const refreshTaskList = vi.fn(async () => {});
 const toastWarning = vi.fn();
+const toastError = vi.fn();
+const toastSuccess = vi.fn();
+const overlay = { commit: vi.fn(), rollback: vi.fn() };
+const beginOptimistic = vi.fn((..._args: unknown[]) => overlay);
 
 vi.mock('@/services/task', () => ({
-  taskService: { batchUpdate: (...args: unknown[]) => batchUpdate(...args) },
+  taskService: {
+    batchDelete: (...args: unknown[]) => batchDelete(...args),
+    batchUpdate: (...args: unknown[]) => batchUpdate(...args),
+  },
 }));
 vi.mock('@/store/task', () => ({
-  useTaskStore: (selector: (s: { refreshTaskList: () => Promise<void> }) => unknown) =>
-    selector({ refreshTaskList }),
+  useTaskStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ internal_beginCollectionTasksOptimistic: beginOptimistic, refreshTaskList }),
 }));
 vi.mock('@lobehub/ui', () => ({
   toast: {
-    error: vi.fn(),
-    success: vi.fn(),
+    error: (...args: unknown[]) => toastError(...args),
+    success: (...args: unknown[]) => toastSuccess(...args),
     warning: (...args: unknown[]) => toastWarning(...args),
   },
 }));
@@ -28,6 +36,12 @@ const partialFailure = { failed: [{ error: 'boom', id: 'b' }], skipped: [], upda
 
 beforeEach(() => {
   batchUpdate.mockReset();
+  batchDelete.mockReset();
+  beginOptimistic.mockClear();
+  overlay.commit.mockReset();
+  overlay.rollback.mockReset();
+  toastError.mockReset();
+  toastSuccess.mockReset();
   refreshTaskList.mockReset();
   refreshTaskList.mockResolvedValue(undefined);
   toastWarning.mockReset();
@@ -50,6 +64,104 @@ describe('useTaskBatchActions', () => {
 
     expect(useTaskSelectionStore.getState().selectedIds).toEqual(['b']);
     expect(useTaskSelectionStore.getState().progress).toBeUndefined();
+    // Only the row the server changed keeps its optimistic patch.
+    const [keep] = overlay.commit.mock.calls[0] as [Map<string, unknown>];
+    expect([...keep.keys()]).toEqual(['a']);
+  });
+
+  it('shows the result and clears the selection before the server answers', async () => {
+    let resolve!: (value: unknown) => void;
+    batchUpdate.mockReturnValue(new Promise((r) => (resolve = r)));
+    useTaskSelectionStore.getState().prune(new Set(['a', 'b']));
+    useTaskSelectionStore.getState().selectAll(['a', 'b']);
+    const { result } = renderHook(() => useTaskBatchActions());
+
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.run({ kind: 'update', patch: { priority: 1 } });
+    });
+    expect(beginOptimistic).toHaveBeenCalledWith(['a', 'b'], expect.any(Function));
+    expect(useTaskSelectionStore.getState().selectedIds).toEqual([]);
+    expect(overlay.commit).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolve({ failed: [], skipped: [], updated: ['a', 'b'] });
+      await pending;
+    });
+    expect(overlay.commit).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not wait for the list refresh before settling', async () => {
+    batchUpdate.mockResolvedValue({ failed: [], skipped: [], updated: ['a'] });
+    refreshTaskList.mockReturnValue(new Promise(() => {}));
+    useTaskSelectionStore.getState().selectAll(['a']);
+    const { result } = renderHook(() => useTaskBatchActions());
+
+    await act(() => result.current.run({ kind: 'update', patch: { priority: 1 } }));
+
+    expect(refreshTaskList).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls everything back and reselects the rows when the request fails', async () => {
+    batchDelete.mockRejectedValue(new Error('offline'));
+    useTaskSelectionStore.getState().prune(new Set(['a', 'b']));
+    useTaskSelectionStore.getState().selectAll(['a', 'b']);
+    const { result } = renderHook(() => useTaskBatchActions());
+
+    act(() => {
+      void result.current.run({ kind: 'delete' });
+      // The deleted rows left the list: its prune drops them from `visibleIds`.
+      useTaskSelectionStore.getState().prune(new Set());
+    });
+    await act(async () => {});
+
+    expect(overlay.rollback).toHaveBeenCalledTimes(1);
+    expect(overlay.commit).not.toHaveBeenCalled();
+    expect(refreshTaskList).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith('offline');
+    // Back in the list after the rollback, so selected again for a retry.
+    expect(useTaskSelectionStore.getState().selectedIds).toEqual(['a', 'b']);
+  });
+
+  it('sends batches to the server in click order', async () => {
+    const order: string[] = [];
+    let releaseFirst!: () => void;
+    batchUpdate
+      .mockImplementationOnce(
+        () =>
+          new Promise((r) => {
+            releaseFirst = () => {
+              order.push('first');
+              r({ failed: [], skipped: [], updated: ['a'] });
+            };
+          }),
+      )
+      .mockImplementationOnce(async () => {
+        order.push('second');
+        return { failed: [], skipped: [], updated: ['a'] };
+      });
+    const { result } = renderHook(() => useTaskBatchActions());
+
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      useTaskSelectionStore.getState().selectAll(['a']);
+      first = result.current.run({ kind: 'update', patch: { priority: 1 } });
+      useTaskSelectionStore.getState().selectAll(['a']);
+      second = result.current.run({ kind: 'update', patch: { priority: 2 } });
+    });
+    // Both already show; the second request waits for the first.
+    expect(beginOptimistic).toHaveBeenCalledTimes(2);
+    await act(async () => {});
+    expect(batchUpdate).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      releaseFirst();
+      await Promise.all([first, second]);
+    });
+    expect(order).toEqual(['first', 'second']);
   });
 
   it('does not restore a selection whose list was left while the batch ran', async () => {
@@ -99,7 +211,7 @@ describe('useTaskBatchActions', () => {
     expect(useTaskSelectionStore.getState().selectedIds).toEqual([]);
   });
 
-  it('freezes the selection while the batch runs', async () => {
+  it('keeps a selection the user made while the batch ran', async () => {
     let resolve!: (value: typeof partialFailure) => void;
     batchUpdate.mockReturnValue(new Promise((r) => (resolve = r)));
     useTaskSelectionStore.getState().prune(new Set(['a', 'b', 'c']));
@@ -110,19 +222,14 @@ describe('useTaskBatchActions', () => {
     act(() => {
       pending = result.current.run({ kind: 'update', patch: { priority: 1 } });
     });
-    act(() => {
-      const store = useTaskSelectionStore.getState();
-      store.toggle('c');
-      store.selectAll(['a', 'b', 'c']);
-      store.selectRange(['a', 'b', 'c'], 'c');
-    });
-    expect(useTaskSelectionStore.getState().selectedIds).toEqual(['a', 'b']);
+    // The list is not frozen: the user goes on selecting.
+    act(() => useTaskSelectionStore.getState().toggle('c'));
 
     await act(async () => {
       resolve(partialFailure);
       await pending;
     });
-    expect(useTaskSelectionStore.getState().selectedIds).toEqual(['b']);
+    expect(useTaskSelectionStore.getState().selectedIds).toEqual(['c']);
   });
 
   it('reports a failed list refresh after a committed batch, with a retry', async () => {
@@ -134,6 +241,7 @@ describe('useTaskBatchActions', () => {
     const { result } = renderHook(() => useTaskBatchActions());
 
     await act(() => result.current.run({ kind: 'update', patch: { priority: 1 } }));
+    await act(async () => {});
 
     const refreshWarning = toastWarning.mock.calls.find(
       ([arg]) => typeof arg === 'object' && arg?.title === 'taskList.bulk.refreshFailed.title',

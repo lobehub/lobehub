@@ -1,3 +1,4 @@
+import type { TaskItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -17,6 +18,22 @@ const batchService = (ctx: {
   userId: string;
   workspaceId?: string | null;
 }) => new TaskBatchService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+
+/**
+ * The list-visible columns of each changed row, so the client can confirm its
+ * optimistic rows with server-computed values (`completedAt`, `updatedAt`)
+ * without waiting for a list refetch. Only these columns: a full row carries
+ * the instruction and config, which a 500-task batch has no reason to ship.
+ */
+const toChangedRow = (task: TaskItem) => ({
+  assigneeAgentId: task.assigneeAgentId,
+  assigneeUserId: task.assigneeUserId,
+  completedAt: task.completedAt,
+  id: task.id,
+  priority: task.priority,
+  status: task.status,
+  updatedAt: task.updatedAt,
+});
 
 const rethrow = (scope: string, message: string) => (error: unknown) => {
   if (error instanceof TRPCError) throw error;
@@ -54,22 +71,22 @@ export const batchRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { ids, ...patch } = input;
-      const { result } = await batchService(ctx)
+      const { result, tasks } = await batchService(ctx)
         // A person made the change; batch actions are user-only (no agent tool).
         .updateFields(ids, patch, { agentId: ctx.actingAgentId ?? null, userId: ctx.userId })
         .catch(rethrow('batchUpdate', 'Failed to update tasks'));
-      return result;
+      return { ...result, tasks: tasks.map(toChangedRow) };
     }),
 
   batchUpdateStatus: taskProcedureWrite
     .input(idsInput.extend({ status: z.enum(TASK_BATCH_STATUSES) }))
     .mutation(async ({ ctx, input }) => {
-      const { result } = await batchService(ctx)
+      const { result, tasks } = await batchService(ctx)
         .updateStatus(input.ids, input.status, {
           agentId: ctx.actingAgentId ?? null,
           userId: ctx.userId,
         })
         .catch(rethrow('batchUpdateStatus', 'Failed to update task status'));
-      return result;
+      return { ...result, tasks: tasks.map(toChangedRow) };
     }),
 });
