@@ -184,7 +184,9 @@ const TaskProperties = memo(() => {
           align="center"
           className={styles.propertyItem}
           gap={8}
-          style={{ flexWrap: 'wrap' }}
+          // Property rows have a fixed height; this one grows with wrapped chips
+          // so a second line never overlaps the row below.
+          style={{ flexWrap: 'wrap', height: 'auto', minHeight: 30, paddingBlock: 4 }}
           variant={'borderless'}
         >
           {labels.length > 0 ? (
