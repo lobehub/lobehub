@@ -265,6 +265,8 @@ export interface ChannelListItem {
   canDelete: boolean;
   createdAt: Date;
   id: string;
+  /** The newest main-channel message, cut for a preview; set by the Channel list. */
+  lastMessage?: { content: string; createdAt: Date } | null;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
   sequence: number;

@@ -87,6 +87,48 @@ describe('buildConversationSections', () => {
   });
 });
 
+describe('buildConversationSections with direct Channels', () => {
+  // The row opened the direct Channel but still showed the legacy topic's badge, preview and time.
+  it('describes an agent row by the direct Channel it opens', () => {
+    const direct = {
+      agentId: 'a',
+      createdAt: new Date('2026-10-01'),
+      id: 'chn_a',
+      lastMessage: { content: '**Done**, see\n the PR', createdAt: new Date('2026-10-09') },
+      unreadCount: 2,
+    } as ChannelListItem;
+    const { recent } = buildConversationSections(
+      [agent('a', '2026-10-01', { unreadCount: 5 }), agent('b', '2026-10-05')],
+      [topic({ agentId: 'a', lastAssistantMessage: 'legacy reply', updatedAt: '2026-10-02' })],
+      new Map([['a', direct]]),
+    );
+
+    expect(recent.map((c) => c.item.id)).toEqual(['a', 'b']);
+    expect(recent[0]).toMatchObject({
+      activeAt: new Date('2026-10-09'),
+      preview: 'Done, see the PR',
+      unread: 2,
+    });
+  });
+
+  it('falls back to the agent description while its direct Channel is empty', () => {
+    const direct = {
+      agentId: 'a',
+      createdAt: new Date('2026-10-01'),
+      id: 'chn_a',
+      lastMessage: null,
+      unreadCount: 0,
+    } as ChannelListItem;
+    const { recent } = buildConversationSections(
+      [agent('a', '2026-10-01', { description: 'Cooks dinner' })],
+      [topic({ agentId: 'a', lastAssistantMessage: 'legacy reply', updatedAt: '2026-10-02' })],
+      new Map([['a', direct]]),
+    );
+
+    expect(recent[0]).toMatchObject({ preview: 'Cooks dinner', unread: 0 });
+  });
+});
+
 describe('formatConversationTime', () => {
   const now = new Date(2026, 9, 26, 15, 0);
 

@@ -55,6 +55,23 @@ describe('direct Channel identity', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('lists each Channel with its newest main message and unread count', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: null,
+      unreadCount: 0,
+    });
+
+    await repository.send(channel.id, { ...sendInput, content: 'First', requestKey: 'first' });
+    await repository.send(channel.id, { ...sendInput, content: 'Second', requestKey: 'second' });
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: { content: 'Second' },
+      unreadCount: 2,
+    });
+  });
+
   it.each([null, fixture.workspaceId])(
     'creates a private user/Agent conversation in scope %s',
     async (workspaceId) => {

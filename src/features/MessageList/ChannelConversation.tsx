@@ -10,6 +10,7 @@ import { channelPath } from '@/features/Channels/paths';
 import { useChannelMenu } from '@/features/Channels/useChannelMenu';
 
 import ConversationRow from './ConversationRow';
+import { channelPreview } from './conversations';
 import { AVATAR_SIZE } from './style';
 
 interface ChannelConversationProps {
@@ -27,6 +28,7 @@ const ChannelConversation = memo<ChannelConversationProps>(({ active, activeAt, 
       active={active}
       activeAt={activeAt}
       contextMenuItems={menuItems(channel)}
+      preview={channelPreview(channel)}
       title={channel.title}
       unread={channel.unreadCount}
       url={channelPath(channel.id)}

@@ -64,7 +64,7 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
       preview={preview}
       running={running}
       title={title}
-      unread={item.unreadCount}
+      unread={conversation.unread ?? item.unreadCount}
       url={url}
       avatar={
         // Same avatar the agent has everywhere else, including its direct Channel: its own

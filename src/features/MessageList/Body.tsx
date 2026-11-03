@@ -31,6 +31,7 @@ import ChannelConversation from './ChannelConversation';
 import {
   buildConversationEntries,
   buildConversationSections,
+  channelActivity,
   type Conversation,
   latestActivity,
   latestTopicOf,
@@ -105,6 +106,17 @@ const Body = memo(() => {
   // Group Channels outside any project; a direct Channel opens from its Agent's row. An archived
   // one leaves the list unless it is open, but search still finds it and the archived group at
   // the end lists it.
+  const directChannels = useMemo(
+    () =>
+      new Map(
+        channelsEnabled
+          ? (allChannels ?? [])
+              .filter((channel) => channel.agentId && !channel.projectId)
+              .map((channel) => [channel.agentId!, channel] as const)
+          : [],
+      ),
+    [allChannels, channelsEnabled],
+  );
   const { archived, channels } = useMemo(() => {
     const groups = channelsEnabled
       ? (allChannels ?? []).filter((channel) => !channel.projectId && !channel.agentId)
@@ -114,11 +126,7 @@ const Body = memo(() => {
     return {
       archived: groups
         .filter(isHidden)
-        .sort(
-          (a, b) =>
-            new Date(b.updatedAt ?? b.createdAt).getTime() -
-            new Date(a.updatedAt ?? a.createdAt).getTime(),
-        ),
+        .sort((a, b) => channelActivity(b).getTime() - channelActivity(a).getTime()),
       channels: query.trim() ? groups : groups.filter((channel) => !isHidden(channel)),
     };
   }, [activeRouteId, allChannels, channelsEnabled, query]);
@@ -144,12 +152,12 @@ const Body = memo(() => {
   const entries = useMemo(
     () =>
       buildConversationEntries(
-        buildConversationSections(items, recents),
+        buildConversationSections(items, recents, directChannels),
         { activeAt: latestActivity(inboxUpdatedAt, inboxTopic), title: inboxTitle },
         query,
         channels,
       ),
-    [items, recents, inboxUpdatedAt, inboxTitle, inboxTopic, query, channels],
+    [items, recents, directChannels, inboxUpdatedAt, inboxTitle, inboxTopic, query, channels],
   );
 
   // Only the agent rows wait on the agent list: Lobe AI and Channels load on
@@ -201,7 +209,7 @@ const Body = memo(() => {
             archived.map((channel) => (
               <ChannelConversation
                 active={false}
-                activeAt={new Date(channel.updatedAt ?? channel.createdAt)}
+                activeAt={channelActivity(channel)}
                 channel={channel}
                 key={channel.id}
               />

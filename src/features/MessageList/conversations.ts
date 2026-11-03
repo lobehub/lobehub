@@ -1,11 +1,15 @@
 import type { ChannelListItem, RecentItem, SidebarAgentItem } from '@lobechat/types';
 
+import { markdownToTxt } from '@/utils/markdownToTxt';
+
 export interface Conversation {
   /** Latest activity: the newer of the item itself and its latest topic. */
   activeAt: Date;
   item: SidebarAgentItem;
   /** One-line preview from the latest topic (assistant reply, else title). */
   preview?: string;
+  /** Unread messages of the agent's direct Channel, when the row opens it. */
+  unread?: number;
 }
 
 export interface ConversationSections {
@@ -24,6 +28,17 @@ const recentOwnerId = (recent: RecentItem): string | undefined => {
 };
 
 const toTime = (value: Date | string) => new Date(value).getTime();
+
+const oneLine = (text: string | null | undefined) =>
+  (text ?? '').replaceAll(/\s+/g, ' ').trim() || undefined;
+
+/** A Channel's latest message as one line of plain text. */
+export const channelPreview = (channel: Pick<ChannelListItem, 'lastMessage'>) =>
+  channel.lastMessage ? oneLine(markdownToTxt(channel.lastMessage.content)) : undefined;
+
+/** When a Channel last had a message, else when it was opened. */
+export const channelActivity = (channel: ChannelListItem): Date =>
+  new Date(channel.lastMessage?.createdAt ?? channel.updatedAt ?? channel.createdAt);
 
 /** Newest topic per owner (agent id, or the group named by the topic route). */
 const topicsByOwner = (recents: RecentItem[] | undefined): Map<string, RecentItem> => {
@@ -65,6 +80,8 @@ export const latestActivity = (
 export const buildConversationSections = (
   items: SidebarAgentItem[],
   recents: RecentItem[] | undefined,
+  /** The person's direct Channel per agent id. A row that opens one shows that conversation. */
+  directChannels?: Map<string, ChannelListItem>,
 ): ConversationSections => {
   const latestByOwner = topicsByOwner(recents);
 
@@ -74,8 +91,20 @@ export const buildConversationSections = (
     if (seen.has(item.id)) continue;
     seen.add(item.id);
 
-    const latest = latestByOwner.get(item.id);
     const itemTime = toTime(item.updatedAt);
+    const direct = directChannels?.get(item.id);
+    if (direct) {
+      // The row opens the direct Channel, so its legacy topics no longer describe it.
+      conversations.push({
+        activeAt: new Date(Math.max(itemTime, channelActivity(direct).getTime())),
+        item,
+        preview: channelPreview(direct) ?? oneLine(item.description),
+        unread: direct.unreadCount ?? 0,
+      });
+      continue;
+    }
+
+    const latest = latestByOwner.get(item.id);
     const latestTime = latest ? toTime(latest.updatedAt) : 0;
 
     conversations.push({
@@ -128,7 +157,7 @@ export const buildConversationEntries = (
     ...channels
       .filter((channel) => matches(channel.title))
       .map((channel) => ({
-        activeAt: new Date(channel.updatedAt ?? channel.createdAt),
+        activeAt: channelActivity(channel),
         channel,
         type: 'channel' as const,
       })),
