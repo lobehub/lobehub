@@ -1,5 +1,6 @@
 import type {
   ChannelAuditDetails,
+  ChannelConfig,
   ChannelExecutionConfig,
   ChannelInputManifest,
   ChannelJobBlockCode,
@@ -92,6 +93,8 @@ export const channels = pgTable(
      * Ignored for personal channels.
      */
     visibility: text('visibility').$type<ChannelVisibility>().notNull().default('private'),
+    /** Validated channel settings; NULL uses the defaults. */
+    config: jsonb('config').$type<ChannelConfig>(),
     metadata: jsonb('metadata').$type<ChannelMetadata>().default({}),
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),

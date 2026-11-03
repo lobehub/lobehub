@@ -1400,6 +1400,13 @@
       "when": 1793552841904,
       "tag": "0199_topic_analyses",
       "breakpoints": true
+    },
+    {
+      "idx": 200,
+      "version": "7",
+      "when": 1793693286645,
+      "tag": "0200_channel_config",
+      "breakpoints": true
     }
   ],
   "version": "6"
