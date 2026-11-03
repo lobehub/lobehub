@@ -1,12 +1,14 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Button, Empty, Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
+import { ImportIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CaseTable from '@/features/LobeBench/CaseTable';
 import { datasetsOf, isViewDataset, libraryOf, nativeCaseId } from '@/features/LobeBench/lobeBench';
+import { useImportLobeBenchDataset } from '@/features/LobeBench/useImportDataset';
 import {
   fetchDatasetCases,
   useLobeBenchBenchmarks,
@@ -24,12 +26,12 @@ const styles = stylex.create({
 });
 
 /**
- * The built-in case library: every case Lobe Bench ships, in one list. It is
- * not a dataset of its own to pick between; the account checks cases here
- * and makes a dataset of them, the only place a dataset is made.
+ * Compatibility view for previously installed library cases. New datasets
+ * can be imported directly without installing a shared library.
  */
 const LobeBenchLibrary = memo(() => {
   const { t } = useTranslation('eval');
+  const importDataset = useImportLobeBenchDataset();
   const { benchmarks } = useLobeBenchBenchmarks();
   const benchmarkIds = useMemo(() => benchmarks.map((b) => b.id), [benchmarks]);
   const { data: datasets } = useLobeBenchDatasets(benchmarkIds);
@@ -58,12 +60,25 @@ const LobeBenchLibrary = memo(() => {
         <Text type={'secondary'}>{t('lobeBench.library.subtitle')}</Text>
       </Flexbox>
 
-      <CaseTable
-        selectable
-        benchmarkIds={benchmarkIds}
-        dataset={library}
-        memberships={memberships}
-      />
+      {library ? (
+        <CaseTable
+          selectable
+          benchmarkIds={benchmarkIds}
+          dataset={library}
+          memberships={memberships}
+        />
+      ) : (
+        <Empty description={t('lobeBench.library.empty')}>
+          <Button
+            icon={ImportIcon}
+            style={{ marginTop: 16 }}
+            type="primary"
+            onClick={() => importDataset()}
+          >
+            {t('dataset.import.title')}
+          </Button>
+        </Empty>
+      )}
     </Flexbox>
   );
 });

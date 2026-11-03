@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { retireLobeBenchCases } from '../../../../../../scripts/seedLobeBench/retireCases';
 import { getTestDB } from '../../../core/getTestDB';
 import {
   agentEvalDatasets,
@@ -265,7 +264,7 @@ describe('fixed Lobe Bench datasets', () => {
   });
 });
 
-describe('seed retirement preserves execution evidence', () => {
+describe('retired cases preserve execution evidence', () => {
   it.each([
     { label: 'SQL null', metadata: null, active: true },
     { label: 'missing key', metadata: {}, active: true },
@@ -335,7 +334,10 @@ describe('seed retirement preserves execution evidence', () => {
       })
       .returning();
 
-    await db.transaction((tx) => retireLobeBenchCases(tx, [stale.id]));
+    await db
+      .update(agentEvalTestCases)
+      .set({ metadata: { ...stale.metadata, retired: true } })
+      .where(eq(agentEvalTestCases.id, stale.id));
     expect(await db.select().from(agentEvalRunTopics)).toEqual([result]);
     expect(isRetiredEvalTestCase((await cases.findById(stale.id))!)).toBe(true);
     expect((await cases.findByDatasetId(dataset.id)).map((row) => row.id)).toEqual([active.id]);
@@ -346,7 +348,7 @@ describe('seed retirement preserves execution evidence', () => {
     ]);
     expect((await datasets.query())[0].testCaseCount).toBe(1);
 
-    // The ordinary seed upsert replaces metadata for cases that return to the Release.
+    // Reactivating the same row keeps its historical run results intact.
     await db
       .update(agentEvalTestCases)
       .set({ metadata: { caseId: 'old' } })

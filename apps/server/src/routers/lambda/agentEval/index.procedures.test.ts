@@ -53,6 +53,7 @@ function expected(): Array<
     ['getRunResults', 'query', 12],
     ['getTestCase', 'query', 12],
     ['importDataset', 'mutation', 13],
+    ['importDatasetPackage', 'mutation', 13],
     ['listBenchmarks', 'query', 12],
     ['listDatasets', 'query', 12],
     ['listEnvironments', 'query', 11],

@@ -40,6 +40,7 @@ import {
   sortBenchmarks,
 } from '@/features/LobeBench/lobeBench';
 import { useDeleteExperiment } from '@/features/LobeBench/useDeleteExperiment';
+import { useImportLobeBenchDataset } from '@/features/LobeBench/useImportDataset';
 import {
   useLobeBenchBenchmarks,
   useLobeBenchDatasets,
@@ -69,7 +70,8 @@ const Body = memo(() => {
   const activeKey = useActiveKey();
   const { experiments, isInit } = useLobeBenchExperiments();
   const deleteExperiment = useDeleteExperiment();
-  const { benchmarks: benchmarkList } = useLobeBenchBenchmarks();
+  const importDataset = useImportLobeBenchDataset();
+  const { benchmarks: benchmarkList, isLoading: loadingBenchmarks } = useLobeBenchBenchmarks();
   const benchmarks = useMemo(() => sortBenchmarks(benchmarkList), [benchmarkList]);
   const benchmarkIds = useMemo(() => benchmarks.map((b) => b.id), [benchmarks]);
   const { data: datasets } = useLobeBenchDatasets(benchmarkIds);
@@ -253,7 +255,13 @@ const Body = memo(() => {
           <AccordionPanel>
             <Flexbox gap={1} paddingBlock={1}>
               {benchmarks.length === 0 ? (
-                <SkeletonList rows={2} />
+                loadingBenchmarks ? (
+                  <SkeletonList rows={2} />
+                ) : (
+                  <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">
+                    {t('lobeBench.sidebar.benchmarks.empty')}
+                  </Text>
+                )
               ) : (
                 benchmarks.map((benchmark) => (
                   <div key={benchmark.id}>
@@ -288,10 +296,24 @@ const Body = memo(() => {
                 )}
               </Flexbox>
             </AccordionTrigger>
+            <div
+              className={cx(
+                'accordion-action',
+                accordionStyles.action,
+                accordionStyles.actionBorderless,
+              )}
+            >
+              <ActionIcon
+                icon={PlusIcon}
+                size="small"
+                title={t('dataset.import.title')}
+                onClick={() => importDataset()}
+              />
+            </div>
           </AccordionHeader>
           <AccordionPanel>
             <Flexbox gap={1} paddingBlock={1}>
-              {!datasets ? (
+              {!datasets && (loadingBenchmarks || benchmarkIds.length > 0) ? (
                 <SkeletonList rows={2} />
               ) : sidebarDatasets.length === 0 ? (
                 <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">

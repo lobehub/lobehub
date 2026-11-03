@@ -3,16 +3,24 @@
 import { createModal, type ImperativeModalProps, type ModalInstance } from '@lobehub/ui';
 import { t } from 'i18next';
 
+import type { DatasetPackageBenchmark } from '@/features/AgentEval/DatasetPackagePreview';
+
 import DatasetImportContent from './Content';
 import DatasetImportFooter from './Footer';
 
 interface CreateOptions {
-  datasetId: string;
+  archiveOnly?: boolean;
+  benchmarkId?: string;
+  benchmarks?: DatasetPackageBenchmark[];
+  datasetId?: string;
   onSuccess?: (datasetId: string) => void;
   presetId?: string;
 }
 
 export const createDatasetImportModal = ({
+  archiveOnly,
+  benchmarkId,
+  benchmarks,
   datasetId,
   onSuccess,
   presetId,
@@ -21,6 +29,7 @@ export const createDatasetImportModal = ({
   let step: 0 | 1 = 0;
   let canImport = false;
   let importing = false;
+  let busy = false;
   let runImport: () => Promise<void> = async () => {};
   let prev: () => void = () => {};
 
@@ -48,6 +57,9 @@ export const createDatasetImportModal = ({
   ref.instance = createModal({
     content: (
       <DatasetImportContent
+        archiveOnly={archiveOnly}
+        benchmarkId={benchmarkId}
+        benchmarks={benchmarks}
         close={() => ref.instance?.close()}
         datasetId={datasetId}
         presetId={presetId}
@@ -59,10 +71,15 @@ export const createDatasetImportModal = ({
           runImport = api.runImport;
         }}
         onStateChange={(next) => {
-          if (next.step === step && next.canImport === canImport) return;
+          if (next.step === step && next.canImport === canImport && next.busy === busy) return;
           step = next.step;
           canImport = next.canImport;
-          ref.instance?.update({ footer: renderFooter() } as Partial<ImperativeModalProps>);
+          busy = next.busy;
+          ref.instance?.update({
+            closable: !busy,
+            keyboard: !busy,
+            footer: renderFooter(),
+          } as Partial<ImperativeModalProps>);
         }}
       />
     ),

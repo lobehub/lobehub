@@ -3,7 +3,7 @@
 import { Button, confirmModal, Empty, Flexbox, Tag, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Pencil, Play, Trash2 } from 'lucide-react';
+import { ImportIcon, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -21,6 +21,7 @@ import {
   runCaseCount,
 } from '@/features/LobeBench/lobeBench';
 import { openRenameDatasetModal } from '@/features/LobeBench/PicksDatasetModal';
+import { useImportLobeBenchDataset } from '@/features/LobeBench/useImportDataset';
 import {
   useLobeBenchBenchmarks,
   useLobeBenchDatasets,
@@ -66,12 +67,13 @@ const styles = stylex.create({
 /**
  * One dataset: the cases it holds and the runs on it, as the Evaluation Lab
  * shows a dataset. Its cases are fixed once it is made, so
- * its runs stay true to it: a built-in one (the library, Hard 50) is read-only,
- * and the account's own can only be renamed or deleted.
+ * its runs stay true to it. Imported packages create a new dataset, keeping
+ * existing runs attached to their cases, including when all cases are retired.
  */
 const LobeBenchDataset = memo(() => {
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
+  const importDataset = useImportLobeBenchDataset();
   const { datasetId } = useParams<{ datasetId: string }>();
   const { benchmarks, isLoading } = useLobeBenchBenchmarks();
   const benchmarkIds = useMemo(() => benchmarks.map((b) => b.id), [benchmarks]);
@@ -155,9 +157,20 @@ const LobeBenchDataset = memo(() => {
         </Flexbox>
         <Flexbox horizontal gap={8} wrap={'wrap'}>
           <Button
+            icon={ImportIcon}
+            type={count === 0 ? 'primary' : 'default'}
+            onClick={() =>
+              importDataset({
+                benchmarkId: dataset.benchmarkId ?? undefined,
+              })
+            }
+          >
+            {t('dataset.import.package.asNew')}
+          </Button>
+          <Button
             disabled={count === 0}
             icon={Play}
-            type={'primary'}
+            type={count === 0 ? 'default' : 'primary'}
             onClick={() => navigate(`${LOBE_BENCH_PATH}/experiments/new?dataset=${dataset.id}`)}
           >
             {t('lobeBench.picks.run')}

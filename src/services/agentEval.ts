@@ -178,6 +178,17 @@ class AgentEvalService {
     return lambdaClient.agentEval.parseDatasetFile.mutate(params);
   }
 
+  async importDatasetPackage(params: {
+    benchmarkId?: string;
+    benchmarkName?: string;
+    datasetId?: string;
+    filename?: string;
+    name?: string;
+    pathname: string;
+  }) {
+    return lambdaClient.agentEval.importDatasetPackage.mutate(params);
+  }
+
   async importDataset(params: {
     datasetId: string;
     pathname: string;

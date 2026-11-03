@@ -182,9 +182,31 @@ export default {
   'dataset.import.step.upload': 'Upload File',
   'dataset.import.success': 'Successfully imported {{count}} test cases',
   'dataset.import.title': 'Import Dataset',
-  'dataset.import.upload.hint': 'Supports CSV, XLSX, JSON, JSONL',
+  'dataset.import.upload.hint':
+    'Supports CSV, XLSX, JSON, JSONL and dataset ZIP packages (up to 10 MiB)',
   'dataset.import.upload.text': 'Click or drag file here to upload',
   'dataset.import.uploading': 'Uploading...',
+  'dataset.import.package.asNew': 'Import as new dataset',
+  'dataset.import.package.benchmark': 'Benchmark',
+  'dataset.import.package.benchmarkName': 'New benchmark name',
+  'dataset.import.package.cases': '{{count}} cases',
+  'dataset.import.package.environments': '{{count}} environments',
+  'dataset.import.package.hint': 'Dataset ZIP package · up to 10 MiB',
+  'dataset.import.package.history':
+    'The imported cases are fixed. Import updated packages as a new dataset to keep past results comparable.',
+  'dataset.import.package.instructions':
+    'Upload your dataset ZIP. The ZIP must contain dataset.json at its root.',
+  'dataset.import.package.mockServices':
+    'Mock services used: {{services}}. Execution uses the service configured for this deployment.',
+  'dataset.import.package.name': 'Dataset name',
+  'dataset.import.package.newBenchmark': 'Create a new benchmark',
+  'dataset.import.package.preserved':
+    'Case content, grading rules and environment settings are imported together. This creates a private dataset in your account.',
+  'dataset.import.package.preview': 'Confirm dataset package',
+  'dataset.import.package.refreshError':
+    'The dataset was imported, but the list could not refresh. Reload the page to see it; you do not need to import again.',
+  'dataset.import.package.tooLarge': 'The ZIP is too large. Choose a package smaller than 10 MiB.',
+  'dataset.import.package.zipRequired': 'Choose a dataset ZIP package.',
   'dataset.detail.backToEval': 'Back to Eval',
   'capture.actual': 'What it answered',
   'capture.captured': 'Captured content',
@@ -551,7 +573,8 @@ export default {
   'lobeBench.overview.card.runs': 'Runs',
   'lobeBench.overview.card.contenders': 'Contenders',
   'lobeBench.overview.newExperiment': 'New experiment',
-  'lobeBench.overview.notInstalled': 'No Lobe Bench case set is installed in this workspace yet.',
+  'lobeBench.overview.notInstalled':
+    'Start by importing a dataset ZIP. You can use a shared package or create your own from the example.',
   'lobeBench.overview.running': 'Running',
   'lobeBench.overview.runningLine': '{{done}}/{{total}} cases · {{cost}} so far',
   'lobeBench.overview.passedOf': '{{passed}}/{{total}}',
@@ -708,7 +731,9 @@ export default {
   'lobeBench.compare.passes': '{{passed}}/{{total}} passed',
   'lobeBench.library.title': 'Case library',
   'lobeBench.library.subtitle':
-    'All built-in Lobe Bench cases. Check cases to make a dataset of your own; benchmarks are made of datasets, each with its own leaderboard.',
+    'Previously installed shared cases. Select cases to make a dataset, or import a dataset ZIP directly.',
+  'lobeBench.library.empty':
+    'No shared case library is installed. You can import a dataset ZIP without one.',
   'lobeBench.sidebar.benchmarks': 'Benchmarks',
   'lobeBench.sidebar.datasets': 'Datasets',
   'lobeBench.benchmark.notFound': 'Benchmark not found',
@@ -780,9 +805,9 @@ export default {
   'lobeBench.benchmark.noRuns': 'No full run yet',
   'lobeBench.dataset.noRuns': 'No run on this dataset yet. Run an experiment on it.',
   'lobeBench.dataset.own.subtitle_one':
-    '{{count}} case copied from the Case library. The cases are fixed; for others, make another dataset.',
+    '{{count}} case. The cases are fixed; import an updated package as a new dataset.',
   'lobeBench.dataset.own.subtitle_other':
-    '{{count}} cases copied from the Case library. The cases are fixed; for others, make another dataset.',
+    '{{count}} cases. The cases are fixed; import an updated package as a new dataset.',
   'lobeBench.dataset.runCount_one': '{{count}} run on this dataset',
   'lobeBench.dataset.runCount_other': '{{count}} runs on this dataset',
   'lobeBench.dataset.notFound': 'Case set not found',
@@ -816,8 +841,8 @@ export default {
   'lobeBench.dashboard.insight.lowest': 'Lowest pass rate',
   'lobeBench.library.badge.broken': 'Possibly broken',
   'lobeBench.library.badge.easy': 'Low discrimination',
-  'lobeBench.library.empty': 'No cases here yet.',
-  'lobeBench.sidebar.datasets.empty': 'None yet. Check cases in the Case library to make one.',
+  'lobeBench.sidebar.datasets.empty': 'No datasets yet. Import a dataset ZIP to start.',
+  'lobeBench.sidebar.benchmarks.empty': 'No benchmarks yet. Import a dataset or create one.',
   'lobeBench.picks.title_one': 'Make a dataset of {{count}} case',
   'lobeBench.picks.title_other': 'Make a dataset of {{count}} cases',
   'lobeBench.picks.fixed':

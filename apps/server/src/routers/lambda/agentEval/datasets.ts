@@ -5,10 +5,16 @@ import { z } from 'zod';
 import { AgentEvalDatasetWriteError } from '@/database/models/agentEval/datasetAccess';
 import { router } from '@/libs/trpc/lambda';
 
+import {
+  importDatasetPackageProcedure,
+  previewDatasetPackage,
+  readDatasetPackageUpload,
+} from './datasetPackages';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 import { evalConfigSchema, evalTestCaseContentSchema, rubricTypeSchema } from './schemas';
 
 export const datasetRouter = router({
+  importDatasetPackage: importDatasetPackageProcedure,
   // ============================================
   // Dataset Operations
   // ============================================
@@ -151,7 +157,7 @@ export const datasetRouter = router({
     .input(
       z.object({
         pathname: z.string(),
-        format: z.enum(['json', 'jsonl', 'csv', 'xlsx']).optional(),
+        format: z.enum(['json', 'jsonl', 'csv', 'xlsx', 'zip']).optional(),
         filename: z.string().optional(),
       }),
     )
@@ -160,14 +166,24 @@ export const datasetRouter = router({
       const format = input.format || 'auto';
       const resolvedFilename = input.filename || input.pathname;
       const isXlsx = format === 'xlsx' || resolvedFilename?.match(/\.xlsx?$/i);
+      const isZip = format === 'zip' || /\.zip$/i.test(resolvedFilename);
+      // Storage failures are not user validation errors; only parse failures below are BAD_REQUEST.
+      const archive = isZip
+        ? await readDatasetPackageUpload(ctx.fileService, input.pathname)
+        : undefined;
+      const content =
+        archive ??
+        (isXlsx
+          ? await ctx.fileService.getFileByteArray(input.pathname)
+          : await ctx.fileService.getFileContent(input.pathname));
 
       try {
-        const content = isXlsx
-          ? await ctx.fileService.getFileByteArray(input.pathname)
-          : await ctx.fileService.getFileContent(input.pathname);
+        if (archive) {
+          return previewDatasetPackage(archive);
+        }
         const result = parseDataset(content, {
           filename: resolvedFilename,
-          format: format === 'auto' ? undefined : format,
+          format: format === 'auto' || format === 'zip' ? undefined : format,
           preview: 50,
         });
 
@@ -176,6 +192,7 @@ export const datasetRouter = router({
           preview: result.rows,
           totalCount: result.totalCount,
           format: result.format,
+          datasetPackage: undefined,
         };
       } catch (error: any) {
         if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);

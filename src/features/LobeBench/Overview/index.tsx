@@ -3,7 +3,7 @@
 import { Button, Empty, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Beaker, Database, Plus } from 'lucide-react';
+import { Beaker, Database, ImportIcon, Plus } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +23,7 @@ import {
   rankableSetsOf,
   sortBenchmarks,
 } from '@/features/LobeBench/lobeBench';
+import { useImportLobeBenchDataset } from '@/features/LobeBench/useImportDataset';
 import {
   useLobeBenchBenchmarks,
   useLobeBenchDatasets,
@@ -77,6 +78,7 @@ const styles = stylex.create({
 const LobeBenchDashboard = memo(() => {
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
+  const importDataset = useImportLobeBenchDataset();
   const { benchmarks: benchmarkList, isLoading: loadingBenchmarks } = useLobeBenchBenchmarks();
   const benchmarks = useMemo(() => sortBenchmarks(benchmarkList), [benchmarkList]);
   const benchmarkIds = useMemo(() => benchmarks.map((b) => b.id), [benchmarks]);
@@ -137,7 +139,16 @@ const LobeBenchDashboard = memo(() => {
   if (!loadingBenchmarks && benchmarks.length === 0) {
     return (
       <Flexbox className={stylex.props(styles.container).className} flex={1}>
-        <Empty description={t('lobeBench.overview.notInstalled')} />
+        <Empty description={t('lobeBench.overview.notInstalled')} icon={Database}>
+          <Button
+            icon={ImportIcon}
+            style={{ marginTop: 16 }}
+            type="primary"
+            onClick={() => importDataset()}
+          >
+            {t('dataset.import.title')}
+          </Button>
+        </Empty>
       </Flexbox>
     );
   }
@@ -216,9 +227,14 @@ const LobeBenchDashboard = memo(() => {
       </Flexbox>
 
       <Flexbox gap={16}>
-        <h2 className={stylex.props(styles.sectionTitle).className}>
-          {t('overview.sections.datasets.title')}
-        </h2>
+        <Flexbox horizontal align="center" justify="space-between">
+          <h2 className={stylex.props(styles.sectionTitle).className}>
+            {t('overview.sections.datasets.title')}
+          </h2>
+          <Button icon={ImportIcon} size="small" onClick={() => importDataset()}>
+            {t('dataset.import.title')}
+          </Button>
+        </Flexbox>
         {listedDatasets.length === 0 ? (
           <Text fontSize={12} type={'secondary'}>
             {t('lobeBench.sidebar.datasets.empty')}
