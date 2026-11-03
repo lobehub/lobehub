@@ -1,3 +1,4 @@
+import { TASK_LIST_FILTER_NONE } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -20,6 +21,7 @@ import { registerCheckpointCommands } from './checkpoint';
 import { registerDepCommands } from './dep';
 import { registerDocCommands } from './doc';
 import { briefIcon, priorityLabel, statusBadge } from './helpers';
+import { collectLabels, formatTaskLabels, registerLabelCommands, resolveLabelIds } from './label';
 import { registerLifecycleCommands } from './lifecycle';
 import { formatTaskModel, toCreateModelConfig, toModelConfigPatch } from './model';
 import { registerReviewCommands } from './review';
@@ -41,6 +43,12 @@ export function registerTaskCommand(program: Command) {
     .option('--root', 'Only show root tasks (no parent)')
     .option('--parent <id>', 'Filter by parent task ID')
     .option('--agent <id>', 'Filter by assignee agent ID')
+    .option(
+      '--label <name>',
+      'Only tasks with this label (repeatable or comma-separated; a group name matches any of its labels)',
+      collectLabels,
+    )
+    .option('--unlabeled', 'Only tasks without labels')
     .option('--archived', 'Include archived tasks')
     .option('-L, --limit <n>', 'Page size', '50')
     .option('--offset <n>', 'Offset', '0')
@@ -53,12 +61,14 @@ export function registerTaskCommand(program: Command) {
         archived?: boolean;
         board?: boolean;
         json?: string | boolean;
+        label?: string[];
         limit?: string;
         offset?: string;
         parent?: string;
         root?: boolean;
         status?: string;
         tree?: boolean;
+        unlabeled?: boolean;
       }) => {
         const client = await getTrpcClient();
 
@@ -70,6 +80,14 @@ export function registerTaskCommand(program: Command) {
         if (options.archived) input.includeArchived = true;
         if (options.limit) input.limit = Number.parseInt(options.limit, 10);
         if (options.offset) input.offset = Number.parseInt(options.offset, 10);
+        if (options.label?.length || options.unlabeled) {
+          const values = options.label?.length
+            ? await resolveListLabelValues(client, options.label)
+            : [];
+          if (values === false) return;
+          if (options.unlabeled) values.push(TASK_LIST_FILTER_NONE);
+          input.filter = { label: { operator: 'is', values } };
+        }
 
         // For tree/board mode, fetch all tasks (no pagination limit)
         if (options.tree || options.board) {
@@ -194,10 +212,11 @@ export function registerTaskCommand(program: Command) {
           priorityLabel(t.priority),
           t.assigneeAgentId ? pc.dim(t.assigneeAgentId) : '-',
           t.parentTaskId ? pc.dim('↳ subtask') : '',
+          formatTaskLabels(t.labels),
           timeAgo(t.createdAt),
         ]);
 
-        printTable(rows, ['ID', 'NAME', 'STATUS', 'PRI', 'AGENT', 'TYPE', 'CREATED']);
+        printTable(rows, ['ID', 'NAME', 'STATUS', 'PRI', 'AGENT', 'TYPE', 'LABELS', 'CREATED']);
         log.info(`Total: ${result.total}`);
       },
     );
@@ -304,6 +323,9 @@ export function registerTaskCommand(program: Command) {
         : null;
       console.log(`${pc.dim('Model:')} ${formatTaskModel(t.config, agentConfig)}`);
       if (t.userId) console.log(`${pc.dim('User:')} ${t.userId}`);
+      if (t.labels?.length) {
+        console.log(`${pc.dim('Labels:')} ${formatTaskLabels(t.labels, t.labels.length)}`);
+      }
       if (t.parent) {
         console.log(`${pc.dim('Parent:')} ${t.parent.identifier} ${t.parent.name || ''}`);
       }
@@ -549,6 +571,11 @@ export function registerTaskCommand(program: Command) {
     .option('--user <idOrEmail>', 'Assign to a workspace member (user id, email or username)')
     .option('--parent <id>', 'Parent task ID')
     .option('--priority <n>', 'Priority (0=none, 1=urgent, 2=high, 3=normal, 4=low)', '0')
+    .option(
+      '--label <name>',
+      'Attach an existing label (repeatable or comma-separated; "Group/Label" also works)',
+      collectLabels,
+    )
     .option('--model <model>', "Model to run with (default: the assignee agent's model)")
     .option('--provider <provider>', 'Provider for --model (default: resolved from the agent)')
     .option('--json [fields]', 'Output JSON')
@@ -557,6 +584,7 @@ export function registerTaskCommand(program: Command) {
         agent?: string;
         instruction: string;
         json?: string | boolean;
+        label?: string[];
         model?: string;
         name?: string;
         parent?: string;
@@ -568,10 +596,13 @@ export function registerTaskCommand(program: Command) {
         const buildUrl = await resolveAppUrlBuilder(client);
         const assigneeUserId = await resolveUserOption(client, options.user);
         if (assigneeUserId === false) return;
+        const labelIds = await resolveLabelOption(client, options.label);
+        if (labelIds === false) return;
 
         const input: Parameters<typeof client.task.create.mutate>[0] = {
           instruction: options.instruction,
         };
+        if (labelIds.length > 0) input.labelIds = labelIds;
         if (options.name) input.name = options.name;
         if (options.agent) input.assigneeAgentId = options.agent;
         if (assigneeUserId) input.assigneeUserId = assigneeUserId;
@@ -604,6 +635,16 @@ export function registerTaskCommand(program: Command) {
     .option('--agent <id>', 'Assign to agent')
     .option('--user <idOrEmail>', 'Assign to a workspace member (user id, email or username)')
     .option('--priority <n>', 'Priority (0-4)')
+    .option(
+      '--label <name>',
+      "Add a label (repeatable or comma-separated; replaces the task's other label of the same group)",
+      collectLabels,
+    )
+    .option(
+      '--remove-label <name>',
+      'Remove a label (repeatable or comma-separated)',
+      collectLabels,
+    )
     .option('--heartbeat-interval <n>', 'Heartbeat interval in seconds')
     .option('--heartbeat-timeout <n>', 'Heartbeat timeout in seconds (0 to disable)')
     .option('--description <text>', 'Task description')
@@ -624,10 +665,12 @@ export function registerTaskCommand(program: Command) {
           heartbeatTimeout?: string;
           instruction?: string;
           json?: string | boolean;
+          label?: string[];
           model?: string;
           name?: string;
           priority?: string;
           provider?: string;
+          removeLabel?: string[];
           status?: string;
           user?: string;
         },
@@ -635,6 +678,11 @@ export function registerTaskCommand(program: Command) {
         const client = await getTrpcClient();
         const assigneeUserId = await resolveUserOption(client, options.user);
         if (assigneeUserId === false) return;
+        const addLabelIds = await resolveLabelOption(client, options.label);
+        if (addLabelIds === false) return;
+        const removeLabelIds = await resolveLabelOption(client, options.removeLabel);
+        if (removeLabelIds === false) return;
+        const hasLabelEdits = addLabelIds.length > 0 || removeLabelIds.length > 0;
 
         const input: Record<string, any> = { id };
         if (options.name) input.name = options.name;
@@ -653,6 +701,29 @@ export function registerTaskCommand(program: Command) {
         const configPatch = toModelConfigPatch(options);
         if (configPatch) input.configPatch = configPatch;
         const hasFieldEdits = Object.keys(input).length > 1;
+
+        // Labels have their own endpoints; apply them before any field /
+        // status edit so a bad label fails the command before anything moves.
+        let labels: Awaited<ReturnType<typeof client.taskLabel.addToTask.mutate>> | undefined;
+        if (removeLabelIds.length > 0) {
+          labels = await client.taskLabel.removeFromTask.mutate({
+            labelIds: removeLabelIds,
+            taskId: id,
+          });
+        }
+        if (addLabelIds.length > 0) {
+          labels = await client.taskLabel.addToTask.mutate({ labelIds: addLabelIds, taskId: id });
+        }
+        if (hasLabelEdits && !hasFieldEdits && !options.status) {
+          if (options.json !== undefined) {
+            outputJson(labels, typeof options.json === 'string' ? options.json : undefined);
+          } else {
+            log.info(
+              `Labels on ${pc.bold(id)}: ${labels?.length ? formatTaskLabels(labels, labels.length) : pc.dim('none')}`,
+            );
+          }
+          return;
+        }
 
         // Status-only edits use the lifecycle API. Combined edits go through
         // task.update so the server can apply the fields and lifecycle change
@@ -823,6 +894,7 @@ export function registerTaskCommand(program: Command) {
   registerDepCommands(task);
   registerTopicCommands(task);
   registerDocCommands(task);
+  registerLabelCommands(task);
 }
 
 /**
@@ -836,6 +908,48 @@ const resolveUserOption = async (
   if (!value) return undefined;
   try {
     return await resolveAssigneeUserId(client, value);
+  } catch (error) {
+    log.error((error as Error).message);
+    process.exitCode = 1;
+    return false;
+  }
+};
+
+/** `--label` values for create / edit: assignable labels only; errors are printed. */
+const resolveLabelOption = async (
+  client: Awaited<ReturnType<typeof getTrpcClient>>,
+  names: string[] | undefined,
+): Promise<string[] | false> => {
+  if (!names?.length) return [];
+  try {
+    return await resolveLabelIds(client, names);
+  } catch (error) {
+    log.error((error as Error).message);
+    process.exitCode = 1;
+    return false;
+  }
+};
+
+/**
+ * `lh task list --label` values: a label group name is accepted too and
+ * matches every label in the group, mirroring the Tasks page filter.
+ */
+const resolveListLabelValues = async (
+  client: Awaited<ReturnType<typeof getTrpcClient>>,
+  names: string[],
+): Promise<string[] | false> => {
+  try {
+    const registry = await client.taskLabel.list.query();
+    const groupIds: string[] = [];
+    const labelNames: string[] = [];
+    for (const name of names) {
+      const group = registry.find(
+        (label) => label.isGroup && label.name.toLowerCase() === name.trim().toLowerCase(),
+      );
+      if (group) groupIds.push(group.id);
+      else labelNames.push(name);
+    }
+    return [...groupIds, ...(await resolveLabelIds(client, labelNames, registry))];
   } catch (error) {
     log.error((error as Error).message);
     process.exitCode = 1;
