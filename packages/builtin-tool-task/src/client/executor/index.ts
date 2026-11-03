@@ -266,6 +266,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         };
       }
       const labels = labelIds.length ? await taskLabelService.addToTask(task.id, labelIds) : [];
+      if (labels.length) void getTaskStoreState().refreshTaskList();
 
       return {
         content: formatTaskCreated({
@@ -558,6 +559,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       if (addLabelIds.length) await taskLabelService.addToTask(identifier, addLabelIds);
       if (removeLabelIds.length) changes.push(`labels removed: ${params.removeLabels!.join(', ')}`);
       if (addLabelIds.length) changes.push(`labels added: ${params.addLabels!.join(', ')}`);
+      if (removeLabelIds.length || addLabelIds.length) void store.refreshTaskList();
 
       await Promise.all(ops);
 

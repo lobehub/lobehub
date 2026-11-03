@@ -1,4 +1,4 @@
-import type { ListWorkspaceMembersParams } from '@lobechat/builtin-tool-task';
+import type { ListWorkspaceMembersParams, ToolLabelResolution } from '@lobechat/builtin-tool-task';
 import {
   describeTaskModelChange,
   MISSING_TASK_NAME_ERROR,
@@ -101,9 +101,14 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
   const taskCaller = () => deps.taskCaller;
 
   /** Resolve agent-supplied label names against the registry; never creates labels. */
-  const resolveLabels = async (names: string[] | undefined, allowGroups = false) => {
-    if (!names?.some((name) => name.trim())) return { ids: [] as string[] };
-    if (!deps.taskLabelCaller) return { error: 'Task labels are unavailable in this context.' };
+  const resolveLabels = async (
+    names: string[] | undefined,
+    allowGroups = false,
+  ): Promise<ToolLabelResolution> => {
+    if (!names?.some((name) => name.trim())) return { ids: [] };
+    if (!deps.taskLabelCaller) {
+      return { error: 'Task labels are unavailable in this context.', ids: [] };
+    }
     return resolveToolLabelIds(await deps.taskLabelCaller.list(), names, { allowGroups });
   };
 
