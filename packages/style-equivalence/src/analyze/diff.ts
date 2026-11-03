@@ -198,3 +198,50 @@ export const analyzeRun = (capture: RunCapture): CaseResult[] => {
   capture.conditions.forEach(analyzer.add);
   return analyzer.finish(capture.caseGaps);
 };
+
+const statusOf = (result: CaseResult): CaseStatus =>
+  result.errors.length
+    ? 'error'
+    : result.unstableConditions.length
+      ? 'unstable'
+      : result.differingConditions.length
+        ? 'difference'
+        : 'equal';
+
+export const mergeRetry = (original: CaseResult, retry: CaseResult): CaseResult => {
+  const retried = new Set(original.unstableConditions);
+  const merged: CaseResult = {
+    ...original,
+    comboDifferences: [
+      ...original.comboDifferences,
+      ...retry.comboDifferences.filter((item) => retried.has(item.condition)),
+    ],
+    differingConditions: [
+      ...new Set([
+        ...original.differingConditions,
+        ...retry.differingConditions.filter((condition) => retried.has(condition)),
+      ]),
+    ],
+    errors: [...new Set([...original.errors, ...retry.errors])],
+    rootCauses: [...original.rootCauses],
+    unstableConditions: original.unstableConditions.filter((condition) =>
+      retry.unstableConditions.includes(condition),
+    ),
+  };
+  const retryCauses = retry.comboDifferences
+    .filter((item) => retried.has(item.condition))
+    .flatMap((item) => item.rootCauses);
+  for (const cause of retryCauses)
+    if (
+      !merged.rootCauses.some(
+        (item) =>
+          item.key === cause.key &&
+          item.property === cause.property &&
+          item.before === cause.before &&
+          item.after === cause.after,
+      )
+    )
+      merged.rootCauses.push(cause);
+  merged.status = statusOf(merged);
+  return merged;
+};

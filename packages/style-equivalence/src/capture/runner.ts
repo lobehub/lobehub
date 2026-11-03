@@ -38,6 +38,7 @@ export interface CaptureOptions {
   browser: Browser;
   conditions: ConditionConfig;
   onCondition?: (condition: ConditionCapture) => void;
+  plan?: PageCondition[];
   states?: readonly CaptureState[];
   urls: Record<Side, string>;
 }
@@ -108,13 +109,65 @@ export const capturePage = async (
   }
 };
 
+export const conditionFromLabel = (label: string): PageCondition => {
+  const [theme, width, state, variant] = label.split('/');
+  return {
+    state: state as CaptureState,
+    theme,
+    variant: variant as ConditionVariant | undefined,
+    width: Number(width),
+  };
+};
+
+const captureConditions = async ({
+  browser,
+  onCondition,
+  plan,
+  urls,
+}: Pick<CaptureOptions, 'browser' | 'onCondition' | 'urls'> & {
+  plan: PageCondition[];
+}): Promise<RunCapture> => {
+  const pageErrors: string[] = [];
+  const captures: ConditionCapture[] = [];
+  for (const options of plan) {
+    const loads = await Promise.all([
+      capturePage(browser, urls.base, options, pageErrors),
+      capturePage(browser, urls.base, options, pageErrors),
+      capturePage(browser, urls.head, options, pageErrors),
+    ]);
+    await Promise.all(loads.map(({ page }) => page.close()));
+    const captured: ConditionCapture = {
+      base: loads[0].snapshots,
+      baseAgain: loads[1].snapshots,
+      condition: conditionLabel(options),
+      head: loads[2].snapshots,
+      ...options,
+    };
+    if (!onCondition) {
+      captures.push(captured);
+      continue;
+    }
+    onCondition(captured);
+    captures.push({ ...captured, base: {}, baseAgain: {}, head: {} });
+  }
+  return {
+    conditions: captures,
+    containerRules: 0,
+    pageErrors,
+    unparsedMedia: 0,
+    widths: [...new Set(plan.map((item) => item.width))],
+  };
+};
+
 export const captureRun = async ({
   browser,
   conditions,
   onCondition,
+  plan: fixedPlan,
   states,
   urls,
 }: CaptureOptions): Promise<RunCapture> => {
+  if (fixedPlan) return captureConditions({ browser, onCondition, plan: fixedPlan, urls });
   const pageErrors: string[] = [];
   const media: string[] = [];
   const pseudoRules: Partial<Record<Side, Record<string, string[]>>> = {};
@@ -154,28 +207,13 @@ export const captureRun = async ({
       variant,
       width: conditions.widths.at(-1)!,
     });
-  const captures: ConditionCapture[] = [];
-  for (const options of plan) {
-    const loads = await Promise.all([
-      capturePage(browser, urls.base, options, pageErrors),
-      capturePage(browser, urls.base, options, pageErrors),
-      capturePage(browser, urls.head, options, pageErrors),
-    ]);
-    await Promise.all(loads.map(({ page }) => page.close()));
-    const captured: ConditionCapture = {
-      base: loads[0].snapshots,
-      baseAgain: loads[1].snapshots,
-      condition: conditionLabel(options),
-      head: loads[2].snapshots,
-      ...options,
-    };
-    if (!onCondition) {
-      captures.push(captured);
-      continue;
-    }
-    onCondition(captured);
-    captures.push({ ...captured, base: {}, baseAgain: {}, head: {} });
-  }
+  const { conditions: captures, pageErrors: capturedErrors } = await captureConditions({
+    browser,
+    onCondition,
+    plan,
+    urls,
+  });
+  pageErrors.push(...capturedErrors);
   return {
     caseGaps: caseGapsOf(unmodeled.base ?? {}, unmodeled.head ?? {}),
     conditions: captures,

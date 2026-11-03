@@ -4,6 +4,15 @@ import type { StyleRule } from './types';
 
 export type SelectorFlag = 'CROSS_COMPONENT' | 'INNER_TARGET';
 
+interface Sibling {
+  prev: () => Sibling | undefined;
+  type: string;
+}
+
+interface Lineage {
+  parent?: { parent?: { type: string; value?: string } };
+}
+
 interface Analysis {
   classes: Array<{ global: boolean; name: string }>;
   innerType: boolean;
@@ -13,20 +22,15 @@ const analyze = (selector: string): Analysis | undefined => {
   const result: Analysis = { classes: [], innerType: false };
   try {
     selectorParser((root) => {
-      root.walk((node) => {
-        if (node.type === 'class') {
-          const global = Boolean(
-            node.parent?.parent?.type === 'pseudo' &&
-            (node.parent.parent as selectorParser.Pseudo).value === ':global',
-          );
-          result.classes.push({ global, name: node.value });
-        }
-        if (node.type === 'tag') {
-          const previous = node.prev();
-          let cursor: selectorParser.Node | undefined = previous;
-          while (cursor && cursor.type !== 'combinator') cursor = cursor.prev();
-          if (cursor) result.innerType = true;
-        }
+      root.walkClasses((node) => {
+        const grandparent = (node as unknown as Lineage).parent?.parent;
+        const global = grandparent?.type === 'pseudo' && grandparent.value === ':global';
+        result.classes.push({ global, name: node.value });
+      });
+      root.walkTags((node) => {
+        let cursor = (node as unknown as Sibling).prev();
+        while (cursor && cursor.type !== 'combinator') cursor = cursor.prev();
+        if (cursor) result.innerType = true;
       });
     }).processSync(selector);
   } catch {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ownDifferences, rootCausesOf } from './diff';
+import { type CaseResult, mergeRetry, ownDifferences, rootCausesOf } from './diff';
 
 const diff = (property: string, before: string, after: string, key = 'root.0') => ({
   after,
@@ -69,5 +69,50 @@ describe('ownDifferences', () => {
     expect(
       ownDifferences([diff('box', '[8,8,100,20]', '[8,10,120,20]', 'root.0.0')], 'root.0.0'),
     ).toEqual([diff('box', '[8,8,100,20]', '[8,10,120,20]', 'root.0.0')]);
+  });
+});
+
+const result = (overrides: Partial<CaseResult>): CaseResult => ({
+  comboDifferences: [],
+  differingConditions: [],
+  errors: [],
+  gaps: [],
+  key: 'a|A#0',
+  rootCauses: [],
+  status: 'equal',
+  unstableConditions: [],
+  ...overrides,
+});
+
+describe('mergeRetry', () => {
+  it('keeps a condition unstable only when the retry is unstable too, and takes the retry differences', () => {
+    const cause = diff('color', 'red', 'blue');
+    const merged = mergeRetry(
+      result({
+        differingConditions: ['light/375/default'],
+        status: 'unstable',
+        unstableConditions: ['light/600/force:active', 'dark/600/default'],
+      }),
+      result({
+        comboDifferences: [
+          { combo: 0, condition: 'dark/600/default', differences: [cause], rootCauses: [cause] },
+        ],
+        differingConditions: ['dark/600/default'],
+        rootCauses: [cause],
+        status: 'difference',
+      }),
+    );
+    expect(merged).toMatchObject({
+      differingConditions: ['light/375/default', 'dark/600/default'],
+      rootCauses: [cause],
+      status: 'difference',
+      unstableConditions: [],
+    });
+    expect(
+      mergeRetry(
+        result({ status: 'unstable', unstableConditions: ['x'] }),
+        result({ status: 'unstable', unstableConditions: ['x'] }),
+      ).status,
+    ).toBe('unstable');
   });
 });

@@ -6,7 +6,7 @@ import { parseArgs, promisify } from 'node:util';
 import { runComparison } from '../run';
 import { runSelfTest } from '../selftest';
 import { formatSelfTest } from '../selftest/run';
-import { startServer } from '../server';
+import { DEFAULT_UI_DIR, startServer } from '../server';
 import { runStack } from '../stack';
 import { formatStack, formatSummary } from './summary';
 
@@ -92,9 +92,20 @@ const main = async () => {
       ? path.resolve(target)
       : path.join(recordsDir, target);
     if (!existsSync(path.join(runDir, 'run.json'))) throw new Error(`No stored run at ${runDir}`);
+    if (!existsSync(path.join(DEFAULT_UI_DIR, 'index.html'))) {
+      console.log('Building the report UI…');
+      const packageDir = path.resolve(import.meta.dirname, '../..');
+      await run('bunx', ['vite', 'build', '--config', 'report.vite.config.ts'], {
+        cwd: packageDir,
+        maxBuffer: 64 * 1024 ** 2,
+      });
+    }
     const server = await startServer({ port: Number(values.port ?? 0), runDir });
     console.log(`Report: ${server.url}`);
-    await new Promise<void>((resolve) => process.once('SIGINT', resolve));
+    await new Promise<void>((resolve) => {
+      process.once('SIGINT', resolve);
+      process.once('SIGTERM', resolve);
+    });
     await server.stop();
     return;
   }

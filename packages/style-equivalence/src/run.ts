@@ -5,11 +5,11 @@ import { promisify } from 'node:util';
 
 import type { Browser } from '@playwright/test';
 
-import { type CaseResult, createRunAnalyzer } from './analyze/diff';
+import { type CaseResult, createRunAnalyzer, mergeRetry } from './analyze/diff';
 import { buildSide } from './build/viteBuild';
 import { calibrate, type CalibrationResult } from './calibration';
 import { launchBrowser } from './capture/browser';
-import { captureRun } from './capture/runner';
+import { captureRun, conditionFromLabel } from './capture/runner';
 import { serveDirectories } from './capture/staticServer';
 import type { ProjectConfig } from './config';
 import { createRunDir, writeEvidence } from './evidence/store';
@@ -125,9 +125,30 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
         },
         urls: { base: `${server.url}/dist-base/`, head: `${server.url}/dist-head/` },
       });
-      const results = new Map(
-        analyzer.finish(capture.caseGaps).map((result) => [result.key, result]),
-      );
+      let analyzed = analyzer.finish(capture.caseGaps);
+      const unstable = analyzed.filter((result) => result.unstableConditions.length);
+      if (unstable.length) {
+        const keys = encodeURIComponent(JSON.stringify(unstable.map((result) => result.key)));
+        const retry = createRunAnalyzer();
+        await captureRun({
+          browser,
+          conditions: config.conditions,
+          onCondition: retry.add,
+          plan: [...new Set(unstable.flatMap((result) => result.unstableConditions))].map(
+            conditionFromLabel,
+          ),
+          urls: {
+            base: `${server.url}/dist-base/?cases=${keys}`,
+            head: `${server.url}/dist-head/?cases=${keys}`,
+          },
+        });
+        const retried = new Map(retry.finish().map((result) => [result.key, result]));
+        analyzed = analyzed.map((result) => {
+          const again = retried.get(result.key);
+          return result.unstableConditions.length && again ? mergeRetry(result, again) : result;
+        });
+      }
+      const results = new Map(analyzed.map((result) => [result.key, result]));
       cases = synthesis.plans.flatMap((plan) =>
         plan.cases.map((entry) => {
           const result =

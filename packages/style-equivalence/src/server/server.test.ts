@@ -149,6 +149,28 @@ describe('report server', () => {
     });
   }, 60_000);
 
+  it('captures one case under one condition with the target values and differences', async () => {
+    const key = encodeURIComponent('src/A.tsx|A#1');
+    const response = await fetch(
+      `${server.url}/api/case/${key}/snapshot?condition=light/1280/hover-target&combo=0`,
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.base.target.values.color).toBe('rgb(0, 0, 0)');
+    expect(body.head.target.values.color).toBe('rgb(255, 0, 0)');
+    expect(body.differences.map((item: { property: string }) => item.property)).toContain('color');
+  }, 60_000);
+
+  it('renders a screenshot of one side under a forced state', async () => {
+    const key = encodeURIComponent('src/A.tsx|A#1');
+    const response = await fetch(
+      `${server.url}/api/case/${key}/shot?side=head&condition=light/1280/hover-target&combo=0`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/png');
+    expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(100);
+  }, 60_000);
+
   it('serves the builds and nothing outside them', async () => {
     expect(await (await fetch(`${server.url}/base/`)).text()).toContain(
       'data-case="src/A.tsx|A#1|0"',
