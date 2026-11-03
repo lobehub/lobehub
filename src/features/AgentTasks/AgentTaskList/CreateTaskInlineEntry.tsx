@@ -1,11 +1,21 @@
 'use client';
 
-import type { TaskExecutionConfig, TaskIntentAnalysis } from '@lobechat/types';
+import type { TaskExecutionConfig, TaskIntentAnalysis, TaskLabelRef } from '@lobechat/types';
 import { readTaskExecutionConfig, toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Block, Button, cssVar, DropdownMenu, Flexbox, Text, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { $getRoot } from 'lexical';
-import { ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
+import { ChevronDown, ChevronUp, Paperclip, TagIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,6 +27,8 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { taskService } from '@/services/task';
@@ -108,6 +120,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     useDefaultMemberAssignee();
   const navigate = useWorkspaceAwareNavigate();
   const [priority, setPriority] = useState(0);
+  const [labels, setLabels] = useState<TaskLabelRef[]>([]);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
   const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -343,6 +356,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   const resetComposer = useCallback(() => {
     setPriority(0);
+    setLabels([]);
     setAssigneeAgentId(agentId);
     setMemberChoice(undefined);
     setInstruction('');
@@ -411,6 +425,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           ...(execution ? { config: { execution: toTaskExecutionConfigPatch(execution) } } : {}),
           editorData: draft.editorJson,
           instruction: draft.instruction,
+          ...(labels.length > 0 ? { labelIds: labels.map((label) => label.id) } : {}),
           name: draft.name,
           parentTaskId,
           priority: priority || undefined,
@@ -483,6 +498,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       assigneeUserId,
       createTask,
       execution,
+      labels,
       navigate,
       onCreated,
       parentTaskId,
@@ -756,6 +772,28 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                 </Text>
               </Block>
             </TaskPriorityTag>
+
+            <TaskLabelPicker value={labels} onChange={setLabels}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {labels.length > 0 ? (
+                  <TaskLabelChips labels={labels} max={3} />
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />
+                    <Text fontSize={12}>{t('taskLabel.label')}</Text>
+                  </>
+                )}
+              </Block>
+            </TaskLabelPicker>
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector

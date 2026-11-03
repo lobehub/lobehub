@@ -1,0 +1,67 @@
+import type { TaskLabel } from '@lobechat/types';
+import { describe, expect, it } from 'vitest';
+
+import {
+  buildTaskLabelPickerSections,
+  canCreateTaskLabel,
+  toggleTaskLabelSelection,
+  toTaskLabelRef,
+} from './labelPickerModel';
+
+const label = (id: string, name: string, extra: Partial<TaskLabel> = {}): TaskLabel => ({
+  color: '#000',
+  id,
+  isGroup: false,
+  name,
+  parentId: null,
+  sortOrder: 0,
+  ...extra,
+});
+
+const registry: TaskLabel[] = [
+  label('fe', 'Frontend'),
+  label('type', 'Type', { isGroup: true }),
+  label('bug', 'Bug', { parentId: 'type' }),
+  label('feature', 'Feature', { parentId: 'type' }),
+  label('empty', 'Empty group', { isGroup: true }),
+];
+
+describe('buildTaskLabelPickerSections', () => {
+  it('lists loose labels first, then non-empty groups', () => {
+    const sections = buildTaskLabelPickerSections(registry);
+    expect(sections.map((s) => s.group?.id)).toEqual([undefined, 'type']);
+    expect(sections[1].labels.map((l) => l.id)).toEqual(['bug', 'feature']);
+  });
+
+  it('filters by label or group name', () => {
+    expect(
+      buildTaskLabelPickerSections(registry, 'bu').flatMap((s) => s.labels.map((l) => l.id)),
+    ).toEqual(['bug']);
+    expect(
+      buildTaskLabelPickerSections(registry, 'type').flatMap((s) => s.labels.map((l) => l.id)),
+    ).toEqual(['bug', 'feature']);
+  });
+});
+
+describe('toggleTaskLabelSelection', () => {
+  it('adds, removes, and swaps within a group', () => {
+    const [fe, , bug, feature] = registry;
+    let selected = toggleTaskLabelSelection([], fe);
+    selected = toggleTaskLabelSelection(selected, bug);
+    expect(selected.map((l) => l.id)).toEqual(['fe', 'bug']);
+
+    selected = toggleTaskLabelSelection(selected, feature);
+    expect(selected.map((l) => l.id)).toEqual(['fe', 'feature']);
+
+    selected = toggleTaskLabelSelection(selected, fe);
+    expect(selected).toEqual([toTaskLabelRef(feature)]);
+  });
+});
+
+describe('canCreateTaskLabel', () => {
+  it('needs a non-empty name not already taken', () => {
+    expect(canCreateTaskLabel(registry, ' ')).toBe(false);
+    expect(canCreateTaskLabel(registry, 'bug')).toBe(false);
+    expect(canCreateTaskLabel(registry, 'Backend')).toBe(true);
+  });
+});
