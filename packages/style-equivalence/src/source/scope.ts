@@ -17,10 +17,11 @@ export interface ScopeOptions {
   base: string;
   head: string;
   repo: string;
+  restrictTo?: string[];
 }
 
 const COMPONENT = /\.tsx$/;
-const STYLE_FACTORY =
+export const STYLE_FACTORY =
   /createStaticStyles|createStyles|stylex\.(?:create|defineVars|defineConsts|keyframes)/;
 const IMPORT = /(?:import|export)\s[^'"]*?from\s+['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"]/g;
 
@@ -81,12 +82,15 @@ export const resolveScope = async ({
   base,
   head,
   repo,
+  restrictTo,
 }: ScopeOptions): Promise<{ files: ScopeFile[] }> => {
+  const allowed = restrictTo && new Set(restrictTo);
   const status = await git(repo, ['diff', '--name-status', '-M', base, head]);
   const files = new Map<string, ScopeFile>();
   const styleModules = new Set<string>();
   for (const line of status.split('\n').filter(Boolean)) {
     const [code, first, second] = line.split('\t');
+    if (allowed && !allowed.has(first) && !(second && allowed.has(second))) continue;
     const kind = code[0];
     if (kind === 'R' && COMPONENT.test(second)) {
       files.set(first, { base: first, head: second, reason: 'renamed' });

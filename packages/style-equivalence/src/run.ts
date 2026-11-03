@@ -40,6 +40,7 @@ export interface RunOptions {
   mutations?: number;
   recordsDir: string;
   repo: string;
+  restrictTo?: string[];
 }
 
 export interface CaseRecord {
@@ -87,6 +88,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       base,
       head,
       repo: options.repo,
+      restrictTo: options.restrictTo,
     });
     const synthesis = await synthesize(scope, roots, config);
     const configDir = path.dirname(options.configFile);

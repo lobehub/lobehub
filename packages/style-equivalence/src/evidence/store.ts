@@ -3,9 +3,17 @@ import path from 'node:path';
 
 export const createRunDir = async (recordsDir: string, base: string, head: string) => {
   const stamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
-  const runId = `${stamp}-${base.slice(0, 7)}-${head.slice(0, 7)}`;
-  await mkdir(path.join(recordsDir, runId), { recursive: true });
-  return { runDir: await realpath(path.join(recordsDir, runId)), runId };
+  const stem = `${stamp}-${base.slice(0, 7)}-${head.slice(0, 7)}`;
+  await mkdir(recordsDir, { recursive: true });
+  for (let attempt = 1; ; attempt++) {
+    const runId = attempt === 1 ? stem : `${stem}-${attempt}`;
+    try {
+      await mkdir(path.join(recordsDir, runId));
+      return { runDir: await realpath(path.join(recordsDir, runId)), runId };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+  }
 };
 
 export const writeEvidence = (runDir: string, name: string, value: unknown) =>

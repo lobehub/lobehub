@@ -81,3 +81,30 @@ export const formatSummary = (input: SummaryInput) => {
   lines.push(`Evidence: ${input.runDir}`);
   return lines.join('\n');
 };
+
+export interface StackSummaryInput {
+  base: string;
+  conflicts: Array<{ files: string[]; id: string }>;
+  head: string;
+  mergeable: boolean;
+  merged: string[];
+  resolved: Array<{ files: string[]; id: string }>;
+  shards: Array<{
+    files: string[];
+    id: string;
+    result: { runDir: string; verdict: Pick<Verdict, 'mergeable' | 'reasons'> };
+  }>;
+}
+
+export const formatStack = (input: StackSummaryInput) =>
+  [
+    `stack verdict ${input.mergeable ? 'mergeable' : 'not mergeable'} · ${input.base.slice(0, 7)}..${input.head.slice(0, 7)} · merged ${input.merged.length} · conflicts ${input.conflicts.length} · shards ${input.shards.length}`,
+    ...input.conflicts.map(
+      (conflict) => `  conflict #${conflict.id}  ${conflict.files.join(', ')}`,
+    ),
+    ...input.resolved.map((entry) => `  kept stack side #${entry.id}  ${entry.files.join(', ')}`),
+    ...input.shards.map(
+      ({ files, id, result }) =>
+        `  #${id}  ${result.verdict.mergeable ? 'mergeable' : `not mergeable: ${result.verdict.reasons.join(' · ')}`}  (${files.length} files)  ${result.runDir}`,
+    ),
+  ].join('\n');

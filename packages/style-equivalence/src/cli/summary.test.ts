@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSummary } from './summary';
+import { formatStack, formatSummary } from './summary';
 
 describe('formatSummary', () => {
   it('prints the counts, the top root causes and where the evidence is', () => {
@@ -123,6 +123,38 @@ describe('formatSummary', () => {
       '  missed src/A.tsx|A#0  numeric: 8px → 9px',
       'calibration 0 agree · 1 mismatch · 0 inconclusive',
       '  mismatch B (src/B.tsx): real mount difference, synthetic equal',
+    ]);
+  });
+});
+
+describe('formatStack', () => {
+  it('prints one line per PR shard and the conflicts', () => {
+    const text = formatStack({
+      base: 'a'.repeat(40),
+      conflicts: [{ files: ['src/A.tsx'], id: '21459' }],
+      head: 'c'.repeat(40),
+      mergeable: false,
+      merged: ['21446', '21452'],
+      resolved: [{ files: ['scripts/legacyFiles.json'], id: '21452' }],
+      shards: [
+        {
+          files: ['x'],
+          id: '21446',
+          result: { runDir: '/r/1', verdict: { mergeable: true, reasons: [] } },
+        },
+        {
+          files: ['y', 'z'],
+          id: '21452',
+          result: { runDir: '/r/2', verdict: { mergeable: false, reasons: ['difference 6'] } },
+        },
+      ],
+    });
+    expect(text.split('\n')).toEqual([
+      'stack verdict not mergeable · aaaaaaa..ccccccc · merged 2 · conflicts 1 · shards 2',
+      '  conflict #21459  src/A.tsx',
+      '  kept stack side #21452  scripts/legacyFiles.json',
+      '  #21446  mergeable  (1 files)  /r/1',
+      '  #21452  not mergeable: difference 6  (2 files)  /r/2',
     ]);
   });
 });
