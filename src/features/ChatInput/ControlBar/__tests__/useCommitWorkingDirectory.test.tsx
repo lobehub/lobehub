@@ -14,6 +14,8 @@ const testState = vi.hoisted(() => ({
   },
   chat: {
     activeTopicId: undefined as string | undefined,
+    pendingNewTopicDirectory: undefined as
+      { agentId: string; projectWorkingDirectoryId: string } | undefined,
     topic: undefined as ChatTopic | undefined,
     updateTopicMetadata: vi.fn(),
   },
@@ -71,6 +73,7 @@ describe('useCommitWorkingDirectory — localTarget', () => {
     testState.agent.updateAgentConfigById = vi.fn();
     testState.agent.updateAgentRuntimeEnvConfigById = vi.fn();
     testState.chat.activeTopicId = undefined;
+    testState.chat.pendingNewTopicDirectory = undefined;
     testState.chat.topic = undefined;
     testState.chat.updateTopicMetadata = vi.fn();
     testState.currentDeviceId = 'this-machine';
@@ -79,6 +82,25 @@ describe('useCommitWorkingDirectory — localTarget', () => {
       isPreferenceLoading: false,
       workspaceScoped: false,
     };
+  });
+
+  it('refuses a worktree pick while a blank conversation is staged in a project directory', async () => {
+    // No topic yet, so the write would otherwise land on the agent default —
+    // a directory this conversation will not run in.
+    testState.agent.agencyConfig = { boundDeviceId: 'this-machine', executionTarget: 'device' };
+    testState.effective.agencyConfig = testState.agent.agencyConfig;
+    testState.chat.pendingNewTopicDirectory = {
+      agentId: 'agent-id',
+      projectWorkingDirectoryId: 'directory',
+    };
+
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+    await expect(
+      result.current.commit({ path: '/repo', git: { activeWorktree: '/repo-worktree' } }),
+    ).rejects.toThrow();
+
+    expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    expect(testState.agent.updateAgentRuntimeEnvConfigById).not.toHaveBeenCalled();
   });
 
   it('keeps a project-bound source directory while allowing worktree selection', async () => {
