@@ -81,7 +81,6 @@ describe('LocalSystemExecutor', () => {
       });
 
       expect(result.content).toBeTruthy();
-      expect(result.content).not.toBe('');
       expect(result.state).toEqual({
         files: [],
         pattern: '**/*never-matches*',
@@ -113,7 +112,6 @@ describe('LocalSystemExecutor', () => {
       // `usage.tools.byTool[].errors`, so a permission-denied glob must not
       // count as a successful call.
       expect(result.success).toBe(false);
-      expect(result.content).toBeTruthy();
       expect(result.content).toContain('EACCES');
       expect(result.state).toEqual({
         files: [],

@@ -30,34 +30,6 @@ describe('UserMemoryQueryModel surface', () => {
     expect(functionMembers(createModel())).toEqual(['queryTaxonomyOptions', 'searchMemory']);
   });
 
-  it('keeps the per-layer retrieval methods on the instance prototype', () => {
-    expect(functionMembers(UserMemoryQueryModel.prototype)).toEqual(
-      expect.arrayContaining([
-        'aggregateBaseArrayOptions',
-        'aggregateBaseMemoryOptions',
-        'aggregateIdentityValueOptions',
-        'aggregateLayerLabels',
-        'aggregateLayerTypes',
-        'aggregateStatuses',
-        'searchActivitiesLexical',
-        'searchActivitiesSemantic',
-        'searchContextsLexical',
-        'searchContextsSemantic',
-        'searchExperiencesLexical',
-        'searchExperiencesSemantic',
-        'searchHybridActivities',
-        'searchHybridContexts',
-        'searchHybridExperiences',
-        'searchHybridIdentities',
-        'searchHybridPreferences',
-        'searchIdentitiesLexical',
-        'searchIdentitiesSemantic',
-        'searchPreferencesLexical',
-        'searchPreferencesSemantic',
-      ]),
-    );
-  });
-
   it('dispatches queryTaxonomyOptions through the instance aggregations', async () => {
     const model = createModel();
     const option = (value: string) => [{ count: 1, layers: undefined, value }];

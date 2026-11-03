@@ -1043,9 +1043,6 @@ describe('OnboardingService', () => {
       });
 
       expect(executeSpy).toHaveBeenCalledTimes(1);
-      // The first (only) execute call inside the transaction is the advisory lock.
-      // We assert structurally rather than on the exact SQL fragment.
-      expect(executeSpy).toHaveBeenCalled();
     });
   });
 });

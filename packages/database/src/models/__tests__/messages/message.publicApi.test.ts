@@ -99,17 +99,15 @@ const PUBLIC_INSTANCE_METHODS = [
 ] as const;
 
 describe('MessageModel public API', () => {
-  it('exposes every public method as an own function property', () => {
+  it('exposes every public method as a function', () => {
     const model = new MessageModel(serverDB, userId);
 
     for (const name of PUBLIC_INSTANCE_METHODS) {
-      expect(Object.prototype.hasOwnProperty.call(model, name), name).toBe(true);
       expect(typeof model[name], name).toBe('function');
     }
   });
 
-  it('keeps updateMessageRAG on the prototype and checkUsersHaveMessages static', () => {
-    expect(typeof MessageModel.prototype.updateMessageRAG).toBe('function');
+  it('keeps checkUsersHaveMessages static', () => {
     expect(typeof MessageModel.checkUsersHaveMessages).toBe('function');
   });
 

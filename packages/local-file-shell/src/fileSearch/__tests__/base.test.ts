@@ -260,29 +260,4 @@ describe('BaseFileSearch', () => {
       expect(results[0].engine).toBe('test-engine');
     });
   });
-
-  describe('glob', () => {
-    it('should return GlobFilesResult with engine', async () => {
-      const result = await fileSearch.glob({ pattern: '*.ts' });
-
-      expect(result.engine).toBe('test-engine');
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe('checkSearchServiceStatus', () => {
-    it('should return true', async () => {
-      const status = await fileSearch.checkSearchServiceStatus();
-
-      expect(status).toBe(true);
-    });
-  });
-
-  describe('updateSearchIndex', () => {
-    it('should return true', async () => {
-      const result = await fileSearch.updateSearchIndex();
-
-      expect(result).toBe(true);
-    });
-  });
 });

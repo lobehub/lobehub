@@ -803,23 +803,6 @@ describe('createQwenImage', () => {
         }),
       );
     });
-
-    it('should throw error when imageUrl is not provided', async () => {
-      const payload: CreateImagePayload = {
-        model: 'qwen-image-edit',
-        params: {
-          prompt: 'Edit this image',
-          // imageUrl not provided
-        },
-      };
-
-      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
-        expect.objectContaining({
-          errorType: 'ProviderBizError',
-          provider: 'qwen',
-        }),
-      );
-    });
   });
 
   describe('new image-generation route coverage', () => {

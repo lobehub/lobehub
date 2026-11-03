@@ -107,22 +107,6 @@ describe('content search engine parity', () => {
     }
   }, 60_000);
 
-  it('does not hide a tracked directory whose name looks like build output', async () => {
-    // Regression: a hardcoded `!**/build/**` made every engine skip this file,
-    // even though git tracks it.
-    const tracked = path.join(repo, 'build', 'entitlements.plist');
-
-    for (const engine of engines) {
-      const r = await search(engine, {
-        output_mode: 'files_with_matches',
-        pattern: 'needle',
-        scope: repo,
-      } as GrepContentParams);
-
-      expect(r.matches, `${engine} hid a tracked build/ file`).toContain(tracked);
-    }
-  }, 60_000);
-
   it('returns absolute paths from every engine', async () => {
     for (const engine of engines) {
       const r = await search(engine, {

@@ -30,12 +30,6 @@ describe('resolveClaudeCodeRenderDisplayControl', () => {
         }),
       ).toBeUndefined();
     });
-
-    it('is still collapsed while the call is in flight (no result yet)', () => {
-      expect(
-        resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Read, undefined),
-      ).toBeUndefined();
-    });
   });
 
   describe('in-app browser screenshot', () => {
