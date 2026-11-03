@@ -1,5 +1,5 @@
 import { DEFAULT_TASK_LABEL_COLOR, type TaskLabel, type TaskLabelRef } from '@lobechat/types';
-import { cssVar, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { Button, cssVar, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, PlusIcon } from 'lucide-react';
@@ -79,7 +79,11 @@ const TaskLabelPicker = memo<TaskLabelPickerProps>(({ children, disabled, onChan
   const [creating, setCreating] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const { isLoading } = useFetchTaskLabels();
+  const { error, isLoading, mutate } = useFetchTaskLabels();
+  const isInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+  // Until the registry is known, an empty list is not "no labels": inline
+  // creation could collide with a name that already exists.
+  const loadFailed = !!error && !isInit;
   const registry = useTaskStore(taskLabelSelectors.labels);
   const createTaskLabel = useTaskStore((s) => s.createTaskLabel);
 
@@ -87,7 +91,7 @@ const TaskLabelPicker = memo<TaskLabelPickerProps>(({ children, disabled, onChan
     () => buildTaskLabelPickerSections(registry, search),
     [registry, search],
   );
-  const showCreate = canCreateTaskLabel(registry, search);
+  const showCreate = isInit && canCreateTaskLabel(registry, search);
   const flatOptions = useMemo<PickerOption[]>(
     () => [
       ...sections.flatMap((section) =>
@@ -190,6 +194,15 @@ const TaskLabelPicker = memo<TaskLabelPickerProps>(({ children, disabled, onChan
       />
       {isLoading ? (
         <SkeletonList rows={4} />
+      ) : loadFailed ? (
+        <Flexbox align={'center'} gap={8} justify={'center'} padding={16}>
+          <Text fontSize={12} type={'secondary'}>
+            {t('taskLabels.loadFailed', { ns: 'setting' })}
+          </Text>
+          <Button size={'small'} onClick={() => mutate()}>
+            {t('retry', { ns: 'common' })}
+          </Button>
+        </Flexbox>
       ) : flatOptions.length === 0 ? (
         <Flexbox align={'center'} justify={'center'} padding={16}>
           <Text fontSize={12} type={'secondary'}>

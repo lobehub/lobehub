@@ -65,13 +65,17 @@ export class TaskLabelSliceActionImpl {
   };
 
   createTaskLabel = async (params: TaskLabelInput) => {
+    const scope = this.#get().taskLabelsScope;
     const label = await taskLabelService.create(params);
-    // Show the new label right away; the refetch fills in usage counts.
-    this.#set(
-      (state) => ({ taskLabels: [...state.taskLabels, { ...label, usageCount: 0 }] }),
-      false,
-      'createTaskLabel',
-    );
+    // Show the new label right away; the refetch fills in usage counts. Skip
+    // it if the user switched workspaces meanwhile: it belongs to the old one.
+    if (this.#get().taskLabelsScope === scope) {
+      this.#set(
+        (state) => ({ taskLabels: [...state.taskLabels, { ...label, usageCount: 0 }] }),
+        false,
+        'createTaskLabel',
+      );
+    }
     void this.refreshTaskLabels();
     return label;
   };
