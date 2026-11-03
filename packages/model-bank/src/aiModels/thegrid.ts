@@ -145,12 +145,12 @@ const thegridChatModels: AIChatModelCard[] = [
   },
   {
     abilities: { functionCall: true, reasoning: true },
-    contextWindowTokens: 1_000_000,
+    contextWindowTokens: 1_048_576,
     description:
       'Lab latest market for GLM supply. You contract for the latest qualifying route, not a specific model.',
     displayName: 'GLM Latest',
     id: 'glm-latest',
-    maxOutput: 128_000,
+    maxOutput: 131_072,
     type: 'chat',
   },
   {
