@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/>이(가) 우선순위를 <from/>에서 <to/>로 변경했습니다",
   "taskDetail.activities.status.changed": "<actor/>이(가) 상태를 <from/>에서 <to/>로 변경했습니다",
   "taskDetail.activitiesEmpty": "아직 활동이 없습니다",
+  "taskDetail.activitiesLoadMore": "이전 활동 보기 ({{count}})",
   "taskDetail.addSubtask": "하위 작업 추가",
   "taskDetail.artifactInaccessible": "이용 불가 문서 — 접근 불가",
   "taskDetail.artifactMenu.delete": "작업에서 제거",

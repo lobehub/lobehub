@@ -4,7 +4,17 @@ import type {
   TaskDetailActivity,
   TaskDetailActivityAuthor,
 } from '@lobechat/types';
-import { Avatar, Block, Collapsible, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  Avatar,
+  Block,
+  Button,
+  Collapsible,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -35,6 +45,7 @@ import CommentInput from './CommentInput';
 import TaskBriefCard from './TaskBriefCard';
 import TaskRunReport from './TaskRunReport';
 import TopicCard from './TopicCard';
+import { useActivityPaging } from './useActivityPaging';
 
 const PRIORITY_NAME: Record<number, 'high' | 'low' | 'none' | 'normal' | 'urgent'> = {
   0: 'none',
@@ -240,6 +251,9 @@ const AssignmentRow = memo<{ activity: TaskDetailActivity }>(({ activity }) => {
   );
 });
 
+/** Activity types the result panel renders; everything else is lifecycle bookkeeping. */
+const RESULT_ACTIVITY_TYPES = new Set<TaskDetailActivity['type']>(['brief', 'comment', 'topic']);
+
 interface TaskActivitiesProps {
   /** Result review leads with run output and leaves the reply composer after the evidence. */
   variant?: 'activity' | 'result';
@@ -402,6 +416,20 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
     [activities],
   );
 
+  // The result panel drops lifecycle bookkeeping, so page over what it shows —
+  // otherwise a page of status flips would render as an empty page.
+  const pageableItems = useMemo(
+    () =>
+      variant === 'result'
+        ? items.filter(({ activity }) => RESULT_ACTIVITY_TYPES.has(activity.type))
+        : items,
+    [items, variant],
+  );
+  const { loadMore, remaining, sentinelRef, visible } = useActivityPaging(
+    pageableItems,
+    activeTaskId,
+  );
+
   const commentInput = activeTaskId ? <CommentInput taskId={activeTaskId} /> : null;
 
   // A goal loop can produce many rounds; only the newest run opens by default so
@@ -440,7 +468,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   const rows =
     items.length > 0 ? (
       withRail(
-        items.map(({ activity, brief, key }) => {
+        visible.map(({ activity, brief, key }) => {
           if (brief) {
             return (
               <TaskBriefCard
@@ -485,6 +513,16 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
       />
     );
 
+  const loadMoreFooter =
+    remaining > 0 ? (
+      <>
+        <div aria-hidden ref={sentinelRef} style={{ height: 1 }} />
+        <Button size={'small'} style={{ alignSelf: 'center' }} type={'text'} onClick={loadMore}>
+          {t('taskDetail.activitiesLoadMore', { count: remaining })}
+        </Button>
+      </>
+    ) : null;
+
   // The Portal header already names the task and the report is the only thing
   // in this section, so a collapsible "运行结果" band above it labels a section
   // of one and eats the top of the reading surface.
@@ -492,7 +530,13 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   // Leaving a note for the next run is one of the report's own actions, which
   // opens the editor on demand instead of parking an empty box under every
   // report.
-  if (variant === 'result') return <Flexbox gap={12}>{rows}</Flexbox>;
+  if (variant === 'result')
+    return (
+      <Flexbox gap={12}>
+        {rows}
+        {loadMoreFooter}
+      </Flexbox>
+    );
 
   return (
     <Flexbox gap={8}>
@@ -517,6 +561,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
         <Flexbox gap={12} paddingBlock={4} paddingInline={12}>
           {commentInput}
           {rows}
+          {loadMoreFooter}
         </Flexbox>
       </Collapsible>
     </Flexbox>
