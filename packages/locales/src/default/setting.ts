@@ -1376,6 +1376,9 @@ export default {
     'Check out <site></site> and <repo></repo> for more details.',
   'settingChatAppearance.linkIcon.title': 'Show icons in message links',
   'settingChatAppearance.mermaidTheme.title': 'Mermaid Theme',
+  'settingChatAppearance.pasteAutoConvert.desc':
+    'Pasted Markdown turns into formatted text in the input. Turn this off to keep text exactly as copied. Press ⇧⌘V (Ctrl+Shift+V on Windows) to paste plain text anytime.',
+  'settingChatAppearance.pasteAutoConvert.title': 'Format Markdown on Paste',
   'settingChatAppearance.title': 'Chat Appearance',
   'settingChatAppearance.transitionMode.desc': 'Choose how chat messages appear',
   'settingChatAppearance.transitionMode.options.fadeIn': 'Fade In',
