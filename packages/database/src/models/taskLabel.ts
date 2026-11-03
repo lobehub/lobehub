@@ -294,13 +294,26 @@ export class TaskLabelModel {
    */
   private lockTaskInScope = async (taskId: string, tx: Transaction) => {
     const [row] = await tx
-      .select({ id: tasks.id })
+      .select({ id: tasks.id, userId: tasks.createdByUserId, workspaceId: tasks.workspaceId })
       .from(tasks)
       .where(and(eq(tasks.id, taskId), taskOwnership(this.ctx)))
       .limit(1)
       .for('update', { of: tasks });
     if (!row) throw new TaskLabelError('TASK_NOT_FOUND', `Task not found: ${taskId}`);
+    return row;
   };
+
+  /**
+   * A link is owned by its task's owner, not by whoever attached it: the
+   * `user_id` FK cascades, and a teammate who labelled a shared task leaving
+   * must not strip the label. The owner leaving takes the task (and links)
+   * with it anyway.
+   */
+  private linkRow = (
+    task: { userId: string; workspaceId: string | null },
+    taskId: string,
+    labelId: string,
+  ) => ({ labelId, taskId, userId: task.userId, workspaceId: task.workspaceId });
 
   /**
    * Resolve ids to assignable labels: every id must exist in scope, none may
@@ -375,7 +388,7 @@ export class TaskLabelModel {
 
     await this.db.transaction(async (tx) => {
       const labels = add.length > 0 ? await this.resolveAssignable(add, tx) : [];
-      await this.lockTaskInScope(taskId, tx);
+      const task = await this.lockTaskInScope(taskId, tx);
 
       if (removeIds.length > 0) {
         await tx
@@ -409,7 +422,7 @@ export class TaskLabelModel {
 
       await tx
         .insert(taskLabelLinks)
-        .values(labels.map((label) => this.payload({ labelId: label.id, taskId })))
+        .values(labels.map((label) => this.linkRow(task, taskId, label.id)))
         .onConflictDoNothing();
     });
 
@@ -430,7 +443,7 @@ export class TaskLabelModel {
     await this.db.transaction(async (tx) => {
       const labels = await this.resolveAssignable(labelIds, tx);
       const nextIds = labels.map((label) => label.id);
-      await this.lockTaskInScope(taskId, tx);
+      const task = await this.lockTaskInScope(taskId, tx);
 
       await tx
         .delete(taskLabelLinks)
@@ -443,7 +456,7 @@ export class TaskLabelModel {
       if (nextIds.length > 0) {
         await tx
           .insert(taskLabelLinks)
-          .values(nextIds.map((labelId) => this.payload({ labelId, taskId })))
+          .values(nextIds.map((labelId) => this.linkRow(task, taskId, labelId)))
           .onConflictDoNothing();
       }
     });

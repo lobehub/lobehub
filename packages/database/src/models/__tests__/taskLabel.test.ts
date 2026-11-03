@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -141,6 +142,18 @@ describe('TaskLabelModel task assignments', () => {
     const next = await workspace.addTaskLabels(task.id, [feature.id]);
 
     expect(next.map((l) => l.name).sort()).toEqual(['Feature', 'Frontend']);
+  });
+
+  it("keeps a teammate's label on a shared task after the teammate's account is deleted", async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const label = await workspace.create({ name: 'Frontend' });
+
+    await member.addTaskLabels(task.id, [label.id]);
+    const [link] = await serverDB.select().from(taskLabelLinks);
+    expect(link.userId).toBe(userId);
+
+    await serverDB.delete(users).where(eq(users.id, otherUserId));
+    expect((await workspace.getTaskLabels(task.id)).map((l) => l.name)).toEqual(['Frontend']);
   });
 
   it('keeps one label per group when siblings are attached concurrently', async () => {
