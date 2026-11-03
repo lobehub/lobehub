@@ -17,12 +17,12 @@ import { useElectronStore } from '@/store/electron';
 
 import { useTopicId } from '../hooks/useTopicId';
 import GitStatus from './GitStatus';
+import StagedBranchStatus from './StagedBranchStatus';
 import {
   useActiveProjectDirectoryTopicId,
   useStagedProjectDirectoryId,
 } from './useProjectTopicDirectory';
 import { useRepoType } from './useRepoType';
-import { useStagedProjectGitTarget } from './useStagedProjectGitTarget';
 import WorkingDirectoryPicker from './WorkingDirectoryPicker';
 
 interface WorkingDirectorySectionProps {
@@ -122,38 +122,16 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
 
 WorkingDirectorySectionInner.displayName = 'WorkingDirectorySectionInner';
 
-/**
- * Git status of the project directory a blank conversation is staged in — see
- * `useStagedProjectGitTarget`.
- */
-const StagedProjectGitStatus = memo<WorkingDirectorySectionProps>(({ agentId }) => {
-  const target = useStagedProjectGitTarget(agentId);
-  if (!target) return null;
-
-  return (
-    <GitStatus
-      agentId={agentId}
-      deviceId={target.deviceId}
-      isGithub={target.isGithub}
-      path={target.path}
-      sourcePath={target.path}
-      topicId={null}
-    />
-  );
-});
-
-StagedProjectGitStatus.displayName = 'StagedProjectGitStatus';
-
 const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId }) => {
   // A blank conversation staged in a project directory runs there, not in the
   // agent default this section resolves; the device switcher names it, so only
-  // its git status shows here.
+  // its branch shows here.
   const stagedDirectoryId = useStagedProjectDirectoryId(agentId);
 
   return (
     <SafeBoundary minHeight={22} resetKeys={[agentId, stagedDirectoryId]}>
       {stagedDirectoryId ? (
-        <StagedProjectGitStatus agentId={agentId} />
+        <StagedBranchStatus agentId={agentId} />
       ) : (
         <WorkingDirectorySectionInner agentId={agentId} />
       )}
