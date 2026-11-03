@@ -6,6 +6,7 @@ import type { FC, ReactNode, UIEvent } from 'react';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ComposerTarget } from '@/features/Conversation/types';
+import CharLimitBanner from '@/features/EditorCanvas/CharLimitBanner';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import PageMetaBar from '@/features/PageEditor/PageMetaBar';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -388,6 +389,8 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
               {/* Prominent in-body notice when another member holds the lock; the
                   compact status badge lives in the Header (EditingIndicator). */}
               <LockedAlert />
+              {/* Plan page-size limit: refused-save notice and near-limit warning. */}
+              <CharLimitBanner sticky documentId={documentId} />
               <EditorCanvas askCopilotTarget={askCopilotTarget} />
               <BlockCommentMarker hostRef={editorContentRef} />
               {documentId && <DocumentLikes documentId={documentId} key={documentId} />}

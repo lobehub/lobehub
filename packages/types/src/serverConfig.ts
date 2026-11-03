@@ -45,6 +45,11 @@ export type IFeatureFlagsState = {
    */
   enableImLayout: boolean | undefined;
   /**
+   * New subscription tiers (`new_tier_plans`). Off by default: the plans page keeps
+   * selling the current tiers; listed users see and can buy the new tiers instead.
+   */
+  enableNewTierPlans: boolean | undefined;
+  /**
    * LobeHub Mobile rollout gate for the multiplexed gateway socket and
    * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
    */

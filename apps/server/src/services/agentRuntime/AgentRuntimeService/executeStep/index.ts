@@ -31,6 +31,7 @@ import {
 } from './guards';
 import { dispatchAfterStepHooks, dispatchBeforeStepHooks, persistStepTracking } from './hooks';
 import { prepareStepInput } from './prepare';
+import { startRunSlotLease } from './runSlotLease';
 import { runAndReconcileStep, saveAndPublishStep } from './runStep';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -112,6 +113,7 @@ export async function executeStep(
   // Hoisted so the shared `finally` can stop it on every exit path — an
   // orphaned poll would keep reading Redis for a step that is long gone.
   let abortPoll: StepAbortPoll | undefined;
+  let stopRunSlotLease: (() => void) | undefined;
 
   // Hoisted so the error-path snapshot finalize can record an
   // approximate startedAt for the failing step. The inner `startAt` at the
@@ -148,6 +150,7 @@ export async function executeStep(
       if (!agentState) {
         throw new Error(`Agent state not found for operation ${operationId}`);
       }
+      stopRunSlotLease = startRunSlotLease(deps.userId, agentState);
 
       // A run created without its init still carries the turn's request: run
       // that init here, after the step claim and before anything is published.
@@ -368,6 +371,7 @@ export async function executeStep(
   } finally {
     invokeAgentSpan.end();
     abortPoll?.stop();
+    stopRunSlotLease?.();
     stopStepLockHeartbeat();
     // Parked runs (human input, async tools) and finished ones are read back
     // by a different invocation, so the partial cannot stay in memory only.
