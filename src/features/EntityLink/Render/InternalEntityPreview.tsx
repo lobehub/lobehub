@@ -1,13 +1,23 @@
 'use client';
 
 import type { VerifyCodingScope } from '@lobechat/types';
-import { Avatar, createStaticStyles, Flexbox, Freeze, Icon, Popover, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  createStaticStyles,
+  Flexbox,
+  Freeze,
+  Icon,
+  Popover,
+  Text,
+} from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import {
   BadgeCheckIcon,
   BotIcon,
   CheckCircleIcon,
   CheckSquareIcon,
+  ExternalLink,
   FileTextIcon,
   TargetIcon,
 } from 'lucide-react';
@@ -22,8 +32,10 @@ import { documentService } from '@/services/document';
 import { goalService } from '@/services/goal';
 import { taskService } from '@/services/task';
 import { verifyService } from '@/services/verify';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import type { InternalLinkReference } from '../internalLink';
+import { useAcceptanceBrowserUrl } from './useAcceptanceBrowserUrl';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
@@ -231,7 +243,11 @@ interface InternalEntityPreviewProps extends PropsWithChildren {
 export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
   ({ children, fallbackTitle, reference }) => {
     const { t } = useTranslation('chat');
+    const { t: tVerify } = useTranslation('verify');
     const [open, setOpen] = useState(false);
+    // A click on the link opens the acceptance in the side panel; this is the
+    // explicit way out to a full browser page.
+    const browserUrl = useAcceptanceBrowserUrl(reference);
     const { data, isLoading } = useClientDataSWR(
       open ? internalEntityPreviewKey(reference) : null,
       () => getPreviewData(reference, t),
@@ -275,6 +291,14 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
             <span className={styles.type}>{typeLabel}</span>
             <span className={styles.title}>{data?.title || fallbackTitle}</span>
           </Flexbox>
+          {browserUrl && (
+            <ActionIcon
+              icon={ExternalLink}
+              size={'small'}
+              title={tVerify('report.actions.openInBrowser')}
+              onClick={() => openTrustedExternalUrl(browserUrl)}
+            />
+          )}
         </Flexbox>
         {data?.description && (
           <Text className={styles.description} fontSize={13}>

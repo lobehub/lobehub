@@ -17,7 +17,6 @@ import {
   FlaskConical,
   GaugeIcon,
   HandCoins,
-  HardDriveIcon,
   Info,
   KeyboardIcon,
   KeyIcon,
@@ -81,8 +80,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   // immediately 403s.
   const { allowed: canCreateContent } = usePermission('create_content');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
-  const enableIntegrations = useUserStore(labPreferSelectors.enableIntegrations);
-  const enablePersistentSandbox = useUserStore(labPreferSelectors.enablePersistentSandbox);
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
@@ -143,17 +140,12 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               label: t('tab.messenger'),
             },
             // An installation connected here belongs to the workspace, so
-            // every member sees the same one. Labs alpha, like the personal
-            // surface.
-            ...(enableIntegrations
-              ? [
-                  {
-                    icon: BlocksIcon,
-                    key: WorkspaceSettingsTabs.Integrations,
-                    label: t('tab.integrations'),
-                  },
-                ]
-              : []),
+            // every member sees the same one.
+            {
+              icon: BlocksIcon,
+              key: WorkspaceSettingsTabs.Integrations,
+              label: t('tab.integrations'),
+            },
           ],
           key: WorkspaceSettingsGroupKey.Account,
           title: t('group.profile'),
@@ -212,13 +204,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: ContainerIcon,
               key: WorkspaceSettingsTabs.Environments,
               label: t('tab.environments'),
-            },
-            // The public drive and the member's own, with the pool's usage —
-            // behind the same lab switch as the composer's folder picker.
-            enablePersistentSandbox && {
-              icon: HardDriveIcon,
-              key: WorkspaceSettingsTabs.Drive,
-              label: t('tab.drive'),
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Resource,
@@ -376,8 +361,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       tLabs,
       tSubscription,
       enableOAuthApps,
-      enableIntegrations,
-      enablePersistentSandbox,
       canManageWorkspace,
       canViewBilling,
       canCreateContent,

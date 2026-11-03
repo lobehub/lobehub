@@ -4,6 +4,7 @@ export * from './codex';
 export * from './cost';
 export * from './kimiCode';
 export * from './loadBalancer';
+export * from './plan';
 export * from './readings';
 export * from './snapshot';
 export * from './types';

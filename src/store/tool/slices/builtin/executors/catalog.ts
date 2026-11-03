@@ -22,6 +22,7 @@ import {
   claudeCodeExecutor,
   codeBuddyExecutor,
   codexExecutor,
+  copilotExecutor,
   cursorExecutor,
   devinExecutor,
   droidExecutor,
@@ -38,13 +39,13 @@ import { attachmentsExecutor } from './lobe-attachments';
 import { canvasExecutor } from './lobe-canvas';
 import { messageExecutor } from './lobe-message';
 import { notebookExecutor } from './lobe-notebook';
-import { pageAgentExecutor } from './lobe-page-agent';
 import { skillStoreExecutor } from './lobe-skill-store';
 import { skillsExecutor } from './lobe-skills';
 import { userInteractionExecutor } from './lobe-user-interaction';
 import { webBrowsing } from './lobe-web-browsing';
 import { webOnboardingExecutor } from './lobe-web-onboarding';
 import { localSystemExecutorWithGitEffects } from './localSystem';
+import { pageAgentHookExecutor, withPageEditHooks } from './pageEdits';
 
 export const builtinToolExecutors = [
   // Hook-only executors for heterogeneous CLI agents —
@@ -53,6 +54,7 @@ export const builtinToolExecutors = [
   claudeCodeExecutor,
   codeBuddyExecutor,
   codexExecutor,
+  copilotExecutor,
   cursorExecutor,
   droidExecutor,
   devinExecutor,
@@ -69,7 +71,7 @@ export const builtinToolExecutors = [
   auvExecutor,
   calculatorExecutor,
   canvasExecutor,
-  cloudSandboxExecutor,
+  withPageEditHooks(cloudSandboxExecutor),
   credsExecutor,
   groupAgentBuilderExecutor,
   groupManagementExecutor,
@@ -81,9 +83,9 @@ export const builtinToolExecutors = [
   memoryExecutor,
   messageExecutor,
   notebookExecutor,
-  pageAgentExecutor,
+  pageAgentHookExecutor,
   skillStoreExecutor,
-  skillsExecutor,
+  withPageEditHooks(skillsExecutor),
   taskExecutor,
   dashboardExecutor,
   videoGenerationExecutor,

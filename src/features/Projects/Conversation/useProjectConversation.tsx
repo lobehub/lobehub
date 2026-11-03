@@ -11,6 +11,7 @@ import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { type PendingNewTopicDirectory } from '@/store/chat/slices/topic/initialState';
 import { useCurrentProjectDetail, useProjectIdByRef, useProjectStore } from '@/store/project';
 import {
   useProjectDirectories,
@@ -60,13 +61,17 @@ export const useProjectConversation = () => {
   const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectRefId);
   const directories = useProjectDirectories(projectRefId);
   const directoryIds = useMemo(() => new Set(directories.map((d) => d.id)), [directories]);
-  const draft = useMemo(
-    () =>
-      draftAgentParam && draftDirectoryParam && directoryIds.has(draftDirectoryParam)
+  // A draft without a directory is conversation-only in the project; it needs
+  // the real project id (the param may be a slug) before it can be staged.
+  const draftProjectId = projectConfirmed ? projectRefId : undefined;
+  const draft = useMemo<PendingNewTopicDirectory | undefined>(() => {
+    if (!draftAgentParam) return;
+    if (draftDirectoryParam)
+      return directoryIds.has(draftDirectoryParam)
         ? { agentId: draftAgentParam, projectWorkingDirectoryId: draftDirectoryParam }
-        : undefined,
-    [draftAgentParam, draftDirectoryParam, directoryIds],
-  );
+        : undefined;
+    return draftProjectId ? { agentId: draftAgentParam, projectId: draftProjectId } : undefined;
+  }, [draftAgentParam, draftDirectoryParam, directoryIds, draftProjectId]);
   const draftAgentId = draft?.agentId;
   const restageDraft = useProjectDraftStaging(draft, directoryIds);
   const chatAgentId = useChatStore((s) => s.activeAgentId);
@@ -136,11 +141,12 @@ export const useProjectConversation = () => {
       <AsyncError error={topicsRequest.error} variant="page" onRetry={topicsRequest.revalidate} />
     );
   else if (!topicId && !draftAgentId) {
-    // A draft's directory list may still be loading; wait for it rather than
-    // sending the draft away. Other new project conversations start from the
-    // project home composer.
+    // A draft's directory list (or, without a directory, its project) may still
+    // be loading; wait for it rather than sending the draft away. Other new
+    // project conversations start from the project home composer.
     fallback =
-      draftAgentParam && !directoriesRequest.hasData ? (
+      draftAgentParam &&
+      (draftDirectoryParam ? !directoriesRequest.hasData : !draftProjectId && !detailSWR.error) ? (
         loading
       ) : (
         <Navigate replace relative="path" to=".." />

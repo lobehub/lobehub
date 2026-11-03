@@ -11,11 +11,16 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   a day. Atomic append (bounded), drain and restore; the runtime drains it into the next turn.
   Writes return `undefined` without Redis, and the caller tells the client to send directly.
 - `linear`: single-use OAuth state for "Connect Linear" (ten minutes, deleted on first read).
+- `pageCollab`: a digest of the body each page's last room projection wrote, for a day, so the
+  next projection can tell that something wrote the body outside the room. `null` without Redis.
 - `agentSignal`: spend bounds for background self-iteration — classifier calls per user per UTC
   day, self-feedback declaration slots per topic, manual triggers per user per hour, and the
   distinct topics one nightly review may cover. Its keys live in the `agent-signal` namespace
   next to the Agent Signal runtime stores. Each count returns `undefined` without Redis; the
   Agent Signal caller decides whether that fails open or closed.
+- `agentIdentity`: replay claims on agent-account provider webhooks, one per provider event
+  id, in the `agent-identity` namespace. `releaseWebhookEvent` gives a claim back when the
+  delivery failed after it was claimed. Without Redis the claim falls back to a process-local one.
 
 `client.ts` is the connection seam. `getRedisServiceClient(scope)` takes the `RedisKeys` scope a
 domain reads its keys from; `RedisKeyScopeNamespace` maps every scope to the namespace that becomes

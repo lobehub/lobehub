@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { assembleLocalAcceptance } from '@lobechat/utils/verify/localAcceptance';
@@ -183,5 +183,18 @@ describe('loadLocalAcceptance', () => {
 
   it('needs a render before read-only commands', () => {
     expect(() => loadLocalAcceptance(fixture.acceptanceDir)).toThrow('no acceptance.json yet');
+  });
+
+  it('names the directory the way a later command must, wherever it is kept', () => {
+    // From the project root, whatever the shell's working directory.
+    expect(loadLocalAcceptance(fixture.acceptanceDir, { create: true }).source.acceptanceDir).toBe(
+      '.acceptances/standalone-demo',
+    );
+
+    // Kept outside `.acceptances/`: only its absolute path names it.
+    const elsewhere = path.join(fixture.root, 'qa', 'rename-review');
+    mkdirSync(path.dirname(elsewhere), { recursive: true });
+    renameSync(fixture.acceptanceDir, elsewhere);
+    expect(loadLocalAcceptance(elsewhere).source.acceptanceDir).toBe(elsewhere);
   });
 });

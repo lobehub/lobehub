@@ -2,10 +2,11 @@
 
 import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
 import { cssVar, Flexbox } from '@lobehub/ui';
-import type { FC, ReactNode, UIEvent } from 'react';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import type { FC, MouseEvent, ReactNode, UIEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ComposerTarget } from '@/features/Conversation/types';
+import CharLimitBanner from '@/features/EditorCanvas/CharLimitBanner';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import PageMetaBar from '@/features/PageEditor/PageMetaBar';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -14,6 +15,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { pageActions } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
+import { focusEditorAtBlankPoint } from './blankAreaClick';
+import { usePageCollabEligible, usePageCollabEnabled } from './collab/usePageCollab';
 import DocumentComments from './DocumentComments';
 import BlockCommentMarker from './DocumentComments/BlockCommentMarker';
 import { DocumentCommentsProvider } from './DocumentComments/context';
@@ -32,6 +35,7 @@ import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
 import TableOfContents from './TableOfContents';
 import TitleSection from './TitleSection';
+import { usePageBodyInteractions } from './usePageBodyInteractions';
 import { usePageEditable } from './usePageEditable';
 
 /**
@@ -328,6 +332,27 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   // Register Files scope and save document hotkey
   useRegisterFilesHotkeys();
 
+  // ArrowUp / Backspace from the top of the body into the title, and a click
+  // below the last block to keep writing.
+  usePageBodyInteractions(editor, editorContentRef);
+
+  // A click on the column's blank space (page margins, below the body). Only
+  // clicks that land on a layout wrapper of the content count: anything inside
+  // it — the title, banners, the line comment marker, likes, comments — is a
+  // control of its own and must keep its focus.
+  const handleBlankAreaClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (!editable) return;
+
+      const content = editorContentRef.current;
+      const target = event.target;
+      if (!content || !(target instanceof Node) || !target.contains(content)) return;
+
+      focusEditorAtBlankPoint(editor, event);
+    },
+    [editable, editor],
+  );
+
   const headerSlot = header === undefined ? <Header /> : header;
 
   const editorPane = (
@@ -367,11 +392,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
           <WideScreenContainer
             wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
             onChange={notifyEditorLayoutChange}
-            onClick={() => {
-              if (!editable) return;
-
-              editor?.focus();
-            }}
+            onClick={handleBlankAreaClick}
           >
             <Flexbox
               flex={1}
@@ -387,6 +408,8 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
               {/* Prominent in-body notice when another member holds the lock; the
                   compact status badge lives in the Header (EditingIndicator). */}
               <LockedAlert />
+              {/* Plan page-size limit: refused-save notice and near-limit warning. */}
+              <CharLimitBanner sticky documentId={documentId} />
               <EditorCanvas askCopilotTarget={askCopilotTarget} />
               <BlockCommentMarker hostRef={editorContentRef} />
               {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
@@ -465,10 +488,19 @@ export const PageEditor: FC<PageEditorProps> = ({
   syncPageAgentActiveState,
 }) => {
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const collabEnabled = usePageCollabEnabled();
+  // Known once the document loads; a SKILL.md then leaves the room path.
+  const collabEligible = usePageCollabEligible(pageId);
+  const [collabEpoch, setCollabEpoch] = useState(0);
+  const handleCollabReset = useCallback(() => setCollabEpoch((epoch) => epoch + 1), []);
 
   return (
     <PageAgentProvider pageId={pageId} syncActiveAgent={syncPageAgentActiveState}>
-      <EditorProvider>
+      {/* A collaboration binding lives for the editor kernel's lifetime, so each room gets a
+          fresh kernel, and a document that leaves the room path drops the binding. */}
+      <EditorProvider
+        key={collabEnabled ? `${pageId}:${collabEligible ? collabEpoch : 'stored'}` : undefined}
+      >
         <PageEditorProvider
           emoji={emoji}
           knowledgeBaseId={knowledgeBaseId}
@@ -476,6 +508,7 @@ export const PageEditor: FC<PageEditorProps> = ({
           pageId={pageId}
           title={title}
           onBack={onBack}
+          onCollabReset={collabEnabled ? handleCollabReset : undefined}
           onDocumentIdChange={onDocumentIdChange}
           onDelete={() => {
             if (!canEdit) return;

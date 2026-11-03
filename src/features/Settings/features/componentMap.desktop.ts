@@ -12,7 +12,6 @@ import Appearance from '../appearance';
 import Connector from '../connector';
 import Creds from '../creds';
 import Devices from '../devices';
-import Drive from '../drive';
 import Environments from '../environments';
 import Hotkey from '../hotkey';
 import Integrations from '../integrations';
@@ -51,7 +50,6 @@ export const componentMap = {
   [SettingsTabs.Storage]: Storage,
   [SettingsTabs.Trash]: Trash,
   [SettingsTabs.Devices]: Devices,
-  [SettingsTabs.Drive]: Drive,
   [SettingsTabs.Environments]: Environments,
   [SettingsTabs.Labels]: Labels,
   // Profile related tabs

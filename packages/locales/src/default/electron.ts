@@ -54,6 +54,7 @@ export default {
   'navigation.resourceFiles': 'Files',
   'navigation.resourceImages': 'Images',
   'navigation.resourcePages': 'Pages',
+  'navigation.resourceSandboxStorage': 'Sandbox Storage',
   'navigation.resourceVideos': 'Videos',
   'navigation.settings': 'Settings',
   'navigation.selfLearning': 'Self-evolving',

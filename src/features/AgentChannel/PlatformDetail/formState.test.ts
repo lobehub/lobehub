@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BOT_WAKE_SETTING_KEYS } from '@/server/services/agentSignal/scenarios/botWake/config';
+import { schema as discordSchema } from '@/server/services/bot/platforms/discord/schema';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
 
 import {
@@ -8,11 +9,11 @@ import {
   findOverLimitSettings,
   getChannelFormValues,
   isFieldReleased,
-  isWakeMasterReleased,
   mergeCredentialsForSave,
   mergeSettingsWithDefaults,
   shouldAdoptIncomingConfig,
-  withWakeMasterOn,
+  withHeterogeneousWakeOff,
+  withNewBotReactionOff,
 } from './formState';
 
 const slackSchema: FieldSchema[] = [
@@ -326,42 +327,52 @@ describe('findOverLimitSettings', () => {
   });
 });
 
-describe('bot-wake master switch', () => {
+describe('withHeterogeneousWakeOff', () => {
   const schema = [
     {
       key: 'settings',
       label: 'settings',
-      properties: [
-        {
-          default: false,
-          featureFlag: 'enableBotWake',
-          key: 'botWakeEnabled',
-          label: 'x',
-          type: 'boolean',
-        },
-        { key: 'charLimit', label: 'y', type: 'number' },
-      ],
+      properties: [{ default: false, key: 'botWakeDisabled', label: 'x', type: 'boolean' }],
       type: 'object',
     },
   ] as FieldSchema[];
 
-  it('is released only when the rollout flag is on', () => {
-    expect(isWakeMasterReleased(schema, { enableBotWake: true })).toBe(true);
-    expect(isWakeMasterReleased(schema, { enableBotWake: false })).toBe(false);
-    expect(isWakeMasterReleased(schema, undefined)).toBe(false);
-    expect(isWakeMasterReleased([], { enableBotWake: true })).toBe(false);
+  it('starts the wake switch off, over the schema default', () => {
+    expect(
+      mergeSettingsWithDefaults(schema, withHeterogeneousWakeOff(schema, {})).botWakeDisabled,
+    ).toBe(true);
   });
 
-  it('is switched on in the form for a released user, whatever was stored', () => {
-    expect(withWakeMasterOn({ botWakeEnabled: false, charLimit: 2000 }, true)).toEqual({
-      botWakeEnabled: true,
-      charLimit: 2000,
-    });
+  it('keeps a choice already made', () => {
+    const settings = { botWakeDisabled: false };
+
+    expect(withHeterogeneousWakeOff(schema, settings)).toBe(settings);
   });
 
-  it('is left alone for everyone else, so saving a bot never switches the options on for them', () => {
-    const settings = { botWakeEnabled: false };
+  it('adds nothing on a platform without the switch', () => {
+    expect(withHeterogeneousWakeOff([], { charLimit: 2000 })).toEqual({ charLimit: 2000 });
+  });
+});
 
-    expect(withWakeMasterOn(settings, false)).toBe(settings);
+describe('withNewBotReactionOff', () => {
+  it('starts a new bot with status reactions off, over the schema default', () => {
+    expect(
+      mergeSettingsWithDefaults(discordSchema, withNewBotReactionOff(discordSchema, {}))
+        .reactionMode,
+    ).toBe('none');
+  });
+
+  it('leaves the schema default on, which a saved bot without the field reads as', () => {
+    expect(extractSettingsDefaults(discordSchema).reactionMode).toBe('minimal');
+  });
+
+  it('keeps a mode the owner already picked', () => {
+    const settings = { reactionMode: 'full' };
+
+    expect(withNewBotReactionOff(discordSchema, settings)).toBe(settings);
+  });
+
+  it('adds nothing on a platform without status reactions', () => {
+    expect(withNewBotReactionOff(slackSchema, { charLimit: 2000 })).toEqual({ charLimit: 2000 });
   });
 });

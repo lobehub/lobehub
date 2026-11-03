@@ -31,7 +31,16 @@ is part of the key because a transferred Agent starts a new conversation in its 
 Only that human participant can access it, even if another
 membership is accidentally granted. It accepts no additional Agent members and routes unmentioned
 messages directly to the bound Agent. Group channels leave `agentId` NULL, including groups with
-only one Agent. Deleting a bound Agent cascades its direct conversations and their public history.
+only one Agent. A group whose only active members are one person and one Agent also skips routing:
+every message that mentions no Agent, in the main timeline or any Thread, goes to that Agent,
+which then follows the Thread. Deleting a bound Agent cascades its direct conversations and their public history.
+While Channels are on, creating an Agent opens its creator's conversation, titled with the Agent's
+name, with the Agent on the device and directory a new Channel would give it
+(`createAgentDirectChannel`).
+Inviting from a direct conversation leaves it as it is and starts a group instead
+(`createGroupFromDirect`): its person and Agent, the Agent in the same channel-local environment,
+plus the invited Agents and, in a workspace, people. `userCandidates` lists those people from a
+workspace direct conversation; `addUser` still refuses it.
 
 Group history survives deletion of an author or Agent. Message sender references use `SET NULL`;
 new writes require exactly one actual sender. Human requests have `userId`, Agent replies have
@@ -63,6 +72,25 @@ Updating Agent settings affects the next claim, including already queued request
 rewrites an earlier job snapshot. A private, trashed, deleted or moved Agent fails the requester
 access check before any topic or operation is created.
 
+## Delivery-key retirement rollout
+
+Migration `0197_channel_jobs_message_member_unique` enforces one job per message and Agent
+member, but deliberately retains the physical `delivery_key` column and its `initial` default.
+Older binaries still include that column in ORM reads and writes; new binaries omit it.
+The generated snapshot and DBML describe the new application schema, not this temporary
+compatibility column. Do not add the column back to the runtime schema or drop it in this release.
+
+Deploy this version normally; no separate manual database step is required. Only after it has
+been deployed and all earlier instances, workers and in-flight tasks have drained should a later
+release drop the column with a **custom** migration (the generated snapshot already omits it).
+Do not ship that cleanup in the same deployment, and retire rollback targets that still reference
+the column before applying it.
+
+The migration fails rather than deleting jobs if historical `(message_id, member_id)` pairs are
+duplicated. The migrator transaction restores the previous index and leaves the data and migration
+history unchanged on failure. Rebuilding the index still takes a table lock; column compatibility
+does not promise a lock-free migration.
+
 ## Topic continuation
 
 Every claim reserves a new operation, but normally continues the previous topic for the same
@@ -80,7 +108,9 @@ starts a new topic instead of inheriting later context. Failed/unknown execution
 environments and unavailable topics also start afresh. An adapter's explicit “new conversation”
 feature is outside this foundation.
 
-Every dispatch receives only the triggering request, its author and attachment references. Public
+Every dispatch receives the triggering request, its explicit quote, their authors and attachment references, preceded by
+at most five public messages its topic has not seen (`recentContext`): those after the last request
+the topic accepted, minus the reply it published; a new topic gets the latest five. Older public
 history is read on demand through `lobe-channel.readMessages` / `readMessage` in Native runs, or
 `lh channel history` / `lh channel message` in external runtimes. A Thread can read the main prefix
 through its root plus its own messages; the frozen request cutoff excludes later arrivals. Reads

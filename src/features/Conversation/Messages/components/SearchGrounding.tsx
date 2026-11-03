@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronRight, Globe, Images } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -33,93 +35,77 @@ const stripHtml = (html: string) =>
     .replaceAll('&#39;', "'")
     .replaceAll('&nbsp;', ' ');
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    width: fit-content;
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    color: ${cssVar.colorTextTertiary};
-  `,
-  containerDark: css`
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  containerLight: css`
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  expandDark: css`
-    background: ${cssVar.colorFillQuaternary} !important;
-  `,
-  expandLight: css`
-    background: ${cssVar.colorFillTertiary} !important;
-  `,
-  imageCard: css`
-    overflow: hidden;
-    border-radius: 8px;
-  `,
-  imageCardLink: css`
-    color: inherit;
-    text-decoration: none;
-    transition: opacity 0.2s;
-
-    &:hover {
-      opacity: 0.75;
-    }
-  `,
-  imageDomain: css`
-    overflow: hidden;
-
-    font-size: 11px;
-    line-height: 1;
-    color: ${cssVar.colorTextQuaternary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  imageGrid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 8px;
-  `,
-  imageThumb: css`
-    display: block;
-    width: 100%;
-    height: 80px;
-    object-fit: cover;
-  `,
-  imageThumbWrap: css`
-    overflow: hidden;
-    display: block;
-    flex-shrink: 0;
-
-    height: 80px;
-    border-radius: 6px;
-  `,
-  imageTitle: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 11px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    font-size: 12px;
-    text-overflow: ellipsis;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    width: 'fit-content',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderRadius: '6px',
+    color: cssVar.colorTextTertiary,
+  },
+  containerDark: {
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  containerLight: {
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  expandDark: {
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  expandLight: {
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  imageCard: {
+    overflow: 'hidden',
+    borderRadius: '8px',
+  },
+  imageCardLink: {
+    color: 'inherit',
+    textDecoration: 'none',
+    opacity: { 'default': null, ':hover': 0.75 },
+    transition: 'opacity 0.2s',
+  },
+  imageDomain: {
+    overflow: 'hidden',
+    fontSize: '11px',
+    lineHeight: 1,
+    color: cssVar.colorTextQuaternary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  imageGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+    gap: '8px',
+  },
+  imageThumb: {
+    display: 'block',
+    width: '100%',
+    height: '80px',
+    objectFit: 'cover',
+  },
+  imageThumbWrap: {
+    overflow: 'hidden',
+    display: 'block',
+    flexShrink: 0,
+    height: '80px',
+    borderRadius: '6px',
+  },
+  imageTitle: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    fontSize: '11px',
+    lineHeight: 1.4,
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+  },
+});
 
 const SearchGrounding = memo<GroundingSearch>(
   ({ searchQueries, citations, imageResults, imageSearchQueries }) => {
@@ -142,11 +128,13 @@ const SearchGrounding = memo<GroundingSearch>(
       <Flexbox
         gap={16}
         style={{ width: showDetail ? '100%' : undefined }}
-        className={cx(
-          styles.container,
-          isDarkMode ? styles.containerDark : styles.containerLight,
-          showDetail && (isDarkMode ? styles.expandDark : styles.expandLight),
-        )}
+        className={
+          stylex.props(
+            styles.container,
+            isDarkMode ? styles.containerDark : styles.containerLight,
+            showDetail && (isDarkMode ? styles.expandDark : styles.expandLight),
+          ).className
+        }
       >
         <Flexbox
           horizontal
@@ -259,26 +247,26 @@ const SearchGrounding = memo<GroundingSearch>(
                   </Flexbox>
                 )}
                 {imageResults && imageResults.length > 0 && (
-                  <div className={styles.imageGrid}>
+                  <div {...stylex.props(styles.imageGrid)}>
                     {imageResults.map((item, index) => (
-                      <div className={styles.imageCard} key={`${item.imageUri}-${index}`}>
+                      <div {...stylex.props(styles.imageCard)} key={`${item.imageUri}-${index}`}>
                         <Flexbox gap={4}>
                           <a
-                            className={styles.imageCardLink}
+                            {...stylex.props(styles.imageCardLink)}
                             href={item.imageUri}
                             rel="noopener noreferrer"
                             target="_blank"
                           >
-                            <div className={styles.imageThumbWrap}>
+                            <div {...stylex.props(styles.imageThumbWrap)}>
                               <img
                                 alt={item.title ? stripHtml(item.title) : ''}
-                                className={styles.imageThumb}
+                                {...stylex.props(styles.imageThumb)}
                                 src={item.imageUri || ''}
                               />
                             </div>
                           </a>
                           <a
-                            className={styles.imageCardLink}
+                            {...stylex.props(styles.imageCardLink)}
                             href={item.sourceUri}
                             rel="noopener noreferrer"
                             target="_blank"
@@ -286,7 +274,9 @@ const SearchGrounding = memo<GroundingSearch>(
                           >
                             <Flexbox gap={2}>
                               {item.title && (
-                                <div className={styles.imageTitle}>{stripHtml(item.title)}</div>
+                                <div {...stylex.props(styles.imageTitle)}>
+                                  {stripHtml(item.title)}
+                                </div>
                               )}
                               {item.domain && (
                                 <Flexbox horizontal align="center" gap={4}>
@@ -298,7 +288,7 @@ const SearchGrounding = memo<GroundingSearch>(
                                     style={{ borderRadius: 2, flexShrink: 0 }}
                                     width={12}
                                   />
-                                  <div className={styles.imageDomain}>{item.domain}</div>
+                                  <div {...stylex.props(styles.imageDomain)}>{item.domain}</div>
                                 </Flexbox>
                               )}
                             </Flexbox>

@@ -155,6 +155,13 @@ const taskListViewOptions = (s: GlobalState) =>
     subGroupBy: 'none',
   };
 
+const EMPTY_TASK_LIST_FILTERS: NonNullable<GlobalState['status']['taskListFilters']> = [];
+
+const taskListFilters = (s: GlobalState) => s.status.taskListFilters ?? EMPTY_TASK_LIST_FILTERS;
+
+const taskListFilter = (scope: string) => (s: GlobalState) =>
+  taskListFilters(s).find((entry) => entry.scope === scope)?.filter;
+
 const taskListViewMode = (s: GlobalState) => s.status.taskListViewMode ?? 'list';
 
 // Default the inline composer to collapsed so a populated task list keeps the
@@ -573,6 +580,8 @@ export const systemStatusSelectors = {
   taskKanbanHiddenColumns,
   taskKanbanHiddenPanelCollapsed,
   taskListViewMode,
+  taskListFilter,
+  taskListFilters,
   taskListViewOptions,
   sidebarExpandedKeys,
   agentSidebarSections,

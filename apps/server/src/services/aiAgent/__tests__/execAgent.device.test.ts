@@ -691,6 +691,52 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(createOpArgs.activeDeviceId).toBe('device-001');
     });
 
+    // An explicit device on the request is a promise to the caller, so the new
+    // topic records that the binding was pinned rather than auto-picked — a
+    // later turn on an `auto` agent then stays on it instead of choosing
+    // whichever machine happens to be online.
+    it('should pin an explicitly requested device on the new topic metadata', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      await useAgencyConfig({ executionTarget: 'auto' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        deviceId: 'device-001',
+        prompt: 'Run a command',
+      });
+
+      expect(topicMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            boundDeviceId: 'device-001',
+            deviceBindingPinned: true,
+          }),
+        }),
+        undefined,
+      );
+    });
+
+    // Same setup as the "not silently reused" spec above, except the topic
+    // records that the device was chosen explicitly. An `auto` agent must now
+    // honour it even though both machines are online.
+    it('should keep a pinned topic device on later turns for an auto agent', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      topicMock.findById.mockResolvedValue({
+        metadata: { boundDeviceId: 'device-002', deviceBindingPinned: true },
+      });
+      await useAgencyConfig({ executionTarget: 'auto' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-existing' },
+        prompt: 'Run a command',
+      });
+
+      expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBe('device-002');
+    });
+
     it('should keep explicit topic binding when the bound device is offline', async () => {
       mockDeviceProxy.isConfigured = true;
       mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice2]);

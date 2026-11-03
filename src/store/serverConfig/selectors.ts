@@ -8,7 +8,7 @@ export const serverConfigSelectors = {
   enableEmailVerification: (s: ServerConfigStore) =>
     s.serverConfig.enableEmailVerification || false,
   enableComposio: (s: ServerConfigStore) => s.serverConfig.enableComposio || false,
-  /** Runtime flag `dashboard`: dashboards, widget previews and the lobe-dashboard tool. */
+  /** Runtime flag `dashboard`: dashboards, widget previews and the builtin-dashboard tool. */
   enableChannels: (s: ServerConfigStore) => s.featureFlags.enableChannels === true,
   enableDashboard: (s: ServerConfigStore) => s.featureFlags.enableDashboard === true,
   enableGatewayMode: (s: ServerConfigStore) => s.serverConfig.enableGatewayMode || false,
@@ -19,6 +19,7 @@ export const serverConfigSelectors = {
   enableMcpApp: (s: ServerConfigStore) => s.featureFlags.enableMcpApp === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
     s.serverConfig.enableMarketTrustedClient || false,
+  enablePageCollab: (s: ServerConfigStore) => s.serverConfig.enablePageCollab || false,
   enableUploadFileToServer: (s: ServerConfigStore) => s.serverConfig.enableUploadFileToServer,
   /** Workspaces are available to this user (business deployment + per-user `workspace` flag). */
   enableWorkspace: (s: ServerConfigStore) =>
@@ -29,5 +30,6 @@ export const serverConfigSelectors = {
   isMobile: (s: ServerConfigStore) => s.isMobile || false,
   oAuthSSOProviders: (s: ServerConfigStore) => s.serverConfig.oAuthSSOProviders,
   oidcIssuer: (s: ServerConfigStore) => s.serverConfig.oidcIssuer,
+  sandbox: (s: ServerConfigStore) => s.serverConfig.sandbox ?? 'market',
   multimodalUnderstanding: (s: ServerConfigStore) => s.serverConfig.multimodalUnderstanding,
 };

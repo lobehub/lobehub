@@ -104,7 +104,7 @@ export const acceptanceComments = pgTable(
     attachments: jsonb('attachments').$type<AcceptanceCommentAttachmentRef[]>(),
     /**
      * The product page a remark was made on, when it came through the embedded
-     * review toolbar rather than the viewer: URL, element, what the page
+     * acceptance toolbar rather than the viewer: URL, element, what the page
      * reported, product-specific facts. Null for everything written in the
      * viewer. Kept as its own column rather than folded into `content` so the
      * viewer can link the page and the repair agent reads it as data.

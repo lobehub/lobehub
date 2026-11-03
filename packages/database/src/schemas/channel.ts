@@ -1,5 +1,6 @@
 import type {
   ChannelAuditDetails,
+  ChannelConfig,
   ChannelExecutionConfig,
   ChannelInputManifest,
   ChannelJobBlockCode,
@@ -92,6 +93,8 @@ export const channels = pgTable(
      * Ignored for personal channels.
      */
     visibility: text('visibility').$type<ChannelVisibility>().notNull().default('private'),
+    /** Validated channel settings; NULL uses the defaults. */
+    config: jsonb('config').$type<ChannelConfig>(),
     metadata: jsonb('metadata').$type<ChannelMetadata>().default({}),
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),
@@ -386,6 +389,9 @@ export const channelMessageFiles = pgTable(
  * topic (continued when safe); execution status, errors, usage and traces live on the
  * operation. The job keeps only what the operation cannot: the frozen input, the execution
  * lease, the writer lock and publication of the final reply.
+ *
+ * The retired delivery_key column is intentionally absent from the ORM schema. Migration
+ * 0197 retains it physically for older binaries; a later custom migration can remove it.
  */
 export const channelJobs = pgTable(
   'channel_jobs',
@@ -399,8 +405,6 @@ export const channelJobs = pgTable(
     threadId: text('thread_id'),
     /** Member who triggered the request; its user is the execution identity. */
     requesterMemberId: uuid('requester_member_id').notNull(),
-    /** Separates redeliveries of the same message to the same member, e.g. after a retry. */
-    deliveryKey: text('delivery_key').notNull().default('initial'),
     /**
      * Channel outcome of this delivery. It may settle while the writer is still held, e.g. a
      * stop cancels the job before the process exits; the locks follow `writerHeld`.
@@ -455,7 +459,7 @@ export const channelJobs = pgTable(
   },
   (t) => [
     unique('channel_jobs_scope_unique').on(t.channelId, t.id),
-    uniqueIndex('channel_jobs_delivery_unique').on(t.messageId, t.memberId, t.deliveryKey),
+    uniqueIndex('channel_jobs_delivery_unique').on(t.messageId, t.memberId),
     index('channel_jobs_channel_status_idx').on(t.channelId, t.status),
     index('channel_jobs_continuation_idx').on(
       t.memberId,

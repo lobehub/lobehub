@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { type ModelParamsSchema, type VideoModelParamsSchema } from '../standard-parameters';
+import {
+  type ModelParamsSchema,
+  type TTSModelParamsSchema,
+  type TTSVoice,
+  type VideoModelParamsSchema,
+} from '../standard-parameters';
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
 
@@ -311,6 +316,12 @@ export interface AIBaseModelCard {
    */
   generation?: string;
   id: string;
+  /**
+   * Whether this card is listed by the vendor that makes the model, so its `pricing` is the
+   * official list price. Resellers that list another vendor's model (e.g. DeepSeek on Qwen)
+   * leave it unset. Unset also means "not checked yet", so treat it as unknown, not as false.
+   */
+  isOfficial?: boolean;
   /**
    * knowledge cutoff date (YYYY-MM). When the provider distinguishes a "reliable
    * knowledge cutoff" from the broader training-data cutoff, use the reliable one.
@@ -668,8 +679,16 @@ export interface AIVideoModelCard extends AIBaseModelCard {
 }
 
 export interface AITTSModelCard extends AIBaseModelCard {
+  /**
+   * Standard TTS parameters the model accepts and their allowed values.
+   */
+  parameters?: TTSModelParamsSchema;
   pricing?: Pricing;
   type: 'tts';
+  /**
+   * Voice catalog. `payload.voice` takes one of these ids.
+   */
+  voices?: TTSVoice[];
 }
 
 export interface AIASRModelCard extends AIBaseModelCard {
@@ -723,10 +742,12 @@ export interface AiFullModelCard extends AIBaseModelCard {
   displayName?: string;
   id: string;
   maxDimension?: number;
-  parameters?: ModelParamsSchema;
+  /** Image generation params, or standard TTS params for `tts` models. */
+  parameters?: ModelParamsSchema | TTSModelParamsSchema;
   pricing?: Pricing;
   settings?: AiModelSettings;
   type: AiModelType;
+  voices?: TTSVoice[];
 }
 
 export interface LobeDefaultAiModelListItem extends AiFullModelCard {
@@ -851,7 +872,8 @@ export interface EnabledAiModel {
   id: string;
   knowledgeCutoff?: string;
   maxOutput?: number;
-  parameters?: ModelParamsSchema;
+  /** Image generation params, or standard TTS params for `tts` models. */
+  parameters?: ModelParamsSchema | TTSModelParamsSchema;
   pricing?: Pricing;
   providerId: string;
   releasedAt?: string;

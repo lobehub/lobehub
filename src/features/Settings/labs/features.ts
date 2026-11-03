@@ -24,11 +24,8 @@ type LabFeatureI18nKey =
   | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
-  | 'inputMarkdown'
-  | 'integrations'
   | 'messageTextSelectionActions'
   | 'oauthApps'
-  | 'persistentSandbox'
   | 'projects'
   | 'selfLearning'
   | 'topicBugReport';
@@ -58,12 +55,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'agentGraphConfig',
     searchKeywords: ['agent graph', 'graph runtime'],
     stage: 'alpha',
-  },
-  {
-    flag: 'enableInputMarkdown',
-    i18nKey: 'inputMarkdown',
-    searchKeywords: ['markdown', 'input markdown'],
-    stage: 'beta',
   },
   {
     flag: 'enableMessageTextSelectionActions',
@@ -121,18 +112,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'oauthApps',
     searchKeywords: ['oauth', 'oauth apps'],
     stage: 'beta',
-  },
-  {
-    flag: 'enableIntegrations',
-    i18nKey: 'integrations',
-    searchKeywords: ['integrations', 'github', 'github app', 'pull request'],
-    stage: 'alpha',
-  },
-  {
-    flag: 'enablePersistentSandbox',
-    i18nKey: 'persistentSandbox',
-    searchKeywords: ['persistent sandbox', 'workspace', 'sandbox storage'],
-    stage: 'alpha',
   },
   {
     flag: 'enableArtifactDeployment',

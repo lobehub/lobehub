@@ -6,12 +6,16 @@ import { LOADING_FLAT } from '@lobechat/const';
 import type {
   MainAgentInterventionTransition,
   MainAgentTurnToolState,
-  SubagentRunSnapshot,
+  SubagentRun,
+  SubagentThreadMessage,
   ToolCallPayload,
 } from '@lobechat/heterogeneous-agents';
 import {
+  buildFinalizedSubagentRunSnapshot,
+  buildSubagentRunSnapshot,
   createMainAgentRunState,
-  rehydrateSubagentRunsState,
+  restoreFinalizedSubagentRun,
+  restoreSubagentRun,
 } from '@lobechat/heterogeneous-agents';
 import { type ChatToolPayload, ThreadStatus, ThreadType } from '@lobechat/types';
 import debug from 'debug';
@@ -423,21 +427,24 @@ const MAX_SIGNAL_ANCHOR_HOPS = 50;
 
 /**
  * Recover `lastToolMsgIdEver` — the anchor a signal turn (a background task's
- * wake-up) parents off — on a replica that never reduced this run's tool
- * batches. Without it the signal turn falls back onto the toolless spine reply,
- * and the read side, which only collects signal turns under tools, renders it
- * as a separate top-level reply.
+ * wake-up) parents off — from the DB instead of trusting this replica's memory.
+ *
+ * A replica that never reduced this run's tool batches has no anchor, so the
+ * signal turn falls back onto the toolless spine reply, and the read side, which
+ * only collects signal turns under tools, renders it as a separate top-level
+ * reply. A warm replica can hold an anchor that another replica has since moved
+ * past (an earlier wake-up called a tool there), which puts the wake-up under an
+ * older tool next to the earlier one. The DB is current in both cases.
  *
  * Walks the spine from its tip back through main-thread assistants and takes
  * the last tool of the first one that called any. Stopping at the first
- * non-assistant (the run's user message) keeps a previous run's tools out.
+ * non-assistant (the run's user message) keeps a previous run's tools out. When
+ * the walk finds no tool, the in-memory anchor stays.
  */
 export async function recoverLastToolMessageFromDb(
   deps: HeterogeneousPersistenceHandlerDeps,
   state: OperationState,
 ): Promise<void> {
-  if (state.main.lastToolMsgIdEver) return;
-
   const threadId = state.threadId ?? null;
   let messageId: string | null | undefined = state.main.lastSpineMessageId;
   for (let hop = 0; messageId && hop < MAX_SIGNAL_ANCHOR_HOPS; hop++) {
@@ -455,28 +462,44 @@ export async function recoverLastToolMessageFromDb(
   }
 }
 
+async function loadThreadMessages(
+  deps: HeterogeneousPersistenceHandlerDeps,
+  state: OperationState,
+  threadId: string,
+): Promise<SubagentThreadMessage[]> {
+  return (await deps.messageModel.query({
+    threadId,
+    topicId: state.topicId,
+  })) as SubagentThreadMessage[];
+}
+
 /**
- * Rebuild the in-flight subagent runs (`state.main.subagents`) from DB.
+ * Reconcile the subagent runs (`state.main.subagents`) with the DB before a
+ * batch is reduced. The DB decides where each thread ends; memory only keeps
+ * the accumulators of a turn that is still the thread's tail.
  *
- * The shared reducer keys runs by `parentToolCallId` and only lazy-creates a
- * thread when the run is ABSENT from this map. On a cold serverless replica
- * `createMainAgentRunState` seeds an empty map, so a subagent event whose
- * thread already exists (created by an earlier batch / another replica) would
- * fork a brand-new thread — the "大量无意义的 Subagent" bug. `refreshMainStateFromDb`
- * rebuilds the main-agent half; this rebuilds the subagent half the same way.
+ * Serverless replicas each hold their own `operationStates`, and batches of one
+ * run spread across them. Three cases follow:
  *
- * Merge semantics: only runs MISSING from the in-memory map are rehydrated, so
- * a warm replica's live per-turn accumulators (`accContent`, current
- * `toolState`) are never clobbered by the DB projection.
+ * - Cold replica (run missing): the reducer would hit `!existing` and fork a
+ *   brand-new thread — the "大量无意义的 Subagent" bug. Rebuild the run.
+ * - Warm replica behind the thread's tail (another replica opened newer
+ *   turns): its stale `lastChainParentId` would parent the next turn onto an
+ *   old node and fork the chain. Rebuild the run.
+ * - Warm replica still at the tail: keep its accumulators, but adopt text
+ *   another replica appended to this same turn.
  *
- * Finalized (`Active`) spawns are NOT rehydrated as live runs (a completed
- * spawn is never resurrected — that would mint spurious empty assistants and
- * re-finalize churn), but their `sourceToolCallId` IS recorded in
- * `finalizedParents` so a REPLAYED first-event on a cold replica can't fork a
- * duplicate thread for a spawn that already finished (the "一模一样的两个
- * thread" bug). This mirrors #15838's main-turn idempotency for the subagent
- * thread-create step: dedup keyed by the DB-homed `sourceToolCallId`,
- * independent of in-memory state and of thread status.
+ * Rebuilt runs restore the in-flight turn's text and tools too, so a
+ * continuation appends to them instead of replacing them.
+ *
+ * Finalized (`Active`) spawns are never live runs (resurrecting one would mint
+ * spurious empty assistants and re-finalize churn), and a warm copy of one is
+ * dropped. Their `sourceToolCallId` IS recorded in `finalizedParents` so a
+ * REPLAYED first-event can't fork a duplicate thread (the "一模一样的两个
+ * thread" bug) — dedup keyed by the DB-homed `sourceToolCallId`, independent
+ * of in-memory state. When the batch carries events for a finalized parent
+ * (`referencedParents`), its resume anchor is rebuilt from the thread so a
+ * subagent woken by `SendMessage` continues the thread from its tail.
  *
  * Best-effort: any DB hiccup (or a partial test mock without the query
  * methods) leaves `state.main.subagents` untouched rather than aborting the
@@ -485,13 +508,13 @@ export async function recoverLastToolMessageFromDb(
 export async function refreshSubagentRunsFromDb(
   deps: HeterogeneousPersistenceHandlerDeps,
   state: OperationState,
+  referencedParents: ReadonlySet<string> = new Set(),
 ): Promise<void> {
   try {
     const threads = await deps.threadModel.queryByTopicId(state.topicId);
-    const existing = state.main.subagents.runs;
-    const snapshots: SubagentRunSnapshot[] = [];
-    // Union with any parents finalized in-memory on a warm replica.
+    const runs = new Map(state.main.subagents.runs);
     const finalizedParents = new Set(state.main.subagents.finalizedParents);
+    const finalizedRuns = new Map(state.main.subagents.finalizedRuns);
 
     for (const thread of threads ?? []) {
       if (thread.type !== ThreadType.Isolation) continue;
@@ -506,85 +529,63 @@ export async function refreshSubagentRunsFromDb(
       // can't attribute them, and the live run re-creates what it needs).
       if (meta?.operationId !== state.operationId) continue;
       const parentToolCallId = meta?.sourceToolCallId;
-      if (!parentToolCallId || existing.has(parentToolCallId)) continue;
+      if (!parentToolCallId) continue;
 
-      // Finalized spawn → remember the key (blocks duplicate create), don't
-      // rehydrate it as a live run.
       if (thread.status !== ThreadStatus.Processing) {
+        runs.delete(parentToolCallId);
         finalizedParents.add(parentToolCallId);
+        if (referencedParents.has(parentToolCallId)) {
+          const messages = await loadThreadMessages(deps, state, thread.id);
+          const anchor = buildFinalizedSubagentRunSnapshot(parentToolCallId, thread.id, messages);
+          if (anchor) finalizedRuns.set(parentToolCallId, restoreFinalizedSubagentRun(anchor));
+        }
         continue;
       }
 
-      const messages = await deps.messageModel.query({
+      // Processing — possibly reopened by another replica since this one finalized it.
+      finalizedParents.delete(parentToolCallId);
+      finalizedRuns.delete(parentToolCallId);
+
+      const run = runs.get(parentToolCallId);
+      const tailId = await deps.messageModel.getLatestSpineMessageId({
         threadId: thread.id,
         topicId: state.topicId,
       });
-      const snapshot = buildSubagentSnapshot(parentToolCallId, thread.id, messages);
-      if (snapshot) snapshots.push(snapshot);
+      if (run && tailId === run.currentAssistantId) {
+        const tail = (await deps.messageModel.findById(tailId)) as
+          SubagentThreadMessage | undefined;
+        runs.set(parentToolCallId, adoptPersistedTurnText(run, tail));
+        continue;
+      }
+
+      const messages = await loadThreadMessages(deps, state, thread.id);
+      const snapshot = buildSubagentRunSnapshot(parentToolCallId, thread.id, messages);
+      if (snapshot) runs.set(parentToolCallId, restoreSubagentRun(snapshot));
     }
 
-    // Nothing new to project: no rehydratable runs AND no finalized keys
-    // beyond what memory already tracked (the set started as a copy of it and
-    // only grows, so an unchanged size means no new Active threads were found).
-    if (
-      snapshots.length === 0 &&
-      finalizedParents.size === state.main.subagents.finalizedParents.size
-    ) {
-      return;
-    }
-
-    // Union: rehydrated (missing) runs + the in-memory ones (which win, since
-    // they carry live accumulators the DB hasn't caught up to yet) + the
-    // finalized-parent guard set.
-    const merged = rehydrateSubagentRunsState(snapshots, [...finalizedParents]);
-    for (const [parentToolCallId, run] of existing) merged.runs.set(parentToolCallId, run);
-    state.main = { ...state.main, subagents: merged };
+    state.main = { ...state.main, subagents: { finalizedParents, finalizedRuns, runs } };
   } catch (err) {
     log('refreshSubagentRunsFromDb failed op=%s err=%O', state.operationId, err);
   }
 }
 
 /**
- * Reconstruct one {@link SubagentRunSnapshot} from a thread's persisted
- * messages (ordered `createdAt` asc by the query). Returns undefined when the
- * thread has no assistant yet — without one there is nothing to attach a
- * continuation turn to, and the first-event path will (correctly) seed it.
+ * Subagent text arrives as deltas, so a longer persisted text means another
+ * replica appended to this turn after this replica last saw it.
  */
-function buildSubagentSnapshot(
-  parentToolCallId: string,
-  threadId: string,
-  messages: Array<{
-    id: string;
-    metadata?: Record<string, any> | null;
-    parentId?: string | null;
-    role: string;
-    tool_call_id?: string;
-  }>,
-): SubagentRunSnapshot | undefined {
-  const assistants = messages.filter((m) => m.role === 'assistant');
-  const currentAssistant = assistants.at(-1);
-  if (!currentAssistant) return undefined;
-
-  const toolRows = messages.filter((m) => m.role === 'tool' && m.tool_call_id);
-  // Chain rule: the next turn's assistant parents off the
-  // prior assistant (the spine), not its last child tool — recover the anchor
-  // as the current assistant itself (matches the subagent reducer, and is
-  // fork-resistant since it reads the thread's real latest assistant from DB).
-  const lastChainParentId = currentAssistant.id;
-  // Recover the in-flight turn's CC message.id so a continuation event is
-  // recognized as the SAME turn (no spurious boundary → no fragmentation).
-  const currentSubagentMessageId =
-    typeof currentAssistant.metadata?.subagentMessageId === 'string'
-      ? currentAssistant.metadata.subagentMessageId
-      : undefined;
-
+function adoptPersistedTurnText(
+  run: SubagentRun,
+  tail: SubagentThreadMessage | undefined,
+): SubagentRun {
+  const content = tail?.content ?? '';
+  const reasoning = tail?.reasoning?.content ?? '';
+  if (content.length <= run.accContent.length && reasoning.length <= run.accReasoning.length) {
+    return run;
+  }
   return {
-    currentAssistantId: currentAssistant.id,
-    currentSubagentMessageId,
-    lastChainParentId,
-    lifetimeToolCallIds: toolRows.map((m) => m.tool_call_id!),
-    parentToolCallId,
-    threadId,
+    ...run,
+    accContent: content.length > run.accContent.length ? content : run.accContent,
+    accReasoning: reasoning.length > run.accReasoning.length ? reasoning : run.accReasoning,
   };
 }
 

@@ -30,9 +30,17 @@ describe('macOS window glass lifecycle', () => {
   let manager: WindowThemeManager;
   const browserWindow = window as unknown as BrowserWindow;
 
+  const setSystemVersion = (version: string) => {
+    Object.defineProperty(process, 'getSystemVersion', {
+      configurable: true,
+      value: vi.fn(() => version),
+    });
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    setSystemVersion('27.2.0');
     glass.isSupported.mockReturnValue(true);
     glass.setWindowGlass.mockImplementation((_handle, enabled) => {
       material.background = enabled ? 'sidebar' : '';
@@ -95,6 +103,14 @@ describe('macOS window glass lifecycle', () => {
     expect(window.setBackgroundColor).toHaveBeenLastCalledWith('#00000000');
     expect(window.setVibrancy).toHaveBeenLastCalledWith(null);
     expect(material.background).toBe('sidebar');
+  });
+
+  it('keeps Electron sidebar vibrancy on macOS 26', () => {
+    setSystemVersion('26.6.0');
+    manager.attach(browserWindow);
+
+    expect(glass.setWindowGlass).not.toHaveBeenCalled();
+    expect(window.setVibrancy).toHaveBeenLastCalledWith('sidebar');
   });
 
   it('keeps Electron sidebar vibrancy when native glass is unavailable', () => {

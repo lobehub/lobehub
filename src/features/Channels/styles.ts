@@ -63,10 +63,51 @@ export const styles = stylex.create({
       [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
     },
   },
+  highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
   messageAvatar: {
     position: 'absolute',
-    insetBlockStart: 12,
+    insetBlockStart: 8,
     insetInlineStart: 0,
+  },
+  // A continuation has no header for its toolbar; reserve room for both actions.
+  continuationWithAction: {
+    paddingInlineEnd: 84,
+  },
+  messageTime: {
+    flexShrink: 0,
+    fontSize: cssVar.fontSizeSM,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+    opacity: 1,
+  },
+  continuationTime: {
+    position: 'absolute',
+    insetBlockStart: 4,
+    insetInlineStart: 0,
+    width: 54,
+    textAlign: 'center',
+    opacity: {
+      default: 1,
+      [HOVER]: {
+        default: 0,
+        [stylex.when.ancestor(':hover')]: 1,
+        [stylex.when.ancestor(':focus-within')]: 1,
+      },
+    },
+  },
+  dateDivider: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    paddingBlock: 12,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+  },
+  dateLine: {
+    flex: '1',
+    height: 1,
+    backgroundColor: cssVar.colorBorderSecondary,
   },
   /** Floats over the row's top-right corner while the row is hovered or focused. */
   messageToolbar: {
@@ -150,15 +191,15 @@ export const styles = stylex.create({
     display: 'flex',
     alignItems: 'flex-end',
     gap: 4,
-    paddingBlock: 6,
-    paddingInline: 6,
+    paddingBlock: 4,
+    paddingInline: 4,
   },
   composerEditor: {
     overflowY: 'auto',
     flex: '1',
     minWidth: 0,
     maxHeight: 240,
-    paddingBlock: 5,
+    paddingBlock: 0,
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {

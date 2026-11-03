@@ -1870,6 +1870,109 @@ describe('Task Router Integration', () => {
       expect(strandedCreate).toHaveLength(0);
     });
 
+    it('should let a member take over another member’s public task as their private task', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-take-over-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Take Over Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const memberCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId!),
+        workspaceId,
+      });
+
+      const root = await ownerCaller.create({
+        assigneeUserId: userId,
+        automationMode: 'schedule',
+        instruction: 'Owner task',
+        schedulePattern: '0 9 * * *',
+        visibility: 'public',
+      });
+      const child = await ownerCaller.create({
+        instruction: 'Owner subtask',
+        parentTaskId: root.data.id,
+      });
+
+      // Without opting in, a non-creator still cannot demote it.
+      await expect(
+        memberCaller.updateVisibility({ id: root.data.id, visibility: 'private' }),
+      ).rejects.toThrow('Only the task creator can make this task private');
+
+      const taken = await memberCaller.updateVisibility({
+        id: root.data.id,
+        takeOwnership: true,
+        visibility: 'private',
+      });
+      expect(taken.data).toMatchObject({
+        assigneeUserId: null,
+        automationMode: null,
+        createdByUserId: otherUserId,
+        status: 'backlog',
+        visibility: 'private',
+      });
+
+      const [childRow] = await serverDB
+        .select({ createdByUserId: tasks.createdByUserId, visibility: tasks.visibility })
+        .from(tasks)
+        .where(eq(tasks.id, child.data.id));
+      expect(childRow).toEqual({ createdByUserId: otherUserId, visibility: 'private' });
+
+      // The previous creator no longer sees it.
+      await expect(ownerCaller.find({ id: root.data.id })).rejects.toThrow();
+    });
+
+    it('should not take over a task while a subtask is running', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-take-over-running-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Take Over Running Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const memberCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId!),
+        workspaceId,
+      });
+
+      const root = await ownerCaller.create({ instruction: 'Busy root', visibility: 'public' });
+      const child = await ownerCaller.create({
+        instruction: 'Busy subtask',
+        parentTaskId: root.data.id,
+      });
+      await serverDB.update(tasks).set({ status: 'running' }).where(eq(tasks.id, child.data.id));
+
+      await expect(
+        memberCaller.updateVisibility({
+          id: root.data.id,
+          takeOwnership: true,
+          visibility: 'private',
+        }),
+      ).rejects.toThrow('Cannot take over this task while it or a subtask is running');
+      const [rootRow] = await serverDB
+        .select({ createdByUserId: tasks.createdByUserId, visibility: tasks.visibility })
+        .from(tasks)
+        .where(eq(tasks.id, root.data.id));
+      expect(rootRow).toEqual({ createdByUserId: userId, visibility: 'public' });
+    });
+
     it('should keep private tasks creator-only for human assignees', async () => {
       otherUserId = await createTestUser(serverDB);
       const workspaceId = 'task-private-assignee-workspace';
@@ -1906,21 +2009,19 @@ describe('Task Router Integration', () => {
         wsCaller.update({ assigneeUserId: otherUserId, id: privateTask.data.id }),
       ).rejects.toThrow('A private task can only be assigned to its creator');
 
-      // Demoting a member-assigned public task to private is rejected until unassigned.
+      // Demoting a member-assigned public task to private unassigns the member,
+      // who could no longer open it.
       const publicTask = await wsCaller.create({
         assigneeUserId: otherUserId,
         instruction: 'Public task assigned to member',
         visibility: 'public',
       });
-      await expect(
-        wsCaller.updateVisibility({ id: publicTask.data.id, visibility: 'private' }),
-      ).rejects.toThrow('A private task can only be assigned to its creator');
-      await wsCaller.update({ assigneeUserId: null, id: publicTask.data.id });
       const demoted = await wsCaller.updateVisibility({
         id: publicTask.data.id,
         visibility: 'private',
       });
       expect(demoted.data.visibility).toBe('private');
+      expect(demoted.data.assigneeUserId).toBeNull();
     });
 
     it('should preserve the responsible assignee independently of automation', async () => {

@@ -40,7 +40,7 @@
   "generation.editing.hint": "描述要修改的地方，其余内容保持不变",
   "generation.editing.modelLocked": "编辑时沿用原视频的模型",
   "generation.editing.title": "编辑 V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 免费额度已用完，将开始消耗积分",
+  "generation.freeQuota.exhausted": "🎁 免费额度已用完，将开始消耗余额",
   "generation.freeQuota.remaining": "🎁 今日剩余 {{remaining}} 个免费视频",
   "generation.status.editing": "正在生成编辑版本...",
   "generation.status.failed": "生成失败",

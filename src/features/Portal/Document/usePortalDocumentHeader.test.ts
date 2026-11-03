@@ -328,8 +328,8 @@ describe('usePortalDocumentHeaderActions', () => {
 
     // The agent docs route redirects unowned ids to its index, so the link
     // must not point there.
-    expect(result.current.path).toBe('/page/document-1');
-    expect(result.current.url).toBe('https://app.lobehub.com/page/document-1');
+    expect(result.current.path).toBe('/resource/page/document-1');
+    expect(result.current.url).toBe('https://app.lobehub.com/resource/page/document-1');
   });
 
   it('refresh revalidates the document caches', async () => {
@@ -356,7 +356,7 @@ describe('usePortalDocumentHeaderActions', () => {
 describe('resolvePortalDocumentPath', () => {
   it('uses the agent docs route only for a bound document', () => {
     expect(resolvePortalDocumentPath('docs_abc', 'agt_1', 'ad_1')).toBe('/agent/agt_1/docs/abc');
-    expect(resolvePortalDocumentPath('docs_abc', 'agt_1', undefined)).toBe('/page/abc');
+    expect(resolvePortalDocumentPath('docs_abc', 'agt_1', undefined)).toBe('/resource/page/abc');
     expect(resolvePortalDocumentPath(undefined, 'agt_1', 'ad_1')).toBeUndefined();
   });
 });

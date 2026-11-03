@@ -234,7 +234,6 @@ export class AgentShareModel {
       .where(eq(agentShares.id, share.id))
       .returning();
 
-    /* v8 ignore next -- unreachable: `share` was inserted by this same open transaction (uncommitted, invisible to and undeletable by any other session), so the UPDATE by its id always returns the row */
     return updated ?? share;
   };
 

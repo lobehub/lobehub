@@ -437,8 +437,6 @@ export const isRunningOperationAlive = async (
 
   // Claims `running`/`idle`, but a killed process never writes a terminal
   // status — age it out so the topic is not held forever.
-  /* v8 ignore start -- unreachable: the `Number.NaN` arm; agent_operations.created_at is NOT NULL DEFAULT now() */
-  const startedAt = operation.createdAt ? new Date(operation.createdAt).getTime() : Number.NaN;
-  /* v8 ignore stop */
-  return !Number.isFinite(startedAt) || Date.now() - startedAt < ABANDONED_OPERATION_TTL_MS;
+  // agent_operations.created_at is NOT NULL DEFAULT now().
+  return Date.now() - operation.createdAt.getTime() < ABANDONED_OPERATION_TTL_MS;
 };

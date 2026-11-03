@@ -1,4 +1,5 @@
-import { and, asc, eq, isNull, notExists, or } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, notExists, or } from 'drizzle-orm';
 
 import { channelMembers, users, workspaceMembers } from '../../schemas';
 import type { Transaction } from '../../type';
@@ -22,20 +23,25 @@ const requireWorkspaceMember = async (tx: Transaction, workspaceId: string, user
   if (!member) throw new ChannelError('NOT_FOUND', 'Workspace member not found');
 };
 
-const requireGroupWorkspace = async (tx: Transaction, { channel, member }: ChannelAccess) => {
-  if (!channel.workspaceId || channel.agentId)
+const requireWorkspace = async (tx: Transaction, { channel, member }: ChannelAccess) => {
+  if (!channel.workspaceId)
     throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
   await requireWorkspaceMember(tx, channel.workspaceId, member.userId!);
   return channel.workspaceId;
 };
 
-/** Only active people in this workspace; search the full directory, not a client-side page. */
-export const channelUserCandidates = async (
+const requireGroupWorkspace = async (tx: Transaction, access: ChannelAccess) => {
+  if (access.channel.agentId)
+    throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
+  return requireWorkspace(tx, access);
+};
+
+const workspaceUserCandidates = (
   tx: Transaction,
-  access: ChannelAccess,
-  search = '',
+  workspaceId: string,
+  exclude: SQL,
+  search: string,
 ) => {
-  const workspaceId = await requireGroupWorkspace(tx, access);
   const query = search.trim();
   return tx
     .select({
@@ -50,18 +56,7 @@ export const channelUserCandidates = async (
       and(
         eq(workspaceMembers.workspaceId, workspaceId),
         isNull(workspaceMembers.deletedAt),
-        notExists(
-          tx
-            .select({ id: channelMembers.id })
-            .from(channelMembers)
-            .where(
-              and(
-                eq(channelMembers.channelId, access.channel.id),
-                eq(channelMembers.userId, users.id),
-                eq(channelMembers.status, 'active'),
-              ),
-            ),
-        ),
+        exclude,
         query
           ? or(ilikeContains(users.fullName, query), ilikeContains(users.username, query))
           : undefined,
@@ -69,6 +64,46 @@ export const channelUserCandidates = async (
     )
     .orderBy(asc(users.fullName), asc(users.id))
     .limit(50);
+};
+
+/**
+ * Only active people in this workspace; search the full directory, not a client-side page. A
+ * direct conversation lists them for the group that inviting from it starts.
+ */
+export const channelUserCandidates = async (
+  tx: Transaction,
+  access: ChannelAccess,
+  search = '',
+) => {
+  const workspaceId = await requireWorkspace(tx, access);
+  return workspaceUserCandidates(
+    tx,
+    workspaceId,
+    notExists(
+      tx
+        .select({ id: channelMembers.id })
+        .from(channelMembers)
+        .where(
+          and(
+            eq(channelMembers.channelId, access.channel.id),
+            eq(channelMembers.userId, users.id),
+            eq(channelMembers.status, 'active'),
+          ),
+        ),
+    ),
+    search,
+  );
+};
+
+/** The people a new workspace Channel can start with: everyone active except its creator. */
+export const newChannelUserCandidates = async (
+  tx: Transaction,
+  workspaceId: string,
+  userId: string,
+  search = '',
+) => {
+  await requireWorkspaceMember(tx, workspaceId, userId);
+  return workspaceUserCandidates(tx, workspaceId, ne(users.id, userId), search);
 };
 
 export const addChannelUser = async (tx: Transaction, access: ChannelAccess, userId: string) => {

@@ -5,10 +5,12 @@ import {
   FilePenIcon,
   FilesIcon,
   FileText,
+  FolderIcon,
   HardDriveIcon,
   ImageIcon,
   LibraryBigIcon,
   Mic2,
+  ServerIcon,
   SquarePlay,
 } from 'lucide-react';
 import type { RouteObject } from 'react-router';
@@ -68,6 +70,22 @@ export const resourceRoute: RouteObject = {
         },
         ...BusinessResourceRoutes,
         ...resourceDriveRoutes,
+        // The cloud sandbox's drives, beside the file drive (moved out of settings).
+        {
+          element: dynamicElement(
+            () => import('@/routes/(main)/resource/(home)/sandbox-storage'),
+            'Desktop > Resource > Sandbox Storage',
+            { preloadId: 'resource' },
+          ),
+          handle: {
+            meta: routeMeta({
+              icon: ServerIcon,
+              Skeleton: createSurfaceSkeleton('list'),
+              titleKey: 'navigation.resourceSandboxStorage',
+            }),
+          },
+          path: 'sandbox-storage',
+        },
         {
           element: dynamicElement(
             () => import('@/routes/(main)/resource/(home)'),
@@ -172,6 +190,23 @@ export const resourceRoute: RouteObject = {
           },
           path: 'permission',
         },
+        // A folder (`folder/<docs_id>`), page (`docs/<docs_id>`) or file
+        // (`file/<file_id>`) opened inside the library, all addressed by id.
+        ...(
+          [
+            { icon: FolderIcon, path: 'folder/:folderId' },
+            { icon: FilePenIcon, path: 'docs/:itemId' },
+            { icon: FilesIcon, path: 'file/:itemId' },
+          ] as const
+        ).map(({ icon, path }) => ({
+          element: dynamicElement(
+            () => import('@/routes/(main)/resource/library'),
+            `Desktop > Resource > Library > ${path}`,
+          ),
+          handle: { meta: routeMeta({ icon, titleKey: 'navigation.knowledgeBase' }) },
+          path,
+        })),
+        // Legacy folder links (`/resource/library/<id>/<folderSlug>`) redirect to `folder/<id>`.
         {
           element: dynamicElement(
             () => import('@/routes/(main)/resource/library/[slug]'),

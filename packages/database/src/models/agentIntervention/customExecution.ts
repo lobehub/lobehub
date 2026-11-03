@@ -71,7 +71,6 @@ export const claimCustomExecution = async (
     }
 
     if (resolution.customExecutionState === 'executing') {
-      /* v8 ignore if -- unreachable: the custom_execution_state CHECK requires an executing row to carry a lease token, a lease expiry and an attempt > 0 */
       if (
         !resolution.customExecutionLeaseToken ||
         !resolution.customExecutionLeaseExpiresAt ||
@@ -86,14 +85,12 @@ export const claimCustomExecution = async (
           outcome: 'in_progress',
         };
       }
-      /* v8 ignore start -- unreachable: the custom_execution_state CHECK only admits NULL, pending, executing and completed, and executing/completed are handled above */
     } else if (
       resolution.customExecutionState !== 'pending' &&
       resolution.customExecutionState !== null
     ) {
       return { outcome: 'conflict' };
     }
-    /* v8 ignore stop */
 
     const attempt = (resolution.customExecutionAttempt ?? 0) + 1;
     const leaseExpiresAt = new Date(now.getTime() + params.leaseDurationMs);
@@ -120,9 +117,7 @@ export const claimCustomExecution = async (
       .returning({ id: agentInterventionResolutions.id });
     return claimed
       ? { attempt, leaseExpiresAt, leaseToken, outcome: 'applied' }
-      : /* v8 ignore next -- unreachable: the row was locked FOR UPDATE in this transaction with the same ownership and was just checked to be resolving, so the UPDATE by its id always returns it */ {
-          outcome: 'conflict',
-        };
+      : { outcome: 'conflict' };
   });
 };
 
@@ -194,8 +189,6 @@ export const completeCustomExecution = async (
       .returning({ result: agentInterventionResolutions.customExecutionResult });
     return completed?.result
       ? { outcome: 'completed', result: completed.result }
-      : /* v8 ignore next -- unreachable: the row was locked FOR UPDATE in this transaction and just matched every filter of this UPDATE, which writes the validated non-null result */ {
-          outcome: 'conflict',
-        };
+      : { outcome: 'conflict' };
   });
 };

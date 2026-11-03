@@ -8,6 +8,7 @@ import {
   MAX_RECENT_ASSIGNEES,
   pickRecentAssignees,
   pushRecentAssignee,
+  shouldOfferPrivateAgents,
 } from './assigneeAgentSections';
 
 const agent = (id: string, extra: Partial<SidebarAgentItem> = {}): SidebarAgentItem => ({
@@ -97,5 +98,54 @@ describe('recent assignees', () => {
     expect(pushRecentAssignee(full, 'f')).toEqual(['f', 'a', 'b', 'c', 'd']);
     expect(pushRecentAssignee(undefined, 'a')).toEqual(['a']);
     expect(pushRecentAssignee(full, 'f')).toHaveLength(MAX_RECENT_ASSIGNEES);
+  });
+});
+
+describe('shouldOfferPrivateAgents', () => {
+  const creatorOnPublicTask = {
+    currentUserId: 'user-a',
+    hasOnChange: false,
+    taskCreatorId: 'user-a',
+    taskIdentifier: 'T-1',
+    taskVisibility: 'public' as const,
+    workspaceId: 'ws-1',
+  };
+  const hidden = { offer: false, privatizes: false, takesOver: false };
+
+  it('offers private agents on a non-public task without privatizing it', () => {
+    const plain = { offer: true, privatizes: false, takesOver: false };
+    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, taskVisibility: 'private' })).toEqual(
+      plain,
+    );
+    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, taskVisibility: null })).toEqual(
+      plain,
+    );
+  });
+
+  it('lets the creator of a public workspace task keep it while privatizing it', () => {
+    expect(shouldOfferPrivateAgents(creatorOnPublicTask)).toEqual({
+      offer: true,
+      privatizes: true,
+      takesOver: false,
+    });
+  });
+
+  it('lets another member take a public workspace task over', () => {
+    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, currentUserId: 'user-b' })).toEqual({
+      offer: true,
+      privatizes: true,
+      takesOver: true,
+    });
+  });
+
+  it('keeps private agents hidden on a public task outside a persisted workspace task', () => {
+    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, taskCreatorId: undefined })).toEqual(
+      hidden,
+    );
+    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, hasOnChange: true })).toEqual(hidden);
+    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, taskIdentifier: undefined })).toEqual(
+      hidden,
+    );
+    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, workspaceId: null })).toEqual(hidden);
   });
 });

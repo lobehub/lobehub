@@ -68,12 +68,16 @@ export enum RequestTrigger {
    * {@link RequestTrigger.GenerationTopicTitle}; kept so historical logs still resolve a label.
    */
   Topic = 'topic',
+  /** Server-side topic classification that runs after the auto summary. */
+  TopicAnalysis = 'topic_analysis',
   /** Server-side topic auto summary (description + rolling summary). */
   TopicSummary = 'topic_summary',
   /** Chat topic title summaries, both client and server generated. */
   TopicTitle = 'topic_title',
   /** Translation of a chat message or a generation prompt, including language detection. */
   Translate = 'translate',
+  /** Text-to-speech synthesis, e.g. `lh generate tts`. */
+  Tts = 'tts',
   /** Acceptance verification: plan generation, judging, review prediction and reports. */
   Verify = 'verify',
   Video = 'video',

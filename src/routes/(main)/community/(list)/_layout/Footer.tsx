@@ -1,4 +1,5 @@
-import { Button, createStaticStyles, cx, Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -6,25 +7,17 @@ import { imageUrl } from '@/const/url';
 import DefaultFooter from '@/features/Setting/Footer';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { sx } from '@/styles/sx';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    min-height: 320px;
-    padding-block-start: 32px;
-
-    background-repeat: no-repeat;
-    background-position: center bottom;
-    background-size: 512px auto;
-  `,
-  footer_dark: css`
-    background-image: url(${imageUrl('community_footer_dark.webp')});
-    background-blend-mode: screen;
-  `,
-  footer_light: css`
-    background-image: url(${imageUrl('community_footer_light.webp')});
-    background-blend-mode: multiply;
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    minHeight: '320px',
+    paddingBlockStart: '32px',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'center bottom',
+    backgroundSize: '512px auto',
+  },
+});
 
 const Footer = memo(() => {
   const { t } = useTranslation('discover');
@@ -46,9 +39,13 @@ const Footer = memo(() => {
   return (
     <Flexbox
       align={'center'}
-      className={cx(styles.footer, isDarkMode ? styles.footer_dark : styles.footer_light)}
       flex={'none'}
       gap={4}
+      {...sx(styles.footer, undefined, {
+        // The image URL is resolved at runtime (CDN base), so it cannot live in stylex.create.
+        backgroundBlendMode: isDarkMode ? 'screen' : 'multiply',
+        backgroundImage: `url(${imageUrl(isDarkMode ? 'community_footer_dark.webp' : 'community_footer_light.webp')})`,
+      })}
     >
       <Text strong align={'center'} as={'h2'} fontSize={22}>
         {t('footer.title')}

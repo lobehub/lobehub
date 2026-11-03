@@ -1,4 +1,5 @@
 import { HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR } from '@lobechat/heterogeneous-agents';
+import { CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import { ChatErrorType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,7 +63,10 @@ vi.mock('@/server/modules/AgentRuntime/factory', () => ({
 
 vi.mock('@/server/services/agentQuota', () => ({
   AgentQuotaService: vi.fn(function () {
-    return { planDeviceRouting: mocks.planDeviceRouting };
+    return {
+      planDeviceRouting: mocks.planDeviceRouting,
+      resolveDeviceRowId: async (id?: string) => (id ? `row-${id}` : undefined),
+    };
   }),
 }));
 
@@ -203,7 +207,7 @@ beforeEach(() => {
 
 describe('Channel history context', () => {
   it.each([true, false])(
-    'passes history instructions only for a reserved Channel run (%s)',
+    'passes complete Channel instructions only for a reserved Channel run (%s)',
     async (channel) => {
       const { deps } = createDeps();
       const result = await dispatchHeteroAgent(
@@ -220,8 +224,7 @@ describe('Channel history context', () => {
       );
       expect(result.success).toBe(true);
       const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
-      expect((dispatched.systemContext ?? '').includes('channel history --json')).toBe(channel);
-      expect((dispatched.systemContext ?? '').includes('Only the current request')).toBe(channel);
+      expect((dispatched.systemContext ?? '').includes(CHANNEL_INSTRUCTIONS)).toBe(channel);
       const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
       expect(signed.capabilities.includes('channel:read')).toBe(channel);
     },
@@ -549,7 +552,11 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
 
     await dispatchHeteroAgent(deps, createCtx(deviceCtx), createInput('claude-code'));
 
-    expect(mocks.planDeviceRouting).toHaveBeenCalledWith('agent-1', { provider: 'claude-code' });
+    // The routing is asked for this device, so its own account choice applies.
+    expect(mocks.planDeviceRouting).toHaveBeenCalledWith('agent-1', {
+      deviceId: 'row-dev-1',
+      provider: 'claude-code',
+    });
     expect(mocks.dispatchAgentRun.mock.calls[0][0].claudeAccountRouting).toEqual(routing);
   });
 
@@ -750,5 +757,82 @@ describe('dispatchHeteroAgent — cloud sandbox', () => {
     expect(mocks.signUserJWT).toHaveBeenCalledTimes(1);
     expect(mocks.signUserJWT).toHaveBeenCalledWith('user-1', '4h');
     expect(result).toMatchObject({ success: true, token: undefined });
+  });
+
+  describe('spawn failure', () => {
+    const marketService = { market: { creds: { list: vi.fn().mockResolvedValue({ data: [] }) } } };
+    const credentialMissing =
+      'CLAUDE_CODE_OAUTH_TOKEN 未设置。请先在凭证管理中添加该凭证后再运行 claude-code。';
+    const spawnFailure = async (ctx: ExecRunContext, detail = credentialMissing) => {
+      mocks.spawnHeteroSandbox.mockRejectedValueOnce(new Error(detail));
+      const { deps } = createDeps({ getMarketService: vi.fn().mockResolvedValue(marketService) });
+      await dispatchHeteroAgent(deps, ctx, createInput('claude-code'));
+      await vi.waitFor(() => expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalled());
+      return mocks.finalizeHeteroDispatchError.mock.calls.at(-1)![1];
+    };
+
+    /**
+     * A sender without device access on a device-bound agent is degraded to the
+     * sandbox. When the sandbox then fails, the reply must say why the run was
+     * there at all — otherwise "the sandbox is missing a credential" reads as
+     * nonsense to someone who expected the owner's device.
+     */
+    it('marks a sandbox run that replaced a denied device', async () => {
+      const params = await spawnFailure(
+        createCtx(
+          {
+            boundDeviceId: 'dev-1',
+            executionTarget: 'device',
+            heterogeneousProvider: { type: 'claude-code' },
+          },
+          { canUseDevice: false, deviceAccessReason: 'bot-external-sender' },
+        ),
+      );
+
+      expect(params).toMatchObject({
+        detail: credentialMissing,
+        dispatch: {
+          agentType: 'claude-code',
+          deviceAccessDenied: true,
+          missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+          stage: 'sandbox_spawn',
+        },
+        message: 'Hetero sandbox spawn failed',
+      });
+    });
+
+    const sandboxAgent = () =>
+      createCtx(
+        { executionTarget: 'sandbox', heterogeneousProvider: { type: 'claude-code' } },
+        { canUseDevice: false },
+      );
+
+    it('reads the credential from English wording too', async () => {
+      const params = await spawnFailure(
+        sandboxAgent(),
+        'CLAUDE_CODE_OAUTH_TOKEN is not set. Add it under Credentials and retry.',
+      );
+
+      expect(params.dispatch.missingCredential).toBe('CLAUDE_CODE_OAUTH_TOKEN');
+    });
+
+    it('does not blame device access for an agent that targets the sandbox', async () => {
+      const params = await spawnFailure(sandboxAgent());
+
+      expect(params.dispatch).toEqual({
+        agentType: 'claude-code',
+        missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+        stage: 'sandbox_spawn',
+      });
+    });
+
+    it.each([
+      'E2B_API_KEY is not set; sandbox credential configuration is incomplete',
+      'Gateway Timeout',
+    ])('names no credential for a failure that is not about one (%s)', async (detail) => {
+      const params = await spawnFailure(sandboxAgent(), detail);
+
+      expect(params.dispatch).toEqual({ agentType: 'claude-code', stage: 'sandbox_spawn' });
+    });
   });
 });

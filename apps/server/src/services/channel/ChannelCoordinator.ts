@@ -169,7 +169,10 @@ export class ChannelCoordinator {
               'Device cannot track Native operation lifetime; update its client',
           );
       }
-      const input = await this.executions.input(job.channelId, job.id);
+      const [input, context] = await Promise.all([
+        this.executions.input(job.channelId, job.id),
+        this.executions.recentContext(job.channelId, job.id),
+      ]);
       const attachments = await resolveChannelAttachments(
         this.db,
         topic.userId,
@@ -191,7 +194,7 @@ export class ChannelCoordinator {
         hooks: [completion],
         instructions: CHANNEL_INSTRUCTIONS,
         maxSteps: 32,
-        prompt: buildChannelPrompt(job.manifest, input),
+        prompt: buildChannelPrompt(job.manifest, input, { context }),
         reservedOperationId: job.operationId,
         trigger: 'channel',
         userInterventionConfig: { approvalMode: 'headless' },

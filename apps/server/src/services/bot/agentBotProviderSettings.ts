@@ -1,5 +1,10 @@
+import { eq } from 'drizzle-orm';
+
 import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
+import { agents } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import {
+  BOT_WAKE_SETTING_KEYS,
   flattenBotWakeSettings,
   hasPassiveListeningRule,
 } from '@/server/services/agentSignal/scenarios/botWake/config';
@@ -9,6 +14,7 @@ import { getBotMessageRouter } from './BotMessageRouter';
 import {
   extractWatchKeywordEntries,
   mergeWithDefaults,
+  NEW_BOT_REACTION_MODE,
   platformRegistry,
   resolveConnectionMode,
   validateAccessSettings,
@@ -30,6 +36,58 @@ export function mergeBotSettingsForPersist(
   const definition = platformRegistry.getPlatform(platform);
   if (!definition) return settings;
   return mergeWithDefaults(definition.schema, settings);
+}
+
+const REACTION_MODE_KEY = 'reactionMode';
+
+/**
+ * {@link mergeBotSettingsForPersist} for a bot being created, with status reactions off unless the
+ * caller chose a mode. Omitted settings would persist as `{}`, where an absent mode reads as the
+ * schema default (on), so on a platform that offers reactions the defaults are written instead.
+ */
+function withNewBotReactionMode(
+  platform: string | undefined,
+  settings: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  const merged = mergeBotSettingsForPersist(platform, settings);
+  if (settings?.[REACTION_MODE_KEY] !== undefined) return merged;
+  const withDefaults = merged ?? mergeBotSettingsForPersist(platform, {});
+  if (!withDefaults || !(REACTION_MODE_KEY in withDefaults)) return merged;
+
+  return { ...withDefaults, [REACTION_MODE_KEY]: NEW_BOT_REACTION_MODE };
+}
+
+/**
+ * The settings to persist for a bot being created: {@link mergeBotSettingsForPersist}, with
+ * - status reactions off ({@link NEW_BOT_REACTION_MODE}) when the platform offers them and the
+ *   caller did not choose. The schema default stays on, since it is also what a bot saved before
+ *   the field existed reads as; only a new bot starts quiet.
+ * - bot wake switched off when the agent runs on a heterogeneous runtime (Claude Code, Codex) and
+ *   the caller did not choose. Every other bot speaks up on its own by default; a heterogeneous
+ *   agent runs on its owner's device and their CLI quota, so it joins conversations only once the
+ *   owner turns it on.
+ */
+export async function mergeBotSettingsForCreate(
+  db: LobeChatDatabase,
+  agentId: string,
+  platform: string | undefined,
+  settings: Record<string, unknown> | undefined,
+): Promise<Record<string, unknown> | undefined> {
+  const merged = withNewBotReactionMode(platform, settings);
+  const key = BOT_WAKE_SETTING_KEYS.disabled;
+  if (settings?.[key] !== undefined) return merged;
+  // Omitted settings persist as `{}`, where an absent switch reads as on: the defaults are written
+  // so the switch can be set.
+  const withDefaults = merged ?? mergeBotSettingsForPersist(platform, {});
+  if (!withDefaults || !(key in withDefaults)) return merged;
+
+  const agent = await db.query.agents.findFirst({
+    columns: { agencyConfig: true },
+    where: eq(agents.id, agentId),
+  });
+  if (!agent?.agencyConfig?.heterogeneousProvider) return merged;
+
+  return { ...withDefaults, [key]: true };
 }
 
 /**

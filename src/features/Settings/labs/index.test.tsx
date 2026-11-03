@@ -121,11 +121,10 @@ describe('Labs settings page', () => {
     expect(screen.getByText('features.oauthApps.title')).toBeDefined();
   });
 
-  it('renders Integrations as an alpha lab toggle', () => {
+  it('does not render released Integrations as a lab toggle', () => {
     renderPage();
 
-    const integrations = screen.getByText('features.integrations.title');
-    expect(within(integrations).getByText('stage.alpha.label')).toBeDefined();
+    expect(screen.queryByText('features.integrations.title')).toBeNull();
   });
 
   it('renders the topic acceptance (tray) lab toggle', () => {
@@ -176,8 +175,8 @@ describe('Labs settings page', () => {
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();
 
-    const inputMarkdown = screen.getByText('features.inputMarkdown.title');
-    expect(within(inputMarkdown).getByText('stage.beta.label')).toBeDefined();
+    const goals = screen.getByText('features.goals.title');
+    expect(within(goals).getByText('stage.beta.label')).toBeDefined();
   });
 
   it('explains what each stage means via the tag tooltip', () => {

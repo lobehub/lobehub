@@ -49,7 +49,8 @@ export const channelKeys = {
   ),
   userCandidates: def(
     'channel:userCandidates',
-    (channelId: string, search: string) => ['channel:userCandidates', channelId, search] as const,
+    (channelId: string | undefined, search: string) =>
+      ['channel:userCandidates', channelId ?? null, search] as const,
   ),
 };
 
@@ -489,6 +490,8 @@ export const userMemoryKeys = {
     taskId,
   ]),
   contexts: def('userMemory:contexts', (params: unknown) => ['userMemory:contexts', params]),
+  contextStories: def('userMemory:contextStories', () => ['userMemory:contextStories']),
+  contextStory: def('userMemory:contextStory', (id: string) => ['userMemory:contextStory', id]),
   experiences: def('userMemory:experiences', (params: unknown) => [
     'userMemory:experiences',
     params,
@@ -789,6 +792,7 @@ export const shareKeys = {
     agentId,
   ]),
   artifact: def('share:artifact', (id: string) => ['share:artifact', id]),
+  file: def('share:file', (shareId: string) => ['share:file', shareId]),
   pageDocument: def('share:pageDocument', (documentId: string) => [
     'share:pageDocument',
     documentId,
@@ -909,13 +913,31 @@ export const agentSignalKeys = {
   ]),
 };
 
+// ---- bot wake records (one bot's judged messages; never persisted) ----
+export const botWakeKeys = {
+  decisions: def(
+    'botWake:decisions',
+    (
+      botId: string,
+      filters: { followupOnly: boolean; outcome?: string; unmarkedOnly: boolean },
+      page: number,
+    ) => [
+      'botWake:decisions',
+      botId,
+      filters.outcome ?? null,
+      filters.followupOnly,
+      filters.unmarkedOnly,
+      page,
+    ],
+  ),
+  summary: def('botWake:summary', (botId: string) => ['botWake:summary', botId]),
+};
+
 // ---- misc UI singletons -------------------------------------------------
 export const ollamaKeys = {
   downloadModel: def('ollama:downloadModel', (model: string) => ['ollama:downloadModel', model]),
 };
 export const authKeys = {
-  oauthAppById: def('auth:oauthAppById', (id: string) => ['auth:oauthAppById', id]),
-  oauthAppList: def('auth:oauthAppList', () => ['auth:oauthAppList']),
   oidcClientMetadata: def('auth:oidcClientMetadata', (clientId: string) => [
     'auth:oidcClientMetadata',
     clientId,
@@ -963,6 +985,7 @@ export const imessageKeys = {
 export const electronKeys = {
   /** Claude Code logins held on this machine (device-local, never persisted). */
   claudeCodeAccounts: def('electron:claudeCodeAccounts', () => ['electron:claudeCodeAccounts']),
+  appMenu: def('electron:getAppMenu', () => ['electron:getAppMenu']),
   appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
   desktopHotkeys: def('electron:getDesktopHotkeys', () => ['electron:getDesktopHotkeys']),
   gatewayDeviceInfo: def('electron:getGatewayDeviceInfo', () => ['electron:getGatewayDeviceInfo']),

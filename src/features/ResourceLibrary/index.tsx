@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useLayoutEffect } from 'react';
-import { useLocation, useParams } from 'react-router';
+import { Navigate, useLocation, useParams } from 'react-router';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
@@ -12,14 +12,31 @@ import ResourceManager from '@/features/ResourceManager';
 import { useInitFileCheck } from '@/features/ResourceManager/hooks/useInitFileCheck';
 import { useKnowledgeBaseItem } from '@/features/ResourceManager/hooks/useKnowledgeItem';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import {
+  legacyLibraryItemRedirect,
+  libraryFolderPath,
+  rebaseLibraryPath,
+} from '@/features/ResourceManager/utils/resourcePath';
+import { useFileStore } from '@/store/file';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
 import LibraryHero from './LibraryHero';
 
 const MainContent = memo(() => {
-  const { id: knowledgeBaseId, slug } = useParams<{ id: string; slug?: string }>();
+  const {
+    folderId,
+    id: knowledgeBaseId,
+    itemId,
+    slug: legacyFolderSlug,
+  } = useParams<{ folderId?: string; id: string; itemId?: string; slug?: string }>();
   const location = useLocation();
   const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
+
+  // Folders used to open as `/resource/library/<id>/<folderSlug>`; resolve the
+  // slug to the folder id the `folder/<folderId>` route carries now.
+  const useFetchFolderBreadcrumb = useFileStore((s) => s.useFetchFolderBreadcrumb);
+  const { data: legacyFolderChain, isLoading: isLegacyFolderLoading } =
+    useFetchFolderBreadcrumb(legacyFolderSlug);
 
   // Load knowledge base data
   const { data, isLoading, error, mutate } = useKnowledgeBaseItem(knowledgeBaseId || '');
@@ -42,7 +59,26 @@ const MainContent = memo(() => {
   }, [knowledgeBaseId, setLibraryId, location.pathname]);
 
   // Sync file view mode from URL
-  useInitFileCheck();
+  useInitFileCheck(itemId);
+
+  // Items used to open as `/resource/library/<id>?file=<itemId>`; keep old links working.
+  const legacyRedirect =
+    knowledgeBaseId && !itemId
+      ? legacyLibraryItemRedirect(location.pathname, location.search, knowledgeBaseId)
+      : null;
+  if (legacyRedirect) return <Navigate replace to={legacyRedirect} />;
+
+  if (knowledgeBaseId && legacyFolderSlug) {
+    const legacyFolderId = legacyFolderChain.at(-1)?.id;
+    if (legacyFolderId) {
+      const pathname = rebaseLibraryPath(
+        location.pathname,
+        libraryFolderPath(knowledgeBaseId, legacyFolderId),
+      );
+      return <Navigate replace to={{ pathname, search: location.search }} />;
+    }
+    return isLegacyFolderLoading ? <RouteLoading /> : <NotFound />;
+  }
 
   // A network / 500 on the KB fetch is NOT "this library doesn't exist" (Read §1.1):
   // branch a transient error to a reload state that keeps the URL, and reserve the
@@ -61,7 +97,7 @@ const MainContent = memo(() => {
   if (!data) return <NotFound />;
 
   // The cover header belongs to the library's root, not to every folder in it.
-  return <ResourceManager explorerHero={slug ? undefined : <LibraryHero library={data} />} />;
+  return <ResourceManager explorerHero={folderId ? undefined : <LibraryHero library={data} />} />;
 });
 
 MainContent.displayName = 'LibraryMainContent';

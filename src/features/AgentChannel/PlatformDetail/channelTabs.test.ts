@@ -29,6 +29,23 @@ describe('resolveTabs', () => {
     expect(resolveTabs(['reply'])).toEqual(['connect', 'reply']);
     expect(resolveTabs([])).toEqual(['connect']);
   });
+
+  it('adds wake records last, only for a saved bot that can wake on its own', () => {
+    expect(resolveTabs(['wake', 'reply'], { hasConfig: true })).toEqual([
+      'connect',
+      'wake',
+      'reply',
+      'records',
+    ]);
+    // Not saved yet: nothing has been judged.
+    expect(resolveTabs(['wake', 'reply'], { hasConfig: false })).toEqual([
+      'connect',
+      'wake',
+      'reply',
+    ]);
+    // No wake settings on this platform: it never judges a message.
+    expect(resolveTabs(['reply'], { hasConfig: true })).toEqual(['connect', 'reply']);
+  });
 });
 
 describe('defaultTab', () => {
@@ -39,6 +56,10 @@ describe('defaultTab', () => {
   it('opens a saved channel on its first settings tab', () => {
     expect(defaultTab(['connect', 'access', 'reply'], true)).toBe('access');
     expect(defaultTab(['connect', 'reply'], true)).toBe('reply');
+  });
+
+  it('never opens on the records tab by itself', () => {
+    expect(defaultTab(['connect', 'wake', 'records'], true)).toBe('wake');
   });
 
   it('stays on connect when there is nothing else', () => {
@@ -95,5 +116,9 @@ describe('footerSaveHidden', () => {
     );
     // A saved bot: the steps fold away and have no save step.
     expect(footerSaveHidden({ activeTab: 'connect', hasConfig: true, stepSave: true })).toBe(false);
+  });
+
+  it('has nothing to save on the records tab', () => {
+    expect(footerSaveHidden({ activeTab: 'records', hasConfig: true, stepSave: false })).toBe(true);
   });
 });

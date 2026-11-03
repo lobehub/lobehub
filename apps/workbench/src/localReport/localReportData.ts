@@ -73,6 +73,8 @@ const createLocalReport = () => {
   };
 
   return {
+    /** The acceptance directory as a command names it (see `LocalAcceptanceSource`). */
+    acceptanceDir: source.acceptanceDir ?? `.acceptances/${source.acceptance.subjectKey}`,
     acceptanceId: id,
     append: (event: LocalReviewEvent) => {
       pending = [...pending, event];

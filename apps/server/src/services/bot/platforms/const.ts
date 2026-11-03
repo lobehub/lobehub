@@ -956,6 +956,14 @@ export const BOT_REACTION_MODES: readonly BotReactionMode[] = ['minimal', 'full'
 
 export const DEFAULT_BOT_REACTION_MODE: BotReactionMode = 'minimal';
 
+/**
+ * The mode a bot is created with. A new bot starts with status reactions off, so it does not ping
+ * anyone until its owner turns them on. {@link DEFAULT_BOT_REACTION_MODE} stays the schema default
+ * and the runtime fallback, because rows saved before the field existed carry no `reactionMode`
+ * and must keep reacting as they always have; only a bot being created gets this mode.
+ */
+export const NEW_BOT_REACTION_MODE: BotReactionMode = 'none';
+
 export const reactionModeField: FieldSchema = {
   key: 'reactionMode',
   default: DEFAULT_BOT_REACTION_MODE,

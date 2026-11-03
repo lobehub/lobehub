@@ -20,6 +20,7 @@ import { ProductLogo } from '@/components/Branding';
 import { isCustomBranding } from '@/const/version';
 
 import { getLocalReport } from './localReportData';
+import { saveReviewLog } from './saveReviewLog';
 
 const styles = stylex.create({
   command: {
@@ -47,28 +48,12 @@ const styles = stylex.create({
   },
 });
 
-/** `reviews.json` content, downloaded where the CLI looks for it. */
-export const reviewExportFileName = (acceptanceId: string) =>
-  `acceptance-reviews-${acceptanceId}.json`;
-
-const download = (fileName: string, content: string) => {
-  const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
-
 /**
  * The page's own chrome: where the report lives, how many decisions are not
  * saved yet, and the one way out to collaboration.
  *
  * A file opened from disk cannot write next to itself, so "save" downloads the
- * review log; the CLI picks the newest download up on its next `view` or
- * `feedback` and files it beside the rounds.
+ * review log (see `saveReviewLog`).
  */
 export const LocalReviewBar = () => {
   const { t } = useTranslation('verify');
@@ -78,13 +63,10 @@ export const LocalReviewBar = () => {
   const pending = report.pendingCount();
   const unsaved = report.unsavedCount();
   const title = report.bundle().subject.title;
-  const publishCommand = `lh acceptance publish .acceptances/${report.source.acceptance.subjectKey}`;
+  const publishCommand = `lh acceptance publish ${report.acceptanceDir}`;
 
   const save = () => {
-    const fileName = reviewExportFileName(report.acceptanceId);
-    download(fileName, `${JSON.stringify(report.exportLog(), null, 2)}\n`);
-    report.markExported();
-    toast.success(t('acceptance.local.saved', { file: fileName }));
+    toast.success(t('acceptance.local.saved', { file: saveReviewLog() }));
   };
 
   return (

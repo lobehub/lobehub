@@ -56,6 +56,36 @@ describe('GoalService', () => {
     expect(after.edges.filter((e) => e.kind === 'depends_on')).toHaveLength(1);
   });
 
+  it('keeps the plan when the goal is renamed while the planner runs', async () => {
+    // Creating a goal without a drafted title names it in the background, right
+    // as its first plan is being made; that rename must not throw the plan away.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const planner = vi
+      .spyOn(GoalCriteriaGeneratorService.prototype, 'decompose')
+      .mockImplementation(async () => {
+        await gate;
+        return {
+          problemStatement: '改名不影响规划',
+          tasks: [{ dependsOn: [], instruction: '收集', title: '方向A' }],
+        };
+      });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ problemDescription: '原话', title: 'Stopgap' });
+
+    const tick = service.tick(graph.goal.id);
+    await vi.waitFor(() => expect(planner).toHaveBeenCalled());
+    await service.updateTitle(graph.goal.id, 'Named');
+    release();
+    await tick;
+
+    const after = await service.graph(graph.goal.id);
+    expect(after.goal.title).toBe('Named');
+    expect(after.nodes.filter((node) => node.kind === 'task')).toHaveLength(1);
+  });
+
   it('waits for an unfenced legacy planner instead of generating a second graph', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Legacy in-flight planning' });

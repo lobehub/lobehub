@@ -56,6 +56,7 @@ import {
   DashboardInterventions,
   DashboardManifest,
   DashboardRenders,
+  LegacyDashboardIdentifier,
 } from '@lobechat/builtin-tool-dashboard/client';
 import {
   GoalInspectors,
@@ -209,6 +210,7 @@ import { registerBuiltinRenders } from './renders';
 import { registerBuiltinStreamings } from './streamings';
 import { TwitterIdentifier, TwitterInspectors } from './twitter';
 
+const COPILOT_IDENTIFIER = 'copilot';
 const DROID_IDENTIFIER = 'droid';
 const DEVIN_IDENTIFIER = 'devin';
 const QODER_IDENTIFIER = 'qoder';
@@ -273,6 +275,10 @@ export const registerBuiltinToolSurfaces = (): void => {
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
     [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
     [ClaudeCodeIdentifier]: ClaudeCodeRenders as Record<string, BuiltinRender>,
+    [COPILOT_IDENTIFIER]: {
+      execute: RunCommandRender as BuiltinRender,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
+    },
     [DROID_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
     },
@@ -304,6 +310,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
     [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,
     [DashboardManifest.identifier]: DashboardRenders as Record<string, BuiltinRender>,
+    // Dashboard tool calls persisted before the rename to `builtin-dashboard`.
+    [LegacyDashboardIdentifier]: DashboardRenders as Record<string, BuiltinRender>,
     [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,
     [UserInteractionIdentifier]: UserInteractionRenders as Record<string, BuiltinRender>,
     [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
@@ -339,6 +347,12 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinInspector
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
+    [COPILOT_IDENTIFIER]: {
+      execute: createRunCommandInspector(
+        'builtins.lobe-local-system.apiName.runCommand',
+      ) as BuiltinInspector,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [DROID_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
     },
@@ -385,6 +399,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
     [CanvasManifest.identifier]: CanvasInspectors,
     [DashboardManifest.identifier]: DashboardInspectors as Record<string, BuiltinInspector>,
+    // Dashboard tool calls persisted before the rename to `builtin-dashboard`.
+    [LegacyDashboardIdentifier]: DashboardInspectors as Record<string, BuiltinInspector>,
     [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
     [UserInteractionIdentifier]: UserInteractionInspectors as Record<string, BuiltinInspector>,
     [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
@@ -442,6 +458,10 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinIntervention
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    [COPILOT_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
     [DROID_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]:
         ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
@@ -472,6 +492,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     [MemoryManifest.identifier]: MemoryInterventions as Record<string, BuiltinIntervention>,
     [MessageManifest.identifier]: MessageInterventions as Record<string, BuiltinIntervention>,
     [DashboardManifest.identifier]: DashboardInterventions as Record<string, BuiltinIntervention>,
+    // Dashboard tool calls persisted before the rename to `builtin-dashboard`.
+    [LegacyDashboardIdentifier]: DashboardInterventions as Record<string, BuiltinIntervention>,
     [TaskManifest.identifier]: TaskInterventions as Record<string, BuiltinIntervention>,
     [UserInteractionIdentifier]: UserInteractionInterventions as Record<
       string,

@@ -27,6 +27,8 @@
   "openChatSettings.title": "Open Chat Settings",
   "openHotkeyHelper.desc": "View instructions for all keyboard shortcuts",
   "openHotkeyHelper.title": "Open Hotkey Help",
+  "openTaskFilter.desc": "Open the filter menu on the Tasks page",
+  "openTaskFilter.title": "Filter Tasks",
   "prevTab.desc": "Cycle to the previous tab in the Desktop app; wraps around to the last tab at the beginning",
   "prevTab.title": "Previous Tab",
   "regenerateMessage.desc": "Regenerate the last message",

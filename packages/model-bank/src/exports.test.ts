@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -13,20 +13,27 @@ describe('model-bank package.json exports should cover all aiModels files', () =
     exports?: Record<string, string>;
   };
 
-  const allModelFiles = readdirSync(aiModelsDir)
-    .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
-    .map((f) => f.replace(/\.ts$/, ''))
-    // Exclude non-provider entry files.
-    .filter((name) => !['index'].includes(name));
+  const entries = readdirSync(aiModelsDir, { withFileTypes: true });
+
+  /** Provider id → expected export path; a provider split into a directory exports its `index.ts`. */
+  const expectedExports = new Map<string, string>([
+    ...entries
+      .filter((e) => e.isFile() && e.name.endsWith('.ts') && !e.name.endsWith('.test.ts'))
+      .map((e) => e.name.replace(/\.ts$/, ''))
+      // Exclude non-provider entry files.
+      .filter((name) => !['index'].includes(name))
+      .map((name): [string, string] => [name, `./src/aiModels/${name}.ts`]),
+    ...entries
+      .filter((e) => e.isDirectory() && existsSync(path.resolve(aiModelsDir, e.name, 'index.ts')))
+      .map((e): [string, string] => [e.name, `./src/aiModels/${e.name}/index.ts`]),
+  ]);
 
   it('every aiModels file should be exported in package.json.exports', () => {
     const exportsMap = packageJson.exports ?? {};
 
-    const missing = allModelFiles.filter((name) => {
-      const key = `./${name}`;
-      const expectedPath = `./src/aiModels/${name}.ts`;
-      return !(key in exportsMap) || exportsMap[key] !== expectedPath;
-    });
+    const missing = [...expectedExports]
+      .filter(([name, expectedPath]) => exportsMap[`./${name}`] !== expectedPath)
+      .map(([name]) => name);
 
     if (missing.length > 0) {
       console.error('Missing exports for aiModels files:', missing);

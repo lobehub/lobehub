@@ -26,6 +26,7 @@ import {
   responseLanguageSettingsUrl,
   unsetLanguageWarning,
 } from './language';
+import { decideLocalAcceptance } from './local/decision';
 import { localAcceptanceTarget, readLocalBundle } from './local/localBundle';
 import { isSignedOut, LOCAL_MODE_INSTRUCTION } from './local/mode';
 import { publishAction, withPublishOptions } from './local/publish';
@@ -706,10 +707,14 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
 
   acceptance
     .command('accept <idOrSubject>')
-    .description('Accept the delivery — the terminal user decision that closes the acceptance')
+    .description(
+      'Accept the delivery — the terminal user decision that closes the acceptance; a local acceptance directory records it offline',
+    )
     .option('--comment <text>', 'Optional note recorded with the decision')
     .option('--json [fields]', 'Output JSON')
     .action(async (idOrSubject: string, options: { comment?: string; json?: boolean | string }) => {
+      const local = localAcceptanceTarget(idOrSubject);
+      if (local) return decideLocalAcceptance(local, 'accept', options);
       const id = await resolveAcceptanceId(idOrSubject);
       const client = await getTrpcClient();
       const result = await client.acceptance.accept.mutate({ comment: options.comment, id });
@@ -726,10 +731,14 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
 
   acceptance
     .command('reject <idOrSubject>')
-    .description('Reject the delivery — the comment seeds the next repair round')
+    .description(
+      'Reject the delivery — the comment seeds the next repair round; a local acceptance directory records it offline',
+    )
     .requiredOption('--comment <text>', 'Why the delivery is rejected (the re-tasking input)')
     .option('--json [fields]', 'Output JSON')
     .action(async (idOrSubject: string, options: { comment: string; json?: boolean | string }) => {
+      const local = localAcceptanceTarget(idOrSubject);
+      if (local) return decideLocalAcceptance(local, 'reject', options);
       const id = await resolveAcceptanceId(idOrSubject);
       const client = await getTrpcClient();
       const result = await client.acceptance.reject.mutate({ comment: options.comment, id });

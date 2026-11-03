@@ -105,7 +105,6 @@ export function ReplyDetail({
           <Text style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
             {job.errorMessage?.trim() || t('receipt.errorUnavailable')}
           </Text>
-          <span {...stylex.props(styles.muted)}>{t('receipt.failedHint')}</span>
         </Flexbox>
       )}
       {job.canStop && isChannelJobActive(job) && (

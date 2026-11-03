@@ -1,3 +1,4 @@
+import { type TaskListFilter } from '@lobechat/types';
 import { type NavigateFunction } from 'react-router';
 
 import { type LocaleMode } from '@/types/locale';
@@ -78,8 +79,6 @@ export enum SettingsTabs {
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
-  /** The cloud sandbox's network drives — labelled “Storage”; `storage` is local data. */
-  Drive = 'drive',
   Environments = 'environments',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
@@ -459,6 +458,13 @@ export interface SystemStatus {
    */
   taskKanbanHiddenPanelCollapsed?: boolean;
   /**
+   * Tasks page filters, one entry per list scope (workspace + global / agent /
+   * project page). An array, not a map: status is deep-merged on write, which
+   * could never drop a removed condition from a nested object, while arrays
+   * are replaced whole.
+   */
+  taskListFilters?: { filter: TaskListFilter; scope: string }[];
+  /**
    * Display mode for the tasks page. Persisted so a manually selected board or
    * list view survives navigation and page reloads.
    */
@@ -573,6 +579,7 @@ export const createNavigationRef = (): GlobalNavigationRef => ({ current: null }
 export interface GlobalState {
   hasNewVersion?: boolean;
   isMobile?: boolean;
+  isNavPanelResizing?: boolean;
   /**
    * Server version is too old, does not support /api/version endpoint
    * Need to prompt user to update server

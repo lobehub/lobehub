@@ -31,6 +31,27 @@ describe('buildVisibleNodes', () => {
     expect(nodes.map((n) => n.key)).toEqual(['folder']);
   });
 
+  it('walks into an expanded document that holds other documents', () => {
+    // Regression: only folders were walked, so a page nested under another page
+    // never showed up in the library tree.
+    const parentDoc = toTreeItem({
+      fileType: 'custom/document',
+      hasChildren: true,
+      id: 'parent-doc',
+      name: 'Parent',
+    });
+    const nodes = buildVisibleNodes(
+      { '': [parentDoc, docB], 'parent-doc': [docA] },
+      { 'parent-doc': true },
+    );
+
+    expect(nodes.map((n) => [n.key, n.level, n.parentKey])).toEqual([
+      ['parent-doc', 0, ''],
+      ['doc-a', 1, 'parent-doc'],
+      ['doc-b', 0, ''],
+    ]);
+  });
+
   it('renders a row that two folder caches both list only once', () => {
     // Optimistic move put doc-a under the folder while the Explorer's
     // reconcile still lists it at the root.

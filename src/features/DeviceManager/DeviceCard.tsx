@@ -353,6 +353,9 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
           <UsageMeterGroup>
             <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
             <UsageMeter label={t('devices.card.memoryUsage')} value={usage.latest?.memoryPercent} />
+            {usage.reportsDisk && (
+              <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
+            )}
           </UsageMeterGroup>
         )}
       </Flexbox>

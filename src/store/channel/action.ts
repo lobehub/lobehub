@@ -23,7 +23,7 @@ export const CHANNEL_IDLE_REFRESH_MS = 60_000;
 
 class ChannelActionImpl {
   readonly #private = new ChannelPrivateAction(useChannelStore.setState, useChannelStore.getState);
-  useFetchUserCandidates = (channelId: string, search: string) =>
+  useFetchUserCandidates = (channelId: string | undefined, search: string) =>
     useClientDataSWR(channelKeys.userCandidates(channelId, search), () =>
       channelService.userCandidates(channelId, search),
     );
@@ -52,6 +52,14 @@ class ChannelActionImpl {
   };
   create = async (input: Parameters<typeof channelService.create>[0]) => {
     const result = await channelService.create(input);
+    await this.#refreshAfterWrite(this.refreshList);
+    return result.data.channel.id;
+  };
+  /** Inviting into a direct conversation starts a new group; the conversation stays as it is. */
+  createGroupFromDirect = async (
+    input: Parameters<typeof channelService.createGroupFromDirect>[0],
+  ) => {
+    const result = await channelService.createGroupFromDirect(input);
     await this.#refreshAfterWrite(this.refreshList);
     return result.data.channel.id;
   };
@@ -164,7 +172,9 @@ class ChannelActionImpl {
     await this.#refreshAfterWrite(() =>
       Promise.all([
         this.refreshDetail({ channelId: input.channelId, threadId: data.threadId }),
-        ...(input.rootMessageId ? [this.refreshDetail({ channelId: input.channelId })] : []),
+        ...(input.rootMessageId || (input.replyToId && data.threadId)
+          ? [this.refreshDetail({ channelId: input.channelId })]
+          : []),
         this.refreshList(),
       ]),
     );

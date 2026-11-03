@@ -15,6 +15,7 @@ import AcceptanceGoal from '@/features/Acceptance/Viewer/Header/AcceptanceGoal';
 import AcceptanceIdentity from '@/features/Acceptance/Viewer/Header/AcceptanceIdentity';
 import ReadDiscussion from '@/features/Acceptance/Viewer/ReadOnly/Discussion';
 
+import { LocalDecision } from './LocalDecision';
 import { LocalReviewBar } from './LocalReviewBar';
 
 const styles = stylex.create({
@@ -49,8 +50,9 @@ const styles = stylex.create({
 
 /**
  * The offline acceptance page: the workbench detail's reading and reviewing
- * atoms over the local bundle. Sharing, the comment composer and every other
- * collaboration surface are simply not mounted — they need LobeHub.
+ * atoms over the local bundle, and the decision on the whole delivery.
+ * Sharing, the comment composer and every other collaboration surface are
+ * simply not mounted — they need LobeHub.
  */
 export const LocalAcceptanceReport = ({ acceptanceId }: { acceptanceId: string }) => {
   const { t } = useTranslation('verify');
@@ -67,6 +69,8 @@ export const LocalAcceptanceReport = ({ acceptanceId }: { acceptanceId: string }
               <AcceptanceIdentity />
               <AcceptanceGoal />
               <AcceptanceCheckInventory />
+              {/* Deciding belongs where the evidence is, as on the hosted page. */}
+              <LocalDecision />
               <section aria-label={t('acceptance.comments.title')}>
                 <Text as={'h2'}>{t('acceptance.comments.title')}</Text>
                 <ReadDiscussion />

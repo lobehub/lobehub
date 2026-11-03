@@ -386,5 +386,10 @@ export async function applySubagentIntent(
       await deps.threadModel.update(intent.threadId, { status: ThreadStatus.Active });
       return;
     }
+
+    case 'reopenThread': {
+      await deps.threadModel.update(intent.threadId, { status: ThreadStatus.Processing });
+      return;
+    }
   }
 }

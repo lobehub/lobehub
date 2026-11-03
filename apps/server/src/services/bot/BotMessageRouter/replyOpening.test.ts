@@ -38,7 +38,7 @@ describe('createReplyOpening', () => {
       client,
       mode: 'agent',
       opener,
-      rolledOut: async () => true,
+      decides: true,
       ...overrides,
     });
 
@@ -120,15 +120,7 @@ describe('createReplyOpening', () => {
 
   it.each([
     ['the owner keeps threads', { mode: 'thread' as const }],
-    ['the rollout is off', { rolledOut: async () => false }],
-    [
-      'the rollout cannot be read',
-      {
-        rolledOut: async () => {
-          throw new Error('down');
-        },
-      },
-    ],
+    ['the wake switch is off', { decides: false }],
   ])('does not decide when %s', async (_, overrides) => {
     const service = create(overrides);
 
@@ -198,6 +190,37 @@ describe('createReplyOpening', () => {
     expect(opener).not.toHaveBeenCalled();
     expect(thread.id).toBe(CHANNEL);
     expect(result.verdict?.reason).toBe('channel:followup');
+  });
+
+  describe('on a platform without reply threads that lets the bot decide (Feishu)', () => {
+    const FEISHU_CHAT = 'feishu:group:oc_1';
+    const feishuClient = { decidesReplyOpening: true };
+
+    it('decides the acknowledgement and answers where the message is', async () => {
+      opener.mockResolvedValue({ ack: 'On it.', placement: 'channel' });
+      const thread = makeThread(FEISHU_CHAT);
+      const service = create({ client: feishuClient });
+
+      await expect(service.decidesPlacement()).resolves.toBe(true);
+      const result = await open(service, thread);
+
+      expect(opener.mock.calls[0][0]).toMatchObject({ canOpenThread: false });
+      expect(thread.id).toBe(FEISHU_CHAT);
+      expect(thread.post).toHaveBeenCalledWith('On it.');
+      expect(result.openingReply).toBe('On it.');
+      expect(result.verdict?.reason).toBe('channel+ack');
+    });
+
+    it('stays where the message is when the model fails', async () => {
+      opener.mockRejectedValue(new Error('provider down'));
+      const thread = makeThread(FEISHU_CHAT);
+
+      const result = await open(create({ client: feishuClient }), thread);
+
+      expect(thread.id).toBe(FEISHU_CHAT);
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(result.verdict?.reason).toBe('channel:fallback-error');
+    });
   });
 
   describe('on a platform whose message arrives keyed by the thread under it (Slack)', () => {

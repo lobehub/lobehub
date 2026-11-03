@@ -125,6 +125,70 @@ describe('evaluateFeatureFlag', () => {
     expect(evaluateFeatureFlag([], 'user-123')).toBe(false);
     expect(evaluateFeatureFlag([])).toBe(false);
   });
+
+  describe('percentage rollout token', () => {
+    const userIds = Array.from({ length: 10_000 }, (_, i) => `user-${i}`);
+    const enabledUsers = (value: string[], flagKey: string) =>
+      userIds.filter((id) => evaluateFeatureFlag(value, id, flagKey));
+
+    it('buckets users by FNV-1a of "flagKey:userId" modulo 100', () => {
+      // FNV-1a("channel:user-1") = 4173342739 → bucket 39, derived outside the codebase
+      expect(evaluateFeatureFlag(['rollout:39'], 'user-1', 'channel')).toBe(false);
+      expect(evaluateFeatureFlag(['rollout:40'], 'user-1', 'channel')).toBe(true);
+    });
+
+    it('enables roughly the configured share of users', () => {
+      const share = enabledUsers(['rollout:10'], 'channel').length / userIds.length;
+
+      expect(share).toBeGreaterThan(0.08);
+      expect(share).toBeLessThan(0.12);
+    });
+
+    it('keeps every enabled user enabled when the percentage grows', () => {
+      const atTen = enabledUsers(['rollout:10'], 'channel');
+      const atTwenty = new Set(enabledUsers(['rollout:20'], 'channel'));
+
+      expect(atTen.every((id) => atTwenty.has(id))).toBe(true);
+    });
+
+    it('picks a different population for each flag key', () => {
+      const channelUsers = new Set(enabledUsers(['rollout:10'], 'channel'));
+      const overlap = enabledUsers(['rollout:10'], 'dashboard').filter((id) =>
+        channelUsers.has(id),
+      );
+
+      expect(overlap.length).toBeLessThan(channelUsers.size / 2);
+    });
+
+    it('enables nobody at 0% and everybody at 100%', () => {
+      expect(enabledUsers(['rollout:0'], 'channel')).toHaveLength(0);
+      expect(enabledUsers(['rollout:100'], 'channel')).toHaveLength(userIds.length);
+    });
+
+    it('still enables allowlisted users outside the rollout bucket', () => {
+      expect(evaluateFeatureFlag(['rollout:0', 'user-1'], 'user-1', 'channel')).toBe(true);
+    });
+
+    it('ignores malformed rollout tokens', () => {
+      for (const token of [
+        'rollout:abc',
+        'rollout:150',
+        'rollout:-5',
+        'rollout:10.5',
+        'rollout:',
+      ]) {
+        expect(enabledUsers([token], 'channel')).toHaveLength(0);
+      }
+    });
+
+    it('does not treat the token as a user id', () => {
+      expect(evaluateFeatureFlag(['rollout:0'], 'rollout:0', 'channel')).toBe(false);
+    });
+
+    it('returns false for anonymous callers', () => {
+      expect(evaluateFeatureFlag(['rollout:100'], undefined, 'channel')).toBe(false);
+    });
+  });
 });
 
 describe('mapFeatureFlagsEnvToState', () => {
@@ -193,6 +257,19 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
+  it('should keep the new subscription tiers off by default and enable them for listed users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.new_tier_plans).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableNewTierPlans).toBe(
+      false,
+    );
+
+    const config = { new_tier_plans: ['tester-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'tester-123').enableNewTierPlans).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableNewTierPlans).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableNewTierPlans).toBe(false);
+  });
+
   it('should keep topic previews off by default and enable them for listed users', () => {
     expect(DEFAULT_FEATURE_FLAGS.topic_preview).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableTopicPreview).toBe(
@@ -205,7 +282,7 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableTopicPreview).toBe(false);
   });
 
-  it('should gate the mobile gateway mux independently from the Web flag', () => {
+  it('should gate the mobile gateway mux behind its own flag', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_gateway_mux_mobile).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableGatewayMuxMobile).toBe(
       false,
@@ -213,16 +290,11 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     const everyone = mapFeatureFlagsEnvToState({ agent_gateway_mux_mobile: true }, 'user-1');
     expect(everyone.enableGatewayMuxMobile).toBe(true);
-    expect(everyone.enableGatewayMux).toBeFalsy();
 
     const config = { agent_gateway_mux_mobile: ['user-123'] };
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableGatewayMuxMobile).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableGatewayMuxMobile).toBe(false);
     expect(mapFeatureFlagsEnvToState(config).enableGatewayMuxMobile).toBe(false);
-
-    const webOnly = mapFeatureFlagsEnvToState({ agent_gateway_mux: true }, 'user-1');
-    expect(webOnly.enableGatewayMux).toBe(true);
-    expect(webOnly.enableGatewayMuxMobile).toBeFalsy();
   });
 
   it('should keep dashboards off by default and enable them per user or globally', () => {
@@ -246,6 +318,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     const config = { mcp_app: ['user-123'] };
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableMcpApp).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApp).toBe(false);
+  });
+
+  it('should keep the rail layout off by default and enable it per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.im_layout).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableImLayout).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ im_layout: true }).enableImLayout).toBe(true);
+
+    const config = { im_layout: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableImLayout).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableImLayout).toBe(false);
   });
 
   it('should keep Channels off by default and enable them per user or globally', () => {
@@ -377,26 +460,12 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableRAGEval).toBe(true);
   });
 
-  describe('bot_wake rollout', () => {
-    it('is off for everyone by default', () => {
-      expect(DEFAULT_FEATURE_FLAGS.bot_wake).toBe(false);
-      expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'owner-1').enableBotWake).toBe(false);
-    });
+  it('salts the rollout bucket with each flag key', () => {
+    // user-1 lands in bucket 39 for channel and 74 for dashboard
+    const config = { channel: ['rollout:40'], dashboard: ['rollout:40'] };
+    const mappedState = mapFeatureFlagsEnvToState(config, 'user-1');
 
-    it('turns on for the bot owners on the allowlist only, then for everyone', () => {
-      const allowlist = { ...DEFAULT_FEATURE_FLAGS, bot_wake: ['owner-1'] };
-
-      expect(mapFeatureFlagsEnvToState(allowlist, 'owner-1').enableBotWake).toBe(true);
-      expect(mapFeatureFlagsEnvToState(allowlist, 'owner-2').enableBotWake).toBe(false);
-      expect(mapFeatureFlagsEnvToState(allowlist).enableBotWake).toBe(false);
-
-      const everyone = { ...DEFAULT_FEATURE_FLAGS, bot_wake: true };
-      expect(mapFeatureFlagsEnvToState(everyone, 'owner-2').enableBotWake).toBe(true);
-    });
-
-    it('accepts a published allowlist or boolean', () => {
-      expect(FeatureFlagsSchema.safeParse({ bot_wake: ['owner-1'] }).success).toBe(true);
-      expect(FeatureFlagsSchema.safeParse({ bot_wake: true }).success).toBe(true);
-    });
+    expect(mappedState.enableChannels).toBe(true);
+    expect(mappedState.enableDashboard).toBe(false);
   });
 });

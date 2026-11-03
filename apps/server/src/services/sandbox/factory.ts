@@ -1,18 +1,8 @@
-import { sandboxEnv } from '@/envs/sandbox';
-
+import { getSandboxProviderKind } from './deployment';
 import { MarketSandboxProvider } from './providers/market';
 import { OnlyboxesSandboxProvider } from './providers/onlyboxes';
 import { SandboxMiddlewareService } from './service';
-import type {
-  SandboxProvider,
-  SandboxProviderKind,
-  SandboxService,
-  SandboxServiceOptions,
-} from './types';
-
-export const getSandboxProviderKind = (): SandboxProviderKind => {
-  return sandboxEnv.SANDBOX_PROVIDER || 'market';
-};
+import type { SandboxProvider, SandboxService, SandboxServiceOptions } from './types';
 
 const createSandboxProvider = (options: SandboxServiceOptions): SandboxProvider => {
   switch (getSandboxProviderKind()) {

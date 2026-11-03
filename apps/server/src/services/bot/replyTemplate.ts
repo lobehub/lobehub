@@ -3,7 +3,11 @@ import {
   getErrorCodeSpec,
   normalizeChatMessageError,
 } from '@lobechat/model-runtime/errors';
-import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
+import type {
+  ChatErrorBudgetContext,
+  ChatErrorDispatchContext,
+  ChatErrorHeterogeneousContext,
+} from '@lobechat/types';
 
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
@@ -13,6 +17,7 @@ import { getExtremeAck } from './ackPhrases';
 // Telegram Guest outbound path import this template for localized copy.
 import { type BotReplyLocale } from './platforms/const';
 import { formatDuration } from './platforms/utils';
+import { renderDispatchError } from './renderDispatchError';
 import { renderHeterogeneousError } from './renderHeterogeneousError';
 
 // Use raw Unicode emoji instead of Chat SDK emoji placeholders,
@@ -382,13 +387,13 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     errorFreePlanLimit:
       '**Free plan limit reached.**\nThe free-plan allowance this bot runs on is used up. Ask the bot owner to upgrade to a paid plan on the LobeHub website to keep going.',
     errorInsufficientCredits:
-      "**Not enough credits.**\nThe credits this bot runs on can't cover this model's estimated cost. Ask the bot owner to top up credits or upgrade their plan on the LobeHub website, or switch to a less expensive model in the agent's settings.",
+      "**Not enough balance.**\nThe balance this bot runs on can't cover this model's estimated cost. Ask the bot owner to top up or upgrade their plan on the LobeHub website, or switch to a less expensive model in the agent's settings.",
     errorInsufficientMemberBudget:
-      "**Member budget in this workspace is used up.**\nThe bot owner's spending allowance in this workspace can't cover this run's estimated cost — topping up credits won't change it. Ask a workspace admin to raise the bot owner's member budget, or switch to a less expensive model in the agent's settings.",
+      "**Member budget in this workspace is used up.**\nThe bot owner's spending allowance in this workspace can't cover this run's estimated cost — topping up won't change it. Ask a workspace admin to raise the bot owner's member budget, or switch to a less expensive model in the agent's settings.",
     errorInsufficientWorkspaceCredits:
-      "**Workspace credits exhausted.**\nThis workspace's shared credits can't cover this run's estimated cost. Ask a workspace admin to top up or upgrade the workspace, or switch to a less expensive model in the agent's settings.",
+      "**Workspace usage exhausted.**\nThis workspace's shared usage can't cover this run's estimated cost. Ask a workspace admin to top up or upgrade the workspace, or switch to a less expensive model in the agent's settings.",
     errorSubscriptionPlanLimit:
-      "**Plan limit reached.**\nThe subscription plan this bot runs on can't cover this request — either its credits are used up for this billing period, or the plan doesn't include this model. Ask the bot owner to upgrade or top up their plan on the LobeHub website, or configure a custom model API in the agent's provider settings.",
+      "**Plan limit reached.**\nThe subscription plan this bot runs on can't cover this request — either its usage is used up for this billing period, or the plan doesn't include this model. Ask the bot owner to upgrade or top up their plan on the LobeHub website, or configure a custom model API in the agent's provider settings.",
     errorInvalidProviderAPIKey:
       "**Invalid or missing API key.**\nThe configured model provider rejected its API key. Please verify the key in the agent's provider settings (it may be expired, revoked, or mistyped) and try again.",
     errorLocationNotSupported:
@@ -421,7 +426,7 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     groupRejectedAllowlist:
       "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
     groupRejectedDisabled:
-      "This bot doesn't respond in groups or channels. Please reach out via direct message instead.",
+      "Sorry, you don't have permission to talk to this bot in groups or channels. Please contact the bot's owner if you need access.",
     guestAttachmentOverflow:
       '<i>Additional attachments could not be listed in this Guest Mode reply.</i>',
     guestLinkButton: 'Open Bot',
@@ -510,13 +515,13 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     errorFreePlanLimit:
       '**免费计划额度已用尽**\n该机器人所使用的免费计划额度已经用完。请联系机器人所有者前往 LobeHub 网页端升级到付费计划后继续。',
     errorInsufficientCredits:
-      '**积分余额不足**\n该机器人所使用的积分不足以覆盖本次模型调用的预估费用。请联系机器人所有者前往 LobeHub 网页端充值积分或升级订阅计划，或在 Agent 设置中切换到费用更低的模型。',
+      '**余额不足**\n该机器人所使用的余额不足以覆盖本次模型调用的预估费用。请联系机器人所有者前往 LobeHub 网页端充值或升级订阅计划，或在 Agent 设置中切换到费用更低的模型。',
     errorInsufficientMemberBudget:
-      '**该工作区的成员预算已用尽**\n机器人所有者在当前工作区的成员预算不足以覆盖本次运行的预估费用，充值积分不会改变该预算。请联系工作区管理员提高机器人所有者的成员预算，或在 Agent 设置中切换到费用更低的模型。',
+      '**该工作区的成员预算已用尽**\n机器人所有者在当前工作区的成员预算不足以覆盖本次运行的预估费用，充值不会改变该预算。请联系工作区管理员提高机器人所有者的成员预算，或在 Agent 设置中切换到费用更低的模型。',
     errorInsufficientWorkspaceCredits:
       '**工作区额度已用尽**\n当前工作区的共享额度不足以覆盖本次运行的预估费用。请联系工作区管理员充值或升级工作区，或在 Agent 设置中切换到费用更低的模型。',
     errorSubscriptionPlanLimit:
-      '**已达到订阅计划限制**\n该机器人所使用的订阅计划无法覆盖本次请求：可能是本周期的订阅积分已用完，也可能是当前计划不包含该模型。请联系机器人所有者前往 LobeHub 网页端升级计划或充值，或在 Agent 的 Provider 设置中配置自定义模型 API。',
+      '**已达到订阅计划限制**\n该机器人所使用的订阅计划无法覆盖本次请求：可能是本周期的订阅额度已用完，也可能是当前计划不包含该模型。请联系机器人所有者前往 LobeHub 网页端升级计划或充值，或在 Agent 的 Provider 设置中配置自定义模型 API。',
     errorInvalidProviderAPIKey:
       '**API Key 无效或缺失**\n所配置的模型 Provider 拒绝了 API Key，可能已过期、被吊销或填写错误。请到 Agent 的 Provider 设置中检查并更新 API Key 后重试。',
     errorLocationNotSupported:
@@ -546,7 +551,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
         : `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
     groupRejectedAllowlist: '该机器人未在此频道启用。如需访问请联系机器人管理员。',
-    groupRejectedDisabled: '该机器人不在群组或频道中响应。请通过私信联系。',
+    groupRejectedDisabled:
+      '抱歉，您没有在群组或频道中与该机器人对话的权限。如需访问请联系机器人主人。',
     guestAttachmentOverflow: '<i>更多附件无法在这条访客模式回复中列出。</i>',
     guestLinkButton: '打开机器人',
     guestLinkPromptChat: '请在私聊中继续，以完成 LobeHub 账户关联。',
@@ -728,6 +734,9 @@ const isCommandConnectionClosedError = (
  *    learns who owns the failure and whether to retry.
  * 3. **Legacy** — when neither is known, the opaque `Operation ID` template.
  *
+ * Allowlisted external-agent (`heterogeneous`) and fail-fast dispatch
+ * (`dispatch`) contexts take precedence over all three tiers.
+ *
  * The Operation ID is appended as a footer to every tier (not the whole
  * message) so it stays traceable in logs without being the only thing the
  * user sees.
@@ -740,10 +749,15 @@ export function renderAgentError(
   attribution?: string,
   budget?: ChatErrorBudgetContext,
   heterogeneous?: ChatErrorHeterogeneousContext,
+  dispatch?: ChatErrorDispatchContext,
 ): string {
   const strings = getSystemStrings(lng);
   const heteroReply = renderHeterogeneousError(heterogeneous);
   if (heteroReply) return appendOperationId(heteroReply, operationId);
+  // A run that failed before its agent started: name the cause (missing
+  // sandbox credential, device-access fallback) instead of the bare legacy tier.
+  const dispatchReply = renderDispatchError(dispatch, lng);
+  if (dispatchReply) return appendOperationId(dispatchReply, operationId);
 
   const normalized = normalizeChatMessageError({
     message: errorMessage,
@@ -960,8 +974,16 @@ export function renderDmRejected(reason: 'disabled' | 'allowlist', lng?: BotRepl
 
 /**
  * Render the system message shown when an inbound non-DM event was blocked
- * by Group Policy. Same disabled-vs-allowlist split as
- * {@link renderDmRejected} so the sender can pivot (try DM, ask the owner).
+ * by Group Policy. Same disabled-vs-allowlist split as {@link renderDmRejected}.
+ *
+ * The bot's owner bypasses Group Policy (see `passGatesOrNotify`), so the bot
+ * *does* speak in groups — `disabled` really means "only the owner may use it
+ * in the groups it has joined" — or nobody, when no owner identity is
+ * configured. (Telegram Guest Mode summons skip Group Policy and follow Guest
+ * Policy instead, so they never reach this notice.) The copy therefore
+ * names the missing permission instead of claiming the bot can't talk in
+ * groups, never promises the owner can (it may be unset), and never points the
+ * sender to a DM (the DM policy may reject them just the same).
  */
 export function renderGroupRejected(
   reason: 'disabled' | 'allowlist',

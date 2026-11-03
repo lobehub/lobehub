@@ -1,5 +1,6 @@
 import { splitAssistantGroupFinalAnswer } from '@lobechat/conversation-flow';
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Fragment, memo, useMemo } from 'react';
 
@@ -28,14 +29,8 @@ import {
 import SteerMessage from './SteerMessage';
 import type { WorkflowExpandLevelDefault } from './WorkflowCollapse';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    container: css`
-      &:has(.tool-blocks) {
-        width: 100%;
-      }
-    `,
-  };
+const styles = stylex.create({
+  container: { width: { 'default': null, ':has(.tool-blocks)': '100%' } },
 });
 
 const ACTIVE_OPERATION_STATUSES = new Set<OperationStatus>(['pending', 'paused', 'running']);
@@ -256,7 +251,7 @@ const Group = memo<GroupChildrenProps>(
     };
 
     return (
-      <Flexbox className={styles.container} gap={4}>
+      <Flexbox className={stylex.props(styles.container).className} gap={4}>
         {views.map((view, index) => (
           <Fragment key={view.id}>
             {view.steerUserId && <SteerMessage id={view.steerUserId} />}

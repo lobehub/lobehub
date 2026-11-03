@@ -279,7 +279,8 @@ export function registerHandlers(
 
   /**
    * How the bot opens a reply: an acknowledgement before the run, and the channel or a thread
-   * under the message, on any platform that offers the choice (`PlatformClient.getReplyTargets`).
+   * under the message, on any platform that offers the choice (`PlatformClient.getReplyTargets`);
+   * the acknowledgement alone on a threadless platform that opts in (`decidesReplyOpening`).
    * Decided by the bot only while the owner leaves the placement to it (see `./replyOpening`);
    * otherwise the previous behaviour.
    */
@@ -294,7 +295,7 @@ export function registerHandlers(
       userId,
       workspaceId: workspaceId ?? undefined,
     }),
-    rolledOut: wakeRecorder.isRolledOut,
+    decides: botWakeEnabled,
   });
 
   const observationOf = (
@@ -445,13 +446,10 @@ export function registerHandlers(
   /**
    * Whether the agent may step back from a conversation when people say it is interfering. Only
    * where it changes something: a stand-down is enforced by the owner rules, in a group
-   * conversation, once the rollout reaches the bot's owner.
+   * conversation, while the bot's wake switch is on.
    */
   const canStandDown = async (thread: { isDM?: boolean }) =>
-    botWakeEnabled &&
-    wakeSettings.ruleMode === 'enforce' &&
-    !thread.isDM &&
-    (await wakeRecorder.isRolledOut());
+    botWakeEnabled && wakeSettings.ruleMode === 'enforce' && !thread.isDM;
 
   const gateFollowup = createFollowupGate({
     applicationId,
@@ -776,9 +774,9 @@ export function registerHandlers(
               : 'watch-keyword'
             : (initiation?.reason ?? 'addressed');
     // Only a wake nobody asked for may end in silence; a DM, @mention, command or solo
-    // conversation is always answered, exactly as before. Until the bot-wake rollout reaches this
-    // bot's owner nothing may: every wake is answered, as it was before the pipeline existed.
-    const wakeKind = (await wakeRecorder.isRolledOut()) ? botWakeKindFor(wakeReason) : 'mention';
+    // conversation is always answered, exactly as before. While the bot's wake switch is off
+    // nothing may: every wake is answered, as it was before the pipeline existed.
+    const wakeKind = botWakeEnabled ? botWakeKindFor(wakeReason) : 'mention';
     if (
       wakeKind === 'followup' &&
       (await gateFollowup({
@@ -850,7 +848,10 @@ export function registerHandlers(
         charLimit,
         client,
         displayToolCalls,
-        duty: wakeReason === 'in-duty' ? { matched: initiation?.duty } : undefined,
+        duty:
+          wakeReason === 'in-duty'
+            ? { helpful: initiation?.helpful, matched: initiation?.duty }
+            : undefined,
         followup: wakeReason === 'followup-window' ? initiation?.followup : undefined,
         named: wakeReason === 'named-in-text',
         openingReply,
@@ -909,7 +910,6 @@ export function registerHandlers(
     dmSettings,
     gateFollowup,
     initiate,
-    isBotWakeRolledOut: wakeRecorder.isRolledOut,
     isMessageMonitoringAllowed,
     nameKeywords,
     observeBurst,

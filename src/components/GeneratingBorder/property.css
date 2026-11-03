@@ -1,0 +1,10 @@
+/*
+ * `@property` is what makes the angle animatable — a plain custom property is
+ * an unregistered token and jumps from 0deg to 360deg instead of sweeping.
+ * Declared once here rather than per call site.
+ */
+@property --lobe-generating-border-angle {
+  inherits: false;
+  initial-value: 0deg;
+  syntax: '<angle>';
+}

@@ -26,6 +26,7 @@ import type { MarketService } from '@/server/services/market';
 
 import { createRunFacts, type RunFacts } from '../runFacts';
 import { applyShareGateToAgentConfig } from '../shareGate';
+import { assertAgentRelayHop } from '../sourceAttribution';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
 import { claimApprovalResume, tryReuseInterventionContinuation } from './approvalResume';
@@ -35,6 +36,7 @@ import { createHistoryMessagesLoader } from './operationPrep';
 import { resolveRunAgentConfig } from './resolveRunAgentConfig';
 import { loadResumeParentMessage } from './resumeParent';
 import { resolveRunSettings } from './runSettings';
+import { bindRunSlot, claimRunSlot, resolveRunSlotPolicy, type RunSlotClaim } from './runSlot';
 import { traceSendStage } from './sendTracing';
 import { startOperation } from './startOperation';
 import { bindTopicWorkingDirectory } from './topicWorkingDirectory';
@@ -86,6 +88,7 @@ export const execAgentTurn = async (
   deps: ExecAgentTurnDeps,
   params: InternalExecAgentParams,
   approvalClaim: ApprovalClaimState,
+  runSlot: RunSlotClaim = {},
 ): Promise<ExecAgentResult> => {
   const {
     additionalPluginIds,
@@ -102,6 +105,7 @@ export const execAgentTurn = async (
     clientIp,
     userAgent,
     deviceId: requestedDeviceId,
+    requireDevice,
     localDeviceId,
     botPlatformContext,
     discordContext,
@@ -282,6 +286,12 @@ export const execAgentTurn = async (
   // flags, tools engine, context snapshot) reads it.
   if (shareGate) applyShareGateToAgentConfig(agentConfig);
 
+  // Before the turn writes any row: a refused send leaves nothing behind.
+  await claimRunSlot(runSlot, {
+    policy: resolveRunSlotPolicy(params, { agentConfig, workspaceId: deps.workspaceId }),
+    userId: deps.userId,
+  });
+
   let resumeParentMessage: Awaited<ReturnType<MessageModel['findById']>>;
 
   // `resumeApproval` implies the same "load parent message + skip user
@@ -386,10 +396,12 @@ export const execAgentTurn = async (
   // Agent → agent attribution: resolve the launching run's agent into a
   // display snapshot once, before the turn rows exist, so the persisted user
   // message carries a self-contained sender block.
-  const agentSender = await deps.resolveSourceAgentSnapshot(
-    resolvedAgentId,
-    params.sourceOperationId,
-  );
+  const agentSender =
+    params.agentSender ??
+    (await deps.resolveSourceAgentSnapshot(resolvedAgentId, params.sourceOperationId));
+  // Two agents told to report back to each other would otherwise wake each
+  // other forever; past the bound a person has to step in.
+  assertAgentRelayHop(agentSender);
 
   // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
   // model), device-access policy, hetero detection, attachment ingestion, and
@@ -426,6 +438,7 @@ export const execAgentTurn = async (
         prompt,
         providerOverride,
         requestedDeviceId,
+        requireDevice,
         resolvedAgentId,
         resume,
         runFromHistory,
@@ -585,6 +598,7 @@ export const execAgentTurn = async (
     params.reservedOperationId ??
     continuationOperationId ??
     `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+  await bindRunSlot(runSlot, deps.userId, operationId);
 
   // Stages 5–18 — the run's init: the tool surface, the message/context
   // assembly, and the human decision a resumed approval turns into the first
@@ -609,6 +623,7 @@ export const execAgentTurn = async (
     hasMentionedAgents,
     isFixedDeviceTarget: turn.isFixedDeviceTarget,
     localDeviceId,
+    requireDevice,
     mentionedAgents,
     parentMessageId,
     prompt,
@@ -713,7 +728,7 @@ export const execAgentTurn = async (
 
   // 19. Create the operation via AgentRuntimeService, persist the reconnect
   // marker, and mint the gateway token (see `pipeline/startOperation`).
-  return traceSendStage('start_operation', () =>
+  const started = await traceSendStage('start_operation', () =>
     startOperation(
       {
         agentRuntimeService: deps.agentRuntimeService,
@@ -733,6 +748,11 @@ export const execAgentTurn = async (
         approvalSourceToolMessageIds,
         autoStart,
         onOperationCreated: params.onOperationCreated,
+        // From here the run's completion releases the slot; a run that never
+        // started (failed, or created without auto-start) gives it back.
+        onScheduled: () => {
+          runSlot.handedOff = true;
+        },
         botContext,
         botPlatformContext,
         clientIp,
@@ -768,4 +788,5 @@ export const execAgentTurn = async (
       },
     ),
   );
+  return started;
 };

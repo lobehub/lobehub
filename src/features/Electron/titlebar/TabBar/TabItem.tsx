@@ -1,7 +1,6 @@
 'use client';
 
-import { ContextMenuTrigger, type DropdownItem, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, cx } from '@lobehub/ui';
+import { ActionIcon, ContextMenuTrigger, cx, type DropdownItem, Icon, Tooltip } from '@lobehub/ui';
 import { X } from 'lucide-react';
 import { type MotionValue, useMotionValue, useSpring, useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -50,6 +49,7 @@ interface TabItemProps {
   enterWidth: number;
   enterX: number;
   index: number;
+  instant: boolean;
   isActive: boolean;
   isSplitVisible: boolean;
   item: ResolvedTab;
@@ -86,6 +86,7 @@ const TabItem = memo<TabItemProps>(
     drag,
     enterWidth,
     enterX,
+    instant,
     onActivate,
     onClose,
     onCloseOthers,
@@ -132,13 +133,28 @@ const TabItem = memo<TabItemProps>(
     const zIndex = useMotionValue(pinned ? 1 : 0);
 
     useEffect(() => {
-      targetWidth.set(width);
-      targetInset.set(resolveTabInset(width));
-    }, [width, targetWidth, targetInset]);
+      const nextInset = resolveTabInset(width);
+      if (!instant) {
+        targetWidth.set(width);
+        targetInset.set(nextInset);
+        return;
+      }
+
+      targetWidth.jump(width);
+      springWidth.jump(width);
+      targetInset.jump(nextInset);
+      springInset.jump(nextInset);
+    }, [width, instant, targetWidth, springWidth, targetInset, springInset]);
 
     useEffect(() => {
       if (!drag) {
-        targetX.set(x);
+        if (!instant) {
+          targetX.set(x);
+          return;
+        }
+
+        targetX.jump(x);
+        springX.jump(x);
         return;
       }
 
@@ -161,7 +177,7 @@ const TabItem = memo<TabItemProps>(
         offPointer();
         offWidth();
       };
-    }, [drag, x, targetX, springX, springWidth]);
+    }, [drag, x, instant, targetX, springX, springWidth]);
 
     // A dropped tab springs from the release point into its slot; it stays above its
     // neighbours until it lands, or it would slide underneath the one it overlaps.

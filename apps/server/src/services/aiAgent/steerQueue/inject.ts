@@ -15,6 +15,7 @@ import {
   mergeQueuedFollowUps,
   type QueuedFollowUp,
   returnFollowUps,
+  takeSameSenderFollowUps,
 } from './index';
 
 const log = debug('lobe-server:steer-queue');
@@ -106,8 +107,10 @@ export const injectQueuedFollowUp = async (
   if (entries.length === 0) return;
 
   const firstHeld = entries.findIndex((entry) => !canJoinRunningTurn(entry, state));
-  const joining = firstHeld === -1 ? entries : entries.slice(0, firstHeld);
-  const held = entries.slice(joining.length);
+  const joinable = firstHeld === -1 ? entries : entries.slice(0, firstHeld);
+  // One author per message: a different sender's follow-ups wait their turn.
+  const { agentSender, taken: joining } = takeSameSenderFollowUps(joinable);
+  const held = entries.filter((entry) => !joining.includes(entry));
   // Back at the head, for the hand-back at the next decision point. Should
   // that fail, they stay in the batch and return when it lapses.
   await returnFollowUps(scope, drained, held, 'needs a turn of its own');
@@ -141,6 +144,7 @@ export const injectQueuedFollowUp = async (
       editorData: request.userMessage?.editorData,
       groupId,
       metadata: buildUserTurnMetadata({
+        agentSender,
         steer: true,
         trigger: request.trigger ?? RequestTrigger.Chat,
       }),

@@ -3,6 +3,7 @@
  */
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
 import { artifactShareRouter } from '@/business/server/lambda-routers/artifactShare';
+import { fileShareRouter } from '@/business/server/lambda-routers/fileShare';
 import { pageShareRouter } from '@/business/server/lambda-routers/pageShare';
 import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
@@ -25,6 +26,7 @@ import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
 import { agentBotProviderRouter } from './agentBotProvider';
+import { agentBotWakeRouter } from './agentBotWake';
 import { agentDocumentRouter } from './agentDocument';
 import { agentEvalRouter } from './agentEval';
 import { agentEvalExternalRouter } from './agentEvalExternal';
@@ -125,6 +127,7 @@ export const lambdaRouter = router({
   acceptanceComment: acceptanceCommentRouter,
   agent: agentRouter,
   agentBotProvider: agentBotProviderRouter,
+  agentBotWake: agentBotWakeRouter,
   agentNotify: agentNotifyRouter,
   botMessage: botMessageRouter,
   agentDocument: agentDocumentRouter,
@@ -231,6 +234,7 @@ export const lambdaRouter = router({
   workspaceUserSettings: workspaceUserSettingsRouter,
   accountDeletion: accountDeletionRouter,
   artifactShare: artifactShareRouter,
+  fileShare: fileShareRouter,
   pageShare: pageShareRouter,
   referral: referralRouter,
   spend: spendRouter,

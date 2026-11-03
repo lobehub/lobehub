@@ -14,6 +14,7 @@ import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { isResourceAuthorOrAdmin } from '@/server/services/resourcePermission';
+import { isSandboxAvailableForUser } from '@/server/services/sandbox/availability';
 
 import type { InternalExecAgentParams } from '../types';
 
@@ -194,13 +195,16 @@ export const resolveRunAgentConfig = async (
   const agentWorkspaceId = row.workspaceId ?? deps.workspaceId;
   const isPublicWorkspaceAgent = !!agentWorkspaceId && row.visibility !== 'private';
 
-  const [overrides, canManageAgent, userLocale] = await Promise.all([
+  const scope = (appContext?.scope ?? undefined) as MessageMapScope | undefined;
+  const [overrides, canManageAgent, userLocale, pageSandboxAvailable] = await Promise.all([
     input.agentConfigSnapshot
       ? Promise.resolve({} as WorkspaceMemberOverrides)
       : loadWorkspaceMemberOverrides(deps, resolvedAgentId),
     resolveCanManage(deps, row, agentWorkspaceId, isPublicWorkspaceAgent),
     // A share visitor replies in their own language, not the owner's.
     loadUserLocale(deps, shareVisitorUserId ?? deps.userId),
+    // The page agent edits through the sandbox; without one it would only fail.
+    scope === 'page' ? isSandboxAvailableForUser(deps.db, deps.userId) : true,
   ]);
 
   // The caller's device preference layers onto the shared row BEFORE the
@@ -242,7 +246,8 @@ export const resolveRunAgentConfig = async (
         ...(modelOverride ? { model: modelOverride } : {}),
         ...(providerOverride ? { provider: providerOverride } : {}),
       },
-      scope: (appContext?.scope ?? undefined) as MessageMapScope | undefined,
+      pageAgentUnavailable: !pageSandboxAvailable,
+      scope,
     },
     snapshot,
   );

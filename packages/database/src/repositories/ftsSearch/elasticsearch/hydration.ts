@@ -30,6 +30,7 @@ import type { LobeChatDatabase } from '../../../type';
 import { notAgentShareDocument } from '../../../utils/documentVisibility';
 import { libraryVisibleFile, notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { visibleMemoryState } from '../../../utils/memoryVisibility';
 import { searchableMessage } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
 import { notTrashed } from '../../../utils/softDelete';
@@ -118,6 +119,7 @@ export const hydrateUserMemories = async (
         // Experience memory is retired and has no page to land on; keep it out of unified search.
         ne(userMemories.memoryLayer, LayersEnum.Experience),
         notTrashed(userMemories.isDeleted),
+        visibleMemoryState(userMemories.state),
       ),
     );
 

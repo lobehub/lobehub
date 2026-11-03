@@ -46,13 +46,7 @@ vi.mock('@/store/global/selectors', () => ({
   },
 }));
 
-const translations: Record<string, string> = {
-  'ModelSwitchPanel.detail.pricing.credits.input': 'Input {{amount}} credits/M tokens',
-  'ModelSwitchPanel.detail.pricing.credits.millionTokens': 'credits/M tokens',
-  'ModelSwitchPanel.detail.pricing.credits.output': 'Output {{amount}} credits/M tokens',
-  'ModelSwitchPanel.detail.pricing.credits.perImage': '~ {{amount}} credits / image',
-  'ModelSwitchPanel.detail.pricing.credits.perVideo': '~ {{amount}} credits / video',
-};
+const translations: Record<string, string> = {};
 
 const t = ((key: string, options?: Record<string, string>) => {
   const template = translations[key] ?? options?.defaultValue ?? key;
@@ -146,7 +140,7 @@ describe('useModelDetailPanel', () => {
     useBusinessModelPricingMock.mockReturnValue(({ pricing }: { pricing?: Pricing }) => pricing);
   });
 
-  it('applies business pricing before formatting LobeHub credit prices', () => {
+  it('applies business pricing before formatting LobeHub USD prices', () => {
     useBusinessModelPricingMock.mockReturnValue(
       ({ pricing, model, provider }: { model?: string; pricing?: Pricing; provider?: string }) =>
         provider === 'lobehub' && model === 'test-model' ? discountedPricing : pricing,
@@ -154,15 +148,14 @@ describe('useModelDetailPanel', () => {
 
     const { result } = renderModelDetailPanelHook();
 
-    expect(result.current.isCreditPricing).toBe(true);
-    expect(result.current.formatPrice?.input).toEqual({ current: '2.5M', original: '5M' });
-    expect(result.current.formatPrice?.output).toEqual({ current: '12.5M', original: '25M' });
+    expect(result.current.formatPrice?.input).toEqual({ current: '2.50', original: '5.00' });
+    expect(result.current.formatPrice?.output).toEqual({ current: '12.50', original: '25.00' });
     expect(result.current.formatPrice?.cachedInput).toEqual({
-      current: '0.3M',
-      original: '1M',
+      current: '0.30',
+      original: '1.00',
     });
     expect(result.current.hasCachedInputPricing).toBe(true);
-    expect(result.current.getUnitPriceSuffix('millionTokens')).toBe(' credits/M tokens');
+    expect(result.current.getUnitPriceSuffix('millionTokens')).toBe('/M tokens');
   });
 
   it('formats original unit prices for tiered and lookup units', () => {
@@ -171,12 +164,12 @@ describe('useModelDetailPanel', () => {
     });
 
     expect(result.current.formatUnitPrice(unitPricing.units[0])).toEqual({
-      current: '20.0K',
-      original: '50.0K',
+      current: '0.02',
+      original: '0.05',
     });
     expect(result.current.formatUnitPrice(unitPricing.units[1])).toEqual({
-      current: '300.0K',
-      original: '500.0K',
+      current: '0.30',
+      original: '0.50',
     });
   });
 

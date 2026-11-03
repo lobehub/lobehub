@@ -8,6 +8,7 @@ import { ClaudeCodeAdapter } from '../adapters/claudeCode';
 import type { AskUserBridge } from '../askUser/AskUserBridge';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import {
+  spawnCopilotAcpAgent,
   spawnCursorAcpAgent,
   spawnDevinAcpAgent,
   spawnDroidAcpAgent,
@@ -472,6 +473,9 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
   const cwd = options.cwd || process.cwd();
   assertSpawnableWorkingDirectory(cwd);
+  if (options.agentType === 'copilot') {
+    return spawnCopilotAcpAgent(options, command, cwd);
+  }
   if (options.agentType === 'devin') {
     return spawnDevinAcpAgent(options, command, cwd);
   }

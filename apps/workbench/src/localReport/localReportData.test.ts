@@ -105,6 +105,13 @@ describe('local report data', () => {
     expect(rerendered.bundle().checks[0]!.userReview).toMatchObject({ action: 'accept' });
   });
 
+  it('hands commands the directory the CLI rendered from', async () => {
+    const custom = await openPage({ ...source(), acceptanceDir: '/work/qa/rename-review' });
+    expect(custom.acceptanceDir).toBe('/work/qa/rename-review');
+    // A page rendered before the CLI embedded it.
+    expect((await openPage(source())).acceptanceDir).toBe('.acceptances/standalone-rename');
+  });
+
   it('refuses a page without acceptance data', async () => {
     document.body.innerHTML = '';
     vi.resetModules();

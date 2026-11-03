@@ -135,6 +135,14 @@ export interface ChatTopicMetadata {
   boundDeviceId?: string;
   cronJobId?: string;
   /**
+   * The conversation's device was chosen explicitly for it (the composer's
+   * picker preset, a project directory, or `lh topic send --new --device`), not
+   * picked automatically by an `auto` agent. Later turns honour that choice
+   * instead of picking a fresh online device, because the caller was told the
+   * work stays on that machine.
+   */
+  deviceBindingPinned?: boolean;
+  /**
    * Set on a topic created by editing and resending a user message of a
    * runtime whose native history cannot be rewound (Codex). The topic holds a
    * copy of the source ancestry but no native session, so a fresh local run
@@ -823,6 +831,12 @@ export interface CreateTopicParams {
   metadata?: ChatTopicMetadata;
   /** Pinned model snapshot for the new topic (see `ChatTopic.model`). */
   model?: string;
+  /**
+   * Bind the new topic to a project without a directory (conversation-only).
+   * Ignored when `projectWorkingDirectoryId` resolves — the directory carries
+   * its own project.
+   */
+  projectId?: string;
   /**
    * Bind the new topic to a project working directory. The server resolves the
    * directory and pins its project, device and paths onto the topic — the same

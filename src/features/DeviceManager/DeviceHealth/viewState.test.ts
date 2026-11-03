@@ -34,12 +34,15 @@ describe('latestUsageView', () => {
   const reported = {
     bucketMs: BUCKET,
     cpuCount: 8,
+    diskTotalBytes: 1000,
     from: to - 12 * BUCKET,
     memoryTotalBytes: 200,
     points: [
       {
         connected: true,
         cpuPercent: 14,
+        diskPercent: 62,
+        diskUsedBytes: 620,
         load1: 1,
         memoryPercent: 35,
         memoryUsedBytes: 70,
@@ -59,14 +62,68 @@ describe('latestUsageView', () => {
     const view = latestUsageView({ data: reported });
 
     expect(view.loading).toBe(false);
-    expect(!view.loading && view.latest).toMatchObject({ cpuPercent: 14, memoryPercent: 35 });
+    expect(!view.loading && view.latest).toMatchObject({
+      cpuPercent: 14,
+      diskPercent: 62,
+      memoryPercent: 35,
+    });
+  });
+
+  it('shows the disk row only for a device that reports its disk', () => {
+    const view = latestUsageView({ data: reported });
+
+    expect(!view.loading && view.reportsDisk).toBe(true);
+  });
+
+  // An lh / desktop version that predates disk reporting would otherwise show a permanent em dash.
+  it('hides the disk row for a device that never reported its disk', () => {
+    const view = latestUsageView({ data: { ...reported, diskTotalBytes: null } });
+
+    expect(!view.loading && view.reportsDisk).toBe(false);
+  });
+
+  // A series persisted before devices reported the disk has no disk fields at all.
+  it('reads no disk usage from a series cached before the disk was reported', () => {
+    const { diskTotalBytes: _, ...cachedSeries } = reported;
+    const { diskPercent: __, diskUsedBytes: ___, ...cachedPoint } = reported.points[0];
+    const view = latestUsageView({ data: { ...cachedSeries, points: [cachedPoint] } as any });
+
+    expect(view).toMatchObject({ latest: { diskPercent: null }, reportsDisk: false });
+  });
+
+  it('shows the load row only for a device that reports load averages', () => {
+    const view = latestUsageView({ data: reported });
+
+    expect(!view.loading && view.reportsLoad).toBe(true);
+  });
+
+  // Windows has no load average, so the sampler reports `load1: null`.
+  it('hides the load row for a device without load averages', () => {
+    const view = latestUsageView({
+      data: { ...reported, points: [{ ...reported.points[0], load1: null }] },
+    });
+
+    expect(view).toMatchObject({ latest: { loadPercent: null }, reportsLoad: false });
+  });
+
+  it('hides the load row when the core count is unknown', () => {
+    const view = latestUsageView({ data: { ...reported, cpuCount: null } });
+
+    expect(!view.loading && view.reportsLoad).toBe(false);
   });
 
   it('resolves to no reading, not loading, for a silent device or a failed read', () => {
-    expect(latestUsageView({ data: series(0) })).toEqual({ latest: null, loading: false });
+    expect(latestUsageView({ data: series(0) })).toEqual({
+      latest: null,
+      loading: false,
+      reportsDisk: false,
+      reportsLoad: false,
+    });
     expect(latestUsageView({ error: new Error('gateway down') })).toEqual({
       latest: null,
       loading: false,
+      reportsDisk: false,
+      reportsLoad: false,
     });
   });
 });
@@ -77,12 +134,15 @@ describe('currentUsage', () => {
   const at = (observedAt: number) => ({
     bucketMs: BUCKET,
     cpuCount: 4,
+    diskTotalBytes: null,
     from: to - 144 * BUCKET,
     memoryTotalBytes: 100,
     points: [
       {
         connected: true,
         cpuPercent: 12,
+        diskPercent: null,
+        diskUsedBytes: null,
         load1: 2,
         memoryPercent: 40,
         memoryUsedBytes: 40,

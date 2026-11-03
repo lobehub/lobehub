@@ -22,7 +22,7 @@ import {
 } from './agent';
 import { findThread } from './delivery';
 import { ChannelError } from './error';
-import { addChannelUser, channelUserCandidates } from './people';
+import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
@@ -77,17 +77,24 @@ export class ChannelRepository {
   /** Opens the unique direct conversation, or creates a group with its initial members. */
   create = async (params: {
     agentId?: string;
+    /** The direct conversation's Agent environment; the caller resolved and checked it. */
+    agentConfig?: ChannelMemberConfig;
     agents?: ChannelAddAgentInput[];
     /** Callers check that the project is readable in this scope. */
     projectId?: string;
     title: string;
+    /** Workspace people a group starts with, checked the same way as adding them later. */
+    userIds?: string[];
     visibility?: ChannelVisibility;
   }) =>
     this.db.transaction(async (tx) => {
       const { agentId } = params;
       if (
         agentId !== undefined &&
-        (!agentId.trim() || params.visibility === 'public' || !!params.agents?.length)
+        (!agentId.trim() ||
+          params.visibility === 'public' ||
+          !!params.agents?.length ||
+          !!params.userIds?.length)
       )
         throw new ChannelError(
           'BAD_REQUEST',
@@ -115,23 +122,66 @@ export class ChannelRepository {
         if (existing) return existing;
         throw new ChannelError('CONFLICT', 'The direct conversation is unavailable');
       }
-      const [member] = await tx
-        .insert(channelMembers)
-        .values({
-          actorType: 'user',
-          channelId: channel.id,
-          lastReadSequence: 0,
-          role: 'owner',
-          userId: this.userId,
-        })
-        .returning();
+      const member = await this.addOwner(tx, channel.id);
 
-      if (agentId) await addAgentMember(tx, channel, this.userId, { agentId });
+      if (agentId)
+        await addAgentMember(tx, channel, this.userId, { agentId, config: params.agentConfig });
       for (const agent of params.agents ?? [])
         await addAgentMember(tx, channel, this.userId, agent);
+      const access = { channel, member } satisfies ChannelAccess;
+      for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
 
-      return { channel, member } satisfies ChannelAccess;
+      return access;
     });
+
+  /**
+   * Inviting into a direct conversation starts a group instead, and the direct conversation stays
+   * as it is. The group holds its person and Agent, the Agent keeping its channel-local
+   * environment, joined by the invited Agents and workspace people.
+   */
+  createGroupFromDirect = async (
+    channelId: string,
+    params: { agents?: ChannelAddAgentInput[]; title: string; userIds?: string[] },
+  ) =>
+    this.write(
+      channelId,
+      async (tx, { channel: direct }) => {
+        if (!direct.agentId)
+          throw new ChannelError('BAD_REQUEST', 'Only a direct conversation starts a group');
+        if (!params.agents?.length && !params.userIds?.length)
+          throw new ChannelError('BAD_REQUEST', 'Invite at least one person or Agent');
+        const [bound] = await tx
+          .select()
+          .from(channelMembers)
+          .where(
+            and(
+              eq(channelMembers.channelId, direct.id),
+              eq(channelMembers.agentId, direct.agentId),
+              eq(channelMembers.status, 'active'),
+            ),
+          )
+          .limit(1);
+        if (!bound) throw new ChannelError('NOT_FOUND', 'Agent member not found');
+
+        const [channel] = await tx
+          .insert(channels)
+          .values({ title: params.title, userId: this.userId, workspaceId: this.workspaceId })
+          .returning();
+        const member = await this.addOwner(tx, channel.id);
+        const access = { channel, member } satisfies ChannelAccess;
+        await addAgentMember(tx, channel, this.userId, {
+          agentId: direct.agentId,
+          config: bound.config ?? undefined,
+          description: bound.description,
+          name: bound.name ?? undefined,
+        });
+        for (const agent of params.agents ?? [])
+          await addAgentMember(tx, channel, this.userId, agent);
+        for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
+        return access;
+      },
+      { minRole: 'admin' },
+    );
 
   /** Adds a usable Agent reference; a missing reference is allowed only for retained history. */
   addAgent = async (channelId: string, input: ChannelAddAgentInput) =>
@@ -196,6 +246,16 @@ export class ChannelRepository {
 
   addUser = async (channelId: string, userId: string) =>
     this.write(channelId, (tx, access) => addChannelUser(tx, access, userId), { minRole: 'admin' });
+
+  /** People a new Channel in this workspace can start with. */
+  newChannelUserCandidates = async (search?: string) => {
+    const { workspaceId } = this;
+    if (!workspaceId)
+      throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
+    return this.db.transaction((tx) =>
+      newChannelUserCandidates(tx, workspaceId, this.userId, search),
+    );
+  };
 
   userCandidates = async (channelId: string, search?: string) =>
     this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {
@@ -486,6 +546,20 @@ export class ChannelRepository {
       }
       return retryRouting(tx, channelId, messageId);
     });
+
+  private addOwner = async (tx: Transaction, channelId: string) => {
+    const [member] = await tx
+      .insert(channelMembers)
+      .values({
+        actorType: 'user',
+        channelId,
+        lastReadSequence: 0,
+        role: 'owner',
+        userId: this.userId,
+      })
+      .returning();
+    return member;
+  };
 
   private findDirect = async (
     tx: Transaction,

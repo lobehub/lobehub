@@ -502,7 +502,7 @@ describe('ChannelExecutionRepository', () => {
   });
 
   it('refuses unclaimed or revoked jobs and trashed channels', async () => {
-    const { channel, job } = await mentionAgent();
+    const { agent, asMember, channel, job } = await mentionAgent();
     await expect(execution.accepted(channel.id, job.id)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
@@ -517,15 +517,18 @@ describe('ChannelExecutionRepository', () => {
       code: 'CONFLICT',
     });
 
+    const next = await asMember.send(channel.id, {
+      content: 'Next',
+      mentions: [agent.id],
+      requestKey: 'req-2',
+      routing: 'decision',
+    });
+    const [nextJob] = await jobsOf(db, next.id);
     await db
       .update(channels)
       .set({ deletedAt: new Date(), isDeleted: true })
       .where(eq(channels.id, channel.id));
-    const [rerun] = await db
-      .insert(channelJobs)
-      .values({ ...job, deliveryKey: 'retry', id: undefined, status: 'queued' })
-      .returning();
-    expect(await execution.claim(channel.id, rerun.id, lease)).toBeNull();
+    expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
   });
 
   it('renews the lease only for the live owner', async () => {
