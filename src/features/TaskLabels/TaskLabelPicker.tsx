@@ -7,6 +7,7 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchTaskLabels } from '@/hooks/useFetchTaskLabels';
@@ -86,6 +87,12 @@ const TaskLabelPicker = memo<TaskLabelPickerProps>(({ children, disabled, onChan
   const loadFailed = !!error && !isInit;
   const registry = useTaskStore(taskLabelSelectors.labels);
   const createTaskLabel = useTaskStore((s) => s.createTaskLabel);
+  // The workspace the picker is showing now, read when a create completes.
+  const workspaceId = useActiveWorkspaceId();
+  const workspaceIdRef = useRef(workspaceId);
+  useEffect(() => {
+    workspaceIdRef.current = workspaceId;
+  }, [workspaceId]);
 
   const sections = useMemo(
     () => buildTaskLabelPickerSections(registry, search),
@@ -117,8 +124,11 @@ const TaskLabelPicker = memo<TaskLabelPickerProps>(({ children, disabled, onChan
     const name = search.trim();
     if (!name || creating) return;
     setCreating(true);
+    const startedIn = workspaceIdRef.current;
     try {
       const label = await createTaskLabel({ color: DEFAULT_TASK_LABEL_COLOR, name });
+      // Switched workspaces meanwhile: the label belongs to the old one.
+      if (workspaceIdRef.current !== startedIn) return;
       setSearch('');
       onChange([...value, toTaskLabelRef(label)]);
     } catch (error) {
