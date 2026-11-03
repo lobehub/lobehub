@@ -21,7 +21,13 @@ import { registerCheckpointCommands } from './checkpoint';
 import { registerDepCommands } from './dep';
 import { registerDocCommands } from './doc';
 import { briefIcon, priorityLabel, statusBadge } from './helpers';
-import { collectLabels, formatTaskLabels, registerLabelCommands, resolveLabelIds } from './label';
+import {
+  collectLabels,
+  expandLabelRefs,
+  formatTaskLabels,
+  registerLabelCommands,
+  resolveLabelIds,
+} from './label';
 import { registerLifecycleCommands } from './lifecycle';
 import { formatTaskModel, toCreateModelConfig, toModelConfigPatch } from './model';
 import { registerReviewCommands } from './review';
@@ -973,7 +979,7 @@ const resolveListLabelValues = async (
     const registry = await client.taskLabel.list.query();
     const groupIds: string[] = [];
     const labelNames: string[] = [];
-    for (const name of names) {
+    for (const name of expandLabelRefs(registry, names)) {
       const group = registry.find(
         (label) => label.isGroup && label.name.toLowerCase() === name.trim().toLowerCase(),
       );
