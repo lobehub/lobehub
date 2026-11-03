@@ -13,6 +13,7 @@ import {
   groupTaskItems,
   HIDDEN_WHEN_COMPLETED_STATUSES,
   isTaskHiddenByCompletedFilter,
+  normalizeTaskGroupBy,
   normalizeTaskListViewOptions,
   toStoredTaskListViewOptions,
 } from './listViewOptions';
@@ -365,5 +366,14 @@ describe('dropMissingLabelGroupings', () => {
   it('leaves non-label groupings alone', () => {
     const plain = { groupBy: 'priority', subGroupBy: 'none' } as const;
     expect(dropMissingLabelGroupings(plain, new Set())).toBe(plain);
+  });
+});
+
+describe('normalizeTaskGroupBy', () => {
+  it('keeps label groupings for the list, and falls back for unknown values', () => {
+    expect(normalizeTaskGroupBy('label:g-type', 'status')).toBe('label:g-type');
+    expect(normalizeTaskGroupBy('priority', 'status')).toBe('priority');
+    expect(normalizeTaskGroupBy('bogus', 'none')).toBe('none');
+    expect(normalizeTaskGroupBy(undefined, 'status')).toBe('status');
   });
 });

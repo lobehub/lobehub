@@ -207,6 +207,20 @@ export const dropMissingLabelGroupings = <
   };
 };
 
+/**
+ * A grouping the list can render, or `fallback`. `label:<groupId>` is
+ * open-ended; whether its group still exists is settled upstream by
+ * {@link dropMissingLabelGroupings}.
+ */
+export const normalizeTaskGroupBy = (
+  value: TaskGroupBy | string | undefined,
+  fallback: TaskGroupBy,
+): TaskGroupBy => {
+  if (!value) return fallback;
+  if (isTaskLabelGroupBy(value)) return value;
+  return TASK_GROUP_BY_SET.has(value as TaskGroupBy) ? (value as TaskGroupBy) : fallback;
+};
+
 export const normalizeTaskListViewOptions = (
   value?: StoredTaskListViewOptions | null,
 ): TaskListViewOptions => {
