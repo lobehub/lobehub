@@ -2421,6 +2421,7 @@
   "taskDetail.activities.priority.changed": "<actor/> 将优先级从 <from/> 改为 <to/>",
   "taskDetail.activities.status.changed": "<actor/> 将状态从 <from/> 改为 <to/>",
   "taskDetail.activitiesEmpty": "暂无活动记录",
+  "taskDetail.activitiesLoadMore": "查看更早的动态（{{count}}）",
   "taskDetail.addSubtask": "添加子任务",
   "taskDetail.artifactInaccessible": "无权访问的文稿",
   "taskDetail.artifactMenu.delete": "从任务中移除",

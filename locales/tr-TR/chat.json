@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/> önceliği <from/> değerinden <to/> değerine değiştirdi",
   "taskDetail.activities.status.changed": "<actor/> durumu <from/> değerinden <to/> değerine değiştirdi",
   "taskDetail.activitiesEmpty": "Henüz aktivite yok",
+  "taskDetail.activitiesLoadMore": "Önceki etkinliği göster ({{count}})",
   "taskDetail.addSubtask": "Alt görev ekle",
   "taskDetail.artifactInaccessible": "Kullanılamayan belge — erişim yok",
   "taskDetail.artifactMenu.delete": "Görevden kaldır",
