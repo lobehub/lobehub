@@ -161,6 +161,44 @@ describe('TaskLabelModel task assignments', () => {
     expect(labels[0].parentId).toBe(group.id);
   });
 
+  it('keeps one label per group when a label is regrouped during an assignment', async () => {
+    const taskModel = new TaskModel(serverDB, userId, workspaceId);
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const sibling = await workspace.create({ name: 'Bug', parentId: group.id });
+
+    for (let round = 0; round < 4; round++) {
+      // T carries the loose label and gains the sibling; T2 carries the
+      // sibling and gains the loose label — both while the label joins Type.
+      const loose = await workspace.create({ name: `Loose ${round}` });
+      const task = await taskModel.create({ instruction: `a${round}` });
+      const task2 = await taskModel.create({ instruction: `b${round}` });
+      await workspace.addTaskLabels(task.id, [loose.id]);
+      await workspace.addTaskLabels(task2.id, [sibling.id]);
+
+      const results = await Promise.allSettled([
+        workspace.update(loose.id, { parentId: group.id }),
+        member.addTaskLabels(task.id, [sibling.id]),
+        member.addTaskLabels(task2.id, [loose.id]),
+      ]);
+      // Losing the race is a clean rule error, never a deadlock or a DB error.
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          expect(result.reason).toMatchObject({ code: 'GROUP_CONFLICT' });
+        }
+      }
+
+      const parentOf = new Map(
+        (await workspace.query()).map((label) => [label.id, label.parentId]),
+      );
+      for (const id of [task.id, task2.id]) {
+        const inGroup = (await workspace.getTaskLabels(id)).filter(
+          (label) => parentOf.get(label.id) === group.id,
+        );
+        expect(inGroup.length).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
   it('rejects groups, two labels of one group, and labels from another scope', async () => {
     const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
     const group = await workspace.create({ isGroup: true, name: 'Type' });

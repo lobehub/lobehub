@@ -170,34 +170,67 @@ export class TaskLabelModel {
     const current = await this.findById(id);
     if (!current) throw new TaskLabelError('LABEL_NOT_FOUND', `Label not found: ${id}`);
 
-    if (value.parentId !== undefined && value.parentId !== current.parentId) {
-      await this.assertValidParent(value.parentId, current.isGroup);
-      // Moving into a group would break "one label per group" on tasks that
-      // already carry a sibling. Refuse rather than silently dropping one.
-      if (value.parentId) await this.assertNoGroupConflict(id, value.parentId);
-    }
+    const write = async (db: LobeChatDatabase | Transaction) => {
+      const [row] = await db
+        .update(taskLabels)
+        .set({
+          ...value,
+          ...(value.name !== undefined ? { name: value.name.trim() } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(taskLabels.id, id), this.ownership()))
+        .returning();
+      return row;
+    };
 
-    const [row] = await this.db
-      .update(taskLabels)
-      .set({
-        ...value,
-        ...(value.name !== undefined ? { name: value.name.trim() } : {}),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(taskLabels.id, id), this.ownership()))
-      .returning();
+    const isRegrouping = value.parentId !== undefined && value.parentId !== current.parentId;
+    if (isRegrouping) await this.assertValidParent(value.parentId, current.isGroup);
+    if (!isRegrouping || !value.parentId) return write(this.db);
 
-    return row;
+    // Moving into a group would break "one label per group" on tasks that
+    // already carry a sibling, so refuse rather than silently dropping one.
+    // The check and the move must not interleave with assignments: lock this
+    // label (assignments hold FOR SHARE on the labels they attach) and every
+    // task carrying it (assignments hold the task row), in the same
+    // label → task order assignments use, then check and write.
+    const groupId = value.parentId;
+    return this.db.transaction(async (tx) => {
+      await tx
+        .select({ id: taskLabels.id })
+        .from(taskLabels)
+        .where(and(eq(taskLabels.id, id), this.ownership()))
+        .for('update');
+      await tx
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          inArray(
+            tasks.id,
+            tx
+              .select({ taskId: taskLabelLinks.taskId })
+              .from(taskLabelLinks)
+              .where(eq(taskLabelLinks.labelId, id)),
+          ),
+        )
+        .orderBy(asc(tasks.id))
+        .for('update');
+      await this.assertNoGroupConflict(id, groupId, tx);
+      return write(tx);
+    });
   };
 
-  private assertNoGroupConflict = async (labelId: string, groupId: string) => {
-    const sibling = this.db
+  private assertNoGroupConflict = async (
+    labelId: string,
+    groupId: string,
+    db: LobeChatDatabase | Transaction,
+  ) => {
+    const sibling = db
       .select({ taskId: taskLabelLinks.taskId })
       .from(taskLabelLinks)
       .innerJoin(taskLabels, eq(taskLabels.id, taskLabelLinks.labelId))
       .where(and(eq(taskLabels.parentId, groupId), ne(taskLabels.id, labelId)));
 
-    const [conflict] = await this.db
+    const [conflict] = await db
       .select({ taskId: taskLabelLinks.taskId })
       .from(taskLabelLinks)
       .where(and(eq(taskLabelLinks.labelId, labelId), inArray(taskLabelLinks.taskId, sibling)))
@@ -272,10 +305,27 @@ export class TaskLabelModel {
   /**
    * Resolve ids to assignable labels: every id must exist in scope, none may
    * be a group, and the set may hold at most one label per group.
+   *
+   * Inside an assignment transaction pass `tx`: the rows are then read under
+   * FOR SHARE, so a concurrent regroup (which locks the label FOR UPDATE)
+   * either finishes first and is seen here, or waits for this write and then
+   * sees its links. Always taken before the task row lock (label → task).
    */
-  private resolveAssignable = async (labelIds: string[]): Promise<TaskLabelItem[]> => {
+  private resolveAssignable = async (
+    labelIds: string[],
+    tx?: Transaction,
+  ): Promise<TaskLabelItem[]> => {
     const ids = [...new Set(labelIds)];
-    const labels = await this.findByIds(ids);
+    const valid = ids.filter(isUuid);
+    const labels =
+      tx && valid.length > 0
+        ? await tx
+            .select()
+            .from(taskLabels)
+            .where(and(inArray(taskLabels.id, valid), this.ownership()))
+            .orderBy(asc(taskLabels.id))
+            .for('share')
+        : await this.findByIds(ids);
 
     const found = new Set(labels.map((label) => label.id));
     const missing = ids.filter((id) => !found.has(id));
@@ -321,10 +371,10 @@ export class TaskLabelModel {
     taskId: string,
     { add = [], remove = [] }: { add?: string[]; remove?: string[] },
   ): Promise<TaskLabelRef[]> => {
-    const labels = add.length > 0 ? await this.resolveAssignable(add) : [];
     const removeIds = remove.filter(isUuid);
 
     await this.db.transaction(async (tx) => {
+      const labels = add.length > 0 ? await this.resolveAssignable(add, tx) : [];
       await this.lockTaskInScope(taskId, tx);
 
       if (removeIds.length > 0) {
@@ -377,10 +427,9 @@ export class TaskLabelModel {
 
   /** Replace the task's full label set. */
   setTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> => {
-    const labels = await this.resolveAssignable(labelIds);
-    const nextIds = labels.map((label) => label.id);
-
     await this.db.transaction(async (tx) => {
+      const labels = await this.resolveAssignable(labelIds, tx);
+      const nextIds = labels.map((label) => label.id);
       await this.lockTaskInScope(taskId, tx);
 
       await tx
