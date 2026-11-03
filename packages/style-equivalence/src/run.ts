@@ -125,29 +125,40 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
         },
         urls: { base: `${server.url}/dist-base/`, head: `${server.url}/dist-head/` },
       });
-      let analyzed = analyzer.finish(capture.caseGaps);
-      const unstable = analyzed.filter((result) => result.unstableConditions.length);
-      if (unstable.length) {
-        const keys = encodeURIComponent(JSON.stringify(unstable.map((result) => result.key)));
-        const retry = createRunAnalyzer();
+      const session = browser;
+      const retry = async (
+        results: CaseResult[],
+        conditionsOf: (result: CaseResult) => string[],
+      ): Promise<CaseResult[]> => {
+        const targets = results.filter((result) => conditionsOf(result).length);
+        if (!targets.length) return results;
+        const keys = encodeURIComponent(JSON.stringify(targets.map((result) => result.key)));
+        const again = createRunAnalyzer();
         await captureRun({
-          browser,
+          browser: session,
           conditions: config.conditions,
-          onCondition: retry.add,
-          plan: [...new Set(unstable.flatMap((result) => result.unstableConditions))].map(
-            conditionFromLabel,
-          ),
+          onCondition: again.add,
+          plan: [...new Set(targets.flatMap(conditionsOf))].map(conditionFromLabel),
           urls: {
             base: `${server.url}/dist-base/?cases=${keys}`,
             head: `${server.url}/dist-head/?cases=${keys}`,
           },
         });
-        const retried = new Map(retry.finish().map((result) => [result.key, result]));
-        analyzed = analyzed.map((result) => {
-          const again = retried.get(result.key);
-          return result.unstableConditions.length && again ? mergeRetry(result, again) : result;
+        const retried = new Map(again.finish().map((result) => [result.key, result]));
+        return results.map((result) => {
+          const second = retried.get(result.key);
+          const conditions = conditionsOf(result);
+          return conditions.length && second ? mergeRetry(result, second, conditions) : result;
         });
-      }
+      };
+      const total = capture.conditions.length;
+      let analyzed = await retry(
+        analyzer.finish(capture.caseGaps),
+        (result) => result.unstableConditions,
+      );
+      analyzed = await retry(analyzed, (result) =>
+        result.differingConditions.length < total ? result.differingConditions : [],
+      );
       const results = new Map(analyzed.map((result) => [result.key, result]));
       cases = synthesis.plans.flatMap((plan) =>
         plan.cases.map((entry) => {

@@ -101,7 +101,10 @@ const CAPTURE_DIGESTS = `(() => {${COLLECT}
   return digests;
 })()`;
 
-const CONDITION_CONCURRENCY = Math.max(1, Math.min(4, Math.floor(availableParallelism() / 4)));
+export const CONDITION_CONCURRENCY = Math.max(
+  1,
+  Math.min(4, Math.floor(availableParallelism() / 4)),
+);
 
 type Digest = { digest: string } | { error: string };
 
@@ -257,14 +260,15 @@ const snapshotsOf = async (page: Page, keys: string[]): Promise<SectionSnapshots
   return expand(delta as DeltaSnapshots);
 };
 
-const captureCondition = async (
+const withDigests = async <T>(
   browser: Browser,
-  urls: Record<Side, string>,
+  urls: string[],
   options: PageCondition,
   pageErrors: string[],
-): Promise<ConditionCapture> => {
+  use: (loads: Array<{ page: Page; value: Record<string, Digest> }>) => Promise<T>,
+) => {
   const settled = await Promise.allSettled(
-    [urls.base, urls.base, urls.head].map((url) =>
+    urls.map((url) =>
       evaluateOpen<Record<string, Digest>>(browser, url, options, pageErrors, CAPTURE_DIGESTS),
     ),
   );
@@ -272,15 +276,42 @@ const captureCondition = async (
   try {
     const failed = settled.find((item) => item.status === 'rejected');
     if (failed) throw failed.reason;
+    return await use(loads);
+  } finally {
+    await Promise.all(loads.map(({ page }) => page.close()));
+  }
+};
+
+const splitIdentical = (digests: Array<Record<string, Digest>>) => {
+  const keys = [...new Set(digests.flatMap((value) => Object.keys(value)))];
+  const identical = keys.filter((key) =>
+    digests.every((value) => sameDigest(digests[0][key], value[key])),
+  );
+  const skipped = new Set(identical);
+  return { identical, rest: keys.filter((key) => !skipped.has(key)) };
+};
+
+export const captureSections = (
+  browser: Browser,
+  urls: string[],
+  options: PageCondition,
+  pageErrors: string[],
+) =>
+  withDigests(browser, urls, options, pageErrors, async (loads) => {
+    const { identical, rest } = splitIdentical(loads.map(({ value }) => value));
+    const snapshots = await Promise.all(loads.map(({ page }) => snapshotsOf(page, rest)));
+    return { identical, snapshots };
+  });
+
+const captureCondition = (
+  browser: Browser,
+  urls: Record<Side, string>,
+  options: PageCondition,
+  pageErrors: string[],
+): Promise<ConditionCapture> =>
+  withDigests(browser, [urls.base, urls.base, urls.head], options, pageErrors, async (loads) => {
     const [base, again, head] = loads;
-    const keys = [...new Set([...Object.keys(base.value), ...Object.keys(head.value)])];
-    const identical = keys.filter(
-      (key) =>
-        sameDigest(base.value[key], again.value[key]) &&
-        sameDigest(base.value[key], head.value[key]),
-    );
-    const skipped = new Set(identical);
-    const rest = keys.filter((key) => !skipped.has(key));
+    const { identical, rest } = splitIdentical([base.value, again.value, head.value]);
     const unstable = rest.filter((key) => !sameDigest(base.value[key], again.value[key]));
     const [baseSnapshots, unstableSnapshots, headSnapshots] = await Promise.all([
       snapshotsOf(base.page, rest),
@@ -299,10 +330,7 @@ const captureCondition = async (
       identical,
       ...options,
     };
-  } finally {
-    await Promise.all(loads.map(({ page }) => page.close()));
-  }
-};
+  });
 
 export const conditionFromLabel = (label: string): PageCondition => {
   const [theme, width, state, variant] = label.split('/');

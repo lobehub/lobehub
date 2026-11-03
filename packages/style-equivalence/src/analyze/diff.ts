@@ -210,32 +210,20 @@ const statusOf = (result: CaseResult): CaseStatus =>
         ? 'difference'
         : 'equal';
 
-export const mergeRetry = (original: CaseResult, retry: CaseResult): CaseResult => {
-  const retried = new Set(original.unstableConditions);
-  const merged: CaseResult = {
-    ...original,
-    comboDifferences: [
-      ...original.comboDifferences,
-      ...retry.comboDifferences.filter((item) => retried.has(item.condition)),
-    ],
-    differingConditions: [
-      ...new Set([
-        ...original.differingConditions,
-        ...retry.differingConditions.filter((condition) => retried.has(condition)),
-      ]),
-    ],
-    errors: [...new Set([...original.errors, ...retry.errors])],
-    rootCauses: [...original.rootCauses],
-    unstableConditions: original.unstableConditions.filter((condition) =>
-      retry.unstableConditions.includes(condition),
-    ),
-  };
-  const retryCauses = retry.comboDifferences
-    .filter((item) => retried.has(item.condition))
-    .flatMap((item) => item.rootCauses);
-  for (const cause of retryCauses)
+export const mergeRetry = (
+  original: CaseResult,
+  retry: CaseResult,
+  conditions: string[] = original.unstableConditions,
+): CaseResult => {
+  const retried = new Set(conditions);
+  const comboDifferences = [
+    ...original.comboDifferences.filter((item) => !retried.has(item.condition)),
+    ...retry.comboDifferences.filter((item) => retried.has(item.condition)),
+  ];
+  const rootCauses: CaseResult['rootCauses'] = [];
+  for (const cause of comboDifferences.flatMap((item) => item.rootCauses))
     if (
-      !merged.rootCauses.some(
+      !rootCauses.some(
         (item) =>
           item.key === cause.key &&
           item.property === cause.property &&
@@ -243,7 +231,23 @@ export const mergeRetry = (original: CaseResult, retry: CaseResult): CaseResult 
           item.after === cause.after,
       )
     )
-      merged.rootCauses.push(cause);
+      rootCauses.push(cause);
+  const merged: CaseResult = {
+    ...original,
+    comboDifferences,
+    differingConditions: [
+      ...new Set([
+        ...original.differingConditions.filter((condition) => !retried.has(condition)),
+        ...retry.differingConditions.filter((condition) => retried.has(condition)),
+      ]),
+    ],
+    errors: [...new Set([...original.errors, ...retry.errors])],
+    rootCauses,
+    unstableConditions: [
+      ...original.unstableConditions.filter((condition) => !retried.has(condition)),
+      ...retry.unstableConditions.filter((condition) => retried.has(condition)),
+    ],
+  };
   merged.status = statusOf(merged);
   return merged;
 };

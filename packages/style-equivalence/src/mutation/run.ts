@@ -6,7 +6,8 @@ import type { Browser } from '@playwright/test';
 import { analyzeRun } from '../analyze/diff';
 import { buildSide } from '../build/viteBuild';
 import {
-  capturePage,
+  captureSections,
+  CONDITION_CONCURRENCY,
   type ConditionCapture,
   conditionLabel,
   type SectionSnapshots,
@@ -198,29 +199,34 @@ export const runMutations = async (context: MutationContext): Promise<MutationRe
     mutant: `${context.serverUrl}/dist-mutants/`,
   };
   const pageErrors: string[] = [];
+  const plan = context.config.conditions.themes.flatMap((theme) =>
+    context.widths.flatMap((width) => context.states.map((state) => ({ state, theme, width }))),
+  );
   const conditions: Array<ConditionCapture & { original: SectionSnapshots }> = [];
-  for (const theme of context.config.conditions.themes)
-    for (const width of context.widths)
-      for (const state of context.states) {
-        const options = { state, theme, width };
-        const loads = await Promise.all(
-          [urls.base, urls.head, urls.mutant].map((url) =>
-            capturePage(context.browser, url, options, pageErrors),
-          ),
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: CONDITION_CONCURRENCY }, async () => {
+      for (let index = next++; index < plan.length; index = next++) {
+        const options = plan[index];
+        const { identical, snapshots } = await captureSections(
+          context.browser,
+          [urls.base, urls.head, urls.mutant],
+          options,
+          pageErrors,
         );
-        await Promise.all(loads.map(({ page }) => page.close()));
-        const [base, head, mutant] = loads.map((load) => load.snapshots);
-        conditions.push({
+        const [base, head, mutant] = snapshots;
+        conditions[index] = {
           base,
           baseAgain: base,
           condition: conditionLabel(options),
           head: mutant,
+          identical,
           original: head,
-          state,
-          theme,
-          width,
-        });
+          ...options,
+        };
       }
+    }),
+  );
   const results = new Map(
     analyzeRun({
       conditions,
