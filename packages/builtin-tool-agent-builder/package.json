@@ -1,0 +1,28 @@
+{
+  "name": "@lobechat/builtin-tool-agent-builder",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executor": "./src/executor.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/agent-manager-runtime": "workspace:*",
+    "@lobechat/const": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "type-fest": "^4.41.0"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^6.0.4",
+    "lucide-react": "*",
+    "next": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

@@ -1,0 +1,108 @@
+export interface BriefAction {
+  /** Action identifier, e.g. 'approve', 'reject', 'feedback' */
+  key: string;
+  /** Display label, e.g. "✅ Confirm Start", "💬 Revisions" */
+  label: string;
+  /**
+   * Action type:
+   * - 'resolve': directly mark brief as resolved
+   * - 'comment': prompt for text input, then resolve
+   * - 'link': navigate to a URL (no resolution)
+   */
+  type: 'resolve' | 'comment' | 'link';
+  /** URL for 'link' type actions */
+  url?: string;
+}
+
+/**
+ * Default actions by brief type.
+ *
+ * Note: `result` briefs intentionally have no defaults — they are terminal and
+ * render a fixed single-button UI (approve → completes the task). Custom
+ * actions on result briefs are dropped at creation time.
+ */
+export const DEFAULT_BRIEF_ACTIONS: Record<string, BriefAction[]> = {
+  decision: [
+    { key: 'approve', label: '✅ Confirm', type: 'resolve' },
+    { key: 'feedback', label: '💬 Request changes', type: 'comment' },
+  ],
+  error: [
+    { key: 'retry', label: '🔄 Retry', type: 'resolve' },
+    { key: 'feedback', label: '💬 Feedback', type: 'comment' },
+  ],
+  insight: [{ key: 'acknowledge', label: '👍 Acknowledged', type: 'resolve' }],
+};
+
+/** Brief type — must match DEFAULT_BRIEF_ACTIONS keys and DB schema comment */
+export type BriefType = 'decision' | 'error' | 'insight' | 'result';
+
+/**
+ * Brief types with nothing to decide — the home "news" digest. Shared between
+ * the server day-feed query and the client feed split so the two can never
+ * disagree on what counts as news.
+ */
+export const NEWS_BRIEF_TYPES: BriefType[] = ['insight', 'result'];
+
+/**
+ * Brief types kept off the home unresolved feed. Run failures are not
+ * decisions: they now reach the user through the notification center and no
+ * longer mint briefs, so legacy unresolved `error` rows must not crowd
+ * "Needs you" either. They stay readable on their task.
+ */
+export const HOME_FEED_EXCLUDED_BRIEF_TYPES: BriefType[] = ['error'];
+
+/**
+ * A single artifact (currently only documents) referenced from a brief.
+ * Programmatically collected during topic completion, not produced by the LLM.
+ */
+export interface BriefArtifactDocument {
+  id: string;
+  kind: string | null;
+  title: string | null;
+}
+
+export interface BriefArtifacts {
+  documents?: BriefArtifactDocument[];
+}
+
+/** Agent Signal-owned Brief metadata namespace. */
+export interface BriefAgentSignalMetadata {
+  /** Future Agent Signal domains can extend this namespace without top-level collisions. */
+  [key: string]: unknown;
+  /** Nightly self-review state written by Agent Signal maintenance runs. */
+  nightlySelfReview?: unknown;
+}
+
+/**
+ * Goal-owned Brief metadata: what a goal brief stands for, so answering it from
+ * the inbox acts on the goal and the goal settles it when answered elsewhere.
+ */
+export interface BriefGoalMetadata {
+  /** Present on a decision brief — the gate it mirrors. */
+  decisionId?: string;
+  goalId: string;
+  goalTitle: string;
+  /** What the brief is for. */
+  kind: 'decision' | 'signOff';
+  /** The action the goal advises — set apart among the brief's buttons. */
+  recommendedAction?: string;
+  /** Present on a held batch release: the review report the decision is made in. */
+  reviewAcceptanceId?: string;
+  /** Present on a sign-off brief — the Goal-level acceptance to sign. */
+  signOffAcceptanceId?: string;
+}
+
+/** Freeform Brief metadata namespaced by feature owner. */
+export interface BriefMetadata {
+  /** Other feature namespaces remain possible without schema churn. */
+  [key: string]: unknown;
+  /** Agent Signal extension metadata. */
+  agentSignal?: BriefAgentSignalMetadata;
+  goal?: BriefGoalMetadata;
+  /**
+   * `llm_generation_tracing` row id of the generation that produced this brief's
+   * title/summary. Set for LLM-synthesized briefs so the user's resolve action
+   * (approve / feedback / ignore) can be reported back as implicit feedback.
+   */
+  tracingId?: string;
+}

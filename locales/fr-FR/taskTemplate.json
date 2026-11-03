@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "Connecter {{provider}}",
+  "action.connect.error": "Échec de la connexion, veuillez réessayer.",
+  "action.connect.popupBlocked": "Fenêtre contextuelle de connexion bloquée. Autorisez les fenêtres contextuelles dans votre navigateur pour continuer.",
+  "action.connect.short": "Connecter",
+  "action.connecting": "En attente d'autorisation…",
+  "action.create.error": "Échec de la création de la tâche. Veuillez réessayer.",
+  "action.create.success": "Tâche planifiée ajoutée. Retrouvez-la dans Lobe AI.",
+  "action.createButton": "Ajouter une tâche",
+  "action.creating": "Création en cours...",
+  "action.dismiss.error": "Échec de la suppression. Veuillez réessayer.",
+  "action.dismiss.tooltip": "Pas intéressé",
+  "action.refresh.button": "Actualiser",
+  "card.templateTag": "Modèle",
+  "schedule.daily": "Chaque jour à {{time}}",
+  "schedule.editableAfterCreateTooltip": "Vous pouvez ajuster le planning après avoir créé la tâche.",
+  "schedule.weekly": "Chaque {{weekday}} à {{time}}",
+  "section.title": "Essayez ces tâches planifiées"
+}

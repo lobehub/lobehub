@@ -1,0 +1,270 @@
+import type {
+  HeteroSessionImportPayload,
+  HeteroSessionImportResult,
+  HeteroSessionImportStatus,
+  UpdateTopicMetadataInput,
+} from '@lobechat/types';
+
+import { INBOX_SESSION_ID } from '@/const/session';
+import { TopicTrigger } from '@/const/topic';
+import { lambdaClient } from '@/libs/trpc/client';
+import { type BatchTaskResult } from '@/types/service';
+import {
+  type ChatTopic,
+  type ChatTopicMetadata,
+  type CreateTopicParams,
+  type QueryTopicParams,
+  type RecentTopic,
+  type TopicRankItem,
+} from '@/types/topic';
+
+/**
+ * A row from `queryTopics`. It comes straight off the `topics` table, so it
+ * carries `agentId` even though `ChatTopic` doesn't declare it, plus the
+ * optional last-assistant-reply preview.
+ */
+export interface TopicListItem extends ChatTopic {
+  agentId?: string | null;
+  /** Owning chat group, for a group conversation (which has no `agentId`). */
+  groupId?: string | null;
+  lastAssistantMessage?: string | null;
+  /**
+   * Visibility of the owning agent/group. `'private'` conversations stay out of
+   * team listings even when the viewer created them; null for legacy rows with
+   * no resolvable parent.
+   */
+  parentVisibility?: 'private' | 'public' | null;
+  /**
+   * Start time of the topic's current run (latest top-level running
+   * `agent_operations` row). Only set for `running` topics; null when the run
+   * never wrote an operation row (e.g. client-mode) — keep a fallback.
+   *
+   * Type widens {@link ChatTopic.runStartedAt}: over-the-wire values arrive as
+   * ISO strings, so a narrowed `Date` here contradicts the base and breaks
+   * assignment in both directions.
+   */
+  runStartedAt?: ChatTopic['runStartedAt'];
+}
+
+export type TopicBatchDeleteScope = 'own' | 'workspace';
+
+export class TopicService {
+  cancelRateLimitContinuation = (id: string) =>
+    lambdaClient.topic.cancelRateLimitContinuation.mutate({ id });
+
+  createTopic = (params: CreateTopicParams): Promise<string> => {
+    return lambdaClient.topic.createTopic.mutate({
+      ...params,
+      sessionId: this.toDbSessionId(params.sessionId),
+    });
+  };
+
+  batchCreateTopics = (importTopics: ChatTopic[]): Promise<BatchTaskResult> => {
+    return lambdaClient.topic.batchCreateTopics.mutate(importTopics);
+  };
+
+  cloneTopic = (id: string, newTitle?: string): Promise<string> => {
+    return lambdaClient.topic.cloneTopic.mutate({ id, newTitle });
+  };
+
+  forkTopic = (params: { id: string; messageId: string; newTitle?: string }): Promise<string> => {
+    return lambdaClient.topic.forkTopic.mutate(params);
+  };
+
+  /** Copies the conversation up to a user message into a new topic with edited content. */
+  branchTopicAtMessage = (params: {
+    content: string;
+    editorData?: Record<string, any> | null;
+    messageId: string;
+    title?: string;
+    topicId: string;
+  }): Promise<{ messageId: string; topicId: string }> => {
+    return lambdaClient.topic.branchTopicAtMessage.mutate(params);
+  };
+
+  batchMoveTopics = (topicIds: string[], targetAgentId: string) => {
+    return lambdaClient.topic.batchMoveTopics.mutate({ targetAgentId, topicIds });
+  };
+
+  importTopic = (params: {
+    agentId: string;
+    data: string;
+    groupId?: string | null;
+  }): Promise<{ messageCount: number; topicId: string }> => {
+    return lambdaClient.topic.importTopic.mutate(params);
+  };
+
+  getHeteroSessionImportStatus = (): Promise<HeteroSessionImportStatus> => {
+    return lambdaClient.topic.getHeteroSessionImportStatus.query();
+  };
+
+  importHeteroSessions = (params: {
+    agentId: string;
+    groupId?: string | null;
+    sessions: HeteroSessionImportPayload[];
+  }): Promise<HeteroSessionImportResult[]> => {
+    return lambdaClient.topic.importHeteroSessions.mutate(params);
+  };
+
+  getTopics = async (params: QueryTopicParams): Promise<{ items: ChatTopic[]; total: number }> => {
+    return lambdaClient.topic.getTopics.query({
+      agentId: params.agentId,
+      current: params.current,
+      editingAgentId: params.editingAgentId,
+      editingGroupId: params.editingGroupId,
+      excludeStatuses: params.excludeStatuses,
+      // Filter before pagination so internal Channel runs consume neither rows nor totals.
+      excludeTriggers: [...new Set([TopicTrigger.Channel, ...(params.excludeTriggers ?? [])])],
+      groupId: params.groupId,
+      includeTriggers: params.includeTriggers,
+      isInbox: params.isInbox,
+      onlyMine: params.onlyMine,
+      pageSize: params.pageSize,
+      sortBy: params.sortBy,
+      triggers: params.triggers,
+      withDetails: params.withDetails,
+    }) as any;
+  };
+
+  queryTopics = (params?: {
+    pageSize?: number;
+    statuses?: string[];
+    /** Pull each topic's last assistant reply (truncated) alongside the row. */
+    withLastMessage?: boolean;
+  }): Promise<TopicListItem[]> => {
+    return lambdaClient.topic.queryTopics.query(params) as any;
+  };
+
+  countTopics = async (params?: {
+    agentId?: string;
+    containerId?: string | null;
+    endDate?: string;
+    range?: [string, string];
+    startDate?: string;
+  }): Promise<number> => {
+    return lambdaClient.topic.countTopics.query(params);
+  };
+
+  rankTopics = async (limit?: number): Promise<TopicRankItem[]> => {
+    return lambdaClient.topic.rankTopics.query(limit);
+  };
+
+  getMaxTaskDuration = async (): Promise<number> => {
+    return lambdaClient.topic.getMaxTaskDuration.query();
+  };
+
+  /**
+   * Fetch a single topic row by id, bypassing the paginated list store.
+   * Used when a deep-linked topic is not on the loaded page but its metadata
+   * (workingDirectory / heteroSessionId bindings) must drive a run.
+   */
+  getTopicDetail = async (id: string): Promise<ChatTopic | null> => {
+    return lambdaClient.topic.getTopicDetail.query({ id }) as Promise<ChatTopic | null>;
+  };
+
+  getRecentTopics = async (limit?: number): Promise<RecentTopic[]> => {
+    return lambdaClient.topic.recentTopics.query({ limit });
+  };
+
+  hasTopicFiles = async (ids: string[]): Promise<boolean> => {
+    const result = await lambdaClient.topic.hasTopicFiles.query({ ids });
+    return result.data.hasFiles;
+  };
+
+  searchTopics = async (
+    keywords: string,
+    agentId?: string,
+    groupId?: string,
+    onlyMine?: boolean,
+  ): Promise<ChatTopic[]> => {
+    const topics = await lambdaClient.topic.searchTopics.query({
+      agentId,
+      groupId,
+      keywords,
+      onlyMine: onlyMine || undefined,
+    });
+    return topics.filter(
+      (topic) => topic.trigger !== TopicTrigger.Channel,
+    ) as unknown as ChatTopic[];
+  };
+
+  updateTopic = (id: string, data: Partial<ChatTopic>) => {
+    return lambdaClient.topic.updateTopic.mutate({ id, value: data });
+  };
+
+  updateTopicModel = (
+    id: string,
+    value: {
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'>;
+      model: string;
+      provider: string;
+    },
+  ) => {
+    return lambdaClient.topic.updateTopicModel.mutate({ id, ...value });
+  };
+
+  updateTopicMetadata = (id: string, metadata: UpdateTopicMetadataInput) => {
+    return lambdaClient.topic.updateTopicMetadata.mutate({ id, metadata });
+  };
+
+  /** `unread` → `active` only while the topic is still unread; `null` when it was not. */
+  markTopicRead = (id: string) => {
+    return lambdaClient.topic.markTopicRead.mutate({ id });
+  };
+
+  settleRunningOperation = (
+    id: string,
+    operationId: string,
+    status?: NonNullable<ChatTopic['status']>,
+  ) => {
+    return lambdaClient.topic.settleRunningOperation.mutate({ id, operationId, status });
+  };
+
+  getShareInfo = (topicId: string) => {
+    return lambdaClient.topic.getShareInfo.query({ topicId });
+  };
+
+  enableSharing = (topicId: string, visibility?: 'private' | 'link') => {
+    return lambdaClient.topic.enableSharing.mutate({ topicId, visibility });
+  };
+
+  updateShareVisibility = (topicId: string, visibility: 'private' | 'link') => {
+    return lambdaClient.topic.updateShareVisibility.mutate({ topicId, visibility });
+  };
+
+  disableSharing = (topicId: string) => {
+    return lambdaClient.topic.disableSharing.mutate({ topicId });
+  };
+
+  removeTopic = (id: string, removeFiles?: boolean) => {
+    return lambdaClient.topic.removeTopic.mutate({ id, removeFiles });
+  };
+
+  removeTopics = (sessionId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteBySessionId.mutate({
+      id: this.toDbSessionId(sessionId),
+      scope,
+    });
+  };
+
+  removeTopicsByAgentId = (agentId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId, scope });
+  };
+
+  removeTopicsByGroupId = (groupId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteByGroupId.mutate({ groupId, scope });
+  };
+
+  batchRemoveTopics = (topics: string[]) => {
+    return lambdaClient.topic.batchDelete.mutate({ ids: topics });
+  };
+
+  removeAllTopic = () => {
+    return lambdaClient.topic.removeAllTopics.mutate();
+  };
+
+  private toDbSessionId = (sessionId?: string | null) =>
+    sessionId === INBOX_SESSION_ID ? null : sessionId;
+}
+
+export const topicService = new TopicService();

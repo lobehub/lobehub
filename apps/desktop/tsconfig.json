@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": false,
+    "target": "ESNext",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "esModuleInterop": true,
+    "emitDecoratorMetadata": true,
+    "composite": true,
+    "experimentalDecorators": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": ["./src/main/*"],
+      "~common/*": ["./src/common/*"],
+      "*": ["./*"]
+    }
+  },
+  "include": [
+    "../../src/libs/mcp/__tests__/fixtures/negotiationServers.ts",
+    "src/main/**/*",
+    "src/main/global.d.ts",
+    "src/preload/**/*",
+    "src/common/**/*",
+    "electron-builder.js",
+    "native-deps.config.js"
+  ]
+}

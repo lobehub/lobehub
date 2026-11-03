@@ -1,0 +1,205 @@
+import { z } from 'zod';
+
+// ===== Manifest Schema =====
+
+export const skillAuthorSchema = z.object({
+  name: z.string(),
+  url: z.string().url().optional(),
+});
+
+export const skillManifestSchema = z
+  .object({
+    // Author can be either a string or an object (for compatibility with market skills)
+    author: z.union([z.string(), skillAuthorSchema]).optional(),
+
+    // Required: skill description
+    description: z.string().min(1, 'Skill description is required'),
+
+    license: z.string().optional(),
+
+    // Required fields
+    name: z.string().min(1, 'Skill name is required'),
+
+    permissions: z.array(z.string()).optional(),
+
+    // Project main repository URL
+    // e.g. https://github.com/lobehub/skills
+    repository: z.string().url().optional(),
+
+    // Source URL where the skill was imported from
+    // e.g. https://github.com/lobehub/skills/tree/main/code-review or https://example.com/skill.md
+    sourceUrl: z.string().url().optional(),
+
+    // Optional fields
+    version: z.string().optional(),
+  })
+  .passthrough();
+
+export type SkillManifest = z.infer<typeof skillManifestSchema>;
+export type SkillAuthor = z.infer<typeof skillAuthorSchema>;
+
+// ===== Builtin Skill =====
+
+export interface BuiltinSkill {
+  avatar?: string;
+  content: string;
+  description: string;
+  identifier: string;
+  name: string;
+  /**
+   * Inline resources for builtin skills.
+   * Key is the file path (e.g. "kb/README.md").
+   * Use `content` field in SkillResourceMeta to inline text content.
+   */
+  resources?: Record<string, SkillResourceMeta>;
+  source: 'builtin';
+  /**
+   * Optional friendly title for UI display. When unset, the inspector and
+   * render layers fall back to `name` (which carries the raw identifier).
+   * Agent-document skill bundles (`agent-skills:<filename>`) set this so the
+   * activateSkill result shows e.g. "LOBE Annotation Cleanup" instead of
+   * the raw `agent-skills:lobe-annotation-cleanup`.
+   */
+  title?: string;
+  /**
+   * Declared in the skill's own `SKILL.md` frontmatter and parsed from it, so a
+   * copy materialized onto a builder's disk carries the version it was installed
+   * at. Lets an installer compare an existing copy against the latest bundle
+   * instead of blindly overwriting or blindly skipping.
+   */
+  version?: string;
+}
+
+export type BuiltinSkillManifest = Pick<
+  BuiltinSkill,
+  'avatar' | 'description' | 'identifier' | 'name' | 'source' | 'title'
+>;
+
+// ===== Skill Source =====
+
+export type SkillSource = 'builtin' | 'market' | 'user';
+
+// ===== Parsed Skill =====
+
+export interface ParsedSkill {
+  content: string;
+  manifest: SkillManifest;
+  raw: string;
+}
+
+export interface ParsedZipSkill {
+  content: string;
+  manifest: SkillManifest;
+  resources: Map<string, Buffer>;
+  /**
+   * Repacked skill directory ZIP buffer (only when repackSkillZip=true)
+   * Used for GitHub imports to store only the skill directory, not the full repo
+   */
+  skillZipBuffer?: Buffer;
+  zipHash?: string;
+}
+
+// ===== Resource Types =====
+
+export interface SkillResourceMeta {
+  /**
+   * Inline text content for builtin skill resources.
+   * When set, the resource is served directly from memory instead of S3.
+   */
+  content?: string;
+  documentId?: string;
+  fileHash: string;
+  size: number;
+}
+
+export interface SkillResourceTreeNode {
+  children?: SkillResourceTreeNode[];
+  content?: string;
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+}
+
+export interface SkillResourceContent {
+  content: string;
+  encoding: 'utf8' | 'base64';
+  fileHash: string;
+  fileType: string;
+  fullPath?: string;
+  path: string;
+  size: number;
+}
+
+// ===== Skill Item (full structure, for detail queries) =====
+
+export interface SkillItem {
+  content?: string | null;
+  createdAt: Date;
+  description?: string | null;
+  editorData?: Record<string, any> | null;
+  id: string;
+  identifier: string;
+  manifest: SkillManifest;
+  name: string;
+  resources?: Record<string, SkillResourceMeta> | null;
+  source: SkillSource;
+  updatedAt: Date;
+  /** Creator attribution — drives the workspace row-level manage gate. */
+  userId?: string | null;
+  zipFileHash?: string | null;
+}
+
+// ===== Skill List Item (simplified structure, for list queries) =====
+
+export interface SkillListItem {
+  createdAt: Date;
+  description?: string | null;
+  id: string;
+  identifier: string;
+  manifest: SkillManifest;
+  name: string;
+  source: SkillSource;
+  updatedAt: Date;
+  /** Creator attribution — drives the workspace row-level manage gate. */
+  userId?: string | null;
+  zipFileHash?: string | null;
+}
+
+// ===== Service Input Types =====
+
+export interface CreateSkillInput {
+  content: string;
+  description: string;
+  identifier?: string;
+  name: string;
+}
+
+export interface ImportZipInput {
+  zipFileId: string;
+}
+
+export interface ImportGitHubInput {
+  branch?: string;
+  gitUrl: string;
+}
+
+export interface ImportUrlInput {
+  url: string;
+}
+
+export interface UpdateSkillInput {
+  content?: string;
+  description?: string;
+  id: string;
+  manifest?: Partial<SkillManifest>;
+  name?: string;
+}
+
+// ===== Import Result Types =====
+
+export type SkillImportStatus = 'created' | 'updated' | 'unchanged';
+
+export interface SkillImportResult {
+  skill: SkillItem;
+  status: SkillImportStatus;
+}

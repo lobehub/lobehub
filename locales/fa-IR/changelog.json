@@ -1,0 +1,14 @@
+{
+  "actions.followOnX": "ما را در X دنبال کنید",
+  "actions.subscribeToUpdates": "اشتراک در به‌روزرسانی‌ها",
+  "actions.versions": "جزئیات نسخه",
+  "addedWhileAway": "در زمانی که نبودید، ویژگی‌های جدیدی اضافه کرده‌ایم.",
+  "allChangelog": "مشاهده تمام تغییرات",
+  "description": "از ویژگی‌ها و بهبودهای جدید {{appName}} باخبر بمانید",
+  "pagination.next": "صفحه بعد",
+  "pagination.older": "مشاهده تغییرات گذشته",
+  "readDetails": "مطالعه جزئیات",
+  "title": "تغییرات نسخه",
+  "versionDetails": "جزئیات نسخه",
+  "welcomeBack": "خوش آمدید!"
+}

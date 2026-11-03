@@ -1,0 +1,70 @@
+---
+title: 邮件服务配置
+description: 配置 LobeHub 的邮件服务，用于邮箱验证、密码重置和魔法链接登录。
+tags:
+  - 邮件服务
+  - SMTP
+  - Resend
+  - 邮箱验证
+  - 魔法链接
+---
+
+# 邮件服务配置
+
+邮件服务用于邮箱验证、密码重置和魔法链接发送。LobeHub 支持两种邮件服务提供商。
+
+## Nodemailer（SMTP）
+
+使用 SMTP 协议发送邮件，适合已有邮箱服务的用户。参考 [Nodemailer SMTP 文档](https://nodemailer.com/smtp/)。
+
+| 环境变量                     | 类型 | 描述                                             | 示例                    |
+| ------------------------ | -- | ---------------------------------------------- | --------------------- |
+| `EMAIL_SERVICE_PROVIDER` | 可选 | 设置为 `nodemailer`（默认值）                          | `nodemailer`          |
+| `SMTP_HOST`              | 必选 | SMTP 服务器主机名                                    | `smtp.gmail.com`      |
+| `SMTP_PORT`              | 必选 | SMTP 服务器端口（TLS 通常为 `587`，SSL 为 `465`）          | `587`                 |
+| `SMTP_SECURE`            | 可选 | SSL 设置为 `true`（端口 465），TLS 设置为 `false`（端口 587） | `false`               |
+| `SMTP_USER`              | 必选 | SMTP 认证用户名                                     | `user@gmail.com`      |
+| `SMTP_PASS`              | 必选 | SMTP 认证密码                                      | `your-app-password`   |
+| `SMTP_FROM`              | 可选 | 发件人地址（AWS SES 必填），默认为 `SMTP_USER`              | `noreply@example.com` |
+
+<Callout type={'warning'}>
+  使用 Gmail 时，需使用应用专用密码而非账户密码。前往 [Google 应用专用密码](https://myaccount.google.com/apppasswords) 生成。
+</Callout>
+
+## Resend
+
+[Resend](https://resend.com/) 是一个现代邮件 API 服务，配置简单，推荐新用户使用。
+
+| 环境变量                     | 类型 | 描述                        | 示例                          |
+| ------------------------ | -- | ------------------------- | --------------------------- |
+| `EMAIL_SERVICE_PROVIDER` | 必选 | 设置为 `resend`              | `resend`                    |
+| `RESEND_API_KEY`         | 必选 | Resend API Key            | `re_xxxxxxxxxxxxxxxxxxxxxx` |
+| `RESEND_FROM`            | 推荐 | 发件人地址，需为 Resend 已验证域名下的邮箱 | `noreply@your-domain.com`   |
+
+<Callout type={'info'}>
+  使用 Resend 前需先 [验证发件域名](https://resend.com/docs/dashboard/domains/introduction)，否则只能发送到自己的邮箱。
+</Callout>
+
+## 邮箱验证
+
+启用邮箱验证以确保用户拥有其注册的邮箱地址（默认关闭）：
+
+| 环境变量                      | 类型 | 描述                   |
+| ------------------------- | -- | -------------------- |
+| `AUTH_EMAIL_VERIFICATION` | 可选 | 设置为 `1` 以要求注册后进行邮箱验证 |
+
+<Callout type={'info'}>
+  邮箱验证需要上方已配置好的邮件服务（SMTP 或 Resend）。启用后，用户必须验证其邮箱地址才能登录。
+</Callout>
+
+## 魔法链接（免密）登录
+
+启用魔法链接登录（依赖上方已配置好的邮件服务，默认关闭）：
+
+| 环境变量                     | 类型 | 描述                      |
+| ------------------------ | -- | ----------------------- |
+| `AUTH_ENABLE_MAGIC_LINK` | 可选 | 设置为 `1` 以启用魔法链接登录（默认关闭） |
+
+<Callout type={'tip'}>
+  前往 [环境变量](/zh/docs/self-hosting/environment-variables/auth#better-auth) 可查阅所有 Better Auth 相关变量详情。
+</Callout>

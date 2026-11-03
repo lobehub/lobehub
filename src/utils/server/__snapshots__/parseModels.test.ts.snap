@@ -1,0 +1,173 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parseModelString > custom deletion, addition, and renaming of models 1`] = `
+{
+  "add": [
+    {
+      "abilities": {},
+      "displayName": undefined,
+      "id": "llama",
+      "type": "chat",
+    },
+    {
+      "abilities": {},
+      "displayName": undefined,
+      "id": "claude-2",
+      "type": "chat",
+    },
+    {
+      "abilities": {},
+      "displayName": "gpt-4-32k",
+      "id": "gpt-4-1106-preview",
+      "type": "chat",
+    },
+  ],
+  "removeAll": true,
+  "removed": [
+    "all",
+    "gpt-3.5-turbo",
+  ],
+}
+`;
+
+exports[`parseModelString > duplicate naming model 1`] = `
+{
+  "add": [
+    {
+      "abilities": {},
+      "displayName": "gpt-4-32k",
+      "id": "gpt-4-1106-preview",
+      "type": "chat",
+    },
+  ],
+  "removeAll": false,
+  "removed": [],
+}
+`;
+
+exports[`parseModelString > empty string model 1`] = `
+{
+  "add": [
+    {
+      "abilities": {},
+      "displayName": "gpt-4-turbo",
+      "id": "gpt-4-1106-preview",
+      "type": "chat",
+    },
+    {
+      "abilities": {},
+      "displayName": undefined,
+      "id": "claude-2",
+      "type": "chat",
+    },
+  ],
+  "removeAll": false,
+  "removed": [],
+}
+`;
+
+exports[`parseModelString > only add the model 1`] = `
+{
+  "add": [
+    {
+      "abilities": {},
+      "displayName": undefined,
+      "id": "model1",
+      "type": "chat",
+    },
+    {
+      "abilities": {},
+      "displayName": undefined,
+      "id": "model2",
+      "type": "chat",
+    },
+    {
+      "abilities": {},
+      "displayName": undefined,
+      "id": "model3",
+      "type": "chat",
+    },
+    {
+      "abilities": {},
+      "displayName": undefined,
+      "id": "model4",
+      "type": "chat",
+    },
+  ],
+  "removeAll": false,
+  "removed": [],
+}
+`;
+
+exports[`transformToChatModelCards > should have file with builtin models like gpt-4-0125-preview 1`] = `
+[
+  {
+    "abilities": {
+      "files": true,
+      "functionCall": true,
+    },
+    "contextWindowTokens": 128000,
+    "description": "The latest GPT-4 Turbo model includes vision. Vision requests can use JSON mode and function calling. GPT-4 Turbo is an enhanced version that balances accuracy and efficiency for cost-effective multimodal tasks and real-time interactions.",
+    "displayName": "ChatGPT-4",
+    "enabled": true,
+    "family": "gpt",
+    "generation": "gpt-4",
+    "id": "gpt-4-0125-preview",
+    "knowledgeCutoff": "2023-12",
+    "pricing": {
+      "units": [
+        {
+          "name": "textInput",
+          "rate": 10,
+          "strategy": "fixed",
+          "unit": "millionTokens",
+        },
+        {
+          "name": "textOutput",
+          "rate": 30,
+          "strategy": "fixed",
+          "unit": "millionTokens",
+        },
+      ],
+    },
+    "providerId": "openai",
+    "source": "builtin",
+    "type": "chat",
+  },
+  {
+    "abilities": {
+      "files": true,
+      "functionCall": true,
+      "vision": true,
+    },
+    "contextWindowTokens": 128000,
+    "description": "The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.",
+    "displayName": "ChatGPT-4 Vision",
+    "enabled": true,
+    "family": "gpt",
+    "generation": "gpt-4",
+    "id": "gpt-4-turbo-2024-04-09",
+    "knowledgeCutoff": "2023-12",
+    "pricing": {
+      "units": [
+        {
+          "name": "textInput",
+          "rate": 10,
+          "strategy": "fixed",
+          "unit": "millionTokens",
+        },
+        {
+          "name": "textOutput",
+          "rate": 30,
+          "strategy": "fixed",
+          "unit": "millionTokens",
+        },
+      ],
+    },
+    "providerId": "openai",
+    "releasedAt": "2024-04-09",
+    "source": "builtin",
+    "type": "chat",
+  },
+]
+`;

@@ -1,0 +1,149 @@
+// @vitest-environment node
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import { describe, expect, it, vi } from 'vitest';
+
+import { loadFile } from './loadFile';
+
+const fixtures = path.join(__dirname, '../test/fixtures');
+const fp = (name: string) => path.join(fixtures, name);
+
+describe('loadFile', () => {
+  it('loads text-like files via TextLoader and aggregates', async () => {
+    const file = fp('test.txt');
+    const doc = await loadFile(file);
+    expect(doc.fileType).toBe('txt');
+    expect(doc.filename).toBe('test.txt');
+    expect(doc.source).toBe(file);
+    expect(doc.content).toContain('This is line 1.');
+    expect(doc.pages?.[0].metadata.lineNumberStart).toBe(1);
+    expect(doc.totalCharCount).toBeGreaterThan(0);
+    expect(doc.totalLineCount).toBeGreaterThan(0);
+  });
+
+  it('loads pdf files via PdfLoader and aggregates', async () => {
+    const file = fp('test.pdf');
+    const doc = await loadFile(file);
+    expect(doc.fileType).toBe('pdf');
+    expect(doc.filename).toBe('test.pdf');
+    expect(doc.source).toBe(file);
+    expect(doc.content).toContain('123');
+    expect(doc.pages && doc.pages.length).toBeGreaterThan(0);
+  }, 15_000);
+
+  it('returns error page when fs.stat fails', async () => {
+    const doc = await loadFile('/not/exists.xyz');
+    expect(doc.pages).toHaveLength(1);
+    expect(doc.pages?.[0].metadata.error).toContain('Failed to access file stats:');
+    expect(doc.metadata.error).toContain('Failed to access file stats:');
+  });
+
+  it('rejects unsupported binary-like file types before text parsing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'lobe-file-loaders-'));
+
+    try {
+      const file = path.join(tempDir, 'archive.zip');
+      await writeFile(file, Buffer.from([80, 75, 3, 4, 0, 0]));
+
+      await expect(loadFile(file)).rejects.toMatchObject({
+        fileType: 'zip',
+        name: 'UnsupportedFileTypeError',
+      });
+      expect(warn).toHaveBeenCalledWith(
+        "No specific loader found for file type 'zip'. Rejecting unsupported file type.",
+      );
+    } finally {
+      warn.mockRestore();
+      await rm(tempDir, { force: true, recursive: true });
+    }
+  });
+
+  it('surfaces a binary .ipynb rejection at the document level', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'lobe-file-loaders-'));
+
+    try {
+      const file = path.join(tempDir, 'renamed.ipynb');
+      await writeFile(file, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x1a, 0x0a]));
+
+      const doc = await loadFile(file);
+
+      // The document-level error is what `readFile` / callers check; a
+      // page-only error would be read as a successful empty file.
+      expect(doc.metadata.error).toContain('Binary content in .ipynb file');
+      expect(doc.content).toBe('');
+      expect(doc.pages).toHaveLength(1);
+      expect(doc.pages?.[0].metadata.error).toContain('Binary content in .ipynb file');
+    } finally {
+      errorSpy.mockRestore();
+      await rm(tempDir, { force: true, recursive: true });
+    }
+  });
+
+  it('surfaces a loader that reports failure through error pages at the document level', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'lobe-file-loaders-'));
+
+    try {
+      // `stat` succeeds on a directory, then TextLoader's `readFile` fails with
+      // EISDIR and returns an error page instead of throwing.
+      const dir = path.join(tempDir, 'looks-like-a-file.txt');
+      await mkdir(dir);
+
+      const doc = await loadFile(dir);
+
+      expect(doc.content).toBe('');
+      expect(doc.pages?.[0].metadata.error).toContain('Failed to load text file');
+      expect(doc.metadata.error).toContain('Failed to load text file');
+    } finally {
+      errorSpy.mockRestore();
+      await rm(tempDir, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps a partially failed load successful when some pages loaded', async () => {
+    vi.resetModules();
+    vi.doMock('./loaders', () => ({
+      getFileLoader: async () =>
+        class PartialLoader {
+          async loadPages() {
+            return [
+              { charCount: 2, lineCount: 1, metadata: {}, pageContent: 'ok' },
+              { charCount: 0, lineCount: 0, metadata: { error: 'page 2 broken' }, pageContent: '' },
+            ];
+          }
+
+          async aggregateContent(pages: { pageContent: string }[]) {
+            return pages.map((page) => page.pageContent).join('');
+          }
+        },
+    }));
+
+    try {
+      const { loadFile: loadFileWithMock } = await import('./loadFile');
+      const doc = await loadFileWithMock(fp('test.txt'));
+
+      expect(doc.content).toBe('ok');
+      expect(doc.metadata.error).toBeUndefined();
+    } finally {
+      vi.doUnmock('./loaders');
+      vi.resetModules();
+    }
+  });
+
+  it('allows overriding metadata via second parameter', async () => {
+    const file = fp('test.txt');
+    const override = {
+      source: 's3://bucket/key',
+      filename: 'override.txt',
+      fileType: 'custom',
+    };
+    const doc = await loadFile(file, override);
+    expect(doc.source).toBe('s3://bucket/key');
+    expect(doc.filename).toBe('override.txt');
+    expect(doc.fileType).toBe('custom');
+  });
+});

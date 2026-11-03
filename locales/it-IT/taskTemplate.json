@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "Connetti {{provider}}",
+  "action.connect.error": "Connessione fallita, per favore riprova.",
+  "action.connect.popupBlocked": "Popup di connessione bloccato. Consenti i popup nel tuo browser per continuare.",
+  "action.connect.short": "Connetti",
+  "action.connecting": "In attesa di autorizzazione…",
+  "action.create.error": "Impossibile creare l'attività. Riprova.",
+  "action.create.success": "Attività programmata aggiunta. Trovala in Lobe AI.",
+  "action.createButton": "Aggiungi attività",
+  "action.creating": "Creazione in corso...",
+  "action.dismiss.error": "Impossibile ignorare. Riprova.",
+  "action.dismiss.tooltip": "Non interessato",
+  "action.refresh.button": "Aggiorna",
+  "card.templateTag": "Modello",
+  "schedule.daily": "Ogni giorno alle {{time}}",
+  "schedule.editableAfterCreateTooltip": "Puoi modificare il programma dopo aver creato l'attività.",
+  "schedule.weekly": "Ogni {{weekday}} alle {{time}}",
+  "section.title": "Prova queste attività programmate"
+}

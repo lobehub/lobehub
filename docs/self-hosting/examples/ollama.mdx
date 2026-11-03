@@ -1,0 +1,105 @@
+---
+title: Integrating LobeHub with Ollama for Enhanced Language Models
+description: >-
+  Learn how to configure and deploy LobeHub to leverage Ollama's powerful
+  language models locally. Follow the guide to run Ollama and LobeHub on your
+  system.
+tags:
+  - Ollama integration
+  - LobeHub configuration
+  - Local deployment
+  - Language models
+  - Ollama usage
+---
+
+# Integrating with Ollama
+
+Ollama is a powerful framework for running large language models (LLMs) locally, supporting various language models including Llama 2, Mistral, and more. Now, LobeHub supports integration with Ollama, meaning you can easily use the language models provided by Ollama to enhance your application within LobeHub.
+
+This document will guide you on how to configure and deploy LobeHub to use Ollama:
+
+## Running Ollama Locally
+
+First, you need to install Ollama. For detailed steps on installing and configuring Ollama, please refer to the [Ollama Website](https://ollama.com).
+
+## Running LobeHub Locally
+
+Assuming you have already started the Ollama service locally on port `11434`. Run the following Docker command to start LobeHub locally:
+
+```bash
+docker run -d -p 3210:3210 -e OLLAMA_PROXY_URL=http://host.docker.internal:11434 lobehub/lobehub
+```
+
+Now, you can use LobeHub to converse with the local LLM.
+
+For more information on using Ollama in LobeHub, please refer to [Ollama Usage](/docs/usage/providers/ollama).
+
+## Accessing Ollama from Non-Local Locations
+
+When you first initiate Ollama, it is configured to allow access only from the local machine. To enable access from other domains and set up port listening, you will need to adjust the environment variables `OLLAMA_ORIGINS` and `OLLAMA_HOST` accordingly.
+
+### Ollama Environment Variables
+
+| Environment Variable | Description                                            | Default Value                                             | Additional Information                                                                 |
+| -------------------- | ------------------------------------------------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `OLLAMA_HOST`        | Specifies the host and port for binding                | "127.0.0.1:11434"                                         | Use "0.0.0.0:port" to make the service accessible from any machine                     |
+| `OLLAMA_ORIGINS`     | Comma-separated list of permitted cross-origin sources | Restricted to local access                                | Set to "\*" to avoid CORS, please set on demand                                        |
+| `OLLAMA_MODELS`      | Path to the directory where models are located         | "\~/.ollama/models" or "/usr/share/ollama/.ollama/models" | Can be customized based on requirements                                                |
+| `OLLAMA_KEEP_ALIVE`  | Duration that the model stays loaded in GPU memory     | "5m"                                                      | Dynamically loading and unloading models can reduce GPU load but may increase disk I/O |
+| `OLLAMA_DEBUG`       | Enable additional debugging logs by setting to 1       | Typically disabled                                        |                                                                                        |
+
+### Setting environment variables on Windows
+
+On Windows, Ollama inherits your user and system environment variables.
+
+1. First Quit Ollama by clicking on its tray icon and selecting Quit
+2. Edit system environment variables from the control panel
+3. Edit or create New variable(s) for your user account for `OLLAMA_HOST`, `OLLAMA_ORIGINS`, etc.
+4. Click OK/Apply to save
+5. Restart it
+
+### Setting environment variables on Mac
+
+If Ollama is run as a macOS application, environment variables should be set using `launchctl`:
+
+1. For each environment variable, call `launchctl setenv`.
+
+   ```bash
+   launchctl setenv OLLAMA_HOST "0.0.0.0"
+   launchctl setenv OLLAMA_ORIGINS "*"
+   ```
+
+2. Restart Ollama application.
+
+### Setting environment variables on Linux
+
+If Ollama is run as a systemd service, environment variables should be set using `systemctl`:
+
+1. Edit the systemd service by calling `sudo systemctl edit ollama.service`.
+
+   ```bash
+   sudo systemctl edit ollama.service
+   ```
+
+2. For each environment variable, add a line `Environment` under section `[Service]`:
+
+   ```bash
+   [Service]
+   Environment="OLLAMA_HOST=0.0.0.0"
+   Environment="OLLAMA_ORIGINS=*"
+   ```
+
+3. Save and exit.
+
+4. Reload `systemd` and restart Ollama:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl restart ollama
+   ```
+
+### Setting environment variables on Docker
+
+If Ollama is run as a Docker container, you can add the environment variables to the `docker run` command.
+
+For further guidance on configuration, consult the [Ollama Official Documentation](https://github.com/ollama/ollama/blob/main/docs/faq.md#how-do-i-configure-ollama-server).

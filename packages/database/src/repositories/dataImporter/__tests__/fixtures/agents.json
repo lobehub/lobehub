@@ -1,0 +1,65 @@
+{
+  "data": {
+    "agents": [
+      {
+        "id": "agt_CSLkGPIXIQms",
+        "slug": "room-possible-somewhere-numeral",
+        "title": null,
+        "description": null,
+        "tags": [],
+        "avatar": null,
+        "backgroundColor": null,
+        "plugins": [],
+        "chatConfig": {
+          "searchMode": "off"
+        },
+        "fewShots": null,
+        "model": "gemini-2.0-flash-exp",
+        "params": {
+          "top_p": 1,
+          "temperature": 1,
+          "presence_penalty": 0,
+          "frequency_penalty": 0
+        },
+        "provider": "google",
+        "systemRole": "",
+        "tts": {
+          "voice": {
+            "openai": "alloy"
+          },
+          "sttLocale": "auto",
+          "ttsService": "openai",
+          "showAllLocaleVoice": false
+        },
+        "accessedAt": "2025-03-05T05:25:44.521Z",
+        "createdAt": "2025-03-05T05:25:44.522Z",
+        "updatedAt": "2025-03-05T05:25:44.522Z"
+      }
+    ],
+    "agentsToSessions": [
+      {
+        "agentId": "agt_CSLkGPIXIQms",
+        "sessionId": "ssn_WdL6m1mReqyb"
+      }
+    ],
+    "sessions": [
+      {
+        "id": "ssn_WdL6m1mReqyb",
+        "slug": "inbox-t",
+        "title": null,
+        "description": null,
+        "avatar": null,
+        "backgroundColor": null,
+        "type": "agent",
+        "groupId": null,
+        "clientId": null,
+        "pinned": false,
+        "accessedAt": "2025-03-05T05:25:44.521Z",
+        "createdAt": "2025-03-05T05:25:44.528Z",
+        "updatedAt": "2025-03-05T05:25:44.528Z"
+      }
+    ]
+  },
+  "mode": "pglite",
+  "schemaHash": "89e91285be422d5f44511c7405f57b57f8dfda4f0304126ae9b0f266e5fd60f1"
+}

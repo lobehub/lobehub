@@ -1,0 +1,98 @@
+name: Desktop Upload Artifacts
+description: Rename macOS yml for multi-arch and upload build artifacts
+
+inputs:
+  artifact-name:
+    description: Name for the uploaded artifact
+    required: true
+  retention-days:
+    description: Number of days to retain artifacts
+    required: false
+    default: '5'
+  update-server-url:
+    description: Update server URL; with core-signing-key, also builds the r0 core release from core-dist
+    required: false
+    default: ''
+  core-signing-key:
+    description: Ed25519 private key PEM used to sign the r0 core manifest
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Rename macOS *-mac.yml for multi-architecture support
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        cd apps/desktop/release
+        SYSTEM_ARCH=$(uname -m)
+        if [[ "$SYSTEM_ARCH" == "arm64" ]]; then
+          ARCH_SUFFIX="arm64"
+        else
+          ARCH_SUFFIX="x64"
+        fi
+        for yml in *-mac.yml; do
+          if [ -f "$yml" ]; then
+            new_name="${yml%.yml}-${ARCH_SUFFIX}.yml"
+            mv "$yml" "$new_name"
+            echo "✅ Renamed $yml to $new_name"
+          fi
+        done
+
+    - name: List yml files before upload
+      shell: bash
+      run: |
+        echo "📋 YML files to upload:"
+        ls -la apps/desktop/release/*.yml 2>/dev/null || echo "   ⚠️ No yml files found!"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ inputs.artifact-name }}
+        if-no-files-found: warn
+        path: |
+          apps/desktop/release/*.yml
+          apps/desktop/release/*.dmg*
+          apps/desktop/release/*.zip*
+          apps/desktop/release/*.exe*
+          apps/desktop/release/*.AppImage
+          apps/desktop/release/*.deb*
+          apps/desktop/release/*.snap*
+          apps/desktop/release/*.rpm*
+          apps/desktop/release/*.tar.gz*
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Build r0 core release
+      id: core
+      if: inputs.update-server-url != '' && inputs.core-signing-key != ''
+      shell: bash
+      working-directory: apps/desktop
+      env:
+        RENDERER_OTA_PRIVATE_KEY: ${{ inputs.core-signing-key }}
+        UPDATE_SERVER_URL: ${{ inputs.update-server-url }}
+      run: |
+        set -euo pipefail
+        BASE="${UPDATE_SERVER_URL%/}"
+        case "$BASE" in
+          */stable|*/nightly|*/canary|*/beta) BASE="${BASE%/*}" ;;
+        esac
+        read -r PLATFORM CHANNEL VERSION SEQ SHELL_ABI < <(node -p "const m=require('./core-dist/manifest.json');[m.platform,m.channel,m.version,m.seq,m.shellAbi].join(' ')")
+        node scripts/buildCore.mjs --protocol=4 \
+          --core=core-dist \
+          --platform="$PLATFORM" \
+          --channel="$CHANNEL" \
+          --version="$VERSION" \
+          --seq="$SEQ" \
+          --shell-abi="$SHELL_ABI" \
+          --objects-base-url="$BASE/cas" \
+          --out=release/core-ota
+        echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+
+    - name: Upload r0 core release
+      if: steps.core.outputs.platform != ''
+      uses: actions/upload-artifact@v6
+      with:
+        name: core-r0-${{ steps.core.outputs.platform }}-${{ runner.arch }}
+        path: apps/desktop/release/core-ota
+        retention-days: ${{ inputs.retention-days }}

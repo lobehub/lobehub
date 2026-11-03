@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "Anthropic.claude-code",
+    "jrr997.antd-docs",
+    "oxc.oxc-vscode",
+    "seatonjiang.gitmoji-vscode",
+    "styled-components.vscode-styled-components",
+    "stylelint.vscode-stylelint",
+    "unifiedjs.vscode-mdx",
+    "unifiedjs.vscode-remark",
+    "vitest.explorer"
+  ]
+}

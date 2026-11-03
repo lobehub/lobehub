@@ -1,0 +1,238 @@
+import { splitAssistantGroupFinalAnswer } from '@lobechat/conversation-flow';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+import isEqual from 'fast-deep-equal';
+import { Fragment, memo, useMemo } from 'react';
+
+import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import type { OperationStatus } from '@/store/chat/slices/operation/types';
+import type { AssistantContentBlock } from '@/types/index';
+
+import { messageStateSelectors, useConversationStore } from '../../../store';
+import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
+import { formatReasoningDuration } from '../toolDisplayNames';
+import { CollapsedMessage } from './CollapsedMessage';
+import type { GroupChainInput, GroupChainView } from './groupChain';
+import { buildChainView, getChainDurationsMs, getLastBlockCreatedAt } from './groupChain';
+import ProcessFold from './ProcessFold';
+import { renderChainSegment } from './renderChainSegment';
+import type { GroupRenderSegment } from './segments';
+import { countAssistantLlmCalls, hasRenderableFinalAnswer, shouldFoldProcess } from './segments';
+import SteerMessage from './SteerMessage';
+import type { WorkflowExpandLevelDefault } from './WorkflowCollapse';
+
+const styles = stylex.create({
+  container: { width: { 'default': null, ':has(.tool-blocks)': '100%' } },
+});
+
+const ACTIVE_OPERATION_STATUSES = new Set<OperationStatus>(['pending', 'paused', 'running']);
+
+interface GroupChildrenProps {
+  blocks: AssistantContentBlock[];
+  content?: string;
+  contentId?: string;
+  /** Later turns steered onto this one; each renders as a continuation of the same chain. */
+  continuations?: GroupChainInput[];
+  defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
+  disableEditing?: boolean;
+  /** Lab flag: fold finished non-latest turns' process under a "已处理" header. */
+  enableProcessFold?: boolean;
+  id: string;
+  /** Whether this turn is the latest item in the conversation. */
+  isLatestItem?: boolean;
+  messageIndex: number;
+}
+
+const Group = memo<GroupChildrenProps>(
+  ({
+    blocks,
+    contentId,
+    continuations,
+    defaultWorkflowExpandLevel,
+    disableEditing,
+    messageIndex,
+    id,
+    content,
+    isLatestItem,
+    enableProcessFold,
+  }) => {
+    const chains = useMemo<GroupChainInput[]>(
+      () => [{ blocks, contentId, id }, ...(continuations ?? [])],
+      [blocks, contentId, continuations, id],
+    );
+    const [isCollapsed, generatingFlags] = useConversationStore(
+      (s) => [
+        messageStateSelectors.isMessageCollapsed(id)(s),
+        chains.map(
+          (chain) =>
+            messageStateSelectors.isAssistantGroupItemGenerating(chain.id)(s) ||
+            messageStateSelectors.isMessageCreating(chain.id)(s),
+        ),
+      ],
+      isEqual,
+    );
+    // A running op whose visible output already ended (`visible_output_end` →
+    // `metadata.visibleLoadingDone`) only has terminal bookkeeping left
+    // (server-side persistence, agent_runtime_end, completeRun). Treating it as
+    // still active would delay process folding by seconds after the answer
+    // finished streaming. Safe to fold early: `stream_start` resets the flag,
+    // so a follow-up step re-activates the operation.
+    const activeFlags = useChatStore(
+      (s) =>
+        chains.map((chain) =>
+          operationSelectors
+            .getOperationsByMessage(chain.id)(s)
+            .some(
+              (op) =>
+                ACTIVE_OPERATION_STATUSES.has(op.status) &&
+                !(op.status === 'running' && op.metadata.visibleLoadingDone),
+            ),
+        ),
+      isEqual,
+    );
+    const allBlocks = useMemo(() => chains.flatMap((chain) => chain.blocks), [chains]);
+    const blockIds = useMemo(() => new Set(allBlocks.map((block) => block.id)), [allBlocks]);
+    /** A stale group projection must receive persisted finish types before empty-block filtering. */
+    const persistedFinishTypes = useConversationStore((s) => {
+      const result: Record<string, string> = {};
+      for (const message of s.dbMessages) {
+        const finishType = message.metadata?.finishType;
+        if (blockIds.has(message.id) && typeof finishType === 'string') {
+          result[message.id] = finishType;
+        }
+      }
+      return result;
+    }, isEqual);
+    const chainsWithFinishTypes = useMemo(
+      () =>
+        chains.map((chain) => ({
+          ...chain,
+          blocks: chain.blocks.map((block) => {
+            if (block.metadata?.finishType != null) return block;
+            const finishType = persistedFinishTypes[block.id];
+            return finishType ? { ...block, metadata: { ...block.metadata, finishType } } : block;
+          }),
+        })),
+      [chains, persistedFinishTypes],
+    );
+    const chainDurations = useConversationStore(
+      (s) => getChainDurationsMs(s.dbMessages, chains),
+      isEqual,
+    );
+    const lastBlock = allBlocks.at(-1);
+    const lastBlockCreatedAt = useConversationStore((s) =>
+      getLastBlockCreatedAt(s.dbMessages, lastBlock),
+    );
+    const contextValues = useMemo(
+      () => chains.map((chain) => ({ assistantGroupId: chain.id })),
+      [chains],
+    );
+
+    const views = useMemo(
+      () =>
+        chainsWithFinishTypes.map((chain, index) =>
+          buildChainView(chain, {
+            hasActiveOperation: !!activeFlags[index],
+            isGenerating: !!generatingFlags[index],
+          }),
+        ),
+      [activeFlags, chainsWithFinishTypes, generatingFlags],
+    );
+    const lastView = views.at(-1)!;
+    const isGenerating = lastView.isGenerating;
+
+    if (isCollapsed) {
+      return (
+        content && (
+          <Flexbox>
+            <CollapsedMessage content={content} id={id} />
+          </Flexbox>
+        )
+      );
+    }
+
+    const renderOptions = {
+      defaultWorkflowExpandLevel,
+      disableEditing,
+      enableProcessFold,
+      messageIndex,
+    };
+
+    const renderChain = (
+      view: GroupChainView,
+      segments: GroupRenderSegment[],
+      variant: 'process' | 'final',
+    ) => (
+      <MessageAggregationContext
+        key={`${view.id}.${variant}`}
+        value={contextValues[views.indexOf(view)]!}
+      >
+        {segments.map((segment) => renderChainSegment(view, segment, renderOptions))}
+      </MessageAggregationContext>
+    );
+
+    // Codex-style turn folding: once the turn's op has ended, fold its whole
+    // process (reasoning + tools + intermediate prose) under a single "已处理
+    // {duration}" header, leaving the final answer always visible — for every
+    // turn, latest or not. Folding must never swallow the final answer, since
+    // that is the turn's payload; only the process collapses. The latest turn
+    // is eligible only once its final answer exists (so a tool-only latest turn
+    // does not collapse into a lone header); still-generating turns render in
+    // full. Steered continuations fold per turn, and each turn keeps its own
+    // final answer: a queued follow-up is only sent once the turn before it has
+    // finished, so that turn's answer is a real reply, not process. Each steer
+    // bubble sits after the answer of the turn it followed. A turn that stopped
+    // on a tool call has no final answer and folds whole.
+    const splits = views.map((view) => splitAssistantGroupFinalAnswer(view.segments));
+    const finalSegments = splits.at(-1)!.finalSegments;
+    const foldProcess = shouldFoldProcess({
+      enabled: enableProcessFold,
+      hasFinalAnswer: hasRenderableFinalAnswer(finalSegments),
+      isGenerating,
+      isLatestItem,
+      operationEnded: !views.some((view) => view.hasActiveOperation),
+      processSegments: splits.flatMap((split) => split.processSegments),
+    });
+
+    const renderFold = (view: GroupChainView, index: number) => {
+      const segments = splits[index]!.processSegments;
+      if (segments.length === 0) return null;
+      const durationMs = chainDurations[index] ?? 0;
+      return (
+        <ProcessFold
+          durationText={durationMs >= 1000 ? formatReasoningDuration(durationMs) : undefined}
+          key={view.id}
+          stepCount={countAssistantLlmCalls(view.segments)}
+        >
+          <Flexbox gap={8}>{renderChain(view, segments, 'process')}</Flexbox>
+        </ProcessFold>
+      );
+    };
+
+    return (
+      <Flexbox className={stylex.props(styles.container).className} gap={4}>
+        {views.map((view, index) => (
+          <Fragment key={view.id}>
+            {view.steerUserId && <SteerMessage id={view.steerUserId} />}
+            {foldProcess ? (
+              <>
+                {renderFold(view, index)}
+                {renderChain(view, splits[index]!.finalSegments, 'final')}
+              </>
+            ) : (
+              renderChain(view, view.segments, 'process')
+            )}
+          </Fragment>
+        ))}
+        {!foldProcess && lastView.showTailRunningIndicator && (
+          <ContentLoading id={lastView.id} startTime={lastBlockCreatedAt} />
+        )}
+      </Flexbox>
+    );
+  },
+  isEqual,
+);
+
+export default Group;

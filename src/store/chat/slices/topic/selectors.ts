@@ -1,0 +1,556 @@
+import { isDesktop } from '@lobechat/const';
+import type { HeterogeneousTopicPin } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { t } from 'i18next';
+import type { AiModelReasoningConfig } from 'model-bank';
+
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS, TopicTrigger } from '@/const/topic';
+import {
+  type ChatTopic,
+  type ChatTopicSummary,
+  type GroupedTopic,
+  type TopicGroupMode,
+  type TopicSortBy,
+} from '@/types/topic';
+import {
+  getTopicSortTime,
+  groupTopicsByAgent,
+  groupTopicsByDevice,
+  groupTopicsByProject,
+  groupTopicsByStatus,
+  groupTopicsByTime,
+  groupTopicsByUpdatedTime,
+  type TopicDeviceDirectory,
+} from '@/utils/client/topic';
+
+import { type ChatStoreState } from '../../initialState';
+import { topicMapKey } from '../../utils/topicMapKey';
+import { operationSelectors } from '../operation/selectors';
+import { type TopicData } from './initialState';
+
+// Helper selector: get current topic data based on session context
+const currentTopicData = (s: ChatStoreState): TopicData | undefined => {
+  const key = topicMapKey({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+  });
+  return s.topicDataMap[key];
+};
+
+const currentTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTopicData(s)?.items;
+
+/**
+ * Every list surface reads through here, so system-owned topics (cron, task
+ * runs, doc chats, evals) stay out of the user's chat history.
+ *
+ * The sidebar fetch already excludes them server-side; this repeats the filter
+ * because `topicDataMap` is keyed by container and not by query, so any panel
+ * fetching the same agent with looser filters overwrites the bucket. Belt and
+ * braces — the fetch decides the page and the total, this decides what renders.
+ */
+const currentTopicsWithoutSystemTriggers = (s: ChatStoreState): ChatTopic[] | undefined => {
+  const topics = currentTopics(s);
+  if (!topics) return undefined;
+  return topics.filter(
+    (topic) => !topic.trigger || !MAIN_SIDEBAR_EXCLUDE_TRIGGERS.includes(topic.trigger),
+  );
+};
+
+const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
+  const inList = currentTopics(s)?.find((topic) => topic.id === s.activeTopicId);
+  if (inList) return inList;
+  // The active topic can be absent from the list bucket — archived (completed)
+  // topics are excluded by the sidebar fetch's `excludeStatuses`. Fall back to
+  // the by-id detail cache so consumers keep real data (title, metadata, …).
+  return s.activeTopicId ? s.topicDetailMap?.[s.activeTopicId] : undefined;
+};
+const searchTopics = (s: ChatStoreState): ChatTopic[] =>
+  s.searchTopics.filter((topic) => topic.trigger !== TopicTrigger.Channel);
+
+const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined =>
+  currentTopicsWithoutSystemTriggers(s);
+
+const currentUnFavTopics = (s: ChatStoreState): ChatTopic[] =>
+  currentTopicsWithoutSystemTriggers(s)?.filter((s) => !s.favorite) || [];
+
+const currentTopicLength = (s: ChatStoreState): number =>
+  currentTopicsWithoutSystemTriggers(s)?.length || 0;
+
+const currentTopicCount = (s: ChatStoreState): number => currentTopicData(s)?.total || 0;
+
+const getTopicById =
+  (id: string) =>
+  (s: ChatStoreState): ChatTopic | undefined => {
+    const currentTopic = currentTopics(s)?.find((topic) => topic.id === id);
+    if (currentTopic) return currentTopic;
+
+    // Multiple desktop tab routers can render topics from different agents at
+    // the same time. The global activeAgentId only describes the focused tab,
+    // so fall back to the other already-loaded agent buckets for background
+    // panes. Topic ids are globally unique.
+    for (const topicData of Object.values(s.topicDataMap)) {
+      const topic = topicData.items.find((item) => item.id === id);
+      if (topic) return topic;
+    }
+
+    return s.topicDetailMap?.[id];
+  };
+
+/**
+ * The `topicDataMap` bucket that actually holds this topic, or undefined when
+ * no loaded bucket does.
+ *
+ * Writes must target it rather than the active agent/group bucket: the Agent
+ * Builder panels render a whole conversation for a builtin agent while
+ * `activeAgentId` still points at the agent being edited, so a write keyed on
+ * the active pair silently lands in a bucket without the row — the optimistic
+ * update no-ops and the revalidation refreshes the wrong list, leaving the
+ * panel showing a stale value forever (the server row having changed).
+ */
+const getTopicContainerKeyById =
+  (id: string) =>
+  (s: ChatStoreState): string | undefined => {
+    for (const [key, data] of Object.entries(s.topicDataMap)) {
+      if (data.items.some((item) => item.id === id)) return key;
+    }
+  };
+
+/**
+ * Get topics by specific agentId (for AgentBuilder scenarios where agentId differs from activeAgentId)
+ */
+const getTopicsByAgentId =
+  (agentId: string) =>
+  (s: ChatStoreState): ChatTopic[] | undefined => {
+    const key = topicMapKey({ agentId });
+    return s.topicDataMap[key]?.items;
+  };
+
+const currentActiveTopicSummary = (s: ChatStoreState): ChatTopicSummary | undefined => {
+  const activeTopic = currentActiveTopic(s);
+  if (!activeTopic) return undefined;
+
+  return {
+    content: activeTopic.historySummary || '',
+    model: activeTopic.metadata?.model || '',
+    provider: activeTopic.metadata?.provider || '',
+  };
+};
+
+const currentTopicMetadata = (s: ChatStoreState) => currentActiveTopic(s)?.metadata;
+
+/**
+ * Get the model/provider pinned to a specific topic (snapshotted on creation,
+ * updated when the user switches model while the topic is active).
+ * Returns undefined when the topic has no model recorded (e.g. legacy topics),
+ * in which case callers should fall back to the agent default.
+ */
+const getTopicModelById =
+  (id: string) =>
+  (s: ChatStoreState): { model: string; provider: string } | undefined => {
+    const topic = getTopicById(id)(s);
+    if (!topic?.model) return undefined;
+
+    return { model: topic.model, provider: topic.provider || '' };
+  };
+
+/**
+ * The model/provider pinned to the active topic, or undefined when there is no
+ * active topic or it has no model recorded.
+ */
+const activeTopicModel = (s: ChatStoreState): { model: string; provider: string } | undefined => {
+  if (!s.activeTopicId) return undefined;
+  return getTopicModelById(s.activeTopicId)(s);
+};
+
+export interface TopicReasoningPin {
+  model: string;
+  provider: string;
+  /** Absent on legacy topics and topics created before the config was loaded. */
+  reasoningConfig?: AiModelReasoningConfig;
+}
+
+/**
+ * The reasoning effort pinned to a topic together with the model it was pinned
+ * for (`ChatTopicMetadata.reasoningConfig` + `ChatTopic.model`). Consumers must
+ * only honor `reasoningConfig` when the pinned model matches the model they are
+ * about to run — a sub-agent `modelOverride` or a stale snapshot must not leak
+ * another model's effort — and fall back to the user-level model-instance
+ * config otherwise. Undefined when the topic has no model pinned at all.
+ */
+const getTopicReasoningPinById =
+  (id: string) =>
+  (s: ChatStoreState): TopicReasoningPin | undefined => {
+    const topic = getTopicById(id)(s);
+    if (!topic?.model) return undefined;
+
+    return {
+      model: topic.model,
+      provider: topic.provider || '',
+      reasoningConfig: topic.metadata?.reasoningConfig,
+    };
+  };
+
+/**
+ * The reasoning config pinned to `id` for exactly `model`/`provider`, else
+ * undefined (no pin, legacy topic, or pinned for another model).
+ */
+const getTopicReasoningConfigForModel =
+  (id: string, model: string, provider: string) =>
+  (s: ChatStoreState): AiModelReasoningConfig | undefined => {
+    const pin = getTopicReasoningPinById(id)(s);
+    if (!pin || pin.model !== model || pin.provider !== provider) return undefined;
+    return pin.reasoningConfig;
+  };
+
+/**
+ * Everything a topic pins for a heterogeneous run — the model/provider columns
+ * plus `metadata.heteroEffort` / `heteroSpeed`. Undefined when nothing is pinned, so callers
+ * can pass it straight to `applyTopicModelToHeterogeneousProvider`.
+ */
+export const resolveTopicHeteroPin = (
+  topic: Pick<ChatTopic, 'metadata' | 'model' | 'provider'> | undefined,
+): HeterogeneousTopicPin | undefined => {
+  if (!topic) return undefined;
+  const effort = topic.metadata?.heteroEffort;
+  const speed = topic.metadata?.heteroSpeed;
+  if (!topic.model && effort === undefined && speed === undefined) return undefined;
+
+  return {
+    ...(topic.model ? { model: topic.model, provider: topic.provider || '' } : {}),
+    ...(effort === undefined ? {} : { effort }),
+    ...(speed === undefined ? {} : { speed }),
+  };
+};
+
+const getTopicHeteroPinById =
+  (id: string) =>
+  (s: ChatStoreState): HeterogeneousTopicPin | undefined =>
+    resolveTopicHeteroPin(getTopicById(id)(s));
+
+const activeTopicHeteroPin = (s: ChatStoreState): HeterogeneousTopicPin | undefined => {
+  if (!s.activeTopicId) return undefined;
+  return getTopicHeteroPinById(s.activeTopicId)(s);
+};
+
+/**
+ * Extract a topic's working directory from its metadata.
+ * On desktop: local filesystem path.
+ * On web (cloud): primary GitHub repo URL (repos[0]), or workingDirectory if set directly.
+ */
+const extractTopicWorkingDirectory = (topic: ChatTopic | undefined): string | undefined => {
+  if (!topic) return;
+
+  // Route the raw `workingDirectory` through the extractor too: it is typed as a
+  // string, but a malformed legacy topic may have persisted a `WorkingDirConfig`
+  // object into it (see #17050 and `getTopicMetadataWorkingDirectorySourcePath`),
+  // and this selector's declared `string | undefined` must hold at runtime.
+  if (isDesktop) {
+    return getWorkingDirEffectivePath(
+      topic.metadata?.workingDirectoryConfig ?? topic.metadata?.workingDirectory,
+    );
+  }
+
+  // Web: return primary repo from repos list, or workingDirectory if set directly
+  const meta = topic.metadata;
+  return (
+    meta?.repos?.[0] ??
+    getWorkingDirEffectivePath(meta?.workingDirectoryConfig ?? meta?.workingDirectory)
+  );
+};
+
+/**
+ * Get a topic's working directory by id, falling back to the active topic only
+ * when the argument is omitted. An explicit null represents a new-topic route
+ * and therefore has no topic-level directory. Prefer the explicit-id form for async work (e.g. a streaming
+ * tool call): the executing topic is captured at request time, so reading the
+ * *active* topic here would return the wrong project if the user switched topics
+ * mid-stream.
+ */
+const getTopicWorkingDirectory =
+  (id?: string | null) =>
+  (s: ChatStoreState): string | undefined =>
+    id === null
+      ? undefined
+      : extractTopicWorkingDirectory(id ? getTopicById(id)(s) : currentActiveTopic(s));
+
+/**
+ * Get current active topic's working directory.
+ */
+const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined =>
+  extractTopicWorkingDirectory(currentActiveTopic(s));
+
+const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
+
+/**
+ * Whether a send from the new-topic view is still in flight — no active topic
+ * yet, while the running send owns creation of the real topic (the `_new`
+ * context only holds optimistic tmp_* messages until then). While true,
+ * `openNewTopicOrSaveTopic` is a no-op, so its entry buttons should be
+ * disabled to make the blocked window visible instead of silently ignoring
+ * the click.
+ */
+const isNewTopicSendInFlight = (s: ChatStoreState): boolean =>
+  !s.activeTopicId &&
+  operationSelectors.isInputLoadingByContext({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
+    topicId: s.activeTopicId,
+  })(s);
+const isUndefinedTopics = (s: ChatStoreState) => !currentTopics(s);
+const isInSearchMode = (s: ChatStoreState) => s.inSearchingMode;
+const isSearchingTopic = (s: ChatStoreState) => s.isSearchingTopic;
+
+const sortTopics = (topics: ChatTopic[], sortBy: TopicSortBy): ChatTopic[] => {
+  const field = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
+  return [...topics].sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
+};
+
+// The active topic the sidebar pins into its list — except one the user just
+// archived while on it, which must hide at once (see `justArchivedTopicId`).
+// With archived topics shown, it keeps its pin so it survives the page slice.
+const sidebarActiveTopic = (
+  s: ChatStoreState,
+  includeCompleted: boolean,
+): ChatTopic | undefined => {
+  const topic = currentActiveTopic(s);
+  if (topic?.trigger === TopicTrigger.Channel) return undefined;
+  return !includeCompleted && topic && topic.id === s.justArchivedTopicId ? undefined : topic;
+};
+
+// Limit topics for sidebar display based on user's page size preference
+const displayTopicsForSidebar =
+  (pageSize: number, sortBy: TopicSortBy = 'updatedAt', includeCompleted = true) =>
+  (s: ChatStoreState): ChatTopic[] | undefined => {
+    const topics = currentTopicsWithoutSystemTriggers(s);
+    if (!topics) return undefined;
+
+    return selectSidebarTopics(
+      topics,
+      pageSize,
+      sortBy,
+      includeCompleted,
+      sidebarActiveTopic(s, includeCompleted),
+    );
+  };
+
+export const selectSidebarTopics = (
+  topics: ChatTopic[],
+  pageSize: number,
+  sortBy: TopicSortBy = 'updatedAt',
+  includeCompleted = true,
+  activeTopic?: ChatTopic,
+): ChatTopic[] => {
+  const visibleTopics = includeCompleted
+    ? topics
+    : topics.filter((topic) => topic.status !== 'completed');
+
+  // Favorites first, then sorted by the chosen timestamp, then page-sliced
+  const favTopics = visibleTopics.filter((t) => t.favorite);
+  const rest = visibleTopics.filter((t) => !t.favorite);
+  const pagedTopics = [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(
+    0,
+    pageSize,
+  );
+
+  // A search result or direct URL can open a topic outside the sidebar's
+  // first page (or an archived topic excluded by the completed filter). Keep
+  // the configured page intact and add that one active row so selection never
+  // disappears merely because the route target was filtered out. An injected
+  // favorite stays in the favorite prefix instead of falling below regular rows.
+  if (
+    activeTopic &&
+    activeTopic.trigger !== 'cron' &&
+    !pagedTopics.some((topic) => topic.id === activeTopic.id)
+  ) {
+    if (activeTopic.favorite) {
+      const pagedFavorites = pagedTopics.filter((topic) => topic.favorite);
+      const pagedRest = pagedTopics.filter((topic) => !topic.favorite);
+
+      return [...sortTopics([...pagedFavorites, activeTopic], sortBy), ...pagedRest];
+    }
+
+    return [...pagedTopics, activeTopic];
+  }
+
+  return pagedTopics;
+};
+
+const getGroupFn = (
+  groupMode: TopicGroupMode,
+  sortBy: TopicSortBy,
+  loadingTopicIds?: ReadonlySet<string>,
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
+) => {
+  const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
+  if (groupMode === 'byProject') {
+    return (topics: ChatTopic[]) =>
+      groupTopicsByProject(topics, field).map((group) =>
+        group.id === 'no-project'
+          ? { ...group, title: t('groupTitle.byProject.noProject', { ns: 'topic' }) }
+          : group,
+      );
+  }
+  if (groupMode === 'byStatus') {
+    return (topics: ChatTopic[]) =>
+      groupTopicsByStatus(topics, field, loadingTopicIds).map((group) => ({
+        ...group,
+        title: t(`groupTitle.byStatus.${group.id}` as any, { ns: 'topic' }),
+      }));
+  }
+  if (groupMode === 'byAgent') {
+    // Agent names come from row metadata (project feeds join them per topic);
+    // buckets without attribution stay title-less and the group item names
+    // them from its agent context.
+    return (topics: ChatTopic[]) => groupTopicsByAgent(topics, field);
+  }
+  if (groupMode === 'byDevice') {
+    // Device names resolve at render time from the directory and device
+    // registries, so groups stay title-less here.
+    return (topics: ChatTopic[]) => groupTopicsByDevice(topics, field, directories);
+  }
+  return sortBy === 'updatedAt' ? groupTopicsByUpdatedTime : groupTopicsByTime;
+};
+
+/**
+ * Build grouped topics from a topic list, splitting favorites into a separate group
+ */
+const buildGroupedTopics = (
+  topics: ChatTopic[],
+  groupFn: (topics: ChatTopic[]) => GroupedTopic[],
+): GroupedTopic[] => {
+  const favTopics = topics.filter((topic) => topic.favorite);
+  const unfavTopics = topics.filter((topic) => !topic.favorite);
+
+  // Favorites stay pinned at the very top. The "needs attention" bucket
+  // (byStatus mode only) follows right below, ahead of the remaining status
+  // groups, since groupTopicsByStatus emits `pending` first (STATUS_GROUP_ORDER).
+  return favTopics.length > 0
+    ? [
+        {
+          children: favTopics,
+          id: 'favorite',
+          title: t('pinned', { ns: 'topic' }),
+        },
+        ...groupFn(unfavTopics),
+      ]
+    : groupFn(topics);
+};
+
+export const groupSidebarTopics = (
+  topics: ChatTopic[],
+  groupMode: TopicGroupMode,
+  sortBy: TopicSortBy,
+  loadingTopicIds?: ReadonlySet<string>,
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
+) => buildGroupedTopics(topics, getGroupFn(groupMode, sortBy, loadingTopicIds, directories));
+
+const groupedTopicsSelector =
+  (groupFn: typeof groupTopicsByTime = groupTopicsByTime) =>
+  (s: ChatStoreState): GroupedTopic[] => {
+    const topics = displayTopics(s);
+    if (!topics) return [];
+    return buildGroupedTopics(topics, groupFn);
+  };
+
+const groupedTopicsForSidebar =
+  (
+    pageSize: number,
+    sortBy: TopicSortBy = 'updatedAt',
+    groupMode: TopicGroupMode = 'byTime',
+    includeCompleted = true,
+  ) =>
+  (s: ChatStoreState): GroupedTopic[] => {
+    const limitedTopics = displayTopicsForSidebar(pageSize, sortBy, includeCompleted)(s);
+    if (!limitedTopics) return [];
+    // Topics actively streaming on this client surface under "running" even
+    // though their persisted status says otherwise — that's the one client-only
+    // overlay (see resolveStatusBucket). Unread is now a persisted status, so it
+    // buckets straight from `topic.status`.
+    const loadingTopicIds =
+      groupMode === 'byStatus' ? operationSelectors.visiblyRunningTopicIds(s) : undefined;
+    return groupSidebarTopics(limitedTopics, groupMode, sortBy, loadingTopicIds);
+  };
+
+const hasMoreTopics = (s: ChatStoreState): boolean => {
+  const topicData = currentTopicData(s);
+  if (!topicData) return false;
+
+  return topicData.hasMore;
+};
+
+const hasMoreTopicsForSidebar = (s: ChatStoreState): boolean => {
+  const topicData = currentTopicData(s);
+  if (!topicData) return false;
+
+  return topicData.hasMore || topicData.total > topicData.pageSize;
+};
+
+const isLoadingMoreTopics = (s: ChatStoreState): boolean =>
+  currentTopicData(s)?.isLoadingMore ?? false;
+
+const loadMoreTopicsError = (s: ChatStoreState): unknown => currentTopicData(s)?.loadMoreError;
+
+const isExpandingPageSize = (s: ChatStoreState): boolean =>
+  currentTopicData(s)?.isExpandingPageSize ?? false;
+
+// Selectors for the Agent Topics management page's dedicated bucket.
+// Always agent-scoped (no group), keyed by `agentId` via `topicMapKey`.
+const agentTopicsViewData = (s: ChatStoreState): TopicData | undefined => {
+  if (!s.activeAgentId) return undefined;
+  return s.agentTopicsViewMap[topicMapKey({ agentId: s.activeAgentId })];
+};
+
+const agentTopicsViewTopics = (s: ChatStoreState): ChatTopic[] =>
+  agentTopicsViewData(s)?.items.filter((topic) => topic.trigger !== TopicTrigger.Channel) ?? [];
+
+const agentTopicsViewHasMore = (s: ChatStoreState): boolean =>
+  agentTopicsViewData(s)?.hasMore ?? false;
+
+const agentTopicsViewIsLoadingMore = (s: ChatStoreState): boolean =>
+  agentTopicsViewData(s)?.isLoadingMore ?? false;
+
+const agentTopicsViewLoadMoreError = (s: ChatStoreState): unknown =>
+  agentTopicsViewData(s)?.loadMoreError;
+
+export const topicSelectors = {
+  activeTopicHeteroPin,
+  activeTopicModel,
+  agentTopicsViewHasMore,
+  agentTopicsViewIsLoadingMore,
+  agentTopicsViewLoadMoreError,
+  agentTopicsViewTopics,
+  currentActiveTopic,
+  currentActiveTopicSummary,
+  currentTopicCount,
+  currentTopicData,
+  currentTopicLength,
+  currentTopicMetadata,
+  currentTopicWorkingDirectory,
+  currentTopics,
+  currentTopicsWithoutSystemTriggers,
+  currentUnFavTopics,
+  displayTopics,
+  displayTopicsForSidebar,
+  getTopicById,
+  getTopicContainerKeyById,
+  getTopicHeteroPinById,
+  getTopicModelById,
+  getTopicReasoningConfigForModel,
+  getTopicReasoningPinById,
+  getTopicWorkingDirectory,
+  getTopicsByAgentId,
+  groupedTopicsForSidebar,
+  groupedTopicsSelector,
+  hasMoreTopics,
+  hasMoreTopicsForSidebar,
+  isCreatingTopic,
+  isExpandingPageSize,
+  isInSearchMode,
+  isLoadingMoreTopics,
+  isNewTopicSendInFlight,
+  isSearchingTopic,
+  isUndefinedTopics,
+  loadMoreTopicsError,
+  searchTopics,
+};

@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "Kết nối {{provider}}",
+  "action.connect.error": "Kết nối thất bại, vui lòng thử lại.",
+  "action.connect.popupBlocked": "Cửa sổ bật lên kết nối bị chặn. Cho phép cửa sổ bật lên trong trình duyệt của bạn để tiếp tục.",
+  "action.connect.short": "Kết nối",
+  "action.connecting": "Đang chờ xác thực…",
+  "action.create.error": "Không thể tạo nhiệm vụ. Vui lòng thử lại.",
+  "action.create.success": "Đã thêm nhiệm vụ đã lên lịch. Tìm nó trong Lobe AI.",
+  "action.createButton": "Thêm nhiệm vụ",
+  "action.creating": "Đang tạo...",
+  "action.dismiss.error": "Không thể bỏ qua. Vui lòng thử lại.",
+  "action.dismiss.tooltip": "Không quan tâm",
+  "action.refresh.button": "Làm mới",
+  "card.templateTag": "Mẫu",
+  "schedule.daily": "Mỗi ngày lúc {{time}}",
+  "schedule.editableAfterCreateTooltip": "Bạn có thể điều chỉnh lịch trình sau khi tạo nhiệm vụ.",
+  "schedule.weekly": "Mỗi {{weekday}} lúc {{time}}",
+  "section.title": "Thử các nhiệm vụ đã lên lịch này"
+}

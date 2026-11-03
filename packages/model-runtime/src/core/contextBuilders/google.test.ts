@@ -1,0 +1,1918 @@
+// @vitest-environment node
+import * as imageToBase64Module from '../../utils/imageToBase64';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
+import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
+import {
+  buildGoogleMessage,
+  buildGoogleMessages,
+  buildGooglePart,
+  buildGoogleTool,
+  buildGoogleTools,
+  GEMINI_MAGIC_THOUGHT_SIGNATURE,
+} from './google';
+
+// Mock the utils
+vi.mock('../../utils/uriParser', () => ({
+  isPublicExternalUrl: vi.fn().mockReturnValue(false),
+  parseDataUri: vi.fn(),
+  validateExternalUrl: vi.fn().mockResolvedValue({ isValid: false, reason: 'mocked' }),
+}));
+
+vi.mock('../../utils/imageToBase64', () => ({
+  imageUrlToBase64: vi.fn(),
+}));
+
+const thoughtSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+
+const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ';
+
+describe('google contextBuilders', () => {
+  describe('GEMINI_MAGIC_THOUGHT_SIGNATURE', () => {
+    it('should use skip_thought_signature_validator for Vertex AI compatibility', () => {
+      // Vertex AI only accepts `skip_thought_signature_validator`, not `context_engineering_is_the_way_to_go`
+      // see: https://github.com/pydantic/pydantic-ai/issues/3881
+      expect(GEMINI_MAGIC_THOUGHT_SIGNATURE).toBe('skip_thought_signature_validator');
+    });
+  });
+
+  describe('buildGooglePart', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should handle text type messages', async () => {
+      const content: UserMessageContentPart = {
+        text: 'Hello',
+        type: 'text',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({ text: 'Hello', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE });
+    });
+
+    it('should handle thinking type messages', async () => {
+      const content: UserMessageContentPart = {
+        signature: 'abc',
+        thinking: 'Hello',
+        type: 'thinking',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual(undefined);
+    });
+
+    it('should handle base64 type images', async () => {
+      const base64Image =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64:
+          'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==',
+        mimeType: 'image/png',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: base64Image },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==',
+          mimeType: 'image/png',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should correct base64 image MIME type when declared type does not match bytes', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: PNG_BASE64,
+        mimeType: 'image/jpeg',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: `data:image/jpeg;base64,${PNG_BASE64}` },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: PNG_BASE64,
+          mimeType: 'image/png',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should handle URL type images', async () => {
+      const imageUrl = 'http://example.com/image.png';
+      const mockBase64 = 'mockBase64Data';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: 'image/png',
+        type: 'url',
+      });
+
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: mockBase64,
+        mimeType: 'image/png',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: imageUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: mockBase64,
+          mimeType: 'image/png',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+
+      expect(imageToBase64Module.imageUrlToBase64).toHaveBeenCalledWith(imageUrl);
+    });
+
+    it('should use fileData for external URL images on gemini-3+', async () => {
+      const imageUrl = 'https://example.com/image.png';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'image/png',
+        isValid: true,
+      });
+
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
+
+      const content: UserMessageContentPart = {
+        image_url: { url: imageUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        fileData: {
+          fileUri: imageUrl,
+          mimeType: 'image/png',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
+    it('should fallback to inlineData when external URL validation fails for HEIC', async () => {
+      const imageUrl = 'https://example.com/image.heic';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'image/heic',
+        isValid: false,
+        reason: 'Unsupported content type: image/heic',
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockBase64Data',
+          mimeType: 'image/heic',
+        });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: imageUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockBase64Data',
+          mimeType: 'image/heic',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+
+      expect(imageToBase64Spy).toHaveBeenCalledWith(imageUrl);
+    });
+
+    it('should force inlineData for external URL images on gemini-2.5 and earlier', async () => {
+      const imageUrl = 'https://example.com/image.png';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockBase64Data',
+          mimeType: 'image/png',
+        });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: imageUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-2.5-flash' });
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockBase64Data',
+          mimeType: 'image/png',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+
+      expect(imageToBase64Spy).toHaveBeenCalledWith(imageUrl);
+      expect(isPublicExternalUrl).not.toHaveBeenCalled();
+      expect(validateExternalUrl).not.toHaveBeenCalled();
+    });
+
+    it('should throw when external URL exceeds size limit', async () => {
+      const imageUrl = 'https://example.com/large-image.png';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: 'image/png',
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 120 * 1024 * 1024,
+        contentType: 'image/png',
+        isTooLarge: true,
+        isValid: false,
+        reason: 'File too large: 120MB',
+      });
+
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
+
+      const content: UserMessageContentPart = {
+        image_url: { url: imageUrl },
+        type: 'image_url',
+      };
+
+      await expect(buildGooglePart(content, { model: 'gemini-3-flash' })).rejects.toThrow(
+        RangeError,
+      );
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
+    it('should throw TypeError for unsupported image URL types', async () => {
+      const unsupportedImageUrl = 'unsupported://example.com/image.png';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'unknown' as any,
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: unsupportedImageUrl },
+        type: 'image_url',
+      };
+
+      await expect(buildGooglePart(content)).rejects.toThrow(TypeError);
+    });
+
+    it('should handle base64 video', async () => {
+      const base64Video = 'data:video/mp4;base64,mockVideoBase64Data';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockVideoBase64Data',
+        mimeType: 'video/mp4',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        type: 'video_url',
+        video_url: { url: base64Video },
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockVideoBase64Data',
+          mimeType: 'video/mp4',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should use fileData for external URL videos on gemini-3+', async () => {
+      const videoUrl = 'https://example.com/video.mp4';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'video/mp4',
+        isValid: true,
+      });
+
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
+
+      const content: UserMessageContentPart = {
+        type: 'video_url',
+        video_url: { url: videoUrl },
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        fileData: {
+          fileUri: videoUrl,
+          mimeType: 'video/mp4',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
+    it('should handle base64 audio', async () => {
+      const base64Audio = 'data:audio/mp3;base64,mockAudioBase64Data';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockAudioBase64Data',
+        mimeType: 'audio/mp3',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: base64Audio },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockAudioBase64Data',
+          mimeType: 'audio/mp3',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should default mimeType to audio/mp3 when base64 audio has no mime', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockAudioBase64Data',
+        mimeType: null,
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: 'data:;base64,mockAudioBase64Data' },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockAudioBase64Data',
+          mimeType: 'audio/mp3',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should use persisted recorder metadata when base64 audio omits its MIME type', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockAudioBase64Data',
+        mimeType: null,
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: {
+          mimeType: 'audio/wav;codecs=pcm',
+          url: 'data:;base64,mockAudioBase64Data',
+        },
+        type: 'audio_url',
+      };
+
+      await expect(buildGooglePart(content)).resolves.toEqual({
+        inlineData: {
+          data: 'mockAudioBase64Data',
+          mimeType: 'audio/wav',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should use fileData for external URL audio on gemini-3+', async () => {
+      const audioUrl = 'https://example.com/audio.mp3';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'audio/mpeg',
+        isValid: true,
+      });
+
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: audioUrl },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        fileData: {
+          fileUri: audioUrl,
+          mimeType: 'audio/mpeg',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
+    it('should use persisted recorder metadata when an external URL is octet-stream', async () => {
+      const audioUrl = 'https://example.com/voice';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'application/octet-stream',
+        isValid: true,
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { mimeType: 'audio/wav', url: audioUrl },
+        type: 'audio_url',
+      };
+
+      await expect(buildGooglePart(content, { model: 'gemini-3-flash-preview' })).resolves.toEqual({
+        fileData: {
+          fileUri: audioUrl,
+          mimeType: 'audio/wav',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should send audio MIME when an inlined audio URL is sniffed as a video container', async () => {
+      const audioUrl = 'https://example.com/voice-message.m4a';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(false);
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: 'm4aBase64Data',
+        mimeType: 'video/mp4',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: audioUrl },
+        type: 'audio_url',
+      };
+
+      await expect(buildGooglePart(content, { model: 'gemini-3.5-flash-lite' })).resolves.toEqual({
+        inlineData: { data: 'm4aBase64Data', mimeType: 'audio/mp4' },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should return undefined for unsupported SVG image (base64)', async () => {
+      const svgBase64 =
+        'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        mimeType: 'image/svg+xml',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: svgBase64 },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for unsupported SVG image (URL)', async () => {
+      const svgUrl = 'https://example.com/image.svg';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        mimeType: 'image/svg+xml',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: svgUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('buildGoogleMessage', () => {
+    it('should correctly convert assistant message', async () => {
+      const message: OpenAIChatMessage = {
+        content: 'Hello',
+        role: 'assistant',
+      };
+
+      const converted = await buildGoogleMessage(message);
+
+      expect(converted).toEqual({
+        parts: [{ text: 'Hello', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+        role: 'model',
+      });
+    });
+
+    it('should correctly convert user message', async () => {
+      const message: OpenAIChatMessage = {
+        content: 'Hi',
+        role: 'user',
+      };
+
+      const converted = await buildGoogleMessage(message);
+
+      expect(converted).toEqual({
+        parts: [{ text: 'Hi', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+        role: 'user',
+      });
+    });
+
+    it('should correctly convert message with inline base64 image parts', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: '...',
+        mimeType: 'image/png',
+        type: 'base64',
+      });
+
+      const message: OpenAIChatMessage = {
+        content: [
+          { text: 'Check this image:', type: 'text' },
+          { image_url: { url: 'data:image/png;base64,...' }, type: 'image_url' },
+        ],
+        role: 'user',
+      };
+
+      const converted = await buildGoogleMessage(message);
+
+      expect(converted).toEqual({
+        parts: [
+          { text: 'Check this image:', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE },
+          {
+            inlineData: { data: '...', mimeType: 'image/png' },
+            thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+          },
+        ],
+        role: 'user',
+      });
+    });
+
+    it('should correctly convert function call message', async () => {
+      const message = {
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: JSON.stringify({ location: 'London', unit: 'celsius' }),
+              name: 'get_current_weather',
+            },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+      } as OpenAIChatMessage;
+
+      const converted = await buildGoogleMessage(message);
+
+      expect(converted).toEqual({
+        parts: [
+          {
+            functionCall: {
+              args: { location: 'London', unit: 'celsius' },
+              name: 'get_current_weather',
+            },
+          },
+        ],
+        role: 'model',
+      });
+    });
+
+    it('recovers functionCall.args from element[0] when arguments parse to an array', async () => {
+      // — same defense as Anthropic: prefer partial recovery from
+      // element[0] over total loss when malformed JSON parses to an array.
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const message = {
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: '[{"content":"a"},{"content":"b"}]',
+              name: 'writeLocalFile',
+            },
+            id: 'call_array',
+            type: 'function',
+          },
+        ],
+      } as OpenAIChatMessage;
+
+      const converted = await buildGoogleMessage(message);
+
+      expect(converted).toEqual({
+        parts: [
+          {
+            functionCall: { args: { content: 'a' }, name: 'writeLocalFile' },
+          },
+        ],
+        role: 'model',
+      });
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('functionCall.args recovered from array'),
+        expect.objectContaining({
+          arrayLength: 2,
+          name: 'writeLocalFile',
+        }),
+      );
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should correctly convert function call message with thoughtSignature', async () => {
+      const message = {
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: JSON.stringify({
+                language: ['JSON'],
+                path: 'package.json',
+                query: '"version":',
+                repo: 'lobehub/lobe-chat',
+              }),
+              name: 'grep____searchGitHub____mcp',
+            },
+            id: 'grep____searchGitHub____mcp_0_6RnOMTF0',
+            thoughtSignature: serializeScopedSignature(
+              'provider-signature',
+              thoughtSignatureScope,
+              'thought_signature',
+            ),
+            type: 'function',
+          },
+        ],
+      } as OpenAIChatMessage;
+
+      const converted = await buildGoogleMessage(message, undefined, { thoughtSignatureScope });
+
+      expect(converted).toEqual({
+        parts: [
+          {
+            functionCall: {
+              args: {
+                language: ['JSON'],
+                path: 'package.json',
+                query: '"version":',
+                repo: 'lobehub/lobe-chat',
+              },
+              name: 'grep____searchGitHub____mcp',
+            },
+            thoughtSignature: 'provider-signature',
+          },
+        ],
+        role: 'model',
+      });
+    });
+
+    describe('should correctly convert function call message without thoughtSignature', () => {
+      it('should add magic signature when last message is tool message', async () => {
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '<plugins>Web Browsing plugin available</plugins>',
+            role: 'system',
+          },
+          {
+            content: '杭州天气如何',
+            role: 'user',
+          },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"query":"杭州天气","searchEngines":["google"]}',
+                  name: 'lobe-web-browsing____search',
+                },
+                id: 'call_001',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: 'Tool execution was aborted by user.',
+            name: 'lobe-web-browsing____search',
+            role: 'tool',
+            tool_call_id: 'call_001',
+          },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"query":"杭州 天气","searchEngines":["bing"]}',
+                  name: 'lobe-web-browsing____search',
+                },
+                id: 'call_002',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: 'no result',
+            name: 'lobe-web-browsing____search',
+            role: 'tool',
+            tool_call_id: 'call_002',
+          },
+        ];
+
+        const contents = await buildGoogleMessages(messages);
+
+        expect(contents).toEqual([
+          {
+            parts: [
+              {
+                text: '<plugins>Web Browsing plugin available</plugins>',
+                thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+              },
+            ],
+            role: 'user',
+          },
+          {
+            parts: [{ text: '杭州天气如何', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+            role: 'user',
+          },
+          {
+            parts: [
+              {
+                functionCall: {
+                  args: { query: '杭州天气', searchEngines: ['google'] },
+                  name: 'lobe-web-browsing____search',
+                },
+                thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+              },
+            ],
+            role: 'model',
+          },
+          {
+            parts: [
+              {
+                functionResponse: {
+                  name: 'lobe-web-browsing____search',
+                  response: { result: 'Tool execution was aborted by user.' },
+                },
+              },
+            ],
+            role: 'user',
+          },
+          {
+            parts: [
+              {
+                functionCall: {
+                  args: { query: '杭州 天气', searchEngines: ['bing'] },
+                  name: 'lobe-web-browsing____search',
+                },
+                thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+              },
+            ],
+            role: 'model',
+          },
+          {
+            parts: [
+              {
+                functionResponse: {
+                  name: 'lobe-web-browsing____search',
+                  response: { result: 'no result' },
+                },
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should NOT add magic signature when thoughtSignature already exists', async () => {
+        const existingSignature = 'existing_signature_from_model';
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '杭州天气如何',
+            role: 'user',
+          },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"query":"杭州天气","searchEngines":["google"]}',
+                  name: 'lobe-web-browsing____search',
+                },
+                id: 'call_001',
+                thoughtSignature: serializeScopedSignature(
+                  existingSignature,
+                  thoughtSignatureScope,
+                  'thought_signature',
+                ),
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: 'Tool result',
+            name: 'lobe-web-browsing____search',
+            role: 'tool',
+            tool_call_id: 'call_001',
+          },
+        ];
+
+        const contents = await buildGoogleMessages(messages, { thoughtSignatureScope });
+
+        expect(contents).toEqual([
+          {
+            parts: [{ text: '杭州天气如何', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+            role: 'user',
+          },
+          {
+            parts: [
+              {
+                functionCall: {
+                  args: { query: '杭州天气', searchEngines: ['google'] },
+                  name: 'lobe-web-browsing____search',
+                },
+                // Should keep existing thoughtSignature, not add magic signature
+                thoughtSignature: existingSignature,
+              },
+            ],
+            role: 'model',
+          },
+          {
+            parts: [
+              {
+                functionResponse: {
+                  name: 'lobe-web-browsing____search',
+                  response: { result: 'Tool result' },
+                },
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should replace foreign and legacy thought signatures with the magic signature', async () => {
+        const foreignScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+        const createMessages = (thoughtSignature: string): OpenAIChatMessage[] => [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'get_weather' },
+                id: 'call_001',
+                thoughtSignature,
+                type: 'function',
+              },
+            ],
+          },
+        ];
+
+        const foreign = await buildGoogleMessages(
+          createMessages(
+            serializeScopedSignature('foreign-signature', foreignScope, 'thought_signature')!,
+          ),
+          { thoughtSignatureScope },
+        );
+        const legacy = await buildGoogleMessages(createMessages('legacy-signature'), {
+          thoughtSignatureScope,
+        });
+
+        expect(foreign[0].parts?.[0].thoughtSignature).toBe(GEMINI_MAGIC_THOUGHT_SIGNATURE);
+        expect(legacy[0].parts?.[0].thoughtSignature).toBe(GEMINI_MAGIC_THOUGHT_SIGNATURE);
+      });
+
+      it('should add magic signature to all function calls in multi-turn scenario', async () => {
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: 'First question',
+            role: 'user',
+          },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"query":"first"}',
+                  name: 'search',
+                },
+                id: 'call_001',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: 'First result',
+            name: 'search',
+            role: 'tool',
+            tool_call_id: 'call_001',
+          },
+          {
+            content: 'Second question',
+            role: 'user',
+          },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"query":"second"}',
+                  name: 'search',
+                },
+                id: 'call_002',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: 'Second result',
+            name: 'search',
+            role: 'tool',
+            tool_call_id: 'call_002',
+          },
+        ];
+
+        const contents = await buildGoogleMessages(messages);
+
+        expect(contents).toEqual([
+          {
+            parts: [{ text: 'First question', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+            role: 'user',
+          },
+          {
+            parts: [
+              {
+                functionCall: {
+                  args: { query: 'first' },
+                  name: 'search',
+                },
+                // Magic signature added to all function calls (cross-provider scenario)
+                thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+              },
+            ],
+            role: 'model',
+          },
+          {
+            parts: [
+              {
+                functionResponse: {
+                  name: 'search',
+                  response: { result: 'First result' },
+                },
+              },
+            ],
+            role: 'user',
+          },
+          {
+            parts: [{ text: 'Second question', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+            role: 'user',
+          },
+          {
+            parts: [
+              {
+                functionCall: {
+                  args: { query: 'second' },
+                  name: 'search',
+                },
+                thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+              },
+            ],
+            role: 'model',
+          },
+          {
+            parts: [
+              {
+                functionResponse: {
+                  name: 'search',
+                  response: { result: 'Second result' },
+                },
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should add magic signature when last message is user text (cross-provider scenario)', async () => {
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '<plugins>Web Browsing plugin available</plugins>',
+            role: 'system',
+          },
+          {
+            content: '杭州天气如何',
+            role: 'user',
+          },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"query":"杭州天气","searchEngines":["google"]}',
+                  name: 'lobe-web-browsing____search',
+                },
+                id: 'call_001',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: 'Tool execution was aborted by user.',
+            name: 'lobe-web-browsing____search',
+            role: 'tool',
+            tool_call_id: 'call_001',
+          },
+          {
+            content: 'Please try again',
+            role: 'user',
+          },
+        ];
+
+        const contents = await buildGoogleMessages(messages);
+
+        expect(contents).toEqual([
+          {
+            parts: [
+              {
+                text: '<plugins>Web Browsing plugin available</plugins>',
+                thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+              },
+            ],
+            role: 'user',
+          },
+          {
+            parts: [{ text: '杭州天气如何', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+            role: 'user',
+          },
+          {
+            parts: [
+              {
+                functionCall: {
+                  args: { query: '杭州天气', searchEngines: ['google'] },
+                  name: 'lobe-web-browsing____search',
+                },
+                // Magic signature added even when last message is user text
+                // (cross-provider scenario: OpenAI → Gemini switch)
+                thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+              },
+            ],
+            role: 'model',
+          },
+          {
+            parts: [
+              {
+                functionResponse: {
+                  name: 'lobe-web-browsing____search',
+                  response: { result: 'Tool execution was aborted by user.' },
+                },
+              },
+            ],
+            role: 'user',
+          },
+          {
+            parts: [{ text: 'Please try again', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+            role: 'user',
+          },
+        ]);
+      });
+    });
+
+    it('should correctly handle empty content', async () => {
+      const message: OpenAIChatMessage = {
+        content: '' as any, // explicitly set as empty string
+        role: 'user',
+      };
+
+      const converted = await buildGoogleMessage(message);
+
+      expect(converted).toEqual({
+        parts: [{ text: '', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+        role: 'user',
+      });
+    });
+
+    it('should correctly convert tool response message', async () => {
+      const toolCallNameMap = new Map<string, string>([['call_1', 'get_current_weather']]);
+
+      const message: OpenAIChatMessage = {
+        content: '{"success":true,"data":{"temperature":"14°C"}}',
+        name: 'get_current_weather',
+        role: 'tool',
+        tool_call_id: 'call_1',
+      };
+
+      const converted = await buildGoogleMessage(message, toolCallNameMap);
+
+      expect(converted).toEqual({
+        parts: [
+          {
+            functionResponse: {
+              name: 'get_current_weather',
+              response: { result: '{"success":true,"data":{"temperature":"14°C"}}' },
+            },
+          },
+        ],
+        role: 'user',
+      });
+    });
+
+    it('should preserve function call IDs for Gemini 3.6', async () => {
+      const messages: OpenAIChatMessage[] = [
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: { arguments: '{"location":"London"}', name: 'get_weather' },
+              id: 'call_weather_1',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content: '{"temperature":14}',
+          role: 'tool',
+          tool_call_id: 'call_weather_1',
+        },
+      ];
+
+      const converted = await buildGoogleMessages(messages, { model: 'gemini-3.6-flash' });
+
+      expect(converted).toMatchObject([
+        {
+          parts: [
+            {
+              functionCall: {
+                args: { location: 'London' },
+                id: 'call_weather_1',
+                name: 'get_weather',
+              },
+            },
+          ],
+          role: 'model',
+        },
+        {
+          parts: [
+            {
+              functionResponse: {
+                id: 'call_weather_1',
+                name: 'get_weather',
+                response: { result: '{"temperature":14}' },
+              },
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+    });
+  });
+
+  describe('buildGoogleMessages', () => {
+    it('get default result with gemini-pro', async () => {
+      const messages: OpenAIChatMessage[] = [{ content: 'Hello', role: 'user' }];
+
+      const contents = await buildGoogleMessages(messages);
+
+      expect(contents).toHaveLength(1);
+      expect(contents).toEqual([
+        {
+          parts: [{ text: 'Hello', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+          role: 'user',
+        },
+      ]);
+    });
+
+    it('should not modify the length if model is gemini-1.5-pro', async () => {
+      const messages: OpenAIChatMessage[] = [
+        { content: 'Hello', role: 'user' },
+        { content: 'Hi', role: 'assistant' },
+      ];
+
+      const contents = await buildGoogleMessages(messages);
+
+      expect(contents).toHaveLength(2);
+      expect(contents).toEqual([
+        {
+          parts: [{ text: 'Hello', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+          role: 'user',
+        },
+        {
+          parts: [{ text: 'Hi', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+          role: 'model',
+        },
+      ]);
+    });
+
+    it('should use specified model when images are included in messages', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: '...',
+        mimeType: 'image/png',
+        type: 'base64',
+      });
+
+      const messages: OpenAIChatMessage[] = [
+        {
+          content: [
+            { text: 'Hello', type: 'text' },
+            { image_url: { url: 'data:image/png;base64,...' }, type: 'image_url' },
+          ],
+          role: 'user',
+        },
+      ];
+
+      const contents = await buildGoogleMessages(messages);
+
+      expect(contents).toHaveLength(1);
+      expect(contents).toEqual([
+        {
+          parts: [
+            { text: 'Hello', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE },
+            {
+              inlineData: { data: '...', mimeType: 'image/png' },
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+    });
+
+    it('should correctly convert function response message', async () => {
+      const messages: OpenAIChatMessage[] = [
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: JSON.stringify({ location: 'London', unit: 'celsius' }),
+                name: 'get_current_weather',
+              },
+              id: 'call_1',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content: '{"success":true,"data":{"temperature":"14°C"}}',
+          name: 'get_current_weather',
+          role: 'tool',
+          tool_call_id: 'call_1',
+        },
+      ];
+
+      const contents = await buildGoogleMessages(messages);
+
+      expect(contents).toHaveLength(2);
+      expect(contents).toEqual([
+        {
+          parts: [
+            {
+              functionCall: {
+                args: { location: 'London', unit: 'celsius' },
+                name: 'get_current_weather',
+              },
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            },
+          ],
+          role: 'model',
+        },
+        {
+          parts: [
+            {
+              functionResponse: {
+                name: 'get_current_weather',
+                response: { result: '{"success":true,"data":{"temperature":"14°C"}}' },
+              },
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+    });
+
+    it('should filter out function role messages', async () => {
+      const messages: OpenAIChatMessage[] = [
+        { content: 'Hello', role: 'user' },
+        { content: 'function result', name: 'test_func', role: 'function' },
+        { content: 'Hi', role: 'assistant' },
+      ];
+
+      const contents = await buildGoogleMessages(messages);
+
+      expect(contents).toHaveLength(2);
+      expect(contents).toEqual([
+        {
+          parts: [{ text: 'Hello', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+          role: 'user',
+        },
+        {
+          parts: [{ text: 'Hi', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+          role: 'model',
+        },
+      ]);
+    });
+
+    it('should filter out empty messages', async () => {
+      const messages: OpenAIChatMessage[] = [
+        { content: 'Hello', role: 'user' },
+        { content: [], role: 'user' },
+        { content: 'Hi', role: 'assistant' },
+      ];
+
+      const contents = await buildGoogleMessages(messages);
+
+      expect(contents).toHaveLength(2);
+      expect(contents).toEqual([
+        {
+          parts: [{ text: 'Hello', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+          role: 'user',
+        },
+        {
+          parts: [{ text: 'Hi', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+          role: 'model',
+        },
+      ]);
+    });
+
+    it('should merge consecutive functionResponse contents into a single Content for multi-tool-call turns', async () => {
+      const messages: OpenAIChatMessage[] = [
+        { content: 'What is the weather in London and Tokyo?', role: 'user' },
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: JSON.stringify({ location: 'London' }),
+                name: 'get_weather',
+              },
+              id: 'call_1',
+              type: 'function',
+            },
+            {
+              function: {
+                arguments: JSON.stringify({ location: 'Tokyo' }),
+                name: 'get_weather',
+              },
+              id: 'call_2',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content: '{"temperature":"14°C"}',
+          name: 'get_weather',
+          role: 'tool',
+          tool_call_id: 'call_1',
+        },
+        {
+          content: '{"temperature":"22°C"}',
+          name: 'get_weather',
+          role: 'tool',
+          tool_call_id: 'call_2',
+        },
+      ];
+
+      const contents = await buildGoogleMessages(messages);
+
+      // Function calls should be in one Content, function responses merged into one Content
+      expect(contents).toHaveLength(3);
+      expect(contents).toEqual([
+        {
+          parts: [
+            {
+              text: 'What is the weather in London and Tokyo?',
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            },
+          ],
+          role: 'user',
+        },
+        {
+          parts: [
+            {
+              functionCall: { args: { location: 'London' }, name: 'get_weather' },
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            },
+            {
+              functionCall: { args: { location: 'Tokyo' }, name: 'get_weather' },
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            },
+          ],
+          role: 'model',
+        },
+        {
+          parts: [
+            {
+              functionResponse: {
+                name: 'get_weather',
+                response: { result: '{"temperature":"14°C"}' },
+              },
+            },
+            {
+              functionResponse: {
+                name: 'get_weather',
+                response: { result: '{"temperature":"22°C"}' },
+              },
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+    });
+
+    it('should correctly convert full conversation with thoughtSignature', async () => {
+      const messages: OpenAIChatMessage[] = [
+        { content: 'system prompt', role: 'system' },
+        { content: 'LobeChat 最新版本', role: 'user' },
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: JSON.stringify({
+                  language: ['JSON'],
+                  path: 'package.json',
+                  query: '"version":',
+                  repo: 'lobehub/lobe-chat',
+                }),
+                name: 'grep____searchGitHub____mcp',
+              },
+              id: 'grep____searchGitHub____mcp_0_6RnOMTF0',
+              thoughtSignature: serializeScopedSignature(
+                'test-signature',
+                thoughtSignatureScope,
+                'thought_signature',
+              ),
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content: '',
+          name: 'grep____searchGitHub____mcp',
+          role: 'tool',
+          tool_call_id: 'grep____searchGitHub____mcp_0_6RnOMTF0',
+        },
+      ];
+
+      const contents = await buildGoogleMessages(messages, { thoughtSignatureScope });
+
+      expect(contents).toEqual([
+        {
+          parts: [{ text: 'system prompt', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+          role: 'user',
+        },
+        {
+          parts: [{ text: 'LobeChat 最新版本', thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }],
+          role: 'user',
+        },
+        {
+          parts: [
+            {
+              functionCall: {
+                args: {
+                  language: ['JSON'],
+                  path: 'package.json',
+                  query: '"version":',
+                  repo: 'lobehub/lobe-chat',
+                },
+                name: 'grep____searchGitHub____mcp',
+              },
+              thoughtSignature: 'test-signature',
+            },
+          ],
+          role: 'model',
+        },
+        {
+          parts: [
+            {
+              functionResponse: {
+                name: 'grep____searchGitHub____mcp',
+                response: { result: '' },
+              },
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+    });
+  });
+
+  describe('buildGoogleTool', () => {
+    it('should use parametersJsonSchema to pass standard JSON Schema directly', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A test tool',
+          name: 'testTool',
+          parameters: {
+            properties: {
+              param1: { type: 'string' },
+              param2: { type: 'number' },
+            },
+            required: ['param1'],
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      expect(result).toEqual({
+        description: 'A test tool',
+        name: 'testTool',
+        parametersJsonSchema: {
+          properties: {
+            param1: { type: 'string' },
+            param2: { type: 'number' },
+          },
+          required: ['param1'],
+          type: 'object',
+        },
+      });
+      // Should not have the old parameters field
+      expect(result.parameters).toBeUndefined();
+    });
+
+    it('should handle tools with empty parameters using dummy property', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A simple function with no parameters',
+          name: 'simple_function',
+          parameters: {
+            properties: {},
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      expect(result).toEqual({
+        description: 'A simple function with no parameters',
+        name: 'simple_function',
+        parametersJsonSchema: { type: 'object', properties: { dummy: { type: 'string' } } },
+      });
+    });
+
+    it('should pass through $ref without needing to resolve', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with $ref',
+          name: 'refTool',
+          parameters: {
+            definitions: {
+              timeIntent: {
+                properties: {
+                  selector: { enum: ['today', 'yesterday', 'month'], type: 'string' },
+                },
+                required: ['selector'],
+                type: 'object',
+              },
+            },
+            properties: {
+              query: { type: 'string' },
+              timeIntent: { $ref: '#/definitions/timeIntent' },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // $ref should be passed through as-is via parametersJsonSchema
+      expect(result.parametersJsonSchema).toEqual(tool.function.parameters);
+    });
+
+    it('should keep nullable type but strip null/empty members from enum (Gemini proto)', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with nullable enum',
+          name: 'nullableTool',
+          parameters: {
+            properties: {
+              status: {
+                enum: ['active', 'inactive', null, ''],
+                type: ['string', 'null'],
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // Gemini proto only accepts non-empty STRING enum members; null/'' get coerced
+      // to '' and rejected with "enum[i]: cannot be empty", so they must be filtered.
+      // The nullable `type` is preserved to keep the field optional.
+      expect(result.parametersJsonSchema).toEqual({
+        properties: {
+          status: {
+            enum: ['active', 'inactive'],
+            type: ['string', 'null'],
+          },
+        },
+        type: 'object',
+      });
+    });
+
+    // Regression: the memory tool's `memoryType` enum carried a trailing `null` sentinel
+    // trailing `null` sentinel (`[...MEMORY_TYPES, null]`), which Gemini rejected
+    // with `enum[10]: cannot be empty`. The sanitizer must drop the null member.
+    it('should strip the null sentinel from a memory-style nullable enum', () => {
+      const memoryTypes = ['fact', 'event', 'people', 'preference'];
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'updateIdentityMemory-style tool',
+          name: 'updateIdentityMemory',
+          parameters: {
+            properties: {
+              set: {
+                properties: {
+                  memoryType: {
+                    description: 'Memory type, use null for omitting the field',
+                    enum: [...memoryTypes, null],
+                    type: ['string', 'null'],
+                  },
+                },
+                type: 'object',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool) as any;
+
+      expect(result.parametersJsonSchema.properties.set.properties.memoryType.enum).toEqual(
+        memoryTypes,
+      );
+    });
+
+    it('should pass through const values without conversion', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with const',
+          name: 'constTool',
+          parameters: {
+            properties: {
+              action: { const: 'insert', type: 'string' },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // const should be passed through as-is
+      expect(result.parametersJsonSchema).toEqual(tool.function.parameters);
+    });
+  });
+
+  describe('buildGoogleTools', () => {
+    it('should return undefined when tools is undefined or empty', () => {
+      expect(buildGoogleTools(undefined)).toBeUndefined();
+      expect(buildGoogleTools([])).toBeUndefined();
+    });
+
+    it('should correctly convert ChatCompletionTool array to GoogleFunctionCallTool', () => {
+      const tools: ChatCompletionTool[] = [
+        {
+          function: {
+            description: 'A test tool',
+            name: 'testTool',
+            parameters: {
+              properties: {
+                param1: { type: 'string' },
+                param2: { type: 'number' },
+              },
+              required: ['param1'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+      ];
+
+      const googleTools = buildGoogleTools(tools);
+
+      expect(googleTools).toHaveLength(1);
+      expect(googleTools![0].functionDeclarations).toHaveLength(1);
+      expect(googleTools![0].functionDeclarations![0]).toEqual({
+        description: 'A test tool',
+        name: 'testTool',
+        parametersJsonSchema: {
+          properties: {
+            param1: { type: 'string' },
+            param2: { type: 'number' },
+          },
+          required: ['param1'],
+          type: 'object',
+        },
+      });
+    });
+
+    it('should handle multiple tools', () => {
+      const tools: ChatCompletionTool[] = [
+        {
+          function: {
+            description: 'Get weather information',
+            name: 'get_weather',
+            parameters: {
+              properties: {
+                city: { type: 'string' },
+                unit: { type: 'string' },
+              },
+              required: ['city'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+        {
+          function: {
+            description: 'Get current time',
+            name: 'get_time',
+            parameters: {
+              properties: {
+                timezone: { type: 'string' },
+              },
+              required: ['timezone'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+      ];
+
+      const googleTools = buildGoogleTools(tools);
+
+      expect(googleTools).toHaveLength(1);
+      expect(googleTools![0].functionDeclarations).toHaveLength(2);
+      expect(googleTools![0].functionDeclarations![0].name).toBe('get_weather');
+      expect(googleTools![0].functionDeclarations![1].name).toBe('get_time');
+    });
+
+    it('should deduplicate tools with the same function name', () => {
+      const tools: ChatCompletionTool[] = [
+        {
+          function: {
+            description: 'Search the web',
+            name: 'lobe-web-browsing____search',
+            parameters: {
+              properties: { query: { type: 'string' } },
+              required: ['query'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+        {
+          function: {
+            description: 'Get weather',
+            name: 'get_weather',
+            parameters: {
+              properties: { city: { type: 'string' } },
+              required: ['city'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+        {
+          function: {
+            description: 'Search the web (duplicate)',
+            name: 'lobe-web-browsing____search',
+            parameters: {
+              properties: { query: { type: 'string' } },
+              required: ['query'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+      ];
+
+      const googleTools = buildGoogleTools(tools);
+
+      expect(googleTools).toHaveLength(1);
+      expect(googleTools![0].functionDeclarations).toHaveLength(2);
+      expect(googleTools![0].functionDeclarations![0].name).toBe('lobe-web-browsing____search');
+      expect(googleTools![0].functionDeclarations![0].description).toBe('Search the web');
+      expect(googleTools![0].functionDeclarations![1].name).toBe('get_weather');
+    });
+
+    it('should keep all tools when there are no duplicates', () => {
+      const tools: ChatCompletionTool[] = [
+        {
+          function: { description: 'Tool A', name: 'tool_a', parameters: { type: 'object' } },
+          type: 'function',
+        },
+        {
+          function: { description: 'Tool B', name: 'tool_b', parameters: { type: 'object' } },
+          type: 'function',
+        },
+      ];
+
+      const googleTools = buildGoogleTools(tools);
+
+      expect(googleTools![0].functionDeclarations).toHaveLength(2);
+    });
+  });
+});

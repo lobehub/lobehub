@@ -1,0 +1,145 @@
+---
+title: URL 分享设置参数 - LobeHub 配置快速设置
+description: 了解如何从外部 URL 导入和导出 LobeHub 的设置参数，包括 keyVaults 和 languageModel，以及参数格式和类型。
+tags:
+  - URL 分享
+  - 设置参数
+  - LobeHub
+  - keyVaults
+  - languageModel
+  - JSON 格式
+  - URL 导入
+  - URL 导出
+---
+
+# URL 分享设置参数
+
+LobeHub 支持从外部 URL 导入设置参数，以便于快速设置 LobeHub 的配置。
+
+目前支持的设置项有：
+
+- `keyVaults`: 模型供应商相关秘钥设置
+- `languageModel`：语言模型设置
+
+## 从 URL 中导入
+
+使用以下 URL 格式，可以从外部 URL 导入设置参数：
+
+```plaintext
+https://lobehub.com/?settings=<JSON格式的设置对象>
+https://lobehub.com/?settings={"keyVaults":{"openai":{"apiKey":"user-key","baseURL":"https://your-proxy.com/v1"}}}
+```
+
+JSON 格式的设置示例：
+
+```json
+{
+  "keyVaults": {
+    "openai": {
+      "apiKey": "user-key"
+    }
+  }
+}
+```
+
+## 将设置导出到 URL
+
+```ts
+// 生成要导出到 URL 的设置
+const settings = {
+  keyVaults: {
+    openai: {
+      apiKey: 'user-key',
+      baseURL: 'https://your-proxy.com/v1',
+    },
+  },
+};
+// Convert settings to a JSON formatted string
+const url = `/?settings=${JSON.stringify(settings)}`;
+console.log(url);
+// /?settings={"keyVaults":{"openai":{"apiKey":"user-key","baseURL":"https://your-proxy.com/v1"}}}
+```
+
+<Callout type={'warning'}>
+  LobeHub 不对 URL 中的设置参数进行正确性校验，也不提供 URL 的加密、解密方法，请谨慎使用。
+</Callout>
+
+## 参数格式
+
+### keyVaults
+
+- 参数及其类型
+
+| 参数名称       | 类型                         |
+| ---------- | -------------------------- |
+| anthropic  | `OpenAICompatibleKeyVault` |
+| azure      | `AzureOpenAIKeyVault`      |
+| bedrock    | `AWSBedrockKeyVault`       |
+| google     | `OpenAICompatibleKeyVault` |
+| groq       | `OpenAICompatibleKeyVault` |
+| minimax    | `OpenAICompatibleKeyVault` |
+| mistral    | `OpenAICompatibleKeyVault` |
+| moonshot   | `OpenAICompatibleKeyVault` |
+| ollama     | `OpenAICompatibleKeyVault` |
+| openai     | `OpenAICompatibleKeyVault` |
+| openrouter | `OpenAICompatibleKeyVault` |
+| perplexity | `OpenAICompatibleKeyVault` |
+| togetherai | `OpenAICompatibleKeyVault` |
+| zeroone    | `OpenAICompatibleKeyVault` |
+| zhipu      | `OpenAICompatibleKeyVault` |
+
+- Type `OpenAICompatibleKeyVault`
+
+| 参数      | 类型     | 描述          |
+| ------- | ------ | ----------- |
+| apiKey  | string | 模型的 API 密钥。 |
+| baseURL | string | 模型 API 端点。  |
+
+- Type `AzureOpenAIKeyVault`
+
+| 参数         | 类型     | 描述                     |
+| ---------- | ------ | ---------------------- |
+| apiVersion | string | Azure OpenAI 的 API 版本。 |
+| apiKey     | string | 模型的 API 密钥。            |
+| baseURL    | string | 模型 API 端点。             |
+
+- Type `AWSBedrockKeyVault`
+
+| 参数              | 类型     | 描述                    |
+| --------------- | ------ | --------------------- |
+| accessKeyId     | string | AWS Bedrock 的访问密钥 ID。 |
+| region          | string | AWS Bedrock 的区域。      |
+| secretAccessKey | string | AWS Bedrock 的访问密钥。    |
+
+### languageModel
+
+```ts
+export type UserModelProviderConfig = Record<string, ProviderConfig>;
+```
+
+| 参数名称       | 类型               |
+| ---------- | ---------------- |
+| anthropic  | `ProviderConfig` |
+| azure      | `ProviderConfig` |
+| bedrock    | `ProviderConfig` |
+| google     | `ProviderConfig` |
+| groq       | `ProviderConfig` |
+| minimax    | `ProviderConfig` |
+| mistral    | `ProviderConfig` |
+| moonshot   | `ProviderConfig` |
+| ollama     | `ProviderConfig` |
+| openai     | `ProviderConfig` |
+| openrouter | `ProviderConfig` |
+| perplexity | `ProviderConfig` |
+| togetherai | `ProviderConfig` |
+| zeroone    | `ProviderConfig` |
+| zhipu      | `ProviderConfig` |
+
+- 类型 `ProviderConfig`
+
+| 参数                  | TS 类型     | 描述                     |
+| ------------------- | --------- | ---------------------- |
+| autoFetchModelLists | boolean   | 是否自动获取模型列表。            |
+| enabled             | boolean   | 是否启用该模型。               |
+| enabledModels       | string\[] | 启用的模型的 ID。             |
+| fetchOnClient       | boolean   | 是否在客户端发起请求，默认在服务端发起请求。 |

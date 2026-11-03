@@ -1,0 +1,47 @@
+import { agentDisplayName } from '@lobechat/types';
+import { Flexbox, Text } from '@lobehub/ui';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
+import PortalHeader from '@/features/Portal/components/Header';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { useSessionStore } from '@/store/session';
+import { sessionSelectors } from '@/store/session/selectors';
+
+import { useGroupThreadClose } from './useClose';
+
+const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
+  const { t } = useTranslation('common');
+  const activeThreadAgentId = useAgentGroupStore((s) => s.activeThreadAgentId);
+
+  const agents = useSessionStore(sessionSelectors.currentGroupAgents);
+  const currentAgent = agents?.find((agent) => agent.id === activeThreadAgentId);
+
+  const close = useGroupThreadClose(onClose);
+
+  return (
+    <PortalHeader
+      title={
+        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+          <AgentAvatar
+            agentId={currentAgent?.id}
+            avatar={currentAgent?.avatar}
+            background={currentAgent?.backgroundColor ?? undefined}
+            name={agentDisplayName(currentAgent, t('defaultSession'))}
+            shape={'square'}
+            size={20}
+          />
+          <Text ellipsis weight={600}>
+            {agentDisplayName(currentAgent, t('defaultSession'))}
+          </Text>
+        </Flexbox>
+      }
+      onClose={close}
+    />
+  );
+});
+
+Header.displayName = 'PortalGroupThreadHeader';
+
+export default Header;

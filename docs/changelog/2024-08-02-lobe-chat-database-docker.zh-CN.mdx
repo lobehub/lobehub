@@ -1,0 +1,43 @@
+---
+title: LobeHub Database Docker 镜像正式发布
+description: LobeHub v1.8.0 推出官方数据库 Docker 镜像，补齐服务端部署链路，支持云端数据同步、用户管理，并提供完整的自部署文档。
+tags:
+  - LobeHub
+  - Docker 镜像
+  - 云端部署
+  - 数据库
+---
+
+# LobeHub Database Docker 镜像：云端部署的最后一块拼图
+
+LobeHub v1.8.0 正式发布官方数据库 Docker 镜像。这补齐了我们持续完善的服务端部署链路，让团队可以更顺畅地完成完整的云端部署流程。
+
+镜像内置 Postgres 和 NextAuth 预配置。云端数据同步与灵活认证开箱即用，同时支持 Auth0 等第三方 SSO 服务商集成。
+
+## 轻量而完整
+
+Docker 镜像仅 90MB，却提供了完整的数据库环境。我们预置了 Server Postgres 与 NextAuth 鉴权体系，从第一刻起就保证稳定连通。部署流程因此保持简洁，同时提供生产级基础能力。
+
+部署完成后，云端数据同步立即可用。客户端与服务端的数据流转无需额外配置。
+
+## 自部署文档重构
+
+为了让私有部署更顺畅，我们重新梳理了部署文档结构：
+
+- 框架思路前置说明
+- 详细的部署案例指引
+- 完整的自部署操作指南
+
+访问[官方文档](https://lobehub.com/zh/docs/self-hosting/server-database)开始部署你自己的 LobeHub 服务。
+
+## 改进与修复
+
+- 正式发布官方数据库 Docker 镜像（90MB）
+- 预置 Server Postgres 与 NextAuth 认证体系
+- 部署完成后即可启用云端数据同步
+- 支持 Auth0 及第三方 SSO 服务商集成
+- 重构自部署文档并补充案例说明
+
+## 致谢
+
+感谢社区在这段建设周期中的耐心等待。我们会继续打磨整体部署体验。

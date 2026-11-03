@@ -1,0 +1,159 @@
+export interface ExecutionSnapshot {
+  agentId?: string;
+  completedAt?: number;
+  completionReason?:
+    | 'done'
+    | 'error'
+    | 'interrupted'
+    | 'max_steps'
+    | 'cost_limit'
+    | 'tool_call_repeat_limit'
+    | 'waiting_for_human';
+  error?: { type: string; message: string };
+  externalRetryCount?: number;
+  model?: string;
+  operationId: string;
+  provider?: string;
+  retryDelayExpression?: string;
+  startedAt: number;
+  steps: StepSnapshot[];
+  topicId?: string;
+  totalCost: number;
+  /**
+   * Provider-native subscription credits consumed by the whole operation
+   * (e.g. Qoder), for runs whose CLI bills in credits instead of tokens.
+   */
+  totalCredits?: number;
+  totalSteps: number;
+  totalTokens: number;
+  traceId: string;
+  userId?: string;
+}
+
+export interface StepSnapshot {
+  /**
+   * Tools newly activated during this step via tool discovery.
+   * Append-only delta — accumulate across steps to reconstruct full `activatedStepTools`.
+   */
+  activatedStepToolsDelta?: any[];
+  completedAt: number;
+  // LLM data
+  content?: string;
+  context?: {
+    phase: string;
+    payload?: unknown;
+    stepContext?: unknown;
+  };
+  /**
+   * Context Engine result snapshot for this step. Only present on steps where the CE ran
+   * (typically `call_llm`). Uses a delta format: only `input`/`output`/`metadata` fields
+   * that changed from the previous step are stored — resolve the full snapshot by walking
+   * backward through steps (same pattern as `messagesBaseline`/`messagesDelta`).
+   *
+   * - `undefined`        → CE did not run for this step (e.g., `call_tool` steps)
+   * - `{}`               → CE ran but `input`/`output`/`metadata` are unchanged from before
+   * - `{ input }`        → input changed; `output`/`metadata` unchanged
+   * - `{ metadata }`     → pipeline decision metadata changed (trim stats, cache gates, …)
+   * - `{ input, output}` → both changed (full snapshot, typical of the first CE event)
+   */
+  contextEngine?: {
+    input?: unknown;
+    metadata?: unknown;
+    output?: unknown;
+  };
+  /**
+   * Provider-native subscription credits consumed by this step (e.g. Qoder),
+   * when the CLI bills in credits instead of reporting token counts.
+   */
+  credits?: number;
+  events?: Array<{ type: string; [key: string]: unknown }>;
+
+  executionTimeMs: number;
+  externalRetryCount?: number;
+
+  inputTokens?: number;
+
+  /**
+   * Whether this step triggered context compression.
+   * When true, `messagesBaseline` contains the compressed messages as a new baseline.
+   */
+  isCompressionReset?: boolean;
+  /**
+   * @deprecated Use `messagesBaseline` + `messagesDelta` for incremental format.
+   * Kept for backward compatibility with old snapshots.
+   */
+  messages?: any[];
+
+  /**
+   * @deprecated Use `messagesBaseline` + `messagesDelta` for incremental format.
+   * Kept for backward compatibility with old snapshots.
+   */
+  messagesAfter?: any[];
+
+  /**
+   * Full messages baseline snapshot. Only present when:
+   * 1. `stepIndex === 0` (initial baseline)
+   * 2. Context compression occurred (`isCompressionReset === true`)
+   */
+  messagesBaseline?: any[];
+
+  /**
+   * Incremental messages added by this step relative to the previous step's state.
+   * For `call_llm`: typically `[assistant message]`
+   * For `call_tool`: typically `[tool_result message(s)]`
+   */
+  messagesDelta?: any[];
+
+  outputTokens?: number;
+
+  reasoning?: string;
+  startedAt: number;
+
+  stepIndex: number;
+  stepType: 'call_llm' | 'call_tool';
+
+  // Tool data
+  toolsCalling?: Array<{
+    apiName: string;
+    identifier: string;
+    arguments?: string;
+  }>;
+  /**
+   * Operation-level tool set baseline. Only present at `stepIndex === 0`.
+   * Immutable after operation creation — stored once to avoid per-step duplication.
+   */
+  toolsetBaseline?: any;
+  toolsResult?: Array<{
+    apiName: string;
+    /**
+     * Wall time the tool took on the DEVICE, by its own clock — present only
+     * for calls dispatched to one, and only when the device and gateway are new
+     * enough to report it. `executionTimeMs - deviceExecutionTimeMs` is the
+     * dispatch overhead: how much of a device tool call is transport rather
+     * than work.
+     */
+    deviceExecutionTimeMs?: number;
+    /** Wall time the server observed for the call, dispatch included. */
+    executionTimeMs?: number;
+    identifier: string;
+    isSuccess?: boolean;
+    output?: string;
+  }>;
+  // Cost incurred by this step, not the whole operation.
+  totalCost: number;
+
+  // Total tokens consumed by this step, not the whole operation.
+  totalTokens: number;
+}
+
+export interface SnapshotSummary {
+  completionReason?: string;
+  createdAt: number;
+  durationMs: number;
+  hasError: boolean;
+  model?: string;
+  operationId: string;
+  totalSteps: number;
+  totalTokens: number;
+  traceId: string;
+}

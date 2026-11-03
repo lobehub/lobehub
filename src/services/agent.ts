@@ -1,0 +1,434 @@
+import { type AgentItem, type AgentRankItem, type LobeAgentConfig } from '@lobechat/types';
+import { type PartialDeep } from 'type-fest';
+
+import { lambdaClient } from '@/libs/trpc/client';
+
+export const AVAILABLE_AGENTS_CONTEXT_LIMIT = 10;
+export const AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT = AVAILABLE_AGENTS_CONTEXT_LIMIT + 2;
+
+export interface AvailableAgentItem {
+  avatar: string | null;
+  backgroundColor: string | null;
+  description: string | null;
+  id: string;
+  /** Product-owned inbox (Lobe AI). A builtin can never join a chat group. */
+  isInbox?: boolean;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
+  title: string | null;
+}
+
+/**
+ * Market agent model can be either a string or an object with model details
+ */
+type MarketAgentModel =
+  | LobeAgentConfig['model']
+  | {
+      model: LobeAgentConfig['model'];
+      parameters?: Partial<LobeAgentConfig['params']>;
+      provider?: LobeAgentConfig['provider'];
+    };
+
+type AgentMetaUpdate = Partial<
+  Pick<
+    AgentItem,
+    | 'avatar'
+    | 'backgroundColor'
+    | 'description'
+    | 'marketIdentifier'
+    | 'metadata'
+    | 'name'
+    | 'profile'
+    | 'societyId'
+    | 'tags'
+    | 'title'
+  >
+>;
+
+/**
+ * Normalize market agent config to standard agent config.
+ * Handles the case where market returns model as an object instead of string.
+ */
+const normalizeMarketAgentModel = (config?: PartialDeep<AgentItem>): PartialDeep<AgentItem> => {
+  if (!config) return {};
+
+  const model = config.model as MarketAgentModel | undefined;
+
+  // If model is not an object, return config as-is
+  if (typeof model !== 'object' || model === null) {
+    return config;
+  }
+
+  // Extract model info and merge parameters
+  const { model: modelName, provider: modelProvider, parameters } = model;
+  const existingParams = (config.params ?? {}) as Record<string, any>;
+  const mergedParams = { ...parameters, ...existingParams };
+
+  return {
+    ...config,
+    model: modelName,
+    params: Object.keys(mergedParams).length > 0 ? mergedParams : undefined,
+    provider: config.provider ?? modelProvider,
+  };
+};
+
+export interface CreateAgentParams {
+  config?: PartialDeep<AgentItem>;
+  groupId?: string;
+  /** This desktop's gateway device, where the creator's direct Channel to a local Agent runs. */
+  localDeviceId?: string;
+  /**
+   * `private` keeps the agent visible only to its creator within the active
+   * workspace; `public` (default) makes it visible to every member. The
+   * router enforces this — sidebar "Create in Private" forwards `'private'`
+   * verbatim, all other creators (templates, marketplace import, etc.)
+   * default to `'public'`.
+   */
+  visibility?: 'private' | 'public';
+}
+
+export interface CreateAgentResult {
+  agentId: string;
+}
+
+export interface CreateAgentOnlyParams {
+  config?: PartialDeep<AgentItem>;
+  groupId: string;
+}
+
+export interface CreateAgentOnlyResult {
+  agentId: string;
+}
+
+interface AgentGroupMembershipImpactRef {
+  agentId: string;
+  groupAvatar: string | null;
+  groupBackgroundColor: string | null;
+  /** `null` when the caller may not see the group; identity is withheld. */
+  groupId: string | null;
+  groupTitle: string | null;
+  /** `false` when the caller may not see the group; its identity is withheld. */
+  groupVisible: boolean;
+}
+
+class AgentService {
+  /**
+   * Check if an agent with the given marketIdentifier already exists
+   */
+  checkByMarketIdentifier = async (marketIdentifier: string): Promise<boolean> => {
+    return lambdaClient.agent.checkByMarketIdentifier.query({ marketIdentifier });
+  };
+
+  /**
+   * Get an agent by marketIdentifier
+   * @returns agent id if exists, null otherwise
+   */
+  getAgentByMarketIdentifier = async (marketIdentifier: string): Promise<string | null> => {
+    return lambdaClient.agent.getAgentByMarketIdentifier.query({ marketIdentifier });
+  };
+
+  /**
+   * Get an agent by forkedFromIdentifier stored in params
+   * @returns agent id if exists, null otherwise
+   */
+  getAgentByForkedFromIdentifier = async (forkedFromIdentifier: string): Promise<string | null> => {
+    return lambdaClient.agent.getAgentByForkedFromIdentifier.query({ forkedFromIdentifier });
+  };
+
+  /**
+   * Create a new agent with session.
+   * Automatically normalizes market agent config (handles model as object).
+   */
+  createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
+    const normalizedConfig = normalizeMarketAgentModel(params.config);
+
+    return lambdaClient.agent.createAgent.mutate({
+      config: normalizedConfig as any,
+      groupId: params.groupId,
+      localDeviceId: params.localDeviceId,
+      visibility: params.visibility,
+    });
+  };
+
+  /**
+   * Publish a private agent to the workspace. Caller should refresh the
+   * sidebar list afterwards so the agent moves from the Private bucket to
+   * the shared list. The inverse (public → private) goes through
+   * {@link setAgentVisibility}.
+   */
+  publishAgentToWorkspace = async (id: string): Promise<void> => {
+    await lambdaClient.agent.publishAgentToWorkspace.mutate({ id });
+  };
+
+  /**
+   * Bidirectional visibility switch. The server only allows the
+   * agent's creator or a workspace owner to pull a published agent back to
+   * private, and rejects builtin agents (LobeAI etc.) outright.
+   */
+  setAgentVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    await lambdaClient.agent.setAgentVisibility.mutate({ id, visibility });
+  };
+
+  /**
+   * Create a virtual agent without session.
+   * Used for Group Agent Builder to create virtual agents for groups.
+   */
+  createAgentOnly = async (params: CreateAgentOnlyParams): Promise<CreateAgentOnlyResult> => {
+    const normalizedConfig = normalizeMarketAgentModel(params.config);
+
+    return lambdaClient.agent.createAgentOnly.mutate({
+      config: normalizedConfig as any,
+      groupId: params.groupId,
+    });
+  };
+
+  createAgentKnowledgeBase = async (
+    agentId: string,
+    knowledgeBaseId: string,
+    enabled?: boolean,
+  ) => {
+    return lambdaClient.agent.createAgentKnowledgeBase.mutate({
+      agentId,
+      enabled,
+      knowledgeBaseId,
+    });
+  };
+
+  deleteAgentKnowledgeBase = async (agentId: string, knowledgeBaseId: string) => {
+    return lambdaClient.agent.deleteAgentKnowledgeBase.mutate({ agentId, knowledgeBaseId });
+  };
+
+  toggleKnowledgeBase = async (agentId: string, knowledgeBaseId: string, enabled?: boolean) => {
+    return lambdaClient.agent.toggleKnowledgeBase.mutate({
+      agentId,
+      enabled,
+      knowledgeBaseId,
+    });
+  };
+
+  createAgentFiles = async (agentId: string, fileIds: string[], enabled?: boolean) => {
+    return lambdaClient.agent.createAgentFiles.mutate({ agentId, enabled, fileIds });
+  };
+
+  deleteAgentFile = async (agentId: string, fileId: string) => {
+    return lambdaClient.agent.deleteAgentFile.mutate({ agentId, fileId });
+  };
+
+  toggleFile = async (agentId: string, fileId: string, enabled?: boolean) => {
+    return lambdaClient.agent.toggleFile.mutate({
+      agentId,
+      enabled,
+      fileId,
+    });
+  };
+
+  getFilesAndKnowledgeBases = async (agentId: string, visibility?: 'private' | 'public') => {
+    return lambdaClient.agent.getKnowledgeBasesAndFiles.query(
+      visibility ? { agentId, visibility } : { agentId },
+    );
+  };
+
+  getAgentConfigById = async (agentId: string) => {
+    return lambdaClient.agent.getAgentConfigById.query({ agentId });
+  };
+
+  /**
+   * @deprecated use getAgentConfigById instead
+   */
+  getSessionConfig = async (sessionId: string) => {
+    return lambdaClient.agent.getAgentConfig.query({ sessionId });
+  };
+
+  /**
+   * Update agent config and return the updated agent data
+   */
+  updateAgentConfig = async (
+    agentId: string,
+    config: PartialDeep<LobeAgentConfig>,
+    signal?: AbortSignal,
+    replaceWorkingDirDeviceIds: string[] = [],
+  ) => {
+    return lambdaClient.agent.updateAgentConfig.mutate(
+      {
+        agentId,
+        replaceWorkingDirDeviceIds,
+        value: config,
+      },
+      { context: { showNotification: false }, signal },
+    );
+  };
+
+  /**
+   * Update agent meta and return the updated agent data
+   */
+  updateAgentMeta = async (agentId: string, meta: AgentMetaUpdate, signal?: AbortSignal) => {
+    return lambdaClient.agent.updateAgentConfig.mutate({ agentId, value: meta }, { signal });
+  };
+
+  /**
+   * Get a builtin agent by slug, creating it if it doesn't exist.
+   * This is a generic interface for all builtin agents (page-copilot, inbox, etc.)
+   */
+  getBuiltinAgent = async (slug: string) => {
+    return lambdaClient.agent.getBuiltinAgent.query({ slug });
+  };
+
+  /**
+   * Resolve a url slug to its agent id. Returns `null` for an unknown slug and
+   * for one the caller can't see — the two are deliberately indistinguishable.
+   */
+  resolveAgentIdBySlug = async (slug: string): Promise<string | null> => {
+    const { agentId } = await lambdaClient.agent.resolveAgentIdBySlug.query({ slug });
+    return agentId;
+  };
+
+  /** Rename an agent's url slug (validated server-side; see `updateAgentSlug`). */
+  updateAgentSlug = async (agentId: string, slug: string) => {
+    return lambdaClient.agent.updateAgentSlug.mutate({ agentId, slug });
+  };
+
+  /**
+   * Remove an agent and its associated session
+   */
+  removeAgent = async (agentId: string) => {
+    return lambdaClient.agent.removeAgent.mutate({ agentId });
+  };
+
+  /**
+   * Query non-virtual agents with optional keyword filter.
+   * Returns agents with minimal info (id, title, description, avatar, backgroundColor).
+   */
+  queryAgents = async (params?: {
+    includeInbox?: boolean;
+    keyword?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AvailableAgentItem[]> => {
+    return lambdaClient.agent.queryAgents.query(params);
+  };
+
+  /**
+   * Count non-virtual agents with optional keyword and date filters,
+   * matching queryAgents conditions.
+   */
+  countAgents = async (params?: {
+    endDate?: string;
+    includeInbox?: boolean;
+    keyword?: string;
+    range?: [string, string];
+    startDate?: string;
+  }) => {
+    return lambdaClient.agent.countAgents.query(params);
+  };
+
+  /**
+   * Pin or unpin an agent
+   */
+  updateAgentPinned = async (agentId: string, pinned: boolean) => {
+    return lambdaClient.agent.updateAgentPinned.mutate({ id: agentId, pinned });
+  };
+
+  /**
+   * Duplicate an agent.
+   * Returns the new agent ID.
+   */
+  duplicateAgent = async (
+    agentId: string,
+    newTitle?: string,
+  ): Promise<{ agentId: string } | null> => {
+    return lambdaClient.agent.duplicateAgent.mutate({ agentId, newTitle });
+  };
+
+  /**
+   * Rank the user's agents by topic count (agent usage ranking).
+   */
+  rankAgents = async (limit?: number): Promise<AgentRankItem[]> => {
+    return lambdaClient.agent.rankAgents.query(limit);
+  };
+
+  /**
+   * Async history-backfill progress for a transferred agent (null when no
+   * backfill is running), including the topic ids still awaiting migration.
+   */
+  getTransferJobStatus = async (
+    agentId: string,
+    topicIds: string[],
+  ): Promise<{
+    completedTopics: number;
+    jobId: string;
+    pendingTopicIds: string[];
+    totalTopics: number;
+    type: string;
+  } | null> => {
+    return lambdaClient.agent.getTransferJobStatus.query({ agentId, topicIds });
+  };
+
+  /**
+   * The user opened a topic whose history is still migrating — jump it to the
+   * front of the backfill queue. `pending: false` means it already migrated.
+   */
+  prioritizeTransferTopic = async (topicId: string): Promise<{ pending: boolean }> => {
+    return lambdaClient.agent.prioritizeTransferTopic.mutate({ topicId });
+  };
+
+  /**
+   * Chat groups a move would affect: `blocked` refuses the move outright,
+   * `leaving` is the silent side effect worth confirming first.
+   */
+  getGroupMembershipImpact = async (
+    agentIds: string[],
+  ): Promise<{
+    blocked: AgentGroupMembershipImpactRef[];
+    leaving: AgentGroupMembershipImpactRef[];
+  }> => {
+    return lambdaClient.agent.getGroupMembershipImpact.query({ agentIds });
+  };
+
+  transferAgent = async (
+    agentId: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
+    const result = await lambdaClient.agent.transferAgent.mutate({
+      agentId,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+    // Without `targetMemberId` the endpoint always takes the scope-move path.
+    return result as { agentId: string; slug: string | null; transferJobId: string | null };
+  };
+
+  /**
+   * Hand ownership to another member of the current workspace. Creates a
+   * pending transfer request the recipient must accept — nothing moves yet.
+   */
+  requestAgentTransferToMember = async (params: {
+    agentId: string;
+    targetMemberId: string;
+  }): Promise<{ requestId: string; status: 'pending' }> => {
+    const result = await lambdaClient.agent.transferAgent.mutate({
+      agentId: params.agentId,
+      targetMemberId: params.targetMemberId,
+      targetWorkspaceId: null,
+    });
+    return result as { requestId: string; status: 'pending' };
+  };
+
+  /**
+   * Batch transfer: moves all agents in one request / one DB transaction
+   * instead of a serial per-agent call chain.
+   */
+  transferAgents = async (
+    agentIds: string[],
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }[]> => {
+    return lambdaClient.agent.transferAgents.mutate({
+      agentIds,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+  };
+}
+
+export const agentService = new AgentService();

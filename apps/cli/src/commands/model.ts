@@ -1,0 +1,366 @@
+import { type Command, InvalidArgumentError } from 'commander';
+import pc from 'picocolors';
+
+import { getTrpcClient } from '../api/client';
+import { confirm, outputJson, printTable, truncate } from '../utils/format';
+import { log } from '../utils/logger';
+
+const isVisibleModel = (model: { visible?: boolean }) => model.visible !== false;
+
+const DEFAULT_MODEL_LIST_LIMIT = 50;
+
+/**
+ * Use a conservative client batch size instead of mirroring the server's current maximum. This
+ * limits coupling across CLI/server versions; the server must keep accepting this public baseline.
+ */
+const MODEL_LIST_PAGE_SIZE = 50;
+
+const parseModelListLimit = (value: string) => {
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new InvalidArgumentError('--limit must be a positive integer');
+  }
+
+  const limit = Number(value);
+  if (!Number.isSafeInteger(limit)) {
+    throw new InvalidArgumentError('--limit must be a positive integer');
+  }
+
+  return limit;
+};
+
+// The model type `stt` was renamed to the standard `asr`. Accept the legacy
+// alias on CLI input and forward/compare `asr`, so existing scripts and muscle
+// memory keep working against the new router schema.
+const normalizeModelType = (type: string): string => (type === 'stt' ? 'asr' : type);
+
+export function registerModelCommand(program: Command) {
+  const model = program.command('model').description('Manage AI models');
+
+  // ── list ──────────────────────────────────────────────
+
+  model
+    .command('list <providerId>')
+    .description('List models for a provider')
+    .option(
+      '-L, --limit <n>',
+      'Maximum number of items',
+      parseModelListLimit,
+      DEFAULT_MODEL_LIST_LIMIT,
+    )
+    .option('--enabled', 'Only show enabled models')
+    .option(
+      '--type <type>',
+      'Filter by model type (chat|embedding|tts|asr|image|video|text2music|realtime|decision)',
+    )
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(
+      async (
+        providerId: string,
+        options: { enabled?: boolean; json?: string | boolean; limit: number; type?: string },
+      ) => {
+        const client = await getTrpcClient();
+
+        const typeFilter = options.type ? normalizeModelType(options.type) : undefined;
+
+        const fetchedItems: any[] = [];
+        let offset = 0;
+
+        while (fetchedItems.length < options.limit) {
+          const pageLimit = Math.min(MODEL_LIST_PAGE_SIZE, options.limit - fetchedItems.length);
+          const input: Record<string, any> = { id: providerId, limit: pageLimit, offset };
+          if (options.enabled) input.enabled = true;
+          if (typeFilter) input.type = typeFilter;
+
+          const result = await client.aiModel.getAiProviderModelList.query(input as any);
+          const pageItems = Array.isArray(result) ? result : ((result as any).items ?? []);
+          fetchedItems.push(...pageItems);
+
+          if (pageItems.length < pageLimit) break;
+          offset += pageItems.length;
+        }
+
+        let items = fetchedItems.slice(0, options.limit).filter(isVisibleModel);
+
+        if (typeFilter) {
+          items = items.filter((m: any) => m.type === typeFilter);
+        }
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(items, fields);
+          return;
+        }
+
+        if (items.length === 0) {
+          console.log('No models found.');
+          return;
+        }
+
+        const rows = items.map((m: any) => [
+          m.id || '',
+          truncate(m.displayName || m.id || '', 40),
+          m.enabled ? pc.green('✓') : pc.dim('✗'),
+          m.type || '',
+        ]);
+
+        printTable(rows, ['ID', 'NAME', 'ENABLED', 'TYPE']);
+      },
+    );
+
+  // ── view ──────────────────────────────────────────────
+
+  model
+    .command('view <id>')
+    .description('View model details')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(async (id: string, options: { json?: string | boolean }) => {
+      const client = await getTrpcClient();
+      const result = await client.aiModel.getAiModelById.query({ id });
+
+      if (!result) {
+        log.error(`Model not found: ${id}`);
+        process.exit(1);
+        return;
+      }
+
+      if (options.json !== undefined) {
+        const fields = typeof options.json === 'string' ? options.json : undefined;
+        outputJson(result, fields);
+        return;
+      }
+
+      const r = result as any;
+      console.log(pc.bold(r.displayName || r.id || 'Unknown'));
+      const meta: string[] = [];
+      if (r.providerId) meta.push(`Provider: ${r.providerId}`);
+      if (r.type) meta.push(`Type: ${r.type}`);
+      if (r.enabled !== undefined) meta.push(r.enabled ? 'Enabled' : 'Disabled');
+      if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
+    });
+
+  // ── create ────────────────────────────────────────────
+
+  model
+    .command('create')
+    .description('Create a new model')
+    .requiredOption('--id <id>', 'Model ID')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--display-name <name>', 'Display name')
+    .option(
+      '--type <type>',
+      'Model type (chat|embedding|tts|asr|image|video|text2music|realtime|decision)',
+      'chat',
+    )
+    .action(
+      async (options: { displayName?: string; id: string; provider: string; type?: string }) => {
+        const client = await getTrpcClient();
+
+        const input: Record<string, any> = {
+          id: options.id,
+          providerId: options.provider,
+          type: normalizeModelType(options.type || 'chat'),
+        };
+        if (options.displayName) input.displayName = options.displayName;
+
+        const resultId = await client.aiModel.createAiModel.mutate(input as any);
+        console.log(`${pc.green('✓')} Created model ${pc.bold(resultId || options.id)}`);
+      },
+    );
+
+  // ── edit ─────────────────────────────────────────────
+
+  model
+    .command('edit <id>')
+    .description('Update model info')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--display-name <name>', 'Display name')
+    .option(
+      '--type <type>',
+      'Model type (chat|embedding|tts|asr|image|video|text2music|realtime|decision)',
+    )
+    .action(
+      async (id: string, options: { displayName?: string; provider: string; type?: string }) => {
+        if (!options.displayName && !options.type) {
+          log.error('No changes specified. Use --display-name or --type.');
+          process.exit(1);
+        }
+
+        const client = await getTrpcClient();
+
+        const value: Record<string, any> = {};
+        if (options.displayName) value.displayName = options.displayName;
+        if (options.type) value.type = normalizeModelType(options.type);
+
+        await client.aiModel.updateAiModel.mutate({
+          id,
+          providerId: options.provider,
+          value: value as any,
+        });
+        console.log(`${pc.green('✓')} Updated model ${pc.bold(id)}`);
+      },
+    );
+
+  // ── toggle ────────────────────────────────────────────
+
+  model
+    .command('toggle <id>')
+    .description('Enable or disable a model')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--enable', 'Enable the model')
+    .option('--disable', 'Disable the model')
+    .action(
+      async (id: string, options: { disable?: boolean; enable?: boolean; provider: string }) => {
+        if (options.enable === undefined && options.disable === undefined) {
+          log.error('Specify --enable or --disable.');
+          process.exit(1);
+        }
+
+        const client = await getTrpcClient();
+        const enabled = options.enable === true;
+
+        await client.aiModel.toggleModelEnabled.mutate({
+          enabled,
+          id,
+          providerId: options.provider,
+        } as any);
+        console.log(`${pc.green('✓')} Model ${pc.bold(id)} ${enabled ? 'enabled' : 'disabled'}`);
+      },
+    );
+
+  // ── delete ────────────────────────────────────────────
+
+  model
+    .command('delete <id>')
+    .description('Delete a model')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--yes', 'Skip confirmation prompt')
+    .action(async (id: string, options: { provider: string; yes?: boolean }) => {
+      if (!options.yes) {
+        const confirmed = await confirm('Are you sure you want to delete this model?');
+        if (!confirmed) {
+          console.log('Cancelled.');
+          return;
+        }
+      }
+
+      const client = await getTrpcClient();
+      await client.aiModel.removeAiModel.mutate({ id, providerId: options.provider });
+      console.log(`${pc.green('✓')} Deleted model ${pc.bold(id)}`);
+    });
+
+  // ── batch-toggle ────────────────────────────────────
+
+  model
+    .command('batch-toggle <ids...>')
+    .description('Enable or disable multiple models at once')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--enable', 'Enable the models')
+    .option('--disable', 'Disable the models')
+    .action(
+      async (ids: string[], options: { disable?: boolean; enable?: boolean; provider: string }) => {
+        if (options.enable === undefined && options.disable === undefined) {
+          log.error('Specify --enable or --disable.');
+          process.exit(1);
+        }
+
+        const client = await getTrpcClient();
+        const enabled = options.enable === true;
+
+        await client.aiModel.batchToggleAiModels.mutate({
+          enabled,
+          id: options.provider,
+          models: ids,
+        } as any);
+        console.log(
+          `${pc.green('✓')} ${enabled ? 'Enabled' : 'Disabled'} ${ids.length} model(s) for provider ${pc.bold(options.provider)}`,
+        );
+      },
+    );
+
+  // ── batch-update ──────────────────────────────────────
+
+  model
+    .command('batch-update <providerId>')
+    .description('Batch update models for a provider')
+    .requiredOption('--models <json>', 'JSON array of model objects')
+    .action(async (providerId: string, options: { models: string }) => {
+      let models: any[];
+      try {
+        models = JSON.parse(options.models);
+      } catch {
+        log.error('Invalid models JSON. Provide a JSON array.');
+        process.exit(1);
+        return;
+      }
+
+      if (!Array.isArray(models)) {
+        log.error('--models must be a JSON array.');
+        process.exit(1);
+        return;
+      }
+
+      const client = await getTrpcClient();
+      await client.aiModel.batchUpdateAiModels.mutate({ id: providerId, models } as any);
+      console.log(
+        `${pc.green('✓')} Batch updated ${models.length} model(s) for provider ${pc.bold(providerId)}`,
+      );
+    });
+
+  // ── sort ──────────────────────────────────────────────
+
+  model
+    .command('sort <providerId>')
+    .description('Update model sort order')
+    .requiredOption('--sort-map <json>', 'JSON array of {id, sort, type?} objects')
+    .action(async (providerId: string, options: { sortMap: string }) => {
+      let sortMap: any[];
+      try {
+        sortMap = JSON.parse(options.sortMap);
+      } catch {
+        log.error('Invalid sort-map JSON. Provide a JSON array.');
+        process.exit(1);
+        return;
+      }
+
+      if (!Array.isArray(sortMap)) {
+        log.error('--sort-map must be a JSON array.');
+        process.exit(1);
+        return;
+      }
+
+      const client = await getTrpcClient();
+      await client.aiModel.updateAiModelOrder.mutate({ providerId, sortMap } as any);
+      console.log(
+        `${pc.green('✓')} Updated sort order for ${sortMap.length} model(s) in provider ${pc.bold(providerId)}`,
+      );
+    });
+
+  // ── clear ───────────────────────────────────────────
+
+  model
+    .command('clear')
+    .description('Clear models for a provider')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--remote', 'Only clear remote/fetched models')
+    .option('--yes', 'Skip confirmation prompt')
+    .action(async (options: { provider: string; remote?: boolean; yes?: boolean }) => {
+      const label = options.remote ? 'remote models' : 'all models';
+      if (!options.yes) {
+        const confirmed = await confirm(
+          `Are you sure you want to clear ${label} for provider ${options.provider}?`,
+        );
+        if (!confirmed) {
+          console.log('Cancelled.');
+          return;
+        }
+      }
+
+      const client = await getTrpcClient();
+      if (options.remote) {
+        await client.aiModel.clearRemoteModels.mutate({ providerId: options.provider } as any);
+      } else {
+        await client.aiModel.clearModelsByProvider.mutate({ providerId: options.provider } as any);
+      }
+      console.log(`${pc.green('✓')} Cleared ${label} for provider ${pc.bold(options.provider)}`);
+    });
+}

@@ -1,0 +1,894 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AgentStreamClient } from './client';
+import type { ConnectionStatus } from './types';
+
+// ─── Mock WebSocket ───
+
+class MockWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
+  readyState = MockWebSocket.CONNECTING;
+  onopen: ((ev: any) => void) | null = null;
+  onmessage: ((ev: any) => void) | null = null;
+  onclose: ((ev: any) => void) | null = null;
+  onerror: ((ev: any) => void) | null = null;
+
+  sent: string[] = [];
+
+  constructor(public url: string) {
+    // Auto-connect in next tick
+    setTimeout(() => {
+      this.readyState = MockWebSocket.OPEN;
+      this.onopen?.({});
+    }, 0);
+  }
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
+
+  close(_code?: number, _reason?: string): void {
+    this.readyState = MockWebSocket.CLOSED;
+    this.onclose?.({});
+  }
+
+  // Test helpers
+  simulateMessage(data: any): void {
+    this.onmessage?.({ data: JSON.stringify(data) });
+  }
+
+  simulateClose(): void {
+    this.readyState = MockWebSocket.CLOSED;
+    this.onclose?.({});
+  }
+
+  simulateError(): void {
+    this.onerror?.({});
+  }
+}
+
+let mockWsInstances: MockWebSocket[] = [];
+
+beforeEach(() => {
+  mockWsInstances = [];
+  vi.stubGlobal(
+    'WebSocket',
+    Object.assign(
+      class extends MockWebSocket {
+        constructor(url: string) {
+          super(url);
+          mockWsInstances.push(this);
+        }
+      },
+      {
+        CLOSED: MockWebSocket.CLOSED,
+        CLOSING: MockWebSocket.CLOSING,
+        CONNECTING: MockWebSocket.CONNECTING,
+        OPEN: MockWebSocket.OPEN,
+      },
+    ),
+  );
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+function createClient(overrides?: Partial<ConstructorParameters<typeof AgentStreamClient>[0]>) {
+  return new AgentStreamClient({
+    gatewayUrl: 'https://gateway.test.com',
+    operationId: 'op-123',
+    token: 'test-token',
+    ...overrides,
+  });
+}
+
+function getLatestWs(): MockWebSocket {
+  return mockWsInstances.at(-1)!;
+}
+
+async function connectAndAuth(client: AgentStreamClient): Promise<MockWebSocket> {
+  client.connect();
+  await vi.advanceTimersByTimeAsync(1);
+  const ws = getLatestWs();
+  ws.simulateMessage({ type: 'auth_success' });
+  return ws;
+}
+
+describe('AgentStreamClient', () => {
+  describe('connection', () => {
+    it('should build correct WebSocket URL', () => {
+      const client = createClient();
+      client.connect();
+      vi.advanceTimersByTime(1);
+
+      expect(getLatestWs().url).toBe('wss://gateway.test.com/ws?operationId=op-123');
+    });
+
+    it('should use ws:// for http gateway URL', () => {
+      const client = createClient({ gatewayUrl: 'http://localhost:8787' });
+      client.connect();
+      vi.advanceTimersByTime(1);
+
+      expect(getLatestWs().url).toBe('ws://localhost:8787/ws?operationId=op-123');
+    });
+
+    it('should send auth message on open', async () => {
+      const client = createClient();
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      const ws = getLatestWs();
+      expect(ws.sent).toHaveLength(1);
+      expect(JSON.parse(ws.sent[0])).toEqual({ token: 'test-token', type: 'auth' });
+    });
+
+    it('should send its client id with auth so the gateway can target it', async () => {
+      const client = createClient({ clientId: 'tab-1' });
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(JSON.parse(getLatestWs().sent[0])).toEqual({
+        clientId: 'tab-1',
+        token: 'test-token',
+        type: 'auth',
+      });
+    });
+
+    it('should transition through connection states', async () => {
+      const client = createClient();
+      const statuses: ConnectionStatus[] = [];
+      client.on('status_changed', (s) => statuses.push(s));
+
+      client.connect();
+      expect(statuses).toContain('connecting');
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(statuses).toContain('authenticating');
+
+      getLatestWs().simulateMessage({ type: 'auth_success' });
+      expect(statuses).toContain('connected');
+    });
+
+    it('should emit connected event after auth_success', async () => {
+      const client = createClient();
+      const onConnected = vi.fn();
+      client.on('connected', onConnected);
+
+      await connectAndAuth(client);
+      expect(onConnected).toHaveBeenCalledOnce();
+    });
+
+    it('should send resume with empty lastEventId after auth', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      // First message is auth, second is resume
+      expect(ws.sent).toHaveLength(2);
+      expect(JSON.parse(ws.sent[1])).toEqual({ lastEventId: '', type: 'resume', wantStatus: true });
+    });
+
+    it('resumes from a cursor handed over by another transport', async () => {
+      // The v1 fallback picks up a run the multiplexed socket was streaming:
+      // the first resume must start after what that socket already delivered,
+      // and without the from-scratch buffering (nothing needs deduplicating).
+      const client = createClient({ lastEventId: '42', resumeOnConnect: true });
+      const ws = await connectAndAuth(client);
+
+      expect(JSON.parse(ws.sent[1])).toEqual({
+        lastEventId: '42',
+        type: 'resume',
+        wantStatus: true,
+      });
+
+      const onEvent = vi.fn();
+      client.on('agent_event', onEvent);
+      ws.simulateMessage({
+        event: { data: {}, stepIndex: 0, timestamp: 1, type: 'stream_chunk' },
+        id: '43',
+        type: 'agent_event',
+      } as any);
+      // Delivered live, not held in a resume buffer.
+      expect(onEvent).toHaveBeenCalledOnce();
+    });
+
+    it('should not connect if already connected', async () => {
+      const client = createClient();
+      await connectAndAuth(client);
+
+      const prevCount = mockWsInstances.length;
+      client.connect();
+      expect(mockWsInstances.length).toBe(prevCount);
+    });
+  });
+
+  describe('auth failure', () => {
+    it('should emit auth_failed and disconnect', async () => {
+      const client = createClient();
+      const onAuthFailed = vi.fn();
+      client.on('auth_failed', onAuthFailed);
+
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      getLatestWs().simulateMessage({ reason: 'invalid token', type: 'auth_failed' });
+
+      expect(onAuthFailed).toHaveBeenCalledWith('invalid token');
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+  });
+
+  describe('auth_expired', () => {
+    it('should emit auth_expired without disconnecting (recoverable)', async () => {
+      const client = createClient();
+      const onAuthExpired = vi.fn();
+      const onDisconnected = vi.fn();
+      client.on('auth_expired', onAuthExpired);
+      client.on('disconnected', onDisconnected);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({ type: 'auth_expired' });
+
+      expect(onAuthExpired).toHaveBeenCalledOnce();
+      // Critical: socket stays connected so the listener can refresh + re-auth.
+      expect(onDisconnected).not.toHaveBeenCalled();
+      expect(client.connectionStatus).toBe('connected');
+    });
+
+    it('reconnect() tears down current ws and dials a new one with the latest token', async () => {
+      const client = createClient();
+      await connectAndAuth(client);
+
+      const wsCountBefore = mockWsInstances.length;
+
+      // Simulate the "got auth_expired → refresh → reconnect" flow
+      client.updateToken('new-token');
+      await client.reconnect();
+      // Let the new MockWebSocket auto-open
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(mockWsInstances.length).toBe(wsCountBefore + 1);
+      const newWs = getLatestWs();
+      // First message on the new socket is auth with the refreshed token
+      expect(JSON.parse(newWs.sent[0])).toEqual({ token: 'new-token', type: 'auth' });
+    });
+  });
+
+  describe('agent events', () => {
+    it('should emit agent_event for incoming events', async () => {
+      const client = createClient();
+      const events: any[] = [];
+      client.on('agent_event', (e) => events.push(e));
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({
+        event: {
+          data: { content: 'hello' },
+          operationId: 'op-123',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'stream_chunk',
+        },
+        id: 'evt-1',
+        type: 'agent_event',
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('stream_chunk');
+      expect(events[0].data.content).toBe('hello');
+    });
+
+    it('should track lastEventId from agent events', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      ws.simulateMessage({
+        event: { data: {}, operationId: 'op-123', stepIndex: 0, timestamp: 1, type: 'step_start' },
+        id: 'evt-5',
+        type: 'agent_event',
+      });
+
+      // Force a disconnect + reconnect to check lastEventId
+      ws.simulateClose();
+      await vi.advanceTimersByTimeAsync(1000); // reconnect delay
+      await vi.advanceTimersByTimeAsync(1);
+
+      const ws2 = getLatestWs();
+      ws2.simulateMessage({ type: 'auth_success' });
+
+      // Resume should use the tracked lastEventId
+      const resumeMsg = JSON.parse(ws2.sent[1]);
+      expect(resumeMsg).toEqual({ lastEventId: 'evt-5', type: 'resume', wantStatus: true });
+    });
+
+    it('should disconnect on agent_runtime_end', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      ws.simulateMessage({
+        event: {
+          data: { stepCount: 3 },
+          operationId: 'op-123',
+          stepIndex: 2,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    it('should disconnect on error event', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      ws.simulateMessage({
+        event: {
+          data: { message: 'runtime error' },
+          operationId: 'op-123',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'error',
+        },
+        type: 'agent_event',
+      });
+
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    it('stays connected through a parked LLM call error, then ends on the run end', async () => {
+      // The run waits for a client (`waiting_for_client`) and streams on in
+      // this session once one resumes it.
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      ws.simulateMessage({
+        event: {
+          data: {
+            body: { reason: 'no_executor', recoverable: true },
+            error: 'ClientLlmExecutorUnavailable',
+          },
+          operationId: 'op-123',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'error',
+        },
+        type: 'agent_event',
+      });
+      expect(client.connectionStatus).toBe('connected');
+
+      ws.simulateMessage({
+        event: {
+          data: {},
+          operationId: 'op-123',
+          stepIndex: 1,
+          timestamp: 2,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    it('should NOT disconnect on a forwarded terminal for a different operationId', async () => {
+      // Single-connection WS multiplexing: a broadcast member's
+      // agent_runtime_end is mirrored onto the supervisor's channel. It must
+      // be emitted (so the member handler can finalize that member) but must
+      // NOT close the supervisor WS.
+      const client = createClient(); // operationId: 'op-123'
+      const events: any[] = [];
+      client.on('agent_event', (e) => events.push(e));
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member-456',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].operationId).toBe('op-member-456');
+      // Connection stays alive for the supervisor + sibling members.
+      expect(client.connectionStatus).toBe('connected');
+
+      // The owner op's own terminal still ends the session.
+      ws.simulateMessage({
+        event: {
+          data: {},
+          operationId: 'op-123',
+          stepIndex: 1,
+          timestamp: 2,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    it('ignores the session_complete echo of a mirrored member terminal (G-02)', async () => {
+      // A gateway that ends a session on ANY agent_runtime_end answers a
+      // member's mirrored terminal with session_complete for the supervisor.
+      // That is the member's echo, not the supervisor's end.
+      const client = createClient(); // operationId: 'op-123'
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member-456',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      ws.simulateMessage({ type: 'session_complete' });
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(client.connectionStatus).toBe('connected');
+
+      // The supervisor keeps streaming and still ends on its own terminal.
+      const events: any[] = [];
+      client.on('agent_event', (e) => events.push(e));
+      ws.simulateMessage({
+        event: {
+          data: { chunkType: 'text', content: 'SUP DONE' },
+          operationId: 'op-123',
+          stepIndex: 2,
+          timestamp: 2,
+          type: 'stream_chunk',
+        },
+        type: 'agent_event',
+      });
+      expect(events).toHaveLength(1);
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(onComplete).toHaveBeenCalledOnce();
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    // Codex P2 on #20102: a suspended tab handles the queued echo late but in
+    // order; wall-clock time must not turn it into the supervisor's end.
+    it('still reads a late echo as the member terminal and honors the next end (G-02)', async () => {
+      const client = createClient(); // op-123
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member-456',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      await vi.advanceTimersByTimeAsync(30_000); // renderer suspended
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(onComplete).not.toHaveBeenCalled();
+
+      // The echo is spent: a further session end is the supervisor's own.
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(onComplete).toHaveBeenCalledOnce();
+    });
+
+    it('should emit session_complete and disconnect', async () => {
+      const client = createClient();
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({ type: 'session_complete' });
+
+      expect(onComplete).toHaveBeenCalledOnce();
+      expect(onComplete).toHaveBeenCalledWith({ source: 'raw_session_complete' });
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+  });
+
+  // Regression guard: a fresh subscriber (no lastEventId) on a
+  // hibernated DO replays zero events. The client must NOT guess "completed"
+  // from silence (the old 3s timeout did, which cleared the shared
+  // runningOperation and cancelled the run on every device). Completion is now
+  // driven purely by the DO's authoritative `resume_complete` status.
+  describe('resume_complete (authoritative status)', () => {
+    async function connectAndAuthResume(client: AgentStreamClient): Promise<MockWebSocket> {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      const ws = getLatestWs();
+      ws.simulateMessage({ type: 'auth_success' });
+      return ws;
+    }
+
+    it('never auto-completes from silence — no resume_complete, no events', async () => {
+      const client = createClient({ resumeOnConnect: true });
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      await connectAndAuthResume(client);
+      // DO is silent (hibernated buffer, slow status). Far past the old 3s window.
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(client.connectionStatus).toBe('connected');
+    });
+
+    it('does NOT complete when DO reports status running', async () => {
+      const client = createClient({ resumeOnConnect: true });
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      const ws = await connectAndAuthResume(client);
+      // DO replayed nothing (hibernated buffer) but tells us the run is alive.
+      ws.simulateMessage({ status: 'running', type: 'resume_complete' });
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(client.connectionStatus).toBe('connected');
+    });
+
+    it('still streams live events after a running resume_complete', async () => {
+      const client = createClient({ resumeOnConnect: true });
+      const events: any[] = [];
+      client.on('agent_event', (e) => events.push(e));
+
+      const ws = await connectAndAuthResume(client);
+      ws.simulateMessage({ status: 'running', type: 'resume_complete' });
+
+      ws.simulateMessage({
+        event: {
+          data: { content: 'live' },
+          operationId: 'op-123',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'stream_chunk',
+        },
+        id: 'evt-9',
+        type: 'agent_event',
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].data.content).toBe('live');
+    });
+
+    it('completes when DO reports a terminal status', async () => {
+      const client = createClient({ resumeOnConnect: true });
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      const ws = await connectAndAuthResume(client);
+      ws.simulateMessage({ status: 'completed', type: 'resume_complete' });
+
+      expect(onComplete).toHaveBeenCalledOnce();
+      expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    // Codex P1 on #20102: a gateway that ends on ANY agent_runtime_end also
+    // leaves its status terminal after a member's mirrored terminal, and a
+    // resubscribe then reported the running supervisor as finished.
+    describe('after a replayed mirrored member terminal (G-02)', () => {
+      const replay = (
+        ws: MockWebSocket,
+        id: string,
+        operationId: string,
+        type: string,
+        data = {},
+      ) =>
+        ws.simulateMessage({
+          event: { data, operationId, stepIndex: 0, timestamp: 1, type },
+          id,
+          type: 'agent_event',
+        });
+
+      it('keeps the supervisor subscribed on the status that member left behind', async () => {
+        const client = createClient({ resumeOnConnect: true }); // op-123
+        const onComplete = vi.fn();
+        client.on('session_complete', onComplete);
+
+        const ws = await connectAndAuthResume(client);
+        replay(ws, 'evt-1', 'op-member-456', 'agent_runtime_end', { reason: 'done' });
+        // The supervisor's continuation after the member — still no own terminal.
+        replay(ws, 'evt-2', 'op-123', 'step_start');
+        ws.simulateMessage({ status: 'completed', type: 'resume_complete' });
+
+        expect(onComplete).not.toHaveBeenCalled();
+        expect(client.connectionStatus).toBe('connected');
+
+        // The supervisor's own terminal still ends the session.
+        ws.simulateMessage({
+          event: {
+            data: { reason: 'done' },
+            operationId: 'op-123',
+            stepIndex: 3,
+            timestamp: 2,
+            type: 'agent_runtime_end',
+          },
+          id: 'evt-3',
+          type: 'agent_event',
+        });
+        expect(client.connectionStatus).toBe('disconnected');
+      });
+
+      it('still completes on a status the member terminal cannot explain', async () => {
+        const client = createClient({ resumeOnConnect: true });
+        const onComplete = vi.fn();
+        client.on('session_complete', onComplete);
+
+        const ws = await connectAndAuthResume(client);
+        replay(ws, 'evt-1', 'op-member-456', 'agent_runtime_end', { reason: 'done' });
+        // e.g. the inactivity watchdog failed the supervisor afterwards.
+        ws.simulateMessage({ status: 'error', type: 'resume_complete' });
+
+        expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'error' });
+      });
+
+      // Codex P1 on #20102 (3rd pass): a member terminal seen before the
+      // disconnect proves nothing about the resumed DO — it may have hibernated
+      // away the supervisor's own terminal while keeping `completed`.
+      it('trusts the status after an empty replay, even with a member terminal seen before', async () => {
+        const client = createClient({ resumeOnConnect: true });
+        const onComplete = vi.fn();
+        client.on('session_complete', onComplete);
+
+        const ws = await connectAndAuthResume(client);
+        ws.simulateMessage({ status: 'running', type: 'resume_complete' });
+        replay(ws, 'evt-1', 'op-member-456', 'agent_runtime_end', { reason: 'done' });
+
+        ws.simulateClose();
+        await vi.advanceTimersByTimeAsync(1000); // reconnect delay
+        await vi.advanceTimersByTimeAsync(1);
+        const ws2 = getLatestWs();
+        ws2.simulateMessage({ type: 'auth_success' });
+        // Hibernated buffer: nothing after evt-1 is replayed.
+        ws2.simulateMessage({ status: 'completed', type: 'resume_complete' });
+
+        expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
+      });
+
+      it('completes once the supervisor terminal was replayed after the member', async () => {
+        const client = createClient({ resumeOnConnect: true });
+        const onComplete = vi.fn();
+        client.on('session_complete', onComplete);
+
+        const ws = await connectAndAuthResume(client);
+        replay(ws, 'evt-1', 'op-member-456', 'agent_runtime_end', { reason: 'done' });
+        replay(ws, 'evt-2', 'op-123', 'agent_runtime_end', { reason: 'done' });
+        ws.simulateMessage({ status: 'completed', type: 'resume_complete' });
+
+        expect(client.connectionStatus).toBe('disconnected');
+      });
+    });
+
+    it('flushes replayed events before completing on a terminal status', async () => {
+      const client = createClient({ resumeOnConnect: true });
+      const events: any[] = [];
+      const order: string[] = [];
+      client.on('agent_event', (e) => {
+        events.push(e);
+        order.push('event');
+      });
+      client.on('session_complete', () => order.push('complete'));
+
+      const ws = await connectAndAuthResume(client);
+      // Buffered during resume replay…
+      ws.simulateMessage({
+        event: { data: {}, operationId: 'op-123', stepIndex: 0, timestamp: 1, type: 'step_start' },
+        id: 'evt-1',
+        type: 'agent_event',
+      });
+      // …then the terminal authoritative status.
+      ws.simulateMessage({ status: 'completed', type: 'resume_complete' });
+
+      expect(events).toHaveLength(1);
+      expect(order).toEqual(['event', 'complete']);
+    });
+  });
+
+  describe('heartbeat', () => {
+    it('should send heartbeats at 30s intervals', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      const heartbeats = ws.sent.filter((s) => JSON.parse(s).type === 'heartbeat');
+      expect(heartbeats).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      const heartbeats2 = ws.sent.filter((s) => JSON.parse(s).type === 'heartbeat');
+      expect(heartbeats2).toHaveLength(2);
+    });
+
+    it('should reset missed count on heartbeat_ack', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      // First heartbeat
+      await vi.advanceTimersByTimeAsync(30_000);
+      ws.simulateMessage({ type: 'heartbeat_ack' });
+
+      // Should not force reconnect after ack
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(client.connectionStatus).toBe('connected');
+    });
+  });
+
+  describe('reconnection', () => {
+    it('should auto-reconnect on unexpected close', async () => {
+      const client = createClient();
+      const onReconnecting = vi.fn();
+      client.on('reconnecting', onReconnecting);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateClose();
+
+      expect(client.connectionStatus).toBe('reconnecting');
+      expect(onReconnecting).toHaveBeenCalledWith(1000);
+    });
+
+    it('should not reconnect after session_complete', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(client.connectionStatus).toBe('disconnected');
+
+      // No reconnection should be scheduled
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    it('should not reconnect after intentional disconnect', async () => {
+      const client = createClient();
+      await connectAndAuth(client);
+
+      client.disconnect();
+      expect(client.connectionStatus).toBe('disconnected');
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    it('should use exponential backoff', async () => {
+      const client = createClient();
+      const delays: number[] = [];
+      client.on('reconnecting', (d) => delays.push(d));
+
+      const ws = await connectAndAuth(client);
+
+      // First disconnect → triggers reconnect with 1s delay
+      ws.simulateClose();
+      expect(delays[0]).toBe(1000);
+
+      // Advance past reconnect delay → new WS created, onopen fires + resets delay,
+      // but we close before auth succeeds → triggers reconnect again with 1s (reset by onopen)
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1);
+      getLatestWs().simulateClose();
+
+      // Third reconnect: previous close scheduled another with 1s,
+      // advance past it, onopen fires, close again to see 2s
+      await vi.advanceTimersByTimeAsync(delays[1]);
+      await vi.advanceTimersByTimeAsync(1);
+      getLatestWs().simulateClose();
+
+      // Verify escalating pattern: 1s, 1s (reset by open), 1s (reset by open)
+      // This is correct: onopen resets delay, so each connect cycle restarts at 1s
+      // The backoff only accumulates when connection *fails to open*
+      expect(delays[0]).toBe(1000);
+      expect(delays[1]).toBe(1000); // Reset by successful WebSocket open
+    });
+
+    it('should not reconnect when autoReconnect is false', async () => {
+      const client = createClient({ autoReconnect: false });
+      const ws = await connectAndAuth(client);
+
+      ws.simulateClose();
+      expect(client.connectionStatus).toBe('disconnected');
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(mockWsInstances).toHaveLength(1); // No new WS created
+    });
+  });
+
+  describe('sendToolResult', () => {
+    it('should send a successful tool_result message', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      const ok = client.sendToolResult({
+        content: '{"files":["a.txt"]}',
+        success: true,
+        toolCallId: 'call_1',
+      });
+
+      expect(ok).toBe(true);
+      const toolResult = ws.sent.find((s) => JSON.parse(s).type === 'tool_result');
+      expect(toolResult).toBeDefined();
+      expect(JSON.parse(toolResult!)).toEqual({
+        content: '{"files":["a.txt"]}',
+        success: true,
+        toolCallId: 'call_1',
+        type: 'tool_result',
+      });
+    });
+
+    it('should send an error tool_result message', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      client.sendToolResult({
+        content: null,
+        error: { message: 'ipc failed', type: 'ipc_error' },
+        success: false,
+        toolCallId: 'call_2',
+      });
+
+      const toolResult = ws.sent.find((s) => JSON.parse(s).type === 'tool_result');
+      expect(JSON.parse(toolResult!)).toEqual({
+        content: null,
+        error: { message: 'ipc failed', type: 'ipc_error' },
+        success: false,
+        toolCallId: 'call_2',
+        type: 'tool_result',
+      });
+    });
+
+    it('should return false when socket is not open', () => {
+      const client = createClient();
+      const ok = client.sendToolResult({
+        content: null,
+        success: false,
+        toolCallId: 'call_3',
+      });
+      expect(ok).toBe(false);
+    });
+  });
+
+  describe('disconnect', () => {
+    it('should clean up timers on disconnect', async () => {
+      const client = createClient();
+      await connectAndAuth(client);
+
+      client.disconnect();
+      expect(client.connectionStatus).toBe('disconnected');
+
+      // No heartbeats should fire
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+  });
+
+  describe('updateToken', () => {
+    it('should use new token on reconnect', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      client.updateToken('new-token');
+      ws.simulateClose();
+
+      // Wait for reconnect
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1);
+
+      const ws2 = getLatestWs();
+      const authMsg = JSON.parse(ws2.sent[0]);
+      expect(authMsg.token).toBe('new-token');
+    });
+  });
+});

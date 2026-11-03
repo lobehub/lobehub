@@ -1,0 +1,25 @@
+name: Revalidate Docs
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+      - next
+    paths:
+      - 'docs/**'
+
+jobs:
+  revalidate:
+    name: Revalidate Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger docs revalidation
+        run: |
+          response=$(curl "${{ secrets.DOCS_REVALIDATE_URL }}" --silent --show-error)
+          echo "Response: $response"
+          if [ "$response" != '{"success":true}' ]; then
+            echo "Error: Unexpected response"
+            exit 1
+          fi

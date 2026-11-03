@@ -1,0 +1,417 @@
+import debug from 'debug';
+import { ModelProvider } from 'model-bank';
+import type OpenAI from 'openai';
+import { AzureOpenAI } from 'openai';
+
+import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { refineErrorCode } from '../../errors';
+import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
+  ChatMethodOptions,
+  ChatStreamPayload,
+} from '../../types';
+import { AgentRuntimeErrorType } from '../../types/error';
+import type { CreateImagePayload } from '../../types/image';
+import { AgentRuntimeError } from '../../utils/createError';
+import { sanitizeError } from '../../utils/sanitizeError';
+import { isResponsesAPIModel, responsesAPIModels, systemToUserModels } from '../openai/modelId';
+
+const azureImageLogger = debug('lobe-image:azure');
+const azureSearchContextSize = process.env.OPENAI_SEARCH_CONTEXT_SIZE;
+
+/**
+ * Azure reasoning models reject sampling/penalty params (`temperature` and friends
+ * 400 with "Unsupported parameter"). Matches GPT-5 and every later GPT generation —
+ * GPT-6 dropped the minor version (`gpt-6-astra`) but kept the same restriction.
+ *
+ * Substring matching is deliberate: Azure deployment names commonly wrap the model
+ * id (`prod-gpt-54`). The `[.-]`/end boundary keeps Azure's legacy `gpt-35-turbo`
+ * deployment name out.
+ */
+const isAzureReasoningModel = (model: string) =>
+  /gpt-[5-9](?:$|[.-])/.test(model) || model.includes('o1') || model.includes('o3');
+
+const supportsImageInputFidelity = (model: string) => /^gpt-image-1(?:$|[-.])/.test(model);
+
+const transformAzureSystemMessages = (messages: ChatStreamPayload['messages'], model: string) =>
+  messages.map((message) => ({
+    ...message,
+    role:
+      isAzureReasoningModel(model) && message.role === 'system'
+        ? [...systemToUserModels].some((sub) => model.includes(sub))
+          ? 'user'
+          : 'developer'
+        : message.role,
+  }));
+
+const appendAzureSearchTool = (
+  tools: ChatStreamPayload['tools'],
+  enabledSearch?: boolean,
+): ChatStreamPayload['tools'] => {
+  if (!enabledSearch) return tools;
+
+  return [
+    ...(tools || []),
+    {
+      type: 'web_search',
+      ...(azureSearchContextSize && {
+        search_context_size: azureSearchContextSize,
+      }),
+    } as any,
+  ];
+};
+
+const normalizeAzureBaseURL = (value?: string) => {
+  if (!value) return value;
+
+  const url = new URL(value);
+  const normalizedPathname = url.pathname.replace(/\/+$/, '');
+  const hasOpenAISegment = normalizedPathname.split('/').includes('openai');
+
+  url.pathname = hasOpenAISegment
+    ? '/openai/v1'
+    : `${normalizedPathname === '/' ? '' : normalizedPathname}/openai/v1`;
+  url.search = '';
+  url.hash = '';
+
+  return url.toString().replace(/\/$/, '');
+};
+
+/**
+ * Azure's `/openai/v1` compatible surface returns 404 `DeploymentNotFound` for
+ * transcription deployments (`gpt-4o-transcribe` family), so transcription must
+ * use the classic `/openai/deployments/{deployment}/audio/transcriptions` path,
+ * which requires an explicit `api-version`.
+ * @see https://learn.microsoft.com/azure/ai-foundry/openai/reference-preview
+ */
+const AZURE_TRANSCRIPTION_API_VERSION = '2025-03-01-preview';
+
+const maskSensitiveUrl = (url: string) => {
+  const regex = /^(https:\/\/)([^.]+)(\.(?:openai\.azure\.com|cognitiveservices\.azure\.com).*)$/;
+
+  return url.replace(regex, (_match, protocol, _subdomain, rest) => `${protocol}***${rest}`);
+};
+
+const BaseAzureOpenAI = createOpenAICompatibleRuntime({
+  chatCompletion: {
+    handlePayload: (payload) => {
+      const {
+        deploymentName,
+        enabledSearch,
+        model,
+        preserveThinking: _preserveThinking,
+        ...rest
+      } = payload;
+      const requestModel = deploymentName ?? model;
+
+      if (isResponsesAPIModel(model) || enabledSearch) {
+        return {
+          ...rest,
+          apiMode: 'responses',
+          enabledSearch,
+          model: requestModel,
+        } as ChatStreamPayload;
+      }
+
+      const updatedMessages = transformAzureSystemMessages(payload.messages, model);
+      const azureChatParams = rest as typeof rest & { logit_bias?: Record<string, number> };
+
+      const {
+        frequency_penalty,
+        logit_bias,
+        logprobs,
+        max_tokens,
+        presence_penalty,
+        reasoning_effort,
+        temperature,
+        top_logprobs,
+        top_p,
+        ...otherParams
+      } = azureChatParams;
+
+      const compatibleReasoningEffort = reasoning_effort === 'minimal' ? 'low' : reasoning_effort;
+      // Azure GPT-5 / o1 / o3 reasoning models reject sampling/penalty params, so we drop
+      // them entirely for reasoning models and only pass them through for regular chat.
+      const supportedSamplingParams = isAzureReasoningModel(model)
+        ? {}
+        : {
+            frequency_penalty,
+            logit_bias,
+            logprobs,
+            max_tokens,
+            presence_penalty,
+            temperature,
+            top_logprobs,
+            top_p,
+          };
+
+      return {
+        ...otherParams,
+        ...supportedSamplingParams,
+        messages: updatedMessages as OpenAI.Chat.ChatCompletionMessageParam[],
+        model: requestModel,
+        reasoning_effort: compatibleReasoningEffort as 'low' | 'medium' | 'high' | undefined,
+        stream: model.includes('o1') ? false : (payload.stream ?? true),
+      } as any;
+    },
+    useResponseModels: [...responsesAPIModels],
+  },
+  debug: {
+    chatCompletion: () => process.env.DEBUG_AZURE_CHAT_COMPLETION === '1',
+    responses: () => process.env.DEBUG_AZURE_RESPONSES === '1',
+  },
+  provider: ModelProvider.Azure,
+  responses: {
+    handlePayload: (payload) => {
+      const {
+        deploymentName,
+        enabledSearch,
+        model,
+        preserveThinking: _preserveThinking,
+        tools,
+        verbosity,
+        ...rest
+      } = payload;
+      const requestModel = deploymentName ?? model;
+      const updatedMessages = transformAzureSystemMessages(payload.messages, model);
+      const azureTools = appendAzureSearchTool(tools, enabledSearch);
+      const responseText = verbosity
+        ? payload.text
+          ? { ...payload.text, verbosity }
+          : { verbosity }
+        : payload.text;
+
+      if (isAzureReasoningModel(model)) {
+        const reasoning = payload.reasoning
+          ? { ...payload.reasoning, summary: 'auto' }
+          : { summary: 'auto' };
+
+        return pruneReasoningPayload({
+          ...rest,
+          messages: updatedMessages,
+          model: requestModel,
+          reasoning,
+          stream: payload.stream ?? true,
+          text: responseText,
+          tools: azureTools as any,
+        } as ChatStreamPayload) as ChatStreamPayload;
+      }
+
+      return {
+        ...rest,
+        messages: updatedMessages,
+        model: requestModel,
+        text: responseText,
+        tools: azureTools,
+      } as ChatStreamPayload;
+    },
+  },
+});
+
+export class LobeAzureOpenAI extends BaseAzureOpenAI {
+  private transcriptionClient?: AzureOpenAI;
+
+  constructor(options: Record<string, any> = {}) {
+    const { endpoint, ...rest } = options;
+    const baseURL = normalizeAzureBaseURL(rest.baseURL ?? endpoint);
+
+    super({
+      ...rest,
+      ...(baseURL ? { baseURL } : {}),
+    });
+  }
+
+  async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+    try {
+      return await super.chat(payload, options);
+    } catch (error) {
+      throw this.attachDeploymentId(error, payload.deploymentName ?? payload.model);
+    }
+  }
+
+  async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
+    try {
+      return await super.transcribe(payload, options);
+    } catch (error) {
+      const payloadError = this.attachDeploymentId(error, this.getMappedModelId(payload.model));
+
+      // `handleError` reports `this.baseURL` (`/openai/v1`), but transcription went to the
+      // deployments path — report the endpoint that was actually called.
+      throw payloadError && typeof payloadError === 'object'
+        ? { ...payloadError, endpoint: maskSensitiveUrl(this.transcriptionBaseURL) }
+        : payloadError;
+    }
+  }
+
+  /** `this.baseURL` is normalized to `.../openai/v1`; deployments live under `.../openai`. */
+  private get transcriptionBaseURL() {
+    return this.baseURL.replace(/\/v1$/, '');
+  }
+
+  /**
+   * `AzureOpenAI` rewrites `/audio/transcriptions` to
+   * `/deployments/{model}/audio/transcriptions` using the request `model`
+   * (already mapped to the deployment name) and appends `api-version`.
+   *
+   * Forwards every client option the chat client received (e.g. `dangerouslyAllowBrowser`
+   * for the client BYOK runtime, `maxRetries`, `timeout`); only the endpoint and
+   * `api-version` differ.
+   */
+  protected getTranscriptionClient(): OpenAI {
+    this.transcriptionClient ??= new AzureOpenAI({
+      ...this._options,
+      apiKey: this._options.apiKey,
+      apiVersion: AZURE_TRANSCRIPTION_API_VERSION,
+      baseURL: this.transcriptionBaseURL,
+    });
+
+    return this.transcriptionClient;
+  }
+
+  async createImage(payload: CreateImagePayload) {
+    const { model, params } = payload;
+    const requestModel = this.getMappedModelId(model);
+    azureImageLogger('Creating image with model: %s and params: %O', requestModel, params);
+
+    try {
+      const userInput: Record<string, any> = { ...params };
+      const hasImageUrlsInput =
+        Array.isArray(userInput.imageUrls) && userInput.imageUrls.length > 0;
+      const hasSingleImageUrlInput = userInput.imageUrl && !userInput.image;
+
+      if (hasImageUrlsInput || hasSingleImageUrlInput) {
+        const { convertImageUrlToFile } = await import('../../core/contextBuilders/openai');
+
+        if (hasImageUrlsInput) {
+          const imageFiles = await Promise.all(
+            userInput.imageUrls.map((url: string) => convertImageUrlToFile(url)),
+          );
+          userInput.image = imageFiles.length === 1 ? imageFiles[0] : imageFiles;
+        } else if (hasSingleImageUrlInput) {
+          userInput.image = await convertImageUrlToFile(userInput.imageUrl);
+        }
+      }
+
+      delete userInput.imageUrls;
+      delete userInput.imageUrl;
+
+      const isImageEdit = Boolean(userInput.image);
+      azureImageLogger('Is Image Edit: %s', isImageEdit);
+
+      if (userInput.size === 'auto') delete userInput.size;
+
+      // gpt-image-2 rejects input_fidelity because it is always high fidelity by default.
+      // Keep the parameter limited to the gpt-image-1 family, matching OpenAI-compatible runtime.
+      const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(model);
+
+      const azureImageOptions: Record<string, any> = {
+        model: requestModel,
+        n: 1,
+        ...(shouldUseInputFidelity ? { input_fidelity: 'high' } : {}),
+        ...userInput,
+      };
+
+      if (!isImageEdit) delete azureImageOptions.image;
+
+      const imageResponse = isImageEdit
+        ? await this.client.images.edit(azureImageOptions as any)
+        : await this.client.images.generate(azureImageOptions as any);
+
+      let result: any = imageResponse;
+      if (typeof result === 'string') {
+        result = JSON.parse(result);
+      } else if (result && typeof result === 'object') {
+        if (typeof result.bodyAsText === 'string') {
+          result = JSON.parse(result.bodyAsText);
+        } else if (typeof result.body === 'string') {
+          result = JSON.parse(result.body);
+        }
+      }
+
+      if (!result || !Array.isArray(result.data) || result.data.length === 0) {
+        throw new Error(
+          `Invalid image response: missing or empty data array. Response: ${JSON.stringify(result)}`,
+        );
+      }
+
+      const imageData = result.data[0];
+      if (!imageData) {
+        throw new Error('Invalid image response: first data item is null or undefined');
+      }
+
+      if (imageData.b64_json) {
+        return { imageUrl: `data:image/png;base64,${imageData.b64_json}` };
+      }
+
+      if (imageData.url) {
+        return { imageUrl: imageData.url };
+      }
+
+      throw new Error('Invalid image response: missing both b64_json and url fields');
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  protected handleError(error: any) {
+    let normalizedError = error as { [key: string]: any; code?: string; message?: string };
+
+    if (!normalizedError.code) {
+      normalizedError = {
+        cause: normalizedError.cause,
+        message: normalizedError.message,
+        name: normalizedError.name,
+      };
+    }
+
+    const fallbackErrorType = normalizedError.code
+      ? AgentRuntimeErrorType.ProviderBizError
+      : AgentRuntimeErrorType.AgentRuntimeError;
+    const errorMessage =
+      typeof normalizedError.error?.message === 'string'
+        ? normalizedError.error.message
+        : normalizedError.message;
+    const refinedErrorType = refineErrorCode({
+      errorType: fallbackErrorType,
+      httpStatus: normalizedError.status,
+      message: errorMessage,
+      provider: ModelProvider.Azure,
+    });
+
+    return AgentRuntimeError.chat({
+      endpoint: maskSensitiveUrl(this.baseURL),
+      error: sanitizeError(normalizedError),
+      errorType: refinedErrorType ?? fallbackErrorType,
+      provider: ModelProvider.Azure,
+    });
+  }
+
+  /**
+   * Keep DeploymentNotFound payload backwards-compatible because callers and
+   * tests rely on the failed deployment/model id being present in the error body.
+   */
+  private attachDeploymentId(error: any, model?: string) {
+    if (
+      model &&
+      error &&
+      typeof error === 'object' &&
+      error.error &&
+      typeof error.error === 'object' &&
+      error.error.code === 'DeploymentNotFound' &&
+      !error.error.deployId
+    ) {
+      return {
+        ...error,
+        error: {
+          ...error.error,
+          deployId: model,
+        },
+      };
+    }
+
+    return error;
+  }
+}

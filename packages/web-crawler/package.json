@@ -1,0 +1,20 @@
+{
+  "name": "@lobechat/web-crawler",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "@lobechat/ssrf-safe-fetch": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "@mozilla/readability": "^0.6.0",
+    "happy-dom": "^20.10.6",
+    "node-html-markdown": "^1.3.0",
+    "query-string": "^9.4.1",
+    "url-join": "^5.0.0"
+  }
+}

@@ -1,0 +1,107 @@
+---
+title: 在 LobeHub 中配置 Auth0 身份验证
+description: 学习如何在 LobeHub 中配置 Auth0 SSO，包括创建应用、添加用户和设置环境变量。
+tags:
+  - Auth0
+  - 身份验证
+  - LobeHub
+  - 单点登录
+---
+
+# 配置 Auth0 身份验证
+
+<Steps>
+  ### 创建 Auth0 应用
+
+  1. 前往 [Auth0 Dashboard](https://manage.auth0.com/dashboard)
+  2. 点击 **Applications** > **Create Application**
+
+  <Image alt="创建 Auth0 应用 S1" inStep src="https://github.com/lobehub/lobehub/assets/30863298/f068190f-0027-4d3b-8667-d632e43d5a86" />
+
+  3. 填写应用名称
+  4. 选择 **Regular Web Applications** 作为应用类型
+  5. 点击 **Create**
+
+  <Image alt="创建 Auth0 应用 S2" inStep src="https://github.com/lobehub/lobehub/assets/30863298/3e0082df-9b6f-46f3-b67f-bdc79e1eb2cc" />
+
+  ### 配置应用设置
+
+  创建后，进入 **Settings** 标签页：
+
+  <Image alt="创建 Auth0 应用 S3" inStep src="https://github.com/lobehub/lobehub/assets/30863298/df4cea85-616a-46f5-b2de-42725d9b82a6" />
+
+  记录：
+
+  - **Domain**（如 `your-tenant.auth0.com`）
+  - **Client ID**
+  - **Client Secret**
+
+  ### 配置回调 URL
+
+  在 **Allowed Callback URLs** 中添加：
+
+  <Callout type={'info'}>
+    回调 URL 格式：
+
+    - 本地开发: `http://localhost:3210/api/auth/callback/auth0`
+    - 生产环境: `https://your-domain.com/api/auth/callback/auth0`
+  </Callout>
+
+  <Image alt="创建 Auth0 应用 S4" inStep src="https://github.com/lobehub/lobehub/assets/30863298/62fbd09f-a69a-4460-949b-0f6285fa65b9" />
+
+  ### 添加用户（可选）
+
+  点击 **User Management** 为组织创建用户。
+
+  <Image alt="添加用户" inStep src="https://github.com/lobehub/lobehub/assets/30863298/0beda150-d0b6-43cf-a9f1-fce928b83a96" />
+
+  ### 配置环境变量
+
+  | 环境变量                 | 类型 | 描述                                     |
+  | -------------------- | -- | -------------------------------------- |
+  | `AUTH_SECRET`        | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS` | 必选 | 填写 `auth0`                             |
+  | `AUTH_AUTH0_ID`      | 必选 | Client ID                              |
+  | `AUTH_AUTH0_SECRET`  | 必选 | Client Secret                          |
+  | `AUTH_AUTH0_ISSUER`  | 必选 | `https://your-tenant.auth0.com`        |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#auth0)
+    可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功后，用户将可以通过 Auth0 身份认证并使用 LobeHub。
+</Callout>
+
+## 高级配置
+
+### 连接现有 SSO 服务
+
+如果组织已有身份认证基础设施，在 **Applications** > **SSO Integrations** 中连接 SSO 服务。
+
+Auth0 支持 Azure AD、Slack、Google Workspace、Office 365、Zoom 等。详见 [Auth0 SSO Integrations](https://marketplace.auth0.com/features/sso-integrations)。
+
+<Image alt="连接现有 SSO 服务" src="https://github.com/lobehub/lobehub/assets/30863298/9891347e-a338-4aa9-8714-f16c8dbcfcec" />
+
+### 配置社交登录
+
+在 **Authentication** > **Social** 中配置社交登录。
+
+<Image alt="配置社交登录" src="https://github.com/lobehub/lobehub/assets/30863298/880749a6-5ba4-4e20-a968-b583a54de7fa" />
+
+<Callout type={'warning'}>
+  默认社交登录允许任何人认证。请配置阻止策略以限制访问。
+</Callout>
+
+<Callout type={'warning'}>
+  创建 GitHub 连接时，务必在 **Attributes** 部分勾选 **Email Address** 权限。LobeHub 需要用户邮箱进行身份认证。
+
+  <Image alt="GitHub 连接邮箱权限" src="https://hub-apac-1.lobeobjects.space/docs/afdf22891dda3e5e44c690db184c548e.png" />
+</Callout>
+
+## 相关资源
+
+- [Auth0 Dashboard](https://manage.auth0.com/dashboard)
+- [Auth0 文档](https://auth0.com/docs)

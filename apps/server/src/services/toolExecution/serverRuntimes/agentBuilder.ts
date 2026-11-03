@@ -1,0 +1,371 @@
+import {
+  AgentBuilderIdentifier,
+  type GetAvailableModelsParams,
+  type InstallPluginParams,
+  normalizeUpdateConfigParams,
+  type SearchMarketToolsParams,
+  type UpdateAgentConfigParams,
+  type UpdatePromptParams,
+} from '@lobechat/builtin-tool-agent-builder';
+import { builtinTools } from '@lobechat/builtin-tools';
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { modelsResultsPrompt } from '@lobechat/prompts';
+import { getPluginMode, upsertPluginMode } from '@lobechat/types';
+
+import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
+import { AgentModel } from '@/database/models/agent';
+import { ConnectorModel } from '@/database/models/connector';
+import { PluginModel } from '@/database/models/plugin';
+import { AiInfraRepos } from '@/database/repositories/aiInfra';
+import { AgentService } from '@/server/services/agent';
+import { DiscoverService } from '@/server/services/discover';
+import { filterHiddenProviderModels } from '@/utils/aiProvider';
+
+import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import { searchMarketTools } from './marketToolSearch';
+import {
+  NEXT_RUN_NOTE,
+  resolveOrInstallMarketPlugin,
+  resolvePluginIdentifier,
+  unresolvablePluginResult,
+} from './pluginResolution';
+import { type ServerRuntimeRegistration } from './types';
+
+const MAX_MODELS = 20;
+
+const handleError = (error: unknown, message: string): ToolExecutionResult => {
+  const err = error as Error;
+  return { content: `${message}: ${err.message}`, success: false };
+};
+
+/**
+ * The builder run is owned by the builtin builder agent, so `ctx.agentId` is the
+ * builder itself — never the agent the user is editing. Without an explicit
+ * editing target the write must fail loudly: falling back to `ctx.agentId`
+ * silently rewrote the builder's own row while reporting success.
+ */
+const noEditingTargetResult: ToolExecutionResult = {
+  content:
+    'No agent is being edited in this conversation, so nothing was changed. Ask the user to open the target agent and use the Agent Builder panel there.',
+  error: { message: 'Missing editing target agent', type: 'NoEditingTarget' },
+  success: false,
+};
+
+export const agentBuilderRuntime: ServerRuntimeRegistration = {
+  factory: (context: ToolExecutionContext) => {
+    if (!context.userId || !context.serverDB) {
+      throw new Error('userId and serverDB are required for Agent Builder execution');
+    }
+    const userId = context.userId;
+
+    const agentModel = new AgentModel(context.serverDB, userId, context.workspaceId);
+    const agentService = new AgentService(context.serverDB, userId, context.workspaceId);
+    const pluginModel = new PluginModel(context.serverDB, userId, context.workspaceId);
+    const connectorModel = new ConnectorModel(context.serverDB, userId, context.workspaceId);
+    const aiInfraRepos = new AiInfraRepos(context.serverDB, userId, {}, context.workspaceId);
+    /**
+     * Market list endpoints require an authenticated caller, and `DiscoverService`
+     * only signs a trusted-client token when it is given an identity — built
+     * without one it sends no credentials at all and every market read fails as
+     * `unauthorized`, which `searchMarketTools` surfaces as a plain tool failure
+     * the model silently works around. `workspaceId` additionally attributes the
+     * read to the workspace rather than the personal account.
+     */
+    const discoverService = new DiscoverService({
+      userInfo: { userId, workspaceId: context.workspaceId },
+    });
+
+    return {
+      getAvailableModels: async (
+        params: GetAvailableModelsParams,
+      ): Promise<ToolExecutionResult> => {
+        try {
+          const [allProviders, hiddenBuiltinModels] = await Promise.all([
+            aiInfraRepos.getAiProviderList(),
+            getHiddenBuiltinModelsForUser(userId),
+          ]);
+          /**
+           * An unresolved access policy must not be interpreted as an empty blocklist.
+           * Keep the model tool empty until the user-scoped policy can be loaded.
+           */
+          const enabledProviders =
+            hiddenBuiltinModels === undefined ? [] : allProviders.filter((p) => p.enabled);
+
+          // LobeHub provider first, then by sort order
+          enabledProviders.sort((a, b) => {
+            if (a.id === BRANDING_PROVIDER) return -1;
+            if (b.id === BRANDING_PROVIDER) return 1;
+            return (a.sort ?? 999) - (b.sort ?? 999);
+          });
+
+          // Apply optional provider filter
+          const filteredProviders = params.providerId
+            ? enabledProviders.filter((p) => p.id === params.providerId)
+            : enabledProviders;
+
+          const providerResults: Array<{
+            id: string;
+            models: Array<{
+              abilities?: {
+                files?: boolean;
+                functionCall?: boolean;
+                reasoning?: boolean;
+                vision?: boolean;
+              };
+              description?: string;
+              id: string;
+              name: string;
+            }>;
+            name: string;
+          }> = [];
+
+          let totalModels = 0;
+
+          for (const provider of filteredProviders) {
+            if (totalModels >= MAX_MODELS) break;
+
+            const enabledChatModels = await aiInfraRepos.getAiProviderModelList(provider.id, {
+              enabled: true,
+              type: 'chat',
+            });
+            const visibleChatModels = filterHiddenProviderModels(
+              enabledChatModels,
+              provider.id,
+              hiddenBuiltinModels,
+            );
+
+            const remaining = MAX_MODELS - totalModels;
+            const sliced = visibleChatModels.slice(0, remaining);
+
+            if (sliced.length === 0) continue;
+
+            providerResults.push({
+              id: provider.id,
+              models: sliced.map((m) => ({
+                abilities: (m.abilities as any) ?? undefined,
+                id: m.id,
+                name: m.displayName || m.id,
+              })),
+              name: provider.name || provider.id,
+            });
+
+            totalModels += sliced.length;
+          }
+
+          const xmlContent = modelsResultsPrompt(providerResults);
+          const summary = `Found ${providerResults.length} enabled provider(s) with ${totalModels} model(s).\n\n${xmlContent}`;
+
+          return {
+            content: summary,
+            state: { providers: providerResults },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to get available models');
+        }
+      },
+
+      searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
+        searchMarketTools({ discoverService, pluginModel }, params),
+
+      updateConfig: async (
+        params: UpdateAgentConfigParams,
+        ctx: ToolExecutionContext,
+      ): Promise<ToolExecutionResult> => {
+        const agentId = ctx.editingAgentId;
+        if (!agentId) return noEditingTargetResult;
+
+        try {
+          const agent = await agentModel.getAgentConfigById(agentId);
+          if (!agent) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
+          const { config: rawConfig, meta: rawMeta } = normalizeUpdateConfigParams(params);
+
+          let finalConfig = rawConfig ? { ...rawConfig } : {};
+          const updatedParts: string[] = [];
+
+          if (params.togglePlugin) {
+            const { pluginId, enabled } = params.togglePlugin;
+            const isEnabled = getPluginMode(agent.plugins ?? undefined, pluginId) === 'pinned';
+            const shouldEnable = enabled !== undefined ? enabled : !isEnabled;
+
+            // Enabling pins the id into the agent's config; an id that resolves
+            // to no loadable tool would be reported as enabled yet never load.
+            // Checked before any write so a rejected call changes nothing.
+            // Disabling stays unvalidated so stale entries can always be removed.
+            if (shouldEnable) {
+              const resolution = await resolvePluginIdentifier(
+                pluginId,
+                { connectorModel, pluginModel },
+                { agentId },
+              );
+              if (resolution.status !== 'loadable')
+                return unresolvablePluginResult(pluginId, resolution);
+            }
+
+            // upsertPluginMode preserves an already-matching entry as-is and
+            // flips a disabled entry back to pinned in place, instead of
+            // blindly pushing a duplicate bare-string identifier.
+            const newPlugins = upsertPluginMode(
+              agent.plugins ?? undefined,
+              pluginId,
+              shouldEnable ? 'pinned' : 'auto',
+            );
+
+            finalConfig = { ...finalConfig, plugins: newPlugins };
+            updatedParts.push(`plugin ${pluginId} ${shouldEnable ? 'enabled' : 'disabled'}`);
+          }
+
+          if ('systemRole' in finalConfig && !('editorData' in finalConfig)) {
+            finalConfig = { ...finalConfig, editorData: null };
+          }
+
+          if (Object.keys(finalConfig).length > 0) {
+            await agentService.updateAgentConfig(agentId, finalConfig);
+            const nonPluginFields = Object.keys(finalConfig).filter((f) => f !== 'plugins');
+            if (nonPluginFields.length > 0) {
+              updatedParts.push(`config fields: ${nonPluginFields.join(', ')}`);
+            }
+          }
+
+          if (rawMeta && Object.keys(rawMeta).length > 0) {
+            await agentModel.update(agentId, rawMeta as Record<string, unknown>);
+            updatedParts.push(`meta fields: ${Object.keys(rawMeta).join(', ')}`);
+          }
+
+          if (updatedParts.length === 0) {
+            return {
+              content: 'No fields to update.',
+              state: { agentId, success: true },
+              success: true,
+            };
+          }
+
+          return {
+            content: `Successfully updated agent. Updated ${updatedParts.join('; ')}`,
+            state: { agentId, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to update agent config');
+        }
+      },
+
+      updatePrompt: async (
+        params: UpdatePromptParams,
+        ctx: ToolExecutionContext,
+      ): Promise<ToolExecutionResult> => {
+        const agentId = ctx.editingAgentId;
+        if (!agentId) return noEditingTargetResult;
+
+        try {
+          // Existence guard: a Drizzle UPDATE on a missing/foreign agent row is a
+          // silent 0-row no-op, so the prompt write would "succeed" without
+          // persisting anything. updateConfig already fails loudly; align it.
+          // Lightweight existsById probe — getAgentConfigById would needlessly
+          // enrich the row with knowledge associations just to test existence.
+          const exists = await agentModel.existsById(agentId);
+          if (!exists) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
+          await agentModel.update(agentId, {
+            editorData: null,
+            systemRole: params.prompt,
+          } as Record<string, unknown>);
+
+          return {
+            content: params.prompt
+              ? `Successfully updated system prompt (${params.prompt.length} characters)`
+              : 'Successfully cleared system prompt',
+            state: { agentId, newPrompt: params.prompt, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to update prompt');
+        }
+      },
+
+      installPlugin: async (
+        params: InstallPluginParams,
+        ctx: ToolExecutionContext,
+      ): Promise<ToolExecutionResult> => {
+        const agentId = ctx.editingAgentId;
+        if (!agentId) return noEditingTargetResult;
+
+        const { identifier, source } = params;
+
+        if (source === 'official') {
+          if (builtinTools.some((t) => t.identifier === identifier)) {
+            // Builtin tools (lobe-web-browsing, lobe-image-generation, etc.) need no OAuth
+            try {
+              const agent = await agentModel.getAgentConfigById(agentId);
+              if (!agent) return { content: `Agent "${agentId}" not found.`, success: false };
+
+              if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
+                await agentModel.updateConfig(agentId, {
+                  plugins: upsertPluginMode(
+                    agent.plugins ?? undefined,
+                    identifier,
+                    'pinned',
+                  ) as unknown as string[],
+                });
+              }
+              return {
+                content: `Successfully enabled "${identifier}" for agent "${agentId}"`,
+                state: { agentId, installed: true, pluginId: identifier, success: true },
+                success: true,
+              };
+            } catch (error) {
+              return handleError(error, 'Failed to enable builtin tool');
+            }
+          }
+
+          // OAuth-based tools (Composio, LobehubSkill) cannot be installed in background context
+          return {
+            content: `Installing official integrations that require OAuth (Composio, LobehubSkill) is not supported in background execution. Please install "${identifier}" from the Agent Builder UI instead.`,
+            error: { message: 'OAuth not available in background context', type: 'NotSupported' },
+            success: false,
+          };
+        }
+
+        // source === 'market' — MCP marketplace plugin
+        try {
+          const agent = await agentModel.getAgentConfigById(agentId);
+          if (!agent) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
+          const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
+            identifier,
+            { connectorModel, discoverService, pluginModel },
+            { agentId, source: 'market' },
+          );
+          if (resolution.status !== 'loadable')
+            return unresolvablePluginResult(identifier, resolution);
+
+          if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
+            await agentModel.updateConfig(agentId, {
+              plugins: upsertPluginMode(
+                agent.plugins ?? undefined,
+                identifier,
+                'pinned',
+              ) as unknown as string[],
+            });
+          }
+
+          return {
+            content: `Successfully enabled plugin "${identifier}" for agent "${agentId}".${installedNow ? NEXT_RUN_NOTE : ''}`,
+            state: { agentId, installed: true, pluginId: identifier, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to install plugin');
+        }
+      },
+    };
+  },
+  identifier: AgentBuilderIdentifier,
+};

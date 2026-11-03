@@ -1,0 +1,17 @@
+[
+  {
+    "id": "mattshumer/reflection-70b:free",
+    "name": "Reflection 70B (free)",
+    "created": 1725580800,
+    "description": "Reflection Llama-3.1 70B is trained with a new technique called Reflection-Tuning that teaches a LLM to detect mistakes in its reasoning and correct course.\n\nThe model was trained on synthetic data.\n\n_These are free, rate-limited endpoints for [Reflection 70B](/models/mattshumer/reflection-70b). Outputs may be cached. Read about rate limits [here](/docs/limits)._",
+    "context_length": 131072,
+    "architecture": { "modality": "text->text", "tokenizer": "Llama3", "instruct_type": null },
+    "pricing": { "prompt": "0", "completion": "0", "image": "0", "request": "0" },
+    "top_provider": {
+      "context_length": 8192,
+      "max_completion_tokens": 4096,
+      "is_moderated": false
+    },
+    "per_request_limits": null
+  }
+]

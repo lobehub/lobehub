@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "Свържете се с {{provider}}",
+  "action.connect.error": "Свързването не бе успешно, моля опитайте отново.",
+  "action.connect.popupBlocked": "Изскачащият прозорец за свързване е блокиран. Разрешете изскачащите прозорци в браузъра си, за да продължите.",
+  "action.connect.short": "Свържи",
+  "action.connecting": "Изчакване за разрешение…",
+  "action.create.error": "Неуспешно създаване на задача. Моля, опитайте отново.",
+  "action.create.success": "Добавена е планирана задача. Намерете я в Lobe AI.",
+  "action.createButton": "Добави задача",
+  "action.creating": "Създаване...",
+  "action.dismiss.error": "Неуспешно отхвърляне. Моля, опитайте отново.",
+  "action.dismiss.tooltip": "Не се интересувам",
+  "action.refresh.button": "Обнови",
+  "card.templateTag": "Шаблон",
+  "schedule.daily": "Всеки ден в {{time}}",
+  "schedule.editableAfterCreateTooltip": "Можете да коригирате графика след създаването на задачата.",
+  "schedule.weekly": "Всеки {{weekday}} в {{time}}",
+  "section.title": "Опитайте тези планирани задачи"
+}

@@ -1,0 +1,45 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`promptNoSearchResults > should format no search results with complex query 1`] = `
+"<knowledge_base_search_results query="API authentication with OAuth 2.0" totalCount="0">
+<instruction>No relevant files found in the knowledge base for this query.</instruction>
+<suggestions>
+<suggestion>Try rephrasing your question with different keywords</suggestion>
+<suggestion>Check if the information exists in the uploaded documents</suggestion>
+<suggestion>Ask the user to provide more context or upload relevant documents</suggestion>
+</suggestions>
+</knowledge_base_search_results>"
+`;
+
+exports[`promptNoSearchResults > should format no search results with non-English query 1`] = `
+"<knowledge_base_search_results query="如何配置数据库连接" totalCount="0">
+<instruction>No relevant files found in the knowledge base for this query.</instruction>
+<suggestions>
+<suggestion>Try rephrasing your question with different keywords</suggestion>
+<suggestion>Check if the information exists in the uploaded documents</suggestion>
+<suggestion>Ask the user to provide more context or upload relevant documents</suggestion>
+</suggestions>
+</knowledge_base_search_results>"
+`;
+
+exports[`promptNoSearchResults > should format no search results with simple query 1`] = `
+"<knowledge_base_search_results query="how to install" totalCount="0">
+<instruction>No relevant files found in the knowledge base for this query.</instruction>
+<suggestions>
+<suggestion>Try rephrasing your question with different keywords</suggestion>
+<suggestion>Check if the information exists in the uploaded documents</suggestion>
+<suggestion>Ask the user to provide more context or upload relevant documents</suggestion>
+</suggestions>
+</knowledge_base_search_results>"
+`;
+
+exports[`promptNoSearchResults > should format no search results with special characters 1`] = `
+"<knowledge_base_search_results query="How to use fetchData<T> with async/await?" totalCount="0">
+<instruction>No relevant files found in the knowledge base for this query.</instruction>
+<suggestions>
+<suggestion>Try rephrasing your question with different keywords</suggestion>
+<suggestion>Check if the information exists in the uploaded documents</suggestion>
+<suggestion>Ask the user to provide more context or upload relevant documents</suggestion>
+</suggestions>
+</knowledge_base_search_results>"
+`;

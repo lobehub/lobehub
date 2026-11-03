@@ -1,0 +1,291 @@
+import {
+  AGENT_CHAT_TOPIC_URL,
+  AGENT_CHAT_URL,
+  GROUP_CHAT_TOPIC_URL,
+  GROUP_CHAT_URL,
+  isDesktop,
+  LOADING_FLAT,
+} from '@lobechat/const';
+import {
+  type DesktopNotificationSender,
+  HeterogeneousAgentSessionErrorCode,
+} from '@lobechat/electron-client-ipc';
+import type { ChatMessageError, ConversationContext } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
+import { t } from 'i18next';
+
+import { getAgentStoreState } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+import type { ChatStore } from '@/store/chat/store';
+import { markdownToTxt } from '@/utils/markdownToTxt';
+
+import { renderAvatarToDataUrl } from './notificationAvatar';
+import { topicMapKey } from './topicMapKey';
+
+export interface DesktopNotificationContext {
+  agentId?: ConversationContext['agentId'];
+  groupId?: ConversationContext['groupId'];
+  topicId?: ConversationContext['topicId'];
+  workspaceSlug?: ConversationContext['workspaceSlug'];
+}
+
+/** Cap the notification body so a long reply doesn't overflow the OS banner. */
+const NOTIFICATION_BODY_MAX_LENGTH = 256;
+
+const applyWorkspaceSlug = (path: string, workspaceSlug?: string): string =>
+  workspaceSlug ? `/${workspaceSlug}${path}` : path;
+
+/**
+ * Resolve the SPA path that should be opened when the user clicks a desktop
+ * notification, based on the conversation context. Topic-aware contexts
+ * deep-link to the specific topic so clicking from another tab/topic still
+ * lands on the completed run.
+ */
+export const resolveNotificationNavigatePath = (
+  context: DesktopNotificationContext,
+): string | undefined => {
+  if (context.groupId && context.topicId)
+    return applyWorkspaceSlug(
+      GROUP_CHAT_TOPIC_URL(context.groupId, context.topicId),
+      context.workspaceSlug,
+    );
+  if (context.groupId)
+    return applyWorkspaceSlug(GROUP_CHAT_URL(context.groupId), context.workspaceSlug);
+  if (context.agentId && context.topicId) {
+    return applyWorkspaceSlug(
+      AGENT_CHAT_TOPIC_URL(context.agentId, context.topicId),
+      context.workspaceSlug,
+    );
+  }
+  if (context.agentId)
+    return applyWorkspaceSlug(AGENT_CHAT_URL(context.agentId), context.workspaceSlug);
+  return undefined;
+};
+
+export const resolveNotificationNavigate = (context: DesktopNotificationContext) => {
+  const path = resolveNotificationNavigatePath(context);
+
+  return path ? { escape: true, path } : undefined;
+};
+
+/**
+ * Resolve the notification title from the conversation context. Prefers the
+ * topic title, then the agent name, and finally the caller-provided fallback.
+ */
+export const resolveNotificationTitle = (
+  get: () => ChatStore,
+  context: DesktopNotificationContext,
+  fallbackTitle: string,
+): string => {
+  if (context.topicId && context.agentId) {
+    const key = topicMapKey({ agentId: context.agentId, groupId: context.groupId });
+    const topicData = get().topicDataMap?.[key];
+    const topic = topicData?.items?.find((item) => item.id === context.topicId);
+
+    if (topic?.title) return topic.title;
+  }
+
+  if (context.agentId) {
+    const agentMeta = agentSelectors.getAgentMetaById(context.agentId)(getAgentStoreState());
+
+    const agentName = agentDisplayName(agentMeta);
+    if (agentName) return agentName;
+  }
+
+  return fallbackTitle;
+};
+
+/**
+ * Build the communication-notification sender (agent name + avatar) for the
+ * conversation context. Returns undefined outside agent conversations so the
+ * notification stays a plain banner.
+ */
+export const buildNotificationSender = async (
+  context: DesktopNotificationContext,
+): Promise<DesktopNotificationSender | undefined> => {
+  if (!context.agentId) return undefined;
+
+  const agentMeta = agentSelectors.getAgentMetaById(context.agentId)(getAgentStoreState());
+  const name = agentDisplayName(agentMeta);
+  if (!name) return undefined;
+
+  const conversationId = [context.groupId ?? context.agentId, context.topicId]
+    .filter(Boolean)
+    .join(':');
+
+  let avatarDataUrl: string | undefined;
+  try {
+    avatarDataUrl = await renderAvatarToDataUrl(context.agentId, agentMeta);
+  } catch (error) {
+    console.error('Notification avatar render failed:', error);
+  }
+
+  return { avatarDataUrl, conversationId, name };
+};
+
+/** Convert the assistant's markdown reply to a length-capped plain-text body. */
+export const buildNotificationBody = (
+  content: string | undefined,
+  fallbackBody: string,
+): string => {
+  const text = content ? markdownToTxt(content).trim() : '';
+  // The assistant row still holding the loading placeholder means the run produced no reply.
+  if (!text || text === LOADING_FLAT) return fallbackBody;
+  return text.length > NOTIFICATION_BODY_MAX_LENGTH
+    ? `${text.slice(0, NOTIFICATION_BODY_MAX_LENGTH)}…`
+    : text;
+};
+
+export const notifyDesktopHumanApprovalRequired = async (
+  get: () => ChatStore,
+  context: DesktopNotificationContext,
+): Promise<void> => {
+  if (!isDesktop) return;
+
+  try {
+    const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
+    const title = resolveNotificationTitle(
+      get,
+      context,
+      t('desktopNotification.humanApprovalRequired.title', { ns: 'chat' }),
+    );
+
+    const navigate = resolveNotificationNavigate(context);
+    const sender = await buildNotificationSender(context);
+
+    await Promise.allSettled([
+      desktopNotificationService.setBadgeCount(1),
+      desktopNotificationService.showNotification({
+        body: t('desktopNotification.humanApprovalRequired.body', { ns: 'chat' }),
+        force: true,
+        navigate,
+        requestAttention: true,
+        sender,
+        title,
+      }),
+    ]);
+  } catch (error) {
+    console.error('Human approval desktop notification failed:', error);
+  }
+};
+
+export interface AgentCompletedNotificationOptions {
+  /** Whether to also bump the dock/taskbar badge to 1 (background runs). */
+  badge?: boolean;
+  /** The assistant's final reply (markdown); rendered as the notification body. */
+  content?: string;
+  context: DesktopNotificationContext;
+}
+
+/**
+ * Unified "agent run finished" desktop notification — the single injection point
+ * every run path (client / gateway / hetero / group orchestration) calls so each
+ * completion notification stays consistent:
+ *
+ * - **title** = topic title → agent name → generic fallback,
+ * - **body** = the actual reply (markdown stripped + length-capped),
+ * - **click** = deep-links to the agent/topic (or group) conversation.
+ *
+ * Callers pass only their conversation context + the assistant reply; they never
+ * assemble the title / body / navigate themselves.
+ */
+export const notifyDesktopAgentCompleted = async (
+  get: () => ChatStore,
+  { context, content, badge }: AgentCompletedNotificationOptions,
+): Promise<void> => {
+  if (!isDesktop) return;
+
+  try {
+    const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
+    const { completionSoundService } = await import('@/services/electron/completionSound');
+    const fallback = t('notification.finishChatGeneration', { ns: 'electron' });
+    const navigate = resolveNotificationNavigate(context);
+    const [sender, soundName] = await Promise.all([
+      buildNotificationSender(context),
+      completionSoundService.getNotificationSoundFile(),
+    ]);
+
+    if (badge) void desktopNotificationService.setBadgeCount(1);
+
+    // The main process owns the window-focus decision, so it also decides which of the two
+    // sounds fires: a delivered banner carries the system sound, and only a banner that was
+    // skipped (or failed) hands the completion chime back to the renderer. Asking here
+    // instead of checking focus twice is what keeps them from doubling up.
+    const result = await desktopNotificationService.showNotification({
+      body: buildNotificationBody(content, fallback),
+      navigate,
+      sender,
+      soundName,
+      title: resolveNotificationTitle(get, context, fallback),
+    });
+
+    if (result?.success && !result.skipped) return;
+
+    try {
+      await completionSoundService.play();
+    } catch (error) {
+      console.error('Completion sound playback failed:', error);
+    }
+  } catch (error) {
+    console.error('Agent completion desktop notification failed:', error);
+  }
+};
+
+/**
+ * Plain-text reason for a failed run. Errors that render a dedicated guide card
+ * get localized wording; anything else surfaces the error's own message.
+ */
+export const buildFailureNotificationBody = (error: ChatMessageError | undefined): string => {
+  const fallback = t('desktopNotification.agentFailed.body', { ns: 'chat' });
+
+  if (error?.body?.code === HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound) {
+    // Gateway/CLI-classified errors carry the path only inside their raw message.
+    const path: string | undefined = error.body.workingDirectory;
+    return path
+      ? t('desktopNotification.workingDirectoryUnavailable.body', { ns: 'chat', path })
+      : t('desktopNotification.workingDirectoryUnavailable.bodyWithoutPath', { ns: 'chat' });
+  }
+
+  return buildNotificationBody(error?.message, fallback);
+};
+
+/** "<agent> ran into a problem" — names the agent rather than the topic. */
+export const buildFailureNotificationTitle = (context: DesktopNotificationContext): string => {
+  const agentMeta = context.agentId
+    ? agentSelectors.getAgentMetaById(context.agentId)(getAgentStoreState())
+    : undefined;
+  const name = agentDisplayName(agentMeta) || t('defaultAgent', { ns: 'chat' });
+
+  return t('desktopNotification.agentFailed.title', { name, ns: 'chat' });
+};
+
+export interface AgentFailedNotificationOptions {
+  context: DesktopNotificationContext;
+  error?: ChatMessageError;
+}
+
+/**
+ * "Agent run failed" desktop notification. Shares the completion notification's
+ * sender and click-through, so a failure in a background conversation is
+ * announced instead of staying silent (or reading as a finished, empty reply).
+ */
+export const notifyDesktopAgentFailed = async (
+  _get: () => ChatStore,
+  { context, error }: AgentFailedNotificationOptions,
+): Promise<void> => {
+  if (!isDesktop) return;
+
+  try {
+    const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
+    const sender = await buildNotificationSender(context);
+
+    await desktopNotificationService.showNotification({
+      body: buildFailureNotificationBody(error),
+      navigate: resolveNotificationNavigate(context),
+      sender,
+      title: buildFailureNotificationTitle(context),
+    });
+  } catch (err) {
+    console.error('Agent failure desktop notification failed:', err);
+  }
+};

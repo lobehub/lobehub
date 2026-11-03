@@ -1,0 +1,18 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.lobehub.app",
+      "sha256_cert_fingerprints": [
+        "D7:54:DB:A3:78:D5:8B:8F:20:01:ED:7B:9B:18:D3:B0:5B:D1:22:AA:97:2B:59:E1:A6:8E:31:24:21:44:0D:2B",
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C",
+        "1B:21:38:5D:72:40:65:F5:16:20:1D:C9:D2:6B:04:63:C3:33:F1:97:AB:6A:06:66:0E:3E:F0:7E:60:82:7E:E7",
+        "1B:BE:D4:A0:AE:43:56:E5:58:01:74:C4:B9:A0:0B:0E:5A:B9:5E:0F:A9:C0:65:18:68:CF:1F:AA:3E:8F:4F:DB"
+      ]
+    }
+  }
+]

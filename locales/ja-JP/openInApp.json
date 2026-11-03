@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "作業ディレクトリを開く",
+  "errors.appNotInstalled": "{{appName}} がインストールされていません",
+  "errors.launchFailed": "{{appName}} で開くことができませんでした: {{error}}",
+  "errors.pathNotFound": "パスが見つかりません: {{path}}",
+  "errors.unknown": "不明なエラー",
+  "tooltip": "{{appName}} で開く"
+}

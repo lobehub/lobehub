@@ -1,0 +1,23 @@
+{
+  "dbV1.action.clearDB": "Lokale Daten löschen",
+  "dbV1.action.downloadBackup": "Datensicherung herunterladen",
+  "dbV1.action.reUpgrade": "Erneut aktualisieren",
+  "dbV1.action.start": "Loslegen",
+  "dbV1.action.upgrade": "Aktualisieren",
+  "dbV1.clear.confirm": "Sie sind dabei, lokale Daten zu löschen (globale Einstellungen bleiben erhalten). Bitte stellen Sie sicher, dass Sie zuvor eine Datensicherung heruntergeladen haben.",
+  "dbV1.description": "In der neuen Version hat die Datenspeicherung von {{appName}} bedeutende Fortschritte gemacht. Daher müssen die alten Daten aktualisiert werden, um Ihnen ein besseres Nutzungserlebnis zu bieten.",
+  "dbV1.features.capability.desc": "Basierend auf IndexedDB-Technologie – speichert Chatnachrichten ein Leben lang.",
+  "dbV1.features.capability.title": "Große Kapazität",
+  "dbV1.features.performance.desc": "Indiziert automatisch Millionen von Nachrichten – Abfragen liefern Ergebnisse in Millisekunden.",
+  "dbV1.features.performance.title": "Hohe Leistung",
+  "dbV1.features.use.desc": "Ermöglicht die Suche nach Titel, Beschreibung, Tags, Nachrichteninhalt und sogar übersetztem Text – für eine deutlich effizientere tägliche Suche.",
+  "dbV1.features.use.title": "Benutzerfreundlicher",
+  "dbV1.title": "{{appName}} Datenentwicklung",
+  "dbV1.upgrade.error.subTitle": "Entschuldigung, beim Upgrade der Datenbank ist ein Fehler aufgetreten. Bitte versuchen Sie Folgendes: A. Lokale Daten löschen und Sicherung erneut importieren; B. Klicken Sie auf „Upgrade wiederholen“.<br><br>Wenn das Problem weiterhin besteht, <1>melden Sie bitte ein Problem</1>, und wir helfen Ihnen so schnell wie möglich.",
+  "dbV1.upgrade.error.title": "Datenbank-Upgrade fehlgeschlagen",
+  "dbV1.upgrade.success.subTitle": "Die Datenbank wurde erfolgreich auf die neueste Version aktualisiert. Sie können nun fortfahren.",
+  "dbV1.upgrade.success.title": "Datenbank-Upgrade erfolgreich",
+  "dbV1.upgradeTip": "Das Upgrade dauert etwa 10 bis 20 Sekunden. Bitte schließen Sie {{appName}} während des Vorgangs nicht.",
+  "migrateError.missVersion": "Die importierten Daten enthalten keine Versionsnummer. Bitte überprüfen Sie die Datei und versuchen Sie es erneut.",
+  "migrateError.noMigration": "Für die aktuelle Version wurde keine Migrationslösung gefunden. Bitte überprüfen Sie die Versionsnummer und versuchen Sie es erneut. Wenn das Problem weiterhin besteht, senden Sie bitte eine Rückmeldung."
+}

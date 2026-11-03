@@ -1,0 +1,765 @@
+import { type TaskListFilter } from '@lobechat/types';
+import { type NavigateFunction } from 'react-router';
+
+import { type LocaleMode } from '@/types/locale';
+import { SessionDefaultGroup } from '@/types/session';
+import { type TopicGroupMode } from '@/types/topic';
+import { AsyncLocalStorage } from '@/utils/localStorage';
+
+export enum SidebarTabKey {
+  Chat = 'chat',
+  Community = 'community',
+  Dashboard = 'dashboard',
+  Goals = 'goals',
+  Home = 'home',
+  Image = 'image',
+  Knowledge = 'knowledge',
+  Me = 'me',
+  Memory = 'memory',
+  Pages = 'pages',
+  Resource = 'resource',
+  Setting = 'settings',
+  Tasks = 'tasks',
+  Video = 'video',
+}
+
+export enum ChatSettingsTabs {
+  Connector = 'connector',
+  Graph = 'graph',
+  Opening = 'opening',
+  Plugin = 'plugin',
+  Prompt = 'prompt',
+}
+
+export enum GroupSettingsTabs {
+  Chat = 'chat',
+  Members = 'members',
+  Settings = 'settings',
+}
+
+// business builds may register extra sidebar tabs, so any string key is accepted
+export type WorkingSidebarTab =
+  | 'browser'
+  | 'comments'
+  | 'documents'
+  | 'files'
+  | 'overview'
+  | 'params'
+  | 'review'
+  | 'search'
+  | 'skills'
+  | 'web'
+  | (string & {});
+
+export const CANVAS_TAB_PREFIX = 'canvas:';
+export const canvasTabKey = (canvasId: string) => `${CANVAS_TAB_PREFIX}${canvasId}`;
+export const canvasIdOfTab = (tab: string) =>
+  tab.startsWith(CANVAS_TAB_PREFIX) ? tab.slice(CANVAS_TAB_PREFIX.length) : undefined;
+
+export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
+  date: 160,
+  name: 574,
+  size: 140,
+  uploader: 180,
+};
+
+export enum SettingsTabs {
+  About = 'about',
+  Advanced = 'advanced',
+  /** @deprecated Use ServiceModel instead */
+  Agent = 'agent',
+  APIKey = 'apikey',
+  Appearance = 'appearance',
+  Billing = 'billing',
+  /** @deprecated Use Appearance instead */
+  ChatAppearance = 'chat-appearance',
+  /** @deprecated Use Appearance instead */
+  Common = 'common',
+  Connector = 'connector',
+  Credits = 'credits',
+  Creds = 'credential',
+  Devices = 'devices',
+  /** The cloud sandbox's network drives — labelled “Storage”; `storage` is local data. */
+  Drive = 'drive',
+  Environments = 'environments',
+  Hotkey = 'hotkey',
+  /** @deprecated Use ServiceModel instead */
+  Image = 'image',
+  Integrations = 'integrations',
+  Labels = 'labels',
+  Labs = 'labs',
+  LLM = 'llm',
+  Memory = 'memory',
+  Messenger = 'messenger',
+  Notification = 'notification',
+  OAuthApps = 'oauth-apps',
+  // business
+  Plans = 'plans',
+  Profile = 'profile',
+  Provider = 'provider',
+  Proxy = 'proxy',
+  Referral = 'referral',
+  Security = 'security',
+  ServiceModel = 'service-model',
+  Skill = 'skill',
+
+  Stats = 'stats',
+  Storage = 'storage',
+  SystemTools = 'system-tools',
+  Tools = 'tools',
+  Trash = 'trash',
+  /** @deprecated Use ServiceModel instead */
+  TTS = 'tts',
+  Usage = 'usage',
+}
+
+/**
+ * @deprecated Use SettingsTabs instead
+ */
+export enum ProfileTabs {
+  APIKey = 'apikey',
+  Memory = 'memory',
+  Profile = 'profile',
+  Security = 'security',
+  Stats = 'stats',
+  Usage = 'usage',
+}
+
+export const MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
+  'rating',
+  'context',
+  'abilities',
+  'pricing',
+  'config',
+] as const;
+
+export type ModelDetailPanelExpandedKey = (typeof MODEL_DETAIL_PANEL_EXPANDED_KEYS)[number];
+
+/**
+ * Expandable sections of the ModelDetailPanel Accordion, all expanded by default.
+ *
+ * Persistence stores the COLLAPSED keys (`modelDetailPanelCollapsedKeys`) instead of the
+ * expanded ones: an expanded-keys array persisted before a section shipped would keep that
+ * section collapsed forever (this happened to `rating`), while a collapsed-keys array lets
+ * newly added sections default to expanded automatically.
+ */
+export const MODEL_DETAIL_PANEL_EXPANDABLE_KEYS = [
+  'rating',
+  'abilities',
+  'pricing',
+  'config',
+] as const satisfies readonly ModelDetailPanelExpandedKey[];
+
+export type TaskViewMode = 'kanban' | 'list';
+
+/** How topics inside one byProject sidebar group are sectioned. */
+export type ProjectTopicSubGroupMode = 'none' | 'byDevice' | 'byTime' | 'byStatus';
+
+export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['favorites', 'recents', 'agent', 'private'];
+
+/** How the agent document tree orders sibling rows. */
+export interface AgentDocumentSort {
+  by: 'createdAt' | 'name' | 'updatedAt';
+  foldersFirst: boolean;
+  order: 'asc' | 'desc';
+}
+
+/** Which Docs sidebar page section a view setting belongs to. */
+export type DocsPageSectionKey = 'mine' | 'shared';
+
+/** How a Docs sidebar page section (My docs / Shared docs) lists its pages. */
+export interface DocsPageSectionView {
+  /** `byTime` buckets rows by the sorted date; `byType` puts artifacts apart from pages. */
+  groupBy: 'byTime' | 'byType' | 'none';
+  /** Rows the section loads and shows; the rest are one click away in the full list. */
+  pageSize: number;
+  sortBy: 'createdAt' | 'title' | 'updatedAt';
+  /** `artifact` keeps HTML pages only, `page` keeps rich-text pages only. */
+  type: 'all' | 'artifact' | 'page';
+}
+
+export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
+  groupBy: 'none',
+  pageSize: 20,
+  sortBy: 'updatedAt',
+  type: 'all',
+};
+
+/** How the sidebar project list is ordered; `manual` follows the shared drag order. */
+export type ProjectListSortBy = 'manual' | 'createdAt' | 'updatedAt';
+
+export interface SystemStatus {
+  /**
+   * Agent Builder panel width
+   */
+  agentBuilderPanelWidth?: number;
+  /**
+   * Sort order of the agent document tree (working panel 「文档」).
+   */
+  agentDocumentSort?: AgentDocumentSort;
+  /**
+   * Expanded group keys of the agent view-all page. Expanded (not collapsed)
+   * keys are persisted because groups default to COLLAPSED (mirrors Linear) —
+   * newly appearing groups start collapsed until explicitly opened.
+   */
+  agentListExpandedGroupKeys?: string[];
+  /**
+   * Whether the "in sidebar" overview section of the agent view-all page is
+   * collapsed. Defaults to expanded so the section is discoverable.
+   */
+  agentListSidebarSectionCollapsed?: boolean;
+  /**
+   * View mode of the agent view-all page (badge-wall card grid vs table list); defaults to card
+   */
+  agentListViewMode?: 'card' | 'list';
+  /**
+   * Display options of the agent view-all page (grouping / ordering / hidden-agent visibility)
+   */
+  agentListViewOptions?: {
+    groupBy: 'author' | 'label' | 'none';
+    orderBy: 'author' | 'title' | 'updatedAt';
+    orderDirection: 'asc' | 'desc';
+    showSidebarHidden: boolean;
+  };
+  /**
+   * number of agents (defaultList) to display
+   */
+  agentPageSize?: number;
+  /**
+   * Sidebar groups folded in the task assignee picker, keyed by group id.
+   * Nested booleans so the lodash `merge` in `updateSystemStatus` replaces
+   * scalars instead of index-merging arrays.
+   */
+  assigneeAgentSelectorCollapsedGroups?: Record<string, boolean>;
+  chatInputHeight?: number;
+  /**
+   * Which topicGroups are collapsed, bucketed by group mode. We persist the
+   * collapsed keys rather than the expanded ones so a group that shows up later
+   * (a new project directory, a new month bucket) starts expanded; and bucketing
+   * per mode keeps `project:*` keys from leaking into byTime, where nothing would
+   * match and every group would render collapsed.
+   */
+  collapsedTopicGroupKeysByMode?: Partial<Record<TopicGroupMode, string[]>>;
+  disabledModelProvidersSortType?: string;
+  disabledModelsSortType?: string;
+  /**
+   * IDs of banners/ads the user has dismissed. New banners use a new ID
+   * so dismissing the current one does not hide future ones.
+   */
+  dismissedBannerIds?: string[];
+  /**
+   * Keys of goal asks (clarification rounds, gates, sign-offs) the user waved
+   * off the approval island. Only the island honours them — the same ask stays
+   * in the Home inbox. Append-only and capped, see `appendDismissedIslandKey`.
+   */
+  dismissedIslandItemKeys?: string[];
+  /**
+   * List options of each Docs sidebar page section, kept apart so narrowing
+   * Shared docs never changes what My docs shows.
+   */
+  docsPageSectionViews?: Partial<Record<DocsPageSectionKey, Partial<DocsPageSectionView>>>;
+  /**
+   * Per-agent expanded state of the agent sidebar's top-level sections
+   * (Tasks / Topic), keyed by agentId. Lets each agent remember its own
+   * collapse/expand state so switching agents doesn't share one accordion.
+   * Nested booleans (not a key array) so the lodash `merge` in
+   * `updateSystemStatus` replaces scalars cleanly instead of index-merging arrays.
+   */
+  expandAgentSidebarSectionsByAgent?: Record<string, Record<string, boolean>>;
+  expandInputActionbar?: boolean;
+  /**
+   * Per-project expanded state of the project sidebar's sections (Channels / Topics), keyed by
+   * projectId. Nested booleans for the same `merge` reason as the agent sections above.
+   */
+  expandProjectSidebarSectionsByProject?: Record<string, Record<string, boolean>>;
+  // which sessionGroup should expand
+  expandSessionGroupKeys: string[];
+  fileManagerViewMode?: 'list' | 'masonry';
+  filePanelWidth: number;
+  /**
+   * Group Agent Builder panel width
+   */
+  groupAgentBuilderPanelWidth?: number;
+  hiddenHomeWidgets?: string[];
+  /**
+   * Hidden sidebar sections
+   */
+  hiddenSidebarSections?: string[];
+  hidePWAInstaller?: boolean;
+  hideThreadLimitAlert?: boolean;
+  hideTopicSharePrivacyWarning?: boolean;
+  /**
+   * Home rail: the goals card folded to its title. Persisted, because a card
+   * you deliberately put away must stay away across reloads — otherwise the
+   * affordance is only a scroll trick.
+   */
+  homeGoalsCollapsed?: boolean;
+  homeRecentsCount?: number;
+  /**
+   * Agent picked from the home AgentSelect dropdown. When unset the home page
+   * falls back to the inbox agent. Persisted so the choice survives reloads.
+   */
+  homeSelectedAgentId?: string;
+  homeTaskCount?: number;
+  imagePanelWidth: number;
+  imageTopicPanelWidth?: number;
+  imageTopicViewMode?: 'grid' | 'list';
+  isShowCredit?: boolean;
+  knowledgeBaseModalViewMode?: 'list' | 'masonry';
+  language?: LocaleMode;
+  /**
+   * Remember user's last selected image generation model
+   */
+  lastSelectedImageModel?: string;
+  /**
+   * Remember user's last selected image generation provider
+   */
+  lastSelectedImageProvider?: string;
+  lastSelectedVideoModel?: string;
+  lastSelectedVideoProvider?: string;
+  latestChangelogId?: string;
+  leftPanelWidth: number;
+  mobileShowPortal?: boolean;
+  mobileShowTopic?: boolean;
+  /**
+   * Persisted collapsed keys of the ModelDetailPanel Accordion
+   * (Rating / Abilities / Pricing / Model Config). Single shared preference
+   * across all entries (model picker submenu, ChatInput extend-params popover).
+   * Collapsed (not expanded) keys are stored so new sections default to expanded
+   * — see MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.
+   */
+  modelDetailPanelCollapsedKeys?: ModelDetailPanelExpandedKey[];
+  /**
+   * ModelSwitchPanel grouping preference. Only ever written by the user's own
+   * switch; the store must not seed a default here, because
+   * `updateSystemStatus` persists the whole merged status and a seeded value
+   * is indistinguishable from a chosen one.
+   *
+   * Replaces the legacy `modelSwitchPanelGroupMode` key, which was seeded with
+   * `'byProvider'` and therefore sits in existing users' storage without them
+   * having picked it. That key is intentionally never read again.
+   */
+  modelSwitchPanelGroupBy?: 'byModel' | 'byProvider';
+  /**
+   * ModelSwitchPanel width
+   */
+  modelSwitchPanelWidth?: number;
+  noWideScreen?: boolean;
+  pageAgentPanelWidth?: number;
+  /**
+   * number of pages (documents) to display per page
+   */
+  pagePageSize?: number;
+  /**
+   * @deprecated legacy shared portal width, kept as the fallback for views that
+   * have no entry in `portalWidths` yet
+   */
+  portalWidth: number;
+  /**
+   * portal width remembered per view type, see `PortalWidths`
+   */
+  portalWidths?: Record<string, number>;
+  /**
+   * number of private agents (ungrouped) to display in the Private sidebar bucket
+   */
+  privateAgentPageSize?: number;
+  /**
+   * Order of the sidebar project list. Device-local view setting; the manual
+   * order itself is shared and lives on `projects.sort_order`.
+   */
+  projectListSortBy?: ProjectListSortBy;
+  /**
+   * Per byProject group (keyed by the group id, e.g. `project-id:<id>`): how its
+   * topics are sectioned. Absent means `none`.
+   */
+  projectTopicSubGroupModeByGroup?: Record<string, ProjectTopicSubGroupMode>;
+  readNotificationSlugs?: string[];
+  /**
+   * Agents this device last picked as a task assignee, newest first, keyed by
+   * workspace id (`personal` outside a workspace). See `pushRecentAssignee`.
+   */
+  recentAssigneeAgentIds?: Record<string, string[]>;
+  /**
+   * number of recent items to display
+   */
+  recentPageSize?: number;
+  /**
+   * Resource Manager column widths
+   */
+  resourceManagerColumnWidths?: {
+    date: number;
+    name: number;
+    size: number;
+    uploader: number;
+  };
+  /**
+   * Visibility of the Agent profile right-side Agent Builder panel.
+   * Independent from `showRightPanel` so builder creation flows do not affect chat pages.
+   */
+  showAgentBuilderPanel?: boolean;
+  showCommandMenu?: boolean;
+  showFilePanel?: boolean;
+  showHomePortrait?: boolean;
+  /**
+   * Visibility of the Home dashboard's activity and recommendations rail.
+   * Independent from `showRightPanel` so Home preferences do not affect chat pages.
+   */
+  showHomeRail?: boolean;
+  showHotkeyHelper?: boolean;
+  showImagePanel?: boolean;
+  showImageTopicPanel?: boolean;
+  showLeftPanel?: boolean;
+  /**
+   * Visibility of the PageEditor right-side agent panel (Copilot / History).
+   * Independent from `showRightPanel` so toggling it does not affect other pages.
+   */
+  showPageAgentPanel?: boolean;
+  showRightPanel?: boolean;
+  showSystemRole?: boolean;
+  /**
+   * Visibility of the Task layout right-side AgentTaskManager panel.
+   * Independent from `showRightPanel` so toggling it does not affect other pages.
+   */
+  showTaskAgentPanel?: boolean;
+  /**
+   * Visibility of the chat bottom terminal panel (desktop-only, Labs gated).
+   */
+  showTerminalPanel?: boolean;
+  /**
+   * Visibility of the Verify workspace left-side report-list panel.
+   * Independent from the nav rail so collapsing the report list does not affect other pages.
+   */
+  showVerifyReportPanel?: boolean;
+  showVideoPanel?: boolean;
+  showVideoTopicPanel?: boolean;
+  /** Visibility of the lightweight chat overview card. Independent from the workspace panel. */
+  showWorkingOverview?: boolean;
+  /**
+   * Flat ordered list of sidebar items.
+   */
+  sidebarExpandedKeys?: string[];
+  sidebarItems?: string[];
+  /**
+   * Legacy accordion-only ordering (recents/agent) from the pre-rework sidebar.
+   * @deprecated Kept for one-time migration into `sidebarItems`.
+   */
+  sidebarSectionOrder?: string[];
+  systemRoleExpandedMap: Record<string, boolean>;
+  /**
+   * Whether the inline task create entry on the tasks page is collapsed (hidden).
+   * When true, the tasks page shows a "+" button in the header that opens the create modal.
+   */
+  taskCreateInlineCollapsed?: boolean;
+  /**
+   * Kanban columns hidden from the main board. Each column renders as a collapsible
+   * entry in the right-side "Hidden columns" panel until restored.
+   */
+  taskKanbanHiddenColumns?: string[];
+  /**
+   * Whether the right-side "Hidden columns" panel on the Kanban board is collapsed.
+   */
+  taskKanbanHiddenPanelCollapsed?: boolean;
+  /**
+   * Tasks page filters, one entry per list scope (workspace + global / agent /
+   * project page). An array, not a map: status is deep-merged on write, which
+   * could never drop a removed condition from a nested object, while arrays
+   * are replaced whole.
+   */
+  taskListFilters?: { filter: TaskListFilter; scope: string }[];
+  /**
+   * Display mode for the tasks page. Persisted so a manually selected board or
+   * list view survives navigation and page reloads.
+   */
+  taskListViewMode?: TaskViewMode;
+  taskListViewOptions?: {
+    /**
+     * Left out of the defaults on purpose: status is deep-merged over the
+     * persisted value, so a default here would override the legacy
+     * `hideCompleted` it replaces before normalization could migrate it.
+     */
+    completedTasks?: 'all' | 'day' | 'month' | 'none' | 'week';
+    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
+    /** @deprecated Replaced by `completedTasks`; read once to migrate. */
+    hideCompleted?: boolean;
+    nestedSubTasks: boolean;
+    orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
+    orderCompletedByRecency: boolean;
+    orderDirection: 'asc' | 'desc';
+    showSubTasks: boolean;
+    subGroupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
+  };
+  /**
+   * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.
+   */
+  terminalPanelHeight?: number;
+  /**
+   * Whether to display tokens in short format
+   */
+  tokenDisplayFormatShort?: boolean;
+  /**
+   * Workspace "only my topics" filter, keyed by the topic list's owner: the
+   * agentId of an agent sidebar, the groupId of a group, the projectId of a
+   * project sidebar. Device-local, so each agent keeps its own choice.
+   */
+  topicOnlyMineByAgent?: Record<string, boolean>;
+  /**
+   * number of topics to display per page
+   */
+  topicPageSize?: number;
+  /**
+   * Width of the Verify workspace left-side report-list panel.
+   */
+  verifyReportPanelWidth: number;
+  videoPanelWidth: number;
+  videoTopicPanelWidth?: number;
+  videoTopicViewMode?: 'grid' | 'list';
+  /**
+   * One-shot navigation request for the WorkingSidebar browser tab, so external
+   * triggers (e.g. web-browsing search results) can open a URL in the in-app
+   * browser. The pane clears it (to `null`) the moment it navigates: this status
+   * is persisted, and the pane remounts whenever the browser session key changes
+   * (i.e. on every topic switch), so a request left lying around would be
+   * re-consumed and would drag that topic's page off whatever the agent had
+   * loaded. `null` rather than `undefined` because `updateSystemStatus` merges
+   * with lodash, which skips undefined.
+   */
+  workingSidebarBrowserRequest?: { nonce: number; url: string } | null;
+  workingSidebarRevealRequest?: { nonce: number; path: string };
+  /**
+   * Active tab inside the agent chat right-side WorkingSidebar.
+   * Lifted to global so external triggers (e.g. the diff badge in the input bar)
+   * can switch the panel to "review" when revealing the right panel.
+   */
+  workingSidebarTab?: WorkingSidebarTab;
+  /**
+   * One-shot request to reveal a WorkingSidebar tab. The nonce makes repeated
+   * requests for the already-selected tab observable, so a closed on-demand tab
+   * can be reopened by Git/File/Browser entry points.
+   */
+  workingSidebarTabRequest?: { nonce: number; tab: WorkingSidebarTab };
+  /**
+   * Width of the agent chat right-side WorkingSidebar (space / params / files / …).
+   * Persisted so resizing survives remounts when navigating away and back.
+   */
+  workingSidebarWidth?: number;
+  /**
+   * Workspace-mode overlay for sidebar layout/visibility preferences.
+   * When the user is inside a workspace (see `useActiveWorkspaceId`), reads
+   * fall back to these values instead of the top-level fields, and writes
+   * to whitelisted fields land here. Top-level fields stay as the personal
+   * (no-workspace) preference, so switching modes does not bleed state.
+   * Single shared bucket across all workspaces — not keyed by workspaceId.
+   */
+  workspace?: Partial<Pick<SystemStatus, WorkspaceOverridableField>>;
+}
+
+/**
+ * Fields whose preference is meaningfully different between personal mode
+ * and workspace mode (e.g. workspace-only sidebar entries like the Private
+ * group, or product-driven defaults like hiding Recents in a workspace).
+ * Writes to these fields are routed to `status.workspace.*` when the user is
+ * inside a workspace; reads fall back to the top-level value when the
+ * overlay is empty.
+ */
+export type WorkspaceOverridableField =
+  'expandSessionGroupKeys' | 'hiddenSidebarSections' | 'sidebarExpandedKeys' | 'sidebarItems';
+
+export const WORKSPACE_OVERRIDABLE_FIELDS = [
+  'expandSessionGroupKeys',
+  'hiddenSidebarSections',
+  'sidebarExpandedKeys',
+  'sidebarItems',
+] as const satisfies readonly WorkspaceOverridableField[];
+
+export interface GlobalNavigationRef {
+  current: NavigateFunction | null;
+}
+
+/** Fresh ref object — use for store init and resets so `initialState` is not aliased by nested mutation. */
+export const createNavigationRef = (): GlobalNavigationRef => ({ current: null });
+
+export interface GlobalState {
+  hasNewVersion?: boolean;
+  isMobile?: boolean;
+  isNavPanelResizing?: boolean;
+  /**
+   * Server version is too old, does not support /api/version endpoint
+   * Need to prompt user to update server
+   */
+  isServerVersionOutdated?: boolean;
+  isStatusInit?: boolean;
+  latestVersion?: string;
+  /** Imperative router navigate; see `NavigatorRegistrar` in `src/utils/router.tsx`. */
+  navigationRef: GlobalNavigationRef;
+  /**
+   * Server version number, used to detect client-server version consistency
+   */
+  serverVersion?: string;
+  sidebarKey: SidebarTabKey;
+  status: SystemStatus;
+  statusStorage: AsyncLocalStorage<SystemStatus>;
+}
+
+export const INITIAL_STATUS = {
+  agentBuilderPanelWidth: 360,
+  agentListExpandedGroupKeys: [] as string[],
+  agentListSidebarSectionCollapsed: false,
+  agentListViewMode: 'card' as const,
+  agentListViewOptions: {
+    groupBy: 'none' as const,
+    orderBy: 'updatedAt' as const,
+    orderDirection: 'desc' as const,
+    showSidebarHidden: true,
+  },
+  agentPageSize: 5,
+  privateAgentPageSize: 5,
+  chatInputHeight: 64,
+  recentPageSize: 5,
+  taskListViewOptions: {
+    groupBy: 'status',
+    nestedSubTasks: true,
+    orderBy: 'updatedAt',
+    orderCompletedByRecency: true,
+    orderDirection: 'asc',
+    showSubTasks: false,
+    subGroupBy: 'none',
+  },
+  taskListViewMode: 'list' as const,
+  taskKanbanHiddenColumns: ['done', 'canceled'],
+  taskKanbanHiddenPanelCollapsed: false,
+  disabledModelProvidersSortType: 'default',
+  disabledModelsSortType: 'default',
+  dismissedBannerIds: [],
+  expandInputActionbar: true,
+  expandSessionGroupKeys: [SessionDefaultGroup.Pinned, SessionDefaultGroup.Default],
+  fileManagerViewMode: 'list' as const,
+  filePanelWidth: 320,
+  groupAgentBuilderPanelWidth: 360,
+  hiddenHomeWidgets: [],
+  hidePWAInstaller: false,
+  hideThreadLimitAlert: false,
+  hideTopicSharePrivacyWarning: false,
+  homeGoalsCollapsed: false,
+  homeRecentsCount: 8,
+  homeTaskCount: 8,
+  imagePanelWidth: 320,
+  imageTopicViewMode: 'grid' as const,
+  imageTopicPanelWidth: 80,
+  knowledgeBaseModalViewMode: 'list' as const,
+  leftPanelWidth: 280,
+  mobileShowTopic: false,
+  modelDetailPanelCollapsedKeys: [],
+  modelSwitchPanelWidth: 460,
+  noWideScreen: true,
+  pageAgentPanelWidth: 360,
+  pagePageSize: 20,
+  portalWidth: 400,
+  portalWidths: {},
+  readNotificationSlugs: [],
+  resourceManagerColumnWidths: DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+  showCommandMenu: false,
+  showFilePanel: true,
+  showHomePortrait: true,
+  showHotkeyHelper: false,
+  /**
+   * One column by default: most people prefer the single-column Home. Only
+   * browsers without a stored preference get this, because `updateSystemStatus`
+   * persists the whole status, so earlier sessions already stored `true`.
+   */
+  showHomeRail: false,
+  showImagePanel: true,
+  showImageTopicPanel: true,
+  showAgentBuilderPanel: false,
+  showLeftPanel: true,
+  showPageAgentPanel: true,
+  showRightPanel: false,
+  showSystemRole: false,
+  showTaskAgentPanel: false,
+  showTerminalPanel: false,
+  showVerifyReportPanel: true,
+  showVideoPanel: true,
+  showVideoTopicPanel: true,
+  sidebarExpandedKeys: [...DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS],
+  systemRoleExpandedMap: {},
+  terminalPanelHeight: 320,
+  tokenDisplayFormatShort: true,
+  topicPageSize: 20,
+  verifyReportPanelWidth: 300,
+  videoPanelWidth: 320,
+  videoTopicViewMode: 'grid' as const,
+  videoTopicPanelWidth: 80,
+  workingSidebarWidth: 360,
+} satisfies SystemStatus;
+
+const statusStorage = new AsyncLocalStorage<SystemStatus>('LOBE_SYSTEM_STATUS');
+
+/** Keeps only `ownerId → boolean` entries of a persisted value of unknown shape. */
+const restoreTopicOnlyMineByAgent = (value: unknown): Record<string, boolean> | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, boolean] => typeof entry[1] === 'boolean',
+    ),
+  );
+};
+
+/**
+ * Restore the shell-defining preferences before React's first render. The
+ * remaining system status still follows the existing async initialization path,
+ * but these must not briefly render their default value after a page reload —
+ * the boot shell reads them synchronously to draw a shell that lines up with
+ * the real layout, and `NavPanelDraggable` would otherwise size its
+ * pre-hydration placeholder to the default width.
+ *
+ * The per-agent "only mine" topic filter is restored here too: it is part of
+ * the topic list identity, and the route loader seeds that list before the
+ * async initialization runs — an unrestored filter seeds the unfiltered page.
+ */
+export const createInitialSystemStatus = (): SystemStatus => {
+  const persistedStatus = statusStorage.getFromLocalStorageSync();
+
+  return {
+    ...INITIAL_STATUS,
+    hiddenHomeWidgets: Array.isArray(persistedStatus.hiddenHomeWidgets)
+      ? persistedStatus.hiddenHomeWidgets
+      : INITIAL_STATUS.hiddenHomeWidgets,
+    leftPanelWidth:
+      typeof persistedStatus.leftPanelWidth === 'number'
+        ? persistedStatus.leftPanelWidth
+        : INITIAL_STATUS.leftPanelWidth,
+    showHomePortrait:
+      typeof persistedStatus.showHomePortrait === 'boolean'
+        ? persistedStatus.showHomePortrait
+        : INITIAL_STATUS.showHomePortrait,
+    showHomeRail:
+      typeof persistedStatus.showHomeRail === 'boolean'
+        ? persistedStatus.showHomeRail
+        : INITIAL_STATUS.showHomeRail,
+    showLeftPanel:
+      typeof persistedStatus.showLeftPanel === 'boolean'
+        ? persistedStatus.showLeftPanel
+        : INITIAL_STATUS.showLeftPanel,
+    showRightPanel:
+      typeof persistedStatus.showRightPanel === 'boolean'
+        ? persistedStatus.showRightPanel
+        : INITIAL_STATUS.showRightPanel,
+    topicOnlyMineByAgent: restoreTopicOnlyMineByAgent(persistedStatus.topicOnlyMineByAgent),
+    showWorkingOverview:
+      typeof persistedStatus.showWorkingOverview === 'boolean'
+        ? persistedStatus.showWorkingOverview
+        : undefined,
+    workingSidebarWidth:
+      typeof persistedStatus.workingSidebarWidth === 'number'
+        ? persistedStatus.workingSidebarWidth
+        : INITIAL_STATUS.workingSidebarWidth,
+  };
+};
+
+export const initialState: GlobalState = {
+  isMobile: false,
+  isStatusInit: false,
+  navigationRef: createNavigationRef(),
+  sidebarKey: SidebarTabKey.Chat,
+  status: createInitialSystemStatus(),
+  statusStorage,
+};

@@ -1,0 +1,40 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PptxLoader > should aggregate content correctly (joining slides) > aggregated_content 1`] = `
+"<slide_page pageNumber="1">
+Hello
+Page1
+</slide_page>
+
+<slide_page pageNumber="2">
+Word
+Page2
+</slide_page>"
+`;
+
+exports[`PptxLoader > should load pages correctly from a PPTX file (one page per slide) 1`] = `
+[
+  {
+    "charCount": 11,
+    "lineCount": 2,
+    "metadata": {
+      "pageCount": 2,
+      "slideNumber": 1,
+      "sourceFileName": "test.pptx",
+    },
+    "pageContent": "Hello
+Page1",
+  },
+  {
+    "charCount": 10,
+    "lineCount": 2,
+    "metadata": {
+      "pageCount": 2,
+      "slideNumber": 2,
+      "sourceFileName": "test.pptx",
+    },
+    "pageContent": "Word
+Page2",
+  },
+]
+`;

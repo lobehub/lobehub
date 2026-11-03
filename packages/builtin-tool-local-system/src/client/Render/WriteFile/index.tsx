@@ -1,0 +1,92 @@
+import type { WriteLocalFileParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinRenderProps } from '@lobechat/types';
+import { Flexbox, Icon, Markdown, PatchDiff } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
+import { ChevronRight } from 'lucide-react';
+import path from 'path-browserify-esm';
+import { memo } from 'react';
+
+import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
+import { LocalFile, LocalFolder } from '@/features/LocalFile';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  container: css`
+    padding-block: 4px;
+  `,
+  previewBox: css`
+    overflow: hidden;
+    border-radius: 8px;
+    background: ${cssVar.colorFillTertiary};
+  `,
+}));
+
+const buildNewFilePatch = (filePath: string, content: string) => {
+  const hasTrailingNewline = content.endsWith('\n');
+  const lines = content.split('\n');
+  const bodyLines = hasTrailingNewline ? lines.slice(0, -1) : lines;
+  const lineCount = bodyLines.length;
+  const header = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lineCount} @@\n`;
+  const body = bodyLines.map((line) => `+${line}`).join('\n');
+  return hasTrailingNewline
+    ? `${header}${body}\n`
+    : `${header}${body}\n\\ No newline at end of file\n`;
+};
+
+type WriteFileArgs = WriteLocalFileParams & {
+  file_path?: string;
+  filePath?: string;
+};
+
+const WriteFile = memo<BuiltinRenderProps<WriteFileArgs>>(({ args }) => {
+  if (!args) return <Skeleton.Text rows={4} />;
+
+  const filePath = args.path || args.filePath || args.file_path || '';
+  const { base, dir } = path.parse(filePath);
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const isHtml = isHtmlFile({ path: filePath });
+  const isMarkdown = ext === 'md' || ext === 'mdx';
+
+  // Code-type files render as a "new file" unified diff so the visual is
+  // consistent with EditLocalFile's PatchDiff. Markdown keeps its rendered
+  // preview because a rendered doc reads better than an all-green diff.
+  if (!isMarkdown && !isHtml && args.content) {
+    return (
+      <PatchDiff
+        fileName={base}
+        language={ext || undefined}
+        patch={buildNewFilePatch(filePath, args.content)}
+        showHeader={false}
+        variant={'borderless'}
+        viewMode={'unified'}
+      />
+    );
+  }
+
+  return (
+    <Flexbox className={styles.container} gap={12}>
+      <Flexbox horizontal align={'center'}>
+        <LocalFolder path={dir} />
+        <Icon icon={ChevronRight} />
+        <LocalFile name={base} path={filePath} />
+      </Flexbox>
+
+      {args.content && (
+        <Flexbox className={styles.previewBox} style={{ height: isHtml ? 260 : undefined }}>
+          {isHtml ? (
+            <InlineHtmlPreview content={args.content} />
+          ) : (
+            <Markdown
+              style={{ maxHeight: 240, overflow: 'auto', padding: '0 8px' }}
+              variant={'chat'}
+            >
+              {args.content}
+            </Markdown>
+          )}
+        </Flexbox>
+      )}
+    </Flexbox>
+  );
+});
+
+export default WriteFile;

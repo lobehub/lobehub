@@ -1,0 +1,217 @@
+---
+title: Image & Video Generation
+description: >-
+  Create images and videos from text in the Generation page with GPT Image,
+  Nano Banana, Seedream, and Seedance models. Learn how to switch modes, write
+  prompts, choose a model, and configure generation parameters.
+tags:
+  - LobeHub
+  - Image Generation
+  - Video Generation
+  - AI Drawing
+  - AI Video
+  - GPT Image
+  - Nano Banana
+  - Seedream
+  - Seedance
+  - Text to Image
+  - Text to Video
+  - Prompt Writing
+---
+
+# Image & Video Generation
+
+You can generate images and videos for prototypes, illustrations, motion concepts, or short clips. Describe what you want, choose a model, and set the generation parameters. Generation time depends on the model and parameters. Results appear in your generation feed, where you can download them or save them to your Resource Library.
+
+Image and video generation share one **Generation** page. Each mode has its own generation parameters.
+
+## Get Started
+
+1. Click **Generation** in the LobeHub sidebar.
+2. Click the mode label on the page to switch between image and video generation.
+
+Both modes include a prompt input, a configuration panel, and a feed of past results.
+
+## Image Generation
+
+### Enter a Prompt
+
+Describe the image you want in the input box. The more specific your description, the more accurate the result.
+
+**Effective prompt structure:**
+
+```
+[Subject] [Style/Medium] [Setting/Background] [Lighting] [Mood] [Technical details]
+```
+
+Examples:
+
+```
+"A futuristic city skyline at sunset, digital art, cyberpunk style, neon lights reflecting on wet streets, cinematic lighting, 4K detail"
+
+"A cozy coffee shop interior, watercolor illustration, warm golden light streaming through windows, potted plants on windowsills, soft and inviting atmosphere"
+
+"A product photo of a minimalist leather wallet on a clean white background, studio lighting, sharp focus, commercial photography style"
+```
+
+**Prompt tips:**
+
+- **Be specific about style** — "oil painting", "watercolor", "digital art", "photorealistic", "anime", "vector illustration"
+- **Describe lighting** — "dramatic shadows", "soft diffused light", "golden hour", "studio lighting"
+- **Specify composition** — "portrait view", "wide angle", "close-up", "bird's eye view"
+- **Add quality modifiers** — "high detail", "4K", "sharp focus", "professional quality"
+- **Avoid vagueness** — "beautiful", "nice", "good" add little — describe what you actually want
+
+### Choose an AI Model
+
+Click the current model name to open the model selector. The **LobeHub** provider lists the following image models as of September 16, 2026:
+
+| Model | Overview |
+| --- | --- |
+| **GPT Image 2.5 Flare** | Prioritizes speed for image generation and editing, with improved subject preservation. Useful for quick iterations.[^gpt-image] |
+| **GPT Image 2.5 Sunburst** | Prioritizes image quality and precise edits for work with demanding visual requirements.[^gpt-image] |
+| **Nano Banana 2 Lite** | Focuses on low latency and cost efficiency for 1K image generation and edits.[^nano-lite] |
+| **Nano Banana 2** | Balances speed and image quality, with support for image edits, text in images, and consistent reference subjects.[^nano-2] |
+| **Nano Banana Pro** | Focuses on complex instructions, text in images, and layout control for design tasks such as infographics and product visuals.[^nano-pro] |
+| **GPT Image 2** | Supports text-to-image generation and edits with reference images for general visual tasks.[^gpt-2] |
+| **Seedream 5 Pro** | An image generation option. Refer to its configuration panel for available parameters. |
+
+These descriptions summarize model providers’ features. To see which are available in LobeHub, check the current model selector and configuration panel.
+
+Try the same prompt with different models to compare results.
+
+### Reference Images (Optional)
+
+If you have reference images, upload them to guide the generation process. Click the upload button or drag and drop your reference images directly. You can upload multiple reference images depending on the model.
+
+![Upload Reference Images for Image Generation](/blog/assets3c160860feef0bd7c653eeb46f683445.webp)
+
+Reference images help the model understand your desired style, composition, or color palette — and many models also support reference-based **edits** (e.g. swap the background, change the outfit) when you describe the change in the prompt.
+
+### Configure Generation Parameters
+
+The configuration panel shows the parameters available for the selected model in LobeHub. Controls vary by model and can include:
+
+- **Aspect Ratio** — `1:1`, `16:9`, `9:16`, `4:3`, `3:2`. Lock or unlock to free-form size.
+- **Size / Resolution** — pick a preset (`512px`, `1K`, `2K`, `4K`) or set width × height directly.
+- **Number of Images** — generate 1–4 variations per run.
+- **Quality** — Standard or High Definition (model-dependent).
+- **Seed** — leave random for variety, or paste a fixed seed to reproduce a previous result.
+- **Steps / Guidance Intensity (CFG)** — fine-tune the speed-vs-quality and prompt-adherence tradeoffs.
+- **Watermark** — toggle on/off where supported.
+- **Web Search** / **Prompt Extend** — let an LLM enrich your prompt with current references before generation.
+
+**Aspect ratio cheatsheet:**
+
+- **1:1** — Social media posts, profile pictures
+- **16:9** — Widescreen, presentations, banners
+- **9:16** — Mobile screens, stories, reels
+- **4:3** — General use, older display formats
+- **3:2** — Photography standard, prints
+
+### View and Download Images
+
+Once generated, images appear in the generation feed. You can:
+
+- Preview any image at full size by clicking it
+- Download, copy the seed, copy the prompt, or reuse the full settings on a new run
+- Delete a single image or the whole batch
+
+![Generated Images in Asset Library](/blog/assets974acc551878f2f395518a3fbb9bd924.webp)
+
+## Video Generation
+
+Switch to video generation on the Generation page. This mode includes a prompt input, a configuration panel, and a feed for generated videos.
+
+### Enter a Prompt
+
+Describe the **scene, motion, and camera** as well as the subject. Action words and camera directions help specify the shot.
+
+```
+"A red fox trotting through fresh snow at golden hour, breath visible in the cold air, slow tracking shot, cinematic"
+
+"An astronaut floating into a colorful nebula, slow dolly-in, dreamy atmosphere, soft volumetric light"
+
+"A cup of coffee being poured in macro slow motion, steam rising, shallow depth of field, commercial product shot"
+```
+
+**Prompt tips for video:**
+
+- **Describe motion explicitly** — "slow tracking shot", "dolly-in", "handheld", "static wide", "pan left"
+- **Set a time progression** — "starts misty then clears", "the door slowly opens"
+- **Reference cinematography** — "shallow depth of field", "anamorphic lens flare", "golden hour"
+- **Keep it focused** — one main action per clip works better than several
+
+### Choose an AI Model
+
+In video mode, click the current model name to open the model selector. The **LobeHub** provider lists these models as of September 16, 2026:
+
+| Model | Overview |
+| --- | --- |
+| **Seedance 2.0** | Generates video and audio together, with an emphasis on complex motion, camera control, and multimodal references.[^seedance] |
+| **Seedance 2.0 Fast** | The Fast variant of Seedance 2.0 supports video and audio generation. Output specifications differ from the standard version.[^seedance] |
+| **Seedance 1.5 Pro** | Generates synchronized video and audio from text or images, with an emphasis on expressions, camera instructions, and narrative audio.[^seedance] |
+
+These descriptions summarize capabilities from the model provider. Available reference inputs, duration, resolution, and audio controls depend on the LobeHub configuration panel for each model.
+
+### Start & End Frames (Optional)
+
+With a model that supports reference frames, you can use images to guide the clip:
+
+- **Start Frame** — upload an image to use as the first frame of the clip. Great for animating a still you generated in the Image interface.
+- **End Frame** — after setting a start frame, upload an image to use as the final frame.
+
+When a start frame is set, the prompt placeholder shifts to "Describe the scene you want to generate with the image".
+
+### Configure Generation Parameters
+
+Controls vary by model, but typically include:
+
+- **Duration** — clip length in seconds (model-dependent, e.g. 4s / 6s / 8s).
+- **Aspect Ratio** — `16:9`, `9:16`, `1:1`, `4:3`, `3:4`, `21:9`.
+- **Resolution** — `480p`, `720p`, `1080p`.
+- **Fixed Camera** — lock the camera in place instead of letting the model animate it.
+- **Generate Audio** — generate synchronized audio with the video, where the selected model provides this control.
+- **Seed** — random or fixed for reproducibility.
+- **Watermark** — toggle on/off where supported.
+- **Web Search** / **Prompt Extend** — same LLM-assisted prompt enrichment as the image flow.
+
+### View and Download Videos
+
+Generated clips appear in the feed and play inline. You can:
+
+- Play, pause, and scrub through the clip
+- Download the video
+- Copy the error message to clipboard if a generation fails
+- Delete a single clip or the whole batch
+
+## Tips for Better Results
+
+**Iterate on prompts** — If the first result isn't quite right, adjust one element at a time rather than rewriting the whole prompt. Add more detail, change the style descriptor, or specify what you don't want.
+
+**Use a reference image or start frame** — Uploading a reference helps the model match your intended style, color palette, composition, or — for video — your opening shot.
+
+**Try multiple variations** — Generate several images per run, or re-generate videos with the same seed and a tweaked prompt. AI generation has inherent randomness — some variations will be significantly better than others.
+
+**Match model to task** — Compare speed, visual quality, and available parameters. For images, try Flare for quick iterations or Sunburst for demanding visual requirements. For video, compare the Seedance models with the same scene description.
+
+**Bridge image → video** — Generate a still in image mode. Then switch to video mode and upload the still as a start frame, where supported.
+
+## Model References
+
+Model documentation consulted on September 16, 2026.
+
+[^gpt-image]: OpenAI, [GPT Image 2.5 prompting guide](https://developers.openai.com/api/docs/guides/image-prompting).
+[^nano-lite]: Google, [Gemini 3.1 Flash Lite Image](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-image).
+[^nano-2]: Google, [Nano Banana 2](https://blog.google/innovation-and-ai/technology/ai/nano-banana-2), 2026-02-26.
+[^nano-pro]: Google, [Gemini 3 Pro Image](https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image).
+[^gpt-2]: OpenAI, [GPT Image 2](https://developers.openai.com/api/docs/models/gpt-image-2.md).
+[^seedance]: Volcengine, [Seedance video generation guide](https://docs.volcengine.com/docs/82379/2298881).
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
+
+  <Card href={'/docs/usage/getting-started/vision'} title={'Vision & Image Understanding'} />
+
+  <Card href={'/docs/usage/providers'} title={'AI Providers'} />
+</Cards>

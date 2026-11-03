@@ -1,0 +1,981 @@
+import {
+  formatCopyDocumentResult,
+  formatCreateDocumentResult,
+  formatCreateFolderResult,
+  formatModifyDocumentResult,
+  formatMoveDocumentsResult,
+  formatRemoveDocumentResult,
+  formatRenameDocumentResult,
+  formatReplaceDocumentResult,
+  formatUpdateLoadRuleResult,
+} from '@lobechat/prompts';
+import { appendTextWindowNotice, sliceTextWindow } from '@lobechat/prompts/textWindow';
+import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+
+import type {
+  CopyDocumentArgs,
+  CreateDocumentArgs,
+  CreateFolderArgs,
+  ListDocumentsArgs,
+  ListedAgentDocument,
+  ModifyDocumentNodesArgs,
+  ModifyDocumentOperation,
+  MoveDocumentResultItem,
+  MoveDocumentsArgs,
+  ReadDocumentArgs,
+  RemoveDocumentArgs,
+  RenameDocumentArgs,
+  ReplaceDocumentContentArgs,
+  UpdateLoadRuleArgs,
+} from '../types';
+import {
+  LIST_DOCUMENTS_DEFAULT_LIMIT,
+  LIST_DOCUMENTS_MAX_LIMIT,
+  MAX_READ_DOCUMENT_CONTENT_CHARS,
+  MOVE_DOCUMENTS_MAX_IDS,
+} from '../types';
+
+const clampListLimit = (limit: unknown): number => {
+  const value = Math.floor(Number(limit));
+  if (!Number.isFinite(value) || value <= 0) return LIST_DOCUMENTS_DEFAULT_LIMIT;
+  return Math.min(value, LIST_DOCUMENTS_MAX_LIMIT);
+};
+
+interface AgentDocumentRecord {
+  /** Entries nested directly under this one (folders and documents can both be parents). */
+  childCount?: number;
+  content?: string;
+  /**
+   * The underlying `documents` table id. Used for portal rendering
+   * (opening the document in the shared EditorCanvas), which must resolve
+   * the row in `documents` — distinct from `id` which is the
+   * `agentDocuments` association row id.
+   */
+  documentId?: string;
+  filename?: string;
+  /** `custom/folder` marks a folder; anything else is a file. */
+  fileType?: string;
+  /**
+   * The `agentDocuments` association row id. This is what the LLM receives
+   * and uses for subsequent operations (read/edit/remove/...).
+   */
+  id: string;
+  litexml?: string;
+  /** `documentId` of the containing folder or document; null at the root. */
+  parentId?: string | null;
+  title?: string;
+  updatedAt?: Date | string;
+}
+
+const FOLDER_FILE_TYPE = 'custom/folder';
+
+interface AgentDocumentOperationContext {
+  agentId?: string | null;
+  currentDocumentId?: string | null;
+  messageId?: string | null;
+  operationId?: string | null;
+  rootOperationId?: string | null;
+  scope?: string | null;
+  taskId?: string | null;
+  threadId?: string | null;
+  toolCallId?: string | null;
+  toolMessageId?: string | null;
+  topicId?: string | null;
+}
+
+/**
+ * Attribution data captured from a builtin tool call that mutates an agent document.
+ */
+interface AgentDocumentToolContext {
+  messageId: string;
+  operationId?: string;
+  rootOperationId?: string;
+  taskId?: string | null;
+  threadId?: string | null;
+  toolCallId: string;
+  toolMessageId?: string;
+  topicId?: string;
+}
+
+/**
+ * Tool-call attribution input for document mutation operations.
+ */
+interface AgentDocumentToolTriggerInput {
+  /**
+   * Same-turn tool-call context used by create-class services to attribute generated documents.
+   */
+  toolContext?: AgentDocumentToolContext;
+  /**
+   * Set to `'tool'` only when the same-turn user message id and tool call id are both available.
+   */
+  trigger?: 'tool';
+}
+
+const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE = 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN';
+const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE = 'CurrentPageDocumentWriteForbidden';
+
+type MaybePromise<T> = T | Promise<T>;
+
+export interface AgentDocumentsRuntimeService {
+  copyDocument: (
+    params: CopyDocumentArgs & {
+      agentId: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => Promise<AgentDocumentRecord | undefined>;
+  createDocument: (
+    params: CreateDocumentArgs & {
+      agentId: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => Promise<AgentDocumentRecord | undefined>;
+  createFolder: (
+    params: CreateFolderArgs & { agentId: string },
+  ) => Promise<{ created: boolean; folder: AgentDocumentRecord }>;
+  createTopicDocument: (
+    params: CreateDocumentArgs & {
+      agentId: string;
+      topicId: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => Promise<AgentDocumentRecord | undefined>;
+  listDocuments: (
+    params: ListDocumentsArgs & {
+      agentId: string;
+    },
+  ) => Promise<AgentDocumentRecord[]>;
+  listTopicDocuments: (
+    params: ListDocumentsArgs & {
+      agentId: string;
+      topicId: string;
+    },
+  ) => Promise<AgentDocumentRecord[]>;
+  modifyNodes: (
+    params: ModifyDocumentNodesArgs & {
+      agentId: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => Promise<AgentDocumentRecord | undefined>;
+  moveDocuments: (
+    params: MoveDocumentsArgs & { agentId: string },
+  ) => Promise<MoveDocumentResultItem[]>;
+  readDocument: (
+    params: ReadDocumentArgs & {
+      agentId: string;
+    },
+  ) => Promise<AgentDocumentRecord | undefined>;
+  removeDocument: (
+    params: RemoveDocumentArgs & {
+      agentId: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => Promise<boolean>;
+  renameDocument: (
+    params: RenameDocumentArgs & {
+      agentId: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => Promise<AgentDocumentRecord | undefined>;
+  replaceDocumentContent: (
+    params: ReplaceDocumentContentArgs & {
+      agentId: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => Promise<AgentDocumentRecord | undefined>;
+  updateLoadRule: (
+    params: UpdateLoadRuleArgs & {
+      agentId: string;
+    },
+  ) => Promise<AgentDocumentRecord | undefined>;
+}
+
+export interface AgentDocumentsRuntimeOptions {
+  /** Keep the backing id for bookkeeping while hiding owner-only edit affordances. */
+  documentReadonly?: boolean;
+  /**
+   * Build a shareable URL that opens a document in the standalone document
+   * route. When provided and it returns a URL, the create result surfaces the
+   * link so the agent can relay it to the user (e.g. in an IM channel).
+   */
+  getDocumentUrl?: (params: {
+    agentId: string;
+    documentId: string;
+  }) => MaybePromise<string | undefined>;
+  /**
+   * Fired after a document-mutating tool call finishes so the host can
+   * invalidate client-side caches. This is the only refresh signal for the
+   * server-runtime path — where the tool executes on the gateway and the
+   * client service layer (which normally invalidates) never runs. Invoked from
+   * the executor's `onAfterCall` lifecycle hook. `documentId` is set only when
+   * the call wrote the body or metadata of an existing `documents` row.
+   */
+  onDocumentsMutated?: (params: { documentId?: string }) => MaybePromise<void>;
+}
+
+/**
+ * Models regularly echo the `documentId` field from listDocuments/createDocument
+ * back instead of `id`, or drop the id entirely. Accept `documentId` as an alias
+ * (reads resolve either identifier) and fail with an actionable message when
+ * neither is present, instead of looking up and reporting `undefined`.
+ */
+const UUID_PATTERN = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+
+const resolveTargetId = <T extends { id: string }>(
+  args: T,
+  apiName: string,
+): { args: T } | { error: BuiltinServerRuntimeOutput } => {
+  const { documentId: alias, ...rest } = args as T & { documentId?: unknown };
+  const id = typeof args.id === 'string' && args.id.trim() ? args.id : alias;
+  if (typeof id === 'string' && id.trim()) return { args: { ...rest, id } as T };
+
+  return {
+    error: {
+      content: `${apiName} requires \`id\`: pass the \`id\` field returned by listDocuments or createDocument (e.g. "3f2c…-uuid").`,
+      success: false,
+    },
+  };
+};
+
+const MODIFY_OPERATION_SHAPES =
+  '{"action":"insert","afterId"|"beforeId":"<node id>","litexml":"…"}, {"action":"modify","litexml":"<tag id=\\"<node id>\\">…</tag>"} or {"action":"remove","id":"<node id>"}';
+
+const nonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+/**
+ * Models send modifyNodes operations in several near-miss shapes: the array as a
+ * JSON string, `type` instead of `action`, `content` instead of `litexml`, or no
+ * `action` at all. Accept the unambiguous ones and reject the rest with the
+ * position and the expected shapes, instead of crashing on a missing `action`.
+ */
+const normalizeModifyOperations = (
+  raw: unknown,
+): { operations: ModifyDocumentOperation[] } | { error: string } => {
+  let list = raw;
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      return {
+        error: `\`operations\` must be an array of operations: ${MODIFY_OPERATION_SHAPES}.`,
+      };
+    }
+  }
+  if (!Array.isArray(list) || list.length === 0) return { error: 'No operations provided.' };
+
+  const operations: ModifyDocumentOperation[] = [];
+  for (const [index, item] of list.entries()) {
+    const op = (item ?? {}) as Record<string, unknown>;
+    const litexml = op.litexml ?? op.content;
+    const declared = op.action ?? op.type;
+    const action =
+      declared ??
+      (nonEmptyString(op.afterId) || nonEmptyString(op.beforeId)
+        ? 'insert'
+        : litexml !== undefined
+          ? 'modify'
+          : nonEmptyString(op.id)
+            ? 'remove'
+            : undefined);
+    const invalid = `Operation ${index + 1} of ${list.length} is not a valid operation; nothing was saved. Use ${MODIFY_OPERATION_SHAPES}.`;
+
+    switch (action) {
+      case 'insert': {
+        if (!nonEmptyString(litexml)) return { error: invalid };
+        if (nonEmptyString(op.beforeId)) {
+          operations.push({ action: 'insert', beforeId: op.beforeId, litexml });
+        } else if (nonEmptyString(op.afterId)) {
+          operations.push({ action: 'insert', afterId: op.afterId, litexml });
+        } else {
+          return { error: invalid };
+        }
+        break;
+      }
+      case 'modify': {
+        const valid =
+          nonEmptyString(litexml) ||
+          (Array.isArray(litexml) && litexml.length > 0 && litexml.every(nonEmptyString));
+        if (!valid) return { error: invalid };
+        operations.push({ action: 'modify', litexml: litexml as string | string[] });
+        break;
+      }
+      case 'remove': {
+        if (!nonEmptyString(op.id)) return { error: invalid };
+        operations.push({ action: 'remove', id: op.id });
+        break;
+      }
+      default: {
+        return { error: invalid };
+      }
+    }
+  }
+
+  return { operations };
+};
+
+export class AgentDocumentsExecutionRuntime {
+  constructor(
+    private service: AgentDocumentsRuntimeService,
+    private options: AgentDocumentsRuntimeOptions = {},
+  ) {}
+
+  /**
+   * Notify the host that the document set changed so it can refresh client
+   * state (e.g. the agent documents list). Invoked from the executor's
+   * `onAfterCall` hook, which fires on `tool_end` regardless of whether the
+   * mutation ran client- or server-side — covering the server-runtime path the
+   * inline client service invalidation can't reach.
+   */
+  notifyMutated(params: { documentId?: string } = {}): Promise<void> {
+    return Promise.resolve(this.options.onDocumentsMutated?.(params));
+  }
+
+  /**
+   * Mutations without a pre-read (copy, load rule) key off the binding id, so a
+   * backing `docs_` id received through the `documentId` alias is resolved first.
+   */
+  private async resolveBindingId(agentId: string, id: string): Promise<string | undefined> {
+    if (UUID_PATTERN.test(id)) return id;
+
+    const existing = await this.service.readDocument({ agentId, id });
+    return existing?.id;
+  }
+
+  private resolveAgentId(context?: AgentDocumentOperationContext) {
+    if (!context?.agentId) return;
+    return context.agentId;
+  }
+
+  /**
+   * Resolve a shareable document url so every document-referencing result can
+   * hand the user a clickable link instead of a raw internal id. Returns
+   * undefined when no url builder is configured or the `documents` row id is
+   * unknown — callers fall back to the id-only result wording in that case.
+   */
+  private buildDocumentUrl(agentId: string, documentId?: string): MaybePromise<string | undefined> {
+    if (!documentId) return undefined;
+    return this.options.getDocumentUrl?.({ agentId, documentId });
+  }
+
+  private getCurrentDocumentId(context?: AgentDocumentOperationContext) {
+    if (context?.scope !== 'page') return;
+    return context.currentDocumentId ?? undefined;
+  }
+
+  private resolveTopicId(context?: AgentDocumentOperationContext) {
+    if (!context?.topicId) return;
+    return context.topicId;
+  }
+
+  private buildToolTriggerInput(
+    context?: AgentDocumentOperationContext,
+  ): AgentDocumentToolTriggerInput {
+    if (!context?.messageId || !context.toolCallId) return {};
+
+    const toolContext: AgentDocumentToolContext = {
+      messageId: context.messageId,
+      toolCallId: context.toolCallId,
+    };
+
+    if (context.operationId) toolContext.operationId = context.operationId;
+    if (context.rootOperationId) toolContext.rootOperationId = context.rootOperationId;
+    if (context.taskId) toolContext.taskId = context.taskId;
+    if (context.threadId) toolContext.threadId = context.threadId;
+    if (context.toolMessageId) toolContext.toolMessageId = context.toolMessageId;
+    if (context.topicId) toolContext.topicId = context.topicId;
+
+    return {
+      toolContext,
+      trigger: 'tool',
+    };
+  }
+
+  private buildCurrentPageDocumentWriteBlockedResult(apiName: string): BuiltinServerRuntimeOutput {
+    const message =
+      `Cannot use lobe-agent-documents.${apiName} on the current page document ` +
+      `while page scope is active. Use lobe-page-agent so the open editor shows a diff node ` +
+      `for review instead of writing directly to the database.`;
+
+    return {
+      content: message,
+      error: {
+        code: CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE,
+        kind: 'replan',
+        message,
+        type: CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE,
+      },
+      success: false,
+    };
+  }
+
+  private isCurrentPageDocument(
+    doc: AgentDocumentRecord | undefined,
+    context?: AgentDocumentOperationContext,
+  ) {
+    const currentDocumentId = this.getCurrentDocumentId(context);
+    if (!currentDocumentId || !doc?.documentId) return false;
+
+    return doc.documentId === currentDocumentId;
+  }
+
+  /**
+   * Returns one window of a field using the shared text-window contract. A field within the cap
+   * and read without `offset`/`limit` is returned whole, exactly as before; otherwise the window
+   * ends with the range, total size and the exact readDocument call for the next window.
+   */
+  private windowReadContent(content: string, args: ReadDocumentArgs, format: string) {
+    const paged = args.offset !== undefined || args.limit !== undefined;
+    if (!paged && content.length <= MAX_READ_DOCUMENT_CONTENT_CHARS) return content;
+
+    const window = sliceTextWindow(content, {
+      maxChars: MAX_READ_DOCUMENT_CONTENT_CHARS,
+      maxLines: args.limit,
+      offset: args.offset,
+    });
+
+    return appendTextWindowNotice(window, {
+      continueFrom: (line) =>
+        `call readDocument again with id="${args.id}", format="${format}" and offset=${line}`,
+    });
+  }
+
+  private formatDocumentReadContent(doc: AgentDocumentRecord, args: ReadDocumentArgs) {
+    const format = args.format ?? 'xml';
+    const markdown = () => this.windowReadContent(doc.content || '', args, format);
+    const xml = () => this.windowReadContent(doc.litexml || '', args, format);
+
+    if (format === 'markdown') return markdown();
+    if (format === 'both') return JSON.stringify({ markdown: markdown(), xml: xml() });
+
+    return doc.litexml ? xml() : markdown();
+  }
+
+  async listDocuments(
+    args: ListDocumentsArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot list agent documents without agentId context.',
+        success: false,
+      };
+    }
+
+    const scope = args.scope ?? 'agent';
+    const sourceType = args.sourceType ?? 'all';
+    const parentId = args.parentId;
+    const topicId = this.resolveTopicId(context);
+    if (scope === 'currentTopic' && !topicId) {
+      return {
+        content: 'Cannot list current topic documents without topicId context.',
+        success: false,
+      };
+    }
+
+    const docs =
+      scope === 'currentTopic'
+        ? await this.service.listTopicDocuments({
+            agentId,
+            parentId,
+            scope,
+            sourceType,
+            topicId: topicId!,
+          })
+        : await this.service.listDocuments({ agentId, parentId, scope, sourceType });
+    const titleQuery = args.titleContains?.trim().toLowerCase();
+    const matched = titleQuery
+      ? docs.filter((d) => (d.title ?? d.filename ?? '').toLowerCase().includes(titleQuery))
+      : docs;
+    const limit = clampListLimit(args.limit);
+    const offset = Math.max(0, Math.floor(Number(args.offset) || 0));
+    const page = matched.slice(offset, offset + limit);
+    const list: ListedAgentDocument[] = await Promise.all(
+      page.map(async (d) => {
+        const url = await this.buildDocumentUrl(agentId, d.documentId);
+        const updatedAt = d.updatedAt ? new Date(d.updatedAt) : undefined;
+        return {
+          ...(d.documentId ? { documentId: d.documentId } : {}),
+          filename: d.filename ?? d.title ?? '',
+          id: d.id,
+          // Folder membership lets the agent see what is filed where without a
+          // second listing per folder; null marks a root entry.
+          ...(d.parentId !== undefined ? { parentId: d.parentId } : {}),
+          ...(d.childCount ? { childCount: d.childCount } : {}),
+          title: d.title,
+          ...(d.fileType !== undefined
+            ? { type: d.fileType === FOLDER_FILE_TYPE ? 'folder' : 'file' }
+            : {}),
+          ...(updatedAt && !Number.isNaN(updatedAt.getTime())
+            ? { updatedAt: updatedAt.toISOString() }
+            : {}),
+          // The clickable link lets the agent reference any listed document to
+          // the user; omitted when no url builder is configured.
+          ...(url ? { url } : {}),
+        };
+      }),
+    );
+
+    const nextOffset = offset + page.length;
+    // Page two must read the same filtered set, so the continuation repeats
+    // every active filter instead of just the offset.
+    const nextArgs = JSON.stringify({
+      limit,
+      offset: nextOffset,
+      ...(parentId ? { parentId } : {}),
+      scope,
+      sourceType,
+      ...(titleQuery ? { titleContains: args.titleContains } : {}),
+    });
+    const pagingNote =
+      nextOffset < matched.length
+        ? `\n\nShowing documents ${offset + 1}-${nextOffset} of ${matched.length}. For the next page call listDocuments with ${nextArgs}.`
+        : '';
+
+    return {
+      content: JSON.stringify(list) + pagingNote,
+      state: { documents: list },
+      success: true,
+    };
+  }
+
+  async createDocument(
+    args: CreateDocumentArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot create agent document without agentId context.',
+        success: false,
+      };
+    }
+
+    if (typeof args.content !== 'string') {
+      return {
+        content:
+          'createDocument requires `content` (the document body as markdown or plain text) and a `title`. Nothing was created.',
+        success: false,
+      };
+    }
+    // An omitted title falls back to the body's leading H1, then a default name.
+    if (typeof args.title !== 'string') args = { ...args, title: '' };
+
+    const scope = args.scope ?? 'agent';
+    const topicId = this.resolveTopicId(context);
+    if (scope === 'currentTopic' && !topicId) {
+      return {
+        content: 'Cannot create current topic document without topicId context.',
+        success: false,
+      };
+    }
+
+    const toolTriggerInput = this.buildToolTriggerInput(context);
+    const created =
+      scope === 'currentTopic'
+        ? await this.service.createTopicDocument({
+            ...args,
+            ...toolTriggerInput,
+            agentId,
+            topicId: topicId!,
+          })
+        : await this.service.createDocument({ ...args, ...toolTriggerInput, agentId });
+    if (!created) return { content: 'Failed to create agent document.', success: false };
+
+    const title = created.title || args.title;
+    // The document route is keyed by the `documents` id; the URL lets the agent
+    // hand the user a clickable link. `created.id` (the agentDocuments row id)
+    // is kept separately because subsequent edit/read/remove calls key off it.
+    const url = await this.buildDocumentUrl(agentId, created.documentId);
+
+    return {
+      content: formatCreateDocumentResult({ id: created.id, title, url }),
+      state: {
+        agentDocumentId: created.id,
+        agentId,
+        documentId: created.documentId,
+        ...(this.options.documentReadonly && { readonly: true }),
+      },
+      success: true,
+    };
+  }
+
+  async createFolder(
+    args: CreateFolderArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return { content: 'Cannot create a folder without agentId context.', success: false };
+    }
+    if (!nonEmptyString(args.title)) {
+      return { content: 'createFolder requires a non-empty `title`.', success: false };
+    }
+
+    const { created, folder } = await this.service.createFolder({
+      agentId,
+      ...(nonEmptyString(args.parentId) ? { parentId: args.parentId } : {}),
+      title: args.title,
+    });
+    const folderId = folder.documentId ?? folder.id;
+    const title = folder.title || args.title.trim();
+
+    return {
+      content: formatCreateFolderResult({ created, folderId, title }),
+      state: {
+        agentDocumentId: folder.id,
+        agentId,
+        created,
+        documentId: folder.documentId,
+        title,
+      },
+      success: true,
+    };
+  }
+
+  async moveDocuments(
+    args: MoveDocumentsArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return { content: 'Cannot move agent documents without agentId context.', success: false };
+    }
+
+    const ids = Array.isArray(args.ids) ? args.ids.filter(nonEmptyString) : [];
+    if (ids.length === 0) {
+      return {
+        content: 'moveDocuments requires `ids`: the ids of the documents or folders to move.',
+        success: false,
+      };
+    }
+    if (ids.length > MOVE_DOCUMENTS_MAX_IDS) {
+      return {
+        content: `moveDocuments accepts at most ${MOVE_DOCUMENTS_MAX_IDS} ids per call; split the rest into another call. Nothing was moved.`,
+        success: false,
+      };
+    }
+
+    // Models send "", "root" or omit the field to mean the root; only a real id targets a folder.
+    const parentId =
+      nonEmptyString(args.parentId) && args.parentId !== 'root' ? args.parentId : null;
+    const results = await this.service.moveDocuments({ agentId, ids, parentId });
+    const movedCount = results.filter((r) => r.status === 'moved').length;
+    const failedCount = results.filter((r) => r.status === 'failed').length;
+
+    return {
+      content: formatMoveDocumentsResult({ parentId, results }),
+      state: { agentId, failedCount, movedCount, parentId, results },
+      // A partial move still changed the tree; only an all-failed call is a failure.
+      success: failedCount < results.length,
+    };
+  }
+
+  async readDocument(
+    rawArgs: ReadDocumentArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'readDocument');
+    if ('error' in target) return target.error;
+    const args = target.args;
+
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot read agent document without agentId context.',
+        success: false,
+      };
+    }
+
+    const { limit: _limit, offset: _offset, ...readArgs } = args;
+    const doc = await this.service.readDocument({ ...readArgs, agentId });
+    if (!doc) return { content: `Document not found: ${args.id}`, success: false };
+
+    return {
+      content: this.formatDocumentReadContent(doc, args),
+      state: { content: doc.content, id: doc.id, title: doc.title, xml: doc.litexml },
+      success: true,
+    };
+  }
+
+  async replaceDocumentContent(
+    rawArgs: ReplaceDocumentContentArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'replaceDocumentContent');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot replace agent document content without agentId context.',
+        success: false,
+      };
+    }
+
+    const existing = await this.service.readDocument({ agentId, id: args.id });
+    if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
+
+    if (this.isCurrentPageDocument(existing, context)) {
+      return this.buildCurrentPageDocumentWriteBlockedResult('replaceDocumentContent');
+    }
+
+    const doc = await this.service.replaceDocumentContent({
+      ...args,
+      ...this.buildToolTriggerInput(context),
+      agentId,
+    });
+    if (!doc) return { content: `Failed to update document ${args.id}.`, success: false };
+
+    const url = await this.buildDocumentUrl(agentId, doc.documentId ?? existing.documentId);
+
+    return {
+      content: formatReplaceDocumentResult({
+        id: args.id,
+        title: doc.title ?? existing.title,
+        url,
+      }),
+      state: {
+        agentDocumentId: args.id,
+        agentId,
+        documentId: doc.documentId ?? existing.documentId,
+        id: args.id,
+        updated: true,
+      },
+      success: true,
+    };
+  }
+
+  async modifyNodes(
+    rawArgs: ModifyDocumentNodesArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'modifyNodes');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot modify agent document nodes without agentId context.',
+        success: false,
+      };
+    }
+
+    const existing = await this.service.readDocument({ agentId, id: args.id });
+    if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
+
+    if (this.isCurrentPageDocument(existing, context)) {
+      return this.buildCurrentPageDocumentWriteBlockedResult('modifyNodes');
+    }
+
+    const normalized = normalizeModifyOperations(args.operations);
+    if ('error' in normalized) return { content: normalized.error, success: false };
+    const { operations } = normalized;
+
+    const updated = await this.service.modifyNodes({
+      agentId,
+      ...this.buildToolTriggerInput(context),
+      id: args.id,
+      operations,
+    });
+    if (!updated) return { content: `Failed to modify document ${args.id}.`, success: false };
+
+    // The service applies the batch atomically: an unknown id or an operation the
+    // editor rejects throws with that operation's position, and nothing is saved.
+    // Reaching this point therefore means every operation was applied.
+    const results = operations.map((operation) => ({
+      action: operation.action,
+      success: true,
+    }));
+
+    const url = await this.buildDocumentUrl(agentId, updated.documentId ?? existing.documentId);
+
+    return {
+      content: formatModifyDocumentResult({
+        id: args.id,
+        operationCount: results.length,
+        title: updated.title ?? existing.title,
+        url,
+      }),
+      state: {
+        agentDocumentId: args.id,
+        agentId,
+        documentId: updated.documentId ?? existing.documentId,
+        id: args.id,
+        results,
+        successCount: results.length,
+        totalCount: results.length,
+      },
+      success: true,
+    };
+  }
+
+  async removeDocument(
+    rawArgs: RemoveDocumentArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'removeDocument');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot remove agent document without agentId context.',
+        success: false,
+      };
+    }
+
+    // Pre-read the backing `documents` row id so the deleted document's Work can
+    // be located from `state` after the row is gone. Mirrors the replace / rename
+    // / modify pre-read and keeps the total query count flat (the server service
+    // impl previously ran this lookup imperatively for the delete registration).
+    const existing = await this.service.readDocument({ agentId, id: args.id });
+    if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
+
+    const deleted = await this.service.removeDocument({
+      ...args,
+      ...this.buildToolTriggerInput(context),
+      agentId,
+    });
+    if (!deleted) return { content: `Document not found: ${args.id}`, success: false };
+
+    return {
+      content: formatRemoveDocumentResult({ id: args.id }),
+      state: {
+        agentDocumentId: args.id,
+        agentId,
+        deleted: true,
+        documentId: existing.documentId,
+        id: args.id,
+      },
+      success: true,
+    };
+  }
+
+  async renameDocument(
+    rawArgs: RenameDocumentArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'renameDocument');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot rename agent document without agentId context.',
+        success: false,
+      };
+    }
+
+    const existing = await this.service.readDocument({ agentId, id: args.id });
+    if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
+
+    if (this.isCurrentPageDocument(existing, context)) {
+      return this.buildCurrentPageDocumentWriteBlockedResult('renameDocument');
+    }
+
+    const doc = await this.service.renameDocument({
+      ...args,
+      ...this.buildToolTriggerInput(context),
+      agentId,
+    });
+    if (!doc) return { content: `Failed to rename document ${args.id}.`, success: false };
+
+    const url = await this.buildDocumentUrl(agentId, doc.documentId ?? existing.documentId);
+
+    return {
+      content: formatRenameDocumentResult({ id: args.id, title: args.newTitle, url }),
+      state: {
+        agentDocumentId: args.id,
+        agentId,
+        documentId: doc.documentId ?? existing.documentId,
+        id: args.id,
+        newTitle: args.newTitle,
+        renamed: true,
+      },
+      success: true,
+    };
+  }
+
+  async copyDocument(
+    rawArgs: CopyDocumentArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'copyDocument');
+    if ('error' in target) return target.error;
+
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot copy agent document without agentId context.',
+        success: false,
+      };
+    }
+
+    const bindingId = await this.resolveBindingId(agentId, target.args.id);
+    if (!bindingId) return { content: `Document not found: ${target.args.id}`, success: false };
+    const args = { ...target.args, id: bindingId };
+
+    const copied = await this.service.copyDocument({
+      ...args,
+      ...this.buildToolTriggerInput(context),
+      agentId,
+    });
+    if (!copied) return { content: `Document not found: ${args.id}`, success: false };
+
+    const url = await this.buildDocumentUrl(agentId, copied.documentId);
+
+    return {
+      content: formatCopyDocumentResult({
+        fromId: args.id,
+        id: copied.id,
+        title: copied.title,
+        url,
+      }),
+      state: {
+        agentDocumentId: copied.id,
+        agentId,
+        copiedFromId: args.id,
+        documentId: copied.documentId,
+        newDocumentId: copied.id,
+      },
+      success: true,
+    };
+  }
+
+  async updateLoadRule(
+    rawArgs: UpdateLoadRuleArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'updateLoadRule');
+    if ('error' in target) return target.error;
+
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot update load rule without agentId context.',
+        success: false,
+      };
+    }
+
+    const bindingId = await this.resolveBindingId(agentId, target.args.id);
+    if (!bindingId) return { content: `Document not found: ${target.args.id}`, success: false };
+    const args = { ...target.args, id: bindingId };
+
+    const updated = await this.service.updateLoadRule({ ...args, agentId });
+    if (!updated) return { content: `Document not found: ${args.id}`, success: false };
+
+    const url = await this.buildDocumentUrl(agentId, updated.documentId);
+
+    return {
+      content: formatUpdateLoadRuleResult({ id: args.id, title: updated.title, url }),
+      state: { applied: true, rule: args.rule },
+      success: true,
+    };
+  }
+}

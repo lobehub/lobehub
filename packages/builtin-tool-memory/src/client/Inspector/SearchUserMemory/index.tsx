@@ -1,0 +1,74 @@
+'use client';
+
+import type { BuiltinInspectorProps } from '@lobechat/types';
+import { Text } from '@lobehub/ui';
+import { cssVar, cx } from '@lobehub/ui';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
+
+import type { SearchMemoryParams, SearchUserMemoryState } from '../../../types';
+
+export const SearchUserMemoryInspector = memo<
+  BuiltinInspectorProps<SearchMemoryParams, SearchUserMemoryState>
+>(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
+  const { t } = useTranslation('plugin');
+
+  // `queries` comes from raw model tool-call args; a model may emit a scalar where
+  // `string[]` is expected, so `.join` guards against a non-array crashing render.
+  const joinQueries = (queries: unknown) => (Array.isArray(queries) ? queries.join(', ') : '');
+  const query = joinQueries(args?.queries) || joinQueries(partialArgs?.queries);
+
+  // Initial streaming state
+  if (isArgumentsStreaming && !query) {
+    return (
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-user-memory.apiName.searchUserMemory')}
+        </span>
+      </div>
+    );
+  }
+
+  // pluginState is SearchMemoryResult directly — except once the read path has
+  // projected it, when the buckets are gone and their total is pinned instead.
+  const resultCount =
+    pluginState?.resultCount ??
+    (pluginState
+      ? (pluginState.activities?.length ?? 0) +
+        (pluginState.contexts?.length ?? 0) +
+        (pluginState.experiences?.length ?? 0) +
+        (pluginState.identities?.length ?? 0) +
+        (pluginState.preferences?.length ?? 0)
+      : 0);
+  const hasResults = resultCount > 0;
+
+  return (
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-user-memory.apiName.searchUserMemory')}:{' '}
+      </span>
+      {query && <span className={highlightTextStyles.primary}>{query}</span>}
+      {!isLoading &&
+        !isArgumentsStreaming &&
+        pluginState &&
+        (hasResults ? (
+          <span style={{ marginInlineStart: 4 }}>({resultCount})</span>
+        ) : (
+          <Text
+            as={'span'}
+            color={cssVar.colorTextDescription}
+            fontSize={12}
+            style={{ marginInlineStart: 4 }}
+          >
+            ({t('builtins.lobe-user-memory.inspector.noResults')})
+          </Text>
+        ))}
+    </div>
+  );
+});
+
+SearchUserMemoryInspector.displayName = 'SearchUserMemoryInspector';
+
+export default SearchUserMemoryInspector;

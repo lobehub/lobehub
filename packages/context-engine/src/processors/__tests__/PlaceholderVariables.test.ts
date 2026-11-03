@@ -1,0 +1,609 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  buildContentPreview,
+  formatPlaceholderValues,
+  parsePlaceholderVariables,
+  parsePlaceholderVariablesMessages,
+  PlaceholderVariablesProcessor,
+  renderPlaceholderTemplate,
+} from '../PlaceholderVariables';
+
+describe('PlaceholderVariablesProcessor', () => {
+  const mockVariableGenerators = {
+    date: () => '2023-12-25',
+    time: () => '14:30:45',
+    username: () => 'TestUser',
+    random: () => '12345',
+    nested: () => 'Value with {{date}} inside',
+  };
+
+  describe('buildContentPreview', () => {
+    it('does not split an emoji at the string preview boundary', () => {
+      const preview = buildContentPreview(`${'a'.repeat(199)}😀tail`);
+
+      expect(preview).toBe('a'.repeat(199));
+      expect(preview).not.toMatch(/[\uD800-\uDFFF]/);
+    });
+
+    it('does not split an emoji in a serialized content preview', () => {
+      const preview = buildContentPreview({ value: `${'a'.repeat(189)}😀tail` });
+
+      expect(preview).toBe(`{"value":"${'a'.repeat(189)}`);
+      expect(preview).not.toMatch(/[\uD800-\uDFFF]/);
+    });
+  });
+
+  describe('parsePlaceholderVariables', () => {
+    it('should replace simple placeholder variables', () => {
+      const text = 'Today is {{date}} and the time is {{time}}';
+      const result = parsePlaceholderVariables(text, mockVariableGenerators);
+      expect(result).toBe('Today is 2023-12-25 and the time is 14:30:45');
+    });
+
+    it('should handle missing variables gracefully', () => {
+      const text = 'Hello {{username}}, missing: {{missing}}';
+      const result = parsePlaceholderVariables(text, mockVariableGenerators);
+      expect(result).toBe('Hello TestUser, missing: {{missing}}');
+    });
+
+    it('should handle nested variables with recursion', () => {
+      const text = 'Nested: {{nested}}';
+      const result = parsePlaceholderVariables(text, mockVariableGenerators);
+      expect(result).toBe('Nested: Value with 2023-12-25 inside');
+    });
+
+    it('should respect depth limit', () => {
+      const text = 'Nested: {{nested}}';
+      const result = parsePlaceholderVariables(text, mockVariableGenerators, 1);
+      expect(result).toBe('Nested: Value with {{date}} inside');
+    });
+
+    it('should handle empty text', () => {
+      const text = '';
+      const result = parsePlaceholderVariables(text, mockVariableGenerators);
+      expect(result).toBe('');
+    });
+
+    it('should handle text without placeholders', () => {
+      const text = 'No placeholders here';
+      const result = parsePlaceholderVariables(text, mockVariableGenerators);
+      expect(result).toBe('No placeholders here');
+    });
+
+    it('should replace placeholders with surrounding whitespace', () => {
+      const text = 'Hello {{ username }}, today is {{ date }}';
+      const result = parsePlaceholderVariables(text, mockVariableGenerators);
+      expect(result).toBe('Hello TestUser, today is 2023-12-25');
+    });
+
+    it('should handle malformed repeated opening braces without backtracking issues', () => {
+      const text = '{{{{'.repeat(2000);
+      const result = parsePlaceholderVariables(text, mockVariableGenerators);
+      expect(result).toBe(text);
+    });
+  });
+
+  describe('parsePlaceholderVariablesMessages', () => {
+    it('should process string content messages', () => {
+      const messages = [
+        {
+          id: '1',
+          role: 'user',
+          content: 'Hello {{username}}, today is {{date}}',
+        },
+        {
+          id: '2',
+          role: 'assistant',
+          content: 'Hi there! The time is {{time}}',
+        },
+      ];
+
+      const result = parsePlaceholderVariablesMessages(messages, mockVariableGenerators);
+
+      expect(result).toEqual([
+        {
+          id: '1',
+          role: 'user',
+          content: 'Hello TestUser, today is 2023-12-25',
+        },
+        {
+          id: '2',
+          role: 'assistant',
+          content: 'Hi there! The time is 14:30:45',
+        },
+      ]);
+    });
+
+    it('should process array content messages with text parts', () => {
+      const messages = [
+        {
+          id: '1',
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Hello {{username}}, today is {{date}}',
+            },
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/png;base64,abc123' },
+            },
+          ],
+        },
+      ];
+
+      const result = parsePlaceholderVariablesMessages(messages, mockVariableGenerators);
+
+      expect(result).toEqual([
+        {
+          id: '1',
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Hello TestUser, today is 2023-12-25',
+            },
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/png;base64,abc123' },
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('should skip messages without content', () => {
+      const messages = [
+        {
+          id: '1',
+          role: 'user',
+        },
+        {
+          id: '2',
+          role: 'assistant',
+          content: null,
+        },
+      ];
+
+      const result = parsePlaceholderVariablesMessages(messages, mockVariableGenerators);
+
+      expect(result).toEqual(messages);
+    });
+
+    it('should handle mixed content types', () => {
+      const messages = [
+        {
+          id: '1',
+          role: 'user',
+          content: 'Simple {{username}} message',
+        },
+        {
+          id: '2',
+          role: 'user',
+          content: [{ type: 'text', text: 'Complex {{date}} message' }],
+        },
+        {
+          id: '3',
+          role: 'assistant',
+          content: { type: 'object', data: 'not processed' },
+        },
+      ];
+
+      const result = parsePlaceholderVariablesMessages(messages, mockVariableGenerators);
+
+      expect(result).toEqual([
+        {
+          id: '1',
+          role: 'user',
+          content: 'Simple TestUser message',
+        },
+        {
+          id: '2',
+          role: 'user',
+          content: [{ type: 'text', text: 'Complex 2023-12-25 message' }],
+        },
+        {
+          id: '3',
+          role: 'assistant',
+          content: { type: 'object', data: 'not processed' },
+        },
+      ]);
+    });
+  });
+
+  describe('PlaceholderVariablesProcessor', () => {
+    it('should process messages through the processor', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: mockVariableGenerators,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: 'Hello {{username}}, today is {{date}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      expect(result.messages[0].content).toBe('Hello TestUser, today is 2023-12-25');
+      expect(result.metadata.placeholderVariablesProcessed).toBe(1);
+    });
+
+    it('should isolate generator throws per message and not over-count', async () => {
+      const faultyGenerators = {
+        error: () => {
+          throw new Error('Generator error');
+        },
+        working: () => 'works',
+      };
+
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: faultyGenerators,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: 'bad',
+            role: 'user',
+            content: 'This {{working}} but this {{error}} fails',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          {
+            id: 'good',
+            role: 'user',
+            content: 'Only {{working}} here',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      // The faulty message bails out of parsing and stays as-is — the throw must
+      // not propagate or corrupt the run, and the count must not double-claim it.
+      expect(result.messages[0].content).toBe('This {{working}} but this {{error}} fails');
+      // A separate, non-faulty message in the same batch is processed normally —
+      // the per-message try/catch in doProcess isolates the failure.
+      expect(result.messages[1].content).toBe('Only works here');
+      expect(result.metadata.placeholderVariablesProcessed).toBe(1);
+    });
+
+    it('should throw an actionable error when variableGenerators is missing', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        // Deliberately bypass the TS contract to simulate a misconfigured harness.
+        variableGenerators: undefined as unknown as Record<string, () => string>,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: 'Hello {{username}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      await expect(processor.process(context)).rejects.toThrow(
+        /variableGenerators config is missing or invalid/,
+      );
+    });
+
+    it('should throw when variableGenerators is null', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: null as unknown as Record<string, () => string>,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: 'Hello {{username}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      await expect(processor.process(context)).rejects.toThrow(
+        /variableGenerators config is missing or invalid/,
+      );
+    });
+
+    it('should use custom depth setting', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: mockVariableGenerators,
+        depth: 1,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: 'Nested: {{nested}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      expect(result.messages[0].content).toBe('Nested: Value with {{date}} inside');
+    });
+
+    it('should not modify messages that do not need processing', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: mockVariableGenerators,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: 'No variables here',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      expect(result.metadata.placeholderVariablesProcessed).toBe(0);
+    });
+
+    it('should not count messages that contain only unresolved placeholders', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: mockVariableGenerators,
+      });
+
+      const originalContent = 'Hello {{missing}}, see also {{alsoMissing}}';
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: originalContent,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      // Count should NOT increment when no placeholder was replaced
+      expect(result.metadata.placeholderVariablesProcessed).toBe(0);
+      // Content should be left exactly as-is (preserves {{missing}} tokens)
+      expect(result.messages[0].content).toBe(originalContent);
+    });
+
+    it('should not count array text-part messages with no replaceable placeholders', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: mockVariableGenerators,
+      });
+
+      const arrayContent = [
+        { type: 'text', text: 'No placeholders in here' },
+        { type: 'text', text: 'Only {{missing}} here' },
+        { type: 'image', image_url: 'https://example.com/x.png' },
+      ];
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: arrayContent,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      expect(result.metadata.placeholderVariablesProcessed).toBe(0);
+      // Content shape preserved verbatim
+      expect(result.messages[0].content).toEqual(arrayContent);
+    });
+
+    it('should count only messages whose content actually changed in a mixed batch', async () => {
+      const processor = new PlaceholderVariablesProcessor({
+        variableGenerators: mockVariableGenerators,
+      });
+
+      const context = {
+        initialState: {
+          messages: [],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: '',
+          tools: [],
+        },
+        messages: [
+          {
+            id: '1',
+            role: 'user',
+            content: 'No placeholders',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          {
+            id: '2',
+            role: 'user',
+            content: 'Hello {{username}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          {
+            id: '3',
+            role: 'user',
+            content: 'Only {{missing}}',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ],
+        metadata: {
+          model: 'gpt-4',
+          maxTokens: 4096,
+        },
+        isAborted: false,
+        executedProcessors: [],
+      };
+
+      const result = await processor.process(context);
+
+      // Only message #2 had a real replacement
+      expect(result.metadata.placeholderVariablesProcessed).toBe(1);
+      expect(result.messages[0].content).toBe('No placeholders');
+      expect(result.messages[1].content).toBe('Hello TestUser');
+      expect(result.messages[2].content).toBe('Only {{missing}}');
+    });
+  });
+
+  describe('formatPlaceholderValues & renderPlaceholderTemplate', () => {
+    it('formats nested structures into strings', () => {
+      const formatted = formatPlaceholderValues({
+        empty: undefined,
+        list: ['work', 'personal'],
+        nested: ['alpha', ['beta']],
+        number: 42,
+      });
+
+      expect(formatted.empty).toBe('');
+      expect(formatted.list).toBe('work, personal');
+      expect(formatted.nested).toBe('alpha, beta');
+      expect(formatted.number).toBe('42');
+    });
+
+    it('renders template strings using provided values', () => {
+      const template = 'Hello {{ name }}! Categories: {{ categories }}';
+      const result = renderPlaceholderTemplate(template, {
+        categories: ['work', 'personal'],
+        name: 'World',
+      });
+
+      expect(result).toBe('Hello World! Categories: work, personal');
+    });
+  });
+});

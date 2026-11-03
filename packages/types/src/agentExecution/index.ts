@@ -1,0 +1,777 @@
+import { z } from 'zod';
+
+import type { LobeAgentChatConfig } from '../agent/chatConfig';
+import type { CreateThreadWithMessageParams } from '../aiChat';
+import type { DeviceUnavailableErrorData } from '../device';
+import { workingDirConfigSchema } from '../device';
+import type { ComposerUserMessage, TaskDetail, UIChatMessage } from '../message';
+import type { ChatTopic } from '../topic';
+
+export * from './credentialFacts';
+export * from './initRequest';
+export * from './modelFacts';
+
+/**
+ * Metadata a client resolved before the topic existed, carried by the first
+ * send so the SERVER topic is born with it.
+ *
+ * The schema is the declaration and the type is derived from it, deliberately.
+ * Written as two independent declarations — an interface here and a
+ * `z.object()` at the router — they drift silently: `z.object()` strips keys it
+ * does not know, so a field added to the interface alone is dropped mid-flight
+ * and the call still answers 200.
+ */
+export const initialTopicMetadataSchema = z.object({
+  repos: z.array(z.string()).optional(),
+  /**
+   * Cloud-sandbox placement the composer chose before any topic existed — an
+   * instance, or a folder on the drive. The choice is made on a conversation
+   * that has nothing to write to yet, so it travels with the first send
+   * instead — the server cannot read the client's pending selection, and
+   * without this the new topic would be born unbound and silently run in a
+   * temporary sandbox.
+   */
+  /** Which workspace drive the placement is on; see `ChatTopicMetadata.sandboxDrive`. */
+  sandboxDrive: z.enum(['personal', 'public']).optional(),
+  /** The environment to initialize the sandbox from; see `ChatTopicMetadata.sandboxEnvironmentId`. */
+  sandboxEnvironmentId: z.string().max(255).optional(),
+  sandboxInstanceId: z.string().optional(),
+  sandboxWorkingDirectory: z.string().max(1024).optional(),
+  workingDirectory: z.string().optional(),
+  workingDirectoryConfig: workingDirConfigSchema.optional(),
+});
+
+export type InitialTopicMetadata = z.infer<typeof initialTopicMetadataSchema>;
+
+export type AgentSignalOperationKind =
+  'memory' | 'nightly-review' | 'self-feedback-intent' | 'self-reflection' | 'skill';
+
+/**
+ * Run-scoped Agent Signal marker stamped onto a background agent operation at
+ * dispatch. It travels on `appContext.agentSignal`, lands in
+ * `state.metadata.agentSignal`, and is read back on the completion path to
+ * project receipts / briefs (the `agent.execution.completed` payload itself only
+ * carries `agentId/operationId/topicId`). Runtime parsing/validation helpers live
+ * server-side in `operationMarker.ts`.
+ */
+export interface AgentSignalOperationMarker {
+  /**
+   * The reviewed user agent a resulting receipt should be attributed to. Needed
+   * when the run executes under a builtin self-iteration slug (whose resolved
+   * operation agentId is the builtin agent, not the user's agent); the
+   * completion projector prefers this over the run's agentId.
+   */
+  agentId?: string;
+  /**
+   * Explicit display anchor for receipts. Write this only when the producer
+   * already knows the exact assistant message that should own the receipt.
+   *
+   * Do not fall back to the triggering user message here. If the backend only
+   * knows the causal source, write `triggerMessageId` and let the conversation
+   * UI resolve the best display anchor from the current message graph.
+   */
+  anchorMessageId?: string;
+  /** Discriminator the completion handler dispatches on. */
+  kind: AgentSignalOperationKind;
+  /** Local review date (YYYY-MM-DD) for nightly review brief/receipt writes. */
+  localDate?: string;
+  /** Review window end (ISO) — lets tools re-derive the evidence digest. */
+  reviewWindowEnd?: string;
+  /** Review window start (ISO). */
+  reviewWindowStart?: string;
+  /** Stable producer source id of the originating signal. */
+  sourceId?: string;
+  /** Topic the run is scoped to. */
+  topicId?: string;
+  /**
+   * Causal message source for the signal. For user-feedback flows this is the
+   * user message that triggered the receipt; it is not necessarily the message
+   * where the receipt should render.
+   */
+  triggerMessageId?: string;
+}
+
+/**
+ * Application context for message storage
+ */
+export interface ExecAgentAppContext {
+  /**
+   * Agent document row id (`agent_documents.id`) for the document the user is
+   * currently viewing. When supplied, the active document context is built
+   * directly without a `listDocumentsForTopic` reverse lookup, so docs opened
+   * outside the active topic (skills, web docs) still carry `agent_document_id`
+   * for downstream tool calls.
+   */
+  agentDocumentId?: string | null;
+  /**
+   * Run-scoped Agent Signal marker for background self-iteration / memory runs.
+   * Forwarded into the operation so the completion path can project receipts.
+   */
+  agentSignal?: AgentSignalOperationMarker;
+  /**
+   * Agent that owns the conversation when it differs from the agent executing
+   * this run (for example, a single explicit @Agent direct route).
+   */
+  conversationAgentId?: string;
+  /** Optional default assignee candidate for task manager prompts */
+  defaultTaskAssigneeAgentId?: string;
+  /** Current document ID for page-scoped conversations */
+  documentId?: string | null;
+  /**
+   * When scope is 'agent_builder', the ID of the agent being edited (i.e. the
+   * left-sidebar agent the user opened AgentBuilder for). The AgentBuilder
+   * builtin runs under its own `agentId`; this field carries the *target* so
+   * server-side tool executors update the correct agent rather than the builder
+   * itself.
+   */
+  editingAgentId?: string;
+  /**
+   * When scope is 'group_agent_builder', the ID of the group being edited (the
+   * group whose Profile page the user opened the builder panel on).
+   *
+   * Deliberately NOT `groupId`: that field marks the run as a *group chat* turn
+   * and gets stamped onto the created topic and messages, which would pull the
+   * builder's private side-conversation into the group's message read path
+   * (`MessageModel.query` filters group chats by `messages.groupId`). The
+   * builder conversation stays owned by the builtin builder agent; only the
+   * group-agent-builder tool runtime and its context injector read this field.
+   */
+  editingGroupId?: string;
+  /** Group ID for group chat */
+  groupId?: string | null;
+  /**
+   * Initial metadata to merge into the topic when a new topic is created for
+   * this execution. Ignored when a topicId is already provided (existing topic).
+   */
+  initialTopicMetadata?: InitialTopicMetadata;
+  /**
+   * Whether this operation runs inside an isolation thread spawned by another
+   * operation on the same topic (callAgent / callSubAgent / group member).
+   *
+   * Such a run is a guest on its parent's topic: it must not claim or clear the
+   * topic's `runningOperation` mark, which is the parent run's gateway reconnect
+   * anchor. Broader than `isSubAgent` on purpose — the `execSubAgent` (callAgent)
+   * path passes `isSubAgent: false` yet is just as much a guest.
+   */
+  isolationThread?: boolean;
+  /**
+   * Whether this operation is an isolated sub-agent execution. Used to disable
+   * recursive sub-agent dispatch.
+   */
+  isSubAgent?: boolean;
+  /**
+   * Branch this run into a NEW thread (subtopic) under `topicId`, persisting the
+   * turn there instead of on the topic's main spine.
+   *
+   * Same intent the non-gateway send path expresses as `newThread` on
+   * `aiChat.sendMessageInServer`. The gateway path skips that call entirely, so
+   * without carrying it here the subtopic silently collapses back into the main
+   * conversation and no thread row is ever created.
+   *
+   * Ignored when `threadId` is already set — that is a follow-up inside an
+   * existing thread, which needs no new row.
+   */
+  newThread?: CreateThreadWithMessageParams;
+  /**
+   * Orchestration role of the agent for this group run. `'supervisor'` for the
+   * group's coordinating agent (execGroupAgent), `'member'` for delegated members
+   * (execAgentMember). Stamped onto the assistant message's
+   * `metadata.orchestrationRole` so the role snapshot persists for rendering.
+   */
+  orchestrationRole?: 'supervisor' | 'member';
+  /**
+   * Project the run belongs to. On a NEW topic it is written onto the row, so
+   * a conversation started from the project home is born inside the project
+   * even without a working directory. For an existing topic the server
+   * resolves it from the topic (or the run's task) and fills it in here, so
+   * every downstream stage reads one value.
+   */
+  projectId?: string;
+  /**
+   * Project working directory a NEW topic is born in — the blank conversation a
+   * project group's "+" opened. The topic is bound to it and the run routes to
+   * the directory's device. Ignored when a topicId is already provided.
+   */
+  projectWorkingDirectoryId?: string;
+  /** Scope identifier */
+  scope?: string | null;
+  /** Session ID */
+  sessionId?: string;
+  /** Optional assistant message id that anchors the run (e.g. parent for an isolated thread). */
+  sourceMessageId?: string;
+  /**
+   * Live-progress anchor for a `callSubAgent` child, spread onto
+   * `state.metadata.subAgentProgress`.
+   *
+   * The child runs under its own operationId, but the client only ever subscribes
+   * to the PARENT's gateway channel — which stays open across the sub-agent run
+   * because `waiting_for_async_tool` is excluded from `STREAM_END_STATUSES`. So
+   * the child's step loop publishes its running totals onto the parent's channel,
+   * addressed at the placeholder tool message by `toolMessageId`. Without it the
+   * client sees no stats until the completion bridge backfills `pluginState`.
+   */
+  subAgentProgress?: { parentOperationId: string; toolMessageId: string };
+  /**
+   * Suppresses AgentSignal `agent.user.message` re-emission when this run is itself driven by a
+   * background/builtin agent. Required for self-iteration / memory-writer / skill-manager runs to
+   * avoid recursion into the analyzeIntent pipeline.
+   */
+  suppressSignal?: boolean;
+  /** Current task identifier when executing from a task detail surface */
+  taskId?: string | null;
+  /** Thread ID for threaded conversations */
+  threadId?: string | null;
+  /** Topic ID */
+  topicId?: string | null;
+  /**
+   * Goal detail page the conversation is happening on. The server builds
+   * `RuntimeInitialContext.goalOverview` from the goal graph so the agent can
+   * answer progress questions without tool calls.
+   */
+  viewedGoal?: { goalId: string };
+}
+
+/**
+ * Parameters for execAgent - execute a single Agent
+ * Either agentId or slug must be provided
+ */
+/**
+ * Ids the client already rendered this run's rows under, for the server to
+ * honour verbatim — the gateway counterpart of `sendMessageInServer`'s
+ * `newTopic.id` / `newUserMessage.id` / `newAssistantMessage.id`. Without
+ * them the gateway path mints its own ids and the client's optimistic rows
+ * never converge with the server rows.
+ *
+ * Only meaningful for a fresh send. Resume / regeneration paths must NOT
+ * carry them: replaying an id there would collide with the row the original
+ * send already created.
+ */
+export interface ExecAgentClientIds {
+  /** Id for the assistant placeholder row this run creates. */
+  assistantMessageId?: string;
+  /** Id for the topic when this run creates one (ignored when reusing). */
+  topicId?: string;
+  /** Id for the user message row this run creates. */
+  userMessageId?: string;
+  /**
+   * Tail of the branch the client renders the new user row under. The server
+   * keeps the turn on this branch unless its newer spine head extends it, so a
+   * turn sent while an older branch is selected stays visible.
+   */
+  userMessageParentId?: string;
+}
+
+/** A client's declaration that it can run relayed LLM attempts (`llm_execute`). */
+export interface ExecAgentLlmExecutor {
+  /** Relay protocol versions the client speaks, e.g. `llm_relay@1`. */
+  capabilities: string[];
+  /** Stable id of the declaring client (tab / desktop window). */
+  clientId: string;
+  /** Provider ids this client can reach directly. */
+  providers: string[];
+}
+
+/**
+ * `ClientLlmExecutorUnavailable` reasons a client can still fix by showing up:
+ * the server parks the run in `waiting_for_client` for them instead of failing
+ * it (U4c), and owns what its assistant row shows.
+ */
+export const CLIENT_LLM_WAITABLE_REASONS: readonly string[] = [
+  'claim_timeout',
+  'no_executor',
+  'not_delivered',
+];
+
+/** Whether a (stream or persisted) error is one the server parks the run on. */
+export const isClientLlmWaitableError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const { body, type } = error as { body?: { reason?: unknown }; type?: unknown };
+  return (
+    type === 'ClientLlmExecutorUnavailable' &&
+    typeof body?.reason === 'string' &&
+    CLIENT_LLM_WAITABLE_REASONS.includes(body.reason)
+  );
+};
+
+/**
+ * A run parked in `waiting_for_client`: its next LLM call needs the user's
+ * device and no client took it. What a client needs to pick it up.
+ */
+export interface ClientLlmWaitItem {
+  agentId?: string;
+  /** Assistant row the resumed call fills. */
+  assistantMessageId?: string;
+  /** When the run stops waiting and ends with an error. */
+  expiresAt: string;
+  operationId: string;
+  /** The provider the client must be able to reach. */
+  provider: string;
+  threadId?: string;
+  topicId?: string;
+}
+
+/** What `resumeClientLlmWait` did; `resumed: false` once the run is no longer parked. */
+export interface ResumeClientLlmWaitResult {
+  assistantMessageId?: string;
+  resumed: boolean;
+  topicId?: string;
+}
+
+export interface ExecAgentParams {
+  /** The agent ID to run (either agentId or slug is required) */
+  agentId?: string;
+  /** Application context for message storage */
+  appContext?: ExecAgentAppContext;
+  /** Whether to auto-start execution after creating operation (default: true) */
+  autoStart?: boolean;
+  /** Client-minted ids for the rows this run creates (fresh sends only). */
+  clientIds?: ExecAgentClientIds;
+  /**
+   * Client IP of the originating request, captured server-side for run
+   * attribution. Propagated into the run's `state.metadata` and downstream
+   * LLM-call metadata for auditing and spend attribution. Never client-passable
+   * input — derived from the request context.
+   */
+  clientIp?: string;
+  /**
+   * Wire protocol this client speaks; `2` declares that it reconciles its
+   * message list from `message_patch` revisions, so the server may stop
+   * pushing whole `uiMessages` snapshots to it. Absent ⇒ 1.
+   */
+  clientProtocol?: 1 | 2;
+  /** Explicit device ID to bind to the topic and activate for this run */
+  deviceId?: string;
+  /** Optional existing message IDs to include in context */
+  existingMessageIds?: string[];
+  /**
+   * File IDs of already-uploaded attachments to attach to the new user message.
+   * Resolved server-side via FileModel.findByIds into imageList / videoList / fileList.
+   * Use this when files were uploaded separately via the file upload flow
+   * (e.g. SPA Gateway mode). For platform-adapter ingestion from raw URL/buffer,
+   * use the internal `files` param instead.
+   */
+  fileIds?: string[];
+  /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
+  includeFinalState?: boolean;
+  /** Additional system instructions appended after the agent's own system role */
+  instructions?: string;
+  /**
+   * This client can execute single LLM attempts the server relays to it
+   * (`llm_execute`) for model providers only this device can reach. Lands on
+   * `state.host.llmExecutor`.
+   */
+  llmExecutor?: ExecAgentLlmExecutor;
+  /** Current desktop's device ID; used only when the effective target is `local`. */
+  localDeviceId?: string;
+  /** Override the agent's default model */
+  model?: string;
+  /**
+   * Parent operation ID when this run is a sub-agent invocation. Forwarded
+   * to `agent_operations.parent_operation_id` so analytics can join the
+   * sub-tree back to its root.
+   */
+  parentOperationId?: string;
+  /** The user input/prompt */
+  prompt: string;
+  /** Override the agent's default provider */
+  provider?: string;
+  /**
+   * Existing topic operation this fresh turn atomically supersedes. The server
+   * accepts the handoff only while the topic marker still belongs to this id.
+   */
+  replacesOperationId?: string;
+  /** The agent slug to run (either agentId or slug is required) */
+  slug?: string;
+  /**
+   * The operation the launcher's run belongs to, when another agent started this
+   * run. Every runtime hands its process its own `LOBEHUB_OPERATION_ID` but
+   * deliberately strips the launcher's agent id (device-dispatched runs), so the
+   * operation is the one identifier that survives every path. The server reads
+   * the topic and the agent from that operation row — its own record, and one
+   * that must belong to the caller — and stamps `metadata.agentSender` on the
+   * created user message.
+   *
+   * Deliberately not a topic id: a topic is a bare client claim no server row
+   * can vouch for, whereas the operation's topic and agent are written by the
+   * server itself.
+   */
+  sourceOperationId?: string;
+  /**
+   * User agent of the originating request, captured server-side for run
+   * attribution. Propagated into the run's `state.metadata` and downstream
+   * LLM-call metadata for auditing and spend attribution. Never client-passable
+   * input — derived from the request context.
+   */
+  userAgent?: string;
+  /**
+   * The composer-authored part of the user message this send creates: rich-text
+   * `editorData` and attached content (`metadata.contextSelections`, …). The
+   * same shape `aiChat.sendMessageInServer` persists, so a gateway send stores
+   * the row a client-runtime send would. See `ComposerUserMessageSchema`.
+   */
+  userMessage?: ComposerUserMessage;
+}
+
+/**
+ * Parameters for scheduleAgentRun — defer an agent run to a future time.
+ *
+ * Deliberately a subset of {@link ExecAgentParams}: a deferred run creates the
+ * topic now and replays the request later through `execAgent`, so anything tied
+ * to a live turn (`existingMessageIds`, `parentOperationId`, `autoStart`) has no
+ * meaning here. One-shot only — recurring execution belongs to
+ * `tasks.automationMode = 'schedule'`.
+ */
+export interface ScheduleAgentRunParams {
+  /** The agent ID to run (either agentId or slug is required) */
+  agentId?: string;
+  /** File IDs of already-uploaded attachments to attach when the run fires */
+  fileIds?: string[];
+  /** Group to file the topic under, when scheduling from a group conversation */
+  groupId?: string | null;
+  /** Override the agent's default model */
+  model?: string;
+  /** The user input/prompt, replayed verbatim when the run comes due */
+  prompt: string;
+  /** Override the agent's default provider */
+  provider?: string;
+  /** When to run. UTC ISO-8601 (`…Z`) — see `TopicScheduledRun.runAt`. */
+  runAt: string;
+  /** The agent slug to run (either agentId or slug is required) */
+  slug?: string;
+}
+
+export interface ScheduleAgentRunResult {
+  /** The resolved agent ID */
+  agentId: string;
+  /** Echoes the scheduled time, so callers don't re-derive it */
+  runAt: string;
+  /** The topic created to hold the deferred run (status `scheduled`) */
+  topicId: string;
+}
+
+/** Response from execAgent. */
+export interface ExecAgentResult {
+  /** The resolved agent ID */
+  agentId: string;
+  /** The assistant message ID created for this operation */
+  assistantMessageId: string;
+  /** Whether the operation was auto-started */
+  autoStarted: boolean;
+  /** Timestamp when operation was created */
+  createdAt: string;
+  /** The thread created for this run when `appContext.newThread` was supplied. */
+  createdThreadId?: string;
+  /** Error message if operation failed to start */
+  error?: string;
+  /** Structured availability context when a device dispatch failed before acceptance. */
+  errorData?: DeviceUnavailableErrorData;
+  /**
+   * The run continues a group member's approved tool under the supervisor's
+   * run (the supervisor keeps the topic and its stream). Explicit, because the
+   * member can be the supervisor agent itself.
+   */
+  groupMemberContinuation?: boolean;
+  /**
+   * External heterogeneous producer for this run. `null` explicitly denotes
+   * the normal AgentRuntime path; `undefined` is reserved for rolling clients
+   * talking to an older server that did not yet return this discriminator.
+   */
+  heteroType?: string | null;
+  /**
+   * With `groupMemberContinuation`: the member's continuation operation. The
+   * client-facing `operationId` then names the supervisor's run, so a client
+   * released before this field keeps following the supervisor (its stream
+   * carries the member's continuation and the supervisor's closing) instead of
+   * taking the topic over and dropping it.
+   */
+  memberOperationId?: string;
+  /** Status message */
+  message: string;
+  /** Queue message ID if auto-started */
+  messageId?: string;
+  /** Operation ID for SSE connection */
+  operationId: string;
+  /** Operation status */
+  status: string;
+  /** Whether the operation was created successfully */
+  success: boolean;
+  /**
+   * Server-side only, with `groupMemberContinuation`: the supervisor run the
+   * member continues under. Mapped into the client shape by the router.
+   */
+  supervisorOperationId?: string;
+  /**
+   * The failure was already announced through the run's terminal lifecycle —
+   * `CompletionLifecycle` fired its `onComplete` hooks, so every consumer of
+   * those hooks (IM bot completion callback, task lifecycle) has been told.
+   *
+   * Callers that render failures themselves must not report it a second time:
+   * a hetero dispatch failure finalizes the run AND returns `success: false`,
+   * which used to put two error messages in the same IM thread. Absent /
+   * `false` means no hook consumer was reachable, so the caller owns the
+   * report — as it still does when delivery itself fails, because a hook with
+   * no fallback throws `CriticalHookDeliveryError` out of `execAgent` instead
+   * of resolving to this result.
+   */
+  terminalReported?: boolean;
+  /** ISO timestamp */
+  timestamp: string;
+  /** Short-lived JWT token for Gateway WebSocket authentication */
+  token?: string;
+  /** The topic ID (created or reused) */
+  topicId: string;
+  /** The user message ID created for this operation */
+  userMessageId: string;
+}
+
+// ============ Group Agent Execution Types ============
+
+/**
+ * Options for creating a new topic in group chat
+ */
+export interface ExecGroupAgentNewTopicOptions {
+  /** Topic title */
+  title?: string;
+  /** Message IDs to include in the topic */
+  topicMessageIds?: string[];
+}
+
+/**
+ * Parameters for execGroupAgent - execute Supervisor Agent in Group chat
+ */
+export interface ExecGroupAgentParams {
+  /** The Supervisor agent ID */
+  agentId: string;
+  /** File IDs attached to the message */
+  files?: string[];
+  /** The Group ID */
+  groupId: string;
+  /** User message content */
+  message: string;
+  /** Optional: Create a new topic */
+  newTopic?: ExecGroupAgentNewTopicOptions;
+  /** Existing topic ID */
+  topicId?: string | null;
+}
+
+/**
+ * Result from execGroupAgent (internal, without messages/topics)
+ */
+export interface ExecGroupAgentResult {
+  /** The assistant message ID created for this operation */
+  assistantMessageId: string;
+  /** Error message if operation failed to start */
+  error?: string;
+  /** Whether a new topic was created */
+  isCreateNewTopic: boolean;
+  /** Operation ID for tracking execution status */
+  operationId: string;
+  /** Whether the operation was created successfully */
+  success?: boolean;
+  /** The topic ID */
+  topicId: string;
+  /** The user message ID created for this operation */
+  userMessageId: string;
+}
+
+/**
+ * Response from execGroupAgent (with messages/topics for UI sync)
+ */
+export interface ExecGroupAgentResponse {
+  /** The assistant message ID created for this operation */
+  assistantMessageId: string;
+  /** Error message if operation failed to start */
+  error?: string;
+  /** Whether a new topic was created */
+  isCreateNewTopic: boolean;
+  /** Latest messages in the conversation */
+  messages: UIChatMessage[];
+  /** Operation ID for SSE connection */
+  operationId: string;
+  /** Whether the operation was created successfully */
+  success?: boolean;
+  /** The topic ID */
+  topicId: string;
+  /** Topics list (if new topic was created) */
+  topics?: {
+    items: ChatTopic[];
+    total: number;
+  };
+  /** The user message ID created for this operation */
+  userMessageId: string;
+}
+
+// ============ SubAgent Execution Types ============
+
+/**
+ * Parameters for execSubAgent - execute an agent in an isolated thread
+ * Supports both Group mode and Single Agent mode
+ *
+ * - Group mode: pass groupId, Thread will be associated with the Group
+ * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
+ */
+export interface ExecSubAgentParams {
+  /** The agent ID to execute */
+  agentId: string;
+  /** The Group ID (optional, only for Group mode) */
+  groupId?: string;
+  /** Instruction/prompt for the agent */
+  instruction: string;
+  /** The parent message ID that anchors the isolated thread */
+  parentMessageId: string;
+  /** Parent operation ID for dispatching callAgent hooks */
+  parentOperationId?: string;
+  /** Timeout in milliseconds (optional) */
+  timeout?: number;
+  /** Thread title shown in UI */
+  title?: string;
+  /** The Topic ID */
+  topicId: string;
+}
+
+/**
+ * Parameters for execVirtualSubAgent - execute a `lobe-agent.callSubAgent`
+ * child run.
+ *
+ * Virtual sub-agents are tool-created isolated runs. They are marked with
+ * `appContext.isSubAgent` so the child cannot recursively spawn more
+ * sub-agents, and they install the completion bridge that backfills the
+ * parent's placeholder tool message before resuming the parent operation.
+ */
+export interface ExecVirtualSubAgentParams {
+  /** The agent ID to execute */
+  agentId: string;
+  /**
+   * Detached run (`callSubAgent({ runInBackground })`): the parent is not
+   * parked on it, its placeholder already holds the start receipt, and the
+   * answer is delivered to the parent as a separate message on completion.
+   */
+  background?: boolean;
+  /**
+   * chatConfig overrides (thinking / reasoning-effort extend params) for the
+   * sub-agent run, from the parent agent's `agencyConfig.subagent.chatConfig`.
+   * Merged over the executing agent's own chatConfig, skipping nulled keys.
+   */
+  chatConfig?: Partial<LobeAgentChatConfig> | null;
+  /**
+   * Explicit device request for the child: the device the parent run is bound
+   * to. Set for an anonymous `callSubAgent` clone so it runs where its parent
+   * runs instead of re-routing through the agent-level `boundDeviceId`.
+   */
+  deviceId?: string;
+  /** The Group ID inherited from the parent operation, when present */
+  groupId?: string;
+  /** Instruction/prompt for the virtual sub-agent */
+  instruction: string;
+  /**
+   * What "this machine" means for the child: the parent run's device. Only
+   * consulted when the child's target is `local`, so a named `callAgent` target
+   * keeps its own execution target.
+   */
+  localDeviceId?: string;
+  /**
+   * Model the sub-agent should run on, resolved by the spawn site from the
+   * parent agent's `agencyConfig.subagent` (explicit override or the parent's
+   * effective model). Passed explicitly so the execution side never re-reads
+   * the parent config.
+   */
+  model?: string;
+  /** The parent placeholder tool message ID */
+  parentMessageId: string;
+  /** Parent operation ID to bridge and resume on completion */
+  parentOperationId: string;
+  /** Provider for {@link model}. */
+  provider?: string;
+  /**
+   * The tool call (`callSubAgent` / `callAgent`) that spawned this sub-agent,
+   * stored on a new thread's metadata so the UI shows the thread as a
+   * sub-agent. A continued thread keeps the call that first spawned it.
+   */
+  sourceToolCallId?: string;
+  /**
+   * Existing isolation thread of an earlier `callSubAgent` run to continue.
+   * When set, the instruction becomes a new turn on that thread (the sub-agent
+   * keeps its history) instead of a new thread being created.
+   */
+  threadId?: string;
+  /** Timeout in milliseconds (optional) */
+  timeout?: number;
+  /** Thread title shown in UI */
+  title?: string;
+  /** The Topic ID */
+  topicId: string;
+}
+
+/**
+ * Result from execSubAgent
+ */
+export interface ExecSubAgentResult {
+  /** The assistant message ID created for this run */
+  assistantMessageId: string;
+  /** Error message if execution failed to start */
+  error?: string;
+  /** Operation ID for tracking execution status */
+  operationId: string;
+  /** Whether the execution was created successfully */
+  success: boolean;
+  /** The Thread ID where the execution is isolated */
+  threadId: string;
+}
+
+/**
+ * @deprecated Use ExecSubAgentParams instead
+ */
+export type ExecGroupSubAgentTaskParams = ExecSubAgentParams;
+
+/**
+ * @deprecated Use ExecSubAgentResult instead
+ */
+export type ExecGroupSubAgentTaskResult = ExecSubAgentResult;
+
+/**
+ * Current activity for real-time progress display
+ * Only returned when task is processing
+ */
+export interface TaskCurrentActivity {
+  /** API name, e.g. "search" */
+  apiName?: string;
+  /** Content preview (truncated) */
+  contentPreview?: string;
+  /** Plugin identifier, e.g. "lobe-web-browsing" */
+  identifier?: string;
+  /** Activity type */
+  type: 'tool_calling' | 'tool_result' | 'generating';
+}
+
+/**
+ * Task status query result
+ */
+export interface TaskStatusResult {
+  /** Task completion time (ISO string) */
+  completedAt?: string;
+  /** Cost information */
+  cost?: { total: number };
+  /** Current activity for real-time progress display (only when processing) */
+  currentActivity?: TaskCurrentActivity;
+  /** Error message if task failed */
+  error?: string;
+  /**
+   * Parsed UI messages from conversation-flow
+   * Used for displaying intermediate steps in server task
+   */
+  messages?: UIChatMessage[];
+  /** Task result content (last assistant message) */
+  result?: string;
+  /** Current task status */
+  status: 'processing' | 'completed' | 'failed' | 'cancel';
+  /** Number of steps executed */
+  stepCount?: number;
+  /** Task detail from Thread table */
+  taskDetail?: TaskDetail;
+  /** Model usage information */
+  usage?: {
+    completion_tokens?: number;
+    prompt_tokens?: number;
+    total_tokens?: number;
+  };
+}

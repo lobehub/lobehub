@@ -1,0 +1,24 @@
+{
+  "name": "@lobechat/agent-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "simple": "tsx examples/tools-calling.ts",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "@lobechat/context-engine": "workspace:*",
+    "@lobechat/types": "workspace:*",
+    "ajv": "^8.20.0",
+    "es-toolkit": "^1.50.0",
+    "p-map": "^7.0.5",
+    "partial-json": "^0.1.7"
+  },
+  "devDependencies": {
+    "openai": "^6.45.0"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/agent-runtime"
+}

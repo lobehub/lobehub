@@ -1,0 +1,419 @@
+'use client';
+
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
+import {
+  Block,
+  confirmModal,
+  copyToClipboard,
+  type DropdownItem,
+  Flexbox,
+  Icon,
+  type ModalInstance,
+  Text,
+  toast,
+} from '@lobehub/ui';
+import {
+  Clock3Icon,
+  Copy,
+  ExternalLink,
+  Hash,
+  Maximize2,
+  PencilLine,
+  Pin,
+  PinOff,
+  Share2,
+  Trash,
+  Wand2,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation, useParams } from 'react-router';
+
+import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
+import { useTopicBugReportMenuItem } from '@/business/client/hooks/useTopicBugReportMenuItem';
+import { openRenameModal } from '@/components/RenameModal';
+import { DOCUMENT_HISTORY_QUERY_LIST_LIMIT } from '@/const/documentHistory';
+import { isDesktop } from '@/const/version';
+import { useAgentContext } from '@/features/Conversation/useAgentContext';
+import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { useFavoriteMenuItem } from '@/features/Favorites';
+import { openDocumentCompareModal } from '@/features/PageEditor/History/CompareModal';
+import { formatHistoryAbsoluteTime } from '@/features/PageEditor/History/formatHistoryDate';
+import type {
+  DocumentHistoryListItem,
+  DocumentHistorySaveSource,
+} from '@/server/routers/lambda/_schema/documentHistory';
+import { documentService } from '@/services/document';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
+import { useDocumentStore } from '@/store/document';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+
+interface TopicInfoHeaderProps {
+  authorName: string;
+  title: string;
+  updatedAtLabel?: string;
+}
+
+const TopicInfoHeader = ({ authorName, title, updatedAtLabel }: TopicInfoHeaderProps) => (
+  <Block
+    horizontal
+    align={'center'}
+    gap={12}
+    paddingBlock={8}
+    paddingInline={12}
+    style={{ minWidth: 240 }}
+    variant={'borderless'}
+  >
+    <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
+      <Text ellipsis style={{ lineHeight: 1.4 }} weight={'bold'}>
+        {title}
+      </Text>
+      <Text ellipsis fontSize={12} style={{ lineHeight: 1.4 }} type={'secondary'}>
+        {updatedAtLabel ? `${authorName} ${updatedAtLabel}` : authorName}
+      </Text>
+    </Flexbox>
+  </Block>
+);
+
+interface UseMenuOptions {
+  /**
+   * Share entry for the topic. Passed only where Share is not already a header
+   * button (inside a workspace, where comments take that slot).
+   */
+  share?: { disabled?: boolean; onClick: () => void };
+}
+
+export const useMenu = ({ share }: UseMenuOptions = {}): {
+  menuHeader?: ReactNode;
+  menuItems: () => DropdownItem[];
+} => {
+  const { t } = useTranslation(['chat', 'topic', 'common', 'file']);
+
+  const { pathname } = useLocation();
+
+  const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
+    systemStatusSelectors.wideScreen(s),
+    s.toggleWideScreen,
+  ]);
+  const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
+
+  const { agentId: activeAgentId, threadId, topicId: routeTopicId } = useAgentContext();
+  const activeTopic = useChatStore((s) =>
+    routeTopicId ? topicSelectors.getTopicById(routeTopicId)(s) : undefined,
+  );
+  const workingDirectory = useChatStore(topicSelectors.getTopicWorkingDirectory(routeTopicId));
+  const [autoRenameTopicTitle, favoriteTopic, removeTopic, updateTopicTitle] = useChatStore((s) => [
+    s.autoRenameTopicTitle,
+    s.favoriteTopic,
+    s.removeTopic,
+    s.updateTopicTitle,
+  ]);
+
+  const { docId } = useParams<{ docId?: string }>();
+  const compareInstanceRef = useRef<ModalInstance | null>(null);
+
+  const saveSourceLabels = useMemo<Record<DocumentHistorySaveSource, string>>(
+    () => ({
+      autosave: t('pageEditor.history.saveSource.autosave', { ns: 'file' }),
+      llm_call: t('pageEditor.history.saveSource.llm_call', { ns: 'file' }),
+      manual: t('pageEditor.history.saveSource.manual', { ns: 'file' }),
+      restore: t('pageEditor.history.saveSource.restore', { ns: 'file' }),
+      system: t('pageEditor.history.saveSource.system', { ns: 'file' }),
+    }),
+    [t],
+  );
+
+  const handleRestoreHistory = useCallback(
+    async (item: DocumentHistoryListItem, onSuccess?: () => void): Promise<void> => {
+      if (!docId || item.isCurrent) return;
+
+      const { editor, markDirty, performSave } = useDocumentStore.getState();
+      if (!editor) {
+        toast.error(t('pageEditor.history.restoreError', { ns: 'file' }));
+        return;
+      }
+
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: t('pageEditor.history.restoreConfirm.content', {
+          ns: 'file',
+          savedAt: formatHistoryAbsoluteTime(item.savedAt),
+        }),
+        okText: t('pageEditor.history.restore', { ns: 'file' }),
+        onOk: async () => {
+          try {
+            const result = await documentService.getDocumentHistoryItem(
+              { documentId: docId, historyId: item.id },
+              `header-actions-history-${docId}`,
+            );
+
+            editor.setDocument('json', JSON.stringify(result.editorData), { keepId: true });
+            markDirty(docId);
+            await performSave(docId, undefined, {
+              restoreFromHistoryId: item.id,
+              saveSource: 'restore',
+            });
+            onSuccess?.();
+          } catch (error) {
+            console.error('[HeaderActions] Failed to restore history item:', error);
+            toast.error(t('pageEditor.history.restoreError', { ns: 'file' }));
+            throw error;
+          }
+        },
+        title: t('pageEditor.history.restoreConfirm.title', { ns: 'file' }),
+      });
+    },
+    [docId, t],
+  );
+
+  const openCompareModal = useCallback(async (): Promise<void> => {
+    if (!docId) return;
+
+    try {
+      const result = await documentService.listDocumentHistory({
+        documentId: docId,
+        includeCurrent: true,
+        limit: DOCUMENT_HISTORY_QUERY_LIST_LIMIT,
+      });
+      const items = result.items ?? [];
+
+      if (items.length === 0) {
+        toast.info(t('pageEditor.history.empty', { ns: 'file' }));
+        return;
+      }
+
+      const initialHistoryId = items.find((item) => !item.isCurrent)?.id ?? items[0].id;
+
+      compareInstanceRef.current?.destroy();
+      const instance = openDocumentCompareModal({
+        documentId: docId,
+        initialHistoryId,
+        items,
+        onRestore: (item) => {
+          void handleRestoreHistory(item, () => instance.close());
+        },
+        saveSourceLabels,
+      });
+      compareInstanceRef.current = instance;
+    } catch (error) {
+      console.error('[HeaderActions] Failed to open document compare modal:', error);
+      toast.error(t('pageEditor.history.compareError', { ns: 'file' }));
+    }
+  }, [docId, handleRestoreHistory, saveSourceLabels, t]);
+
+  const authorInfo = useAuthorInfo(activeTopic?.userId);
+
+  const topicId = activeTopic?.id;
+  const topicTitle = activeTopic?.title ?? '';
+  const isFavorite = !!activeTopic?.favorite;
+  // `isFavorite` above is the topic's Pin; this adds it to the home sidebar's
+  // Favorites section. No star button owns the hotkey here, so none is shown.
+  const favoriteMenuItem = useFavoriteMenuItem(
+    topicId && activeAgentId
+      ? {
+          path: AGENT_CHAT_TOPIC_URL(activeAgentId, topicId),
+          snapshotReady: !!topicTitle && topicTitle !== '...',
+          targetId: topicId,
+          title: topicTitle,
+          type: 'topic',
+        }
+      : undefined,
+    { showHotkey: false },
+  );
+
+  const enableTopicBugReport = useUserStore(labPreferSelectors.enableTopicBugReport);
+  const bugReportItem = useTopicBugReportMenuItem({
+    agentId: activeAgentId,
+    threadId: threadId ?? undefined,
+    topicId,
+  });
+
+  const menuHeader = useMemo<ReactNode | undefined>(() => {
+    if (!authorInfo?.fullName || !topicId) return undefined;
+
+    const updatedAt = activeTopic?.updatedAt;
+    const formattedDate = updatedAt
+      ? new Date(updatedAt).toLocaleString(undefined, {
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : '';
+    const updatedAtLabel = formattedDate
+      ? t('info.updatedAt', { ns: 'topic', time: formattedDate })
+      : undefined;
+
+    return (
+      <TopicInfoHeader
+        authorName={authorInfo.fullName}
+        title={t('info.title', { ns: 'topic' })}
+        updatedAtLabel={updatedAtLabel}
+      />
+    );
+  }, [activeTopic?.updatedAt, authorInfo?.fullName, topicId, t]);
+
+  const menuItems = useCallback((): DropdownItem[] => {
+    const items: DropdownItem[] = [];
+
+    if (topicId) {
+      items.push(
+        {
+          icon: <Icon icon={isFavorite ? PinOff : Pin} />,
+          key: 'favorite',
+          label: t(isFavorite ? 'actions.unpin' : 'actions.pin', { ns: 'topic' }),
+          onClick: () => {
+            favoriteTopic(topicId, !isFavorite);
+          },
+        },
+        ...(favoriteMenuItem ? [favoriteMenuItem] : []),
+        { type: 'divider' as const },
+        {
+          icon: <Icon icon={Wand2} />,
+          key: 'autoRename',
+          label: t('actions.autoRename', { ns: 'topic' }),
+          onClick: () => {
+            autoRenameTopicTitle(topicId);
+          },
+        },
+        {
+          icon: <Icon icon={PencilLine} />,
+          key: 'rename',
+          label: t('rename', { ns: 'common' }),
+          onClick: () => {
+            openRenameModal({
+              defaultValue: topicTitle,
+              description: t('renameModal.description', { ns: 'topic' }),
+              onSave: async (newTitle) => {
+                await updateTopicTitle(topicId, newTitle);
+              },
+              title: t('renameModal.title', { ns: 'topic' }),
+            });
+          },
+        },
+        { type: 'divider' as const },
+      );
+
+      if (share) {
+        items.push({
+          disabled: share.disabled,
+          icon: <Icon icon={Share2} />,
+          key: 'share',
+          label: t('share', { ns: 'common' }),
+          onClick: share.onClick,
+        });
+      }
+
+      if (isDesktop && workingDirectory) {
+        items.push({
+          icon: <Icon icon={Copy} />,
+          key: 'copyWorkingDirectory',
+          label: t('actions.copyWorkingDirectory', { ns: 'topic' }),
+          onClick: () => {
+            void navigator.clipboard.writeText(workingDirectory);
+            toast.success(t('actions.copyWorkingDirectorySuccess', { ns: 'topic' }));
+          },
+        });
+      }
+
+      if (isDesktop && activeAgentId && !pathname.startsWith('/popup')) {
+        items.push({
+          icon: <Icon icon={ExternalLink} />,
+          key: 'openInNewWindow',
+          label: t('actions.openInNewWindow', { ns: 'topic' }),
+          onClick: () => {
+            openTopicInNewWindow(activeAgentId, topicId);
+          },
+        });
+      }
+
+      items.push(
+        {
+          icon: <Icon icon={Hash} />,
+          key: 'copySessionId',
+          label: t('actions.copySessionId', { ns: 'topic' }),
+          onClick: async () => {
+            await copyToClipboard(topicId);
+            toast.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
+          },
+        },
+        ...(enableTopicBugReport && bugReportItem ? [bugReportItem] : []),
+        { type: 'divider' as const },
+      );
+    }
+
+    if (docId) {
+      items.push(
+        {
+          icon: <Icon icon={Clock3Icon} />,
+          key: 'open-document-compare',
+          label: t('pageEditor.history.compareTitle', { ns: 'file' }),
+          onClick: () => {
+            void openCompareModal();
+          },
+        },
+        { type: 'divider' as const },
+      );
+    }
+
+    items.push({
+      checked: wideScreen,
+      icon: <Icon icon={Maximize2} />,
+      key: 'full-width',
+      label: t('viewMode.fullWidth'),
+      onCheckedChange: toggleWideScreen,
+      type: 'switch',
+    });
+
+    if (topicId) {
+      items.push(
+        { type: 'divider' as const },
+        {
+          danger: true,
+          icon: <Icon icon={Trash} />,
+          key: 'delete',
+          label: t('delete', { ns: 'common' }),
+          onClick: () => {
+            void confirmRemoveTopic({
+              onConfirm: async (removeFiles) => {
+                await removeTopic(topicId, removeFiles);
+              },
+              topicIds: [topicId],
+            });
+          },
+        },
+      );
+    }
+
+    return items;
+  }, [
+    topicId,
+    topicTitle,
+    bugReportItem,
+    enableTopicBugReport,
+    isFavorite,
+    favoriteMenuItem,
+    share,
+    activeAgentId,
+    pathname,
+    workingDirectory,
+    wideScreen,
+    docId,
+    autoRenameTopicTitle,
+    favoriteTopic,
+    openTopicInNewWindow,
+    removeTopic,
+    updateTopicTitle,
+    toggleWideScreen,
+    openCompareModal,
+    t,
+  ]);
+
+  return { menuHeader, menuItems };
+};

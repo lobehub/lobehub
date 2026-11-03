@@ -1,0 +1,261 @@
+import dayjs from 'dayjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  daysAgo,
+  formatActivityTime,
+  getYYYYmmddHHMMss,
+  hoursAgo,
+  isNewReleaseDate,
+  lastMonth,
+  monthsAgo,
+  thisMonth,
+  thisQuarter,
+  thisWeek,
+  thisYear,
+  today,
+  weeksAgo,
+} from './time';
+
+describe('time utilities', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // Set a fixed date for consistent testing: 2024-06-15 14:30:45 (local time)
+    vi.setSystemTime(new Date('2024-06-15T14:30:45.123'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('today', () => {
+    it('should return the start of the current day', () => {
+      const result = today();
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-06-15 00:00:00');
+    });
+  });
+
+  describe('thisWeek', () => {
+    it('should return the start of the current week', () => {
+      const result = thisWeek();
+
+      // dayjs starts week on Sunday by default
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-06-09 00:00:00');
+    });
+  });
+
+  describe('thisMonth', () => {
+    it('should return the start of the current month', () => {
+      const result = thisMonth();
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-06-01 00:00:00');
+    });
+  });
+
+  describe('thisQuarter', () => {
+    it('should return the start of the current quarter (Q2)', () => {
+      const result = thisQuarter();
+
+      // June is in Q2, which starts in April (month 3, 0-indexed)
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-04-01 00:00:00');
+    });
+
+    it('should work correctly for Q1 (January)', () => {
+      vi.setSystemTime(new Date('2024-01-15T14:30:45.123'));
+      const result = thisQuarter();
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-01-01 00:00:00');
+    });
+  });
+
+  describe('thisYear', () => {
+    it('should return the start of the current year', () => {
+      const result = thisYear();
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-01-01 00:00:00');
+    });
+  });
+
+  describe('hoursAgo', () => {
+    it('should return the correct time hours ago', () => {
+      const result = hoursAgo(3);
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-06-15 11:00:00');
+    });
+  });
+
+  describe('daysAgo', () => {
+    it('should return the correct date days ago', () => {
+      const result = daysAgo(7);
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-06-08 00:00:00');
+    });
+  });
+
+  describe('weeksAgo', () => {
+    it('should return the correct week weeks ago', () => {
+      const result = weeksAgo(2);
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-05-26 00:00:00');
+    });
+  });
+
+  describe('monthsAgo', () => {
+    it('should return the correct month months ago', () => {
+      const result = monthsAgo(3);
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-03-01 00:00:00');
+    });
+    it('should handle cross year boundary', () => {
+      const result = monthsAgo(12);
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2023-06-01 00:00:00');
+    });
+  });
+
+  describe('lastMonth', () => {
+    it('should return the end of last month', () => {
+      const result = lastMonth();
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-05-31 23:59:59');
+    });
+
+    it('should work correctly for January (December of previous year)', () => {
+      vi.setSystemTime(new Date('2024-01-15T14:30:45.123'));
+      const result = lastMonth();
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2023-12-31 23:59:59');
+    });
+
+    it('should work correctly for March (February with 29 days in leap year)', () => {
+      vi.setSystemTime(new Date('2024-03-15T14:30:45.123'));
+      const result = lastMonth();
+
+      expect(result.format('YYYY-MM-DD HH:mm:ss')).toBe('2024-02-29 23:59:59');
+    });
+  });
+
+  describe('getYYYYmmddHHMMss', () => {
+    it('should format date to YYYYMMDD_HHmmss format', () => {
+      const date = new Date('2024-01-01T23:59:59.123');
+      const result = getYYYYmmddHHMMss(date);
+
+      expect(result).toBe('20240101_235959');
+    });
+
+    it('should format date with zero padding', () => {
+      const date = new Date('2024-02-05T01:02:03.456');
+      const result = getYYYYmmddHHMMss(date);
+
+      expect(result).toBe('20240205_010203');
+    });
+    it('should work with the current mocked time', () => {
+      const date = new Date('2024-06-15T14:30:45.123');
+      const result = getYYYYmmddHHMMss(date);
+
+      expect(result).toBe('20240615_143045');
+    });
+  });
+
+  describe('edge cases and integration', () => {
+    it('should all return dayjs objects for date functions', () => {
+      expect(dayjs.isDayjs(today())).toBe(true);
+      expect(dayjs.isDayjs(thisWeek())).toBe(true);
+      expect(dayjs.isDayjs(thisMonth())).toBe(true);
+      expect(dayjs.isDayjs(thisQuarter())).toBe(true);
+      expect(dayjs.isDayjs(thisYear())).toBe(true);
+      expect(dayjs.isDayjs(hoursAgo(1))).toBe(true);
+      expect(dayjs.isDayjs(daysAgo(1))).toBe(true);
+      expect(dayjs.isDayjs(weeksAgo(1))).toBe(true);
+      expect(dayjs.isDayjs(monthsAgo(1))).toBe(true);
+      expect(dayjs.isDayjs(lastMonth())).toBe(true);
+    });
+
+    it('should maintain consistency between different time functions', () => {
+      const todayResult = today();
+      const daysAgoResult = daysAgo(0);
+
+      expect(todayResult.format('YYYY-MM-DD')).toBe(daysAgoResult.format('YYYY-MM-DD'));
+    });
+
+    it('should work with different time zones in getYYYYmmddHHMMss', () => {
+      // Note: dayjs uses the local timezone by default
+      const localDate = new Date('2024-06-15T14:30:45.000');
+      const result = getYYYYmmddHHMMss(localDate);
+
+      // The exact result depends on the test environment's timezone
+      // But it should always be a valid format
+      expect(result).toMatch(/^\d{8}_\d{6}$/);
+      expect(result).toHaveLength(15);
+      // Should match the local time format
+      expect(result).toBe('20240615_143045');
+    });
+  });
+
+  describe('isNewReleaseDate', () => {
+    it('should return true if date is within 14 days', () => {
+      const date = '2024-06-15'; // 0 days before 2024-06-15
+      expect(isNewReleaseDate(date)).toBe(true);
+    });
+    it('should return false if date is 15 days ago', () => {
+      const date = '2024-05-31'; // 15 days before 2024-06-15
+      expect(isNewReleaseDate(date)).toBe(false);
+    });
+
+    it('should return true if date is in future', () => {
+      const date = '2024-06-16'; // 1 day after 2024-06-15
+      expect(isNewReleaseDate(date)).toBe(true);
+    });
+    it('should return true if date is exactly 13 days ago', () => {
+      const date = '2024-06-02'; // 13 days before 2024-06-15
+      expect(isNewReleaseDate(date)).toBe(true);
+    });
+    it('should work with custom days', () => {
+      const date = '2024-06-09'; // 6 days ago from 2024-06-15
+      expect(isNewReleaseDate(date, 7)).toBe(true);
+      expect(isNewReleaseDate(date, 5)).toBe(false);
+    });
+  });
+
+  describe('formatActivityTime', () => {
+    it('uses relative phrasing when the gap is below one day', () => {
+      const input = '2026-05-01T05:00:00Z';
+      const result = formatActivityTime(input, {
+        now: '2026-05-01T14:00:00Z',
+      });
+      expect(result.text).toMatch(/hours? ago/);
+      // title is rendered in local timezone — derive expected value the same
+      // way so the assertion stays correct regardless of the runner's TZ.
+      expect(result.title).toBe(dayjs(input).format('YYYY-MM-DD HH:mm:ss'));
+    });
+
+    it('switches to absolute date once the gap exceeds one day', () => {
+      const result = formatActivityTime('2026-04-29T10:00:00Z', {
+        now: '2026-05-01T10:00:00Z',
+      });
+      expect(result.text).toBe('Apr 29');
+    });
+
+    it('uses the cross-year format when the year differs', () => {
+      const result = formatActivityTime('2025-12-30T10:00:00Z', {
+        now: '2026-05-01T10:00:00Z',
+      });
+      expect(result.text).toBe('Dec 30, 2025');
+    });
+
+    it('honors custom locale format strings', () => {
+      const result = formatActivityTime('2026-04-29T10:00:00Z', {
+        formatOtherYear: 'YYYY年M月D日',
+        formatThisYear: 'M月D日',
+        now: '2026-05-01T10:00:00Z',
+      });
+      expect(result.text).toBe('4月29日');
+    });
+
+    it('returns empty strings for missing or invalid input', () => {
+      expect(formatActivityTime()).toEqual({ text: '', title: '' });
+      expect(formatActivityTime('not a date')).toEqual({ text: '', title: '' });
+    });
+  });
+});

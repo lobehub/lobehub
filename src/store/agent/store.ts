@@ -1,0 +1,71 @@
+import { shallow } from 'zustand/shallow';
+import { createWithEqualityFn } from 'zustand/traditional';
+import { type StateCreator } from 'zustand/vanilla';
+
+import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
+import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
+import { type AgentStoreState } from './initialState';
+import { initialState } from './initialState';
+import { type AgentSliceAction } from './slices/agent';
+import { createAgentSlice } from './slices/agent';
+import { type AgentArtworkSliceAction, createAgentArtworkSlice } from './slices/artwork';
+import { type BotSliceAction } from './slices/bot';
+import { createBotSlice } from './slices/bot';
+import { type BuiltinAgentSliceAction } from './slices/builtin';
+import { createBuiltinAgentSlice } from './slices/builtin';
+import { type KnowledgeSliceAction } from './slices/knowledge';
+import { createKnowledgeSlice } from './slices/knowledge';
+import { type PluginSliceAction } from './slices/plugin';
+import { createPluginSlice } from './slices/plugin';
+
+//  ===============  aggregate createStoreFn ============ //
+
+export interface AgentStore
+  extends
+    AgentArtworkSliceAction,
+    AgentSliceAction,
+    BotSliceAction,
+    BuiltinAgentSliceAction,
+    KnowledgeSliceAction,
+    PluginSliceAction,
+    ResetableStore,
+    AgentStoreState {}
+
+type AgentStoreAction = AgentSliceAction &
+  AgentArtworkSliceAction &
+  BotSliceAction &
+  BuiltinAgentSliceAction &
+  KnowledgeSliceAction &
+  PluginSliceAction &
+  ResetableStore;
+
+class AgentStoreResetAction extends ResetableStoreAction<AgentStore> {
+  protected readonly resetActionName = 'resetAgentStore';
+}
+
+const createStore: StateCreator<AgentStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<AgentStore, [['zustand/devtools', never]]>>
+) => ({
+  ...initialState,
+  ...flattenActions<AgentStoreAction>([
+    createAgentArtworkSlice(...parameters),
+    createAgentSlice(...parameters),
+    createBotSlice(...parameters),
+    createBuiltinAgentSlice(...parameters),
+    createKnowledgeSlice(...parameters),
+    createPluginSlice(...parameters),
+    new AgentStoreResetAction(...parameters),
+  ]),
+});
+
+//  ===============  implement useStore ============ //
+
+const devtools = createDevtools('agent');
+
+export const useAgentStore = createWithEqualityFn<AgentStore>()(devtools(createStore), shallow);
+
+expose('agent', useAgentStore);
+
+export const getAgentStoreState = () => useAgentStore.getState();

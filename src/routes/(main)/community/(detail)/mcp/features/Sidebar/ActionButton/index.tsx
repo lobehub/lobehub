@@ -1,0 +1,97 @@
+'use client';
+
+import { Button, Flexbox, Icon } from '@lobehub/ui';
+import { Trash2Icon } from 'lucide-react';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
+import { useDetailContext } from '@/features/MCPPluginDetail/DetailProvider';
+import { usePermission } from '@/hooks/usePermission';
+import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { useToolStore } from '@/store/tool';
+import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
+
+const ActionButton = memo(() => {
+  const { t } = useTranslation(['discover', 'plugin']);
+  const detailContext = useDetailContext();
+  const { identifier, haveCloudEndpoint } = detailContext;
+  const [isLoading, setIsLoading] = useState(false);
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
+  const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
+
+  const [installed, installMCPPlugin, uninstallMCPPlugin] = useToolStore((s) => [
+    pluginSelectors.isPluginInstalled(identifier!)(s),
+    s.installMCPPlugin,
+    s.uninstallMCPPlugin,
+  ]);
+
+  // Check if this is a cloud MCP plugin
+  const isCloudMcp = haveCloudEndpoint;
+
+  const installPlugin = async () => {
+    if (!canCreate || !canEdit) return;
+    if (!identifier) return;
+
+    // If this is a cloud MCP and user is not authenticated, request authorization first
+    if (isCloudMcp && !isAuthenticated) {
+      try {
+        await signIn('mcp');
+      } catch {
+        return; // Don't proceed with installation if auth fails
+      }
+    }
+
+    // Proceed with installation
+    setIsLoading(true);
+    try {
+      await installMCPPlugin(identifier);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const buttonLoading = isLoading || isAuthLoading;
+
+  return installed ? (
+    <Flexbox horizontal gap={8}>
+      <Button block disabled={buttonLoading} size={'large'} type={'default'}>
+        {t('plugins.installed')}
+      </Button>
+
+      <Button
+        disabled={!canEdit}
+        icon={<Icon icon={Trash2Icon} size={20} />}
+        loading={buttonLoading}
+        size={'large'}
+        style={{ minWidth: 45 }}
+        styles={{
+          icon: { height: 20 },
+        }}
+        onClick={async () => {
+          if (!canEdit) return;
+          setIsLoading(true);
+          await uninstallMCPPlugin(identifier!);
+          setIsLoading(false);
+        }}
+      />
+    </Flexbox>
+  ) : (
+    <>
+      <Button
+        block
+        disabled={!canCreate || !canEdit}
+        loading={buttonLoading}
+        size={'large'}
+        type={'primary'}
+        onClick={installPlugin}
+      >
+        {t('plugins.install')}
+      </Button>
+      <MCPInstallProgress identifier={identifier!} />
+    </>
+  );
+});
+
+export default ActionButton;

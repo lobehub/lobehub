@@ -1,0 +1,1184 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+import type { BuiltinToolManifest } from '@lobechat/types';
+
+import { systemPrompt } from './systemRole';
+import { MessageApiName, MessageToolIdentifier, MESSENGER_PUSH_CONTENT_MAX_LENGTH } from './types';
+
+const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat'];
+
+/**
+ * Shared schema fragment for the outbound `attachments` array on message-
+ * sending tools (`sendMessage`, `sendDirectMessage`, `replyToThread`). Mirrors
+ * the `SendMessageAttachment` TypeScript type and the TRPC zod schema.
+ *
+ * Either `data` (base64-encoded bytes) or `fetchUrl` (public URL the
+ * platform server can GET) must be provided. `fetchUrl` is preferred when
+ * the bytes already live somewhere reachable — base64 inflates the request
+ * payload ~33% and many platforms (LINE, QQ guild) can ONLY consume URLs.
+ *
+ * Platform support varies — see each platform's `sendAttachments` helper
+ * for the actual delivery shape:
+ * - WeChat / Discord / Telegram / Slack / Feishu / Lark: full support
+ * - LINE: image + HTTPS URL only; other types degrade to a text-link line
+ * - QQ: group / c2c only; guild / dms / data-only degrade to text-link
+ */
+const attachmentsSchema = {
+  description:
+    'Optional outbound media attachments (images / files / video / audio). Each item must provide either `fetchUrl` (preferred — a public URL the platform server fetches) or `data` (base64-encoded bytes). When you have a stable public URL for the file, ALWAYS use `fetchUrl` — base64 bloats the payload and a few platforms (LINE, QQ guild) only accept URLs.',
+  items: {
+    additionalProperties: false,
+    properties: {
+      data: {
+        description:
+          'Base64-encoded bytes. Use only when no public URL exists; prefer `fetchUrl`. Some platforms (LINE, QQ guild) cannot consume this and will fall back to a text-link mention of the attachment.',
+        type: 'string',
+      },
+      fetchUrl: {
+        description:
+          'Public HTTPS URL the platform server can GET to retrieve the bytes. Preferred over `data`.',
+        type: 'string',
+      },
+      mimeType: {
+        description: 'MIME type (e.g. "image/png", "application/pdf"). Optional but helpful.',
+        type: 'string',
+      },
+      name: {
+        description:
+          'Filename shown to the recipient (e.g. "report.pdf"). Optional; some platforms infer from URL.',
+        type: 'string',
+      },
+      type: {
+        description:
+          'Media category. Drives which platform-specific endpoint is used (e.g. image → Telegram sendPhoto, file → Telegram sendDocument).',
+        enum: ['image', 'file', 'video', 'audio'],
+        type: 'string',
+      },
+    },
+    required: ['type'],
+    type: 'object',
+  },
+  type: 'array',
+};
+
+/**
+ * JSON Schema for the optional `embeds` array shared by the message-sending
+ * tools. Mirrors the `SendMessageEmbed` TypeScript type — the Discord embed
+ * object. Other platforms ignore embeds so the `content` text still ships.
+ */
+const embedsSchema = {
+  description:
+    'Optional rich "cards" rendered natively on Discord as embeds (title, coloured accent bar, key/value fields, footer, images). Use for reports, dashboards, structured summaries, or status notices where a card reads better than plain text. Put the human-readable summary in `content` as well so platforms without embeds (Slack / Telegram / Feishu / …) still receive the message — they silently ignore `embeds`. Max 10 embeds per message, 6000 characters total across all embeds.',
+  items: {
+    additionalProperties: false,
+    properties: {
+      author: {
+        additionalProperties: false,
+        description: 'Small header line above the title (e.g. the report source).',
+        properties: {
+          icon_url: {
+            description: 'HTTPS URL of a small icon shown before the name.',
+            type: 'string',
+          },
+          name: { description: 'Author / source name (max 256 chars).', type: 'string' },
+          url: { description: 'HTTPS URL the author name links to.', type: 'string' },
+        },
+        required: ['name'],
+        type: 'object',
+      },
+      color: {
+        description:
+          'Accent colour of the left bar. Accepts a hex string like "#22c55e" or a decimal integer (0xRRGGBB). Use green for success, red for failure/alerts, blue/blurple for neutral info. Defaults to Discord blurple.',
+        type: ['string', 'integer'],
+      },
+      description: {
+        description:
+          'Body text below the title (max 4096 chars). Supports Discord markdown: **bold**, `code`, lists, links.',
+        type: 'string',
+      },
+      fields: {
+        description:
+          'Key/value blocks below the description (max 25). Set `inline: true` on consecutive fields to lay them out side-by-side (up to 3 per row) — ideal for "Yesterday / Last 7d / Last 30d" style columns.',
+        items: {
+          additionalProperties: false,
+          properties: {
+            inline: {
+              description: 'Render side-by-side with neighbouring inline fields (max 3 per row).',
+              type: 'boolean',
+            },
+            name: { description: 'Field label (max 256 chars).', type: 'string' },
+            value: {
+              description:
+                'Field body (max 1024 chars). Markdown allowed; use newlines for multi-line stats.',
+              type: 'string',
+            },
+          },
+          required: ['name', 'value'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+      footer: {
+        additionalProperties: false,
+        description: 'Small muted line at the bottom of the card (e.g. data source, generated-at).',
+        properties: {
+          icon_url: {
+            description: 'HTTPS URL of a small icon shown before the text.',
+            type: 'string',
+          },
+          text: { description: 'Footer text (max 2048 chars).', type: 'string' },
+        },
+        required: ['text'],
+        type: 'object',
+      },
+      image: {
+        additionalProperties: false,
+        description: 'Large image rendered below the fields.',
+        properties: { url: { description: 'HTTPS image URL.', type: 'string' } },
+        required: ['url'],
+        type: 'object',
+      },
+      thumbnail: {
+        additionalProperties: false,
+        description: 'Small image rendered in the top-right corner of the card.',
+        properties: { url: { description: 'HTTPS image URL.', type: 'string' } },
+        required: ['url'],
+        type: 'object',
+      },
+      timestamp: {
+        description: 'ISO-8601 timestamp shown next to the footer (e.g. "2026-08-10T08:00:00Z").',
+        type: 'string',
+      },
+      title: { description: 'Card heading (max 256 chars). Emoji allowed.', type: 'string' },
+      url: { description: 'HTTPS URL — makes the title a hyperlink.', type: 'string' },
+    },
+    type: 'object',
+  },
+  type: 'array',
+};
+
+/**
+ * Schema for the bot's `settings` JSON column. Both `createBot` and
+ * `updateBot` accept a partial object — only the keys you pass are written
+ * (everything else preserved). Use this as the single source of truth for
+ * what the AI is allowed to toggle on a bot.
+ */
+const botSettingsSchema = {
+  additionalProperties: true,
+  properties: {
+    allowFrom: {
+      description:
+        'Global user-ID allowlist. When non-empty, ONLY listed users may interact with the bot anywhere — DMs, group @mentions, threads — regardless of dmPolicy/groupPolicy. Empty array means "no user-level filter". Pass the FULL desired list (this field is overwrite-replace, not append): to add or remove a single user, first call getBotDetail to read settings.allowFrom, mutate locally, then write back the entire array.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          id: {
+            description: 'Platform user ID (e.g. Discord snowflake, Telegram user_id)',
+            type: 'string',
+          },
+          name: {
+            description:
+              'Optional human-friendly label so the operator can recognise the entry later (e.g. "Ada from Product"). Runtime ignores this; only id is matched.',
+            type: 'string',
+          },
+        },
+        required: ['id'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    replyEmojis: {
+      description:
+        'Emoji and stickers the bot may use in its replies: `[{ emoji, usage? }]`, where `emoji` is pasted into the text as is (a Unicode emoji, a Discord custom emoji `<:name:id>` or `<a:name:id>`, a Slack `:name:`) and `usage` says when it fits ("someone ships something", "a teasing reply"). Overwrite-replace: read with getBotDetail, edit, write the whole array back. Only change it when the bot\'s owner asks; up to 50.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          emoji: { type: 'string' },
+          usage: { type: 'string' },
+        },
+        required: ['emoji'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    replyStyle: {
+      description:
+        'How the bot talks in every channel, as free text: tone, length, formatting, language, emoji use ("casual, short, like a teammate; no bullet lists; reply in the language you were spoken to"). Only how it speaks, not what it does (that is botWakeDuties). channelReplyStyles replaces it for one channel. Empty string clears it. Only change it when the bot\'s owner asks; up to 2000 characters.',
+      type: 'string',
+    },
+    botWakeDuties: {
+      description:
+        'The bot\'s duties (职责边界): free text, one duty per line, saying what the bot is responsible for in its channels (e.g. "When someone describes a feature request, assess it; for easy ones create a task for dario"). Unless the owner turned bot-wake off (botWakeDisabled), a message from anyone that nobody addressed to the bot but that falls within these duties may wake it. Empty string turns this off. Overwrite-replace: to add or change one duty, read the current text with getBotDetail, edit it, and write the whole text back. Only change it when the bot\'s owner asks; up to 4000 characters.',
+      type: 'string',
+    },
+    botWakeDutiesThreshold: {
+      description:
+        'How sure the bot must be that a message falls within botWakeDuties before it steps in, 0..1 (default 0.65). Higher = steps in less often.',
+      maximum: 1,
+      minimum: 0,
+      type: 'number',
+    },
+    channelReplyStyles: {
+      description:
+        "A reply style for one channel or thread, replacing replyStyle there: `[{ channelId, style }]` (the Discord channel or thread id, the Slack channel id, …). Overwrite-replace like watchKeywords: read with getBotDetail, edit, write the whole array back. Only change it when the bot's owner asks.",
+      items: {
+        additionalProperties: false,
+        properties: {
+          channelId: { type: 'string' },
+          style: { type: 'string' },
+        },
+        required: ['channelId', 'style'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    dmPolicy: {
+      description:
+        'Direct-message gate. open=accept DMs from anyone (default); allowlist=only users in allowFrom can DM, fails closed if list is empty; pairing=non-listed senders get a one-time code and the owner runs /approve <code> to add them; disabled=ignore all DMs. pairing requires settings.userId (owner platform ID).',
+      enum: ['open', 'allowlist', 'pairing', 'disabled'],
+      type: 'string',
+    },
+    groupAllowFrom: {
+      description:
+        'Channel/group/thread ID allowlist for group traffic. Only consulted when groupPolicy="allowlist". Same overwrite-replace semantics as allowFrom — read-modify-write to add/remove entries.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          id: {
+            description:
+              'Channel / group / thread ID (e.g. Discord channel ID copied via "Copy Channel ID")',
+            type: 'string',
+          },
+          name: { description: 'Optional human-friendly label.', type: 'string' },
+        },
+        required: ['id'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    groupPolicy: {
+      description:
+        'Group/channel @mention gate. open=respond to @mentions in any channel (default); allowlist=respond only in channels listed in groupAllowFrom; disabled=ignore all non-DM traffic.',
+      enum: ['open', 'allowlist', 'disabled'],
+      type: 'string',
+    },
+    serverId: {
+      description:
+        'Default server / guild / workspace ID used when the AI calls listChannels/getMemberInfo without an explicit serverId. Optional; populated automatically once the bot has been used in a server.',
+      type: 'string',
+    },
+    userId: {
+      description:
+        "The bot owner's platform user ID. Required when dmPolicy='pairing' (used as approver identity and as an implicit member of allowFrom). Also used to push owner-only notifications.",
+      type: 'string',
+    },
+    watchKeywords: {
+      description:
+        'Channel-side keyword wake list. When a non-mention message in a non-DM channel contains any of these keywords (case-insensitive, whole-word), the bot wakes without an @mention. If the matched entry has an `instruction`, it is prepended to the user message as an extra prompt before being sent to the AI — so a bare trigger like "bug" can carry a directive ("Scan the recent thread and reply if there is a real bug report"). Empty/absent instructions just wake the bot with the raw user text. Set `asName: true` on an entry to make the keyword one of the bot\'s names (a nickname or alias such as "canis" or "倏昱"): saying it calls the bot like its display name does. Same overwrite-replace semantics as allowFrom — read-modify-write via getBotDetail to add/remove entries.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          asName: {
+            description:
+              'Mark this keyword as a name the bot answers to (an alias or nickname). A message that says it is treated as calling the bot by name: answered right away, even while the owner is active in the channel. Omit (or false) for an ordinary trigger word like "bug" or "mobile". Its `instruction`, if any, still applies.',
+            type: 'boolean',
+          },
+          instruction: {
+            description:
+              'Optional operator-authored prompt prepended to the user message when this keyword fires. Omit for "just wake the bot" behaviour.',
+            type: 'string',
+          },
+          keyword: {
+            description:
+              'Trigger word. Lowercased and whole-word matched against inbound message text (Latin scripts use ASCII word boundaries; CJK keywords match as substrings since they have no whitespace boundary).',
+            type: 'string',
+          },
+        },
+        required: ['keyword'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+  },
+  type: 'object',
+};
+
+export const MessageManifest: BuiltinToolManifest = {
+  api: [
+    // ==================== Direct Messaging ====================
+    {
+      description:
+        'Send a direct/private message to ANOTHER user by their platform user ID. Creates a DM channel automatically. To reach the CURRENT user themselves ("DM me", "send me a message"), use `sendMessengerPush` instead — it needs no user id. Supports optional outbound media `attachments` (images / files / video / audio) and rich `embeds` cards (Discord). To pick the connection: when sending into the IM conversation you are currently in, pass neither `botId` nor `messengerInstallationId`; otherwise call `listBots` for the platform first — if there\'s a non-`failed` entry, use its `botId`; else call `listMessengers` and use that entry\'s `id` as `messengerInstallationId`.',
+      name: MessageApiName.sendDirectMessage,
+      ordered: true,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          attachments: attachmentsSchema,
+          embeds: embedsSchema,
+          botId: {
+            description:
+              'Per-agent bot id from `listBots` (skip bots whose status is `failed`). Pass at most one of `botId` / `messengerInstallationId`; omit both when sending into the IM conversation you are currently in — the runtime then uses the connection that conversation arrived on.',
+            type: 'string',
+          },
+          content: {
+            description: 'Message content',
+            type: 'string',
+          },
+          messengerInstallationId: {
+            description:
+              'System Bot installation id from `listMessengers`. Pass at most one of `botId` / `messengerInstallationId`; omit both when sending into the IM conversation you are currently in.',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          userId: {
+            description: 'Target user ID on the platform (e.g. Discord user ID)',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'userId', 'content'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Core Message Operations ====================
+    {
+      description:
+        "Send a message to a specific channel or conversation on the target platform. Supports optional outbound media `attachments` (images / files / video / audio) — use this when you need to deliver a generated image, document, or other binary alongside your reply — and rich `embeds` cards (rendered natively on Discord; ignored elsewhere) for reports, dashboards, and structured summaries. To pick the connection: when sending into the IM conversation you are currently in, pass neither `botId` nor `messengerInstallationId`; otherwise call `listBots` first — if there's a non-`failed` entry for the platform, use its `botId`; else call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
+      name: MessageApiName.sendMessage,
+      ordered: true,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          attachments: attachmentsSchema,
+          botId: {
+            description:
+              'Per-agent bot id from `listBots` (skip bots whose status is `failed`). Pass at most one of `botId` / `messengerInstallationId`; omit both when sending into the IM conversation you are currently in — the runtime then uses the connection that conversation arrived on.',
+            type: 'string',
+          },
+          channelId: {
+            description: 'Channel / conversation / room ID to send the message to',
+            type: 'string',
+          },
+          content: {
+            description:
+              'Message content. Supports text and markdown depending on platform capabilities.',
+            type: 'string',
+          },
+          embeds: embedsSchema,
+          messengerInstallationId: {
+            description:
+              'System Bot installation id from `listMessengers`. Pass at most one of `botId` / `messengerInstallationId`; omit both when sending into the IM conversation you are currently in.',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          replyTo: {
+            description: 'Optional message ID to reply to',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'content'],
+        type: 'object',
+      },
+    },
+    {
+      description: `Read recent messages from a channel or conversation. Returns messages in chronological order.`,
+      name: MessageApiName.readMessages,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          after: {
+            description: 'Read messages after this message ID (for pagination)',
+            type: 'string',
+          },
+          before: {
+            description: 'Read messages before this message ID (for pagination)',
+            type: 'string',
+          },
+          channelId: {
+            description: 'Channel / conversation / room ID to read from',
+            type: 'string',
+          },
+          cursor: {
+            description:
+              'Pagination cursor from a previous readMessages response (nextCursor). When provided, fetches the next page. Used by Feishu/Lark.',
+            type: 'string',
+          },
+          endTime: {
+            description:
+              'End time as Unix second timestamp. Used by Feishu/Lark to filter messages before this time.',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          startTime: {
+            description:
+              'Start time as Unix second timestamp. Used by Feishu/Lark to filter messages after this time.',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Read the full text of a cloud document shared in the chat (Feishu/Lark docx, wiki pages, meeting minutes / 智能纪要 documents). Pass the document URL exactly as it appears in the message. Use this IMMEDIATELY whenever the user points at a document link ("看这份纪要", "总结这个文档") or a message you read contains one — never ask the user to paste the content.',
+      name: MessageApiName.readDocument,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          documentId: {
+            description:
+              'Platform document ID / token, only when you have it without a URL. Prefer `url`.',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          url: {
+            description:
+              'Document URL as it appeared in the chat, e.g. https://<tenant>.feishu.cn/docx/<token> or a /wiki/ link.',
+            type: 'string',
+          },
+        },
+        required: ['platform'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Edit an existing message. Only the message author can edit their messages.',
+      name: MessageApiName.editMessage,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID where the message is located',
+            type: 'string',
+          },
+          content: {
+            description: 'New message content',
+            type: 'string',
+          },
+          messageId: {
+            description: 'ID of the message to edit',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'messageId', 'content'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Delete a message from a channel. Requires appropriate permissions.',
+      name: MessageApiName.deleteMessage,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID where the message is located',
+            type: 'string',
+          },
+          messageId: {
+            description: 'ID of the message to delete',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'messageId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Search for messages in a channel matching a query string. Supports optional author filtering.',
+      name: MessageApiName.searchMessages,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          authorId: {
+            description: 'Optional: filter results by author/user ID',
+            type: 'string',
+          },
+          channelId: {
+            description: 'Channel ID to search in',
+            type: 'string',
+          },
+          limit: {
+            default: 25,
+            description: 'Maximum number of results to return (default: 25)',
+            maximum: 100,
+            minimum: 1,
+            type: 'integer',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          query: {
+            description: 'Search query string',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'query'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Reactions ====================
+    {
+      description: 'Add an emoji reaction to a message.',
+      name: MessageApiName.reactToMessage,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID',
+            type: 'string',
+          },
+          emoji: {
+            description:
+              'Emoji to react with. Use unicode emoji (e.g. "👍") or platform-specific format (e.g. Discord custom emoji ":custom_emoji:123456")',
+            type: 'string',
+          },
+          messageId: {
+            description: 'Message ID to react to',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'messageId', 'emoji'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Get all reactions on a specific message.',
+      name: MessageApiName.getReactions,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID',
+            type: 'string',
+          },
+          messageId: {
+            description: 'Message ID to get reactions for',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'messageId'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Pin Management ====================
+    {
+      description: 'Pin a message in a channel.',
+      name: MessageApiName.pinMessage,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID',
+            type: 'string',
+          },
+          messageId: {
+            description: 'Message ID to pin',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'messageId'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Unpin a message from a channel.',
+      name: MessageApiName.unpinMessage,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID',
+            type: 'string',
+          },
+          messageId: {
+            description: 'Message ID to unpin',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'messageId'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'List all pinned messages in a channel.',
+      name: MessageApiName.listPins,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Channel Management ====================
+    {
+      description: 'Get information about a specific channel or conversation.',
+      name: MessageApiName.getChannelInfo,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID to get info for',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'List available channels in a server or workspace.',
+      name: MessageApiName.listChannels,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          filter: {
+            description: 'Optional filter by category or channel type',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          serverId: {
+            description:
+              'Server / workspace / organization ID. Required for platforms with multi-server support (Discord, Slack).',
+            type: 'string',
+          },
+        },
+        required: ['platform'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Member Information ====================
+    {
+      description: 'Get information about a specific member or user.',
+      name: MessageApiName.getMemberInfo,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          memberId: {
+            description: 'Member / user ID to look up',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          serverId: {
+            description: 'Server / workspace ID. Required for some platforms to scope the lookup.',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'memberId'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Thread Operations ====================
+    {
+      description:
+        'Create a new thread in a channel. On Discord, creates a thread from a message or as a standalone thread. On Slack, starts a thread reply chain.',
+      name: MessageApiName.createThread,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID to create the thread in',
+            type: 'string',
+          },
+          content: {
+            description: 'Optional initial message content for the thread',
+            type: 'string',
+          },
+          messageId: {
+            description: 'Optional message ID to create thread from (platform-specific)',
+            type: 'string',
+          },
+          name: {
+            description: 'Thread name / title',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'name'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'List threads in a channel.',
+      name: MessageApiName.listThreads,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Send a reply to a thread. Supports optional outbound media `attachments` (images / files / video / audio) and rich `embeds` cards (Discord). To pick the connection: when sending into the IM conversation you are currently in, pass neither `botId` nor `messengerInstallationId`; otherwise call `listBots` first — if there's a non-`failed` entry for the platform, use its `botId`; else call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
+      name: MessageApiName.replyToThread,
+      ordered: true,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          attachments: attachmentsSchema,
+          embeds: embedsSchema,
+          botId: {
+            description:
+              'Per-agent bot id from `listBots` (skip bots whose status is `failed`). Pass at most one of `botId` / `messengerInstallationId`; omit both when sending into the IM conversation you are currently in — the runtime then uses the connection that conversation arrived on.',
+            type: 'string',
+          },
+          content: {
+            description: 'Reply message content',
+            type: 'string',
+          },
+          messengerInstallationId: {
+            description:
+              'System Bot installation id from `listMessengers`. Pass at most one of `botId` / `messengerInstallationId`; omit both when sending into the IM conversation you are currently in.',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          threadId: {
+            description: 'Thread ID to reply in',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'threadId', 'content'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Platform-Specific: Polls ====================
+    {
+      description:
+        'Create a poll in a channel. Supported on platforms with native poll features (Discord, Telegram).',
+      name: MessageApiName.createPoll,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          channelId: {
+            description: 'Channel ID to create the poll in',
+            type: 'string',
+          },
+          duration: {
+            description: 'Poll duration in hours (platform-specific limits apply)',
+            minimum: 1,
+            type: 'integer',
+          },
+          multipleAnswers: {
+            description: 'Whether to allow multiple answers (default: false)',
+            type: 'boolean',
+          },
+          options: {
+            description: 'Array of poll options / answer choices',
+            items: { type: 'string' },
+            minItems: 2,
+            type: 'array',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          question: {
+            description: 'The poll question',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'channelId', 'question', 'options'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Bot Management ====================
+    {
+      description:
+        'List all supported messaging platforms and their required credential fields. Use this to guide users when setting up a new bot.',
+      name: MessageApiName.listPlatforms,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "List all per-agent bot integrations configured for the current agent (with runtime status). Returns this agent's per-agent bots only — use `listMessengers` to see the user's System Bot installations (a separate outbound channel source). For sending decisions, try `listBots` first; if it has no entry for the target platform, fall back to `listMessengers`.",
+      name: MessageApiName.listBots,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description: 'Get detailed information about a specific bot integration.',
+      name: MessageApiName.getBotDetail,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID',
+            type: 'string',
+          },
+        },
+        required: ['botId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Create a new bot integration for a platform. Call listPlatforms first to see required credentials.',
+      name: MessageApiName.createBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          agentId: {
+            description: 'Agent ID to attach the bot to',
+            type: 'string',
+          },
+          applicationId: {
+            description: 'Application ID for webhook routing (platform-specific)',
+            type: 'string',
+          },
+          credentials: {
+            description:
+              'Credential key-value pairs. Required fields depend on the platform (e.g. botToken for Discord, appSecret for Feishu).',
+            type: 'object',
+          },
+          platform: {
+            description: 'Target platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          settings: {
+            ...botSettingsSchema,
+            description:
+              'Optional initial settings (DM policy, allowlists, owner userId, etc.). Omit to use schema defaults — open DMs, no allowlist. See field descriptions for each key.',
+          },
+        },
+        required: ['platform', 'agentId', 'applicationId', 'credentials'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Update credentials or settings of an existing bot integration. Use this to adjust DM policy (e.g. switch to pairing mode), edit the allowlist, or rotate credentials. Settings is merged at the key level — only keys you pass are written. For array fields like allowFrom/groupAllowFrom, the array is REPLACED, not merged: read-modify-write via getBotDetail before adding/removing entries.',
+      name: MessageApiName.updateBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID',
+            type: 'string',
+          },
+          credentials: {
+            description: 'Updated credential key-value pairs (partial update)',
+            type: 'object',
+          },
+          settings: {
+            ...botSettingsSchema,
+            description:
+              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId, watchKeywords, botWakeDuties, botWakeDutiesThreshold, replyStyle, channelReplyStyles, replyEmojis).',
+          },
+        },
+        required: ['botId'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Delete a bot integration.',
+      name: MessageApiName.deleteBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID to delete',
+            type: 'string',
+          },
+        },
+        required: ['botId'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Enable or disable a bot integration.',
+      name: MessageApiName.toggleBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID',
+            type: 'string',
+          },
+          enabled: {
+            description: 'true to enable, false to disable',
+            type: 'boolean',
+          },
+        },
+        required: ['botId', 'enabled'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Connect and start a bot. The bot must be enabled and have valid credentials.',
+      name: MessageApiName.connectBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID to connect',
+            type: 'string',
+          },
+        },
+        required: ['botId'],
+        type: 'object',
+      },
+    },
+
+    // ==================== System Bot Messenger Management ====================
+    {
+      description: `List the current user's ${BRANDING_NAME} System Bot connections (Slack workspaces, Discord guilds, Telegram, and user-owned WeChat accounts). Each entry returns an \`id\` to pass back as \`installationId\` on \`getMessengerDetail\` / \`uninstallMessenger\`, or as \`messengerInstallationId\` on send APIs. Use this when the user asks about connected messengers, or as the fallback when \`listBots\` has no entry for the target platform.`,
+      name: MessageApiName.listMessengers,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Get detailed metadata about a single System Bot connection. Returns the same fields as `listMessengers` plus `revokedAt` (null when active). Use before `uninstallMessenger` to surface tenant or account info in the confirmation prompt.',
+      name: MessageApiName.getMessengerDetail,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          installationId: {
+            description: 'Stable connection id from `listMessengers`.',
+            type: 'string',
+          },
+        },
+        required: ['installationId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Disconnect a System Bot connection. **Workspace installs affect every user in that workspace**; a WeChat account connection affects only its owner. For Slack this freezes the workspace's bot since dispatch is gated on the install token; for Discord it removes the audit entry (the bot itself stays in the guild until an admin removes it). Always confirm with the user before calling. To disconnect only the current user's account from a workspace install, use `unlinkMessenger` instead.",
+      name: MessageApiName.uninstallMessenger,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          installationId: {
+            description: 'Connection id to disconnect.',
+            type: 'string',
+          },
+        },
+        required: ['installationId'],
+        type: 'object',
+      },
+    },
+    {
+      description: `List the platforms where the user can connect the ${BRANDING_NAME} System Bot. Returns \`appId\` / \`botUsername\` when relevant. Use when guiding the user through \`Settings → Messenger\`; browser OAuth and QR setup flows cannot be initiated from this tool.`,
+      name: MessageApiName.listMessengerPlatforms,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "List the user's per-platform account links — one entry per (platform, tenant). Each link determines which agent receives inbound IM messages from that platform/tenant. Use before `setMessengerActiveAgent` to find the current routing.",
+      name: MessageApiName.listMessengerLinks,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Change which agent receives inbound IM messages on a specific platform link. Pass `agentId: null` to clear the active agent (next message gets the "/agents to pick" prompt). Pass `tenantId` to scope to one Slack workspace; omit for Telegram and WeChat.',
+      name: MessageApiName.setMessengerActiveAgent,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          agentId: {
+            description:
+              'Agent id to route to, or null to clear. The agent must belong to the current user.',
+            type: ['string', 'null'],
+          },
+          platform: {
+            description: 'Target platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          tenantId: {
+            description: 'Optional tenant scope (Slack workspace id).',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'agentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Remove the current user's account link for a platform. The workspace install stays — other users can still use the System Bot in that workspace; only the current user's inbound routing is removed. To revoke the install for everyone, use `uninstallMessenger`.",
+      name: MessageApiName.unlinkMessenger,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          platform: {
+            description: 'Target platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          tenantId: {
+            description: 'Optional tenant scope (Slack workspace id).',
+            type: 'string',
+          },
+        },
+        required: ['platform'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Proactively push a message to the CURRENT USER's own DM with the " +
+        BRANDING_NAME +
+        ' System Bot — THE api for "send me a message on <platform>", "DM me", "notify me when done". Unlike `sendDirectMessage` it needs no bot discovery, channel id, or platform user id: the server resolves the user\'s own account link. Availability comes from that account link, NOT from `listBots` / `listMessengers` — a platform missing there can still be pushable, so never refuse based on those lists. Call `listMessengerLinks` when unsure which platforms are linked; when the user named one, just push and let an `unlinked` status tell you. Telegram / Discord / iMessage-SMS (`linq`) deliver immediately. Slack with several linked workspaces returns `needs_workspace_selection` — ask the user to pick, then retry with that `tenantId`. WeChat can only deliver inside the send window opened by the user\'s last inbound message; outside it the push is `queued` and you must tell the user to message the ' +
+        BRANDING_NAME +
+        ' WeChat bot first so the queued push gets delivered.',
+      name: MessageApiName.sendMessengerPush,
+      ordered: true,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          content: {
+            description:
+              'Message content to deliver (plain text, max 2000 characters). Longer content is rejected, not truncated — summarize or split it yourself.',
+            maxLength: MESSENGER_PUSH_CONTENT_MAX_LENGTH,
+            minLength: 1,
+            type: 'string',
+          },
+          platform: {
+            description:
+              "Platform to push to — must be one the user has linked. `linq` is iMessage / SMS to the user's linked phone number.",
+            enum: ['telegram', 'slack', 'discord', 'wechat', 'linq'],
+            type: 'string',
+          },
+          tenantId: {
+            description:
+              'Slack-only: workspace (team) id when the user linked several workspaces. Omit elsewhere.',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'content'],
+        type: 'object',
+      },
+    },
+  ],
+  identifier: MessageToolIdentifier,
+  meta: {
+    avatar: '💬',
+    description:
+      'Send, read, edit, and manage messages across multiple messaging platforms with a unified interface',
+    readme:
+      'Cross-platform messaging tool supporting Discord, Telegram, Slack, Google Chat, and IRC. Provides unified APIs for message operations, reactions, pins, threads, channel management, and platform-specific features like polls.',
+    title: 'Message',
+  },
+  systemRole: systemPrompt,
+  type: 'builtin',
+};

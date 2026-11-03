@@ -1,0 +1,113 @@
+import { Button, Flexbox, Input, TextArea } from '@lobehub/ui';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { defaultCoverPreset, presetCoverValue } from '@/features/LibraryCover';
+import CoverPicker from '@/features/LibraryCover/CoverPicker';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { buildLibraryPath } from '@/features/ResourceManager/utils/resourcePath';
+import { useKnowledgeBaseStore } from '@/store/library';
+
+interface CreateFormProps {
+  id?: string;
+  initialValues?: { cover?: string; description?: string; name?: string };
+  onClose?: () => void;
+  onSuccess?: (id: string) => void;
+}
+
+const CreateForm = memo<CreateFormProps>(({ id, initialValues, onClose, onSuccess }) => {
+  const { t } = useTranslation('knowledgeBase');
+  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState(initialValues?.name || '');
+  const [description, setDescription] = useState(initialValues?.description || '');
+  // A new library has no id yet; a per-form seed keeps the previewed default
+  // cover identical to the one it is created with.
+  const [draftSeed] = useState(() => id ?? `draft-${Math.random().toString(36).slice(2)}`);
+  const [cover, setCover] = useState<string | null>(initialValues?.cover ?? null);
+  const updateKnowledgeBaseCover = useKnowledgeBaseStore((s) => s.updateKnowledgeBaseCover);
+  const createNewKnowledgeBase = useKnowledgeBaseStore((s) => s.createNewKnowledgeBase);
+  const updateKnowledgeBase = useKnowledgeBaseStore((s) => s.updateKnowledgeBase);
+  // Derive KB visibility from the current sidebar mode: "private space" →
+  // private KB, "workspace space" → public KB. Personal-mode users have the
+  // toggle hidden and `listVisibility` stays at its default 'workspace', so
+  // personal-mode create still resolves to 'public' — matching the pre-column
+  // default and giving `buildWorkspaceWhere` nothing to filter on.
+  const listVisibility = useResourceManagerStore((s) => s.listVisibility);
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+
+  const isEditMode = !!id;
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+
+    setLoading(true);
+    const values = {
+      description: description.trim(),
+      name: name.trim(),
+    };
+
+    try {
+      if (isEditMode) {
+        // Edit only touches the metadata the form shows. `listVisibility`
+        // describes the sidebar mode the user happens to be browsing in, not
+        // this library's visibility — sending it would silently take a shared
+        // library private just because its description was edited from the
+        // Private tab. Publish / make-private have their own guarded entries.
+        await updateKnowledgeBase(id, values);
+        if (cover !== (initialValues?.cover ?? null)) await updateKnowledgeBaseCover(id, cover);
+        setLoading(false);
+        onClose?.();
+      } else {
+        const newId = await createNewKnowledgeBase({
+          ...values,
+          cover: cover ?? presetCoverValue(defaultCoverPreset(draftSeed).id),
+          visibility: listVisibility === 'private' ? ('private' as const) : ('public' as const),
+        });
+        setLoading(false);
+
+        if (onSuccess) {
+          onSuccess(newId);
+          onClose?.();
+        } else {
+          // Workspace routes are mounted under `/:workspaceSlug`, so the hard
+          // navigation must carry the active slug or it lands in the personal
+          // scope where the new library does not resolve.
+          window.location.href = buildLibraryPath(newId, activeWorkspaceSlug);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Flexbox gap={16}>
+      <Input
+        autoFocus
+        placeholder={t('createNew.name.placeholder')}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <Flexbox gap={8}>
+        <label style={{ fontSize: 14 }}>{t('createNew.description.label')}</label>
+        <TextArea
+          placeholder={t('createNew.description.placeholder')}
+          style={{ minHeight: 120 }}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </Flexbox>
+      <Flexbox gap={8}>
+        <label style={{ fontSize: 14 }}>{t('createNew.cover.label')}</label>
+        <CoverPicker seed={draftSeed} value={cover} onChange={setCover} />
+      </Flexbox>
+      <Button block loading={loading} type={'primary'} onClick={handleSubmit}>
+        {isEditMode ? t('createNew.edit.confirm') : t('createNew.confirm')}
+      </Button>
+    </Flexbox>
+  );
+});
+
+export default CreateForm;

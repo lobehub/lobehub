@@ -1,0 +1,170 @@
+import { USD_TO_CNY } from '@lobechat/const';
+import dayjs from 'dayjs';
+import { isNumber } from 'es-toolkit/compat';
+import type { ModelPriceCurrency } from 'model-bank';
+import numeral from 'numeral';
+
+export const formatSize = (bytes: number, fractionDigits: number = 1): string => {
+  if (!bytes && bytes !== 0) return '--';
+
+  const kbSize = bytes / 1024;
+  if (kbSize < 1024) {
+    return `${kbSize.toFixed(fractionDigits)} KB`;
+  } else if (kbSize < 1_048_576) {
+    const mbSize = kbSize / 1024;
+    return `${mbSize.toFixed(fractionDigits)} MB`;
+  } else {
+    const gbSize = kbSize / 1_048_576;
+    return `${gbSize.toFixed(fractionDigits)} GB`;
+  }
+};
+
+/**
+ * format speed from Byte number to string like KB/s, MB/s or GB/s
+ */
+export const formatSpeed = (byte: number, fractionDigits = 2) => {
+  if (!byte && byte !== 0) return '--';
+
+  if (byte <= 1000) return byte.toFixed(fractionDigits) + ' Byte/s';
+  if (byte / 1024 <= 1000) return (byte / 1024).toFixed(fractionDigits) + ' KB/s';
+  if (byte / 1024 / 1024 <= 1000) return (byte / 1024 / 1024).toFixed(fractionDigits) + ' MB/s';
+  return (byte / 1024 / 1024 / 1024).toFixed(fractionDigits) + ' GB/s';
+};
+
+export const formatTime = (timeInSeconds: number): string => {
+  if (!timeInSeconds && timeInSeconds !== 0) return '--';
+  if (!isNumber(timeInSeconds)) return timeInSeconds;
+
+  if (timeInSeconds < 60) {
+    return `${timeInSeconds.toFixed(1)} s`;
+  } else if (timeInSeconds < 3600) {
+    return `${(timeInSeconds / 60).toFixed(1)} min`;
+  } else {
+    return `${(timeInSeconds / 3600).toFixed(2)} h`;
+  }
+};
+
+export const formatShortenNumber = (num: any) => {
+  if (!num && num !== 0) return '--';
+  if (!isNumber(num)) return num;
+
+  // Use Intl.NumberFormat to add thousand separators
+  const formattedWithComma = new Intl.NumberFormat('en-US').format(num);
+
+  // Format as K, M, B or T
+  if (num >= 1_000_000_000_000) {
+    return (num / 1_000_000_000_000).toFixed(1) + 'T';
+  } else if (num >= 1_000_000_000) {
+    return (num / 1_000_000_000).toFixed(1) + 'B';
+  } else if (num >= 1_000_000) {
+    return (num / 1_000_000).toFixed(1) + 'M';
+  } else if (num >= 10_000) {
+    return (num / 1000).toFixed(1) + 'K';
+  } else if (num === 0) {
+    return 0;
+  } else {
+    return formattedWithComma;
+  }
+};
+
+export const formatNumber = (num: any, fractionDigits?: number) => {
+  if (!num && num !== 0) return '--';
+
+  if (!fractionDigits) return new Intl.NumberFormat('en-US').format(num);
+  const [a, b] = num.toFixed(fractionDigits).split('.');
+  return `${numeral(a).format('0,0')}.${b}`;
+};
+
+export const formatIntergerNumber = (num?: any) => {
+  if (!num && num !== 0) return '--';
+
+  return numeral(num).format('0,0');
+};
+
+export const formatUsageValue = (number: number) => {
+  if (number >= 1_000_000_000) return `${numeral(number / 1_000_000_000).format('0.[0]')}B`;
+  if (number >= 1_000_000) return `${numeral(number / 1_000_000).format('0.[0]')}M`;
+  if (number >= 1_000) return `${numeral(number / 1_000).format('0.[0]')}K`;
+  return numeral(number).format('0,0');
+};
+
+export const formatTokenNumber = (num: number): string => {
+  if (!num && num !== 0) return '--';
+
+  if (num > 0 && num < 1024) return '1K';
+
+  let kiloToken = Math.floor(num / 1024);
+  if ((num >= 1024 && num < 1024 * 41) || num >= 128_000) {
+    kiloToken = Math.floor(num / 1000);
+  }
+  if (num === 131_072) return '128K';
+  return kiloToken < 1000 ? `${kiloToken}K` : `${Math.floor(kiloToken / 1000)}M`;
+};
+
+export const formatCost = (value: number): string => {
+  return value.toLocaleString('en-US', {
+    maximumSignificantDigits: 4,
+    minimumSignificantDigits: 2,
+  });
+};
+
+export const formatPrice = (price: number, fractionDigits: number = 2) => {
+  if (!price && price !== 0) return '--';
+
+  if (fractionDigits === 0) return numeral(price).format('0,0');
+
+  // Expand precision when a positive price would round to zero at the requested
+  // precision (e.g. $0.003625 → "0.00"), so users can tell it isn't actually free.
+  // Cap at 100 because Number.prototype.toFixed throws RangeError beyond that.
+  let digits = fractionDigits;
+  if (price > 0 && Number(price.toFixed(fractionDigits)) === 0) {
+    digits = Math.min(100, Math.ceil(-Math.log10(price)));
+  }
+
+  const [a, b] = price.toFixed(digits).split('.');
+  return `${numeral(a).format('0,0')}.${b}`;
+};
+
+/** Keep up to four significant digits below $1 so rates like 0.075 are not shown as 0.07. */
+const formatUnitPrice = (price: number) => {
+  if (price === 0) return formatPrice(price);
+
+  const magnitude = Math.floor(Math.log10(Math.abs(price)));
+  const fractionDigits = Math.min(100, Math.max(2, 3 - magnitude));
+  const formattedPrice = formatPrice(price, fractionDigits);
+  const [integer, fraction] = formattedPrice.split('.');
+
+  if (!fraction) return formattedPrice;
+
+  const trimmedFraction = fraction.replace(/0+$/, '').padEnd(2, '0');
+  return `${integer}.${trimmedFraction}`;
+};
+
+export const formatPriceByCurrency = (price?: number, currency?: ModelPriceCurrency) => {
+  if (!price && price !== 0) return '-';
+
+  if (currency === 'CNY') {
+    return formatUnitPrice(price / USD_TO_CNY);
+  }
+  return formatUnitPrice(price);
+};
+
+export const formatDate = (date?: Date) => {
+  if (!date) return '--';
+
+  return dayjs(date).format('YYYY-MM-DD');
+};
+
+/**
+ * Log-style timestamp: `Jul 12 12:12:32`. The year only shows up when the entry
+ * is not from the current year, so the common case stays short.
+ */
+export const formatSpendTime = (value?: Date | string | null): string => {
+  if (!value) return '--';
+
+  const time = dayjs(value);
+  if (!time.isValid()) return '--';
+
+  const format = time.year() === dayjs().year() ? 'MMM D HH:mm:ss' : 'MMM D, YYYY HH:mm:ss';
+  return time.format(format);
+};

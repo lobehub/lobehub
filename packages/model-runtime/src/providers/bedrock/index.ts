@@ -1,0 +1,525 @@
+import type Anthropic from '@anthropic-ai/sdk';
+import {
+  BedrockRuntimeClient,
+  InvokeModelCommand,
+  InvokeModelWithResponseStreamCommand,
+} from '@aws-sdk/client-bedrock-runtime';
+import { ModelProvider } from 'model-bank';
+
+import type { AnthropicGenerateObjectResponse } from '../../core/anthropicCompatibleFactory/generateObject';
+import {
+  buildAnthropicGenerateObjectRequest,
+  emitAnthropicGenerateObjectUsage,
+  parseAnthropicGenerateObjectResponse,
+} from '../../core/anthropicCompatibleFactory/generateObject';
+import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
+import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
+import { resolveClaudeThinkingConfig } from '../../core/anthropicCompatibleFactory/resolveThinkingConfig';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
+import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
+import { resolveModelSamplingParameters } from '../../core/parameterResolver';
+import {
+  finalizeProviderResponse,
+  initializeProviderDiagnostics,
+  observeProviderReadableStream,
+  recordProviderError,
+} from '../../core/providerDiagnostics';
+import {
+  AWSBedrockClaudeStream,
+  AWSBedrockLlamaStream,
+  createBedrockStream,
+} from '../../core/streams';
+import { ErrorClassifier } from '../../errors';
+import type {
+  ChatMethodOptions,
+  ChatStreamPayload,
+  Embeddings,
+  EmbeddingsOptions,
+  EmbeddingsPayload,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
+} from '../../types';
+import { AgentRuntimeErrorType } from '../../types/error';
+import type { ProviderResponseDiagnostics } from '../../types/providerDiagnostics';
+import { AgentRuntimeError } from '../../utils/createError';
+import { debugStream } from '../../utils/debugStream';
+import { getModelPricing } from '../../utils/getModelPricing';
+import { StreamingResponse } from '../../utils/response';
+import { stripUnsupportedClaudeAssistantPrefill } from '../anthropic/claudePrefill';
+import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
+import { rejectsDisabledThinkingAtEffort } from '../anthropic/modelId';
+import { recordBedrockResponseEvent } from './providerDiagnostics';
+
+/**
+ * Bedrock accepts a 20MB request body and 3.75MB per image (5MB of base64), so
+ * images get a smaller share than on the Anthropic API.
+ */
+const BEDROCK_INLINE_IMAGE_BUDGET = { maxTotalBase64Bytes: 12 * 1024 * 1024 };
+
+/**
+ * A prompt constructor for HuggingFace LLama 2 chat models.
+ * Does not support `function` messages.
+ * @see https://huggingface.co/meta-llama/Llama-2-70b-chat-hf and https://huggingface.co/blog/llama2#how-to-prompt-llama-2
+ */
+export function experimental_buildLlama2Prompt(messages: { content: string; role: string }[]) {
+  const startPrompt = `<s>[INST] `;
+  const endPrompt = ` [/INST]`;
+  const conversation = messages.map(({ content, role }, index) => {
+    switch (role) {
+      case 'user': {
+        return content.trim();
+      }
+      case 'assistant': {
+        return ` [/INST] ${content}</s><s>[INST] `;
+      }
+      case 'function': {
+        throw new Error('Llama 2 does not support function calls.');
+      }
+      default: {
+        if (role === 'system' && index === 0) {
+          return `<<SYS>>\n${content}\n<</SYS>>\n\n`;
+        } else {
+          throw new Error(`Invalid message role: ${role}`);
+        }
+      }
+    }
+  });
+
+  return startPrompt + conversation.join('') + endPrompt;
+}
+
+export interface LobeBedrockAIParams {
+  accessKeyId?: string;
+  accessKeySecret?: string;
+  apiKey?: string;
+  id?: string;
+  modelIdMapping?: Record<string, string>;
+  region?: string;
+  sessionToken?: string;
+}
+
+export class LobeBedrockAI implements LobeRuntimeAI {
+  private client: BedrockRuntimeClient;
+  private id: string;
+  private modelIdMapping: Record<string, string>;
+
+  region: string;
+
+  constructor(options: LobeBedrockAIParams = {}) {
+    const {
+      id,
+      modelIdMapping = {},
+      region,
+      accessKeyId,
+      accessKeySecret,
+      apiKey,
+      sessionToken,
+    } = options;
+
+    this.region = region ?? 'us-east-1';
+    this.id = id ?? ModelProvider.Bedrock;
+    this.modelIdMapping = modelIdMapping;
+
+    if (apiKey) {
+      this.client = new BedrockRuntimeClient({
+        authSchemePreference: ['httpBearerAuth'],
+        region: this.region,
+        token: { token: apiKey },
+      });
+      return;
+    }
+
+    if (!(accessKeyId && accessKeySecret))
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidBedrockCredentials);
+
+    this.client = new BedrockRuntimeClient({
+      credentials: {
+        accessKeyId,
+        secretAccessKey: accessKeySecret,
+        sessionToken,
+      },
+      region: this.region,
+    });
+  }
+
+  async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+    if (payload.model.startsWith('meta')) return this.invokeLlamaModel(payload, options);
+
+    return this.invokeClaudeModel(payload, options);
+  }
+
+  private resolveModelId(model: string): string {
+    return this.modelIdMapping[model] ?? model;
+  }
+  /**
+   * Supports the Amazon Titan Text models series.
+   * Cohere Embed models are not supported
+   * because the current text size per request
+   * exceeds the maximum 2048 characters limit
+   * for a single request for this series of models.
+   * [bedrock embed guide] https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html
+   */
+  async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions): Promise<Embeddings[]> {
+    const input = Array.isArray(payload.input) ? payload.input : [payload.input];
+    const promises = input.map((inputText: string) =>
+      this.invokeEmbeddingModel(
+        {
+          dimensions: payload.dimensions,
+          input: inputText,
+          model: payload.model,
+        },
+        options,
+      ),
+    );
+    return Promise.all(promises);
+  }
+
+  async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    return this.invokeClaudeGenerateObject(payload, options);
+  }
+
+  private invokeClaudeGenerateObject = async (
+    payload: GenerateObjectPayload,
+    options?: GenerateObjectOptions,
+  ) => {
+    const { bedrock: bedrockModels } = await import('model-bank');
+    const resolvedMaxTokens = await resolveMaxTokens({
+      model: payload.model,
+      providerModels: bedrockModels,
+      thinking: payload.thinking,
+    });
+    const systemMessages = payload.messages.filter((m) => m.role === 'system');
+    const normalizedMessages = normalizeClaudeThinkingHistoryMessages(
+      payload.messages.filter((m) => m.role !== 'system') as ChatStreamPayload['messages'],
+    ) as GenerateObjectPayload['messages'];
+    const { requestParams, schemaToolName } = await buildAnthropicGenerateObjectRequest(
+      { ...payload, messages: [...systemMessages, ...normalizedMessages] },
+      // requestModel keys the prefill guard on the Bedrock id actually sent
+      // below, so channel modelIdMapping aliases still get the strip.
+      { maxTokens: resolvedMaxTokens, requestModel: this.resolveModelId(payload.model) },
+    );
+    const bedrockRequestParams: Omit<Anthropic.MessageCreateParams, 'model'> & {
+      model?: Anthropic.MessageCreateParams['model'];
+    } = { ...requestParams };
+    delete bedrockRequestParams.model;
+
+    const command = new InvokeModelCommand({
+      accept: 'application/json',
+      body: JSON.stringify({
+        anthropic_version: 'bedrock-2023-05-31',
+        ...bedrockRequestParams,
+      }),
+      contentType: 'application/json',
+      modelId: this.resolveModelId(payload.model),
+    });
+
+    try {
+      const [res, pricing] = await Promise.all([
+        this.client.send(command, { abortSignal: options?.signal }),
+        getModelPricing(payload.model, this.id, options?.pricingContext),
+      ]);
+      const responseBody = JSON.parse(
+        new TextDecoder().decode(res.body),
+      ) as AnthropicGenerateObjectResponse;
+
+      await emitAnthropicGenerateObjectUsage(responseBody, options, pricing);
+
+      return parseAnthropicGenerateObjectResponse(responseBody, schemaToolName);
+    } catch (e) {
+      const err = e as Error & { $metadata: any };
+
+      throw AgentRuntimeError.chat({
+        error: {
+          body: err.$metadata,
+          message: err.message,
+          type: err.name,
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: this.id,
+        region: this.region,
+      });
+    }
+  };
+
+  private invokeEmbeddingModel = async (
+    payload: EmbeddingsPayload,
+    options?: EmbeddingsOptions,
+  ): Promise<Embeddings> => {
+    const command = new InvokeModelCommand({
+      accept: 'application/json',
+      body: JSON.stringify({
+        dimensions: payload.dimensions,
+        inputText: payload.input,
+        normalize: true,
+      }),
+      contentType: 'application/json',
+      modelId: payload.model,
+    });
+    try {
+      const res = await this.client.send(command, { abortSignal: options?.signal });
+      const responseBody = JSON.parse(new TextDecoder().decode(res.body));
+      return responseBody.embedding;
+    } catch (e) {
+      const err = e as Error & { $metadata: any };
+      throw AgentRuntimeError.chat({
+        error: {
+          body: err.$metadata,
+          message: err.message,
+          type: err.name,
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: this.id,
+        region: this.region,
+      });
+    }
+  };
+
+  private invokeClaudeModel = async (
+    payload: ChatStreamPayload,
+    options?: ChatMethodOptions,
+  ): Promise<Response> => {
+    const {
+      effort,
+      enabledContextCaching = true,
+      max_tokens,
+      messages,
+      model,
+      temperature,
+      top_p,
+      tools,
+      thinking,
+    } = payload;
+    const inputStartAt = Date.now();
+    const system_message = messages.find((m) => m.role === 'system');
+    const user_messages = normalizeClaudeThinkingHistoryMessages(
+      messages.filter((m) => m.role !== 'system'),
+    );
+    // Filter out empty/whitespace-only system prompts — Anthropic API rejects them
+    const systemPromptText =
+      typeof system_message?.content === 'string' && system_message.content.trim()
+        ? system_message.content
+        : undefined;
+
+    const { bedrock: bedrockModels } = await import('model-bank');
+
+    const resolvedMaxTokens = await resolveMaxTokens({
+      max_tokens,
+      model,
+      providerModels: bedrockModels,
+      thinking,
+    });
+
+    const systemPrompts = !!systemPromptText
+      ? ([
+          {
+            cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
+            text: systemPromptText,
+            type: 'text',
+          },
+        ] as Anthropic.TextBlockParam[])
+      : undefined;
+
+    const postTools = buildAnthropicTools(tools, {
+      enabledContextCaching,
+    });
+
+    // Key the prefill guard on the resolved Bedrock model id: a custom logical
+    // id can map to a Claude 4.6+/5 Bedrock id via the channel modelIdMapping,
+    // which would otherwise skip the strip and 400 on a trailing assistant turn.
+    const postMessages = stripUnsupportedClaudeAssistantPrefill(
+      this.resolveModelId(model),
+      await buildAnthropicMessages(user_messages, {
+        enabledContextCaching,
+        imageBudget: BEDROCK_INLINE_IMAGE_BUDGET,
+      }),
+    );
+
+    const anthropicBase = {
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: resolvedMaxTokens,
+      messages: postMessages,
+      system: systemPrompts,
+      tools: postTools,
+    };
+
+    let anthropicPayload;
+
+    const resolvedThinking = resolveClaudeThinkingConfig({
+      maxTokens: resolvedMaxTokens,
+      model,
+      requestModel: this.resolveModelId(model),
+      thinking,
+    });
+
+    if (resolvedThinking && resolvedThinking.type !== 'disabled') {
+      anthropicPayload = {
+        ...anthropicBase,
+        ...(resolvedThinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
+        thinking: resolvedThinking,
+      };
+    } else {
+      // Resolve temperature/top_p: Claude 4+ on Bedrock doesn't allow both simultaneously.
+      // normalizeTemperature divides by 2 to map LobeChat's 0-2 range to Anthropic's 0-1 range.
+      const resolvedSamplingParams = resolveModelSamplingParameters(
+        model,
+        { temperature, top_p },
+        { normalizeTemperature: true, preferTemperature: true },
+      );
+
+      // Claude Opus 5 and later reject disabled thinking at effort `xhigh` / `max`; every lower
+      // effort level stays valid, so only that pairing is dropped.
+      const forwardsEffort =
+        !!effort &&
+        !(resolvedThinking?.type === 'disabled' && rejectsDisabledThinkingAtEffort(model, effort));
+
+      anthropicPayload = {
+        ...anthropicBase,
+        ...(forwardsEffort ? { output_config: { effort } } : {}),
+        ...(resolvedThinking ? { thinking: resolvedThinking } : {}),
+        temperature: resolvedSamplingParams.temperature,
+        top_p: resolvedSamplingParams.top_p,
+      };
+    }
+
+    const command = new InvokeModelWithResponseStreamCommand({
+      accept: 'application/json',
+      body: JSON.stringify(anthropicPayload),
+      contentType: 'application/json',
+      modelId: this.resolveModelId(model),
+    });
+    const providerResponseDiagnostics = initializeProviderDiagnostics({
+      apiMode: 'bedrock_claude_messages',
+      diagnostics: options?.diagnostics,
+      endpoint: `bedrock:${this.region}`,
+      payload: anthropicPayload,
+      sentAt: Date.now(),
+    });
+
+    try {
+      // Ask Claude for a streaming chat completion given the prompt
+      const res = await this.client.send(command, { abortSignal: options?.signal });
+
+      if (providerResponseDiagnostics) {
+        providerResponseDiagnostics.requestId = res.$metadata?.requestId;
+        providerResponseDiagnostics.status = res.$metadata?.httpStatusCode;
+      }
+      const claudeStream = observeProviderReadableStream(
+        createBedrockStream(res),
+        providerResponseDiagnostics,
+        recordBedrockResponseEvent,
+        options?.signal,
+      );
+      let prod = claudeStream;
+
+      if (process.env.DEBUG_BEDROCK_CHAT_COMPLETION === '1') {
+        const [productionStream, debug] = claudeStream.tee();
+        prod = productionStream;
+        debugStream(debug).catch(console.error);
+      }
+
+      const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
+      const cacheTTL = resolveCacheTTL({ ...payload, enabledContextCaching }, anthropicBase);
+      const pricingOptions = cacheTTL ? { lookupParams: { ttl: cacheTTL } } : undefined;
+
+      // Respond with the stream
+      return StreamingResponse(
+        AWSBedrockClaudeStream(prod, {
+          callbacks: options?.callback,
+          inputStartAt,
+          payload: { model, pricing, pricingOptions, provider: this.id },
+        }),
+        {
+          headers: options?.headers,
+        },
+      );
+    } catch (e) {
+      const err = e as Error & { $metadata: any };
+      recordProviderError(providerResponseDiagnostics, err);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
+      const errorType = ErrorClassifier.isExceededContextWindow(err.message)
+        ? AgentRuntimeErrorType.ExceededContextWindow
+        : AgentRuntimeErrorType.ProviderBizError;
+
+      throw AgentRuntimeError.chat({
+        error: {
+          body: err.$metadata,
+          message: err.message,
+          type: err.name,
+        },
+        errorType,
+        provider: this.id,
+        region: this.region,
+      });
+    }
+  };
+
+  private invokeLlamaModel = async (
+    payload: ChatStreamPayload,
+    options?: ChatMethodOptions,
+  ): Promise<Response> => {
+    const { max_tokens, messages, model } = payload;
+    const llamaPayload = {
+      max_gen_len: max_tokens || 400,
+      prompt: experimental_buildLlama2Prompt(messages as any),
+    };
+    const command = new InvokeModelWithResponseStreamCommand({
+      accept: 'application/json',
+      body: JSON.stringify(llamaPayload),
+      contentType: 'application/json',
+      modelId: model,
+    });
+    const providerResponseDiagnostics: ProviderResponseDiagnostics | undefined =
+      initializeProviderDiagnostics({
+        apiMode: 'bedrock_llama',
+        diagnostics: options?.diagnostics,
+        endpoint: `bedrock:${this.region}`,
+        payload: llamaPayload,
+        sentAt: Date.now(),
+      });
+
+    try {
+      // Ask Claude for a streaming chat completion given the prompt
+      const res = await this.client.send(command, { abortSignal: options?.signal });
+
+      if (providerResponseDiagnostics) {
+        providerResponseDiagnostics.requestId = res.$metadata?.requestId;
+        providerResponseDiagnostics.status = res.$metadata?.httpStatusCode;
+      }
+      const stream = observeProviderReadableStream(
+        createBedrockStream(res),
+        providerResponseDiagnostics,
+        recordBedrockResponseEvent,
+        options?.signal,
+      );
+      let prod = stream;
+
+      if (process.env.DEBUG_BEDROCK_CHAT_COMPLETION === '1') {
+        const [productionStream, debug] = stream.tee();
+        prod = productionStream;
+        debugStream(debug).catch(console.error);
+      }
+      // Respond with the stream
+      return StreamingResponse(AWSBedrockLlamaStream(prod, options?.callback), {
+        headers: options?.headers,
+      });
+    } catch (e) {
+      const err = e as Error & { $metadata: any };
+      recordProviderError(providerResponseDiagnostics, err);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
+
+      throw AgentRuntimeError.chat({
+        error: {
+          body: err.$metadata,
+          message: err.message,
+          region: this.region,
+          type: err.name,
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: this.id,
+        region: this.region,
+      });
+    }
+  };
+}
+
+export default LobeBedrockAI;

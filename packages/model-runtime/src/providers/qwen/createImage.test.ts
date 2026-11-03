@@ -1,0 +1,1060 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import { type CreateImagePayload } from '../../types/image';
+import { createQwenImage } from './createImage';
+
+// Mock the console.error to avoid polluting test output
+vi.spyOn(console, 'error').mockImplementation(() => {});
+
+const mockOptions: CreateImageOptions = {
+  apiKey: 'test-api-key',
+  provider: 'qwen',
+};
+
+beforeEach(() => {
+  // Reset all mocks before each test
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('createQwenImage', () => {
+  describe('Base URL handling', () => {
+    it('should use intl baseURL when provided', async () => {
+      const mockTaskId = 'task-123456';
+      const mockImageUrl = 'https://example.com/test-image.jpg';
+      const intlBaseUrl = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
+
+      // Mock fetch for task creation and immediate success
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-123',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+              results: [{ url: mockImageUrl }],
+            },
+            request_id: 'req-124',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx-v1',
+        params: {
+          prompt: 'Test image',
+        },
+      };
+
+      const optionsWithCustomUrl: CreateImageOptions = {
+        apiKey: 'test-api-key',
+        provider: 'qwen',
+        baseURL: intlBaseUrl,
+      };
+
+      const result = await createQwenImage(payload, optionsWithCustomUrl);
+
+      // Verify the custom base URL is used (without /compatible-mode/v1)
+      expect(fetch).toHaveBeenCalledWith(
+        'https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis',
+        expect.any(Object),
+      );
+
+      // Verify the task status query also uses the custom base URL
+      expect(fetch).toHaveBeenCalledWith(
+        'https://dashscope-intl.aliyuncs.com/api/v1/tasks/task-123456',
+        expect.any(Object),
+      );
+
+      expect(result).toEqual({ imageUrl: mockImageUrl });
+    });
+
+    it('should use default baseURL when not provided', async () => {
+      const mockTaskId = 'task-123456';
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/test-image.jpg';
+
+      // Mock fetch for task creation and immediate success
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-123',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+              results: [{ url: mockImageUrl }],
+            },
+            request_id: 'req-124',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx-v1',
+        params: {
+          prompt: 'Test image',
+        },
+      };
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      // Verify the default base URL is used
+      expect(fetch).toHaveBeenCalledWith(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis',
+        expect.any(Object),
+      );
+
+      expect(result).toEqual({ imageUrl: mockImageUrl });
+    });
+  });
+
+  describe('Success scenarios', () => {
+    it('should successfully generate image with immediate success', async () => {
+      const mockTaskId = 'task-123456';
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/test-image.jpg';
+
+      // Mock fetch for task creation and immediate success
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-123',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+              results: [{ url: mockImageUrl }],
+            },
+            request_id: 'req-124',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'A beautiful sunset over the mountains',
+        },
+      };
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      // Verify task creation request
+      expect(fetch).toHaveBeenCalledWith(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer test-api-key',
+            'Content-Type': 'application/json',
+            'X-DashScope-Async': 'enable',
+          },
+          body: JSON.stringify({
+            input: {
+              prompt: 'A beautiful sunset over the mountains',
+            },
+            model: 'wanx2.1-t2i-turbo',
+            parameters: {
+              n: 1,
+              size: '1024*1024',
+            },
+          }),
+        },
+      );
+
+      // Verify status query request
+      expect(fetch).toHaveBeenCalledWith(
+        `https://dashscope.aliyuncs.com/api/v1/tasks/${mockTaskId}`,
+        {
+          headers: {
+            Authorization: 'Bearer test-api-key',
+          },
+        },
+      );
+
+      expect(result).toEqual({
+        imageUrl: mockImageUrl,
+      });
+    });
+
+    it('should handle task that needs polling before success', async () => {
+      const mockTaskId = 'task-polling';
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/test-image-3.jpg';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-127',
+          }),
+        })
+        // First status query - still running
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'RUNNING',
+            },
+            request_id: 'req-128',
+          }),
+        })
+        // Second status query - succeeded
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+              results: [{ url: mockImageUrl }],
+            },
+            request_id: 'req-129',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Abstract digital art',
+        },
+      };
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      // Should have made 3 fetch calls: 1 create + 2 status checks
+      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(result).toEqual({
+        imageUrl: mockImageUrl,
+      });
+    });
+
+    it('should handle custom image dimensions', async () => {
+      const mockTaskId = 'task-custom-size';
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/custom-size.jpg';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-140',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+              results: [{ url: mockImageUrl }],
+            },
+            request_id: 'req-141',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Custom size image',
+          width: 512,
+          height: 768,
+        },
+      };
+
+      await createQwenImage(payload, mockOptions);
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis',
+        expect.objectContaining({
+          body: JSON.stringify({
+            input: {
+              prompt: 'Custom size image',
+            },
+            model: 'wanx2.1-t2i-turbo',
+            parameters: {
+              n: 1,
+              size: '512*768',
+            },
+          }),
+        }),
+      );
+    });
+
+    it('should handle long running tasks with retries', async () => {
+      const mockTaskId = 'task-long-running';
+
+      // Mock status query that returns RUNNING a few times then succeeds
+      let statusCallCount = 0;
+      const statusQueryMock = vi.fn().mockImplementation(() => {
+        statusCallCount++;
+        if (statusCallCount <= 3) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              output: {
+                task_id: mockTaskId,
+                task_status: 'RUNNING',
+              },
+              request_id: `req-${133 + statusCallCount}`,
+            }),
+          });
+        } else {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              output: {
+                task_id: mockTaskId,
+                task_status: 'SUCCEEDED',
+                results: [{ url: 'https://example.com/final-image.jpg' }],
+              },
+              request_id: 'req-137',
+            }),
+          });
+        }
+      });
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-132',
+          }),
+        })
+        .mockImplementation(statusQueryMock);
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Long running task',
+        },
+      };
+
+      // Mock setTimeout to make test run faster but still allow controlled execution
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+        // Use setImmediate to avoid recursion issues
+        setImmediate(callback);
+        return 1 as any;
+      });
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      expect(result).toEqual({
+        imageUrl: 'https://example.com/final-image.jpg',
+      });
+
+      // Should have made 1 create call + 4 status calls (3 RUNNING + 1 SUCCEEDED)
+      expect(fetch).toHaveBeenCalledTimes(5);
+    });
+
+    it('should handle seed value of 0 correctly', async () => {
+      const mockTaskId = 'task-with-zero-seed';
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/seed-zero.jpg';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-seed-0',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+              results: [{ url: mockImageUrl }],
+            },
+            request_id: 'req-seed-0-status',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Image with seed 0',
+          seed: 0,
+        },
+      };
+
+      await createQwenImage(payload, mockOptions);
+
+      // Verify that seed: 0 is included in the request
+      expect(fetch).toHaveBeenCalledWith(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis',
+        expect.objectContaining({
+          body: JSON.stringify({
+            input: {
+              prompt: 'Image with seed 0',
+            },
+            model: 'wanx2.1-t2i-turbo',
+            parameters: {
+              n: 1,
+              seed: 0,
+              size: '1024*1024',
+            },
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('Error scenarios', () => {
+    it('should handle task creation failure', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        statusText: 'Bad Request',
+        json: async () => ({
+          message: 'Invalid model name',
+        }),
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'invalid-model',
+        params: {
+          prompt: 'Test prompt',
+        },
+      };
+
+      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
+        expect.objectContaining({
+          errorType: 'ProviderBizError',
+          provider: 'qwen',
+        }),
+      );
+    });
+
+    it('should handle non-JSON error responses', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        json: async () => {
+          throw new Error('Failed to parse JSON');
+        },
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Test prompt',
+        },
+      };
+
+      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
+        expect.objectContaining({
+          errorType: 'ProviderBizError',
+          provider: 'qwen',
+        }),
+      );
+    });
+
+    it('should handle task failure status', async () => {
+      const mockTaskId = 'task-failed';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-130',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'FAILED',
+              error_message: 'Content policy violation',
+            },
+            request_id: 'req-131',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Invalid prompt that causes failure',
+        },
+      };
+
+      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
+        expect.objectContaining({
+          errorType: 'ProviderBizError',
+          provider: 'qwen',
+        }),
+      );
+    });
+
+    it('should handle task succeeded but no results', async () => {
+      const mockTaskId = 'task-no-results';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-134',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+              results: [], // Empty results array
+            },
+            request_id: 'req-135',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Test prompt',
+        },
+      };
+
+      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
+        expect.objectContaining({
+          errorType: 'ProviderBizError',
+          provider: 'qwen',
+        }),
+      );
+    });
+
+    it('should handle status query failure', async () => {
+      const mockTaskId = 'task-query-fail';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-136',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          statusText: 'Unauthorized',
+          json: async () => ({
+            message: 'Invalid API key',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Test prompt',
+        },
+      };
+
+      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
+        expect.objectContaining({
+          errorType: 'ProviderBizError',
+          provider: 'qwen',
+        }),
+      );
+    });
+
+    it('should handle transient status query failures and retry', async () => {
+      const mockTaskId = 'task-transient-failure';
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/retry-success.jpg';
+
+      let statusQueryCount = 0;
+      const statusQueryMock = vi.fn().mockImplementation(() => {
+        statusQueryCount++;
+        if (statusQueryCount === 1 || statusQueryCount === 2) {
+          // First two calls fail
+          return Promise.reject(new Error('Network timeout'));
+        } else {
+          // Third call succeeds
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              output: {
+                task_id: mockTaskId,
+                task_status: 'SUCCEEDED',
+                results: [{ url: mockImageUrl }],
+              },
+              request_id: 'req-retry-success',
+            }),
+          });
+        }
+      });
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-transient',
+          }),
+        })
+        .mockImplementation(statusQueryMock);
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Test transient failure',
+        },
+      };
+
+      // Mock setTimeout to make test run faster
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+        setImmediate(callback);
+        return 1 as any;
+      });
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      expect(result).toEqual({
+        imageUrl: mockImageUrl,
+      });
+
+      // Verify the mock was called the expected number of times
+      expect(statusQueryMock).toHaveBeenCalledTimes(3); // 2 failures + 1 success
+
+      // Should have made 1 create call + 3 status calls (2 failed + 1 succeeded)
+      expect(fetch).toHaveBeenCalledTimes(4);
+    });
+
+    it('should fail after consecutive query failures', async () => {
+      const mockTaskId = 'task-consecutive-failures';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-will-fail',
+          }),
+        })
+        // All subsequent calls fail
+        .mockRejectedValue(new Error('Persistent network error'));
+
+      const payload: CreateImagePayload = {
+        model: 'wanx2.1-t2i-turbo',
+        params: {
+          prompt: 'Test persistent failure',
+        },
+      };
+
+      // Mock setTimeout to make test run faster
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
+        setImmediate(callback);
+        return 1 as any;
+      });
+
+      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
+        expect.objectContaining({
+          errorType: 'ProviderBizError',
+          provider: 'qwen',
+        }),
+      );
+
+      // Should have made 1 create call + 3 failed status calls (maxConsecutiveFailures)
+      expect(fetch).toHaveBeenCalledTimes(4);
+    });
+  });
+
+  describe('qwen-image-edit model', () => {
+    it('should successfully generate image with qwen-image-edit model', async () => {
+      const mockImageUrl =
+        'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/test-generated-image.jpg';
+
+      // Mock fetch for multimodal-generation API
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: {
+            choices: [
+              {
+                message: {
+                  content: [{ image: mockImageUrl }],
+                },
+              },
+            ],
+          },
+          request_id: 'req-edit-123',
+        }),
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'qwen-image-edit',
+        params: {
+          prompt: 'Edit this image to add a cat',
+          imageUrl: 'https://example.com/source-image.jpg',
+        },
+      };
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      expect(result).toEqual({
+        imageUrl: mockImageUrl,
+      });
+
+      expect(fetch).toHaveBeenCalled();
+      const [url, options] = (fetch as any).mock.calls[0];
+
+      expect(url).toBe(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+      );
+      expect(options.method).toBe('POST');
+      expect(options.headers).toEqual({
+        'Authorization': 'Bearer test-api-key',
+        'Content-Type': 'application/json',
+      });
+
+      const body = JSON.parse(options.body);
+      expect(body).toEqual({
+        input: {
+          messages: [
+            {
+              content: [
+                { image: 'https://example.com/source-image.jpg' },
+                { text: 'Edit this image to add a cat' },
+              ],
+              role: 'user',
+            },
+          ],
+        },
+        model: 'qwen-image-edit',
+        parameters: { n: 1 },
+      });
+    });
+
+    it('should throw error when imageUrl is missing for qwen-image-edit', async () => {
+      const payload: CreateImagePayload = {
+        model: 'qwen-image-edit',
+        params: {
+          prompt: 'Edit this image',
+          // imageUrl is missing
+        },
+      };
+
+      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
+        expect.objectContaining({
+          errorType: 'ProviderBizError',
+          provider: 'qwen',
+        }),
+      );
+    });
+
+    it('should handle qwen-image-edit API errors', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        json: async () => ({
+          message: 'Invalid image format',
+        }),
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'qwen-image-edit',
+        params: {
+          prompt: 'Edit this image',
+          imageUrl: 'https://example.com/invalid-image.jpg',
+        },
+      };
+
+      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
+        expect.objectContaining({
+          errorType: 'ProviderBizError',
+          provider: 'qwen',
+        }),
+      );
+    });
+
+    it('should throw error when imageUrl is not provided', async () => {
+      const payload: CreateImagePayload = {
+        model: 'qwen-image-edit',
+        params: {
+          prompt: 'Edit this image',
+          // imageUrl not provided
+        },
+      };
+
+      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
+        expect.objectContaining({
+          errorType: 'ProviderBizError',
+          provider: 'qwen',
+        }),
+      );
+    });
+  });
+
+  describe('new image-generation route coverage', () => {
+    it('should throw helpful validation error when image is missing for wan2.6-image model', async () => {
+      const payload: CreateImagePayload = {
+        model: 'wan2.6-image-pro',
+        params: {
+          prompt: '参考输入图生成新图',
+        },
+      };
+
+      try {
+        await createQwenImage(payload, mockOptions);
+      } catch (error) {
+        const runtimeError = error as any;
+
+        expect(runtimeError).toEqual(
+          expect.objectContaining({
+            errorType: 'ProviderBizError',
+            provider: 'qwen',
+          }),
+        );
+
+        const errorMessage = runtimeError?.error?.message ?? runtimeError?.error?.error?.message;
+        expect(errorMessage).toBe('imageUrl or imageUrls is required for model wan2.6-image-pro');
+
+        expect(fetch).not.toHaveBeenCalled();
+        return;
+      }
+
+      throw new Error('Expected createQwenImage to throw for missing image on wan2.6-image');
+    });
+
+    it('should use image-generation async API for kling model and parse choices result', async () => {
+      const mockTaskId = 'task-kling-123';
+      const mockImageUrl = 'https://p4-fdl.klingai.com/xxx.png?token=abc';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-kling-1',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              choices: [
+                {
+                  message: {
+                    content: [{ image: mockImageUrl, type: 'image' }],
+                  },
+                },
+              ],
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+            },
+            request_id: 'req-kling-2',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'kling/kling-v3-omni-image-generation',
+        params: {
+          aspectRatio: '1:1',
+          imageUrls: ['https://cdn.example.com/ref-1.png', 'https://cdn.example.com/ref-2.png'],
+          prompt: '参考图1风格和图2背景生成番茄炒蛋',
+          resolution: '1k',
+        },
+      };
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      expect(result).toEqual({ imageUrl: mockImageUrl });
+
+      const [firstUrl, firstOptions] = (fetch as any).mock.calls[0];
+      expect(firstUrl).toBe(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation',
+      );
+      expect(firstOptions).toEqual({
+        body: JSON.stringify({
+          input: {
+            messages: [
+              {
+                content: [
+                  { text: '参考图1风格和图2背景生成番茄炒蛋' },
+                  { image: 'https://cdn.example.com/ref-1.png' },
+                  { image: 'https://cdn.example.com/ref-2.png' },
+                ],
+                role: 'user',
+              },
+            ],
+          },
+          model: 'kling/kling-v3-omni-image-generation',
+          parameters: {
+            n: 1,
+            aspect_ratio: '1:1',
+            resolution: '1k',
+            size: '1024*1024',
+          },
+        }),
+        headers: {
+          'Authorization': 'Bearer test-api-key',
+          'Content-Type': 'application/json',
+          'X-DashScope-Async': 'enable',
+        },
+        method: 'POST',
+      });
+    });
+
+    it('should use image-generation async API for wan2.7 model', async () => {
+      const mockTaskId = 'task-wan27-1';
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/wan27-image.jpg';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: { task_id: mockTaskId },
+            request_id: 'req-wan27-create',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              results: [{ url: mockImageUrl }],
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+            },
+            request_id: 'req-wan27-status',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'wan2.7-image-pro',
+        params: {
+          height: 2048,
+          prompt: 'A futuristic city skyline',
+          seed: 123,
+          width: 2048,
+        },
+      };
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      expect(result).toEqual({ imageUrl: mockImageUrl });
+
+      const [createUrl, createOptions] = (fetch as any).mock.calls[0];
+
+      expect(createUrl).toBe(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation',
+      );
+      expect(JSON.parse(createOptions.body)).toEqual({
+        input: {
+          messages: [
+            {
+              content: [{ text: 'A futuristic city skyline' }],
+              role: 'user',
+            },
+          ],
+        },
+        model: 'wan2.7-image-pro',
+        parameters: {
+          n: 1,
+          seed: 123,
+          size: '2048*2048',
+        },
+      });
+
+      expect(fetch).toHaveBeenCalledWith(
+        `https://dashscope.aliyuncs.com/api/v1/tasks/${mockTaskId}`,
+        {
+          headers: {
+            Authorization: 'Bearer test-api-key',
+          },
+        },
+      );
+    });
+
+    it('should use multimodal-generation sync API for sync-only model', async () => {
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/sync-only-image.jpg';
+
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: {
+            choices: [
+              {
+                message: {
+                  content: [{ image: mockImageUrl }],
+                },
+              },
+            ],
+          },
+          request_id: 'req-sync-only',
+        }),
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'qwen-image-max',
+        params: {
+          prompt: 'A cinematic portrait',
+          seed: 42,
+        },
+      };
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      expect(result).toEqual({ imageUrl: mockImageUrl });
+
+      const [syncUrl, syncOptions] = (fetch as any).mock.calls[0];
+
+      expect(syncUrl).toBe(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+      );
+      expect(JSON.parse(syncOptions.body)).toEqual({
+        input: {
+          messages: [
+            {
+              content: [{ text: 'A cinematic portrait' }],
+              role: 'user',
+            },
+          ],
+        },
+        model: 'qwen-image-max',
+        parameters: {
+          n: 1,
+          seed: 42,
+        },
+      });
+    });
+  });
+});

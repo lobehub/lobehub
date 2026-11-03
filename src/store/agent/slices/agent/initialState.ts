@@ -1,0 +1,125 @@
+import type { AgentContextDocument } from '@lobechat/context-engine';
+import type { PartialDeep } from 'type-fest';
+
+import { type AgentSettingsInstance } from '@/features/AgentSetting';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+import { type AvailableAgentItem } from '@/services/agent';
+import { type AgentItem } from '@/types/agent';
+import { type MetaData } from '@/types/meta';
+
+import { readAllLocalAgentWorkingDirectories } from '../../utils/localAgentWorkingDirectoryStorage';
+import type { ServerDefaultHeterogeneousCapability } from './projection';
+
+export type LoadingState = Record<Partial<keyof MetaData> | string, boolean>;
+export type SaveStatus = 'idle' | 'saving' | 'saved';
+
+export interface AgentSliceState {
+  activeAgentId?: string;
+  /**
+   * Per-agent config fetch error message. Lets the UI distinguish "fetch
+   * failed" from "still loading" instead of showing an endless skeleton
+   * (e.g. 401s are not retried by SWR). Cleared on successful fetch / retry.
+   */
+  agentConfigErrorMap: Record<string, string>;
+  /** Replica bookkeeping for agent configs (`agentMap` is its view). */
+  agentConfigReplica: ReplicaState<PartialDeep<AgentItem>>;
+  agentDocumentsMap: Record<string, AgentContextDocument[]>;
+  agentMap: Record<string, PartialDeep<AgentItem>>;
+  /**
+   * Agents whose config fetch succeeded but resolved to `null` — the agent
+   * doesn't exist or the caller lost access (e.g. a workspace agent switched
+   * back to private). Distinct from `agentConfigErrorMap` (transport errors):
+   * these are settled, non-retryable, and should render a 404 card rather
+   * than a loading skeleton. Cleared when a later fetch succeeds (e.g. the
+   * agent is made public again).
+   */
+  agentNotFoundMap: Record<string, boolean>;
+  agentSettingInstance?: AgentSettingsInstance | null;
+  /** Replica view of user-chosen slugs: `slug → agent id`. */
+  agentSlugIdMap: Record<string, string>;
+  /** Replica bookkeeping of `agentSlugIdMap`. */
+  agentSlugIdReplica: ReplicaState<string>;
+  /** Replica view of the recently updated agents the chat context can delegate to. */
+  availableAgents?: AvailableAgentItem[];
+  /** Replica bookkeeping of `availableAgents`. */
+  availableAgentsReplica: ReplicaState<AvailableAgentItem[]>;
+  /**
+   * The agents changed (create / delete / sidebar refresh) since
+   * `availableAgents` was confirmed: the chat context reads a fresh list.
+   */
+  availableAgentsStale: boolean;
+  /** Replica view of the server-default heterogeneous capability. */
+  heteroServerDefaultCapability?: ServerDefaultHeterogeneousCapability;
+  /** Replica bookkeeping of `heteroServerDefaultCapability`. */
+  heteroServerDefaultCapabilityReplica: ReplicaState<ServerDefaultHeterogeneousCapability>;
+  /**
+   * Whether the agent panel is pinned (UI state)
+   */
+  isAgentPinned: boolean;
+  /**
+   * Last time the agent config/meta was updated
+   */
+  lastUpdatedTime?: Date | null;
+  /**
+   * Loading state for meta fields (used during autocomplete)
+   */
+  loadingState: LoadingState;
+  /**
+   * Per-agent local working directory. Persisted to localStorage; held in
+   * store so subscribers re-render on change.
+   */
+  localAgentWorkingDirectoryMap: Record<string, string>;
+  /**
+   * Save status for showing auto-save hint
+   */
+  saveStatus: SaveStatus;
+  /**
+   * Content being streamed for system role update
+   */
+  streamingSystemRole?: string;
+  /**
+   * Agent that owns the current system role stream
+   */
+  streamingSystemRoleAgentId?: string;
+  /**
+   * Monotonic token that distinguishes successive streams for the same agent
+   */
+  streamingSystemRoleGeneration: number;
+  /**
+   * Whether system role streaming is in progress
+   */
+  streamingSystemRoleInProgress?: boolean;
+  updateAgentChatConfigSignal?: AbortController;
+  updateAgentConfigSignal?: AbortController;
+  updateAgentMetaSignal?: AbortController;
+}
+
+export const initialAgentSliceState: AgentSliceState = {
+  agentConfigErrorMap: {},
+  agentConfigReplica: createReplicaState(),
+  agentDocumentsMap: {},
+  agentMap: {},
+  agentNotFoundMap: {},
+  agentSlugIdMap: {},
+  agentSlugIdReplica: createReplicaState(),
+  availableAgents: undefined,
+  availableAgentsReplica: createReplicaState(),
+  availableAgentsStale: false,
+  heteroServerDefaultCapability: undefined,
+  heteroServerDefaultCapabilityReplica: createReplicaState(),
+  isAgentPinned: false,
+  lastUpdatedTime: null,
+  localAgentWorkingDirectoryMap: readAllLocalAgentWorkingDirectories(),
+  loadingState: {
+    avatar: false,
+    backgroundColor: false,
+    description: false,
+    tags: false,
+    title: false,
+  },
+  saveStatus: 'idle',
+  streamingSystemRole: undefined,
+  streamingSystemRoleAgentId: undefined,
+  streamingSystemRoleGeneration: 0,
+  streamingSystemRoleInProgress: false,
+};

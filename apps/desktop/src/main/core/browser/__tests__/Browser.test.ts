@@ -1,0 +1,1151 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type App as AppCore } from '../../App';
+import Browser, { type BrowserWindowOpts } from '../Browser';
+
+// Use vi.hoisted to define mocks before hoisting
+const {
+  mockAppModule,
+  mockBrowserWindow,
+  mockNativeTheme,
+  mockIpcMain,
+  mockShell,
+  mockScreen,
+  MockBrowserWindow,
+  mockEnv,
+} = vi.hoisted(() => {
+  const mockBrowserWindow = {
+    center: vi.fn(),
+    close: vi.fn(),
+    focus: vi.fn(),
+    getBounds: vi.fn().mockReturnValue({ height: 600, width: 800, x: 0, y: 0 }),
+    getContentBounds: vi.fn().mockReturnValue({ height: 600, width: 800 }),
+    hide: vi.fn(),
+    isDestroyed: vi.fn().mockReturnValue(false),
+    isFocused: vi.fn().mockReturnValue(true),
+    isFullScreen: vi.fn().mockReturnValue(false),
+    isMaximized: vi.fn().mockReturnValue(false),
+    isVisible: vi.fn().mockReturnValue(true),
+    loadFile: vi.fn().mockResolvedValue(undefined),
+    loadURL: vi.fn().mockResolvedValue(undefined),
+    maximize: vi.fn(),
+    minimize: vi.fn(),
+    on: vi.fn(),
+    once: vi.fn(),
+    setBackgroundColor: vi.fn(),
+    setBounds: vi.fn(),
+    setFullScreen: vi.fn(),
+    setPosition: vi.fn(),
+    setTitleBarOverlay: vi.fn(),
+    setVibrancy: vi.fn(),
+    show: vi.fn(),
+    unmaximize: vi.fn(),
+    webContents: {
+      ipc: { once: vi.fn() },
+      openDevTools: vi.fn(),
+      reloadIgnoringCache: vi.fn(),
+      send: vi.fn(),
+      session: {
+        webRequest: {
+          onBeforeSendHeaders: vi.fn(),
+          onHeadersReceived: vi.fn(),
+        },
+      },
+      on: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+    },
+  };
+
+  return {
+    mockAppModule: {
+      dock: {
+        setBadge: vi.fn(),
+        show: vi.fn(),
+      },
+      getLocale: vi.fn(() => 'en-US'),
+      getPreferredSystemLanguages: vi.fn(() => ['en-US']),
+      getVersion: vi.fn(() => '1.2.3'),
+      setActivationPolicy: vi.fn(),
+      setBadgeCount: vi.fn(),
+    },
+    MockBrowserWindow: vi.fn(function () {
+      return mockBrowserWindow;
+    }),
+    mockBrowserWindow,
+    mockEnv: {
+      externalNavigationHosts: '',
+      isDev: false,
+      isLinux: false,
+      isMac: false,
+      isMacTahoe: false,
+      isWindows: true,
+    },
+    mockIpcMain: {
+      handle: vi.fn(),
+      removeHandler: vi.fn(),
+    },
+    mockNativeTheme: {
+      off: vi.fn(),
+      on: vi.fn(),
+      shouldUseDarkColors: false,
+      themeSource: 'system',
+    },
+    mockScreen: {
+      getDisplayMatching: vi.fn().mockReturnValue({
+        workArea: { height: 1080, width: 1920, x: 0, y: 0 },
+      }),
+      getDisplayNearestPoint: vi.fn().mockReturnValue({
+        workArea: { height: 1080, width: 1920, x: 0, y: 0 },
+      }),
+      getPrimaryDisplay: vi.fn().mockReturnValue({
+        workArea: { height: 1080, width: 1920, x: 0, y: 0 },
+      }),
+    },
+    mockShell: {
+      openExternal: vi.fn().mockResolvedValue(undefined),
+    },
+  };
+});
+
+// Mock electron
+vi.mock('electron', () => ({
+  app: mockAppModule,
+  BrowserWindow: MockBrowserWindow,
+  ipcMain: mockIpcMain,
+  nativeTheme: mockNativeTheme,
+  screen: mockScreen,
+  shell: mockShell,
+}));
+
+// Mock constants
+vi.mock('@/const/dir', () => ({
+  buildDir: '/mock/build',
+  preloadDir: '/mock/preload',
+  resourcesDir: '/mock/resources',
+}));
+
+vi.mock('@/const/env', () => ({
+  get DESKTOP_EXTERNAL_NAVIGATION_HOSTS() {
+    return mockEnv.externalNavigationHosts;
+  },
+  get isDev() {
+    return mockEnv.isDev;
+  },
+  get isLinux() {
+    return mockEnv.isLinux;
+  },
+  get isMac() {
+    return mockEnv.isMac;
+  },
+  get isMacTahoe() {
+    return mockEnv.isMacTahoe;
+  },
+  get isWindows() {
+    return mockEnv.isWindows;
+  },
+}));
+
+vi.mock('../../../const/theme', () => ({
+  BACKGROUND_DARK: '#1a1a1a',
+  BACKGROUND_LIGHT: '#ffffff',
+  SYMBOL_COLOR_DARK: '#ffffff',
+  SYMBOL_COLOR_LIGHT: '#000000',
+  THEME_CHANGE_DELAY: 0,
+}));
+
+describe('Browser', () => {
+  let browser: Browser;
+  let mockApp: AppCore;
+  let mockStoreManagerGet: ReturnType<typeof vi.fn>;
+  let mockStoreManagerSet: ReturnType<typeof vi.fn>;
+  let mockRemoteServerConfigCtr: {
+    getAccessToken: ReturnType<typeof vi.fn>;
+    getRemoteServerConfig: ReturnType<typeof vi.fn>;
+  };
+  let autoLoadUrlSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+  const defaultOptions: BrowserWindowOpts = {
+    height: 600,
+    identifier: 'test-window',
+    path: '/test',
+    title: 'Test Window',
+    width: 800,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+
+    // Reset mock behaviors
+    mockBrowserWindow.getBounds.mockReturnValue({ height: 600, width: 800, x: 0, y: 0 });
+    mockBrowserWindow.isDestroyed.mockReturnValue(false);
+    mockBrowserWindow.isVisible.mockReturnValue(true);
+    mockBrowserWindow.isFocused.mockReturnValue(true);
+    mockBrowserWindow.isFullScreen.mockReturnValue(false);
+    mockBrowserWindow.loadURL.mockResolvedValue(undefined);
+    mockBrowserWindow.loadFile.mockResolvedValue(undefined);
+    mockNativeTheme.shouldUseDarkColors = false;
+    mockEnv.isLinux = false;
+    mockEnv.isMac = false;
+    mockEnv.isMacTahoe = false;
+    mockEnv.isWindows = true;
+    mockEnv.externalNavigationHosts = '';
+
+    // Create mock App
+    mockStoreManagerGet = vi.fn().mockReturnValue(undefined);
+    mockStoreManagerSet = vi.fn();
+
+    // Browser setup now installs protocol handlers that depend on RemoteServerConfigCtr
+    mockRemoteServerConfigCtr = {
+      getAccessToken: vi.fn().mockResolvedValue(null),
+      getRemoteServerConfig: vi.fn().mockResolvedValue({
+        remoteServerUrl: 'http://localhost:3000',
+      }),
+    };
+
+    // Ensure Browser can register protocol handlers on the session
+    (mockBrowserWindow.webContents.session as any).protocol = {
+      handle: vi.fn(),
+    };
+
+    mockApp = {
+      i18n: { ns: () => (key: string) => key },
+      coreUpdateManager: {
+        pauseForUnloadConfirmation: vi.fn(() => false),
+        resolveUnloadConfirmation: vi.fn(() => true),
+        handleUnloadPrevented: vi.fn(),
+      },
+      browserManager: {
+        retrieveByIdentifier: vi.fn(),
+      },
+      buildRendererUrl: vi.fn(async (path: string) => {
+        const cleanPath = path.startsWith('/') ? path : `/${path}`;
+        return `http://localhost:3000${cleanPath}`;
+      }),
+      getController: vi.fn((ctr: any) => {
+        // Only the remote server config controller is required in these unit tests
+        if (ctr?.name === 'RemoteServerConfigCtr') return mockRemoteServerConfigCtr;
+        throw new Error(`Unexpected controller requested in Browser tests: ${ctr?.name ?? ctr}`);
+      }),
+      isQuiting: false,
+      nextServerUrl: 'http://localhost:3000',
+      storeManager: {
+        get: mockStoreManagerGet,
+        set: mockStoreManagerSet,
+      },
+    } as unknown as AppCore;
+
+    browser = new Browser(defaultOptions, mockApp);
+    // The constructor starts the initial renderer navigation asynchronously.
+    autoLoadUrlSpy = vi.spyOn(browser, 'loadUrl').mockResolvedValue(undefined as any);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('constructor', () => {
+    it('should set identifier and options', () => {
+      expect(browser.identifier).toBe('test-window');
+      expect(browser.options).toEqual(defaultOptions);
+    });
+
+    it('should reject webviews outside the approved browser partition', () => {
+      const handler = mockBrowserWindow.webContents.on.mock.calls.find(
+        ([eventName]) => eventName === 'will-attach-webview',
+      )?.[1];
+      const event = { preventDefault: vi.fn() };
+      const webPreferences = { nodeIntegration: true, preload: '/tmp/evil.js' };
+
+      handler(event, webPreferences, {
+        partition: 'persist:attacker-controlled',
+        src: 'https://example.com',
+      });
+
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      expect(webPreferences).toEqual({ nodeIntegration: true, preload: '/tmp/evil.js' });
+    });
+
+    it('should harden webviews in the approved browser partition', () => {
+      const handler = mockBrowserWindow.webContents.on.mock.calls.find(
+        ([eventName]) => eventName === 'will-attach-webview',
+      )?.[1];
+      const event = { preventDefault: vi.fn() };
+      const webPreferences: Record<string, unknown> = {
+        nodeIntegration: true,
+        preload: '/tmp/evil.js',
+      };
+
+      handler(event, webPreferences, {
+        partition: 'persist:lobe-browser-app',
+        src: 'https://example.com',
+      });
+
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(webPreferences).toMatchObject({
+        contextIsolation: true,
+        nodeIntegration: false,
+        partition: 'persist:lobe-browser-app',
+      });
+      expect(webPreferences).not.toHaveProperty('preload');
+    });
+
+    it('should create BrowserWindow on construction', () => {
+      expect(MockBrowserWindow).toHaveBeenCalled();
+    });
+
+    it('loads the renderer directly without a splash-page navigation', async () => {
+      await vi.waitFor(() => {
+        expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+          'http://localhost:3000/test?lng=en-US',
+        );
+      });
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledTimes(1);
+      expect(mockBrowserWindow.loadFile).not.toHaveBeenCalledWith('/mock/resources/splash.html');
+    });
+  });
+
+  describe('browserWindow getter', () => {
+    it('should return existing window if not destroyed', () => {
+      mockBrowserWindow.isDestroyed.mockReturnValue(false);
+
+      const win1 = browser.browserWindow;
+      const win2 = browser.browserWindow;
+
+      // Should not create a new window
+      expect(MockBrowserWindow).toHaveBeenCalledTimes(1);
+      expect(win1).toBe(win2);
+    });
+  });
+
+  describe('webContents getter', () => {
+    it('should return webContents when window not destroyed', () => {
+      mockBrowserWindow.isDestroyed.mockReturnValue(false);
+
+      expect(browser.webContents).toBe(mockBrowserWindow.webContents);
+    });
+
+    it('should return null when window is destroyed', () => {
+      mockBrowserWindow.isDestroyed.mockReturnValue(true);
+
+      expect(browser.webContents).toBeNull();
+    });
+  });
+
+  describe('retrieveOrInitialize', () => {
+    const firstFrameSignals = () => ({
+      loadingScreenPainted: mockBrowserWindow.webContents.ipc.once.mock.calls.findLast(
+        ([channel]: [string]) => channel === 'desktop:loading-screen-painted',
+      )?.[1],
+      readyToShow: mockBrowserWindow.once.mock.calls.findLast(
+        ([event]: [string]) => event === 'ready-to-show',
+      )?.[1],
+    });
+
+    it('should show the window once the preload reports the loading screen painted', () => {
+      new Browser({ ...defaultOptions, showOnInit: true }, mockApp);
+      expect(mockBrowserWindow.show).not.toHaveBeenCalled();
+
+      const { loadingScreenPainted, readyToShow } = firstFrameSignals();
+      loadingScreenPainted();
+      expect(mockBrowserWindow.show).toHaveBeenCalledTimes(1);
+
+      readyToShow();
+      expect(mockBrowserWindow.show).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fall back to ready-to-show when the paint report never arrives', () => {
+      new Browser({ ...defaultOptions, showOnInit: true }, mockApp);
+
+      const { loadingScreenPainted, readyToShow } = firstFrameSignals();
+      readyToShow();
+      expect(mockBrowserWindow.show).toHaveBeenCalledTimes(1);
+
+      loadingScreenPainted();
+      expect(mockBrowserWindow.show).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not show the window when showOnInit is unset', () => {
+      const { loadingScreenPainted, readyToShow } = firstFrameSignals();
+      loadingScreenPainted();
+      readyToShow();
+
+      expect(mockBrowserWindow.show).not.toHaveBeenCalled();
+    });
+
+    it('should restore window size from store', () => {
+      mockStoreManagerGet.mockImplementation((key: string) => {
+        if (key === 'windowSize_test-window') {
+          return { height: 700, width: 900 };
+        }
+        return undefined;
+      });
+
+      // Create new browser to trigger initialization with saved state
+      const _newBrowser = new Browser(defaultOptions, mockApp);
+
+      expect(MockBrowserWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 700,
+          width: 900,
+        }),
+      );
+    });
+
+    it('should prefer the requested initial size when state restoration is disabled', () => {
+      mockStoreManagerGet.mockImplementation((key: string) => {
+        if (key === 'windowSize_test-window') {
+          return { height: 700, width: 900 };
+        }
+        return undefined;
+      });
+
+      new Browser(
+        {
+          ...defaultOptions,
+          height: 954,
+          restoreWindowState: false,
+          width: 1432,
+        },
+        mockApp,
+      );
+
+      expect(MockBrowserWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 954,
+          width: 1432,
+        }),
+      );
+    });
+
+    it('should restore window position from store and clamp within display', () => {
+      mockStoreManagerGet.mockImplementation((key: string) => {
+        if (key === 'windowSize_test-window') {
+          return { height: 700, width: 900, x: 1800, y: 900 };
+        }
+        return undefined;
+      });
+
+      new Browser(defaultOptions, mockApp);
+
+      expect(MockBrowserWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 700,
+          width: 900,
+          x: 1020,
+          y: 380,
+        }),
+      );
+    });
+
+    it('should clamp saved size when it exceeds current display bounds', () => {
+      mockScreen.getDisplayMatching.mockReturnValueOnce({
+        workArea: { height: 800, width: 1200, x: 0, y: 0 },
+      });
+      mockStoreManagerGet.mockImplementation((key: string) => {
+        if (key === 'windowSize_test-window') {
+          return { height: 1200, width: 2000, x: 0, y: 0 };
+        }
+        return undefined;
+      });
+
+      new Browser(defaultOptions, mockApp);
+
+      expect(MockBrowserWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 800,
+          width: 1200,
+        }),
+      );
+    });
+
+    it('should use default size when no saved state', () => {
+      mockStoreManagerGet.mockReturnValue(undefined);
+
+      expect(MockBrowserWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 600,
+          width: 800,
+        }),
+      );
+    });
+
+    it('should setup theme listener', () => {
+      expect(mockNativeTheme.on).toHaveBeenCalledWith('updated', expect.any(Function));
+    });
+
+    it('should setup CORS bypass', () => {
+      expect(mockBrowserWindow.webContents.session.webRequest.onHeadersReceived).toHaveBeenCalled();
+    });
+
+    it('should open devTools when devTools option is true', () => {
+      const optionsWithDevTools: BrowserWindowOpts = {
+        ...defaultOptions,
+        devTools: true,
+      };
+
+      new Browser(optionsWithDevTools, mockApp);
+
+      expect(mockBrowserWindow.webContents.openDevTools).toHaveBeenCalled();
+    });
+  });
+
+  describe('theme management', () => {
+    describe('getPlatformThemeConfig', () => {
+      it('should return Windows dark theme config when shouldUseDarkColors is true', () => {
+        mockNativeTheme.shouldUseDarkColors = true;
+
+        // Create browser with dark mode
+        const _darkBrowser = new Browser(defaultOptions, mockApp);
+
+        expect(MockBrowserWindow).toHaveBeenCalledWith(
+          expect.objectContaining({
+            backgroundColor: '#1a1a1a',
+            titleBarOverlay: expect.objectContaining({
+              color: '#00000000',
+              symbolColor: '#ffffff',
+            }),
+          }),
+        );
+      });
+
+      it('should return Windows light theme config when shouldUseDarkColors is false', () => {
+        mockNativeTheme.shouldUseDarkColors = false;
+
+        expect(MockBrowserWindow).toHaveBeenCalledWith(
+          expect.objectContaining({
+            backgroundColor: '#ffffff',
+            titleBarOverlay: expect.objectContaining({
+              color: '#00000000',
+              symbolColor: '#000000',
+            }),
+          }),
+        );
+      });
+    });
+
+    describe('handleThemeChange', () => {
+      it('should reapply visual effects on theme change', () => {
+        // Get the theme change handler
+        const themeHandler = mockNativeTheme.on.mock.calls.find(
+          (call) => call[0] === 'updated',
+        )?.[1];
+
+        expect(themeHandler).toBeDefined();
+
+        // Trigger theme change
+        themeHandler();
+        vi.advanceTimersByTime(0);
+
+        // Should update window background and title bar
+        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalled();
+        expect(mockBrowserWindow.setTitleBarOverlay).toHaveBeenCalled();
+      });
+    });
+
+    describe('handleAppThemeChange', () => {
+      it('should reapply visual effects', () => {
+        browser.handleAppThemeChange();
+        vi.advanceTimersByTime(0);
+
+        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalled();
+        expect(mockBrowserWindow.setTitleBarOverlay).toHaveBeenCalled();
+      });
+    });
+
+    describe('isDarkMode', () => {
+      it('should return true when shouldUseDarkColors is true', () => {
+        mockNativeTheme.shouldUseDarkColors = true;
+
+        const darkBrowser = new Browser(defaultOptions, mockApp);
+        // Access private getter through handleAppThemeChange which uses isDarkMode
+        darkBrowser.handleAppThemeChange();
+        vi.advanceTimersByTime(0);
+
+        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalledWith('#1a1a1a');
+      });
+
+      it('should return false when shouldUseDarkColors is false', () => {
+        mockNativeTheme.shouldUseDarkColors = false;
+
+        const lightBrowser = new Browser(defaultOptions, mockApp);
+        lightBrowser.handleAppThemeChange();
+        vi.advanceTimersByTime(0);
+
+        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalledWith('#ffffff');
+      });
+    });
+  });
+
+  describe('loadUrl', () => {
+    it('should load full URL successfully', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      await browser.loadUrl('/test-path');
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+        'http://localhost:3000/test-path?lng=en-US',
+      );
+    });
+
+    it('injects the OS language when the stored locale is auto', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      mockStoreManagerGet.mockImplementation((key: string) =>
+        key === 'locale' ? 'auto' : undefined,
+      );
+      mockAppModule.getPreferredSystemLanguages.mockReturnValue(['zh-Hans-CN']);
+
+      await browser.loadUrl('/test-path');
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+        'http://localhost:3000/test-path?lng=zh-CN',
+      );
+    });
+
+    it('injects an explicit locale choice ahead of the OS language', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      mockStoreManagerGet.mockImplementation((key: string) =>
+        key === 'locale' ? 'ja-JP' : undefined,
+      );
+      mockAppModule.getPreferredSystemLanguages.mockReturnValue(['zh-Hans-CN']);
+
+      await browser.loadUrl('/test-path');
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+        'http://localhost:3000/test-path?lng=ja-JP',
+      );
+    });
+
+    it('appends lng to a URL that already carries a query string', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      mockAppModule.getPreferredSystemLanguages.mockReturnValue(['en-US']);
+      (mockApp.buildRendererUrl as any).mockResolvedValueOnce(
+        'http://localhost:3000/test-path?foo=1',
+      );
+
+      await browser.loadUrl('/test-path');
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+        'http://localhost:3000/test-path?foo=1&lng=en-US',
+      );
+    });
+
+    it('should load error page on failure', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      mockBrowserWindow.loadURL.mockRejectedValueOnce(new Error('Load failed'));
+
+      await browser.loadUrl('/test-path');
+
+      expect(mockBrowserWindow.loadFile).toHaveBeenCalledWith('/mock/resources/error.html');
+    });
+
+    it('should setup retry handler on error', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      mockBrowserWindow.loadURL.mockRejectedValueOnce(new Error('Load failed'));
+
+      await browser.loadUrl('/test-path');
+
+      expect(mockIpcMain.removeHandler).toHaveBeenCalledWith('retry-connection');
+      expect(mockIpcMain.handle).toHaveBeenCalledWith('retry-connection', expect.any(Function));
+    });
+
+    it('should load fallback HTML when error page fails', async () => {
+      autoLoadUrlSpy?.mockRestore();
+      mockBrowserWindow.loadURL.mockRejectedValueOnce(new Error('Load failed'));
+      mockBrowserWindow.loadURL.mockResolvedValueOnce(undefined);
+      mockBrowserWindow.loadFile.mockImplementation(async (filePath: string) => {
+        if (filePath === '/mock/resources/error.html') throw new Error('Error page failed');
+        return undefined;
+      });
+
+      await browser.loadUrl('/test-path');
+
+      expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith(
+        expect.stringContaining('data:text/html'),
+      );
+    });
+  });
+
+  describe('loadPlaceholder', () => {
+    it('should load splash screen', async () => {
+      await browser.loadPlaceholder();
+
+      expect(mockBrowserWindow.loadFile).toHaveBeenCalledWith('/mock/resources/splash.html');
+    });
+  });
+
+  describe('window operations', () => {
+    describe('show', () => {
+      it('should show window', () => {
+        browser.show();
+
+        expect(mockBrowserWindow.show).toHaveBeenCalled();
+      });
+
+      it('should restore regular activation policy when showing the main window on macOS', () => {
+        mockEnv.isMac = true;
+        mockEnv.isWindows = false;
+
+        const mainBrowser = new Browser({ ...defaultOptions, identifier: 'app' }, mockApp);
+        vi.spyOn(mainBrowser, 'loadUrl').mockResolvedValue(undefined as any);
+
+        mainBrowser.show();
+
+        expect(mockAppModule.setActivationPolicy).toHaveBeenCalledWith('regular');
+        expect(mockAppModule.dock.show).toHaveBeenCalled();
+      });
+    });
+
+    describe('hide', () => {
+      it('should hide window', () => {
+        mockBrowserWindow.isFullScreen.mockReturnValue(false);
+
+        browser.hide();
+
+        expect(mockBrowserWindow.hide).toHaveBeenCalled();
+      });
+    });
+
+    describe('fullscreen events', () => {
+      it('should broadcast fullscreen state changes', () => {
+        const enterHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'enter-full-screen',
+        )?.[1];
+        const leaveHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'leave-full-screen',
+        )?.[1];
+
+        expect(enterHandler).toBeDefined();
+        expect(leaveHandler).toBeDefined();
+
+        enterHandler();
+        expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith('windowFullscreenChanged', {
+          isFullScreen: true,
+        });
+
+        leaveHandler();
+        expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith('windowFullscreenChanged', {
+          isFullScreen: false,
+        });
+      });
+
+      it('should disable macOS vibrancy in fullscreen and restore it after leaving', () => {
+        mockEnv.isMac = true;
+        mockEnv.isWindows = false;
+        mockBrowserWindow.on.mockClear();
+
+        new Browser(defaultOptions, mockApp);
+
+        const enterHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'enter-full-screen',
+        )?.[1];
+        const leaveHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'leave-full-screen',
+        )?.[1];
+
+        enterHandler();
+        expect(mockBrowserWindow.setVibrancy).toHaveBeenLastCalledWith(null);
+
+        leaveHandler();
+        expect(mockBrowserWindow.setVibrancy).toHaveBeenLastCalledWith('sidebar');
+      });
+    });
+
+    describe('close', () => {
+      it('should close window', () => {
+        browser.close();
+
+        expect(mockBrowserWindow.close).toHaveBeenCalled();
+      });
+    });
+
+    describe('moveToCenter', () => {
+      it('should center window', () => {
+        browser.moveToCenter();
+
+        expect(mockBrowserWindow.center).toHaveBeenCalled();
+      });
+    });
+
+    describe('setWindowSize', () => {
+      it('should set window bounds', () => {
+        browser.setWindowSize({ height: 700, width: 900 });
+
+        expect(mockBrowserWindow.setBounds).toHaveBeenCalledWith({
+          height: 700,
+          width: 900,
+        });
+      });
+
+      it('should use current size for missing dimensions', () => {
+        mockBrowserWindow.getBounds.mockReturnValue({ height: 600, width: 800 });
+
+        browser.setWindowSize({ width: 900 });
+
+        expect(mockBrowserWindow.setBounds).toHaveBeenCalledWith({
+          height: 600,
+          width: 900,
+        });
+      });
+    });
+
+    describe('toggleVisible', () => {
+      it('should hide when visible and focused', () => {
+        mockBrowserWindow.isVisible.mockReturnValue(true);
+        mockBrowserWindow.isFocused.mockReturnValue(true);
+
+        browser.toggleVisible();
+
+        expect(mockBrowserWindow.hide).toHaveBeenCalled();
+      });
+
+      it('should show and focus when not visible', () => {
+        mockBrowserWindow.isVisible.mockReturnValue(false);
+
+        browser.toggleVisible();
+
+        expect(mockBrowserWindow.show).toHaveBeenCalled();
+        expect(mockBrowserWindow.focus).toHaveBeenCalled();
+      });
+
+      it('should show and focus when visible but not focused', () => {
+        mockBrowserWindow.isVisible.mockReturnValue(true);
+        mockBrowserWindow.isFocused.mockReturnValue(false);
+
+        browser.toggleVisible();
+
+        expect(mockBrowserWindow.show).toHaveBeenCalled();
+        expect(mockBrowserWindow.focus).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('broadcast', () => {
+    it('should send message to webContents', () => {
+      browser.broadcast('updateAvailable' as any, { version: '1.0.0' } as any);
+
+      expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith('updateAvailable', {
+        version: '1.0.0',
+      });
+    });
+
+    it('should not send when window is destroyed', () => {
+      mockBrowserWindow.isDestroyed.mockReturnValue(true);
+
+      browser.broadcast('updateAvailable' as any);
+
+      expect(mockBrowserWindow.webContents.send).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('destroy', () => {
+    it('should cleanup theme listener', () => {
+      browser.destroy();
+
+      expect(mockNativeTheme.off).toHaveBeenCalledWith('updated', expect.any(Function));
+    });
+  });
+
+  describe('close event handling', () => {
+    let closeHandler: (e: any) => void;
+
+    beforeEach(() => {
+      // Get the close handler registered during initialization
+      closeHandler = mockBrowserWindow.on.mock.calls.find((call) => call[0] === 'close')?.[1];
+    });
+
+    it('should save window size and allow close when app is quitting', () => {
+      (mockApp as any).isQuiting = true;
+      const mockEvent = { preventDefault: vi.fn() };
+
+      closeHandler(mockEvent);
+
+      expect(mockStoreManagerSet).toHaveBeenCalledWith('windowSize_test-window', {
+        height: 600,
+        width: 800,
+        x: 0,
+        y: 0,
+      });
+      expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('should hide instead of close when keepAlive is true', () => {
+      const keepAliveOptions: BrowserWindowOpts = {
+        ...defaultOptions,
+        keepAlive: true,
+      };
+      const _keepAliveBrowser = new Browser(keepAliveOptions, mockApp);
+
+      // Get the new close handler
+      const keepAliveCloseHandler = mockBrowserWindow.on.mock.calls.findLast(
+        (call) => call[0] === 'close',
+      )?.[1];
+
+      const mockEvent = { preventDefault: vi.fn() };
+      keepAliveCloseHandler(mockEvent);
+
+      expect(mockEvent.preventDefault).toHaveBeenCalled();
+      expect(mockBrowserWindow.hide).toHaveBeenCalled();
+    });
+
+    it('should save size and allow close when keepAlive is false', () => {
+      const mockEvent = { preventDefault: vi.fn() };
+
+      closeHandler(mockEvent);
+
+      expect(mockStoreManagerSet).toHaveBeenCalledWith('windowSize_test-window', {
+        height: 600,
+        width: 800,
+        x: 0,
+        y: 0,
+      });
+    });
+  });
+
+  describe('reapplyVisualEffects', () => {
+    it('should apply visual effects', () => {
+      browser.reapplyVisualEffects();
+
+      expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalled();
+      expect(mockBrowserWindow.setTitleBarOverlay).toHaveBeenCalled();
+    });
+
+    it('should not apply when window is destroyed', () => {
+      mockBrowserWindow.isDestroyed.mockReturnValue(true);
+      mockBrowserWindow.setBackgroundColor.mockClear();
+
+      browser.reapplyVisualEffects();
+
+      expect(mockBrowserWindow.setBackgroundColor).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('will-prevent-unload event handling', () => {
+    let willPreventUnloadHandler: (e: any) => void;
+
+    beforeEach(() => {
+      // Get the will-prevent-unload handler registered during initialization
+      willPreventUnloadHandler = mockBrowserWindow.webContents.on.mock.calls.find(
+        (call) => call[0] === 'will-prevent-unload',
+      )?.[1];
+    });
+
+    it('should call preventDefault when app is quitting', () => {
+      (mockApp as any).isQuiting = true;
+      const mockEvent = { preventDefault: vi.fn() };
+
+      expect(willPreventUnloadHandler).toBeDefined();
+      willPreventUnloadHandler(mockEvent);
+
+      expect(mockEvent.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should not call preventDefault when app is not quitting', () => {
+      (mockApp as any).isQuiting = false;
+      const mockEvent = { preventDefault: vi.fn() };
+
+      expect(willPreventUnloadHandler).toBeDefined();
+      willPreventUnloadHandler(mockEvent);
+
+      expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('continues a protected window close without reloading the page', () => {
+      const closeHandler = mockBrowserWindow.on.mock.calls.find((call) => call[0] === 'close')?.[1];
+      const event = { preventDefault: vi.fn() };
+      closeHandler(event);
+      willPreventUnloadHandler(event);
+      mockBrowserWindow.close.mockImplementationOnce(() => {
+        closeHandler(event);
+        willPreventUnloadHandler(event);
+      });
+
+      browser.resolveUnloadConfirmation(true);
+      browser.resolveUnloadConfirmation(true);
+
+      expect(mockBrowserWindow.close).toHaveBeenCalledOnce();
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).not.toHaveBeenCalled();
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+    });
+
+    it('keeps a protected window open when closing is cancelled', () => {
+      const closeHandler = mockBrowserWindow.on.mock.calls.find((call) => call[0] === 'close')?.[1];
+      closeHandler({ preventDefault: vi.fn() });
+      willPreventUnloadHandler({ preventDefault: vi.fn() });
+      browser.resolveUnloadConfirmation(false);
+
+      expect(mockBrowserWindow.close).not.toHaveBeenCalled();
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).not.toHaveBeenCalled();
+    });
+
+    it('requests one UI confirmation and retries only after approval', () => {
+      const event = { preventDefault: vi.fn() };
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementation(() => {
+        const loadingHandler = mockBrowserWindow.webContents.on.mock.calls.find(
+          (call) => call[0] === 'did-start-loading',
+        )?.[1];
+        loadingHandler?.();
+        willPreventUnloadHandler(event);
+      });
+      browser.reloadIgnoringCache();
+      browser.reloadIgnoringCache();
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(
+        mockBrowserWindow.webContents.send.mock.calls.filter(
+          ([name]) => name === 'reloadConfirmationRequested',
+        ),
+      ).toHaveLength(1);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).toHaveBeenCalledOnce();
+      browser.resolveUnloadConfirmation(true);
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      browser.resolveUnloadConfirmation(true);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).toHaveBeenCalledTimes(2);
+    });
+
+    it('cancels a stale prompt and registers a fresh confirmation on retry', () => {
+      mockApp.coreUpdateManager.pauseForUnloadConfirmation = vi.fn(() => true);
+      const event = { preventDefault: vi.fn() };
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementation(() =>
+        willPreventUnloadHandler(event),
+      );
+      browser.reloadIgnoringCache();
+      browser.cancelUnloadConfirmation();
+      expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith(
+        'reloadConfirmationCancelled',
+        undefined,
+      );
+      browser.resolveUnloadConfirmation(true);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).toHaveBeenCalledOnce();
+      browser.reloadIgnoringCache();
+      expect(mockApp.coreUpdateManager.pauseForUnloadConfirmation).toHaveBeenCalledTimes(2);
+      browser.resolveUnloadConfirmation(true);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).toHaveBeenCalledTimes(3);
+    });
+
+    it('keeps the page when the confirmation is dismissed', () => {
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementation(() =>
+        willPreventUnloadHandler({ preventDefault: vi.fn() }),
+      );
+      browser.reloadIgnoringCache();
+      browser.resolveUnloadConfirmation(false);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).toHaveBeenCalledOnce();
+    });
+
+    it('does not replace an unknown unload operation with a reload', () => {
+      const event = { preventDefault: vi.fn() };
+      willPreventUnloadHandler(event);
+      browser.resolveUnloadConfirmation(true);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(mockBrowserWindow.webContents.send).not.toHaveBeenCalledWith(
+        'reloadConfirmationRequested',
+        undefined,
+      );
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).not.toHaveBeenCalled();
+    });
+
+    it('does not replace a pending reload confirmation with a close', () => {
+      const event = { preventDefault: vi.fn() };
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementation(() =>
+        willPreventUnloadHandler(event),
+      );
+      browser.reloadIgnoringCache();
+      const closeEvent = { preventDefault: vi.fn() };
+      const closeHandler = mockBrowserWindow.on.mock.calls.find((call) => call[0] === 'close')?.[1];
+      closeHandler(closeEvent);
+      expect(closeEvent.preventDefault).toHaveBeenCalledOnce();
+      browser.resolveUnloadConfirmation(true);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).toHaveBeenCalledTimes(2);
+      expect(mockBrowserWindow.close).not.toHaveBeenCalled();
+    });
+
+    it('silently defers automatic reloads without requesting a modal', () => {
+      const event = { preventDefault: vi.fn() };
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementationOnce(() => {
+        const loadingHandler = mockBrowserWindow.webContents.on.mock.calls.find(
+          (call) => call[0] === 'did-start-loading',
+        )?.[1];
+        loadingHandler?.();
+        willPreventUnloadHandler(event);
+      });
+      browser.reloadIgnoringCache(false, false);
+      expect(mockBrowserWindow.webContents.send).not.toHaveBeenCalledWith(
+        'reloadConfirmationRequested',
+        undefined,
+      );
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(mockApp.coreUpdateManager.handleUnloadPrevented).toHaveBeenCalledOnce();
+    });
+
+    it('should bypass beforeunload once for a renderer OTA reload', () => {
+      const reloadEvent = { preventDefault: vi.fn() };
+      const laterEvent = { preventDefault: vi.fn() };
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementationOnce(() => {
+        willPreventUnloadHandler(reloadEvent);
+      });
+
+      browser.reloadIgnoringCache(true);
+      willPreventUnloadHandler(laterEvent);
+
+      expect(reloadEvent.preventDefault).toHaveBeenCalledOnce();
+      expect(laterEvent.preventDefault).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('top-level navigation handling', () => {
+    let willNavigateHandler: (event: any, url: string) => void;
+
+    beforeEach(() => {
+      willNavigateHandler = mockBrowserWindow.webContents.on.mock.calls.find(
+        (call) => call[0] === 'will-navigate',
+      )?.[1];
+    });
+
+    it('should open configured external navigation hosts in system browser', () => {
+      mockEnv.externalNavigationHosts = 'stripe.com';
+      const mockEvent = { preventDefault: vi.fn() };
+
+      expect(willNavigateHandler).toBeDefined();
+      willNavigateHandler(mockEvent, 'https://checkout.stripe.com/c/pay/session_id');
+
+      expect(mockEvent.preventDefault).toHaveBeenCalled();
+      expect(mockShell.openExternal).toHaveBeenCalledWith(
+        'https://checkout.stripe.com/c/pay/session_id',
+      );
+    });
+
+    it('should allow internal result routes in the app window', () => {
+      mockEnv.externalNavigationHosts = 'stripe.com';
+      const mockEvent = { preventDefault: vi.fn() };
+
+      expect(willNavigateHandler).toBeDefined();
+      willNavigateHandler(mockEvent, 'http://localhost:3000/payment/upgrade-success');
+
+      expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+      expect(mockShell.openExternal).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('window open handling', () => {
+    let windowOpenHandler: (details: { url: string }) => { action: string };
+
+    beforeEach(() => {
+      windowOpenHandler = mockBrowserWindow.webContents.setWindowOpenHandler.mock.calls.at(-1)?.[0];
+    });
+
+    it('should open web URLs in the system browser', () => {
+      expect(windowOpenHandler).toBeDefined();
+
+      expect(windowOpenHandler({ url: 'https://github.com/lobehub/lobehub' })).toEqual({
+        action: 'deny',
+      });
+      expect(mockShell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobehub');
+    });
+
+    it('should deny renderer-origin URLs instead of handing them to the OS', () => {
+      expect(windowOpenHandler({ url: 'app://renderer/acceptance/acc-1' })).toEqual({
+        action: 'deny',
+      });
+      expect(mockShell.openExternal).not.toHaveBeenCalled();
+    });
+  });
+});

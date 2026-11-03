@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2020",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "@cucumber/cucumber", "@playwright/test"],
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@/*": ["../*"]
+    }
+  },
+  "exclude": ["node_modules", "reports"],
+  "extends": "../tsconfig.json",
+  "include": ["src/**/*", "*.js"]
+}

@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "باز کردن دایرکتوری کاری در",
+  "errors.appNotInstalled": "{{appName}} نصب نشده است",
+  "errors.launchFailed": "باز کردن در {{appName}} با خطا مواجه شد: {{error}}",
+  "errors.pathNotFound": "مسیر یافت نشد: {{path}}",
+  "errors.unknown": "خطای ناشناخته",
+  "tooltip": "باز کردن در {{appName}}"
+}

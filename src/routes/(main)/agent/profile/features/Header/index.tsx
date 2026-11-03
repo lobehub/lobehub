@@ -1,0 +1,472 @@
+import { isDesktop } from '@lobechat/const';
+import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
+import {
+  ActionIcon,
+  confirmModal,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  type ModalInstance,
+  toast,
+} from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
+import type { TFunction } from 'i18next';
+import {
+  BotMessageSquareIcon,
+  Download,
+  MoreHorizontal,
+  Settings2Icon,
+  Share2Icon,
+  Trash,
+  UploadCloud,
+  UserRound,
+  UsersIcon,
+} from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
+import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
+import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
+import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { useAgentMarketSubmission } from '@/features/AgentMarketSubmission/useAgentMarketSubmission';
+import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
+import NavHeader from '@/features/NavHeader';
+import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
+import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
+import { usePermission } from '@/hooks/usePermission';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
+import { useHomeStore } from '@/store/home';
+import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
+import { sanitizeFileName } from '@/utils/sanitizeFileName';
+
+import { openAgentSettingsModal } from '../AgentSettings';
+import { selectors as profileSelectors, useProfileStore } from '../store';
+import AgentForkTag from './AgentForkTag';
+import AgentVersionReviewTag from './AgentVersionReviewTag';
+
+type HeaderTranslation = TFunction<
+  readonly ['setting', 'chat', 'file', 'common', 'agent'],
+  undefined
+>;
+
+const buildAgentProfileMarkdown = (params: {
+  description?: string;
+  model?: string;
+  plugins?: string[];
+  provider?: string;
+  systemRole?: string;
+  t: HeaderTranslation;
+  tags?: string[];
+  title?: string;
+}) => {
+  const { description, model, plugins = [], provider, systemRole, t, tags = [], title } = params;
+  const sections: string[] = [];
+  const agentTitle = title?.trim() || t('settingAgent.export.untitled', { ns: 'setting' });
+
+  sections.push(`# ${agentTitle}`);
+
+  if (description?.trim()) sections.push(description.trim());
+
+  const metadata = [
+    provider ? `- ${t('settingAgent.export.provider', { ns: 'setting' })}: ${provider}` : undefined,
+    model ? `- ${t('settingAgent.export.model', { ns: 'setting' })}: ${model}` : undefined,
+    tags.length > 0
+      ? `- ${t('settingAgent.export.tags', { ns: 'setting' })}: ${tags.join(', ')}`
+      : undefined,
+  ].filter(Boolean);
+
+  if (metadata.length > 0) {
+    sections.push(
+      `## ${t('settingAgent.export.metadata', { ns: 'setting' })}\n\n${metadata.join('\n')}`,
+    );
+  }
+
+  if (plugins.length > 0) {
+    sections.push(
+      `## ${t('settingAgent.export.enabledPlugins', { ns: 'setting' })}\n\n${plugins
+        .map((plugin) => `- ${plugin}`)
+        .join('\n')}`,
+    );
+  }
+
+  if (systemRole?.trim()) {
+    sections.push(
+      `## ${t('settingAgent.prompt.title', { ns: 'setting' })}\n\n${systemRole.trim()}`,
+    );
+  }
+
+  return `${sections.join('\n\n')}\n`;
+};
+
+const Header = memo(() => {
+  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'agent']);
+  const dateLocale = i18n?.resolvedLanguage || i18n?.language;
+  const navigate = useWorkspaceAwareNavigate();
+
+  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
+  // `currentAgentConfig` is typed non-nullable but reads straight out of
+  // `agentMap`, so it IS undefined until the config lands. Reaching a profile by
+  // slug adds a resolution hop before that happens, which is long enough for the
+  // dependency array below to read `config.model` off nothing and drop the whole
+  // page into the error boundary.
+  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual) as
+    LobeAgentConfig | undefined;
+  const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
+  const visibility = useAgentStore(agentSelectors.currentAgentVisibility);
+  const authorId = useAgentStore(agentSelectors.currentAgentAuthorId);
+  const createdAt = useAgentStore(agentSelectors.currentAgentCreatedAt);
+  const authorName = useAuthorInfo(authorId)?.fullName;
+  const hasActiveWorkspace = useHasActiveWorkspace();
+  // Resource permissions apply to every public workspace agent, including the
+  // workspace-scoped LobeAI row. Builtin restrictions only prevent visibility
+  // changes; they must not hide the independent General-access control.
+  const showPermissionsEntry = hasActiveWorkspace && !!activeAgentId && visibility !== 'private';
+  // The Permission page also hosts the model / execution-environment policies,
+  // which a private workspace agent configures ahead of sharing — so its entry
+  // is wider than the member-access controls alone.
+  const showPermissionPageEntry = hasActiveWorkspace && !!activeAgentId;
+  const [showAgentBuilderPanel, toggleAgentBuilderPanel, isStatusInit] = useGlobalStore((s) => [
+    systemStatusSelectors.showAgentBuilderPanel(s),
+    s.toggleAgentBuilderPanel,
+    systemStatusSelectors.isStatusInit(s),
+  ]);
+  const removeAgent = useHomeStore((s) => s.removeAgent);
+  const editor = useProfileStore((s) => s.editor);
+  const lockedByOther = useProfileStore(profileSelectors.lockedByOther);
+  const lockPending = useProfileStore(profileSelectors.lockPending);
+  const { allowed: hasEditPermission } = usePermission('edit_own_content');
+  // A workspace member without edit-level General access on this agent gets the
+  // same disabled-with-tooltip treatment as a role viewer (server enforces).
+  const { canEditResource, canManageResource } = useResourceAccess(
+    'agent',
+    showPermissionsEntry ? activeAgentId : undefined,
+  );
+  // `canManageResource` also unlocks *configuring* the collaborative builtin
+  // rows (Lobe AI, the builders, the page agent) for any workspace member, but
+  // those rows can never be deleted or rehomed — the server rejects it, so the
+  // affordance must not be offered at all.
+  const isBuiltinAgent = useAgentStore(builtinAgentSelectors.isBuiltinAgent(activeAgentId));
+  const canManage = hasEditPermission && canManageResource && !isBuiltinAgent;
+  // Both halves, in the same order `ResourceConfigAccessGate` applies them: a
+  // role that cannot edit content is refused even where this agent's General
+  // Access says `edit`. Checking only the resource half would re-open the
+  // dead-end click for exactly that member.
+  const canConfigure = hasEditPermission && canEditResource;
+
+  const handleDelete = useCallback(() => {
+    if (!canManage || !activeAgentId) return;
+    confirmModal({
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await removeAgent(activeAgentId);
+        } catch (error) {
+          toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
+          return;
+        }
+        toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
+        navigate('/');
+      },
+      content: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
+      okText: t('delete', { ns: 'common' }),
+      title: t('delete', { ns: 'common' }),
+    });
+  }, [activeAgentId, canManage, navigate, removeAgent, t]);
+
+  const handleExportMarkdown = useCallback(async () => {
+    try {
+      const editorMarkdown = isHeterogeneous
+        ? undefined
+        : (editor?.getDocument('markdown') as string | null | undefined);
+      const profileMarkdown = buildAgentProfileMarkdown({
+        description: meta?.description,
+        model: config?.model,
+        // Pinned identifiers only — a disabled plugin shouldn't be advertised
+        // as "enabled" in the exported markdown.
+        plugins: getActivePluginIds(config?.plugins),
+        provider: config?.provider,
+        systemRole: editorMarkdown ?? systemRole,
+        t,
+        tags: meta?.tags,
+        title: meta?.title,
+      });
+      const baseFileName = sanitizeFileName(
+        meta?.title || '',
+        t('settingAgent.export.untitledFileName', { ns: 'setting' }),
+      );
+      const fileName = `${baseFileName}.md`;
+
+      if (isDesktop) {
+        const { desktopExportService } = await import('@/services/electron/desktopExportService');
+        await desktopExportService.exportMarkdown({
+          content: profileMarkdown,
+          dialogTitle: t('settingAgent.export.dialogTitle', { ns: 'setting' }),
+          fileName,
+          successTitle: t('settingAgent.export.success', { ns: 'setting' }),
+        });
+      } else {
+        const blob = new Blob([profileMarkdown], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast.success(t('settingAgent.export.success', { ns: 'setting' }));
+      }
+    } catch (error) {
+      console.error('Failed to export agent profile markdown:', error);
+      toast.error(t('settingAgent.export.error', { ns: 'setting' }));
+    }
+  }, [
+    config?.model,
+    config?.plugins,
+    config?.provider,
+    editor,
+    isHeterogeneous,
+    meta,
+    systemRole,
+    t,
+  ]);
+
+  const copyAgentIdItem = useCopyAgentIdMenuItem(activeAgentId);
+  const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
+  const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
+  // Ownership handover to a workspace member — separate from the scope moves.
+  const transferToMemberItem = useAgentTransferToMemberMenuItem(activeAgentId ?? undefined, meta);
+
+  const settingsModalRef = useRef<ModalInstance | null>(null);
+  useEffect(
+    () => () => {
+      settingsModalRef.current?.close();
+      settingsModalRef.current = null;
+    },
+    [],
+  );
+
+  const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
+  // External sharing is stronger than General Access `edit`: only the Agent
+  // creator or a Workspace admin (`canManageResource`) may manage the link.
+  const canShareAgent = shareVisible === true && canManage;
+
+  const showMarketSubmission = !!config && !isBuiltinAgent && !isHeterogeneous;
+  const canSubmitToMarket = showMarketSubmission && canManage && !lockedByOther && !lockPending;
+  const marketSubmission = useAgentMarketSubmission({
+    agentId: activeAgentId,
+    canSubmit: canSubmitToMarket,
+    getPrompt: () => ({
+      editorData: editor
+        ? (editor.getDocument('json') as LobeAgentConfig['editorData'])
+        : config?.editorData,
+      systemRole: editor ? (editor.getDocument('markdown') as unknown as string) : systemRole,
+    }),
+  });
+
+  // Share settings are a sibling tab of the profile group, not a popup — the
+  // shortcut just jumps to that tab.
+  const handleOpenShare = useCallback(() => {
+    if (!activeAgentId) return;
+    navigate(`/agent/${activeAgentId}/share`);
+  }, [activeAgentId, navigate]);
+
+  const menuItems = useMemo(() => {
+    const businessTransferMenuItems = transferMenuItems ?? [];
+
+    return [
+      {
+        // View/use-level members can't edit the agent config — keep the entry
+        // visible but disabled (project convention: disabled, not hidden).
+        disabled: !canConfigure,
+        icon: <Icon icon={Settings2Icon} />,
+        key: 'advanced-settings',
+        label: t('advancedSettings', { ns: 'setting' }),
+        onClick: () => {
+          if (!canConfigure) return;
+          settingsModalRef.current?.close();
+          settingsModalRef.current = openAgentSettingsModal();
+        },
+      },
+      showPermissionPageEntry
+        ? {
+            // Same gate the page itself applies (ResourceConfigAccessGate):
+            // without edit-level access it redirects straight back with a
+            // toast, so an enabled entry here is a click into a dead end.
+            // Disabled, not hidden — the member can still see the action exists.
+            disabled: !canConfigure,
+            icon: <Icon icon={UsersIcon} />,
+            key: 'permission',
+            label: t('permission.page.entry', { ns: 'setting' }),
+            onClick: () => {
+              if (!canConfigure) return;
+              if (activeAgentId) navigate(`/agent/${activeAgentId}/permission`);
+            },
+          }
+        : null,
+      { type: 'divider' as const },
+      showMarketSubmission
+        ? {
+            disabled: !canSubmitToMarket || marketSubmission.isSubmitting,
+            icon: <Icon icon={UploadCloud} />,
+            key: 'submit-to-market',
+            label: t('marketSubmission.entry'),
+            onClick: marketSubmission.open,
+          }
+        : null,
+      {
+        children: [
+          {
+            key: 'export-markdown',
+            label: t('pageEditor.menu.export.markdown', { ns: 'file' }),
+            onClick: handleExportMarkdown,
+          },
+        ],
+        icon: <Icon icon={Download} />,
+        key: 'export',
+        label: t('pageEditor.menu.export', { ns: 'file' }),
+      },
+      copyAgentIdItem,
+      importMenuItem ? { type: 'divider' as const } : null,
+      importMenuItem,
+      businessTransferMenuItems.length > 0 || transferToMemberItem
+        ? { type: 'divider' as const }
+        : null,
+      ...businessTransferMenuItems,
+      transferToMemberItem,
+      canManage ? { type: 'divider' as const } : null,
+      canManage
+        ? {
+            danger: true,
+            icon: <Icon icon={Trash} />,
+            key: 'delete',
+            label: t('delete', { ns: 'common' }),
+            onClick: handleDelete,
+          }
+        : null,
+      // Author / creation info footer, mirroring the page editor menu.
+      ...(!isInbox && (authorName || createdAt)
+        ? [
+            { type: 'divider' as const },
+            {
+              disabled: true,
+              icon: authorName ? <Icon icon={UserRound} /> : undefined,
+              key: 'agent-info',
+              label: (
+                <span style={{ color: cssVar.colorTextTertiary, fontSize: 12, lineHeight: 1.6 }}>
+                  {[
+                    authorName,
+                    createdAt
+                      ? t('createdAt', {
+                          ns: 'common',
+                          time: formatPageEditorInfoTime(createdAt, dateLocale),
+                        })
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              ),
+            },
+          ]
+        : []),
+    ].filter(Boolean);
+  }, [
+    activeAgentId,
+    authorName,
+    canConfigure,
+    canManage,
+    canSubmitToMarket,
+    copyAgentIdItem,
+    createdAt,
+    dateLocale,
+    handleExportMarkdown,
+    handleDelete,
+    isInbox,
+    marketSubmission.isSubmitting,
+    marketSubmission.open,
+    navigate,
+    showMarketSubmission,
+    showPermissionPageEntry,
+    t,
+    importMenuItem,
+    transferMenuItems,
+    transferToMemberItem,
+  ]);
+
+  return (
+    // `relative` anchors the absolutely-centered switcher below.
+    <NavHeader
+      style={{ position: 'relative' }}
+      left={
+        <Flexbox horizontal align={'center'} gap={8}>
+          {/* No section title — the Segmented beside it names the current tab. */}
+          {activeAgentId && <AgentBreadcrumb agentId={activeAgentId} />}
+          <AgentVersionReviewTag
+            key={`review-${activeAgentId}-${marketSubmission.revision}`}
+            submitted={marketSubmission.isUnderReview}
+          />
+          <AgentForkTag />
+          <AccessLevelTag
+            resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
+            resourceType={'agent'}
+          />
+        </Flexbox>
+      }
+      right={
+        <Flexbox horizontal align={'center'} gap={4}>
+          {canShareAgent && (
+            <ActionIcon
+              icon={Share2Icon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('share.entry', { ns: 'agent' })}
+              tooltipProps={{ placement: 'bottom' }}
+              onClick={handleOpenShare}
+            />
+          )}
+          <DropdownMenu items={menuItems}>
+            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+          </DropdownMenu>
+          {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
+            <ToggleRightPanelButton
+              expand={showAgentBuilderPanel}
+              icon={BotMessageSquareIcon}
+              showActive={true}
+              onToggle={() => toggleAgentBuilderPanel()}
+            />
+          )}
+        </Flexbox>
+      }
+      styles={{
+        // Center the switcher on the *header* midpoint, not within the leftover
+        // flex track between the left/right slots — those slots differ in width,
+        // so flex centering leaves unequal gaps (it reads as space-between, not
+        // centered). Absolute + translateX(-50%) makes the two gaps equal.
+        center: AGENT_PROFILE_TABS_CENTER_STYLE,
+        left: {
+          paddingInlineStart: 8,
+        },
+      }}
+    >
+      {activeAgentId && <AgentProfileTabs active={'profile'} agentId={activeAgentId} />}
+    </NavHeader>
+  );
+});
+
+export default Header;

@@ -1,0 +1,57 @@
+'use client';
+
+import React, { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
+
+import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
+import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
+import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
+import { useUserStore } from '@/store/user';
+import { preferenceSelectors } from '@/store/user/selectors';
+
+import AllTopicsDrawer from '../AllTopicsDrawer';
+import ByTimeMode from '../TopicListContent/ByTimeMode';
+import FlatMode from '../TopicListContent/FlatMode';
+
+const TopicList = memo<{ showEmptyAction?: boolean }>(({ showEmptyAction = true }) => {
+  const { t } = useTranslation('topic');
+  const router = useQueryRoute();
+  const topicLength = useChatStore((s) => topicSelectors.currentTopicLength(s));
+  const isUndefinedTopics = useChatStore((s) => topicSelectors.isUndefinedTopics(s));
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
+  const [allTopicsDrawerOpen, closeAllTopicsDrawer] = useChatStore((s) => [
+    s.allTopicsDrawerOpen,
+    s.closeAllTopicsDrawer,
+  ]);
+
+  const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
+
+  useFetchChatTopics();
+  useFetchActiveTopicDetail();
+
+  // Show skeleton when current session's topic data is not yet loaded
+  if (isUndefinedTopics) return <SkeletonList />;
+
+  return (
+    <>
+      {showEmptyAction && topicLength === 0 && activeGroupId && (
+        <EmptyNavItem
+          title={t('actions.addNewTopic')}
+          onClick={() => {
+            router.push(urlJoin('/group', activeGroupId));
+          }}
+        />
+      )}
+      {topicGroupMode === 'flat' ? <FlatMode /> : <ByTimeMode />}
+      <AllTopicsDrawer open={allTopicsDrawerOpen} onClose={closeAllTopicsDrawer} />
+    </>
+  );
+});
+
+export default TopicList;

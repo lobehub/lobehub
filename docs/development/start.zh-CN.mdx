@@ -1,0 +1,129 @@
+---
+title: 技术开发上手指南
+description: 了解 LobeHub 的技术栈和开发环境设置，快速上手开发。
+tags:
+  - LobeHub
+  - 技术开发
+  - Next.js
+  - 国际化
+  - 状态管理
+---
+
+# 技术开发上手指南
+
+先按目标选择入口：修改 LobeHub 源码、从终端操作现有实例，以及通过 API 集成应用，需要不同的准备工作。本页后续内容面向**源码开发与贡献**。
+
+## 选择开发路径
+
+| 目标 | 入口 | 边界 |
+| --- | --- | --- |
+| 修改界面、服务端或运行时 | [开发环境设置](/zh/docs/development/basic/setup-development)，再阅读下方技术栈和目录结构 | 需要源码开发环境；仅使用 CLI 或 API 不必搭建完整开发环境。 |
+| 从终端操作现有 LobeHub 实例 | [CLI README](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/cli/README.md)，任务示例见[任务工具](/zh/docs/usage/agent/connectors#using-the-cli) | README 包含源码构建、链接命令和服务器配置。使用已安装的 CLI 前，核对版本、目标服务器及账户权限。 |
+| 用 HTTP 集成应用 | [OpenAPI 规范](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/openapi/openapi.yml) | 按目标部署支持的公开 REST API、认证方式和参数调用；应用内部路由不等于公开 API 契约。 |
+| 用 TypeScript 集成应用 | [官方 SDK README](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/sdk/README.md) | `@lobehub/sdk` 基于 OpenAPI 生成；方法、认证和流式处理以对应版本的 README 与规范为准。不要假定所有界面或 CLI 功能都有 SDK 方法。 |
+| 理解应用内部聊天调用 | [Chat API 内部实现](/zh/docs/development/basic/chat-api) | 供源码阅读和调试，不是外部应用的接口接入教程。 |
+
+### CLI 与执行环境
+
+已安装 CLI 时，可先运行 `lh --help` 查看命令。CLI README 中的本地构建命令面向 `apps/cli` 开发，不应当作所有用户通用的安装流程。
+
+[2026-05-04 更新](/zh/changelog/2026-05-04-task-scheduler)描述的是当时仅桌面端可用的 Claude Code / Codex 调度，并不是定时任务表单的发布依据。[2026-05-11 更新](/zh/changelog/2026-05-11-agent-tasks-ga)随后说明云端异构 Agent 和 `lh hetero exec`；[2026-06-22 更新](/zh/changelog/2026-06-22-delivery-checks)说明 `lh update`。这些记录不能用来推断所有部署都具备相同工具、命令或执行环境。
+
+以上入口依据 2026-09-14 核对的仓库快照。接入前核对实际安装版本；不要将 `/webapi/chat/[provider]` 或内部 tRPC 路由当作稳定的公开接口。
+
+
+## 基础技术栈
+
+LobeHub 的核心技术栈如下：
+
+- **框架**：[Next.js](https://nextjs.org/) 16 + [React](https://react.dev/) 19，为项目提供服务端渲染、Router Handler 等关键功能。
+- **组件库**：[Ant Design (antd)](https://ant.design/) 作为基础组件库，[@lobehub/ui](https://github.com/lobehub/lobe-ui) 作为业务组件库。
+- **状态管理**：[zustand](https://github.com/pmndrs/zustand)，一款轻量级且易于使用的状态管理库。
+- **数据获取**：[SWR](https://swr.vercel.app/) 用于客户端数据获取。
+- **路由**：采用混合路由架构 —— [Next.js App Router](https://nextjs.org/) 处理静态页面（如认证页），[React Router DOM](https://reactrouter.com/) 承载主应用 SPA。
+- **API**：[tRPC](https://trpc.io/) 实现端到端类型安全的 API 通信。
+- **数据库**：[Drizzle ORM](https://orm.drizzle.team/) + PostgreSQL。
+- **国际化**：[react-i18next](https://react.i18next.com/) 实现多语言支持。
+- **样式**：[`@lobehub/ui`](https://ui.lobehub.com)，组件自带样式；业务代码使用其 `createStaticStyles` + `cssVar` token。
+- **单元测试**：[Vitest](https://github.com/vitest-dev/vitest) 进行单元测试。
+
+## 文件夹目录架构
+
+LobeHub 采用 Monorepo 架构（`@lobechat/` 命名空间），顶层目录结构如下：
+
+```bash
+lobehub/
+├── apps/
+│   ├── cli/               # LobeHub CLI
+│   ├── desktop/           # Electron 桌面应用
+│   └── server/            # 独立服务端（tRPC routers、services、modules）
+├── packages/              # 共享包（@lobechat/*）
+│   ├── database/          # 数据库 schemas、models、repositories
+│   ├── agent-runtime/     # Agent 运行时
+│   ├── model-runtime/     # 模型运行时
+│   ├── app-config/        # 应用配置文件，包含客户端与服务端环境变量
+│   ├── env/               # 环境变量定义和校验（分析、认证、LLM 等）
+│   ├── locales/           # 国际化默认语言文件
+│   ├── builtin-tools/     # 内置工具注册表（inspectors、interventions 等）
+│   └── ...                # 更多共享包
+├── src/                   # 主应用源码
+│   ├── app/               # Next.js App Router：后端 API 路由 + SPA/认证页 HTML 外壳服务
+│   ├── components/        # 可复用的 UI 组件
+│   ├── const/             # 应用常量和枚举
+│   ├── features/          # 业务功能模块，如 Agent 设置、插件开发弹窗等
+│   ├── helpers/           # 工具辅助函数
+│   ├── hooks/             # 全应用复用的自定义 Hooks
+│   ├── layout/            # 布局组件（AuthProvider、GlobalProvider 等）
+│   ├── libs/              # 第三方集成（better-auth、OIDC、tRPC 等）
+│   ├── routes/            # SPA 页面片段，按平台分组（(main)/(mobile)/(desktop)/(popup)）
+│   ├── server/            # 尚未迁移到 apps/server 的剩余服务端模块
+│   ├── services/          # 客户端服务接口
+│   ├── spa/               # SPA 入口和 React Router 配置
+│   ├── store/             # zustand 状态管理
+│   ├── styles/            # 全局样式和 CSS-in-JS 配置
+│   ├── types/             # TypeScript 类型定义
+│   └── utils/             # 通用工具函数
+├── locales/               # 国际化翻译文件（zh-CN、en-US 等）
+└── e2e/                   # E2E 测试（Cucumber + Playwright）
+```
+
+有关目录架构的详细介绍，详见： [文件夹目录架构](/zh/docs/development/basic/folder-structure)
+
+## 本地开发环境设置
+
+请参考
+[开发环境设置指南](/zh/docs/development/basic/setup-development)
+了解完整的环境搭建流程，
+包括软件安装、项目配置、Docker 服务启动和数据库迁移等步骤。
+
+## 代码风格与贡献指南
+
+在 LobeHub 项目中，我们十分重视代码的质量和一致性。为此，我们制定了一系列的代码风格规范和贡献流程，以确保每位开发者都能顺利地参与到项目中。以下是你作为开发者需要遵守的代码风格和贡献准则。
+
+- **代码风格**：我们使用 `@lobehub/lint` 统一代码风格，包括 ESLint、Prettier、remarklint 和 stylelint 配置。请遵守我们的代码规范，以保持代码的一致性和可读性。
+- **贡献流程**：我们采用 gitmoji 和 semantic release 作为代码提交和发布流程。请使用 gitmoji 标注您的提交信息，并确保遵循 semantic release 的规范，以便我们的自动化系统能够正确处理版本控制和发布。
+
+所有的贡献都将经过代码审查。维护者可能会提出修改建议或要求。请积极响应审查意见，并及时做出调整，我们期待你的参与和贡献。
+
+详细的代码风格和贡献指南，请参考 [代码风格与贡献指南](/zh/docs/development/basic/contributing-guidelines)。
+
+## 国际化实现指南
+
+LobeHub 采用 `react-i18next` 实现多语言支持，确保用户全球化体验。
+
+默认语言文件位于 `packages/locales/src/default/`（英文），
+翻译文件位于 `locales/` 目录。
+开发时只需编辑 `packages/locales/src/default/` 中的 key，
+CI 会自动生成其他语言的翻译文件。
+
+如果要添加新语种，需遵循特定步骤，详见 [新语种添加指南](/zh/docs/development/internationalization/add-new-locale)。 我们鼓励你参与我们的国际化努力，共同为全球用户提供更好的服务。
+
+详细的国际化实现指南，请参考 [国际化实现指南](/zh/docs/development/internationalization/internationalization-implementation)。
+
+## 附录：资源与参考
+
+为了支持开发者更好地理解和使用 LobeHub 的技术栈，我们提供了一份详尽的资源与参考列表 —— [LobeHub 资源与参考](/zh/docs/development/basic/resources) - 访问我们维护的资源列表，包括教程、文章和其他有用的链接。
+
+我们鼓励开发者利用这些资源深入学习和提升技能，通过 [LobeHub GitHub Discussions](https://github.com/lobehub/lobehub/discussions) 或者 [Discord](https://discord.com/invite/AYFPHvv2jT) 加入社区讨论，提出问题或分享你的经验。
+
+如果你有任何疑问，或者需要进一步的帮助，请不要犹豫，请通过上述渠道与我们联系。

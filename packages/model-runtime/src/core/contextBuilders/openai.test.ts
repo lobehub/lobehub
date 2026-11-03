@@ -1,0 +1,1791 @@
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
+import { videoUrlToBase64 } from '../../utils/videoToBase64';
+import type OpenAI from 'openai';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { OpenAIChatMessage } from '../../types';
+import { clearReferenceImageCache } from '../../utils/referenceImageCache';
+import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
+import { parseDataUri } from '../../utils/uriParser';
+import {
+  convertImageUrlToFile,
+  convertMessageContent,
+  convertOpenAIMessages,
+  convertOpenAIResponseInputs,
+  type ExtendedChatCompletionContentPart,
+} from './openai';
+
+// 模拟依赖
+vi.mock('../../utils/imageToBase64', () => ({
+  imageUrlToBase64: vi.fn(),
+}));
+vi.mock('../../utils/videoToBase64', () => ({
+  videoUrlToBase64: vi.fn(),
+}));
+vi.mock('../../utils/uriParser');
+
+const MP3_BASE64 = 'SUQzBAAAAAA=';
+const WAV_BASE64 = 'UklGRjAwMDBXQVZFZm10IA==';
+
+describe('convertMessageContent', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should return the same content if not image_url type', async () => {
+    const content = { type: 'text', text: 'Hello' } as OpenAI.ChatCompletionContentPart;
+    const result = await convertMessageContent(content);
+    expect(result).toEqual(content);
+  });
+
+  it.each([
+    ['WAV', 'audio/wav', 'wav', WAV_BASE64],
+    ['MP3', 'audio/mpeg', 'mp3', MP3_BASE64],
+  ] as const)(
+    'should convert a base64 %s data URI to input_audio',
+    async (_, mimeType, format, base64) => {
+      const content = {
+        audio_url: {
+          codec: format,
+          durationMs: 2500,
+          mimeType,
+          url: `data:${mimeType};base64,${base64}`,
+        },
+        type: 'audio_url',
+      } as const;
+      vi.mocked(parseDataUri).mockReturnValue({
+        base64,
+        mimeType,
+        type: 'base64',
+      });
+
+      await expect(convertMessageContent(content, { supportsAudioInput: true })).resolves.toEqual({
+        input_audio: { data: base64, format },
+        type: 'input_audio',
+      });
+      expect(imageUrlToBase64).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['WAV', 'audio/wav', 'wav', WAV_BASE64],
+    ['MP3', 'audio/mpeg', 'mp3', MP3_BASE64],
+  ] as const)(
+    'should safely download a %s URL and convert it to input_audio',
+    async (_, mimeType, format, base64) => {
+      const url = `https://files.example.com/voice.${format}`;
+      const content = { audio_url: { url }, type: 'audio_url' } as const;
+      vi.mocked(parseDataUri).mockReturnValue({ base64: null, mimeType: null, type: 'url' });
+      vi.mocked(imageUrlToBase64).mockResolvedValue({ base64, mimeType });
+
+      await expect(convertMessageContent(content, { supportsAudioInput: true })).resolves.toEqual({
+        input_audio: { data: base64, format },
+        type: 'input_audio',
+      });
+      expect(imageUrlToBase64).toHaveBeenCalledWith(url, { maxBytes: 20 * 1024 * 1024 });
+    },
+  );
+
+  it('should fail closed when the provider adapter does not enable audio input', async () => {
+    const content = {
+      audio_url: { url: 'data:audio/wav;base64,audioBase64' },
+      type: 'audio_url',
+    } as const;
+
+    await expect(convertMessageContent(content)).rejects.toThrow(
+      'Audio input is not supported by this provider runtime',
+    );
+    expect(parseDataUri).not.toHaveBeenCalled();
+    expect(imageUrlToBase64).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['base64 data', { base64: 'audioBase64', mimeType: 'audio/ogg', type: 'base64' as const }],
+    ['download URL', { base64: null, mimeType: null, type: 'url' as const }],
+  ])('should reject an unsupported audio MIME type from %s', async (_, parsedUri) => {
+    const url =
+      parsedUri.type === 'url'
+        ? 'https://files.example.com/voice.ogg'
+        : 'data:audio/ogg;base64,audioBase64';
+    const content = { audio_url: { url }, type: 'audio_url' } as const;
+    vi.mocked(parseDataUri).mockReturnValue(parsedUri);
+    if (parsedUri.type === 'url') {
+      vi.mocked(imageUrlToBase64).mockResolvedValue({
+        base64: 'downloadedAudio',
+        mimeType: 'audio/ogg',
+      });
+    }
+
+    await expect(convertMessageContent(content, { supportsAudioInput: true })).rejects.toThrow(
+      /only supports (?:base64 )?WAV or MP3/i,
+    );
+  });
+
+  it('should reject bytes that only claim to be WAV in persisted metadata', async () => {
+    const url = 'https://files.example.com/spoofed.wav';
+    const content = {
+      audio_url: { mimeType: 'audio/wav', url },
+      type: 'audio_url',
+    } as const;
+    vi.mocked(parseDataUri).mockReturnValue({ base64: null, mimeType: null, type: 'url' });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'bm90IGF1ZGlv',
+      mimeType: 'application/octet-stream',
+    });
+
+    await expect(convertMessageContent(content, { supportsAudioInput: true })).rejects.toThrow(
+      'only supports WAV or MP3 files',
+    );
+  });
+
+  it('should convert image URL to base64 when necessary', async () => {
+    // 设置环境变量
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = '1';
+
+    const content = {
+      type: 'image_url',
+      image_url: { url: 'https://example.com/image.jpg' },
+    } as OpenAI.ChatCompletionContentPart;
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'base64String',
+      mimeType: 'image/jpeg',
+    });
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual({
+      type: 'image_url',
+      image_url: { url: 'data:image/jpeg;base64,base64String' },
+    });
+
+    expect(parseDataUri).toHaveBeenCalledWith('https://example.com/image.jpg');
+    expect(imageUrlToBase64).toHaveBeenCalledWith('https://example.com/image.jpg');
+  });
+
+  it('should not convert image URL when not necessary', async () => {
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
+
+    const content = {
+      type: 'image_url',
+      image_url: { url: 'https://example.com/image.jpg' },
+    } as OpenAI.ChatCompletionContentPart;
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual(content);
+    expect(imageUrlToBase64).not.toHaveBeenCalled();
+  });
+
+  it('should convert image URL when forceImageBase64 is true', async () => {
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
+
+    const content = {
+      type: 'image_url',
+      image_url: { url: 'https://example.com/image.jpg' },
+    } as OpenAI.ChatCompletionContentPart;
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'image/jpeg',
+    });
+
+    const result = await convertMessageContent(content, { forceImageBase64: true });
+
+    expect(result).toEqual({
+      type: 'image_url',
+      image_url: { url: 'data:image/jpeg;base64,forcedBase64' },
+    });
+
+    expect(imageUrlToBase64).toHaveBeenCalledWith('https://example.com/image.jpg');
+  });
+
+  it('should convert video URL to base64 when necessary', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockResolvedValue({
+      base64: 'base64String',
+      mimeType: 'video/mp4',
+    });
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual({
+      type: 'video_url',
+      video_url: { url: 'data:video/mp4;base64,base64String' },
+    });
+
+    expect(parseDataUri).toHaveBeenCalledWith('https://example.com/video.mp4');
+    expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+  });
+
+  it('should not convert video URL when not necessary', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual(content);
+    expect(videoUrlToBase64).not.toHaveBeenCalled();
+  });
+
+  it('should convert video URL when forceVideoBase64 is true', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'video/mp4',
+    });
+
+    const result = await convertMessageContent(content, { forceVideoBase64: true });
+
+    expect(result).toEqual({
+      type: 'video_url',
+      video_url: { url: 'data:video/mp4;base64,forcedBase64' },
+    });
+
+    expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+  });
+
+  it('should return original content when video conversion fails', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockRejectedValue(new Error('Conversion failed'));
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual(content);
+
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+  });
+});
+
+describe('convertOpenAIMessages', () => {
+  it('should restore thoughtSignature only for the exact scope', async () => {
+    const scope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const foreignScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+    const thoughtSignature = serializeScopedSignature(
+      'google-signature',
+      scope,
+      'thought_signature',
+    );
+    const messages = [
+      {
+        content: '',
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: { arguments: '{}', name: 'get_weather' },
+            id: 'call_1',
+            thoughtSignature,
+            type: 'function',
+          },
+        ],
+      },
+    ] as any;
+
+    const matching = await convertOpenAIMessages(messages, { thoughtSignatureScope: scope });
+    const mismatching = await convertOpenAIMessages(messages, {
+      thoughtSignatureScope: foreignScope,
+    });
+    const legacy = await convertOpenAIMessages(
+      [
+        {
+          ...messages[0],
+          tool_calls: [{ ...messages[0].tool_calls[0], thoughtSignature: 'legacy-signature' }],
+        },
+      ],
+      { thoughtSignatureScope: scope },
+    );
+
+    expect((matching[0] as any).tool_calls[0].thoughtSignature).toBe('google-signature');
+    expect((mismatching[0] as any).tool_calls[0].thoughtSignature).toBeUndefined();
+    expect((legacy[0] as any).tool_calls[0].thoughtSignature).toBeUndefined();
+  });
+
+  it('should convert string content messages', async () => {
+    const messages = [
+      { role: 'user', content: 'Hello' },
+      { role: 'assistant', content: 'Hi there' },
+    ] as OpenAI.ChatCompletionMessageParam[];
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual(messages);
+  });
+
+  it('should convert array content messages', async () => {
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Hello' },
+          { type: 'image_url', image_url: { url: 'https://example.com/image.jpg' } },
+        ],
+      },
+    ] as OpenAI.ChatCompletionMessageParam[];
+
+    vi.spyOn(Promise, 'all');
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'base64String',
+      mimeType: 'image/jpeg',
+    });
+
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = '1';
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Hello' },
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/jpeg;base64,base64String' },
+          },
+        ],
+      },
+    ]);
+
+    expect(Promise.all).toHaveBeenCalledTimes(2); // 一次用于消息数组，一次用于内容数组
+
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
+  });
+  it('should convert array content messages', async () => {
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Hello' },
+          { type: 'image_url', image_url: { url: 'https://example.com/image.jpg' } },
+        ],
+      },
+    ] as OpenAI.ChatCompletionMessageParam[];
+
+    vi.spyOn(Promise, 'all');
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'base64String',
+      mimeType: 'image/jpeg',
+    });
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual(messages);
+
+    expect(Promise.all).toHaveBeenCalledTimes(2); // 一次用于消息数组，一次用于内容数组
+  });
+
+  it('should filter out reasoning field from messages', async () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Hello',
+        reasoning: { content: 'some reasoning', duration: 100 },
+      },
+      { role: 'user', content: 'Hi' },
+    ] as any;
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      { role: 'assistant', content: 'Hello' },
+      { role: 'user', content: 'Hi' },
+    ]);
+    // Ensure reasoning field is removed
+    expect((result[0] as any).reasoning).toBeUndefined();
+  });
+
+  describe('reasoning passback for thinking families', () => {
+    // Upstream rejects a thinking-mode turn that carries tool_calls without the
+    // historical reasoning: "If thinking mode and tool_calls, `reasoning_content`
+    // must be passed back to the API."
+    const assistantTurn = {
+      content: 'Calling a tool',
+      reasoning: { content: 'step-by-step thinking' },
+      role: 'assistant',
+      tool_calls: [
+        { function: { arguments: '{}', name: 'search' }, id: 'call-1', type: 'function' },
+      ],
+    } as any;
+
+    it.each([['deepseek-v4-pro'], ['glm-5.3'], ['kimi-k3']])(
+      'echoes structured reasoning back for %s',
+      async (model) => {
+        const result = await convertOpenAIMessages([assistantTurn], { model });
+
+        expect((result[0] as any).reasoning_content).toBe('step-by-step thinking');
+      },
+    );
+
+    it('leaves unrelated models untouched', async () => {
+      const result = await convertOpenAIMessages([assistantTurn], { model: 'gpt-5.6-sol' });
+
+      expect((result[0] as any).reasoning_content).toBeUndefined();
+    });
+
+    it('keeps the empty placeholder scoped to DeepSeek thinking models', async () => {
+      const withoutReasoning = { ...assistantTurn, reasoning: undefined };
+
+      const deepseek = await convertOpenAIMessages([withoutReasoning], {
+        model: 'deepseek-v4-pro',
+      });
+      const glm = await convertOpenAIMessages([withoutReasoning], { model: 'glm-5.3' });
+
+      expect((deepseek[0] as any).reasoning_content).toBe('');
+      expect((glm[0] as any).reasoning_content).toBeUndefined();
+    });
+  });
+
+  it('should preserve reasoning_content field from messages (for DeepSeek compatibility)', async () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Hello',
+        reasoning_content: 'some reasoning content',
+      },
+      { role: 'user', content: 'Hi' },
+    ] as any;
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      { role: 'assistant', content: 'Hello', reasoning_content: 'some reasoning content' },
+      { role: 'user', content: 'Hi' },
+    ]);
+    // Ensure reasoning_content field is preserved
+    expect((result[0] as any).reasoning_content).toBe('some reasoning content');
+  });
+
+  it('should filter internal thinking content parts but preserve reasoning_content', async () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: [
+          {
+            signature: 'sig_123',
+            thinking: 'internal reasoning',
+            type: 'thinking',
+          },
+          {
+            text: 'Visible answer',
+            type: 'text',
+          },
+        ],
+        reasoning_content: 'internal reasoning',
+      },
+    ] as any;
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'assistant',
+        content: [{ text: 'Visible answer', type: 'text' }],
+        reasoning_content: 'internal reasoning',
+      },
+    ]);
+  });
+
+  it('should filter out reasoning but preserve reasoning_content field', async () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Hello',
+        reasoning: { content: 'some reasoning', duration: 100 },
+        reasoning_content: 'some reasoning content',
+      },
+    ] as any;
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      { role: 'assistant', content: 'Hello', reasoning_content: 'some reasoning content' },
+    ]);
+    // Ensure reasoning object is removed but reasoning_content is preserved
+    expect((result[0] as any).reasoning).toBeUndefined();
+    expect((result[0] as any).reasoning_content).toBe('some reasoning content');
+  });
+
+  describe('tool messages with image parts', () => {
+    it('should flatten the tool message to text and re-attach images as a user message', async () => {
+      vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+      const messages = [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            { id: 'call_1', type: 'function', function: { name: 'readFile', arguments: '{}' } },
+          ],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call_1',
+          content: [
+            { type: 'text', text: '[Image: cat.png]' },
+            { type: 'image_url', image_url: { url: 'https://files.example.com/cat.png' } },
+          ],
+        },
+        { role: 'user', content: 'what do you see?' },
+      ] as OpenAI.ChatCompletionMessageParam[];
+
+      const result = await convertOpenAIMessages(messages);
+
+      expect(result).toEqual([
+        messages[0],
+        // Tool message content must be text-only for the OpenAI API.
+        { role: 'tool', tool_call_id: 'call_1', content: '[Image: cat.png]' },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Image output of tool call call_1:' },
+            { type: 'image_url', image_url: { url: 'https://files.example.com/cat.png' } },
+          ],
+        },
+        { role: 'user', content: 'what do you see?' },
+      ]);
+    });
+
+    it('should keep the tool batch contiguous when multiple tool results carry images', async () => {
+      vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+      const messages = [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            { id: 'call_1', type: 'function', function: { name: 'readFile', arguments: '{}' } },
+            { id: 'call_2', type: 'function', function: { name: 'readFile', arguments: '{}' } },
+          ],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call_1',
+          content: [{ type: 'image_url', image_url: { url: 'https://files.example.com/a.png' } }],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'call_2',
+          content: 'plain text result',
+        },
+      ] as OpenAI.ChatCompletionMessageParam[];
+
+      const result = await convertOpenAIMessages(messages);
+
+      // No user message may interleave between the tool results of one batch.
+      expect(result.map((m) => m.role)).toEqual(['assistant', 'tool', 'tool', 'user']);
+      expect(result[1]).toEqual({
+        role: 'tool',
+        tool_call_id: 'call_1',
+        content: '[Image output attached below]',
+      });
+      expect(result[2]).toEqual(messages[2]);
+      expect(result[3]).toEqual({
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Image output of tool call call_1:' },
+          { type: 'image_url', image_url: { url: 'https://files.example.com/a.png' } },
+        ],
+      });
+    });
+  });
+
+  describe('DeepSeek reasoning_content compatibility', () => {
+    it('should derive reasoning_content from reasoning.content for deepseek models', async () => {
+      const messages = [
+        {
+          role: 'assistant',
+          content: 'Answer with tool call',
+          reasoning: { content: 'planned tool invocation', duration: 100 },
+          tool_calls: [
+            { id: 'call_1', type: 'function', function: { name: 'search', arguments: '{}' } },
+          ],
+        },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-v4-flash' });
+
+      expect((result[0] as any).reasoning_content).toBe('planned tool invocation');
+      expect((result[0] as any).tool_calls).toHaveLength(1);
+      expect((result[0] as any).reasoning).toBeUndefined();
+    });
+
+    it('should force empty reasoning_content for deepseek-v4 thinking-mode assistant messages without reasoning', async () => {
+      const messages = [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            { id: 'call_1', type: 'function', function: { name: 'search', arguments: '{}' } },
+          ],
+        },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-v4-pro' });
+
+      expect((result[0] as any).reasoning_content).toBe('');
+    });
+
+    it('should force empty reasoning_content for deepseek-reasoner', async () => {
+      const messages = [{ role: 'assistant', content: 'Hi' }] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-reasoner' });
+
+      expect((result[0] as any).reasoning_content).toBe('');
+    });
+
+    it('should match provider-prefixed deepseek model ids (e.g. Deepseek/deepseek-v4-pro)', async () => {
+      const messages = [{ role: 'assistant', content: 'Hi' }] as any;
+
+      const result = await convertOpenAIMessages(messages, {
+        model: 'Deepseek/deepseek-v4-pro',
+      });
+
+      expect((result[0] as any).reasoning_content).toBe('');
+    });
+
+    it('should not force reasoning_content for non-thinking deepseek models', async () => {
+      const messages = [{ role: 'assistant', content: 'Hi' }] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-chat' });
+
+      expect((result[0] as any).reasoning_content).toBeUndefined();
+    });
+
+    it('should leave non-deepseek models untouched', async () => {
+      const messages = [
+        {
+          role: 'assistant',
+          content: 'Hi',
+          reasoning: { content: 'unrelated', duration: 10 },
+        },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'gpt-4o-mini' });
+
+      expect((result[0] as any).reasoning_content).toBeUndefined();
+      expect((result[0] as any).reasoning).toBeUndefined();
+    });
+
+    it('should not touch non-assistant messages', async () => {
+      const messages = [
+        { role: 'user', content: 'hello' },
+        { role: 'tool', content: '{}', tool_call_id: 'call_1' },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-v4-flash' });
+
+      expect((result[0] as any).reasoning_content).toBeUndefined();
+      expect((result[1] as any).reasoning_content).toBeUndefined();
+    });
+
+    it('should preserve existing reasoning_content over reasoning.content', async () => {
+      const messages = [
+        {
+          role: 'assistant',
+          content: 'Hi',
+          reasoning: { content: 'should be ignored', duration: 10 },
+          reasoning_content: 'kept',
+        },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-v4-flash' });
+
+      expect((result[0] as any).reasoning_content).toBe('kept');
+    });
+  });
+});
+
+describe('convertOpenAIResponseInputs', () => {
+  it('should reject raw audio explicitly instead of dropping it from Responses input', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          {
+            audio_url: { mimeType: 'audio/wav', url: 'https://files.example.com/voice.wav' },
+            type: 'audio_url',
+          },
+        ],
+        role: 'user',
+      },
+    ];
+
+    await expect(convertOpenAIResponseInputs(messages)).rejects.toThrow(
+      'OpenAI raw audio input requires the Chat Completions API',
+    );
+  });
+
+  it('应该正确转换普通文本消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { role: 'user', content: 'Hello' },
+      { role: 'assistant', content: 'Hi there!' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      { role: 'user', content: 'Hello' },
+      { role: 'assistant', content: 'Hi there!' },
+    ]);
+  });
+
+  it('应该正确转换带有工具调用的消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_123',
+            type: 'function',
+            function: {
+              name: 'test_function',
+              arguments: '{"key": "value"}',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        arguments: 'test_function',
+        call_id: 'call_123',
+        name: 'test_function',
+        type: 'function_call',
+      },
+    ]);
+  });
+
+  it('应该正确转换工具响应消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'tool',
+        content: 'Function result',
+        tool_call_id: 'call_123',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        call_id: 'call_123',
+        output: 'Function result',
+        type: 'function_call_output',
+      },
+    ]);
+  });
+
+  it('工具响应带图片时应保持 output 纯文本并追加 user 图片消息', async () => {
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          { text: '[Image: cat.png]', type: 'text' },
+          { image_url: { url: 'https://files.example.com/cat.png' }, type: 'image_url' },
+        ] as any,
+        role: 'tool',
+        tool_call_id: 'call_123',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        call_id: 'call_123',
+        // function_call_output.output is text-only — images must not land here.
+        output: '[Image: cat.png]',
+        type: 'function_call_output',
+      },
+      {
+        content: [
+          { text: 'Image output of tool call call_123:', type: 'input_text' },
+          { image_url: 'https://files.example.com/cat.png', type: 'input_image' },
+        ],
+        role: 'user',
+        type: 'message',
+      },
+    ]);
+  });
+
+  it('应该正确转换包含图片的消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is an image' },
+          {
+            type: 'image_url',
+            image_url: {
+              url: 'data:image/jpeg;base64,test123',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is an image' },
+          {
+            type: 'input_image',
+            image_url: 'data:image/jpeg;base64,test123',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('should preserve the requested image detail on input_image parts', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Inspect the circled area' },
+          {
+            type: 'image_url',
+            image_url: { detail: 'high', url: 'data:image/png;base64,test123' },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Inspect the circled area' },
+          { detail: 'high', image_url: 'data:image/png;base64,test123', type: 'input_image' },
+        ],
+      },
+    ]);
+  });
+
+  it('应该正确转换包含视频的消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is a video' },
+          {
+            type: 'video_url',
+            video_url: {
+              url: 'data:video/mp4;base64,test123',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is a video' },
+          {
+            type: 'input_video',
+            video_url: 'data:video/mp4;base64,test123',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('应该正确转换包含图片和视频的混合消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is an image and a video' },
+          {
+            type: 'image_url',
+            image_url: {
+              url: 'data:image/jpeg;base64,test123',
+            },
+          },
+          {
+            type: 'video_url',
+            video_url: {
+              url: 'data:video/mp4;base64,test456',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is an image and a video' },
+          {
+            type: 'input_image',
+            image_url: 'data:image/jpeg;base64,test123',
+          },
+          {
+            type: 'input_video',
+            video_url: 'data:video/mp4;base64,test456',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('应该正确处理带有无效 video_url 的消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is a video' },
+          {
+            type: 'video_url',
+            video_url: {
+              url: '',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: 'Here is a video' }],
+      },
+    ]);
+  });
+
+  it('应该正确处理混合类型的消息序列', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { role: 'user', content: 'I need help with a function' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_456',
+            type: 'function',
+            function: {
+              name: 'get_data',
+              arguments: '{}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '{"result": "success"}',
+        tool_call_id: 'call_456',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      { role: 'user', content: 'I need help with a function' },
+      {
+        arguments: 'get_data',
+        call_id: 'call_456',
+        name: 'get_data',
+        type: 'function_call',
+      },
+      {
+        call_id: 'call_456',
+        output: '{"result": "success"}',
+        type: 'function_call_output',
+      },
+    ]);
+  });
+
+  it('should filter orphan tool calls when strictToolPairing is enabled', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { role: 'user', content: 'Use tools carefully' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_paired',
+            type: 'function',
+            function: {
+              name: 'get_weather',
+              arguments: '{"city":"Hangzhou"}',
+            },
+          },
+          {
+            id: 'call_orphan',
+            type: 'function',
+            function: {
+              name: 'get_news',
+              arguments: '{"topic":"AI"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '{"temp":22}',
+        tool_call_id: 'call_paired',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { strictToolPairing: true });
+
+    expect(result).toEqual([
+      { role: 'user', content: 'Use tools carefully' },
+      {
+        arguments: '{"city":"Hangzhou"}',
+        call_id: 'call_paired',
+        name: 'get_weather',
+        type: 'function_call',
+      },
+      {
+        call_id: 'call_paired',
+        output: '{"temp":22}',
+        type: 'function_call_output',
+      },
+    ]);
+  });
+
+  it('should drop assistant message with all orphaned tool_calls in strict mode', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { role: 'user', content: 'Do something' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_orphan_1',
+            type: 'function',
+            function: { name: 'fn_a', arguments: '{}' },
+          },
+          {
+            id: 'call_orphan_2',
+            type: 'function',
+            function: { name: 'fn_b', arguments: '{}' },
+          },
+        ],
+      },
+      { role: 'assistant', content: 'Final answer' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { strictToolPairing: true });
+
+    // The assistant message with all-orphaned tool_calls should produce no items,
+    // NOT fall through to the default builder which would spread tool_calls back.
+    expect(result).toEqual([
+      { role: 'user', content: 'Do something' },
+      { role: 'assistant', content: 'Final answer' },
+    ]);
+  });
+
+  it('should extract reasoning.content into a separate reasoning item', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { content: 'system prompts', role: 'system' },
+      { content: '你好', role: 'user' },
+      {
+        content: 'hello',
+        role: 'assistant',
+        reasoning: { content: 'reasoning content', duration: 2706 },
+      },
+      { content: '杭州天气如何', role: 'user' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      { content: 'system prompts', role: 'developer' },
+      { content: '你好', role: 'user' },
+      { summary: [{ text: 'reasoning content', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'hello', role: 'assistant' },
+      { content: '杭州天气如何', role: 'user' },
+    ]);
+  });
+
+  it('should replay encrypted reasoning from a persisted message for the exact scope', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        model: 'gpt-5.6-sol',
+        provider: 'chatgpt',
+        reasoning: {
+          content: 'reasoning content',
+          signature: serializeScopedSignature(
+            'encrypted-reasoning-content',
+            reasoningSignatureScope,
+            'reasoning',
+          ),
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { reasoningSignatureScope });
+
+    expect(result).toEqual([
+      {
+        encrypted_content: 'encrypted-reasoning-content',
+        summary: [{ text: 'reasoning content', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should preserve encrypted reasoning content without a visible summary', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: {
+          signature: serializeScopedSignature(
+            'encrypted-reasoning-content',
+            reasoningSignatureScope,
+            'reasoning',
+          ),
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { reasoningSignatureScope });
+
+    expect(result).toEqual([
+      {
+        encrypted_content: 'encrypted-reasoning-content',
+        summary: [],
+        type: 'reasoning',
+      },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should keep the visible summary but reject foreign and legacy encrypted reasoning', async () => {
+    const sourceScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const targetScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+    const baseMessage: OpenAIChatMessage = {
+      content: 'hello',
+      reasoning: {
+        content: 'reasoning content',
+        signature: serializeScopedSignature(
+          'encrypted-reasoning-content',
+          sourceScope,
+          'reasoning',
+        ),
+      },
+      role: 'assistant',
+    };
+
+    const foreignResult = await convertOpenAIResponseInputs([baseMessage], {
+      reasoningSignatureScope: targetScope,
+    });
+    const legacyResult = await convertOpenAIResponseInputs(
+      [{ ...baseMessage, reasoning: { ...baseMessage.reasoning, signature: 'legacy-signature' } }],
+      { reasoningSignatureScope: sourceScope },
+    );
+
+    const expected = [
+      { summary: [{ text: 'reasoning content', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'hello', role: 'assistant' },
+    ];
+    expect(foreignResult).toEqual(expected);
+    expect(legacyResult).toEqual(expected);
+  });
+
+  it('should replay complete reasoning items in original order for the exact scope', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: {
+          content: 'first summary',
+          responseItems: [
+            {
+              encrypted_content: serializeScopedSignature(
+                'encrypted-part-1',
+                reasoningSignatureScope,
+                'reasoning',
+              ),
+              id: 'rs_1',
+              status: 'completed',
+              summary: [{ text: 'first summary', type: 'summary_text' }],
+              type: 'reasoning',
+            },
+            {
+              encrypted_content: serializeScopedSignature(
+                'encrypted-part-2',
+                reasoningSignatureScope,
+                'reasoning',
+              ),
+              id: 'rs_2',
+              status: 'completed',
+              summary: [],
+              type: 'reasoning',
+            },
+          ],
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { reasoningSignatureScope });
+
+    expect(result).toEqual([
+      {
+        encrypted_content: 'encrypted-part-1',
+        id: 'rs_1',
+        status: 'completed',
+        summary: [{ text: 'first summary', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      {
+        encrypted_content: 'encrypted-part-2',
+        id: 'rs_2',
+        status: 'completed',
+        summary: [],
+        type: 'reasoning',
+      },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should replay hidden reasoning items that have no visible summary', async () => {
+    const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: {
+          responseItems: [
+            {
+              encrypted_content: serializeScopedSignature(
+                'hidden-encrypted',
+                reasoningSignatureScope,
+                'reasoning',
+              ),
+              id: 'rs_hidden',
+              summary: [],
+              type: 'reasoning',
+            },
+          ],
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { reasoningSignatureScope });
+
+    expect(result).toEqual([
+      {
+        encrypted_content: 'hidden-encrypted',
+        id: 'rs_hidden',
+        summary: [],
+        type: 'reasoning',
+      },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should fall back to the visible summary when any reasoning item is foreign-scoped', async () => {
+    const sourceScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
+    const targetScope: SignatureScope = { fingerprint: 'b'.repeat(32) };
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: {
+          content: 'visible summary',
+          responseItems: [
+            {
+              encrypted_content: serializeScopedSignature(
+                'encrypted-part-1',
+                sourceScope,
+                'reasoning',
+              ),
+              id: 'rs_1',
+              summary: [{ text: 'visible summary', type: 'summary_text' }],
+              type: 'reasoning',
+            },
+          ],
+          signature: serializeScopedSignature('encrypted-part-1', sourceScope, 'reasoning'),
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, {
+      reasoningSignatureScope: targetScope,
+    });
+
+    expect(result).toEqual([
+      { summary: [{ text: 'visible summary', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should strip item ids when replaying summary-only reasoning items', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'hello',
+        provider: 'chatgpt',
+        reasoning: {
+          content: 'summary only',
+          responseItems: [
+            {
+              id: 'rs_summary_only',
+              summary: [{ text: 'summary only', type: 'summary_text' }],
+              type: 'reasoning',
+            },
+          ],
+        },
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      { summary: [{ text: 'summary only', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'hello', role: 'assistant' },
+    ]);
+  });
+
+  it('should preserve message order when earlier messages have async content (images)', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { content: 'system prompts', role: 'system' },
+      {
+        content: [
+          { type: 'text', text: 'describe this image' },
+          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,abc123' } },
+        ],
+        role: 'user',
+      },
+      {
+        content: 'The image shows a green car.',
+        role: 'assistant',
+        reasoning: { content: 'analyzing the image', duration: 3000 },
+      },
+      { content: '1 + 1 = ?', role: 'user' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      { content: 'system prompts', role: 'developer' },
+      {
+        content: [
+          { type: 'input_text', text: 'describe this image' },
+          { type: 'input_image', image_url: 'data:image/jpeg;base64,abc123' },
+        ],
+        role: 'user',
+      },
+      { summary: [{ text: 'analyzing the image', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'The image shows a green car.', role: 'assistant' },
+      { content: '1 + 1 = ?', role: 'user' },
+    ]);
+  });
+
+  it('should handle openai and claude mixed message', async () => {
+    // See: https://github.com/lobehub/lobehub/pull/12017
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'system prompts',
+        role: 'system',
+      },
+      {
+        content: '你是谁',
+        role: 'user',
+      },
+      {
+        content: [
+          {
+            signature: 'E',
+            thinking: 'thoughts',
+            type: 'thinking',
+          },
+          {
+            text: '我是 Claude',
+            type: 'text',
+          },
+        ],
+        provider: 'anthropic',
+        role: 'assistant',
+        reasoning: {
+          content: 'The user is asking',
+          duration: 110,
+          signature: 'E',
+        },
+      },
+    ];
+    const result = await convertOpenAIResponseInputs(messages, { provider: 'chatgpt' });
+    expect(result).toEqual([
+      { content: 'system prompts', role: 'developer' },
+      { content: '你是谁', role: 'user' },
+      {
+        summary: [{ text: 'The user is asking', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      {
+        content: [{ text: '我是 Claude', type: 'output_text' }],
+        role: 'assistant',
+      },
+    ]);
+  });
+
+  it('should drop assistant image content for Responses API input', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          {
+            image_url: { url: 'data:image/jpeg;base64,abc123' },
+            type: 'image_url',
+          },
+        ],
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([]);
+  });
+
+  it('should keep assistant text and drop unsupported assistant media for Responses API input', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          {
+            text: 'Here is the generated image.',
+            type: 'text',
+          },
+          {
+            image_url: { url: 'data:image/jpeg;base64,abc123' },
+            type: 'image_url',
+          },
+          {
+            video_url: { url: 'data:video/mp4;base64,def456' },
+            type: 'video_url',
+          },
+        ],
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        content: [{ text: 'Here is the generated image.', type: 'output_text' }],
+        role: 'assistant',
+      },
+    ]);
+  });
+
+  it('should pass forceVideoBase64 to convertMessageContent in video_url branch', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is a video' },
+          {
+            type: 'video_url',
+            video_url: {
+              url: 'https://example.com/video.mp4',
+            },
+          },
+        ],
+      },
+    ];
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'video/mp4',
+    });
+
+    const result = await convertOpenAIResponseInputs(messages, { forceVideoBase64: true });
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is a video' },
+          {
+            type: 'input_video',
+            video_url: 'data:video/mp4;base64,forcedBase64',
+          },
+        ],
+      },
+    ]);
+
+    expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+  });
+
+  it('should pass forceImageBase64 to convertMessageContent in image_url branch', async () => {
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
+
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is an image' },
+          {
+            type: 'image_url',
+            image_url: {
+              url: 'https://example.com/image.jpg',
+            },
+          },
+        ],
+      },
+    ];
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'image/jpeg',
+    });
+
+    const result = await convertOpenAIResponseInputs(messages, { forceImageBase64: true });
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is an image' },
+          {
+            type: 'input_image',
+            image_url: 'data:image/jpeg;base64,forcedBase64',
+          },
+        ],
+      },
+    ]);
+
+    expect(imageUrlToBase64).toHaveBeenCalledWith('https://example.com/image.jpg');
+  });
+});
+
+describe('convertImageUrlToFile', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearReferenceImageCache();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('Data URL handling', () => {
+    it('should convert PNG data URL to File object correctly', async () => {
+      const base64Data =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+      const dataUrl = `data:image/png;base64,${base64Data}`;
+
+      const result = await convertImageUrlToFile(dataUrl);
+
+      expect(result).toBeDefined();
+      expect(result).toHaveProperty('name', 'image.png');
+      expect(result).toHaveProperty('type', 'image/png');
+      expect(result).toHaveProperty('size');
+      expect(result.size).toBeGreaterThan(0);
+    });
+
+    it('should convert JPEG data URL to File object correctly', async () => {
+      const base64Data =
+        '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA9BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
+      const dataUrl = `data:image/jpeg;base64,${base64Data}`;
+
+      const result = await convertImageUrlToFile(dataUrl);
+
+      expect(result).toBeDefined();
+      expect(result).toHaveProperty('name', 'image.jpeg');
+      expect(result).toHaveProperty('type', 'image/jpeg');
+      expect(result).toHaveProperty('size');
+      expect(result.size).toBeGreaterThan(0);
+    });
+
+    it('should convert WebP data URL to File object correctly', async () => {
+      const base64Data = 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAAAAJaQAA6g=';
+      const dataUrl = `data:image/webp;base64,${base64Data}`;
+
+      const result = await convertImageUrlToFile(dataUrl);
+
+      expect(result).toBeDefined();
+      expect(result).toHaveProperty('name', 'image.webp');
+      expect(result).toHaveProperty('type', 'image/webp');
+      expect(result).toHaveProperty('size');
+      expect(result.size).toBeGreaterThan(0);
+    });
+  });
+
+  describe('HTTP URL handling', () => {
+    const mockFetch = vi.fn();
+
+    beforeEach(() => {
+      // Mock global fetch using vi.stubGlobal for better isolation
+      vi.stubGlobal('fetch', mockFetch);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.clearAllMocks();
+    });
+
+    it('should convert HTTP URL to File object correctly', async () => {
+      const mockArrayBuffer = new ArrayBuffer(8);
+      const mockHeaders = new Headers();
+      mockHeaders.set('content-type', 'image/jpeg');
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+        headers: mockHeaders,
+      } satisfies Partial<Response>);
+
+      const result = await convertImageUrlToFile('https://example.com/image.jpg');
+
+      expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg');
+      expect(result).toBeDefined();
+      expect(result).toHaveProperty('name', 'image.jpeg');
+      expect(result).toHaveProperty('type', 'image/jpeg');
+      expect(result).toHaveProperty('size');
+      expect(result.size).toEqual(8);
+    });
+
+    it('should handle different content types from HTTP response headers', async () => {
+      const testCases = [
+        { contentType: 'image/jpeg', expectedExtension: 'jpeg' },
+        { contentType: 'image/png', expectedExtension: 'png' },
+        { contentType: 'image/webp', expectedExtension: 'webp' },
+        { contentType: null, expectedExtension: 'png' }, // default fallback
+      ];
+
+      for (const testCase of testCases) {
+        const mockArrayBuffer = new ArrayBuffer(8);
+        const mockHeaders = new Headers();
+        if (testCase.contentType) {
+          mockHeaders.set('content-type', testCase.contentType);
+        }
+
+        mockFetch.mockResolvedValue({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+          headers: mockHeaders,
+        } satisfies Partial<Response>);
+
+        const result = await convertImageUrlToFile('https://example.com/image.jpg');
+
+        expect(result).toHaveProperty('name', `image.${testCase.expectedExtension}`);
+        expect(result).toHaveProperty('type', testCase.contentType || 'image/png');
+
+        vi.clearAllMocks();
+        clearReferenceImageCache();
+      }
+    });
+
+    it('should reuse one download for repeated conversions of the same URL', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+        headers: new Headers({ 'content-type': 'image/png' }),
+      } satisfies Partial<Response>);
+
+      const first = await convertImageUrlToFile('https://example.com/reference.png');
+      const second = await convertImageUrlToFile('https://example.com/reference.png');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(first).not.toBe(second);
+      expect(second).toHaveProperty('type', 'image/png');
+    });
+
+    it('should throw error when HTTP request fails', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        statusText: 'Not Found',
+      } satisfies Partial<Response>);
+
+      await expect(convertImageUrlToFile('https://example.com/nonexistent.jpg')).rejects.toThrow(
+        'Failed to fetch image from https://example.com/nonexistent.jpg: Not Found',
+      );
+
+      expect(mockFetch).toHaveBeenCalledWith('https://example.com/nonexistent.jpg');
+    });
+
+    it('should throw error when network request fails', async () => {
+      mockFetch.mockRejectedValue(new Error('Network error'));
+
+      await expect(convertImageUrlToFile('https://example.com/image.jpg')).rejects.toThrow(
+        'Network error',
+      );
+
+      expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg');
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('should handle malformed data URL gracefully', async () => {
+      const malformedDataUrl = 'data:invalid-format';
+
+      // 这个测试可能会抛出错误，我们需要适当处理
+      await expect(convertImageUrlToFile(malformedDataUrl)).rejects.toThrow();
+    });
+  });
+});

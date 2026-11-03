@@ -1,0 +1,64 @@
+// @vitest-environment node
+import { vi } from 'vitest';
+
+// Create mock PromptBuilder class first
+const MockPromptBuilder = vi.fn().mockImplementation(function (workflow: any) {
+  return {
+    input: vi.fn().mockReturnThis(),
+    setInputNode: vi.fn().mockReturnThis(),
+    setOutputNode: vi.fn().mockReturnThis(),
+    workflow, // Expose the workflow for testing
+  };
+});
+
+// Module-level mock for @saintno/comfyui-sdk
+vi.mock('@saintno/comfyui-sdk', () => ({
+  CallWrapper: vi.fn().mockImplementation(function () {
+    return {
+      call: vi.fn(),
+      execute: vi.fn(),
+    };
+  }),
+  ComfyApi: vi.fn().mockImplementation(function (
+    baseURL: string,
+    clientId?: string,
+    options?: any,
+  ) {
+    return {
+      baseURL,
+      clientId,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      getObjectInfo: vi.fn().mockResolvedValue({}),
+      init: vi.fn(),
+      options,
+    };
+  }),
+  PromptBuilder: MockPromptBuilder,
+  seed: vi.fn(function () {
+    return 42;
+  }),
+}));
+
+// Mock other utility functions
+vi.mock('../utils/promptSplitter', () => ({
+  splitPromptForDualCLIP: vi.fn(function (prompt: string) {
+    return {
+      clipLPrompt: prompt,
+      t5xxlPrompt: prompt,
+    };
+  }),
+}));
+
+vi.mock('../utils/weightDType', () => ({
+  selectOptimalWeightDtype: vi.fn(function () {
+    return 'default';
+  }),
+}));
+
+export const setupAllMocks = () => {
+  // Enhanced PromptBuilder mock to record parameters
+  const inputCalls = new Map<string, any>();
+
+  return { inputCalls };
+};

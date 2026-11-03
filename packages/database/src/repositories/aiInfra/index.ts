@@ -1,0 +1,456 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { loadModels } from '@lobechat/business-model-bank/model-config';
+import type {
+  AiProviderDetailItem,
+  AiProviderListItem,
+  AiProviderRuntimeState,
+  EnabledProvider,
+  ProviderConfig,
+} from '@lobechat/types';
+import { isEmpty } from 'es-toolkit/compat';
+import type { AIChatModelCard, AiProviderModelListItem, EnabledAiModel } from 'model-bank';
+import {
+  AiModelSourceEnum,
+  isAiModelVisible,
+  normalizeAiModelType,
+  resolveModelSearchDefaultSettings,
+} from 'model-bank';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
+import pMap from 'p-map';
+
+import { merge, mergeArrayById } from '@/utils/merge';
+
+import { AiModelModel } from '../../models/aiModel';
+import { AiProviderModel } from '../../models/aiProvider';
+import type { LobeChatDatabase } from '../../type';
+
+type DecryptUserKeyVaults = (encryptKeyVaultsStr: string | null) => Promise<any>;
+
+const normalizeProvider = (provider: string) => provider.toLowerCase();
+
+// Only inject settings during read; add or remove search-related fields in settings based on abilities.search
+const injectSearchSettings = (providerId: string, item: any) => {
+  const abilities = item?.abilities || {};
+
+  // Model explicitly disables search capability: remove search-related fields from settings to prevent UI from showing built-in search
+  if (abilities.search === false) {
+    if (item?.settings?.searchImpl || item?.settings?.searchProvider) {
+      const next = { ...item } as any;
+      if (next.settings) {
+        const {
+          searchImpl: _searchImpl,
+          searchProvider: _searchProvider,
+          ...restSettings
+        } = next.settings;
+        next.settings = Object.keys(restSettings).length > 0 ? restSettings : undefined;
+      }
+      return next;
+    }
+    return item;
+  }
+
+  // Model explicitly enables search capability: add search-related fields to settings
+  else if (abilities.search === true) {
+    // If built-in (local) model already has either field, preserve it without overriding
+    if (item?.settings?.searchImpl || item?.settings?.searchProvider) return item;
+
+    // Otherwise use providerId + modelId
+    const searchSettings = resolveModelSearchDefaultSettings(providerId, item.id);
+
+    return {
+      ...item,
+      settings: {
+        ...item.settings,
+        ...searchSettings,
+      },
+    };
+  }
+
+  // Compatibility for legacy versions where database doesn't store abilities.search field
+  return item;
+};
+
+export class AiInfraRepos {
+  private userId: string;
+  private db: LobeChatDatabase;
+  aiProviderModel: AiProviderModel;
+  private readonly providerConfigs: Record<string, ProviderConfig>;
+  aiModelModel: AiModelModel;
+  private modelBankModelsPromise?: ReturnType<typeof loadModels>;
+
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    providerConfigs: Record<string, ProviderConfig>,
+    workspaceId?: string,
+  ) {
+    this.userId = userId;
+    this.db = db;
+    this.aiProviderModel = new AiProviderModel(db, userId, workspaceId);
+    this.aiModelModel = new AiModelModel(db, userId, workspaceId);
+    this.providerConfigs = providerConfigs;
+  }
+
+  /**
+   * Calculate the final providerList based on the known providerConfig
+   */
+  getAiProviderList = async () => {
+    const userProviders = await this.aiProviderModel.getAiProviderList();
+
+    // 1. First create a mapping based on DEFAULT_MODEL_PROVIDER_LIST id order
+    const orderMap = new Map(DEFAULT_MODEL_PROVIDER_LIST.map((item, index) => [item.id, index]));
+
+    const builtinProviders = DEFAULT_MODEL_PROVIDER_LIST.map((item) => ({
+      description: item.description,
+      enabled:
+        userProviders.some((provider) => provider.id === item.id && provider.enabled) ||
+        this.providerConfigs[item.id]?.enabled,
+      id: item.id,
+      name: item.name,
+      source: 'builtin',
+    })) as AiProviderListItem[];
+
+    const mergedProviders = mergeArrayById(builtinProviders, userProviders);
+
+    // 3. Sort based on orderMap
+    return mergedProviders.sort((a, b) => {
+      const orderA = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const orderB = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return orderA - orderB;
+    });
+  };
+
+  /**
+   * used in the chat page. to show the enabled providers
+   */
+  getUserEnabledProviderList = async () => {
+    const list = await this.getAiProviderList();
+    return list
+      .filter((item) => item.enabled)
+      .sort((a, b) => a.sort! - b.sort!)
+      .map((item): EnabledProvider => ({
+        id: item.id,
+        logo: item.logo,
+        name: item.name,
+        source: item.source,
+      }));
+  };
+
+  /**
+   * used in the chat page. to show the enabled models
+   */
+  getEnabledModels = async (filterEnabled: boolean = true) => {
+    const [providers, allModels] = await Promise.all([
+      this.getAiProviderList(),
+      this.aiModelModel.getAllModels(),
+    ]);
+    const enabledProviders = providers.filter((item) => (filterEnabled ? item.enabled : true));
+
+    const builtinModelList = await pMap(
+      enabledProviders,
+      async (provider) => {
+        const aiModels = await this.fetchBuiltinModels(provider.id);
+        return (aiModels || [])
+          .map<EnabledAiModel & { enabled?: boolean | null }>((item) => {
+            const user = allModels.find((m) => m.id === item.id && m.providerId === provider.id);
+
+            // User hasn't modified local model
+            if (!user)
+              return injectSearchSettings(provider.id, {
+                ...item,
+                abilities: item.abilities || {},
+                providerId: provider.id,
+              });
+
+            const mergedModel = {
+              ...item,
+              abilities: !isEmpty(user.abilities) ? user.abilities : item.abilities || {},
+              // Deep-merge instead of replacing: a user row holding only a
+              // reasoning preference (`config.chatConfig`) must not drop the
+              // builtin card's `config.deploymentName` (Azure/Volcengine-style
+              // providers resolve the request model from it)
+              config: !isEmpty(user.config) ? merge(item.config || {}, user.config) : item.config,
+              contextWindowTokens:
+                typeof user.contextWindowTokens === 'number'
+                  ? user.contextWindowTokens
+                  : item.contextWindowTokens,
+              displayName: user?.displayName || item.displayName,
+              enabled: typeof user.enabled === 'boolean' ? user.enabled : item.enabled,
+              id: item.id,
+              pricing: user.pricing || item.pricing,
+              providerId: provider.id,
+              settings: isEmpty(user.settings)
+                ? item.settings
+                : merge(item.settings || {}, user.settings || {}),
+              sort: user.sort ?? undefined,
+              type: normalizeAiModelType(user.type || item.type),
+            };
+            return injectSearchSettings(provider.id, mergedModel); // User modified local model, check search settings
+          })
+          .filter((item) => (filterEnabled ? item.enabled : true));
+      },
+      { concurrency: 10 },
+    );
+
+    const builtinModels = builtinModelList.flat();
+    const builtinModelKeys = new Set(builtinModels.map((item) => `${item.providerId}:${item.id}`));
+
+    const enabledProviderIds = new Set(enabledProviders.map((item) => item.id));
+    // User database models, check search settings
+    // Exclude models already handled in builtinModelList to avoid duplicates
+    const appendedUserModels = allModels
+      .filter((item) => {
+        if (item.providerId === BRANDING_PROVIDER) return false;
+        if (builtinModelKeys.has(`${item.providerId}:${item.id}`)) return false;
+        return filterEnabled ? enabledProviderIds.has(item.providerId) && item.enabled : true;
+      })
+      .map((item) =>
+        injectSearchSettings(item.providerId, { ...item, type: normalizeAiModelType(item.type) }),
+      );
+
+    return [...builtinModels, ...appendedUserModels].sort(
+      (a, b) => (a?.sort ?? Infinity) - (b?.sort ?? Infinity),
+    ) as EnabledAiModel[];
+  };
+
+  getAiProviderRuntimeState = async (
+    decryptor?: DecryptUserKeyVaults,
+  ): Promise<AiProviderRuntimeState> => {
+    const [result, enabledAiProviders, allModels] = await Promise.all([
+      this.aiProviderModel.getAiProviderRuntimeConfig(decryptor),
+      this.getUserEnabledProviderList(),
+      this.getEnabledModels(false),
+    ]);
+
+    const runtimeConfig = result;
+    Object.entries(result).forEach(([key, value]) => {
+      runtimeConfig[key] = merge(this.providerConfigs[key] || {}, value);
+    });
+    const enabledAiModels = allModels.filter((model) => model.enabled);
+    const enabledChatAiProviders = enabledAiProviders.filter((provider) => {
+      return allModels.some((model) => model.providerId === provider.id && model.type === 'chat');
+    });
+    const enabledImageAiProviders = enabledAiProviders.filter((provider) => {
+      return allModels.some((model) => model.providerId === provider.id && model.type === 'image');
+    });
+    const enabledVideoAiProviders = enabledAiProviders.filter((provider) => {
+      return allModels.some((model) => model.providerId === provider.id && model.type === 'video');
+    });
+
+    return {
+      enabledAiModels,
+      enabledAiProviders,
+      enabledChatAiProviders,
+      enabledImageAiProviders,
+      enabledVideoAiProviders,
+      runtimeConfig,
+    };
+  };
+
+  /**
+   * Resolve the best provider for a given model.
+   *
+   * Matching pipeline:
+   * 1) Build a map of provider -> enabled model ids (disabled models are ignored).
+   * 2) Walk providers in priority order: preferred providers (if any) -> explicit fallback provider -> remaining providers that have enabled models.
+   * 3) For each provider, look for an exact modelId match or any preferred model alias.
+   * 4) If nothing matches, fall back to the configured provider (with a warning) or throw when no fallback exists.
+   *
+   * Handles:
+   * - Preferred provider ordering (case-insensitive).
+   * - Preferred model aliases.
+   * - Disabled models are skipped.
+   * - Missing matches: falls back when possible, otherwise surfaces an error.
+   *
+   * Edge cases to note:
+   * - If preferredProviders are set, non-preferred providers are skipped unless they are also the explicit fallback.
+   * - If fallbackProvider lacks enabled models, it is still returned (caller should ensure runtimeConfig has credentials).
+   */
+  static async tryMatchingProviderFrom(
+    runtimeState: AiProviderRuntimeState,
+    options: {
+      fallbackProvider?: string;
+      label?: string;
+      modelId: string;
+      preferredModels?: string[];
+      preferredProviders?: string[];
+    },
+  ): Promise<string> {
+    const { modelId, fallbackProvider, preferredModels, preferredProviders, label } = options;
+
+    // Build a map of provider -> enabled model ids for quick membership checks; skip disabled models entirely
+    const providerModels = runtimeState.enabledAiModels.reduce<Record<string, Set<string>>>(
+      (acc, model) => {
+        if (model.enabled === false) return acc;
+
+        const providerId = normalizeProvider(model.providerId);
+        acc[providerId] = acc[providerId] || new Set<string>();
+        acc[providerId].add(model.id);
+
+        return acc;
+      },
+      {},
+    );
+
+    // Normalize preferred providers so ordering is stable and comparisons are case-insensitive
+    const normalizedPreferredProviders = (preferredProviders || [])
+      .map(normalizeProvider)
+      .filter(Boolean);
+
+    // Provider search pipeline:
+    // 1) iterate preferred providers (if given)
+    // 2) fall back to the explicitly configured fallback provider
+    // 3) consider any provider that has enabled models
+    const providerOrder = Array.from(
+      new Set(
+        [
+          ...normalizedPreferredProviders,
+          fallbackProvider ? normalizeProvider(fallbackProvider) : undefined,
+          ...Object.keys(providerModels),
+        ].filter(Boolean) as string[],
+      ),
+    );
+
+    // Candidate models include the requested modelId plus any preferred model aliases
+    const modelTargets = new Set([modelId, ...(preferredModels || [])]);
+
+    for (const providerId of providerOrder) {
+      // If preferred providers are specified, skip non-preferred providers unless they are the explicit fallback
+      if (
+        normalizedPreferredProviders.length > 0 &&
+        providerId !== normalizeProvider(fallbackProvider || '') &&
+        !normalizedPreferredProviders.includes(providerId)
+      ) {
+        continue;
+      }
+
+      const models = providerModels[providerId];
+      if (!models) {
+        continue;
+      }
+
+      // Accept the first provider in order whose enabled models contain either the requested id or any preferred alias
+      const match = Array.from(modelTargets).find((target) => models.has(target));
+      if (match) {
+        return providerId;
+      }
+    }
+
+    if (fallbackProvider) {
+      console.warn(
+        `[ai-infra] no enabled provider found for ${label || 'model'} "${modelId}" (preferred ${preferredProviders}), falling back to server-configured provider "${fallbackProvider}".`,
+      );
+      return normalizeProvider(fallbackProvider);
+    }
+
+    throw new Error(
+      `Unable to resolve provider for ${label || 'model'} "${modelId}". Check preferred providers/models configuration.`,
+    );
+  }
+
+  getAiProviderModelList = async (
+    providerId: string,
+    options?: {
+      enabled?: boolean;
+      limit?: number;
+      offset?: number;
+      type?: string;
+    },
+  ) => {
+    const aiModels = await this.aiModelModel.getModelListByProviderId(providerId);
+
+    const defaultModels: AiProviderModelListItem[] =
+      (await this.fetchBuiltinModels(providerId)) || [];
+    // Not modifying search settings here doesn't affect usage, but done for data consistency on get
+    let mergedModel = mergeArrayById(defaultModels, aiModels) as AiProviderModelListItem[];
+
+    // Model type (chat/video/image/embedding/tts/stt) should always come from builtin config,
+    // because remote-fetched models from provider API (e.g. OpenAI /v1/models) don't return
+    // a type field, causing them to fallback to 'chat' and get saved to DB with wrong type.
+    // e.g. sora-2 is a video model but gets stored as 'chat' after "Fetch models".
+    const builtinTypeMap = new Map(defaultModels.map((m) => [m.id, m.type]));
+    for (const m of mergedModel) {
+      const builtinType = builtinTypeMap.get(m.id);
+      if (builtinType) m.type = builtinType;
+      // Read-time map for the legacy `stt` → `asr` rename (custom models that
+      // aren't in the builtin list and still carry the old value in the DB).
+      m.type = normalizeAiModelType(m.type);
+    }
+
+    // Filter out DB residual models that are no longer in the builtin list for branding provider
+    const builtinIds = new Set(defaultModels.map((m) => m.id));
+    if (providerId === BRANDING_PROVIDER) {
+      mergedModel = mergedModel.filter((m) => builtinIds.has(m.id));
+    }
+
+    // Preference-only shells — rows persisting just `config.chatConfig` (created
+    // by updateModelReasoningConfig, or left behind when clearRemoteModels
+    // demotes a remote row with a saved reasoning preference) — carry no
+    // user-visible identity. With no builtin card to merge onto, hide the
+    // ID-only entry instead of listing a ghost disabled model.
+    mergedModel = mergedModel.filter(
+      (m) => builtinIds.has(m.id) || !AiModelModel.isPreferenceOnlyRow(m),
+    );
+
+    mergedModel = mergedModel.filter(isAiModelVisible);
+
+    let list = mergedModel.map((m) =>
+      injectSearchSettings(providerId, m),
+    ) as AiProviderModelListItem[];
+
+    if (typeof options?.enabled === 'boolean') {
+      list = list.filter((m) => m.enabled === options.enabled);
+    }
+
+    if (options?.type) {
+      list = list.filter((m) => m.type === options.type);
+    }
+
+    if (typeof options?.offset === 'number' || typeof options?.limit === 'number') {
+      const offset = Math.max(0, options?.offset ?? 0);
+      const limit = options?.limit;
+      if (typeof limit === 'number') return list.slice(offset, offset + Math.max(0, limit));
+      return list.slice(offset);
+    }
+
+    return list;
+  };
+
+  /**
+   * use in the `/settings/provider/[id]` page
+   */
+  getAiProviderDetail = async (id: string, decryptor?: DecryptUserKeyVaults) => {
+    const config = await this.aiProviderModel.getAiProviderById(id, decryptor);
+
+    return merge(this.providerConfigs[id] || {}, config) as AiProviderDetailItem;
+  };
+
+  /**
+   * Fetch builtin models from config
+   */
+  private getModelBankModels = () => {
+    this.modelBankModelsPromise ??= loadModels();
+    return this.modelBankModelsPromise;
+  };
+
+  private fetchBuiltinModels = async (
+    providerId: string,
+  ): Promise<AiProviderModelListItem[] | undefined> => {
+    try {
+      // use the serverModelLists as the defined server model list
+      // fallback to empty array for custom provider
+      const presetList =
+        this.providerConfigs[providerId]?.serverModelLists ||
+        (await this.getModelBankModels()).filter((model) => model.providerId === providerId);
+
+      return (presetList as AIChatModelCard[]).map<AiProviderModelListItem>((m) => ({
+        ...m,
+        enabled: m.enabled || false,
+        source: AiModelSourceEnum.Builtin,
+      }));
+    } catch (error) {
+      console.error(error);
+      // maybe provider id not exist
+    }
+  };
+}

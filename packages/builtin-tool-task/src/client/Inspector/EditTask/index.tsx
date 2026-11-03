@@ -1,0 +1,282 @@
+'use client';
+
+import { priorityLabel } from '@lobechat/prompts';
+import type { BuiltinInspectorProps } from '@lobechat/types';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import type { ReactNode } from 'react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
+import AssigneeUserAvatar from '@/features/AgentTasks/features/AssigneeUserAvatar';
+import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useUserDisplayMeta } from '@/features/AgentTasks/shared/useUserDisplayMeta';
+import { inspectorTextStyles, shinyTextStyles } from '@/styles';
+
+import type { EditTaskParams, EditTaskState } from '../../../types';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  addChip: css`
+    flex-shrink: 0;
+
+    padding-block: 1px;
+    padding-inline: 8px;
+    border-radius: 999px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorSuccess};
+
+    background: ${cssVar.colorSuccessBg};
+  `,
+  assigneeAvatar: css`
+    flex-shrink: 0;
+  `,
+  assigneeChip: css`
+    overflow: hidden;
+    display: inline-flex;
+    flex-shrink: 1;
+    gap: 6px;
+    align-items: center;
+
+    min-width: 0;
+    max-width: 220px;
+    padding-block: 1px;
+    padding-inline: 4px 8px;
+    border-radius: 999px;
+
+    font-size: 12px;
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  assigneeName: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  chip: css`
+    overflow: hidden;
+    display: inline-flex;
+    flex-shrink: 1;
+    align-items: center;
+
+    min-width: 0;
+    max-width: 200px;
+    padding-block: 1px;
+    padding-inline: 8px;
+    border-radius: 999px;
+
+    font-size: 12px;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  group: css`
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  `,
+  identifierChip: css`
+    flex-shrink: 0;
+
+    padding-block: 1px;
+    padding-inline: 8px;
+    border-radius: 999px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  label: css`
+    flex-shrink: 0;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  removeChip: css`
+    flex-shrink: 0;
+
+    padding-block: 1px;
+    padding-inline: 8px;
+    border: 1px dashed ${cssVar.colorErrorBorder};
+    border-radius: 999px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorError};
+    text-decoration: line-through;
+
+    background: transparent;
+  `,
+}));
+
+const AssigneeChip = memo<{ agentId: string }>(({ agentId }) => {
+  const agentMeta = useAgentDisplayMeta(agentId, { fallbackToDefault: false });
+  const displayName = agentMeta?.title || agentId;
+
+  return (
+    <span className={styles.assigneeChip} title={displayName}>
+      <span className={styles.assigneeAvatar}>
+        <AssigneeAvatar agentId={agentId} fallbackToDefault={false} size={16} />
+      </span>
+      <span className={styles.assigneeName}>{displayName}</span>
+    </span>
+  );
+});
+
+AssigneeChip.displayName = 'AssigneeChip';
+
+const MemberChip = memo<{ userId: string }>(({ userId }) => {
+  const meta = useUserDisplayMeta(userId);
+  const displayName = meta?.title || userId;
+
+  return (
+    <span className={styles.assigneeChip} data-testid="member-chip" title={displayName}>
+      <span className={styles.assigneeAvatar}>
+        <AssigneeUserAvatar size={16} userId={userId} />
+      </span>
+      <span className={styles.assigneeName}>{displayName}</span>
+    </span>
+  );
+});
+
+MemberChip.displayName = 'MemberChip';
+
+export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, EditTaskState>>(
+  ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
+    const { t } = useTranslation('plugin');
+
+    const params = args || partialArgs || ({} as Partial<EditTaskParams>);
+    const identifier = pluginState?.identifier ?? params.identifier;
+
+    const segments: { content: ReactNode; key: string }[] = [];
+
+    if (params.name !== undefined) {
+      segments.push({
+        content: (
+          <>
+            <span className={styles.label}>{t('builtins.lobe-task.edit.rename')}</span>
+            <span className={styles.chip}>{params.name}</span>
+          </>
+        ),
+        key: 'name',
+      });
+    }
+
+    if (params.priority !== undefined) {
+      segments.push({
+        content: (
+          <>
+            <span className={styles.label}>{t('builtins.lobe-task.edit.priority')}</span>
+            <span className={styles.chip}>{priorityLabel(params.priority)}</span>
+          </>
+        ),
+        key: 'priority',
+      });
+    }
+
+    if (params.instruction !== undefined) {
+      segments.push({
+        content: <span className={styles.chip}>{t('builtins.lobe-task.edit.instruction')}</span>,
+        key: 'instruction',
+      });
+    }
+
+    if (params.description !== undefined) {
+      segments.push({
+        content: <span className={styles.chip}>{t('builtins.lobe-task.edit.description')}</span>,
+        key: 'description',
+      });
+    }
+
+    if (params.parentIdentifier !== undefined) {
+      segments.push({
+        content:
+          params.parentIdentifier === null ? (
+            <span className={styles.chip}>{t('builtins.lobe-task.edit.parentClear')}</span>
+          ) : (
+            <>
+              <span className={styles.label}>{t('builtins.lobe-task.edit.parent')}</span>
+              <span className={styles.chip}>{params.parentIdentifier}</span>
+            </>
+          ),
+        key: 'parent',
+      });
+    }
+
+    if (params.assigneeAgentId !== undefined || params.assigneeUserId !== undefined) {
+      // Executing agent and human owner are independent sides that can change
+      // (and be set) together — render a chip per assigned side; a call that
+      // only clears reads as unassign.
+      const hasAnyAssignee = Boolean(params.assigneeAgentId || params.assigneeUserId);
+      segments.push({
+        content: hasAnyAssignee ? (
+          <>
+            <span className={styles.label}>{t('builtins.lobe-task.edit.assign')}</span>
+            {params.assigneeAgentId && <AssigneeChip agentId={params.assigneeAgentId} />}
+            {params.assigneeUserId && <MemberChip userId={params.assigneeUserId} />}
+          </>
+        ) : (
+          <span className={styles.chip}>{t('builtins.lobe-task.edit.unassign')}</span>
+        ),
+        key: 'assignee',
+      });
+    }
+
+    if (params.addDependencies?.length) {
+      segments.push({
+        content: (
+          <>
+            <span className={styles.label}>{t('builtins.lobe-task.edit.blocksOn')}</span>
+            {params.addDependencies.map((dep) => (
+              <span className={styles.addChip} key={`add-${dep}`}>
+                {dep}
+              </span>
+            ))}
+          </>
+        ),
+        key: 'addDeps',
+      });
+    }
+
+    if (params.removeDependencies?.length) {
+      segments.push({
+        content: (
+          <>
+            <span className={styles.label}>{t('builtins.lobe-task.edit.unblocks')}</span>
+            {params.removeDependencies.map((dep) => (
+              <span className={styles.removeChip} key={`remove-${dep}`}>
+                {dep}
+              </span>
+            ))}
+          </>
+        ),
+        key: 'removeDeps',
+      });
+    }
+
+    return (
+      <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 6 }}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-task.apiName.editTask')}
+        </span>
+        {identifier && <span className={styles.identifierChip}>{identifier}</span>}
+        {segments.map((segment, index) => (
+          <span className={styles.group} key={segment.key}>
+            {index > 0 && <span style={{ color: cssVar.colorTextQuaternary }}>·</span>}
+            {segment.content}
+          </span>
+        ))}
+      </div>
+    );
+  },
+);
+
+EditTaskInspector.displayName = 'EditTaskInspector';
+
+export default EditTaskInspector;

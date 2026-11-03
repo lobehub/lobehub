@@ -1,0 +1,86 @@
+'use client';
+
+import { ActionIcon, createStaticStyles, Flexbox, Image } from '@lobehub/ui';
+import { QuoteIcon } from 'lucide-react';
+import { memo } from 'react';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  container: css`
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    margin-inline-start: -16px;
+  `,
+  image: css`
+    padding: 2px;
+    box-shadow: ${cssVar.boxShadowTertiary};
+
+    img {
+      border-radius: 6px;
+    }
+  `,
+  icon: css`
+    pointer-events: none;
+
+    z-index: 10;
+
+    border-radius: 50% !important;
+
+    color: ${cssVar.colorBgLayout};
+
+    background: ${cssVar.colorFill};
+    box-shadow: ${cssVar.boxShadowTertiary};
+  `,
+}));
+
+interface VideoReferenceFramesProps {
+  endImageUrl?: string | null;
+  imageUrl?: string | null;
+  imageUrls?: string[];
+}
+
+const VideoReferenceFrames = memo<VideoReferenceFramesProps>(
+  ({ imageUrl, imageUrls, endImageUrl }) => {
+    // Providers treat every image as a reference once `imageUrls` is set, so label them as such.
+    const isReference = !!imageUrls?.length;
+    const allImages: { alt: string; url: string }[] = [];
+    if (imageUrl)
+      allImages.push({ alt: isReference ? 'Reference image' : 'Start frame', url: imageUrl });
+    if (isReference) allImages.push(...imageUrls.map((url) => ({ alt: 'Reference image', url })));
+    if (endImageUrl)
+      allImages.push({ alt: isReference ? 'Reference image' : 'End frame', url: endImageUrl });
+
+    if (allImages.length === 0) return null;
+
+    return (
+      <Image.PreviewGroup>
+        <Flexbox horizontal align={'flex-end'} flex={'none'} wrap="wrap">
+          <ActionIcon
+            glass
+            className={styles.icon}
+            icon={QuoteIcon}
+            size={'small'}
+            variant={'filled'}
+          />
+          {allImages.map(({ alt, url }, index) => (
+            <div className={styles.container} key={`${url}-${index}`}>
+              <Image
+                alt={alt}
+                className={styles.image}
+                height={'100%'}
+                src={url}
+                style={{ height: '100%', width: '100%' }}
+                variant={'outlined'}
+                width={'100%'}
+              />
+            </div>
+          ))}
+        </Flexbox>
+      </Image.PreviewGroup>
+    );
+  },
+);
+
+VideoReferenceFrames.displayName = 'VideoReferenceFrames';
+
+export default VideoReferenceFrames;

@@ -1,0 +1,7 @@
+{"type":"step_start","timestamp":1,"sessionID":"ses_open_1","part":{"id":"part-start-1","sessionID":"ses_open_1","messageID":"msg-1","type":"step-start"}}
+{"type":"reasoning","timestamp":2,"sessionID":"ses_open_1","part":{"id":"part-reason-1","sessionID":"ses_open_1","messageID":"msg-1","type":"reasoning","text":"I should inspect it.","time":{"start":1,"end":2}}}
+{"type":"text","timestamp":3,"sessionID":"ses_open_1","part":{"id":"part-text-1","sessionID":"ses_open_1","messageID":"msg-1","type":"text","text":"First answer.","time":{"start":2,"end":3}}}
+{"type":"step_finish","timestamp":4,"sessionID":"ses_open_1","part":{"id":"part-finish-1","sessionID":"ses_open_1","messageID":"msg-1","type":"step-finish","reason":"tool-calls","cost":0.012,"tokens":{"total":205,"input":100,"output":50,"reasoning":20,"cache":{"read":30,"write":5}}}}
+{"type":"step_start","timestamp":5,"sessionID":"ses_open_1","part":{"id":"part-start-2","sessionID":"ses_open_1","messageID":"msg-2","type":"step-start"}}
+{"type":"text","timestamp":6,"sessionID":"ses_open_1","part":{"id":"part-text-2","sessionID":"ses_open_1","messageID":"msg-2","type":"text","text":"Second answer.","time":{"start":5,"end":6}}}
+{"type":"step_finish","timestamp":7,"sessionID":"ses_open_1","part":{"id":"part-finish-2","sessionID":"ses_open_1","messageID":"msg-2","type":"step-finish","reason":"stop","cost":0.003,"tokens":{"input":20,"output":10,"reasoning":0,"cache":{"read":50,"write":0}}}}

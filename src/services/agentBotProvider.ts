@@ -1,0 +1,132 @@
+import type { BotWakeDecisionPage, BotWakeSummary, BotWakeUserMark } from '@lobechat/types';
+
+import { lambdaClient } from '@/libs/trpc/client';
+
+import type { BotRuntimeStatusSnapshot } from '../types/botRuntimeStatus';
+
+class AgentBotProviderService {
+  listPlatforms = async () => {
+    return lambdaClient.agentBotProvider.listPlatforms.query();
+  };
+
+  getByAgentId = async (agentId: string) => {
+    return lambdaClient.agentBotProvider.getByAgentId.query({ agentId });
+  };
+
+  /**
+   * Credentials in the clear, for writing an importable export file. Separate
+   * from `getByAgentId` on purpose: that one masks, and the export is the only
+   * place allowed to ask for the real values.
+   */
+  exportByAgentId = async (agentId: string) => {
+    return lambdaClient.agentBotProvider.exportByAgentId.query({ agentId });
+  };
+
+  getRuntimeStatus = async (params: {
+    applicationId: string;
+    platform: string;
+  }): Promise<BotRuntimeStatusSnapshot> => {
+    return lambdaClient.agentBotProvider.getRuntimeStatus.query(params);
+  };
+
+  refreshRuntimeStatus = async (params: {
+    applicationId: string;
+    platform: string;
+  }): Promise<BotRuntimeStatusSnapshot> => {
+    return lambdaClient.agentBotProvider.refreshRuntimeStatus.mutate(params);
+  };
+
+  refreshRuntimeStatusesByAgent = async (agentId: string): Promise<void> => {
+    await lambdaClient.agentBotProvider.refreshRuntimeStatusesByAgent.mutate({ agentId });
+  };
+
+  create = async (params: {
+    agentId: string;
+    applicationId: string;
+    credentials: Record<string, string>;
+    enabled?: boolean;
+    platform: string;
+    settings?: Record<string, unknown>;
+  }) => {
+    return lambdaClient.agentBotProvider.create.mutate(params);
+  };
+
+  update = async (
+    id: string,
+    params: {
+      applicationId?: string;
+      credentials?: Record<string, string>;
+      enabled?: boolean;
+      platform?: string;
+      settings?: Record<string, unknown>;
+    },
+  ) => {
+    return lambdaClient.agentBotProvider.update.mutate({ id, ...params });
+  };
+
+  delete = async (id: string) => {
+    return lambdaClient.agentBotProvider.delete.mutate({ id });
+  };
+
+  connectBot = async (params: {
+    applicationId: string;
+    platform: string;
+  }): Promise<{ status: 'queued' | 'started' }> => {
+    return lambdaClient.agentBotProvider.connectBot.mutate(params);
+  };
+
+  testConnection = async (params: { applicationId: string; platform: string }) => {
+    return lambdaClient.agentBotProvider.testConnection.mutate(params);
+  };
+
+  /** One bot's wake decisions, newest first; pass the previous page's `nextCursor` for more. */
+  listWakeDecisions = async (
+    params: Parameters<typeof lambdaClient.agentBotWake.listWakeDecisions.query>[0],
+  ): Promise<BotWakeDecisionPage> => {
+    return lambdaClient.agentBotWake.listWakeDecisions.query(params);
+  };
+
+  getWakeSummary = async (botId: string): Promise<BotWakeSummary> => {
+    return lambdaClient.agentBotWake.getWakeSummary.query({ botId });
+  };
+
+  labelWakeDecision = async (
+    params: Parameters<typeof lambdaClient.agentBotWake.labelWakeDecision.mutate>[0],
+  ): Promise<BotWakeUserMark> => {
+    return lambdaClient.agentBotWake.labelWakeDecision.mutate(params);
+  };
+
+  lineFetchBotInfo = async (channelAccessToken: string) => {
+    return lambdaClient.agentBotProvider.lineFetchBotInfo.mutate({ channelAccessToken });
+  };
+
+  feishuFetchOwnerId = async (params: {
+    appId: string;
+    appSecret: string;
+    platform: 'feishu' | 'lark';
+  }) => {
+    return lambdaClient.agentBotProvider.feishuFetchOwnerId.mutate(params);
+  };
+
+  wechatGetQrCode = async () => {
+    return lambdaClient.agentBotProvider.wechatGetQrCode.mutate();
+  };
+
+  wechatPollQrStatus = async (qrcode: string) => {
+    return lambdaClient.agentBotProvider.wechatPollQrStatus.query({ qrcode });
+  };
+
+  feishuRegisterBegin = async (
+    params: Parameters<typeof lambdaClient.agentBotProvider.feishuRegisterBegin.mutate>[0],
+  ) => {
+    return lambdaClient.agentBotProvider.feishuRegisterBegin.mutate(params);
+  };
+
+  feishuRegisterPoll = async (
+    params: Parameters<typeof lambdaClient.agentBotProvider.feishuRegisterPoll.query>[0],
+  ) => {
+    return lambdaClient.agentBotProvider.feishuRegisterPoll.query(params);
+  };
+}
+
+export const agentBotProviderService = new AgentBotProviderService();

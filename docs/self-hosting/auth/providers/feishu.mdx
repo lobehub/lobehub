@@ -1,0 +1,73 @@
+---
+title: Configuring Feishu (Lark) Authentication for LobeHub
+description: >-
+  Learn how to configure Feishu (Lark) SSO for LobeHub, including creating an
+  application and setting up environment variables.
+tags:
+  - Feishu
+  - Lark
+  - Authentication
+  - LobeHub
+  - Single Sign-On
+---
+
+# Configuring Feishu (Lark) Authentication
+
+[Feishu](https://www.feishu.cn/) (also known as Lark internationally) is an enterprise collaboration platform by ByteDance.
+
+<Steps>
+  ### Create Application in Feishu Open Platform
+
+  1. Go to [Feishu Open Platform](https://open.feishu.cn/)
+  2. Click **Create App** > **Enterprise Self-built App**
+  3. Fill in the app name and description
+  4. After creation, go to **Credentials & Basic Info** to get:
+     - **App ID**
+     - **App Secret**
+
+  ### Configure OAuth Permissions
+
+  1. In app settings, go to **Security Settings**
+  2. Add the redirect URI
+
+  <Callout type={'info'}>
+    Callback URL format:
+
+    - Local development: `http://localhost:3210/api/auth/callback/feishu`
+    - Production: `https://your-domain.com/api/auth/callback/feishu`
+  </Callout>
+
+  3. Go to **Permissions & Scopes** and add:
+     - `contact:user.email:readonly` (read user email)
+     - `contact:user.base:readonly` (read basic user info)
+
+  ### Publish the Application
+
+  1. Go to **Version Management & Release**
+  2. Create a new version and submit for review
+  3. Once approved, publish the app
+
+  ### Configure Environment Variables
+
+  | Environment Variable     | Type     | Description                                                     |
+  | ------------------------ | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`            | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`     | Required | Set to `feishu`                                                 |
+  | `AUTH_FEISHU_APP_ID`     | Required | App ID from Feishu Open Platform                                |
+  | `AUTH_FEISHU_APP_SECRET` | Required | App Secret from Feishu Open Platform                            |
+
+  <Callout type={'tip'}>
+    Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#feishu)
+    for detailed information.
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  After successful deployment, users will be able to authenticate with Feishu
+  and use LobeHub.
+</Callout>
+
+## Related Resources
+
+- [Feishu Open Platform](https://open.feishu.cn/)
+- [Feishu OAuth 2.0 Guide](https://open.feishu.cn/document/common-capabilities/sso/web-application-sso/web-app-overview)

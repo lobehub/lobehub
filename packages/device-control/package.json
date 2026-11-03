@@ -1,0 +1,39 @@
+{
+  "name": "@lobechat/device-control",
+  "version": "1.0.0",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./agent-browser": "./src/agentBrowser.ts",
+    "./browser-input": "./src/browserInput.ts",
+    "./claude-code-account-routing": "./src/claudeCodeAccountRouting.ts",
+    "./claude-code-memory": "./src/claudeCodeMemory.ts",
+    "./computer-use": "./src/computerUse.ts",
+    "./file-preview": "./src/filePreview.ts",
+    "./metrics": "./src/metrics/index.ts",
+    "./project-file-index": "./src/projectFileIndex.ts",
+    "./rpc-clients": "./src/rpcClients.ts",
+    "./skill-directory": "./src/skillDirectory.ts",
+    "./workspace": "./src/workspace.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "bunx vitest run --silent='passed-only'",
+    "test:coverage": "bunx vitest run --coverage"
+  },
+  "dependencies": {
+    "@lobechat/heterogeneous-agents": "workspace:*",
+    "@lobechat/html-artifact": "workspace:*",
+    "@lobechat/local-file-shell": "workspace:*",
+    "@lobechat/types": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "fast-glob": "^3.3.3",
+    "fflate": "^0.8.3",
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "vitest": "5.0.0"
+  }
+}

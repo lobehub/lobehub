@@ -1,0 +1,1485 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => {
+  const sandboxService = {
+    callTool: vi.fn(),
+    capabilities: {
+      backgroundCommands: true,
+      exportFile: true,
+      files: true,
+      languages: ['python'],
+      persistentSession: true,
+      shell: true,
+      skillScripts: true,
+    },
+    exportAndUploadFile: vi.fn(),
+    kind: 'onlyboxes',
+  };
+
+  return {
+    buildDeviceLhEnv: vi.fn(),
+    checkHash: vi.fn(),
+    createSandboxService: vi.fn(function () {
+      return sandboxService;
+    }),
+    executeToolCall: vi.fn(),
+    fileService: {
+      getFullFileUrl: vi.fn(),
+    },
+    findAll: vi.fn(),
+    findById: vi.fn(),
+    findByName: vi.fn(),
+    isLhCommand: vi.fn(),
+    getAgentConfigById: vi.fn(),
+    getAgentSkills: vi.fn(),
+    getUserSettings: vi.fn(),
+    marketService: {},
+    prepareSkillDirectory: vi.fn(),
+    preprocessLhCommand: vi.fn(),
+    readResource: vi.fn(),
+    resolveContentWorkspaceId: vi.fn(),
+    resolveRunWorkspaceId: vi.fn(),
+    sandboxService,
+  };
+});
+
+vi.mock('@lobechat/builtin-skills', () => ({
+  builtinSkills: [],
+}));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(function () {
+    return {
+      getAgentConfigById: mocks.getAgentConfigById,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/agentSkill', () => ({
+  AgentSkillModel: vi.fn(function () {
+    return {
+      findAll: mocks.findAll,
+      findById: mocks.findById,
+      findByName: mocks.findByName,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn(function () {
+    return {
+      checkHash: mocks.checkHash,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: vi.fn(function () {
+    return {
+      getUserSettings: mocks.getUserSettings,
+    };
+  }),
+}));
+
+vi.mock('@/helpers/skillFilters', () => ({
+  filterBuiltinSkills: vi.fn(function (skills: unknown) {
+    return skills;
+  }),
+}));
+
+vi.mock('@/server/services/agentDocuments', () => ({
+  AgentDocumentsService: vi.fn(function () {
+    return {
+      getAgentSkills: mocks.getAgentSkills,
+    };
+  }),
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(function () {
+    return mocks.fileService;
+  }),
+}));
+
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn(function () {
+    return mocks.marketService;
+  }),
+}));
+
+vi.mock('@/server/services/sandbox', async () => {
+  const actual = await vi.importActual('@/server/services/sandbox');
+
+  return {
+    ...(actual as Record<string, unknown>),
+    createSandboxService: mocks.createSandboxService,
+  };
+});
+
+vi.mock('@/server/services/skill/resource', () => ({
+  SkillResourceService: vi.fn(function () {
+    return {
+      readResource: mocks.readResource,
+    };
+  }),
+}));
+
+vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
+  buildDeviceLhEnv: mocks.buildDeviceLhEnv,
+  isLhCommand: mocks.isLhCommand,
+  preprocessLhCommand: mocks.preprocessLhCommand,
+}));
+
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: {
+    prepareSkillDirectory: mocks.prepareSkillDirectory,
+  },
+}));
+
+vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
+  executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
+    mocks.executeToolCall(...args),
+}));
+
+vi.mock('../resolveWorkspaceScope', () => ({
+  resolveContentWorkspaceId: mocks.resolveContentWorkspaceId,
+  resolveRunWorkspaceId: mocks.resolveRunWorkspaceId,
+}));
+
+describe('skillsRuntime', () => {
+  it.each(
+    (['runCommand', 'execScript', 'exportFile'] as const).flatMap((api) =>
+      (['returned', 'thrown', 'stderr'] as const)
+        .filter((mode) => api !== 'exportFile' || mode !== 'stderr')
+        .map((mode) => ({ api, mode })),
+    ),
+  )(
+    'preserves sandbox $mode errors through the $api execution pipeline',
+    async ({ api, mode }) => {
+      const { skillsRuntime } = await import('../skills');
+      const { ToolExecutionService } = await import('../../index');
+      const error = { name: 'MarketAPIError', message: 'Forbidden' };
+      mocks.sandboxService.callTool.mockResolvedValue({ error, result: null, success: false });
+      mocks.sandboxService.exportAndUploadFile.mockResolvedValue({
+        error,
+        filename: 'page.html',
+        success: false,
+      });
+      if (mode === 'thrown') {
+        const thrown = Object.assign(new Error('Forbidden'), { status: 403 });
+        mocks.sandboxService.callTool.mockRejectedValue(thrown);
+        mocks.sandboxService.exportAndUploadFile.mockRejectedValue(thrown);
+      } else if (mode === 'stderr') {
+        mocks.sandboxService.callTool.mockResolvedValue({
+          success: true,
+          result: { success: false, exitCode: 1, stdout: '', stderr: 'Forbidden' },
+        });
+      }
+      const runtime = await skillsRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+      const execute = () =>
+        api === 'exportFile'
+          ? runtime.exportFile({ path: '/page.html', filename: 'page.html' })
+          : runtime[api]({ command: 'echo example', description: 'Example' });
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute } as never,
+        mcpService: {} as never,
+      });
+      const result = await service.executeTool(
+        {
+          apiName: api,
+          arguments: '{}',
+          id: 'refusal',
+          identifier: 'lobe-skills',
+          type: 'builtin',
+        },
+        { toolManifestMap: {} },
+      );
+      expect(result.success).toBe(false);
+      if (mode === 'stderr') {
+        expect(result.content).toContain('Forbidden');
+        expect(result.content).not.toContain('Do not retry');
+        expect(result.error?.code).not.toBe('FORBIDDEN');
+        return;
+      }
+      expect(JSON.parse(result.content).error).toMatchObject({
+        code: 'FORBIDDEN',
+        kind: 'stop',
+        message: 'Forbidden',
+        hint: expect.stringContaining('Do not retry'),
+      });
+      expect(result.error).toMatchObject({ code: 'FORBIDDEN', kind: 'stop' });
+    },
+    30_000,
+  );
+
+  it.each(
+    (['runCommand', 'execScript', 'exportFile'] as const).flatMap((api) =>
+      (['returned', 'thrown', 'stderr'] as const)
+        .filter((mode) => api !== 'exportFile' || mode !== 'stderr')
+        .map((mode) => ({ api, mode })),
+    ),
+  )(
+    'does not replay the side-effecting $api after a $mode timeout',
+    async ({ api, mode }) => {
+      const { executeToolWithRetry } = await import('@lobechat/agent-runtime');
+      const { skillsRuntime } = await import('../skills');
+      const { ToolExecutionService } = await import('../../index');
+      // A timeout at the gateway says nothing about whether the command ran:
+      // the sandbox may already have launched it, so replaying it re-runs any
+      // non-idempotent side effect (a background script started three times).
+      const error = { message: 'Gateway Timeout', name: 'MarketAPIError' };
+      const call =
+        mode === 'returned'
+          ? vi
+              .fn()
+              .mockResolvedValue({ error, filename: 'page.html', result: null, success: false })
+          : mode === 'thrown'
+            ? vi
+                .fn()
+                .mockRejectedValue(Object.assign(new Error('Gateway Timeout'), { status: 504 }))
+            : vi.fn().mockResolvedValue({
+                result: {
+                  exitCode: 28,
+                  stderr: 'curl: (28) Connection timed out after 30001 milliseconds',
+                  stdout: '',
+                  success: false,
+                },
+                success: true,
+              });
+      mocks.sandboxService.callTool.mockImplementation(call);
+      mocks.sandboxService.exportAndUploadFile.mockImplementation(call);
+      const runtime = await skillsRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+      const execute = () =>
+        api === 'exportFile'
+          ? runtime.exportFile({ path: '/page.html', filename: 'page.html' })
+          : runtime[api]({ command: 'nohup python extract.py &', description: 'Extract' });
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute } as never,
+        mcpService: {} as never,
+      });
+
+      const { attempts, result } = await executeToolWithRetry(
+        () =>
+          service.executeTool(
+            {
+              apiName: api,
+              arguments: '{}',
+              id: 'side-effect',
+              identifier: 'lobe-skills',
+              type: 'builtin',
+            },
+            { toolManifestMap: {} },
+          ),
+        // Same budget as the server tool transport (TOOL_MAX_RETRIES).
+        { maxRetries: 2 },
+      );
+
+      expect(call).toHaveBeenCalledTimes(1);
+      expect(attempts).toBe(1);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ kind: 'stop' });
+    },
+    60_000,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mocks.checkHash.mockResolvedValue({ isExist: true, url: 'skills/user-skill.zip' });
+    mocks.fileService.getFullFileUrl.mockResolvedValue('https://files.example.com/user-skill.zip');
+    mocks.findAll.mockResolvedValue({ data: [], total: 0 });
+    mocks.findById.mockResolvedValue(undefined);
+    mocks.getAgentConfigById.mockResolvedValue(undefined);
+    mocks.findByName.mockImplementation(async (name: string) => {
+      if (name === 'user-skill') {
+        return {
+          id: 'user-skill-id',
+          name: 'user-skill',
+          zipFileHash: 'zip-hash-1',
+        };
+      }
+
+      return undefined;
+    });
+    mocks.getAgentSkills.mockResolvedValue([]);
+    mocks.getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
+    // Pass-through by default: the runtime now routes both runCommand and
+    // execScript through preprocessing, so a fixed return value would rewrite
+    // every command in the suite.
+    mocks.preprocessLhCommand.mockImplementation(async (command: string) => ({
+      command,
+      isLhCommand: false,
+      skipSkillLookup: false,
+    }));
+    mocks.isLhCommand.mockReturnValue(false);
+    mocks.buildDeviceLhEnv.mockReturnValue(undefined);
+    // Mirrors the real helper: the context's own id when it has one, the
+    // agent's workspace when the dispatch path dropped it. Tests that exercise
+    // the recovery override this with a value of their own.
+    mocks.resolveContentWorkspaceId.mockImplementation(
+      async (ctx?: { workspaceId?: string }) => ctx?.workspaceId,
+    );
+    mocks.resolveRunWorkspaceId.mockResolvedValue(undefined);
+    mocks.sandboxService.callTool.mockResolvedValue({
+      result: {
+        exitCode: 0,
+        output: 'ok',
+        stdout: 'ok',
+        success: true,
+      },
+      success: true,
+    });
+  });
+
+  // First dynamic `import('../skills')` in the file pays the real transform
+  // cost for this (now larger) module — default 5s timeout is marginal for
+  // that cold cost alone, independent of test logic.
+  it('executes scripts through the sandbox service and only attaches persisted skill zips', async () => {
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await runtime.execScript({
+      activatedSkills: [
+        { id: 'user-skill-id', name: 'user-skill' },
+        { id: 'builtin-skill-id', name: 'builtin-skill' },
+      ],
+      command: 'python scripts/run.py',
+      description: 'Run skill script',
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.findByName).toHaveBeenCalledWith('user-skill');
+    expect(mocks.findByName).toHaveBeenCalledWith('builtin-skill');
+    expect(mocks.checkHash).toHaveBeenCalledWith('zip-hash-1');
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+      'execScript',
+      expect.objectContaining({
+        command: 'python scripts/run.py',
+        description: 'Run skill script',
+        skillZipUrls: {
+          'user-skill': 'https://files.example.com/user-skill.zip',
+        },
+      }),
+    );
+  }, 20_000);
+
+  it('tags sandbox exec results with executionEnv for plugin-state observability', async () => {
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await runtime.execScript({
+      activatedSkills: [],
+      command: 'echo hi',
+      description: 'plain command',
+    });
+
+    expect(result.state).toMatchObject({ executionEnv: 'sandbox' });
+  });
+
+  it('passes workspace scope when preprocessing sandbox lh commands', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    await runtime.runCommand({ command: 'lh agent edit agt_123 -s "new prompt"' });
+
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent edit agt_123 -s "new prompt"',
+      'user-1',
+      'workspace-1',
+      false,
+      // These runtimes carry no run context, so there is no operation to forward.
+      undefined,
+    );
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith('runCommand', {
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+    });
+  });
+
+  it('recovers workspace scope for sandbox lh commands when context lost it', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+    mocks.isLhCommand.mockReturnValue(true);
+    mocks.resolveContentWorkspaceId.mockResolvedValueOnce('workspace-1');
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      agentId: 'agent-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    await runtime.runCommand({ command: 'lh agent edit agt_123 -s "new prompt"' });
+
+    expect(mocks.resolveContentWorkspaceId).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agent-1' }),
+    );
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent edit agt_123 -s "new prompt"',
+      'user-1',
+      'workspace-1',
+      false,
+      // These runtimes carry no run context, so there is no operation to forward.
+      undefined,
+    );
+  });
+
+  // The client-side executor (routers/tools/market.ts) has always preprocessed
+  // execScript too; on Cloud, where gateway mode routes through this runtime
+  // instead, `lh` inside execScript reached the sandbox raw — no CLI, no
+  // credentials, no workspace scope.
+  it('forwards the run operation id so a sandbox dispatch can be attributed', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command: 'lh agent run -a agt_123',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      operationId: 'op-abc',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    await runtime.execScript({
+      activatedSkills: [],
+      command: 'lh agent run -a agt_123',
+      description: 'Delegate',
+    });
+
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent run -a agt_123',
+      'user-1',
+      'workspace-1',
+      false,
+      'op-abc',
+    );
+  });
+
+  it('preprocesses lh commands passed to execScript, not just runCommand', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command:
+        'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_123 -t x',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    await runtime.execScript({
+      activatedSkills: [],
+      command: 'lh agent edit agt_123 -t x',
+      description: 'Edit myself',
+    });
+
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent edit agt_123 -t x',
+      'user-1',
+      'workspace-1',
+      false,
+      // No run context here, so there is no operation for a dispatch to be
+      // attributed to.
+      undefined,
+    );
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+      'execScript',
+      expect.objectContaining({
+        command:
+          'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_123 -t x',
+      }),
+    );
+  });
+
+  it('surfaces a preprocessing auth failure from execScript instead of running raw', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command: 'lh agent list',
+      error: 'Failed to authenticate for CLI execution',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await runtime.execScript({
+      activatedSkills: [],
+      command: 'lh agent list',
+      description: 'List agents',
+    });
+
+    expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
+    expect(result.state).toMatchObject({ success: false });
+  });
+
+  it('scopes device-routed execScript lh commands to the run workspace', async () => {
+    mocks.buildDeviceLhEnv.mockReturnValue({ LOBEHUB_WORKSPACE_ID: 'workspace-1' });
+    mocks.resolveContentWorkspaceId.mockResolvedValue('workspace-1');
+    mocks.executeToolCall.mockResolvedValue({
+      state: { exitCode: 0, stdout: 'ok', success: true },
+      success: true,
+    });
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      activeDeviceId: 'device-1',
+      agentId: 'agent-1',
+      operationId: 'op-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    await runtime.execScript({
+      activatedSkills: [],
+      command: 'lh agent edit agt_123 -t x',
+      description: 'Edit myself',
+    });
+
+    const [, toolCall] = mocks.executeToolCall.mock.calls.at(-1)!;
+    expect(mocks.buildDeviceLhEnv.mock.calls[0][0]).toMatchObject({ operationId: 'op-1' });
+    // Auth stays with the device — the caller's token must not travel there.
+    expect(JSON.parse(toolCall.arguments).env).not.toHaveProperty('LOBEHUB_JWT');
+  });
+
+  describe('disabled skill enforcement', () => {
+    it('refuses to activate a DB skill the agent has disabled, even though it exists', async () => {
+      mocks.getAgentConfigById.mockResolvedValue({
+        plugins: [{ identifier: 'user-skill-identifier', mode: 'disabled' }],
+      });
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? { id: 'user-skill-id', identifier: 'user-skill-identifier', name: 'user-skill' }
+          : undefined,
+      );
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('still activates the skill when it is not disabled', async () => {
+      mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? {
+              content: '# User skill',
+              id: 'user-skill-id',
+              identifier: 'user-skill-identifier',
+              name: 'user-skill',
+            }
+          : undefined,
+      );
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  /**
+   * Agent Share's per-skill allowlist, enforced where the content is actually
+   * handed out rather than only where the tool is assembled. The gate upstream
+   * already trims `<available_skills>`, but the model can name any string, and
+   * a DB miss falls through to the builtin / agent-document lists — so every
+   * door has to answer the same question.
+   */
+  describe('agent share skill grants', () => {
+    const buildVisitorRuntime = async (skillGrants: string[]) => {
+      const { skillsRuntime } = await import('../skills');
+
+      return skillsRuntime.factory({
+        agentId: 'agent-1',
+        agentShareVisitor: { skillGrants },
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      } as never);
+    };
+
+    beforeEach(() => {
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? {
+              content: '# User skill',
+              id: 'user-skill-id',
+              identifier: 'user-skill-identifier',
+              name: 'user-skill',
+              resources: [{ path: 'notes.md' }],
+            }
+          : undefined,
+      );
+      mocks.findById.mockImplementation(async (id: string) =>
+        id === 'user-skill-id'
+          ? {
+              content: '# User skill',
+              id: 'user-skill-id',
+              identifier: 'user-skill-identifier',
+              name: 'user-skill',
+              resources: [{ path: 'notes.md' }],
+            }
+          : undefined,
+      );
+      mocks.readResource.mockResolvedValue({ content: 'secret notes', path: 'notes.md' });
+    });
+
+    it('activates a DB skill the creator granted', async () => {
+      const runtime = await buildVisitorRuntime(['user-skill-identifier']);
+
+      expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(true);
+    });
+
+    it('refuses a DB skill the creator did not grant, even though the row exists', async () => {
+      const runtime = await buildVisitorRuntime(['some-other-skill']);
+
+      expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(false);
+    });
+
+    it('refuses every skill when the creator revoked all of them', async () => {
+      const runtime = await buildVisitorRuntime([]);
+
+      expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(false);
+    });
+
+    it('refuses readReference on an ungranted skill', async () => {
+      // A second door into the same content: `readReference` streams the
+      // skill's attached files, so blocking only `activateSkill` would leave the
+      // reference files readable to any visitor who guesses a path.
+      const runtime = await buildVisitorRuntime(['some-other-skill']);
+
+      const result = await runtime.readReference({ id: 'user-skill', path: 'notes.md' });
+
+      expect(result.success).toBe(false);
+      expect(mocks.readResource).not.toHaveBeenCalled();
+    });
+
+    it('allows readReference on a granted skill', async () => {
+      // Pins the test above to the GRANT rather than to a lookup miss.
+      const runtime = await buildVisitorRuntime(['user-skill-identifier']);
+
+      const result = await runtime.readReference({ id: 'user-skill', path: 'notes.md' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('secret notes');
+    });
+
+    it('does not leak ungranted skill names in the not-found catalog', async () => {
+      // `activateSkill`'s failure message echoes the full skill list back to the
+      // model. Unfiltered, a visitor learns the names and descriptions of every
+      // skill the creator owns just by guessing one wrong name.
+      mocks.findAll.mockResolvedValue({
+        data: [
+          { description: 'Internal audit checklist', identifier: 'secret', name: 'secret-skill' },
+          { description: 'Public', identifier: 'user-skill-identifier', name: 'user-skill' },
+        ],
+        total: 2,
+      });
+      const runtime = await buildVisitorRuntime(['user-skill-identifier']);
+
+      const result = await runtime.activateSkill({ name: 'no-such-skill' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).not.toContain('secret-skill');
+      expect(result.content).not.toContain('Internal audit checklist');
+      expect(result.content).toContain('user-skill');
+    });
+
+    it('drops ungranted agent-document skills before they reach the runtime', async () => {
+      // The DB lookup misses for these, so they resolve off the injected
+      // builtin list instead — a fall-through path the DB check never sees.
+      mocks.getAgentSkills.mockResolvedValue([
+        {
+          content: '# Granted bundle',
+          description: 'granted',
+          identifier: 'agent-skills:granted',
+          name: 'granted-bundle',
+        },
+        {
+          content: '# Secret bundle',
+          description: 'secret',
+          identifier: 'agent-skills:secret',
+          name: 'secret-bundle',
+        },
+      ]);
+      const runtime = await buildVisitorRuntime(['agent-skills:granted']);
+
+      expect((await runtime.activateSkill({ name: 'granted-bundle' })).success).toBe(true);
+      expect((await runtime.activateSkill({ name: 'secret-bundle' })).success).toBe(false);
+    });
+
+    it('leaves a non-share run completely unfiltered', async () => {
+      // No `agentShareVisitor` means no per-skill allowlist at all: the creator's
+      // own run must keep reaching every skill it owns.
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(true);
+    });
+  });
+
+  // Regression guard for the server/gateway migration: when the execution plan
+  // routed a device (activeDeviceId present), execScript must run ON the device
+  // — prepare the skill archives via the prepareSkillDirectory RPC and execute
+  // through local-system over the gateway — never in the cloud sandbox.
+  describe('device execution branch', () => {
+    it('prepares archives on the device and runs the command with cwd = extracted dir', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        extractedDir: '/home/user/.lobehub/skills/extracted/zip-hash-1',
+        success: true,
+      });
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'ok',
+        state: { exitCode: 0, stdout: 'ok', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+        command: 'python scripts/run.py',
+        description: 'Run skill script',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ executionEnv: 'device' });
+      expect(mocks.prepareSkillDirectory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceId: 'device-1',
+          url: 'https://files.example.com/user-skill.zip',
+          userId: 'user-1',
+          zipHash: 'zip-hash-1',
+        }),
+      );
+      expect(mocks.executeToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'device-1', userId: 'user-1' }),
+        expect.objectContaining({
+          apiName: 'runCommand',
+          arguments: JSON.stringify({
+            command: 'python scripts/run.py',
+            cwd: '/home/user/.lobehub/skills/extracted/zip-hash-1',
+          }),
+          identifier: 'lobe-local-system',
+        }),
+        undefined,
+      );
+      expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('fails explicitly (no sandbox fallback) when the device cannot prepare a skill', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        error: 'Failed to download skill archive: 404 Not Found',
+        success: false,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+        command: 'python scripts/run.py',
+        description: 'Run skill script',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('404 Not Found');
+      expect(mocks.executeToolCall).not.toHaveBeenCalled();
+      expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
+    });
+
+    // Version-skew window: an old client build replies with the dispatcher's
+    // deterministic unknown-method error — the ONE prepare failure that falls
+    // back to the sandbox, with an explicit disclosure note for the model.
+    it('falls back to the sandbox (with a disclosure note) when the client predates the RPC', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        error: 'Unknown device RPC method: prepareSkillDirectory',
+        success: false,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+        command: 'python scripts/run.py',
+        description: 'Run skill script',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ executionEnv: 'sandbox' });
+      expect(result.content).toContain('update their LobeHub app');
+      expect(mocks.executeToolCall).not.toHaveBeenCalled();
+      expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+        'execScript',
+        expect.objectContaining({ command: 'python scripts/run.py' }),
+      );
+    });
+
+    // A multi-MB skill on a slow link outlasts the prepare deadline while the
+    // device keeps downloading; the next call reuses that work. Telling the
+    // model the app may be outdated made it give up and blame the user's app.
+    it.each([
+      '{"error":"TIMEOUT","success":false}',
+      'DEVICE_RESPONSE_TIMEOUT (HTTP 504)',
+      'The operation was aborted due to timeout',
+    ])(
+      'asks for a later retry, not an app update, when the prepare times out (%s)',
+      async (error) => {
+        mocks.prepareSkillDirectory.mockResolvedValue({ error, success: false });
+
+        const { skillsRuntime } = await import('../skills');
+        const runtime = await skillsRuntime.factory({
+          activeDeviceId: 'device-1',
+          serverDB: {} as never,
+          toolManifestMap: {},
+          topicId: 'topic-1',
+          userId: 'user-1',
+        });
+
+        const result = await runtime.execScript({
+          activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+          command: 'python scripts/run.py',
+          description: 'Run skill script',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.content).toContain('did not finish in time');
+        expect(result.content).toContain('run the same execScript again');
+        expect(result.content).not.toContain('may need an update');
+        expect(mocks.executeToolCall).not.toHaveBeenCalled();
+      },
+    );
+
+    it('keeps reporting a finished download failure that merely mentions a timeout', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        error: 'Failed to download skill package: 504 Gateway Timeout',
+        success: false,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+        command: 'python scripts/run.py',
+        description: 'Run skill script',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Failed to download skill package: 504 Gateway Timeout');
+      expect(result.content).not.toContain('did not finish in time');
+    });
+
+    it('runs without a skill dir (workingDirectory cwd) when no archive exists', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'ok',
+        state: { exitCode: 0, stdout: 'ok', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+        workingDirectory: '/Users/me/project',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'builtin-skill-id', name: 'builtin-skill' }],
+        command: 'echo hi',
+        description: 'no archive',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mocks.prepareSkillDirectory).not.toHaveBeenCalled();
+      expect(mocks.executeToolCall).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          arguments: JSON.stringify({ command: 'echo hi', cwd: '/Users/me/project' }),
+        }),
+        undefined,
+      );
+    });
+
+    // Filesystem (project/device) skills have no DB archive — their SKILL.md
+    // directory on the device is the cwd, and the last activated skill wins
+    // over earlier archive-backed ones.
+    it('uses the project skill directory as cwd, winning over earlier archives', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        extractedDir: '/home/user/.lobehub/skills/extracted/zip-hash-1',
+        success: true,
+      });
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'ok',
+        state: { exitCode: 0, stdout: 'ok', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        projectSkills: [
+          { location: '/ws/.agents/skills/foo/SKILL.md', name: 'foo', source: 'project' },
+        ],
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [
+          { id: 'user-skill-id', name: 'user-skill' },
+          // Filesystem activations carry no DB id — matching is by name only.
+          { name: 'foo' },
+        ],
+        command: 'python scripts/run.py',
+        description: 'Run project skill script',
+      });
+
+      expect(result.success).toBe(true);
+      // The archive-backed skill is still prepared (activated earlier)...
+      expect(mocks.prepareSkillDirectory).toHaveBeenCalledTimes(1);
+      // ...but the project skill activated last wins the cwd.
+      expect(mocks.executeToolCall).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          arguments: JSON.stringify({
+            command: 'python scripts/run.py',
+            cwd: '/ws/.agents/skills/foo',
+          }),
+        }),
+        undefined,
+      );
+    });
+
+    // Archive prepares are full device-gateway round-trips and activatedSkills
+    // accumulates over the conversation — they must fire concurrently, while
+    // the activation-order semantics (last resolvable wins the cwd) stay
+    // intact.
+    it('fires archive prepares concurrently and the last resolvable skill wins the cwd', async () => {
+      mocks.findByName.mockImplementation(async (name: string) => {
+        if (name === 'skill-a') return { id: 'a-id', name: 'skill-a', zipFileHash: 'hash-a' };
+        if (name === 'skill-b') return { id: 'b-id', name: 'skill-b', zipFileHash: 'hash-b' };
+        return undefined;
+      });
+      mocks.checkHash.mockImplementation(async (hash: string) => ({
+        isExist: true,
+        url: `skills/${hash}.zip`,
+      }));
+      mocks.fileService.getFullFileUrl.mockImplementation(
+        async (url: string) => `https://files.example.com/${url}`,
+      );
+
+      // Hold both prepares pending to prove the second RPC fires before the
+      // first resolves (a sequential await chain would deadlock this test).
+      const resolvers: ((value: { extractedDir: string; success: boolean }) => void)[] = [];
+      mocks.prepareSkillDirectory.mockImplementation(function () {
+        return new Promise((resolve) => resolvers.push(resolve));
+      });
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'ok',
+        state: { exitCode: 0, stdout: 'ok', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const pending = runtime.execScript({
+        activatedSkills: [
+          { id: 'a-id', name: 'skill-a' },
+          { id: 'b-id', name: 'skill-b' },
+        ],
+        command: 'python scripts/run.py',
+        description: 'multi skill',
+      });
+
+      await vi.waitFor(() => expect(mocks.prepareSkillDirectory).toHaveBeenCalledTimes(2));
+      resolvers[0]({ extractedDir: '/dev/extracted/hash-a', success: true });
+      resolvers[1]({ extractedDir: '/dev/extracted/hash-b', success: true });
+
+      const result = await pending;
+      expect(result.success).toBe(true);
+      expect(mocks.executeToolCall).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          arguments: JSON.stringify({
+            command: 'python scripts/run.py',
+            cwd: '/dev/extracted/hash-b',
+          }),
+        }),
+        undefined,
+      );
+    });
+
+    // With concurrent prepares, error reporting must still follow activation
+    // order: the FIRST failing skill is the one surfaced, regardless of which
+    // RPC settles first.
+    it('reports the first failing skill in activation order despite concurrent prepares', async () => {
+      mocks.findByName.mockImplementation(async (name: string) => {
+        if (name === 'skill-a') return { id: 'a-id', name: 'skill-a', zipFileHash: 'hash-a' };
+        if (name === 'skill-b') return { id: 'b-id', name: 'skill-b', zipFileHash: 'hash-b' };
+        return undefined;
+      });
+      mocks.checkHash.mockImplementation(async (hash: string) => ({
+        isExist: true,
+        url: `skills/${hash}.zip`,
+      }));
+      mocks.fileService.getFullFileUrl.mockImplementation(
+        async (url: string) => `https://files.example.com/${url}`,
+      );
+      mocks.prepareSkillDirectory.mockImplementation(async ({ zipHash }: { zipHash: string }) =>
+        zipHash === 'hash-a'
+          ? { error: 'Failed to download skill archive: 404 Not Found', success: false }
+          : { extractedDir: '/dev/extracted/hash-b', success: true },
+      );
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [
+          { id: 'a-id', name: 'skill-a' },
+          { id: 'b-id', name: 'skill-b' },
+        ],
+        command: 'python scripts/run.py',
+        description: 'multi skill',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('skill-a');
+      expect(result.content).toContain('404 Not Found');
+      expect(mocks.executeToolCall).not.toHaveBeenCalled();
+      expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
+    });
+
+    // A command that outlives the shell observation window comes back with no
+    // exitCode — it must surface as still running (with a pollable shell_id),
+    // not as a successful completion.
+    it('reports a still-running command instead of pretending completion', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'Command is still running after the wait window.',
+        state: { commandId: 'shell-9', stdout: '', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [],
+        command: 'sleep 600',
+        description: 'long script',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ executionEnv: 'device', shellId: 'shell-9' });
+      expect(result.state).not.toHaveProperty('exitCode', 0);
+      expect(result.content).toContain('still running');
+      expect(result.content).toContain('shell-9');
+      expect(result.content).not.toContain('completed successfully');
+    });
+
+    // The device ComputerRuntime reports service failures (spawn error, shell
+    // lost) with a delivered envelope: `success: true`, `state.success:
+    // false`, and no exitCode — they must surface as failures, not as a
+    // still-running command.
+    it('reports failure when the device service fails without an exit code', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'spawn ENOENT',
+        state: { error: 'spawn ENOENT', isBackground: false, success: false },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [],
+        command: 'python scripts/run.py',
+        description: 'spawn failure',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('spawn ENOENT');
+      expect(result.content).not.toContain('still running');
+    });
+
+    // The device shell observation reports success: true for any delivered
+    // observation — the actual exit status only lives in exitCode.
+    it('reports failure when the script exits non-zero despite a successful observation', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: '',
+        state: { exitCode: 2, stderr: 'boom', stdout: '', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [],
+        command: 'exit 2',
+        description: 'failing script',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.state).toMatchObject({ executionEnv: 'device', exitCode: 2 });
+      expect(result.content).toContain('boom');
+    });
+
+    it('forwards executionTimeoutMs as the shell observation timeout in the runCommand args', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'ok',
+        state: { exitCode: 0, stdout: 'ok', success: true },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        executionTimeoutMs: 300_000,
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      await runtime.execScript({
+        activatedSkills: [],
+        command: 'sleep 60',
+        description: 'long script',
+      });
+
+      expect(mocks.executeToolCall).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          arguments: JSON.stringify({ command: 'sleep 60', timeout: 300_000 }),
+        }),
+        300_000,
+      );
+    });
+
+    // Large streams are truncated to a preview device-side with the full
+    // output saved to disk — dropping state.outputFiles would lose the only
+    // retrieval path for the truncated output.
+    it('carries saved-output file paths through for truncated device output', async () => {
+      mocks.executeToolCall.mockResolvedValue({
+        content: 'preview…',
+        state: {
+          exitCode: 0,
+          outputFiles: {
+            stdout: {
+              path: '/tmp/lobe-shell/shell-1.stdout.log',
+              size: 5_242_880,
+              truncated: true,
+            },
+          },
+          stdout: 'preview…',
+          success: true,
+        },
+        success: true,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [],
+        command: 'cat big.log',
+        description: 'noisy script',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('/tmp/lobe-shell/shell-1.stdout.log');
+      expect(result.state).toMatchObject({
+        outputFiles: { stdout: expect.objectContaining({ truncated: true }) },
+      });
+    });
+
+    // The device manifest hides the sandbox-only APIs, but the builtin
+    // executor dispatches any method on the runtime regardless of the
+    // manifest — a prompt-following or hallucinated call must be refused at
+    // execution time, not silently run in the sandbox.
+    it('refuses the sandbox runCommand while a device is routed', async () => {
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.runCommand({ command: 'ls' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('lobe-local-system');
+      expect(mocks.createSandboxService).not.toHaveBeenCalled();
+    });
+
+    it('refuses the sandbox exportFile while a device is routed', async () => {
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.exportFile({ filename: 'out.csv', path: '/tmp/out.csv' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain("already on the user's machine");
+      expect(mocks.sandboxService.exportAndUploadFile).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression guard for the device-gating fix: builtin skills must be filtered
+  // with canExecuteOnDevice derived from the run's activeDeviceId, not the
+  // compile-time isDesktop constant (always false on the server).
+  it('gates device-only builtin skills on activeDeviceId presence', async () => {
+    const { filterBuiltinSkills } = await import('@/helpers/skillFilters');
+    const { skillsRuntime } = await import('../skills');
+
+    await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(filterBuiltinSkills).toHaveBeenLastCalledWith(expect.anything(), {
+      canExecuteOnDevice: false,
+    });
+
+    await skillsRuntime.factory({
+      activeDeviceId: 'device-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(filterBuiltinSkills).toHaveBeenLastCalledWith(expect.anything(), {
+      canExecuteOnDevice: true,
+    });
+  });
+
+  // Regression guard for the split-sandbox bug: the sandbox session is keyed by
+  // the acting account, which is derived from the trusted-client token. Without
+  // `workspaceId` this runtime acted as the personal account while `lobe-creds`
+  // and `lobe-cloud-sandbox` (which pass it) acted as the workspace, so
+  // credentials injected for a workspace topic were invisible to every command
+  // run here.
+  it('scopes the market identity to the run workspace so sandbox calls share one session', async () => {
+    const { MarketService } = await import('@/server/services/market');
+    const { skillsRuntime } = await import('../skills');
+
+    // The id now comes from the recovery helper, which answers with the
+    // context's own value when it has one and with the agent's workspace when
+    // the dispatch path dropped it.
+    mocks.resolveContentWorkspaceId.mockResolvedValueOnce('workspace-1');
+
+    await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    expect(MarketService).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: 'workspace-1' }),
+      }),
+    );
+
+    await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(MarketService).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: undefined }),
+      }),
+    );
+  });
+
+  // The dispatch and resume paths reach this runtime without `workspaceId`, and
+  // a workspace topic resolved in the personal scope came back as "no such
+  // topic" — the run went ephemeral, `pwd` answered `/workspace`, and whatever
+  // the conversation wrote was thrown away with the session.
+  it('recovers the workspace from the agent when the context lost it', async () => {
+    const { MarketService } = await import('@/server/services/market');
+    const { skillsRuntime } = await import('../skills');
+
+    mocks.resolveContentWorkspaceId.mockImplementation(async () => 'workspace-1');
+
+    await skillsRuntime.factory({
+      agentId: 'agt-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    // The same id the session is keyed by, so the sandbox this runtime reaches
+    // is the workspace's and not the member's personal one.
+    expect(mocks.resolveContentWorkspaceId).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agt-1' }),
+    );
+    expect(MarketService).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({ workspaceId: 'workspace-1' }),
+      }),
+    );
+  });
+});

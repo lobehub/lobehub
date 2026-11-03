@@ -1,0 +1,390 @@
+import type { ChatModelCard } from '@lobechat/types';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
+import { ModelProvider } from 'model-bank';
+import type { ChatResponse, Tool } from 'ollama/browser';
+import { Ollama } from 'ollama/browser';
+import type { ClientOptions } from 'openai';
+
+import type { LobeRuntimeAI } from '../../core/BaseAI';
+import {
+  parseStructuredOutputText,
+  parseStructuredToolArguments,
+  StructuredOutputError,
+} from '../../core/openaiCompatibleFactory/structuredOutput';
+import { convertIterableToStream, createModelPullStream, OllamaStream } from '../../core/streams';
+import type {
+  ChatMethodOptions,
+  ChatStreamPayload,
+  Embeddings,
+  EmbeddingsPayload,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
+  ModelRequestOptions,
+  OpenAIChatMessage,
+  PullModelParams,
+} from '../../types';
+import { AgentRuntimeErrorType } from '../../types/error';
+import { AgentRuntimeError } from '../../utils/createError';
+import { debugStream } from '../../utils/debugStream';
+import { createErrorResponse } from '../../utils/errorResponse';
+import { StreamingResponse } from '../../utils/response';
+import { parseDataUri } from '../../utils/uriParser';
+import type { OllamaMessage } from './type';
+
+export interface OllamaModelCard {
+  name: string;
+}
+
+export const params = {
+  baseURL: undefined,
+  debug: {
+    chatCompletion: () => process.env.DEBUG_OLLAMA_CHAT_COMPLETION === '1',
+  },
+  provider: ModelProvider.Ollama,
+};
+
+export class LobeOllamaAI implements LobeRuntimeAI {
+  private client: Ollama;
+
+  baseURL?: string;
+
+  constructor({ baseURL }: ClientOptions = {}) {
+    try {
+      if (baseURL) new URL(baseURL);
+    } catch (e) {
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidOllamaArgs, e);
+    }
+
+    this.client = new Ollama(!baseURL ? undefined : { host: baseURL });
+
+    if (baseURL) this.baseURL = baseURL;
+  }
+
+  async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+    try {
+      const abort = () => {
+        this.client.abort();
+        options?.signal?.removeEventListener('abort', abort);
+      };
+
+      options?.signal?.addEventListener('abort', abort);
+
+      const response = await this.client.chat({
+        messages: await this.buildOllamaMessages(payload.messages),
+        model: payload.model,
+        options: {
+          frequency_penalty: payload.frequency_penalty,
+          presence_penalty: payload.presence_penalty,
+          temperature: payload.temperature !== undefined ? payload.temperature / 2 : undefined,
+          top_p: payload.top_p,
+        },
+        stream: true,
+        tools: payload.tools as Tool[],
+      });
+
+      const stream = convertIterableToStream(response);
+      const [prod, debug] = stream.tee();
+
+      if (process.env.DEBUG_OLLAMA_CHAT_COMPLETION === '1') {
+        debugStream(debug).catch(console.error);
+      }
+
+      return StreamingResponse(OllamaStream(prod, options?.callback), {
+        headers: options?.headers,
+      });
+    } catch (error) {
+      throw await this.toRuntimeError(error);
+    }
+  }
+
+  async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    const { messages, model, schema, thinking, tools } = payload;
+    if (!tools && !schema) throw new Error('tools or schema is required');
+
+    // `client.abort()` only reaches streamed requests, so a cancelled structured
+    // call gets a one-off client whose fetch carries the caller's signal.
+    const signal = options?.signal;
+    const client = signal
+      ? new Ollama({
+          fetch: (input, init) => fetch(input, { ...init, signal }),
+          ...(this.baseURL && { host: this.baseURL }),
+        })
+      : this.client;
+
+    let response: ChatResponse;
+    try {
+      response = await client.chat({
+        format: tools ? undefined : schema!.schema,
+        messages,
+        model,
+        stream: false,
+        // Ollama rejects `think: true` on models without thinking, so only ever turn it off.
+        ...(thinking?.type === 'disabled' && { think: false }),
+        tools: tools as Tool[] | undefined,
+      });
+    } catch (error) {
+      throw await this.toRuntimeError(error);
+    }
+
+    if (response.prompt_eval_count !== undefined || response.eval_count !== undefined) {
+      const inputTokens = response.prompt_eval_count ?? 0;
+      const outputTokens = response.eval_count ?? 0;
+      await options?.onUsage?.({
+        inputTextTokens: inputTokens,
+        outputTextTokens: outputTokens,
+        totalInputTokens: inputTokens,
+        totalOutputTokens: outputTokens,
+        totalTokens: inputTokens + outputTokens,
+      });
+    }
+
+    if (!tools) return parseStructuredOutputText(response.message?.content);
+
+    const toolCalls = response.message?.tool_calls;
+    if (!toolCalls?.length) throw new StructuredOutputError('no tool calls returned');
+
+    return toolCalls.map((item) => ({
+      arguments: parseStructuredToolArguments(item.function.arguments),
+      name: item.function.name,
+    }));
+  }
+
+  private async toRuntimeError(error: unknown) {
+    const e = error as {
+      error: any;
+      message: string;
+      name: string;
+      status_code: number;
+    };
+    const errorDetail = {
+      ...(typeof e.error !== 'string' ? e.error : undefined),
+      message: String(e.error?.message || e.message),
+      name: e.name,
+      status_code: e.status_code,
+    };
+
+    const fetchErrorMessage = e.message?.toLowerCase();
+    if (fetchErrorMessage === 'fetch failed' || fetchErrorMessage === 'failed to fetch') {
+      // A long-running chat request can fail even while the local Ollama service remains healthy.
+      // See https://github.com/lobehub/lobehub/issues/17316
+      try {
+        await this.client.list();
+      } catch {
+        return AgentRuntimeError.chat({
+          error: {
+            message: 'please check whether your ollama service is available',
+          },
+          errorType: AgentRuntimeErrorType.OllamaServiceUnavailable,
+          provider: ModelProvider.Ollama,
+        });
+      }
+
+      return AgentRuntimeError.chat({
+        error: errorDetail,
+        errorType: AgentRuntimeErrorType.ProviderNetworkError,
+        provider: ModelProvider.Ollama,
+      });
+    }
+
+    return AgentRuntimeError.chat({
+      error: errorDetail,
+      errorType: AgentRuntimeErrorType.OllamaBizError,
+      provider: ModelProvider.Ollama,
+    });
+  }
+
+  async embeddings(payload: EmbeddingsPayload): Promise<Embeddings[]> {
+    const input = Array.isArray(payload.input) ? payload.input : [payload.input];
+    const promises = input.map((inputText: string) =>
+      this.invokeEmbeddingModel({
+        dimensions: payload.dimensions,
+        input: inputText,
+        model: payload.model,
+      }),
+    );
+    return await Promise.all(promises);
+  }
+
+  async models() {
+    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+
+    const list = await this.client.list();
+
+    const modelList: OllamaModelCard[] = list.models;
+
+    return modelList
+      .map((model) => {
+        const knownModel = LOBE_DEFAULT_MODEL_LIST.find(
+          (m) => model.name.toLowerCase() === m.id.toLowerCase(),
+        );
+
+        return {
+          contextWindowTokens: knownModel?.contextWindowTokens ?? undefined,
+          displayName: knownModel?.displayName ?? undefined,
+          enabled: knownModel?.enabled || false,
+          functionCall: knownModel?.abilities?.functionCall || false,
+          id: model.name,
+          reasoning: knownModel?.abilities?.reasoning || false,
+          vision: knownModel?.abilities?.vision || false,
+        };
+      })
+      .filter(Boolean) as ChatModelCard[];
+  }
+
+  private invokeEmbeddingModel = async (payload: EmbeddingsPayload): Promise<Embeddings> => {
+    try {
+      const responseBody = await this.client.embeddings({
+        model: payload.model,
+        prompt: payload.input as string,
+      });
+      return responseBody.embedding;
+    } catch (error) {
+      const e = error as { message: string; name: string; status_code: number };
+
+      throw AgentRuntimeError.chat({
+        error: { message: e.message, name: e.name, status_code: e.status_code },
+        errorType: AgentRuntimeErrorType.OllamaBizError,
+        provider: ModelProvider.Ollama,
+      });
+    }
+  };
+
+  private async buildOllamaMessages(messages: OpenAIChatMessage[]) {
+    return Promise.all(messages.map((message) => this.convertContentToOllamaMessage(message)));
+  }
+
+  private convertContentToOllamaMessage = async (
+    message: OpenAIChatMessage,
+  ): Promise<OllamaMessage> => {
+    if (typeof message.content === 'string') {
+      return { content: message.content, role: message.role };
+    }
+
+    const ollamaMessage: OllamaMessage = {
+      content: '',
+      role: message.role,
+    };
+
+    // Collect image processing tasks for parallel execution
+    const imagePromises: Array<Promise<string | null> | string> = [];
+
+    for (const content of message.content) {
+      switch (content.type) {
+        case 'text': {
+          // keep latest text input
+          ollamaMessage.content = content.text;
+          break;
+        }
+        case 'image_url': {
+          const { base64, type } = parseDataUri(content.image_url.url);
+
+          // If already base64 format, use it directly
+          if (base64) {
+            imagePromises.push(base64);
+          }
+          // If it's a URL, add async conversion task with error handling
+          else if (type === 'url') {
+            imagePromises.push(
+              imageUrlToBase64(content.image_url.url)
+                .then((result) => result.base64)
+                .catch(() => null), // Silently ignore failed conversions
+            );
+          }
+          break;
+        }
+      }
+    }
+
+    // Process all images in parallel and filter out failed conversions
+    if (imagePromises.length > 0) {
+      const results = await Promise.all(imagePromises);
+      const validImages = results.filter((img): img is string => img !== null);
+      if (validImages.length > 0) {
+        ollamaMessage.images = validImages;
+      }
+    }
+
+    return ollamaMessage;
+  };
+
+  async pullModel(params: PullModelParams, options?: ModelRequestOptions): Promise<Response> {
+    const { model, insecure } = params;
+    const signal = options?.signal; // Get the passed-in AbortSignal
+
+    const abortOllama = () => {
+      // Assume this.client.abort() is idempotent or can be safely called multiple times
+      this.client.abort();
+    };
+
+    // If an AbortSignal is present, listen for the abort event
+    // Use { once: true } to ensure the listener only fires once
+    signal?.addEventListener('abort', abortOllama, { once: true });
+
+    try {
+      // Get the iterable for the Ollama pull operation
+      const iterable = await this.client.pull({
+        insecure: insecure ?? false,
+        model,
+        stream: true,
+      });
+
+      // Use the dedicated model download stream conversion method
+      const progressStream = createModelPullStream(iterable, model, {
+        onCancel: () => {
+          // When the stream is cancelled, call abortOllama
+          // Remove the signal's event listener to avoid duplicate calls (if abortOllama is not idempotent)
+          signal?.removeEventListener('abort', abortOllama);
+          abortOllama(); // Execute the abort logic
+        },
+      });
+
+      // Return the standard response
+      return new Response(progressStream, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (error) {
+      // If an error occurs during the initial call to client.pull or stream creation, remove the listener
+      signal?.removeEventListener('abort', abortOllama);
+
+      // Handle errors
+      if ((error as Error).message === 'fetch failed') {
+        return createErrorResponse(AgentRuntimeErrorType.OllamaServiceUnavailable, {
+          message: 'please check whether your ollama service is available',
+          provider: ModelProvider.Ollama,
+        });
+      }
+
+      console.error('model download error:', error);
+
+      // Check if the operation was cancelled
+      if ((error as Error).name === 'AbortError') {
+        return new Response(
+          JSON.stringify({
+            model,
+            status: 'cancelled',
+          }),
+          {
+            headers: { 'Content-Type': 'application/json' },
+            status: 499,
+          },
+        );
+      }
+
+      // Return an error response
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return new Response(
+        JSON.stringify({
+          error: errorMessage,
+          model,
+          status: 'error',
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+          status: 500,
+        },
+      );
+    }
+  }
+}
+
+export default LobeOllamaAI;

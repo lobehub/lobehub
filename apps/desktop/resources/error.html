@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LobeHub - 连接错误</title>
+    <style>
+      .drag-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 32px;
+        -webkit-app-region: drag;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px 0 0;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        color: #1f1f1f;
+        overflow: hidden;
+      }
+
+      /* 添加暗色模式支持 */
+      @media (prefers-color-scheme: dark) {
+        body {
+          color: #f5f5f5;
+        }
+        .error-message {
+          color: #f5f5f5;
+        }
+        .retry-button {
+          background-color: #2a2a2a;
+          color: #f5f5f5;
+          border: 1px solid #3a3a3a;
+        }
+        .retry-button:hover {
+          background-color: #3a3a3a;
+        }
+      }
+
+      .container {
+        text-align: center;
+        padding: 2rem;
+        max-width: 500px;
+      }
+
+      .lobe-brand {
+        width: 120px;
+        height: auto;
+        margin-bottom: 2rem;
+      }
+
+      .lobe-brand path {
+        fill: currentcolor;
+      }
+
+      .error-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        color: #ff4d4f;
+      }
+
+      .error-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+      }
+
+      .error-message {
+        margin-bottom: 2rem;
+        line-height: 1.5;
+        color: #666;
+      }
+
+      .retry-button {
+        padding: 0.75rem 1.5rem;
+        background-color: #f5f5f5;
+        color: #1f1f1f;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .retry-button:hover {
+        background-color: #e9e9e9;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="drag-bar"></div>
+    <div class="container">
+      <div class="error-icon">⚠️</div>
+      <h1 class="error-title">Connection Error</h1>
+      <p class="error-message">
+        Unable to connect to the application, please check your network connection or confirm if the
+        development server is running.
+      </p>
+
+      <button id="retry-button" class="retry-button">Retry</button>
+    </div>
+
+    <script>
+      // 当按钮被点击时，通知主进程重试连接
+      const retryButton = document.getElementById('retry-button');
+      const errorMessage = document.querySelector('.error-message');
+
+      if (retryButton) {
+        retryButton.addEventListener('click', () => {
+          // 更新UI状态
+          retryButton.disabled = true;
+          retryButton.textContent = 'Retrying...';
+          errorMessage.textContent = 'Attempting to reconnect to the next server, please wait...';
+
+          // 调用主进程的重试逻辑
+          if (window.electron && window.electron.ipcRenderer) {
+            window.electron.ipcRenderer.invoke('retry-connection').then((result) => {
+              if (result && result.success) {
+                // 连接成功，无需额外操作，页面会自动导航
+              } else {
+                // 连接失败，重置按钮状态
+                setTimeout(() => {
+                  retryButton.disabled = false;
+                  retryButton.textContent = 'Retry';
+                  errorMessage.textContent =
+                    'Unable to connect to the application, please check your network connection or confirm if the development server is running.';
+                }, 1000);
+              }
+            });
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

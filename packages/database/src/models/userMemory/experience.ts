@@ -1,0 +1,192 @@
+import type {
+  ExperienceListParams,
+  ExperienceListResult,
+  UserMemoryExperience,
+  UserMemoryExperienceInsert,
+} from '@lobechat/types';
+import type { SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
+
+import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
+import { userMemories, userMemoriesExperiences } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { buildUserMemoryWhere } from './where';
+
+export class UserMemoryExperienceModel {
+  private userId: string;
+  private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
+
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
+    this.userId = userId;
+    this.db = db;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
+  }
+
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
+  }
+
+  create = async (params: Omit<UserMemoryExperienceInsert, 'userId'>) => {
+    const [result] = await this.db
+      .insert(userMemoriesExperiences)
+      .values({ ...params, userId: this.userId })
+      .returning();
+
+    return result;
+  };
+
+  delete = async (id: string) => {
+    return this.db.transaction(async (tx) => {
+      const experience = await tx.query.userMemoriesExperiences.findFirst({
+        where: and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)),
+      });
+
+      if (!experience || !experience.userMemoryId) {
+        return { success: false };
+      }
+
+      // Delete the base user memory (cascade will handle the experience)
+      await tx
+        .delete(userMemories)
+        .where(and(eq(userMemories.id, experience.userMemoryId), this.memoryWhere(userMemories)));
+
+      return { success: true };
+    });
+  };
+
+  deleteAll = async () => {
+    return this.db.delete(userMemoriesExperiences).where(this.memoryWhere(userMemoriesExperiences));
+  };
+
+  query = async (limit = 50) => {
+    return this.db.query.userMemoriesExperiences.findMany({
+      limit,
+      orderBy: [desc(userMemoriesExperiences.createdAt)],
+      where: this.memoryWhere(userMemoriesExperiences),
+    });
+  };
+
+  /**
+   * Query experience list with pagination, search, and sorting
+   * Returns a flat structure optimized for frontend display
+   */
+  queryList = async (params: ExperienceListParams = {}): Promise<ExperienceListResult> => {
+    const { order = 'desc', page = 1, pageSize = 20, q, sort, tags, types } = params;
+
+    const normalizedPage = Math.max(1, page);
+    const normalizedPageSize = Math.min(Math.max(pageSize, 1), 100);
+    const offset = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedQuery = typeof q === 'string' ? q.trim() : '';
+    const bm25MatchQuery = normalizedQuery
+      ? normalizeBm25MatchQuery(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
+      : '';
+    const candidateResult =
+      normalizedQuery && this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+        ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'memoryExperiences',
+            filters: {
+              ...(tags?.length ? { memoryTagMatch: 'any' as const, memoryTags: tags } : {}),
+              ...(types?.length ? { memoryTypes: types } : {}),
+            },
+            pagination: {},
+            query: {
+              fields: ['parent_title', 'situation', 'key_learning', 'action'],
+              text: normalizedQuery,
+            },
+          })
+        : undefined;
+    const candidateIds = candidateResult?.candidates.map(({ id }) => id);
+
+    // Build WHERE conditions
+    const conditions: Array<SQL | undefined> = [
+      this.memoryWhere(userMemoriesExperiences),
+      candidateIds ? inJsonStringArray(userMemoriesExperiences.id, candidateIds) : undefined,
+      // Full-text search across title, situation, keyLearning, action
+      normalizedQuery && !candidateIds
+        ? sql`(${userMemories.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('title', ${bm25MatchQuery}, conjunction_mode => true)]) OR ${userMemoriesExperiences.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('situation', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('key_learning', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('action', ${bm25MatchQuery}, conjunction_mode => true)]))`
+        : undefined,
+      types && types.length > 0 ? inArray(userMemoriesExperiences.type, types) : undefined,
+      tags && tags.length > 0
+        ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesExperiences.tags})`))
+        : undefined,
+    ];
+
+    const filters = conditions.filter((condition): condition is SQL => condition !== undefined);
+    const whereClause = filters.length > 0 ? and(...filters) : undefined;
+
+    // Build ORDER BY
+    const applyOrder = order === 'asc' ? asc : desc;
+    const sortColumn =
+      sort === 'scoreConfidence'
+        ? userMemoriesExperiences.scoreConfidence
+        : userMemoriesExperiences.capturedAt;
+
+    const orderByClauses = [
+      applyOrder(sortColumn),
+      applyOrder(userMemoriesExperiences.updatedAt),
+      applyOrder(userMemoriesExperiences.createdAt),
+    ];
+
+    // JOIN condition
+    const joinCondition = and(
+      eq(userMemories.id, userMemoriesExperiences.userMemoryId),
+      this.memoryWhere(userMemories),
+    );
+
+    // Execute queries in parallel
+    const [rows, totalResult] = await Promise.all([
+      this.db
+        .select({
+          action: userMemoriesExperiences.action,
+          capturedAt: userMemoriesExperiences.capturedAt,
+          createdAt: userMemoriesExperiences.createdAt,
+          id: userMemoriesExperiences.id,
+          keyLearning: userMemoriesExperiences.keyLearning,
+          scoreConfidence: userMemoriesExperiences.scoreConfidence,
+          situation: userMemoriesExperiences.situation,
+          tags: userMemoriesExperiences.tags,
+          title: userMemories.title,
+          type: userMemoriesExperiences.type,
+          updatedAt: userMemoriesExperiences.updatedAt,
+        })
+        .from(userMemoriesExperiences)
+        .innerJoin(userMemories, joinCondition)
+        .where(whereClause)
+        .orderBy(...orderByClauses)
+        .limit(normalizedPageSize)
+        .offset(offset),
+      this.db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(userMemoriesExperiences)
+        .innerJoin(userMemories, joinCondition)
+        .where(whereClause),
+    ]);
+
+    return {
+      items: rows,
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total: Number(totalResult[0]?.count ?? 0),
+    };
+  };
+
+  findById = async (id: string) => {
+    return this.db.query.userMemoriesExperiences.findFirst({
+      where: and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)),
+    });
+  };
+
+  update = async (id: string, value: Partial<UserMemoryExperience>) => {
+    return this.db
+      .update(userMemoriesExperiences)
+      .set({ ...value, updatedAt: new Date() })
+      .where(and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)));
+  };
+}

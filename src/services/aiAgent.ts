@@ -1,0 +1,558 @@
+import type { AgentStreamClientFeature } from '@lobechat/agent-gateway-client';
+import { CLIENT_PROTOCOL_VERSION } from '@lobechat/agent-gateway-client';
+import type {
+  ClientLlmWaitItem,
+  ComposerUserMessage,
+  ContextSelection,
+  ExecAgentAppContext,
+  ExecAgentClientIds,
+  ExecAgentLlmExecutor,
+  ExecAgentResult,
+  PageSelection,
+  ResumeClientLlmWaitResult,
+  RuntimeMentionedAgent,
+  ScheduleAgentRunParams,
+  ScheduleAgentRunResult,
+  UserInterventionConfig,
+} from '@lobechat/types';
+
+import { canUseGatewayProtocolV2 } from '@/helpers/gatewayProtocol';
+import { lambdaClient } from '@/libs/trpc/client';
+import { buildLlmExecutorDeclaration } from '@/services/llmRelay';
+
+export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
+
+/** Gateway stream features every run started from this client handles. */
+const STREAM_FEATURES: AgentStreamClientFeature[] = ['file_works', 'member_runtime_end'];
+
+/** An older server's strict input schema rejected the `streamFeatures` key. */
+const isUnknownStreamFeaturesError = (error: unknown): boolean => {
+  const { data, message } = (error ?? {}) as { data?: { code?: string }; message?: unknown };
+
+  return (
+    data?.code === 'BAD_REQUEST' &&
+    typeof message === 'string' &&
+    message.includes('unrecognized_keys') &&
+    message.includes('streamFeatures')
+  );
+};
+
+/**
+ * Resume instruction for an operation that hit `human_approve_required`. When
+ * present, the new op acts as the "continue" step: server reads the target tool
+ * message, writes the user's decision, and either re-dispatches the tool
+ * (approved) or feeds the rejection back to the LLM as user feedback
+ * (rejected / rejected_continue).
+ *
+ * Kept as a top-level field (not folded into `appContext`) so the server schema
+ * can validate it independently.
+ */
+export interface ResumeApprovalParam {
+  decision: 'approved' | 'rejected' | 'rejected_continue';
+  /** ID of the pending `role='tool'` message this decision targets. */
+  parentMessageId: string;
+  /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+  rejectionReason?: string;
+  /** tool_call_id of the pending tool call being approved/rejected. */
+  toolCallId: string;
+}
+
+/**
+ * Resume instruction for an operation that paused on a `humanIntervention:
+ * 'always'` tool (e.g. lobe-agent `askUserQuestion`) during a GATEWAY/server
+ * run. When present, the new op writes the human-provided answer as the pending
+ * tool message's result and resumes from `phase: 'tool_result'` — the tool is
+ * NOT re-executed, so the server runtime never overwrites the answer with a
+ * fresh "pending" placeholder.
+ *
+ * Kept as a top-level field (not folded into `appContext`) so the server schema
+ * can validate it independently.
+ */
+export interface ResumeToolResultParam {
+  /** The human-provided tool result (the answer text). */
+  content: string;
+  /** Distinguishes a submitted form from an explicit skip. */
+  outcome?: 'skipped' | 'submitted';
+  /** ID of the pending `role='tool'` message this result targets. */
+  parentMessageId: string;
+  /** Optional plugin state to persist on the tool message. */
+  pluginState?: Record<string, unknown>;
+  /** Optional user-supplied reason for a skipped interaction. */
+  rejectionReason?: string;
+  /** tool_call_id of the pending tool call being answered. */
+  toolCallId: string;
+}
+
+export type AgentInterventionSourceAction =
+  | { optionId: string; type: 'select_provider_option' }
+  | {
+      edits?: Record<string, Record<string, unknown>>;
+      scope: 'once' | 'remember';
+      type: 'approve_tool';
+    }
+  | { reason?: string; type: 'reject_continue' }
+  | { scope: 'operation'; type: 'stop' }
+  | { result: Record<string, string | string[]>; type: 'submit_answers' }
+  | {
+      result: { kind: 'agent_marketplace'; selectedTemplateIds: string[] };
+      type: 'submit_custom';
+    }
+  | { type: 'skip_interaction' }
+  | { type: 'cancel_interaction' };
+
+export interface ResolveAgentInterventionBySourceParams {
+  action: AgentInterventionSourceAction;
+  batchId: string;
+  operationId: string;
+  resolutionRequestId: string;
+  targets: Array<{ toolCallId: string; toolMessageId: string }>;
+}
+
+export type ResolveAgentInterventionBySourceResult =
+  | { execution?: never; handled: false; state?: never }
+  | {
+      execution?: ExecAgentResult;
+      handled: true;
+      state: 'already_resolved' | 'claimed';
+    };
+
+export interface GetAgentInterventionReviewBySourceParams {
+  batchId: string;
+  operationId: string;
+  targets: Array<{ toolCallId: string; toolMessageId: string }>;
+}
+
+/** Must not exceed the server's `ExecAgentSchema.clientOperations` bound. */
+export const MAX_CLIENT_OPERATION_SNAPSHOT = 10;
+
+export interface ClientOperationSnapshot {
+  isAborting?: boolean;
+  operationId: string;
+  status: string;
+  visibleLoadingDone?: boolean;
+}
+
+export interface ExecAgentTaskParams {
+  agentId?: string;
+  appContext?: ExecAgentAppContext;
+  autoStart?: boolean;
+  /**
+   * Client-minted ids for the rows this run creates, honoured verbatim by the
+   * server — the gateway counterpart of `sendMessageInServer`'s
+   * `newTopic.id` / `newUserMessage.id` / `newAssistantMessage.id`. Fresh
+   * sends only; resume / regeneration must not replay them.
+   */
+  clientIds?: ExecAgentClientIds;
+  /**
+   * Server runs the composer tracked on this conversation at send time. The
+   * server records them only when this send has to stop a run the client left
+   * live, to tell whether the client never saw it or its stop never landed.
+   */
+  clientOperations?: ClientOperationSnapshot[];
+  /** @deprecated Mirror of `userMessage.metadata.contextSelections` for servers that predate it. */
+  contextSelections?: ContextSelection[];
+  deviceId?: string;
+  existingMessageIds?: string[];
+  /** File IDs of already-uploaded attachments to attach to the new user message */
+  fileIds?: string[];
+  localDeviceId?: string;
+  /**
+   * Agents the user @-mentioned in this message (multi-mention). The server
+   * enables the callAgent tool and injects the mentioned-agents delegation
+   * context so the supervisor run delegates to them instead of answering itself.
+   */
+  mentionedAgents?: RuntimeMentionedAgent[];
+  /** @deprecated Mirror of `userMessage.metadata.pageSelections` for servers that predate it. */
+  pageSelections?: PageSelection[];
+  /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
+  parentMessageId?: string;
+  prompt: string;
+  /** Existing gateway operation this fresh turn atomically supersedes. */
+  replacesOperationId?: string;
+  /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
+  resumeApproval?: ResumeApprovalParam;
+  /**
+   * Batch form of `resumeApproval` — one entry per pending tool resolved in a
+   * single "approve all" action. The server applies every decision, runs all
+   * approved tools as ONE `call_tools_batch`, and continues the LLM once.
+   */
+  resumeApprovals?: ResumeApprovalParam[];
+  /** Resume a previous op paused on a human-intervention tool by carrying the human answer as the tool result. */
+  resumeToolResult?: ResumeToolResultParam;
+  /** Skill identifiers the user selected in this message; the server injects their bodies. */
+  selectedSkillIds?: string[];
+  /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
+  selectedToolIds?: string[];
+  slug?: string;
+  /** The prompt was queued behind a running turn and renders as its continuation. */
+  steer?: boolean;
+  /**
+   * Override what initiated this operation. Server defaults to `'chat'` when
+   * omitted. Pass a more specific value (`'cli'`, `'openapi'`, …) so the
+   * `agent_operations.trigger` column reflects the real source.
+   */
+  trigger?: string;
+  userInterventionConfig?: UserInterventionConfig;
+  /** The composer-authored part of the new user message; see `ExecAgentParams.userMessage`. */
+  userMessage?: ComposerUserMessage;
+}
+
+/**
+ * A composer send queued behind the running turn on the server: the
+ * fresh-send part of {@link ExecAgentTaskParams}.
+ */
+export type QueuedFollowUpRequest = Omit<
+  ExecAgentTaskParams,
+  | 'autoStart'
+  | 'clientIds'
+  | 'clientOperations'
+  | 'existingMessageIds'
+  | 'parentMessageId'
+  | 'replacesOperationId'
+  | 'resumeApproval'
+  | 'resumeApprovals'
+  | 'resumeToolResult'
+  | 'steer'
+>;
+
+export interface QueuedFollowUpSurface {
+  threadId?: string | null;
+  topicId: string;
+}
+
+/**
+ * Parameters for execSubAgentTask
+ * Supports both Group mode (with groupId) and Single Agent mode (without groupId)
+ */
+export interface ExecSubAgentTaskParams {
+  agentId: string;
+  /** Optional for Single Agent mode, required for Group mode */
+  groupId?: string;
+  instruction: string;
+  /** This tab runs the sub-agent's device-only LLM calls (with {@link llmRelayChannel}). */
+  llmExecutor?: ExecAgentLlmExecutor;
+  /** The one-shot relay channel this tab stands by on for the sub-agent's LLM calls. */
+  llmRelayChannel?: string;
+  parentMessageId: string;
+  /** Parent operation ID for dispatching callAgent hooks */
+  parentOperationId?: string;
+  timeout?: number;
+  /** Task title (shown in UI, used as thread title) */
+  title?: string;
+  topicId: string;
+}
+
+export interface GetSubAgentTaskStatusParams {
+  threadId: string;
+}
+
+export interface InterruptTaskParams {
+  operationId?: string;
+  threadId?: string;
+  topicId?: string;
+}
+
+/**
+ * Parameters for createClientTaskThread
+ * Creates a Thread for client-side task execution (desktop only, single agent mode)
+ */
+export interface CreateClientTaskThreadParams {
+  agentId: string;
+  /**
+   * Seed an assistant placeholder for transports that stream into an existing
+   * message (for example a local heterogeneous CLI).
+   */
+  assistantMessage?: { provider: string };
+  groupId?: string;
+  /** Initial user message content (task instruction) */
+  instruction: string;
+  parentMessageId: string;
+  title?: string;
+  topicId: string;
+}
+
+/**
+ * Parameters for createClientGroupAgentTaskThread
+ * Creates a Thread for client-side task execution in Group mode
+ */
+export interface CreateClientGroupAgentTaskThreadParams {
+  /** The Group ID (required for Group mode) */
+  groupId: string;
+  /** Initial user message content (task instruction) */
+  instruction: string;
+  parentMessageId: string;
+  /** The Sub-Agent ID that will execute the task (worker agent in group) */
+  subAgentId: string;
+  title?: string;
+  topicId: string;
+}
+
+/**
+ * Parameters for updateClientTaskThreadStatus
+ * Updates Thread status after client-side execution completes
+ */
+export interface UpdateClientTaskThreadStatusParams {
+  completionReason: 'done' | 'error' | 'interrupted';
+  error?: string;
+  metadata?: {
+    totalCost?: number;
+    totalLlmCalls?: number;
+    totalMessages?: number;
+    totalSteps?: number;
+    totalTokens?: number;
+    totalToolCalls?: number;
+  };
+  resultContent?: string;
+  threadId: string;
+}
+
+class AiAgentService {
+  async getServerDefaultHeterogeneousCapability() {
+    return await lambdaClient.aiAgent.getServerDefaultHeterogeneousCapability.query();
+  }
+
+  /**
+   * Execute a single Agent task.
+   * Returns the operationId needed to connect to the Agent Gateway.
+   */
+  async execAgentTask(
+    params: ExecAgentTaskParams,
+    options?: { signal?: AbortSignal },
+  ): Promise<ExecAgentResult> {
+    // Ask for protocol-v2 delivery — message revisions instead of whole message
+    // snapshots — when this client both understands it and is inside the
+    // rollout. Anything else stays on the pushed snapshots, which is what an
+    // older bundle needs to render the run at all. A caller may still pin it
+    // (a replay harness asserting v1 delivery).
+    const clientProtocol = canUseGatewayProtocolV2() ? CLIENT_PROTOCOL_VERSION : undefined;
+    // Inside the `agent_llm_relay` rollout this tab offers to run the LLM calls
+    // of providers only this device can reach (a local Ollama, a private
+    // endpoint); the server hands them over as `llm_execute`.
+    const llmExecutor = buildLlmExecutorDeclaration();
+
+    return await lambdaClient.aiAgent.execAgent.mutate(
+      {
+        clientProtocol,
+        ...(llmExecutor && { llmExecutor }),
+        ...params,
+        streamFeatures: STREAM_FEATURES,
+      },
+      options,
+    );
+  }
+
+  /**
+   * Queue a follow-up behind the surface's running turn on the server. It
+   * carries the same run declarations as {@link execAgentTask}, so the run can
+   * tell whether the follow-up can join it. `queued: false` means nothing was
+   * stored and this client must send it itself.
+   */
+  async appendQueuedFollowUp(params: {
+    /** Composer state to keep with it, so a reloaded page can show and resend it as typed. */
+    composer?: { editorData?: Record<string, any>; filesPreview?: Record<string, any>[] };
+    id: string;
+    request: QueuedFollowUpRequest;
+  }) {
+    const clientProtocol = canUseGatewayProtocolV2() ? CLIENT_PROTOCOL_VERSION : undefined;
+    const llmExecutor = buildLlmExecutorDeclaration();
+
+    return await lambdaClient.agentSteerQueue.append.mutate({
+      ...(params.composer && { composer: params.composer }),
+      id: params.id,
+      request: {
+        clientProtocol,
+        ...(llmExecutor && { llmExecutor }),
+        ...params.request,
+        streamFeatures: STREAM_FEATURES,
+      },
+    });
+  }
+
+  /** This user's follow-ups still waiting on the server, oldest first. */
+  async listQueuedFollowUps(surface: QueuedFollowUpSurface) {
+    return await lambdaClient.agentSteerQueue.list.query(surface);
+  }
+
+  /** `removed: false` means the follow-up already left the queue to be delivered. */
+  async removeQueuedFollowUp(params: QueuedFollowUpSurface & { id: string }) {
+    return await lambdaClient.agentSteerQueue.remove.mutate(params);
+  }
+
+  /**
+   * Defer an agent run to a future time. Creates an empty `scheduled` topic that
+   * the backend cron fires once `runAt` passes; nothing runs now.
+   */
+  async scheduleAgentRun(params: ScheduleAgentRunParams): Promise<ScheduleAgentRunResult> {
+    return await lambdaClient.aiAgent.scheduleAgentRun.mutate(params);
+  }
+
+  /**
+   * Execute a sub-agent task (supports both Group and Single Agent mode)
+   *
+   * - Group mode: pass groupId, Thread will be associated with the Group
+   * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
+   */
+  /**
+   * Get a fresh JWT token for Gateway WebSocket reconnection.
+   */
+  async refreshGatewayToken(topicId: string): Promise<{ token: string }> {
+    return await lambdaClient.aiAgent.refreshGatewayToken.query({ topicId });
+  }
+
+  /**
+   * Mint the per-user JWT for the multiplexed Gateway WebSocket (v2, one
+   * socket per user). Not bound to any operation — the mux client calls this
+   * before every connect attempt.
+   */
+  async issueGatewayUserToken(): Promise<{ token: string }> {
+    return await lambdaClient.aiAgent.issueGatewayUserToken.query();
+  }
+
+  async execSubAgentTask(params: ExecSubAgentTaskParams) {
+    return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
+  }
+
+  /** This tab stopped standing by on the relay channel it named in `execSubAgentTask`. */
+  async releaseSubAgentLlmRelay(params: { channel: string }) {
+    return await lambdaClient.aiAgent.releaseSubAgentLlmRelay.mutate(params);
+  }
+
+  /**
+   * Get SubAgent task status by threadId
+   * Works for both Group and Single Agent mode tasks
+   */
+  async getSubAgentTaskStatus(params: GetSubAgentTaskStatusParams) {
+    return await lambdaClient.aiAgent.getSubAgentTaskStatus.query(params);
+  }
+
+  /**
+   * Authoritative terminal outcome of a server run, by its operation id.
+   *
+   * The leaked-run sweep needs it to tell a run that COMPLETED from one that
+   * failed / was interrupted: only a completion may drain the follow-up the user
+   * queued behind it (a failed run keeps its queue, like every terminal path).
+   * The terminal frame that would have carried this outcome is exactly what the
+   * leak lost.
+   *
+   * Resolves `null` when the server no longer holds the run (its state expired).
+   * Callers must treat that as UNKNOWN, never as a completion.
+   */
+  async getOperationStatus(params: { operationId: string }) {
+    return await lambdaClient.aiAgent.getOperationStatus.query(params);
+  }
+
+  /**
+   * Interrupt a running task
+   */
+  async interruptTask(params: InterruptTaskParams) {
+    return await lambdaClient.aiAgent.interruptTask.mutate(params);
+  }
+
+  /** Runs parked in `waiting_for_client`, waiting for a client to run their LLM call. */
+  /** Runs parked for a client, narrowed to `providers` (the ones this client can run). */
+  async listClientLlmWaits(providers?: string[]): Promise<ClientLlmWaitItem[]> {
+    return await lambdaClient.aiAgent.listClientLlmWaits.query(
+      providers ? { providers } : undefined,
+    );
+  }
+
+  /** Continue a run parked in `waiting_for_client`, with this client as its executor. */
+  async resumeClientLlmWait(params: {
+    llmExecutor: ExecAgentLlmExecutor;
+    operationId: string;
+  }): Promise<ResumeClientLlmWaitResult> {
+    return await lambdaClient.aiAgent.resumeClientLlmWait.mutate(params);
+  }
+
+  /**
+   * Tell a running server operation whether user messages are queued behind it,
+   * so it hands the turn back at its next step boundary.
+   */
+  async setQueuedMessages(params: { operationId: string; pending: boolean }) {
+    return await lambdaClient.aiAgent.setQueuedMessages.mutate(params);
+  }
+
+  /**
+   * Stop a run parked on tool approval: settle the pending tool rows and end
+   * the operation without running anything or continuing the model.
+   *
+   * Not `interruptTask` — that one assumes a live loop will persist the
+   * outcome, which a parked run does not have.
+   */
+  async stopPendingApproval(params: {
+    batchId: string;
+    operationId: string;
+    toolMessageIds: string[];
+    topicId: string;
+  }) {
+    return await lambdaClient.aiAgent.stopPendingApproval.mutate(params);
+  }
+
+  /**
+   * Try the Cloud durable first-winner path for an active Web card. A false
+   * result means this deployment has no generic intervention store and the
+   * caller should use the legacy OSS Gateway resume path.
+   */
+  async resolveAgentInterventionBySource(
+    params: ResolveAgentInterventionBySourceParams,
+  ): Promise<ResolveAgentInterventionBySourceResult> {
+    const mutate = lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate;
+    let result: Awaited<ReturnType<typeof mutate>>;
+    try {
+      // This client subscribes to the continuation it starts.
+      result = await mutate({ ...params, streamFeatures: STREAM_FEATURES });
+    } catch (error) {
+      // A server from before `streamFeatures` validates this input strictly and
+      // rejects the unknown key before claiming anything, so resending the same
+      // resolution without it is safe. That server never renames a mirrored
+      // member terminal, so dropping the declaration loses nothing.
+      if (!isUnknownStreamFeaturesError(error)) throw error;
+      result = await mutate(params);
+    }
+
+    if (!result.success) return { handled: false };
+
+    return {
+      execution: 'execution' in result ? result.execution : undefined,
+      handled: true,
+      state: result.state,
+    };
+  }
+
+  /** Fetch the authoritative v2 snapshot and view/resolve authorization for an active card. */
+  async getAgentInterventionReviewBySource(params: GetAgentInterventionReviewBySourceParams) {
+    return await lambdaClient.aiAgent.getAgentInterventionReviewBySource.mutate(params);
+  }
+
+  /**
+   * Create Thread for client-side task execution (desktop only, single agent mode)
+   *
+   * This method is called when runInClient=true on desktop client.
+   * It creates the Thread but does NOT execute the task - execution happens locally.
+   */
+  async createClientTaskThread(params: CreateClientTaskThreadParams) {
+    return await lambdaClient.aiAgent.createClientTaskThread.mutate(params);
+  }
+
+  /**
+   * Create Thread for client-side task execution in Group mode
+   *
+   * This method is specifically for Group Chat scenarios where:
+   * - Messages may have different agentIds (supervisor, workers)
+   * - Thread messages query should not filter by agentId
+   */
+  async createClientGroupAgentTaskThread(params: CreateClientGroupAgentTaskThreadParams) {
+    return await lambdaClient.aiAgent.createClientGroupAgentTaskThread.mutate(params);
+  }
+
+  /**
+   * Update Thread status after client-side task execution completes
+   *
+   * This method is called by desktop client after task execution finishes.
+   */
+  async updateClientTaskThreadStatus(params: UpdateClientTaskThreadStatusParams) {
+    return await lambdaClient.aiAgent.updateClientTaskThreadStatus.mutate(params);
+  }
+}
+
+export const aiAgentService = new AiAgentService();

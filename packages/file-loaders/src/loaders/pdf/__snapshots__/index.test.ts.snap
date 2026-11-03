@@ -1,0 +1,102 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PdfLoader > should aggregate content correctly 1`] = `
+"<page pageNumber="1">
+简单报告
+副标题
+轻点或点按此占位符⽂本并开始键⼊即可开始。你可以在 Mac、iPad、iPhone 或
+iCloud.com 上查看和编辑此⽂稿。
+轻松编辑⽂本、更改字体以及添加精美的图形。使⽤段落样式来使整篇⽂稿保持⼀
+致的⻛格。例如，此段落使⽤“正⽂”样式。你可以在“格式”控制的“⽂本”标签⻚中
+更改样式。
+若要添加照⽚、图像画廊、⾳频⽚段、视频、图表或任意 700 多种可⾃定义形状，
+请在⼯具栏中轻点或点按其中⼀个插⼊按钮，或者将对象拖放到⻚⾯中。你可以分
+层放置对象、调整其⼤⼩以及将其放在⻚⾯中的任意位置。若要更改对象随⽂本移
+动的⽅式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签⻚。
+⼩标题
+Pages ⽂稿可⽤于⽂字处理和⻚⾯布局。此“简单报告”模板为⽂字处理⽽设置，如
+此⼀来，⽂本便会随着你的键⼊⽽从某⼀⻚流向下⼀⻚，到达⻚⾯末尾时会⾃动创
+建新的⻚⾯。
+在⻚⾯布局⽂稿中，你可以⼿动重新排列⻚⾯并随意调整⻚⾯中的⽂本框、图像和
+其他对象的位置。若要创建⻚⾯布局⽂稿，请在模板选取器中选取⼀种⻚⾯布局模
+板。你也可以在 Mac、iPad 或 iPhone 上将此⽂稿改为⻚⾯布局，⽅法是在“⽂稿”
+控制中关闭“⽂稿正⽂”。
+“这是⼀个引⽤（报告中的关键短语）的例⼦。轻点或点按此
+⽂本添加你⾃⼰的内容。”
+⻚脚 
+1
+</page>
+
+<page pageNumber="2">
+这是第⼆⻚的内容
+⻚脚 
+2
+</page>"
+`;
+
+exports[`PdfLoader > should attach document metadata correctly 1`] = `
+{
+  "pdfInfo": {
+    "CreationDate": "D:20250419155028Z00'00'",
+    "Creator": "Pages文稿",
+    "EncryptFilterName": null,
+    "IsAcroFormPresent": false,
+    "IsCollectionPresent": false,
+    "IsLinearized": false,
+    "IsSignaturesPresent": false,
+    "IsXFAPresent": false,
+    "Language": null,
+    "ModDate": "D:20250419155028Z00'00'",
+    "PDFFormatVersion": "1.3",
+    "Producer": "macOS 版本15.3.2（版号24D81） Quartz PDFContext",
+    "Title": "test",
+  },
+  "pdfMetadata": null,
+  "pdfVersion": "5.4.530",
+}
+`;
+
+exports[`PdfLoader > should load pages correctly from a PDF file 1`] = `
+[
+  {
+    "charCount": 576,
+    "lineCount": 23,
+    "metadata": {
+      "pageNumber": 1,
+    },
+    "pageContent": "简单报告
+副标题
+轻点或点按此占位符⽂本并开始键⼊即可开始。你可以在 Mac、iPad、iPhone 或
+iCloud.com 上查看和编辑此⽂稿。
+轻松编辑⽂本、更改字体以及添加精美的图形。使⽤段落样式来使整篇⽂稿保持⼀
+致的⻛格。例如，此段落使⽤“正⽂”样式。你可以在“格式”控制的“⽂本”标签⻚中
+更改样式。
+若要添加照⽚、图像画廊、⾳频⽚段、视频、图表或任意 700 多种可⾃定义形状，
+请在⼯具栏中轻点或点按其中⼀个插⼊按钮，或者将对象拖放到⻚⾯中。你可以分
+层放置对象、调整其⼤⼩以及将其放在⻚⾯中的任意位置。若要更改对象随⽂本移
+动的⽅式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签⻚。
+⼩标题
+Pages ⽂稿可⽤于⽂字处理和⻚⾯布局。此“简单报告”模板为⽂字处理⽽设置，如
+此⼀来，⽂本便会随着你的键⼊⽽从某⼀⻚流向下⼀⻚，到达⻚⾯末尾时会⾃动创
+建新的⻚⾯。
+在⻚⾯布局⽂稿中，你可以⼿动重新排列⻚⾯并随意调整⻚⾯中的⽂本框、图像和
+其他对象的位置。若要创建⻚⾯布局⽂稿，请在模板选取器中选取⼀种⻚⾯布局模
+板。你也可以在 Mac、iPad 或 iPhone 上将此⽂稿改为⻚⾯布局，⽅法是在“⽂稿”
+控制中关闭“⽂稿正⽂”。
+“这是⼀个引⽤（报告中的关键短语）的例⼦。轻点或点按此
+⽂本添加你⾃⼰的内容。”
+⻚脚 
+1",
+  },
+  {
+    "charCount": 14,
+    "lineCount": 3,
+    "metadata": {
+      "pageNumber": 2,
+    },
+    "pageContent": "这是第⼆⻚的内容
+⻚脚 
+2",
+  },
+]
+`;

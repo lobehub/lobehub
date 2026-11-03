@@ -1,0 +1,64 @@
+---
+title: Configuring Tencent Cloud COS Storage Service
+description: >-
+  Detailed steps to configure Tencent Cloud COS storage service for smooth file
+  storage.
+tags:
+  - Tencent Cloud COS
+  - S3 Storage
+  - File Storage
+  - Environment Variables
+---
+
+# Configuring Tencent Cloud COS Storage Service
+
+We need to configure S3 storage service for file storage in the server-side database.
+
+## Configuration Steps
+
+<Steps>
+  ### Configure and Obtain S3 Bucket
+
+  Create a new bucket on [Tencent Cloud COS](https://console.cloud.tencent.com/cos/bucket):
+
+  <Image alt={'Tencent Cloud COS Storage Interface'} src={'/blog/assets0f244d5fe648127774636a54ae9ffafc.webp'} />
+
+  Name the bucket (e.g., 'lobe'). Choose 'Public Read, Private Write', select any region, and keep other settings default.
+
+  <Image alt={'COS Create Bucket'} src={'/blog/assets2ad69e4e124f49710fcedf8e9827f2f3.webp'} />
+
+  ### Get Bucket-related Environment Variables
+
+  View bucket information in COS bucket overview:
+
+  <Image alt={'View Bucket Information'} src={'/blog/assetsc51018f1581b769727ad1bb3bb641567.webp'} />
+
+  Corresponding environment variables:
+
+  ```shell
+  S3_BUCKET=lobe-130xxxxxx2
+  S3_ENDPOINT=https://cos.ap-chengdu.myqcloud.com
+  S3_REGION=ap-chengdu
+  ```
+
+  <Callout type={'warning'}>
+    Note: `S3_ENDPOINT` should be `https://cos.ap-chengdu.myqcloud.com`, not `https://lobe-130xxxxxx2.cos.ap-chengdu.myqcloud.com`
+
+    Include `https://` in the URL
+  </Callout>
+
+  ### Configure CORS
+
+  Add the following in 'Security Management - CORS Settings':
+
+  <Image alt={'Configure CORS'} src={'/blog/assetsb6af626eeb0e1e638d80dc9ff7a6eba9.webp'} />
+
+  ### Get S3 Keys
+
+  Create a new SecretId and SecretKey at [Tencent Cloud API Key Management](https://console.cloud.tencent.com/cam/capi). Use as `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`.
+</Steps>
+
+### Additional Notes
+
+- Consider setting up CDN acceleration for improved access speed and reduced costs.
+- Use role management when creating API keys for enhanced security.

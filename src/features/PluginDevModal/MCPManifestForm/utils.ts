@@ -1,0 +1,145 @@
+import { type ToolManifest } from '@lobechat/types';
+
+import { safeParseJSON } from '@/utils/safeParseJSON';
+
+// (McpConfig, McpServers, ParsedMcpInput interface definitions remain unchanged)
+interface McpConfig {
+  args?: string[];
+  command?: string;
+  url?: string;
+}
+
+interface McpServers {
+  [key: string]: McpConfig;
+}
+
+interface ParsedMcpInput {
+  manifest?: ToolManifest;
+  mcpServers?: McpServers;
+}
+
+// Removed DuplicateIdentifier
+export enum McpParseErrorCode {
+  EmptyMcpServers = 'EmptyMcpServers',
+  InvalidJsonStructure = 'InvalidJsonStructure',
+  InvalidMcpStructure = 'InvalidMcpStructure',
+  ManifestNotSupported = 'ManifestNotSupported',
+}
+
+// Removed isDuplicate
+interface ParseSuccessResult {
+  identifier: string;
+  mcpConfig: McpConfig & { type: 'stdio' | 'http' };
+  status: 'success';
+}
+
+interface ParseErrorResult {
+  errorCode: McpParseErrorCode;
+  // identifier field may still be useful for displaying the user-input ID when structure errors occur
+  identifier?: string;
+  status: 'error';
+}
+
+interface ParseNoOpResult {
+  status: 'noop';
+}
+
+export type ParseResult = ParseSuccessResult | ParseErrorResult | ParseNoOpResult;
+
+export const parseMcpInput = (value: string): ParseResult => {
+  const parsedJson = safeParseJSON<ParsedMcpInput | McpServers>(value);
+
+  if (parsedJson && typeof parsedJson === 'object' && !Array.isArray(parsedJson)) {
+    // 1. Check for the nested "mcpServers" structure
+    if (
+      'mcpServers' in parsedJson &&
+      typeof parsedJson.mcpServers === 'object' &&
+      parsedJson.mcpServers !== null
+    ) {
+      const mcpKeys = Object.keys(parsedJson.mcpServers);
+
+      if (mcpKeys.length > 0) {
+        const identifier = mcpKeys[0];
+        // @ts-expect-error type mismatch
+        const mcpConfig = parsedJson.mcpServers[identifier];
+
+        if (mcpConfig && typeof mcpConfig === 'object' && !Array.isArray(mcpConfig)) {
+          let resultMcpConfig: McpConfig & { type?: 'stdio' | 'http' };
+
+          if (mcpConfig.command && Array.isArray(mcpConfig.args)) {
+            resultMcpConfig = { ...mcpConfig, type: 'stdio' };
+          } else if (mcpConfig.url) {
+            resultMcpConfig = { type: 'http', url: mcpConfig.url };
+          } else {
+            return {
+              errorCode: McpParseErrorCode.InvalidMcpStructure,
+              identifier,
+              status: 'error',
+            };
+          }
+
+          return {
+            identifier,
+            mcpConfig: resultMcpConfig as McpConfig & { type: 'stdio' | 'http' },
+            status: 'success',
+          };
+        }
+        // mcpConfig is invalid or not an object
+        return {
+          errorCode: McpParseErrorCode.InvalidMcpStructure,
+          identifier,
+          status: 'error',
+        };
+      } else {
+        // mcpServers object is empty
+        return { errorCode: McpParseErrorCode.EmptyMcpServers, status: 'error' };
+      }
+    }
+    // 3. Check for the flat structure (identifier as top-level key)
+    else {
+      const topLevelKeys = Object.keys(parsedJson);
+
+      // Allow exactly one top-level key which is the identifier
+      if (topLevelKeys.length === 1) {
+        const identifier = topLevelKeys[0];
+        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+        const mcpConfig = (parsedJson as any)[identifier];
+
+        if (mcpConfig && typeof mcpConfig === 'object' && !Array.isArray(mcpConfig)) {
+          let resultMcpConfig: McpConfig & { type?: 'stdio' | 'http' };
+
+          // Explicitly check properties of mcpConfig
+          if (mcpConfig.command && Array.isArray(mcpConfig.args)) {
+            resultMcpConfig = { ...mcpConfig, type: 'stdio' };
+          } else if (mcpConfig.url) {
+            // For the flat structure, ensure only 'url' is included for http type
+            resultMcpConfig = { type: 'http', url: mcpConfig.url };
+          } else {
+            // Invalid structure within the identifier's value
+            return {
+              errorCode: McpParseErrorCode.InvalidMcpStructure,
+              identifier, // We have the identifier here
+              status: 'error',
+            };
+          }
+
+          // Structure parsed successfully
+          return {
+            identifier,
+            mcpConfig: resultMcpConfig as McpConfig & { type: 'stdio' | 'http' },
+            status: 'success',
+          };
+        } else {
+          // The value associated with the single key is not a valid config object
+          return { errorCode: McpParseErrorCode.InvalidMcpStructure, identifier, status: 'error' };
+        }
+      } else {
+        // Neither mcpServers nor manifest, and not a single top-level key structure
+        return { errorCode: McpParseErrorCode.InvalidJsonStructure, status: 'error' };
+      }
+    }
+  }
+
+  // Input is not a valid JSON object or failed safeParseJSON
+  return { status: 'noop' }; // Or potentially InvalidJsonStructure if safeParse failed but wasn't null/undefined?
+};

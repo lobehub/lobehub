@@ -1,0 +1,36 @@
+---
+title: 'Daily Brief, Document History & Approval Flow'
+description: >-
+  A new Daily Brief on the homepage, Notion-style document history, human
+  approval for agent actions, and Discord DM support.
+tags:
+  - Daily Brief
+  - Document History
+  - Human Approval
+  - Discord
+---
+
+# Daily Brief, Document History & Approval Flow
+
+## Features
+
+- **Daily Brief.** A homepage module that surfaces a personalized daily summary across your agents.
+- **Page history.** A Notion-style timeline for browsing previous versions of agent documents, with per-source retention limits.
+- **Human approval.** Agents can pause and ask for your approval before running sensitive actions, with one approve/reject UI and headless support in the CLI.
+- **Agent working panel.** A collapsible panel for managing agent documents and in-progress work next to the conversation.
+- **Discord slash commands and DMs.** Discord bots now support slash commands and direct messages.
+- **Client tools in Gateway mode.** Desktop can run client-side tools while the agent runs in Gateway mode.
+- **Pinnable sidebar items.** Lock important items so they stay put while you customize the sidebar.
+- **Task filters.** Filter tasks by multiple values with pagination, and see participant avatars on task cards.
+
+## Improvements
+
+- Multi-step command runs are split into separate assistant messages, so each step is easier to follow.
+- The settings save bar stays pinned to the bottom with an instant toggle.
+- Nav panel transitions feel snappier after removing the content-switch animation.
+- Restored the knowledge-base file listing and detail tools.
+
+## Fixes
+
+- The recent-items delete action now takes effect.
+- The Gateway-mode stop button, approve/reject routing, and paused-operation cleanup are more reliable.

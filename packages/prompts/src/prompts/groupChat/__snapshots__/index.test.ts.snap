@@ -1,0 +1,252 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildGroupChatSystemPrompt > should generate correct prompt with members and history 1`] = `
+"You are an expert collaborator.
+
+Guidelines:
+
+- Stay in character as agent-1 (Agent One)
+- Be concise and natural, behave like a real person
+- The group supervisor will decide whether to send it privately or publicly, so you just need to say the actuall content, even it's a DM to a specific member. Do not pretend you've sent it.
+- Be collaborative and build upon others' responses when appropriate
+- Keep your responses concise and relevant to the ongoing discussion
+
+<group_members>
+  <member id="user" title="User Name" />
+  <member id="agent-1" title="Agent One" />
+</group_members>
+
+Now it's your turn to respond.  You are sending message to the group publicly. Please respond as this agent would, considering the full conversation history provided above. Directly return the message content, no other text. You do not need add author name or anything else."
+`;
+
+exports[`buildGroupChatSystemPrompt > should generate correct prompt without members and history 1`] = `
+"You are an expert collaborator.
+
+Guidelines:
+
+- Stay in character as agent-2 (Agent)
+- Be concise and natural, behave like a real person
+- The group supervisor will decide whether to send it privately or publicly, so you just need to say the actuall content, even it's a DM to a specific member. Do not pretend you've sent it.
+- Be collaborative and build upon others' responses when appropriate
+- Keep your responses concise and relevant to the ongoing discussion
+
+Now it's your turn to respond.  You are sending message to the group publicly. Please respond as this agent would, considering the full conversation history provided above. Directly return the message content, no other text. You do not need add author name or anything else."
+`;
+
+exports[`filterMessagesForAgent > should handle assistant direct messages 1`] = `
+[
+  {
+    "agentId": "agent-2",
+    "content": "DM to agent-1",
+    "createdAt": 1634567890000,
+    "id": "1",
+    "role": "assistant",
+    "targetId": "agent-1",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "agentId": "agent-3",
+    "content": "***",
+    "createdAt": 1634567890000,
+    "id": "2",
+    "role": "assistant",
+    "targetId": "agent-2",
+    "updatedAt": 1634567890000,
+  },
+]
+`;
+
+exports[`filterMessagesForAgent > should handle group messages without targetId 1`] = `
+[
+  {
+    "content": "Hello everyone",
+    "createdAt": 1634567890000,
+    "id": "1",
+    "role": "user",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "agentId": "agent-2",
+    "content": "Hi there",
+    "createdAt": 1634567890000,
+    "id": "2",
+    "role": "assistant",
+    "updatedAt": 1634567890000,
+  },
+]
+`;
+
+exports[`filterMessagesForAgent > should handle messages sent by this agent 1`] = `
+[
+  {
+    "agentId": "agent-1",
+    "content": "My message to agent-2",
+    "createdAt": 1634567890000,
+    "id": "1",
+    "role": "assistant",
+    "targetId": "agent-2",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "agentId": "agent-1",
+    "content": "My group message",
+    "createdAt": 1634567890000,
+    "id": "2",
+    "role": "assistant",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "agentId": "agent-2",
+    "content": "***",
+    "createdAt": 1634567890000,
+    "id": "3",
+    "role": "assistant",
+    "targetId": "agent-3",
+    "updatedAt": 1634567890000,
+  },
+]
+`;
+
+exports[`filterMessagesForAgent > should handle mixed message types 1`] = `
+[
+  {
+    "content": "System prompt",
+    "createdAt": 1634567890000,
+    "id": "1",
+    "role": "system",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "content": "Hello everyone",
+    "createdAt": 1634567890000,
+    "id": "2",
+    "role": "user",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "agentId": "agent-1",
+    "content": "Hi!",
+    "createdAt": 1634567890000,
+    "id": "3",
+    "role": "assistant",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "content": "DM to agent-1",
+    "createdAt": 1634567890000,
+    "id": "4",
+    "role": "user",
+    "targetId": "agent-1",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "agentId": "agent-1",
+    "content": "DM response",
+    "createdAt": 1634567890000,
+    "id": "5",
+    "role": "assistant",
+    "targetId": "user",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "content": "***",
+    "createdAt": 1634567890000,
+    "id": "6",
+    "role": "user",
+    "targetId": "agent-2",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "agentId": "agent-2",
+    "content": "***",
+    "createdAt": 1634567890000,
+    "id": "7",
+    "role": "assistant",
+    "targetId": "user",
+    "updatedAt": 1634567890000,
+  },
+]
+`;
+
+exports[`filterMessagesForAgent > should handle system messages 1`] = `
+[
+  {
+    "content": "System message",
+    "createdAt": 1634567890000,
+    "id": "1",
+    "role": "system",
+    "updatedAt": 1634567890000,
+  },
+]
+`;
+
+exports[`filterMessagesForAgent > should handle user direct messages 1`] = `
+[
+  {
+    "content": "Private message to agent-1",
+    "createdAt": 1634567890000,
+    "id": "1",
+    "role": "user",
+    "targetId": "agent-1",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "content": "***",
+    "createdAt": 1634567890000,
+    "id": "2",
+    "role": "user",
+    "targetId": "agent-2",
+    "updatedAt": 1634567890000,
+  },
+]
+`;
+
+exports[`filterMessagesForAgent > should preserve all message properties when replacing content 1`] = `
+[
+  {
+    "content": "***",
+    "createdAt": 1634567890000,
+    "files": [
+      "file1",
+    ],
+    "id": "1",
+    "observationId": "obs1",
+    "parentId": "parent1",
+    "role": "user",
+    "targetId": "agent-2",
+    "tools": [],
+    "updatedAt": 1634567890000,
+  },
+]
+`;
+
+exports[`filterMessagesForAgent > should replace content for DMs not involving this agent 1`] = `
+[
+  {
+    "content": "***",
+    "createdAt": 1634567890000,
+    "id": "1",
+    "role": "user",
+    "targetId": "agent-2",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "agentId": "agent-2",
+    "content": "***",
+    "createdAt": 1634567890000,
+    "id": "2",
+    "role": "assistant",
+    "targetId": "user",
+    "updatedAt": 1634567890000,
+  },
+  {
+    "agentId": "agent-2",
+    "content": "***",
+    "createdAt": 1634567890000,
+    "id": "3",
+    "role": "assistant",
+    "targetId": "agent-3",
+    "updatedAt": 1634567890000,
+  },
+]
+`;

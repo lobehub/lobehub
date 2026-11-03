@@ -1,0 +1,22 @@
+{
+  "error.invalidFormat.desc": "Możesz nadal to przeczytać. Układ może różnić się od oryginału.",
+  "error.invalidFormat.ownerHint": "Zapisz ponownie w edytorze, aby przywrócić oryginalny układ.",
+  "error.invalidFormat.title": "Nie można wyświetlić tej strony w jej oryginalnym formacie",
+  "popover.copyLink": "Kopiuj link",
+  "popover.copyLinkSuccess": "Link skopiowany",
+  "popover.linkHint": "Każdy z linkiem może zobaczyć tę stronę",
+  "popover.permissionLink": "Każdy z linkiem",
+  "popover.permissionPrivate": "Prywatne",
+  "popover.permissionWorkspace": "Każdy w przestrzeni roboczej",
+  "popover.privateHint": "Tylko Ty masz dostęp do tej strony",
+  "popover.sectionViews_one": "{{count}} wyświetlenie",
+  "popover.sectionViews_other": "{{count}} wyświetlenia",
+  "popover.title": "Udostępnij stronę",
+  "popover.updateError": "Nie udało się zaktualizować ustawień udostępniania",
+  "popover.visibility": "Widoczność",
+  "popover.visibilityUpdated": "Widoczność zaktualizowana",
+  "popover.workspaceHint": "Każdy w tej przestrzeni roboczej może zobaczyć tę stronę",
+  "shareButton.label": "Udostępnij",
+  "shell.sharedBy": "Udostępnione przez {{name}}",
+  "shell.updatedAt": "Zaktualizowano {{relative}}"
+}

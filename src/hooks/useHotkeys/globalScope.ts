@@ -1,0 +1,108 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
+import { useLocation } from 'react-router';
+
+import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
+import { usePinnedAgentState } from '@/hooks/usePinnedAgentState';
+import { useGlobalStore } from '@/store/global';
+
+import { useHotkeyById } from './useHotkeyById';
+
+/**
+ * Task routes render AgentTaskManager, whose panel status is intentionally
+ * independent from the generic right panel used by chat and page editor routes.
+ */
+export const isTaskPanelRoute = (pathname: string) =>
+  pathname === '/tasks' || pathname.startsWith('/tasks/') || pathname.startsWith('/task/');
+
+/**
+ * Agent profile renders AgentBuilder, whose panel status is intentionally
+ * independent from the generic right panel used by chat routes.
+ */
+export const isAgentProfilePanelRoute = (pathname: string) =>
+  /^\/agent\/[^/]+\/profile\/?$/.test(pathname);
+
+// Switch to chat tab (and focus on Lobe AI)
+export const useNavigateToChatHotkey = () => {
+  const navigateToAgent = useNavigateToAgent();
+  const [, { unpinAgent }] = usePinnedAgentState();
+
+  return useHotkeyById(HotkeyEnum.NavigateToChat, () => {
+    navigateToAgent(INBOX_SESSION_ID);
+    unpinAgent();
+  });
+};
+
+export const useOpenHotkeyHelperHotkey = () => {
+  const [open, updateSystemStatus] = useGlobalStore((s) => [
+    s.status.showHotkeyHelper,
+    s.updateSystemStatus,
+  ]);
+
+  return useHotkeyById(HotkeyEnum.OpenHotkeyHelper, () =>
+    updateSystemStatus({ showHotkeyHelper: !open }),
+  );
+};
+
+export const useToggleLeftPanelHotkey = () => {
+  const toggleLeftPanel = useGlobalStore((s) => s.toggleLeftPanel);
+  return useHotkeyById(HotkeyEnum.ToggleLeftPanel, () => toggleLeftPanel(), {
+    enableOnContentEditable: true,
+  });
+};
+
+export const useToggleRightPanelHotkey = () => {
+  const { pathname } = useLocation();
+  const [toggleAgentBuilderPanel, toggleRightPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
+    s.toggleAgentBuilderPanel,
+    s.toggleRightPanel,
+    s.toggleTaskAgentPanel,
+  ]);
+  const isAgentProfileRoute = isAgentProfilePanelRoute(pathname);
+  const isTaskRoute = isTaskPanelRoute(pathname);
+
+  return useHotkeyById(
+    HotkeyEnum.ToggleRightPanel,
+    () => {
+      if (isTaskRoute) {
+        toggleTaskAgentPanel();
+        return;
+      }
+
+      if (isAgentProfileRoute) {
+        toggleAgentBuilderPanel();
+        return;
+      }
+
+      toggleRightPanel();
+    },
+    {
+      enableOnContentEditable: true,
+    },
+    [
+      isAgentProfileRoute,
+      isTaskRoute,
+      toggleAgentBuilderPanel,
+      toggleRightPanel,
+      toggleTaskAgentPanel,
+    ],
+  );
+};
+
+// CMDK
+export const useCommandPaletteHotkey = () => {
+  const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+
+  return useHotkeyById(HotkeyEnum.CommandPalette, () => toggleCommandMenu(), {
+    enableOnContentEditable: true,
+  });
+};
+
+export const useRegisterGlobalHotkeys = () => {
+  // Global auto-registration doesn't need enableScope
+  useToggleLeftPanelHotkey();
+  useToggleRightPanelHotkey();
+  useNavigateToChatHotkey();
+  useOpenHotkeyHelperHotkey();
+  useCommandPaletteHotkey();
+};

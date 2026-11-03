@@ -1,0 +1,364 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AiModelModel } from '@/database/models/aiModel';
+import { AiInfraRepos } from '@/database/repositories/aiInfra';
+
+import { aiModelRouter } from '../aiModel';
+
+const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
+
+vi.mock('@/business/server/aiProvider', () => ({
+  getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
+  getModelRedirects: vi.fn(async () => ({})),
+}));
+vi.mock('@/database/models/aiModel');
+vi.mock('@/database/models/user');
+vi.mock('@/database/repositories/aiInfra');
+vi.mock('@/server/globalConfig', () => ({
+  getServerGlobalConfig: vi.fn().mockReturnValue({
+    aiProvider: {},
+  }),
+}));
+vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
+  KeyVaultsGateKeeper: {
+    initWithEnvKey: vi.fn().mockResolvedValue({
+      encrypt: vi.fn(),
+      decrypt: vi.fn(),
+    }),
+  },
+}));
+
+describe('aiModelRouter', () => {
+  const mockCtx = {
+    userId: 'test-user',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
+  });
+
+  it('should create ai model', async () => {
+    const mockCreate = vi.fn().mockResolvedValue({ id: 'model-1' });
+    const mockFindByIdAndProvider = vi.fn().mockResolvedValue(null);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+        findByIdAndProvider: mockFindByIdAndProvider,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    const result = await caller.createAiModel({
+      id: 'test-model',
+      providerId: 'test-provider',
+    });
+
+    expect(result).toBe('model-1');
+    expect(mockFindByIdAndProvider).toHaveBeenCalledWith('test-model', 'test-provider');
+    expect(mockCreate).toHaveBeenCalledWith({
+      id: 'test-model',
+      providerId: 'test-provider',
+    });
+  });
+
+  it('should reject duplicate ai model before creating', async () => {
+    const mockCreate = vi.fn();
+    const mockFindByIdAndProvider = vi.fn().mockResolvedValue({ id: 'test-model' });
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+        findByIdAndProvider: mockFindByIdAndProvider,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.createAiModel({
+        id: 'test-model',
+        providerId: 'test-provider',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Model "test-model" already exists',
+    });
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('should convert duplicate insert races to conflict errors', async () => {
+    const duplicateError = Object.assign(new Error('failed query'), {
+      cause: Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'ai_models_id_provider_id_user_id_pk',
+      }),
+    });
+    const mockCreate = vi.fn().mockRejectedValue(duplicateError);
+    const mockFindByIdAndProvider = vi.fn().mockResolvedValue(null);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+        findByIdAndProvider: mockFindByIdAndProvider,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.createAiModel({
+        id: 'test-model',
+        providerId: 'test-provider',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Model "test-model" already exists',
+    });
+  });
+
+  it('should get ai model by id', async () => {
+    const mockModel = {
+      id: 'model-1',
+      name: 'Test Model',
+    };
+    const mockFindById = vi.fn().mockResolvedValue(mockModel);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        findById: mockFindById,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    const result = await caller.getAiModelById({ id: 'model-1' });
+
+    expect(result).toEqual(mockModel);
+    expect(mockFindById).toHaveBeenCalledWith('model-1');
+  });
+
+  it('should get ai provider model list', async () => {
+    const mockModelList = [
+      { id: 'model-1', name: 'Model 1' },
+      { id: 'model-2', name: 'Model 2' },
+    ];
+    const mockGetList = vi.fn().mockResolvedValue(mockModelList);
+    vi.mocked(AiInfraRepos).mockImplementation(function () {
+      return {
+        getAiProviderModelList: mockGetList,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    const result = await caller.getAiProviderModelList({ id: 'provider-1' });
+
+    expect(result).toEqual(mockModelList);
+    expect(mockGetList).toHaveBeenCalledWith('provider-1', {
+      enabled: undefined,
+      limit: undefined,
+      offset: undefined,
+    });
+  });
+
+  it('should remove ai model', async () => {
+    const mockDelete = vi.fn().mockResolvedValue(true);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.removeAiModel({
+      id: 'model-1',
+      providerId: 'provider-1',
+    });
+
+    expect(mockDelete).toHaveBeenCalledWith('model-1', 'provider-1');
+  });
+
+  it('should update ai model', async () => {
+    const mockUpdate = vi.fn().mockResolvedValue(true);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        update: mockUpdate,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.updateAiModel({
+      id: 'model-1',
+      providerId: 'provider-1',
+      value: {
+        displayName: 'Updated Model',
+      },
+    });
+
+    expect(mockUpdate).toHaveBeenCalledWith('model-1', 'provider-1', {
+      displayName: 'Updated Model',
+    });
+  });
+
+  it('should toggle model enabled status', async () => {
+    const mockToggle = vi.fn().mockResolvedValue(true);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        toggleModelEnabled: mockToggle,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.toggleModelEnabled({
+      id: 'model-1',
+      providerId: 'provider-1',
+      enabled: true,
+      type: 'embedding',
+    });
+
+    expect(mockToggle).toHaveBeenCalledWith({
+      id: 'model-1',
+      providerId: 'provider-1',
+      enabled: true,
+      type: 'embedding',
+    });
+  });
+
+  it('should batch toggle ai models', async () => {
+    const mockBatchToggle = vi.fn().mockResolvedValue(true);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        batchToggleAiModels: mockBatchToggle,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.batchToggleAiModels({
+      id: 'provider-1',
+      models: ['model-1', 'model-2'],
+      enabled: true,
+    });
+
+    expect(mockBatchToggle).toHaveBeenCalledWith('provider-1', ['model-1', 'model-2'], true);
+  });
+
+  it('should batch update ai models', async () => {
+    const mockBatchUpdate = vi.fn().mockResolvedValue([]);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        batchUpdateAiModels: mockBatchUpdate,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.batchUpdateAiModels({
+      id: 'provider-1',
+      models: [{ id: 'model-1' }, { id: 'model-2' }],
+    });
+
+    expect(mockBatchUpdate).toHaveBeenCalledWith('provider-1', [
+      { id: 'model-1' },
+      { id: 'model-2' },
+    ]);
+  });
+
+  it('should clear models by provider', async () => {
+    const mockClear = vi.fn().mockResolvedValue(true);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        clearModelsByProvider: mockClear,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.clearModelsByProvider({
+      providerId: 'provider-1',
+    });
+
+    expect(mockClear).toHaveBeenCalledWith('provider-1');
+  });
+
+  it('should clear remote models', async () => {
+    const mockClearRemote = vi.fn().mockResolvedValue(true);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        clearRemoteModels: mockClearRemote,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.clearRemoteModels({
+      providerId: 'provider-1',
+    });
+
+    expect(mockClearRemote).toHaveBeenCalledWith('provider-1');
+  });
+
+  it('should get model reasoning config', async () => {
+    const mockGet = vi.fn().mockResolvedValue({ gpt5_6ReasoningEffort: 'high' });
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        getModelReasoningConfig: mockGet,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    const result = await caller.getAiModelReasoningConfig({
+      id: 'gpt-5.6-sol',
+      providerId: 'openai',
+    });
+
+    expect(mockGet).toHaveBeenCalledWith('gpt-5.6-sol', 'openai');
+    expect(result).toEqual({ gpt5_6ReasoningEffort: 'high' });
+  });
+
+  it('should update model reasoning config', async () => {
+    const mockUpdate = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        updateModelReasoningConfig: mockUpdate,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.updateAiModelReasoningConfig({
+      id: 'gpt-5.6-sol',
+      providerId: 'openai',
+      value: { gpt5_6ReasoningEffort: 'xhigh', reasoningMode: 'pro' },
+    });
+
+    expect(mockUpdate).toHaveBeenCalledWith('gpt-5.6-sol', 'openai', {
+      gpt5_6ReasoningEffort: 'xhigh',
+      reasoningMode: 'pro',
+    });
+  });
+
+  it('should reject invalid reasoning config values', async () => {
+    const mockUpdate = vi.fn();
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        updateModelReasoningConfig: mockUpdate,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.updateAiModelReasoningConfig({
+        id: 'gpt-5.6-sol',
+        providerId: 'openai',
+        value: { gpt5_6ReasoningEffort: 'ultra' } as any,
+      }),
+    ).rejects.toThrow();
+
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});

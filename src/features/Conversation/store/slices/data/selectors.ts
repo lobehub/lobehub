@@ -1,0 +1,377 @@
+import type {
+  AssistantContentBlock,
+  ChatToolPayloadWithResult,
+  UIChatMessage,
+} from '@lobechat/types';
+
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
+
+import { type State } from '../../initialState';
+import { getPendingInterventions } from './pendingInterventions';
+import { collectSteerChains } from './steerChains';
+import { getWorkSummariesByRootOperationId } from './workSummaries';
+
+const displayMessages = (s: State) => s.displayMessages;
+const displayMessageIds = (s: State) => s.displayMessages.map((m) => m.id);
+const dbMessages = (s: State) => s.dbMessages;
+const messagesInit = (s: State) => s.messagesInit;
+const skipFetch = (s: State) => s.skipFetch;
+const hasLaterMessages = (s: State) => s.hasLaterMessages;
+
+const getDisplayMessageById = (id: string) => (s: State) => {
+  // First, try to find in top-level displayMessages
+  const topLevelMessage = s.displayMessages.find((m) => m.id === id);
+  if (topLevelMessage) return topLevelMessage;
+
+  // If not found, search in agentCouncil members
+  for (const message of s.displayMessages) {
+    if (message.role === 'agentCouncil' && (message as any).members) {
+      const member = (message as any).members.find((m: UIChatMessage) => m.id === id);
+      if (member) return member;
+    }
+  }
+
+  return undefined;
+};
+const getDbMessageById = (id: string) => (s: State) => s.dbMessages.find((m) => m.id === id);
+const getDbMessageByToolCallId = (id: string) => (s: State) =>
+  s.dbMessages.find((m) => m.tool_call_id === id);
+
+/**
+ * `createdAt` is typed as a number but arrives as a `Date` after a DB rehydrate
+ * (superjson keeps `timestamptz` as `Date`), so normalize before comparing.
+ */
+const toEpochMs = (value: Date | number | string | null | undefined): number | undefined => {
+  if (value === null || value === undefined) return undefined;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(time) ? undefined : time;
+};
+
+/**
+ * `createdAt` of a tool call's result row, normalized to epoch ms.
+ *
+ * Resolve the row by its unique message id rather than `tool_call_id`: Codex
+ * reuses item ids such as `item_1` across resumed turns in the same topic.
+ */
+const getToolMessageCreatedAt = (resultMessageId: string | undefined) => (s: State) =>
+  resultMessageId ? toEpochMs(getDbMessageById(resultMessageId)(s)?.createdAt) : undefined;
+
+/**
+ * Helper to find last message ID in an AssistantContentBlock
+ */
+const findLastBlockId = (block: AssistantContentBlock | undefined): string | undefined => {
+  if (!block) return undefined;
+
+  // Check tools for result message ID
+  if (block.tools && block.tools.length > 0) {
+    const lastTool = block.tools.at(-1);
+    return lastTool?.result_msg_id;
+  }
+
+  // Return block ID
+  return block.id;
+};
+
+/**
+ * Recursively finds the last message ID in a message tree
+ * Priority: children > tools > self
+ */
+export const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | undefined => {
+  if (!node) return undefined;
+
+  // Priority 1: Dive into children recursively
+  if (node.children && node.children.length > 0) {
+    const lastChild = node.children.at(-1);
+    return findLastBlockId(lastChild);
+  }
+
+  // Priority 2: Check tools for result message ID
+  if (node.tools && node.tools.length > 0) {
+    const lastTool = node.tools.at(-1);
+    return lastTool?.result_msg_id;
+  }
+
+  // Priority 3: Return self ID
+  return node.id;
+};
+
+/**
+ * Whether a message currently has no reply rendered beneath it.
+ *
+ * True during the window a retry opens up: `delAndRegenerateMessage` removes the
+ * failed turn before the replacement exists, so for a beat the user turn stands
+ * alone with nothing under it and nothing to hang a loading state on.
+ */
+const hasNoRenderedReply = (id: string) => (s: State) =>
+  !s.displayMessages.some((message) => message.parentId === id);
+
+/**
+ * Finds the last (deepest) message ID from a display message
+ * Recursively traverses children and tools to find the actual last message
+ */
+const findLastMessageId = (id: string) => (s: State) => {
+  const message = getDisplayMessageById(id)(s);
+  return findLastMessageIdRecursive(message);
+};
+
+/**
+ * Gets the latest message block from a group message that doesn't contain tools
+ * Returns undefined if the last block contains tools or if message is not a group message
+ */
+const getGroupLatestMessageWithoutTools = (id: string) => (s: State) => {
+  const message = s.displayMessages.find((m) => m.id === id);
+
+  if (
+    !message ||
+    message.role !== 'assistantGroup' ||
+    !message.children ||
+    message.children.length === 0
+  )
+    return;
+
+  // Get the last child
+  const lastChild = message.children.at(-1);
+
+  if (!lastChild) return;
+
+  // Return the last child only if it doesn't have tools
+  if (!lastChild.tools || lastChild.tools.length === 0) {
+    if (!lastChild.content) return;
+
+    return lastChild;
+  }
+
+  return;
+};
+
+// ===== Topic-related selectors (bridged from ChatStore) =====
+
+/**
+ * Get the topic summary for current conversation
+ * This is a bridge selector that reads from global ChatStore
+ */
+const currentTopicSummary = () => {
+  const chatState = useChatStore.getState();
+  return topicSelectors.currentActiveTopicSummary(chatState);
+};
+
+const pendingInterventions = (s: State) => getPendingInterventions(s.displayMessages);
+
+// Works ride the message payload (attached server-side to each round's anchor
+// message), so the in-message chips read from the raw `dbMessages` (keyed by the
+// display-resolved rootOperationId) instead of a dedicated work-summary fetch.
+const workSummariesByRootOperationId = (rootOperationId?: string | null) => (s: State) =>
+  getWorkSummariesByRootOperationId(s.dbMessages, rootOperationId);
+
+const isRefreshingAt = (id: string) => (s: State) => s.refreshingRowId === id;
+
+const isSecondLastMessageFromUser = (s: State) => s.displayMessages.at(-2)?.role === 'user';
+
+const rowMemberIds = (id: string) => (s: State) =>
+  collectSteerChains(s.displayMessages).byHost.get(id)?.memberIds ?? [id];
+
+const hostRowOf = (id: string) => (s: State) =>
+  collectSteerChains(s.displayMessages).hostOf.get(id) ?? id;
+
+/**
+ * The last message of the row that contains `id`.
+ *
+ * A row's id is its host — the *first* turn of the row. Steered continuations
+ * (see `collectSteerChains`) render inside that same row, so the row's id and
+ * the message the user is actually looking at are two different things. Any
+ * action that must act on what the user sees has to resolve to the row tail;
+ * otherwise it silently acts on the chain head. A plain (non-chained) row
+ * resolves to itself, so this is a no-op there.
+ */
+const rowTailId = (id: string) => (s: State) => {
+  const { byHost, hostOf } = collectSteerChains(s.displayMessages);
+  const hostId = hostOf.get(id) ?? id;
+
+  return byHost.get(hostId)?.continuations.at(-1)?.groupId ?? hostId;
+};
+
+const collectDeletableMessageIds = (message: UIChatMessage | undefined): string[] => {
+  if (!message) return [];
+  if ((message.role !== 'assistantGroup' && message.role !== 'supervisor') || !message.children) {
+    return [message.id];
+  }
+
+  return [
+    message.id,
+    ...message.children.map((child) => child.id),
+    ...message.children.flatMap(
+      (child) => child.tools?.flatMap((tool) => (tool.result?.id ? [tool.result.id] : [])) ?? [],
+    ),
+  ];
+};
+
+// The server reparents survivors instead of cascading, so every folded
+// continuation must be expanded the same way as the host or its later blocks
+// resurface as a fresh turn under the original user message.
+const deletableRowMessageIds = (id: string) => (s: State) => [
+  ...new Set(
+    rowMemberIds(id)(s).flatMap((memberId) =>
+      collectDeletableMessageIds(getDisplayMessageById(memberId)(s)),
+    ),
+  ),
+];
+
+const toAssistantContentBlock = (message: UIChatMessage): AssistantContentBlock => ({
+  content: message.content,
+  error: message.error,
+  fileList: message.fileList,
+  id: message.id,
+  imageList: message.imageList,
+  metadata: message.metadata ?? undefined,
+  performance: message.performance,
+  reasoning: message.reasoning ?? undefined,
+  tasks: message.tasks as AssistantContentBlock['tasks'],
+  tools: message.tools as ChatToolPayloadWithResult[],
+  usage: message.usage,
+});
+
+const getRowLatestMessageWithoutTools = (id: string) => (s: State) => {
+  const tailId = rowMemberIds(id)(s).at(-1) ?? id;
+  const tail = getDisplayMessageById(tailId)(s);
+
+  if (tail?.role !== 'assistant') return getGroupLatestMessageWithoutTools(tailId)(s);
+  if (tail.tools?.length || !tail.content) return;
+
+  return toAssistantContentBlock(tail);
+};
+
+/**
+ * Walk displayMessages (including compressed groups and agentCouncil members)
+ * to find an assistant content block by its id. Used to let tool subtrees
+ * self-subscribe to their own data instead of receiving it as props from the
+ * message-level renderer.
+ */
+const findBlockById = (
+  blockId: string,
+  messages: UIChatMessage[],
+): AssistantContentBlock | undefined => {
+  for (const message of messages) {
+    if (message.role === 'assistant' && message.id === blockId) {
+      return toAssistantContentBlock(message);
+    }
+    if (message.children) {
+      const block = message.children.find((child) => child.id === blockId);
+      if (block) return block;
+    }
+    // Post-task summary blocks live in a separate field on virtual
+    // assistantGroup messages so they render AFTER `<SignalCallbacks>`
+    // (). Same lookup contract as `children` — the renderer
+    // identifies blocks by id regardless of which slot they came from.
+    if ((message as { taskCompletions?: AssistantContentBlock[] }).taskCompletions) {
+      const block = (
+        message as { taskCompletions?: AssistantContentBlock[] }
+      ).taskCompletions!.find((child) => child.id === blockId);
+      if (block) return block;
+    }
+    if (message.compressedMessages) {
+      const inCompressedMessages = findBlockById(blockId, message.compressedMessages);
+      if (inCompressedMessages) return inCompressedMessages;
+    }
+    if (message.role === 'agentCouncil' && (message as any).members) {
+      const inMembers = findBlockById(blockId, (message as any).members);
+      if (inMembers) return inMembers;
+    }
+  }
+  return undefined;
+};
+
+const getToolsInBlock =
+  (blockId: string) =>
+  (s: State): ChatToolPayloadWithResult[] | undefined => {
+    const block = findBlockById(blockId, s.displayMessages);
+    return block?.tools;
+  };
+
+const getToolInBlock =
+  (blockId: string, toolCallId: string) =>
+  (s: State): ChatToolPayloadWithResult | undefined => {
+    const tools = getToolsInBlock(blockId)(s);
+    return tools?.find((t) => t.id === toolCallId);
+  };
+
+const getBlockContent =
+  (blockId: string) =>
+  (s: State): string | undefined =>
+    findBlockById(blockId, s.displayMessages)?.content;
+
+/**
+ * Block metadata from the same recursive lookup as {@link getBlockContent}, so blocks nested in
+ * compressed groups or council members resolve too (`getDbMessageById` only sees top-level rows).
+ */
+const getBlockMetadata =
+  (blockId: string) =>
+  (s: State): AssistantContentBlock['metadata'] =>
+    findBlockById(blockId, s.displayMessages)?.metadata;
+
+const getBlockHasTools =
+  (blockId: string) =>
+  (s: State): boolean => {
+    const tools = findBlockById(blockId, s.displayMessages)?.tools;
+    return !!tools && tools.length > 0;
+  };
+
+/**
+ * Task ids whose `role='taskCallback'` handoff message already landed in this
+ * thread. Drives Goal-card dedupe: once the callback card exists it absorbs
+ * the Goal status header, so the creating turn's tracker card retires.
+ */
+const taskCallbackTaskIds = (s: State): string[] => {
+  const ids: string[] = [];
+  for (const message of s.displayMessages) {
+    if (message.role !== 'taskCallback') continue;
+    const taskId = message.metadata?.taskCallback?.taskId;
+    if (taskId) ids.push(taskId);
+  }
+  return ids;
+};
+
+/** 1-based position of a verify message among all verify messages in the thread. */
+const getVerifyOrdinal = (id: string) => (s: State) => {
+  let ordinal = 0;
+  for (const message of s.displayMessages) {
+    if (message.role === 'verify') {
+      ordinal += 1;
+      if (message.id === id) return ordinal;
+    }
+  }
+  return ordinal || 1;
+};
+
+export const dataSelectors = {
+  hasLaterMessages,
+  isRefreshingAt,
+  currentTopicSummary,
+  dbMessages,
+  deletableRowMessageIds,
+  getVerifyOrdinal,
+  displayMessageIds,
+  displayMessages,
+  findLastMessageId,
+  getDbMessageById,
+  getDbMessageByToolCallId,
+  getBlockContent,
+  getBlockMetadata,
+  getBlockHasTools,
+  getDisplayMessageById,
+  getGroupLatestMessageWithoutTools,
+  getRowLatestMessageWithoutTools,
+  getToolInBlock,
+  getToolMessageCreatedAt,
+  getToolsInBlock,
+  hasNoRenderedReply,
+  hostRowOf,
+  isSecondLastMessageFromUser,
+  messagesInit,
+  pendingInterventions,
+  rowMemberIds,
+  rowTailId,
+  skipFetch,
+  taskCallbackTaskIds,
+  workSummariesByRootOperationId,
+};

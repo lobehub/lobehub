@@ -1,0 +1,25 @@
+{
+  "name": "@lobechat/prompts",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./channel": "./src/chains/channel.ts",
+    "./fileSystem": "./src/prompts/fileSystem/index.ts",
+    "./textWindow": "./src/textWindow/index.ts",
+    "./toolResult": "./src/toolResult/index.ts"
+  },
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'",
+    "test:update": "vitest -u"
+  },
+  "dependencies": {
+    "@lobechat/const": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*",
+    "tsx": "^4.22.4"
+  }
+}

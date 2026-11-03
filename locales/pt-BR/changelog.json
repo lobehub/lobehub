@@ -1,0 +1,14 @@
+{
+  "actions.followOnX": "Siga-nos no X",
+  "actions.subscribeToUpdates": "Inscreva-se para receber atualizações",
+  "actions.versions": "Detalhes da versão",
+  "addedWhileAway": "Adicionamos novos recursos enquanto você esteve ausente.",
+  "allChangelog": "Ver todas as alterações",
+  "description": "Fique por dentro das novidades e melhorias do {{appName}}",
+  "pagination.next": "Próxima página",
+  "pagination.older": "Ver alterações anteriores",
+  "readDetails": "Ler detalhes",
+  "title": "Registro de alterações",
+  "versionDetails": "Detalhes da versão",
+  "welcomeBack": "Bem-vindo de volta!"
+}

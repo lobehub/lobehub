@@ -1,0 +1,682 @@
+import type {
+  ConversationContext,
+  MessageMapScope,
+  MessageMetadata,
+  UploadFileItem,
+} from '@lobechat/types';
+
+import type { QueuedFollowUpRequest } from '@/services/aiAgent';
+
+/**
+ * Operation Type Definitions
+ * Unified operation state management for all async operations
+ */
+
+/**
+ * Operation type enumeration - covers all async operations
+ */
+export type OperationType =
+  // === Message sending ===
+  | 'sendMessage' // Send message to server
+  | 'uploadVoiceMessage' // Upload a local voice recording before dispatching its turn
+  | 'createTopic' // Auto create topic
+  | 'regenerate' // Regenerate message
+  | 'continue' // Continue generation
+  | 'autoRetryPending' // Heterogeneous "overloaded" auto-retry waiting period (counting down to the next attempt). Keeps the turn in a loading/in-progress state between attempts; cancelled by Stop or the guide's cancel action.
+
+  // === AI generation ===
+  | 'execAgentRuntime' // Execute agent runtime (client-side, entire agent runtime execution)
+  | 'execServerAgentRuntime' // Execute server agent runtime (server-side, e.g., Group Chat)
+  | 'execHeterogeneousAgent'
+  | 'subagentThread' // Per-spawn subagent Thread context (child of execHeterogeneousAgent); carries thread-scoped ConversationContext so dispatches resolve to the Thread's messagesMap bucket. NOT in AI_RUNTIME_OPERATION_TYPES — it's a context container, not an independent loading state.
+  | 'createAssistantMessage' // Create assistant message (sub-operation of execAgentRuntime)
+  // === LLM execution (sub-operations) ===
+  | 'callLLM' // Call LLM streaming response (sub-operation of execAgentRuntime)
+  // === (sub-operations) = ==
+  | 'reasoning' // AI reasoning process (child operation)
+
+  // === RAG and retrieval ===
+  | 'rag' // RAG retrieval flow (child operation)
+  | 'searchWorkflow' // Search workflow
+
+  // === Tool calling ===
+  | 'toolCalling' // Tool calling (streaming, child operation)
+  // === (sub-operations) ===
+  | 'createToolMessage' // Create tool message (sub-operation of executeToolCall)
+  | 'executeToolCall' // Execute tool call (sub-operation of toolCalling)
+  // === Tool intervention ===
+  | 'approveToolCalling' // Approve tool intervention
+  | 'rejectToolCalling' // Reject tool intervention
+  | 'submitToolInteraction' // Submit user interaction response
+  | 'skipToolInteraction' // Skip user interaction
+  | 'cancelToolInteraction' // Cancel user interaction
+  // === (sub-operations of executeToolCall) ===
+  | 'pluginApi' // Plugin API call
+  | 'builtinToolSearch' // Builtin tool: search
+  | 'builtinToolLocalSystem' // Builtin tool: local system
+  | 'builtinToolKnowledgeBase' // Builtin tool: knowledge base
+  | 'builtinToolMemory' // Builtin tool: user memory
+  | 'builtinToolAgentBuilder' // Builtin tool: agent builder
+  | 'builtinToolGroupAgentBuilder' // Builtin tool: group agent builder
+  | 'builtinToolPageAgent' // Builtin tool: page agent (document editing)
+
+  // === Group Chat ===
+  | 'supervisorDecision' // Supervisor decision
+
+  // === Sub-Agent (Desktop only) ===
+  | 'execClientSubAgent' // Dispatch single sub-agent on the desktop client
+
+  // === Context Compression ===
+  // Context compression (compress old messages into summary)
+  | 'contextCompression'
+  | 'createMessageGroup'
+  | 'generateSummary'
+  // === Others ===
+  | 'translate'; // Translate message
+
+/**
+ * Operation status
+ */
+export type OperationStatus =
+  | 'pending' // Waiting to start (not currently used)
+  | 'running' // Executing
+  | 'paused' // Paused (for user intervention scenarios)
+  | 'completed' // Successfully completed
+  | 'cancelled' // User cancelled
+  | 'failed'; // Execution failed
+
+/**
+ * Operation context - business entity associations
+ * Extends ConversationContext with operation-specific fields
+ * Captured when an operation is created. A temporary `_new` conversation may be rekeyed once
+ * the server resolves its persisted topic/thread id; all other context changes create a new op.
+ */
+export interface OperationContext extends Partial<ConversationContext> {
+  agentId?: string; // Associated agent ID (specific agent in Group Chat)
+  groupId?: string; // Associated group ID (Group Chat)
+  messageId?: string; // Associated message ID
+}
+
+/**
+ * Operation cancel context - passed to cancel handler
+ */
+export interface OperationCancelContext {
+  metadata?: OperationMetadata;
+  operationId: string;
+  reason: string;
+  type: OperationType;
+}
+
+/**
+ * Callback to execute after AgentRuntime completes
+ */
+export type AfterCompletionCallback = () => void | Promise<void>;
+
+/**
+ * Runtime hooks that can be registered during operation execution
+ */
+export interface RuntimeHooks {
+  /**
+   * Callbacks to execute after AgentRuntime completes
+   * Used for actions that should happen after current execution finishes
+   * to avoid race conditions with message updates
+   */
+  afterCompletionCallbacks?: AfterCompletionCallback[];
+}
+
+/**
+ * Operation metadata
+ */
+export interface OperationMetadata {
+  // Other metadata (extensible)
+  [key: string]: any;
+
+  // Cancel information
+  cancelReason?: string;
+  duration?: number;
+  /**
+   * The run ended without completing — stopped from another tab, device or the
+   * API — though it settles as `completed` here. Nothing drains its queue next.
+   */
+  endedWithoutCompletion?: boolean;
+
+  endTime?: number;
+
+  // Error information
+  error?: {
+    type: string;
+    message: string;
+    code?: string;
+    details?: any;
+  };
+
+  /**
+   * One-use automatic retry grant for a run explicitly dispatched by this client.
+   * Consumed by the error card; absent for restored/reconnected operations.
+   * @default undefined
+   */
+  heteroAutoRetryAvailable?: boolean;
+
+  /**
+   * External heterogeneous producer (e.g. `claude-code`) the server dispatched
+   * this Gateway run to. `null` denotes the native AgentRuntime; `undefined`
+   * means an older server or topic marker did not report it, so it may still
+   * be an external producer.
+   * @default undefined
+   */
+  heteroType?: string | null;
+
+  // UI state (for sendMessage operation)
+  inputEditorTempState?: any | null; // Editor state snapshot for cancel restoration
+  inputSendErrorMsg?: string; // Error message to display in UI
+  /**
+   * User-facing LLM-call total for the running operation.
+   *
+   * Counts only actual model invocations — tool-only runtime iterations do not
+   * increment it. `stepCount` in operation metadata remains the internal
+   * scheduling/execution index.
+   */
+  llmCalls?: number;
+  // Progress information
+  progress?: {
+    current: number;
+    total: number;
+    percentage?: number;
+  };
+
+  // Runtime hooks (collected during execution, executed after completion)
+  runtimeHooks?: RuntimeHooks;
+
+  /**
+   * Server-side operation id reported by the agent gateway for this local
+   * runtime operation. Preferred over the local nanoid when surfacing an
+   * operation id for tracing (e.g. the message "Copy Operation ID" action).
+   */
+  serverOperationId?: string;
+
+  // Performance information
+  startTime: number;
+
+  /**
+   * Upstream stream retry state surfaced by heterogeneous agents while no
+   * assistant output has arrived yet.
+   */
+  streamRetry?: StreamRetryMetadata;
+
+  /** A persisted server terminal snapshot already retired this local operation. */
+  terminalReconciled?: boolean;
+
+  /**
+   * Start of the turn a steered run continues. Elapsed timers count from here so
+   * a queued follow-up reads as one continuous turn; inherited by child operations.
+   */
+  turnStartTime?: number;
+
+  /**
+   * The model text stream has finished and there is no visible follow-up phase
+   * to wait for, but the runtime operation still needs its terminal lifecycle
+   * (`agent_runtime_end`) for cache, queue, unread, and notification effects.
+   */
+  visibleLoadingDone?: boolean;
+}
+
+export interface StreamRetryMetadata {
+  agentType?: string;
+  attempt?: number;
+  delayMs?: number;
+  error?: string;
+  errorStatus?: number;
+  maxAttempts?: number;
+  provider?: string;
+}
+
+/**
+ * Operation definition
+ */
+export interface Operation {
+  // === Control ===
+  abortController: AbortController; // Abort controller
+  childOperationIds?: string[]; // Child operation IDs
+  // === Context (core: capture and fix business context) ===
+  context: OperationContext; // Associated entities, captured at creation
+
+  description?: string; // Operation description (for tooltip)
+
+  // === Basic information ===
+  id: string; // Unique operation ID (using nanoid)
+
+  // === UI display ===
+  label?: string; // Operation display label (for UI)
+
+  // === Metadata ===
+  metadata: OperationMetadata;
+
+  // === Cancel handler ===
+  onCancelHandler?: (context: OperationCancelContext) => void | Promise<void>; // Cancel callback
+  // === Dependencies ===
+  parentOperationId?: string; // Parent operation ID (for operation nesting)
+
+  status: OperationStatus; // Operation status
+  type: OperationType; // Operation type
+}
+
+/**
+ * Per-file preview metadata snapshotted at enqueue time so the queue tray can
+ * render thumbnails and the resumed sendMessage can rebuild the optimistic
+ * audioList/imageList/videoList without relying on the global chat upload store (which
+ * is cleared as soon as the user submits).
+ */
+export interface QueuedFile {
+  audioMetadata?: UploadFileItem['audioMetadata'];
+  id: string;
+  /** MIME type, e.g. `image/png`, `video/mp4`, `application/pdf` */
+  mimeType: string;
+  name: string;
+  /** Preview URL — S3 URL for uploaded files, blob/base64 for in-memory items */
+  url: string;
+}
+
+/**
+ * Rebuild `UploadFileItem`-shaped objects from queued previews so the resumed
+ * `sendMessage` can derive audioList/imageList/videoList AND so we can repopulate
+ * `chatUploadFileList` when the user edits a queued message. The synthesized
+ * `File` carries only `name` + `type` (zero bytes) — the consumers we hit only
+ * read `file.name`, `file.type`, plus the URL fields we set below.
+ *
+ * We mirror the snapshotted `url` into both `fileUrl` and `previewUrl`: the
+ * optimistic-message path uses the `fileUrl || base64Url || previewUrl` fallback
+ * chain, while the desktop chat-input file preview only reads `previewUrl`.
+ */
+/**
+ * Snapshot file previews so the tray can render thumbnails and the resumed
+ * sendMessage can rebuild audioList/imageList/videoList — by the time the
+ * queue drains, chatUploadFileList has long been cleared.
+ */
+export const snapshotQueuedFiles = (files?: UploadFileItem[]): QueuedFile[] | undefined => {
+  if (!files?.length) return undefined;
+
+  return files.map((f) => ({
+    audioMetadata: f.audioMetadata,
+    id: f.id,
+    mimeType: f.file?.type ?? '',
+    name: f.file?.name ?? f.id,
+    url: f.fileUrl || f.base64Url || f.previewUrl || '',
+  }));
+};
+
+export const reconstructUploadFilesFromQueue = (files: QueuedFile[]): UploadFileItem[] =>
+  files.map((f) => ({
+    audioMetadata: f.audioMetadata,
+    id: f.id,
+    file: new File([], f.name, { type: f.mimeType }),
+    fileUrl: f.url || undefined,
+    previewUrl: f.url || undefined,
+    status: 'success',
+  }));
+
+/**
+ * Queued message waiting to be injected into agent runtime
+ */
+export interface QueuedMessage {
+  content: string;
+  createdAt: number;
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any>;
+  files?: string[];
+  /** Snapshot of file previews (id, name, mime, url) for tray rendering and optimistic resume */
+  filesPreview?: QueuedFile[];
+  /** Mirrors SendMessageParams.forceRuntime so a queued task-topic follow-up
+   *  keeps its gateway pin when the queue drains. */
+  forceRuntime?: 'client' | 'gateway' | 'hetero';
+  id: string;
+  interruptMode: 'soft' | 'hard';
+  metadata?: MessageMetadata;
+  /**
+   * Where the server holds this follow-up: `appending` while it is being
+   * handed to the server queue behind the running Gateway run, `server` once
+   * it is there. The server then joins it into that run or starts it as the
+   * next turn, so this client never sends it. Unset: only this client has it.
+   */
+  serverDelivery?: 'appending' | 'server';
+  /**
+   * The run request the server starts this follow-up with. Set when the send
+   * could be queued on the server; such an item may be handed over later.
+   */
+  serverRequest?: QueuedFollowUpRequest;
+  /**
+   * The append's answer was lost, so it may or may not be on the server. It
+   * stays the server's — never sent from here — until the same id is appended
+   * again and the server says where it is.
+   */
+  serverUnconfirmed?: boolean;
+}
+
+/** Whether only this client holds the queued message, so only it can send it. */
+export const isClientHeldQueuedMessage = (message: QueuedMessage): boolean =>
+  !message.serverDelivery;
+
+/**
+ * Merged message ready for injection
+ */
+export interface MergedQueuedMessage {
+  content: string;
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any>;
+  files: string[];
+  filesPreview: QueuedFile[];
+  forceRuntime?: 'client' | 'gateway' | 'hetero';
+  metadata?: MessageMetadata;
+}
+
+const createTextNode = (text: string) => ({
+  detail: 0,
+  format: 0,
+  mode: 'normal',
+  style: '',
+  text,
+  type: 'text',
+  version: 1,
+});
+
+const createParagraphNode = (text = '') => ({
+  children: text ? [createTextNode(text)] : [],
+  direction: 'ltr',
+  format: '',
+  indent: 0,
+  type: 'paragraph',
+  version: 1,
+});
+
+const createEditorDataFromContent = (content: string): Record<string, any> | undefined => {
+  if (!content) return undefined;
+
+  return {
+    root: {
+      children: content.split('\n').map((line) => createParagraphNode(line)),
+      direction: 'ltr',
+      format: '',
+      indent: 0,
+      type: 'root',
+      version: 1,
+    },
+  };
+};
+
+const normalizeQueuedEditorData = (message: QueuedMessage): Record<string, any> | undefined => {
+  if (message.editorData?.root) return message.editorData;
+
+  return createEditorDataFromContent(message.content);
+};
+
+const mergeQueuedEditorData = (messages: QueuedMessage[]): Record<string, any> | undefined => {
+  const mergedChildren: any[] = [];
+  let baseRoot: Record<string, any> | undefined;
+
+  for (const message of messages) {
+    const editorData = normalizeQueuedEditorData(message);
+    const root = editorData?.root;
+    const children = root?.children;
+
+    if (!Array.isArray(children) || children.length === 0) continue;
+
+    if (!baseRoot) {
+      baseRoot = structuredClone(root);
+    }
+
+    if (mergedChildren.length > 0) {
+      mergedChildren.push(createParagraphNode());
+    }
+
+    mergedChildren.push(...structuredClone(children));
+  }
+
+  if (mergedChildren.length === 0) return undefined;
+
+  return {
+    root: {
+      ...baseRoot,
+      children: mergedChildren,
+      type: 'root',
+      version: baseRoot?.version ?? 1,
+    },
+  };
+};
+
+/**
+ * Merge multiple queued messages into a single message.
+ * Sorted by creation time, content joined with double newlines.
+ */
+export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMessage => {
+  const sorted = [...messages].sort((a, b) => a.createdAt - b.createdAt);
+  const metadata = sorted.reduce<MessageMetadata | undefined>((acc, message) => {
+    if (!message.metadata) return acc;
+    const localSystemToolSnapshots = [
+      ...(acc?.localSystemToolSnapshots ?? []),
+      ...(message.metadata.localSystemToolSnapshots ?? []),
+    ];
+    const pageSelections = [
+      ...(acc?.pageSelections ?? []),
+      ...(message.metadata.pageSelections ?? []),
+    ];
+    const contextSelections = [
+      ...(acc?.contextSelections ?? []),
+      ...(message.metadata.contextSelections ?? []),
+    ];
+
+    return {
+      ...acc,
+      ...message.metadata,
+      ...(localSystemToolSnapshots.length ? { localSystemToolSnapshots } : undefined),
+      ...(contextSelections.length ? { contextSelections } : undefined),
+      ...(pageSelections.length ? { pageSelections } : undefined),
+    };
+  }, undefined);
+
+  // If any queued message pins the runtime, propagate it — a "server topic"
+  // follow-up must stay on its rails even after merge.
+  const forceRuntime = sorted.find((m) => m.forceRuntime)?.forceRuntime;
+
+  return {
+    content: sorted.map((m) => m.content).join('\n\n'),
+    editorData: mergeQueuedEditorData(sorted),
+    files: sorted.flatMap((m) => m.files ?? []),
+    filesPreview: sorted.flatMap((m) => m.filesPreview ?? []),
+    ...(forceRuntime ? { forceRuntime } : {}),
+    metadata,
+  };
+};
+
+/**
+ * Operation filter for querying operations
+ */
+export interface OperationFilter {
+  agentId?: string;
+  groupId?: string | null;
+  isNew?: boolean;
+  messageId?: string;
+  scope?: MessageMapScope;
+  status?: OperationStatus | OperationStatus[];
+  threadId?: string | null;
+  topicId?: string | null;
+  type?: OperationType | OperationType[];
+}
+
+// === Operation Type Constants ===
+
+/**
+ * Operation types that indicate AI is generating content
+ * Used for loading state indicators and animation in UI
+ *
+ * Includes:
+ * - execAgentRuntime: Client-side agent execution (single chat)
+ * - execHeterogeneousAgent: Heterogeneous agent execution (Claude Code CLI, etc.)
+ * - execServerAgentRuntime: Server-side agent execution (Group Chat)
+ */
+export const SEND_NOW_CANCEL_REASON = 'send_now';
+
+export const AI_RUNTIME_OPERATION_TYPES: OperationType[] = [
+  'execAgentRuntime',
+  'execHeterogeneousAgent',
+  'execServerAgentRuntime',
+];
+
+/**
+ * Interim operations that approve / submit / skip / regenerate each start
+ * synchronously on click, before the whitelisted `execServerAgentRuntime` op is
+ * created 2–4 serial tRPC round-trips later. The interim op stays running until
+ * `executeGatewayAgent` spins up the runtime op, so it bridges the pre-generation
+ * window seamlessly.
+ *
+ * Shared by two whitelists so the whole window behaves consistently:
+ * - INPUT_LOADING_OPERATION_TYPES — show input loading/Stop the instant the user clicks.
+ * - QUEUE_BLOCKING_OPERATION_TYPES — a fast follow-up Enter queues behind the interim
+ *   op instead of starting a concurrent `sendMessage` that interleaves with the
+ *   approve/retry flow before the real runtime op exists.
+ *
+ * Kept out of AI_RUNTIME_OPERATION_TYPES on purpose to avoid flipping
+ * isAgentRuntimeRunning / isMessageGenerating and their gating logic.
+ */
+export const INTERIM_LOADING_OPERATION_TYPES: OperationType[] = [
+  'approveToolCalling',
+  'submitToolInteraction',
+  'skipToolInteraction',
+  'regenerate',
+];
+
+/**
+ * Operation types that should block input and show loading state
+ * Superset of AI_RUNTIME_OPERATION_TYPES, also includes sendMessage
+ * since the input should be in loading state from the moment user sends until AI finishes
+ */
+export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
+  ...AI_RUNTIME_OPERATION_TYPES,
+  'sendMessage',
+  // The auto-retry waiting period is part of the same in-progress turn — keep
+  // the input in loading state (and let Stop target it) across the countdown.
+  'autoRetryPending',
+  // Interim approve/submit/skip/regenerate ops light up the input the instant
+  // the user clicks, mirroring how `sendMessage` already does — instead of only
+  // after the round-trips. See INTERIM_LOADING_OPERATION_TYPES for the bridge
+  // semantics and why they stay out of AI_RUNTIME_OPERATION_TYPES.
+  //
+  // This also makes Stop appear during the pre-generation window. The approve
+  // gateway branches forward `parentOperationId` to `executeGatewayAgent`, so
+  // Stop there interrupts the resumed run: approval cards resolve instantly
+  // and no longer cover the composer, which keeps this window reachable.
+  // Known limitation (accepted): the submit/skip gateway branches don't
+  // forward it yet, so Stop in that narrow window doesn't abort (loading
+  // briefly flickers, generation proceeds). The `regenerate` branch DOES
+  // forward it — an unsettled regenerate wrapper is what the retry guard
+  // reads, so it must never outlive phase-1 (a WS drop before session end
+  // would otherwise brick retry for that turn permanently).
+  ...INTERIM_LOADING_OPERATION_TYPES,
+];
+
+/**
+ * Operation types whose in-flight state pins a topic row's `running` ring and
+ * elapsed clock — the set `operationSelectors.isTopicVisiblyRunning` /
+ * `visiblyRunningTopicIds` read.
+ *
+ * The stale-run sweep must be able to retire a leaked op from this set (see
+ * {@link SETTLEABLE_TOPIC_RUN_OPERATION_TYPES}): one that pins the row but sits
+ * outside the sweeper's filter strands the row spinning and counting over a
+ * finished topic until a full reload. That is exactly what an intervention
+ * continuation's interim op (`approveToolCalling` / `submitToolInteraction` /
+ * `skipToolInteraction`) did while the sweeps only looked at
+ * {@link AI_RUNTIME_OPERATION_TYPES}.
+ */
+export const TOPIC_VISIBLY_RUNNING_OPERATION_TYPES: OperationType[] = INPUT_LOADING_OPERATION_TYPES;
+
+/**
+ * Row-pinning operations that deliberately live WITHOUT a server-side run, so
+ * the stale-run sweep must never retire them.
+ *
+ * `autoRetryPending` is the entire reason this list exists. It is held for the
+ * heterogeneous overload backoff (`HETERO_OVERLOAD_BACKOFF_SECONDS` reaches 30s
+ * ± 20% jitter) precisely so the turn keeps its busy state across the wait. The
+ * sweep's own settle age is 30s, so without this exclusion it would retire the
+ * wait op mid-countdown — and `isHeteroOverloadWaitAborted` reads a non-running
+ * op as "the user cancelled", which would silently exhaust the retry sequence.
+ */
+export const LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES: OperationType[] = ['autoRetryPending'];
+
+/**
+ * {@link TOPIC_VISIBLY_RUNNING_OPERATION_TYPES} minus the
+ * {@link LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES}: the operations
+ * `ChatAgentRunGatewayAction.settleAllUnbackedTopicRuns` may retire once the
+ * server reports no live run.
+ *
+ * Anything that can pin the row and IS server-backed has to be in here, or it
+ * leaks a permanently-spinning row. Anything local-only has to stay out, or the
+ * sweep kills the wait it is holding.
+ */
+export const SETTLEABLE_TOPIC_RUN_OPERATION_TYPES: OperationType[] =
+  TOPIC_VISIBLY_RUNNING_OPERATION_TYPES.filter(
+    (type) => !LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES.includes(type),
+  );
+
+/**
+ * Operation types that block a fresh `sendMessage`: a send fired while one of
+ * these runs enqueues behind it instead of starting a concurrent run.
+ *
+ * Single source of truth shared by the enqueue check (conversationLifecycle) and
+ * the QueueTray "Send now" cancel path — so both agree on what a follow-up is
+ * queued behind. Kept in sync with INPUT_LOADING via the shared
+ * INTERIM_LOADING_OPERATION_TYPES: if the input shows loading for an op, a
+ * follow-up must queue behind it, and "Send now" must be able to cancel it.
+ */
+export const QUEUE_BLOCKING_OPERATION_TYPES: OperationType[] = [
+  ...AI_RUNTIME_OPERATION_TYPES,
+  'sendMessage',
+  // A voice turn becomes visible before its binary upload finishes. Keep later composer sends in
+  // the normal queue so the model observes the same order as the optimistic transcript. This is
+  // intentionally not an INPUT_LOADING operation: recording upload must not lock the composer.
+  'uploadVoiceMessage',
+  ...INTERIM_LOADING_OPERATION_TYPES,
+];
+
+const QUEUE_BLOCKING_OPERATION_TYPE_SET = new Set<OperationType>(QUEUE_BLOCKING_OPERATION_TYPES);
+
+/**
+ * Single source of truth for "a fresh send must queue behind this op instead of
+ * starting a concurrent run" — shared by the enqueue check
+ * (`conversationLifecycle`) and the QueueTray "Send now" cancel path, so both
+ * agree on what a follow-up is queued behind.
+ *
+ * Deliberately mirrors what the composer shows rather than a bare
+ * `status === 'running'`: the Send button comes back on `isAborting` /
+ * `visibleLoadingDone`, and when the enqueue check disagreed, an idle-looking
+ * composer silently swallowed messages into the tray — permanently when the
+ * terminal event never landed, since the queue only drains on success.
+ */
+export const isQueueBlockingOperation = (
+  operation: Operation,
+  options?: {
+    /**
+     * Whether this run's bucket already holds queued follow-ups. See below —
+     * order beats latency once a queue exists.
+     */
+    hasQueuedMessages?: boolean;
+  },
+): boolean => {
+  if (!QUEUE_BLOCKING_OPERATION_TYPE_SET.has(operation.type)) return false;
+  if (operation.status !== 'running') return false;
+
+  // Stop was pressed. With no older queue, this run cannot absorb a follow-up,
+  // so let the next send start fresh. When older items already exist, keep the
+  // operation blocking until cancellation completes; the send lifecycle then
+  // restarts that orphaned FIFO as one ordered batch.
+  if (operation.metadata.isAborting && !options?.hasQueuedMessages) return false;
+
+  // Visible output is done and the op is only finishing terminal bookkeeping
+  // (DB reconciliation, title, drain). The answer is complete on screen and the
+  // composer says Send, so honor that: start a fresh turn instead of parking the
+  // message in a tray the user has no reason to expect.
+  //
+  // Unless this run already has follow-ups queued behind it: the terminal drain
+  // will send those, so jumping ahead of them would both reorder the
+  // conversation and run two turns at once. Order beats latency there.
+  if (operation.metadata.visibleLoadingDone && !options?.hasQueuedMessages) return false;
+
+  return true;
+};

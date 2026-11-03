@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "Verbind {{provider}}",
+  "action.connect.error": "Verbinding mislukt, probeer het alstublieft opnieuw.",
+  "action.connect.popupBlocked": "Verbindingspopup geblokkeerd. Sta pop-ups toe in uw browser om door te gaan.",
+  "action.connect.short": "Verbinden",
+  "action.connecting": "Wachten op autorisatie…",
+  "action.create.error": "Taak aanmaken mislukt. Probeer het opnieuw.",
+  "action.create.success": "Geplande taak toegevoegd. Vind het in Lobe AI.",
+  "action.createButton": "Taak toevoegen",
+  "action.creating": "Bezig met aanmaken...",
+  "action.dismiss.error": "Afwijzen mislukt. Probeer het opnieuw.",
+  "action.dismiss.tooltip": "Niet geïnteresseerd",
+  "action.refresh.button": "Vernieuwen",
+  "card.templateTag": "Sjabloon",
+  "schedule.daily": "Elke dag om {{time}}",
+  "schedule.editableAfterCreateTooltip": "U kunt het schema aanpassen nadat u de taak heeft aangemaakt.",
+  "schedule.weekly": "Elke {{weekday}} om {{time}}",
+  "section.title": "Probeer deze geplande taken"
+}

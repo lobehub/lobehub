@@ -1,0 +1,107 @@
+[
+  {
+    "id": "msg-501",
+    "role": "user",
+    "content": "Help me debug this Python code that's throwing an error",
+    "parentId": null,
+    "createdAt": 1704067200000,
+    "updatedAt": 1704067200000
+  },
+  {
+    "id": "msg-502",
+    "role": "assistant",
+    "content": "I'll help you debug the code. Let me first check the syntax and run some analysis.",
+    "parentId": "msg-501",
+    "tools": [
+      {
+        "id": "tool-lint",
+        "identifier": "code-analyzer",
+        "apiName": "analyzePython",
+        "arguments": "{\"action\":\"lint\"}",
+        "type": "default"
+      },
+      {
+        "id": "tool-test",
+        "identifier": "code-analyzer",
+        "apiName": "runTests",
+        "arguments": "{\"action\":\"test\"}",
+        "type": "default"
+      }
+    ],
+    "createdAt": 1704067202000,
+    "updatedAt": 1704067202000,
+    "usage": {
+      "totalInputTokens": 32,
+      "totalOutputTokens": 48,
+      "totalTokens": 80,
+      "cost": 0.00024
+    },
+    "performance": {
+      "tps": 45
+    }
+  },
+  {
+    "id": "msg-503",
+    "role": "tool",
+    "tool_call_id": "tool-lint",
+    "content": "{\"status\":\"success\",\"issues\":[{\"line\":15,\"message\":\"undefined variable 'result'\"}]}",
+    "pluginState": {
+      "cached": false
+    },
+    "parentId": "msg-502",
+    "createdAt": 1704067203000,
+    "updatedAt": 1704067203000
+  },
+  {
+    "id": "msg-504",
+    "role": "tool",
+    "tool_call_id": "tool-test",
+    "content": "{\"status\":\"failed\",\"error\":\"NameError: name 'result' is not defined\"}",
+    "pluginState": {
+      "cached": false
+    },
+    "pluginError": {
+      "type": "NameError",
+      "message": "name 'result' is not defined"
+    },
+    "parentId": "msg-502",
+    "createdAt": 1704067203100,
+    "updatedAt": 1704067203100
+  },
+  {
+    "id": "msg-505",
+    "role": "user",
+    "content": "Here's the code:\n```python\ndef calculate():\n    x = 5\n    y = 10\n    print(result)\n```",
+    "parentId": "msg-504",
+    "createdAt": 1704067210000,
+    "updatedAt": 1704067210000
+  },
+  {
+    "id": "msg-506",
+    "role": "assistant",
+    "content": "I found the issue! On line 15, you're trying to use `result` but it's never defined. Here's the fix:\n\n```python\ndef calculate():\n    x = 5\n    y = 10\n    result = x + y  # Define result before using it\n    print(result)\n```",
+    "parentId": "msg-505",
+    "createdAt": 1704067213000,
+    "updatedAt": 1704067213000,
+    "usage": {
+      "totalInputTokens": 156,
+      "totalOutputTokens": 89,
+      "totalTokens": 245,
+      "cost": 0.000735
+    }
+  },
+  {
+    "id": "msg-507",
+    "role": "assistant",
+    "content": "Alternatively, you could return the value instead:\n\n```python\ndef calculate():\n    x = 5\n    y = 10\n    return x + y\n\nresult = calculate()\nprint(result)\n```",
+    "parentId": "msg-505",
+    "createdAt": 1704067213100,
+    "updatedAt": 1704067213100,
+    "usage": {
+      "totalInputTokens": 156,
+      "totalOutputTokens": 72,
+      "totalTokens": 228,
+      "cost": 0.000684
+    }
+  }
+]

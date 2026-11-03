@@ -1,0 +1,269 @@
+import type { ModelTokensUsage, ModelUsage } from '@lobechat/types';
+import debug from 'debug';
+import type { Pricing } from 'model-bank';
+import type OpenAI from 'openai';
+
+import type { ChatPayloadForTransformStream } from '../streams/protocol';
+import { withUsageCost } from './utils/withUsageCost';
+
+const log = debug('lobe-cost:convertOpenAIUsage');
+
+// Keep the reference implementation's behavior of filtering out zero/falsy values,
+// except for fields where 0 is semantically meaningful. `inputAudioTokens` must preserve an
+// explicitly reported zero so callers can distinguish it from a provider omission.
+// `!!value` would filter out 0, which is often desired for token counts.
+const shouldKeepUsageValue = (key: string, value: unknown) => {
+  if (value === undefined || value === null) return false;
+  if (typeof value !== 'number') return Boolean(value);
+  if (!Number.isFinite(value)) return false;
+
+  if (value !== 0) return true;
+
+  // Explicit zero cache reads distinguish a cache miss from unavailable telemetry.
+  return (
+    key === 'inputAudioTokens' || key === 'inputCacheMissTokens' || key === 'inputCachedTokens'
+  );
+};
+
+/**
+ * OpenAI GPT-5.6+ reports cache writes as `cache_write_tokens` under usage details,
+ * a field not yet present in the openai SDK type snapshots — extend the SDK detail
+ * shapes locally until the SDK catches up.
+ */
+type CacheWriteUsageDetails =
+  | (NonNullable<OpenAI.Completions.CompletionUsage['prompt_tokens_details']> & {
+      cache_write_tokens?: number;
+    })
+  | (NonNullable<OpenAI.Responses.ResponseUsage['input_tokens_details']> & {
+      cache_write_tokens?: number;
+    });
+
+/**
+ * Billing note: write tokens are a subset of total input tokens and are charged at
+ * 1.25× uncached input. They must be excluded from the uncached (1×) miss bucket so
+ * computeChatCost does not double-charge textInput + textInput_cacheWrite.
+ */
+const readCacheWriteTokens = (details: CacheWriteUsageDetails | undefined): number | undefined => {
+  const value = details?.cache_write_tokens;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+};
+
+const resolveOpenAIInputCacheMissTokens = (params: {
+  explicitMissTokens?: number;
+  inputCachedTokens?: number;
+  inputWriteCacheTokens?: number;
+  totalInputTokens: number;
+}): number | undefined => {
+  if (typeof params.explicitMissTokens === 'number') return params.explicitMissTokens;
+
+  const hasCacheBreakdown =
+    typeof params.inputCachedTokens === 'number' ||
+    typeof params.inputWriteCacheTokens === 'number';
+
+  if (!hasCacheBreakdown) return undefined;
+
+  return Math.max(
+    0,
+    params.totalInputTokens - (params.inputCachedTokens ?? 0) - (params.inputWriteCacheTokens ?? 0),
+  );
+};
+
+export const convertOpenAIUsage = (
+  usage: OpenAI.Completions.CompletionUsage,
+  payload?: ChatPayloadForTransformStream,
+): ModelUsage => {
+  // Currently only pplx has citation_tokens
+  const inputAudioTokens = usage.prompt_tokens_details?.audio_tokens;
+  // OpenAI prompt_tokens is the aggregate input count. Keep modality buckets disjoint so a
+  // dedicated audioInput pricing unit cannot charge the same tokens again as textInput.
+  const inputTextTokens = Math.max(0, (usage.prompt_tokens || 0) - (inputAudioTokens ?? 0));
+  const inputCitationTokens = (usage as any).citation_tokens || 0;
+  const totalInputTokens = inputCitationTokens + (usage.prompt_tokens || 0);
+
+  const cachedTokens =
+    (usage as any).prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens;
+  // OpenAI reports aggregate cached prompt tokens, but does not identify how many cached tokens
+  // are audio. Do not infer inputCachedAudioTokens from overlapping aggregate counters; callers
+  // can handle the unavailable modality split without receiving fabricated usage.
+  const inputWriteCacheTokens = readCacheWriteTokens(usage.prompt_tokens_details);
+
+  const inputCacheMissTokens = resolveOpenAIInputCacheMissTokens({
+    explicitMissTokens: (usage as any).prompt_cache_miss_tokens,
+    inputCachedTokens: typeof cachedTokens === 'number' ? cachedTokens : undefined,
+    inputWriteCacheTokens,
+    totalInputTokens,
+  });
+
+  const totalOutputTokens = usage.completion_tokens;
+  const outputReasoning = usage.completion_tokens_details?.reasoning_tokens || 0;
+  const outputAudioTokens = usage.completion_tokens_details?.audio_tokens || 0;
+  const outputImageTokens = (usage.completion_tokens_details as any)?.image_tokens || 0;
+
+  // XAI's completion_tokens does not include reasoning_tokens, requires special handling
+  const outputTextTokens =
+    payload?.provider === 'xai'
+      ? totalOutputTokens - outputAudioTokens
+      : totalOutputTokens - outputReasoning - outputAudioTokens - outputImageTokens;
+  const totalOutputTokensNormalized =
+    payload?.provider === 'xai' ? totalOutputTokens + outputReasoning : totalOutputTokens;
+
+  const totalTokens = inputCitationTokens + usage.total_tokens;
+
+  const data = {
+    acceptedPredictionTokens: usage.completion_tokens_details?.accepted_prediction_tokens,
+    inputAudioTokens,
+    inputCacheMissTokens,
+    inputCachedTokens: cachedTokens,
+    inputCitationTokens,
+    inputTextTokens,
+    inputWriteCacheTokens,
+    outputAudioTokens,
+    outputImageTokens,
+    outputReasoningTokens: outputReasoning,
+    outputTextTokens,
+    rejectedPredictionTokens: usage.completion_tokens_details?.rejected_prediction_tokens,
+    totalInputTokens,
+    totalOutputTokens: totalOutputTokensNormalized,
+    totalTokens,
+  } satisfies ModelTokensUsage;
+
+  const finalData = {};
+
+  Object.entries(data).forEach(([key, value]) => {
+    if (shouldKeepUsageValue(key, value)) {
+      // @ts-ignore
+      finalData[key] = value;
+    }
+  });
+
+  log('convertOpenAIUsage data(completion-api): %O', finalData);
+
+  return withUsageCost(finalData as ModelUsage, payload?.pricing);
+};
+
+export const convertOpenAIResponseUsage = (
+  usage: OpenAI.Responses.ResponseUsage,
+  payload?: ChatPayloadForTransformStream,
+): ModelUsage => {
+  // 1. Extract and default primary values
+  const totalInputTokens = usage.input_tokens || 0;
+  const inputCachedTokens = usage.input_tokens_details?.cached_tokens;
+  const inputWriteCacheTokens = readCacheWriteTokens(usage.input_tokens_details);
+
+  const totalOutputTokens = usage.output_tokens || 0;
+  const outputReasoningTokens = usage.output_tokens_details?.reasoning_tokens || 0;
+
+  const overallTotalTokens = usage.total_tokens || 0;
+
+  // 2. Calculate derived values.
+  // Exclude cache writes from the uncached bucket so textInput (1×) and
+  // textInput_cacheWrite (1.25×) do not both bill the same tokens.
+  const inputCacheMissTokens =
+    resolveOpenAIInputCacheMissTokens({
+      inputCachedTokens,
+      inputWriteCacheTokens,
+      totalInputTokens,
+    }) ?? totalInputTokens;
+
+  // For ResponseUsage, inputTextTokens is effectively totalInputTokens as no further breakdown is given.
+  const inputTextTokens = totalInputTokens;
+
+  // For ResponseUsage, outputTextTokens is totalOutputTokens minus reasoning, as no audio output tokens are specified.
+  const outputTextTokens = totalOutputTokens - outputReasoningTokens;
+  const outputImageTokens = (usage.output_tokens_details as any)?.image_tokens || 0;
+
+  // 3. Construct the comprehensive data object (matching ModelTokensUsage structure)
+  const data = {
+    // Fields from ModelTokensUsage that are not in ResponseUsage will be undefined or 0
+    // and potentially filtered out later.
+    acceptedPredictionTokens: undefined, // Not in ResponseUsage
+    inputAudioTokens: undefined, // Not in ResponseUsage
+    inputCacheMissTokens,
+    inputCachedTokens,
+    inputCitationTokens: undefined, // Not in ResponseUsage
+    inputTextTokens,
+    inputWriteCacheTokens,
+    outputAudioTokens: undefined, // Not in ResponseUsage
+    outputImageTokens,
+    outputReasoningTokens,
+    outputTextTokens,
+    rejectedPredictionTokens: undefined, // Not in ResponseUsage
+    totalInputTokens,
+    totalOutputTokens,
+    totalTokens: overallTotalTokens,
+  } satisfies ModelTokensUsage; // This helps ensure all keys of ModelTokensUsage are considered
+
+  // 4. Filter out zero/falsy values using the shared retention rules above.
+  const finalData: Partial<ModelUsage> = {}; // Use Partial for type safety during construction
+  Object.entries(data).forEach(([key, value]) => {
+    if (shouldKeepUsageValue(key, value)) {
+      // @ts-ignore - We are building an object that will conform to ModelTokensUsage
+      // by selectively adding properties.
+      finalData[key as keyof ModelUsage] = value as number;
+    }
+  });
+
+  log('convertOpenAIResponseUsage data(response-api): %O', finalData);
+
+  return withUsageCost(finalData as ModelUsage, payload?.pricing); // Cast because we've built it to match
+};
+
+export const convertOpenAIImageUsage = (
+  usage: OpenAI.Images.ImagesResponse.Usage,
+  pricing?: Pricing,
+): ModelUsage => {
+  const data: ModelTokensUsage = {
+    inputImageTokens: usage.input_tokens_details.image_tokens,
+    inputTextTokens: usage.input_tokens_details.text_tokens,
+    outputImageTokens: usage.output_tokens,
+    totalInputTokens: usage.input_tokens,
+    totalOutputTokens: usage.output_tokens,
+    totalTokens: usage.total_tokens,
+  };
+
+  return withUsageCost(data as ModelUsage, pricing);
+};
+
+/**
+ * Token usage of `POST /audio/transcriptions` for token-billed models such as
+ * `gpt-4o-transcribe`. Duration-billed models (`whisper-1`) report
+ * `{ type: 'duration', seconds }` instead and yield no token usage.
+ */
+interface OpenAITranscriptionTokenUsage {
+  input_token_details?: { audio_tokens?: number; text_tokens?: number };
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+}
+
+export const convertOpenAITranscriptionUsage = (
+  usage: unknown,
+  pricing?: Pricing,
+): ModelUsage | undefined => {
+  if (!usage || typeof usage !== 'object') return;
+
+  const { input_token_details, input_tokens, output_tokens, total_tokens } =
+    usage as OpenAITranscriptionTokenUsage;
+  if (typeof input_tokens !== 'number') return;
+
+  const inputTextTokens = input_token_details?.text_tokens ?? 0;
+  // Some OpenAI-compatible gateways (e.g. OpenRouter) omit the modality split. The
+  // input of a transcription is the audio itself (the text prompt is optional), so
+  // bill the unsplit remainder as audio rather than at the cheaper text rate.
+  const inputAudioTokens =
+    input_token_details?.audio_tokens ?? Math.max(0, input_tokens - inputTextTokens);
+  const outputTextTokens = output_tokens ?? 0;
+
+  const data = {
+    inputAudioTokens,
+    inputTextTokens,
+    outputTextTokens,
+    totalInputTokens: input_tokens,
+    totalOutputTokens: outputTextTokens,
+    totalTokens: total_tokens ?? input_tokens + outputTextTokens,
+  } satisfies ModelTokensUsage;
+
+  log('convertOpenAITranscriptionUsage data: %O', data);
+
+  return withUsageCost(data, pricing);
+};

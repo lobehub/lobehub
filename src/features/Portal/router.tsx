@@ -1,0 +1,122 @@
+'use client';
+
+import React, { Fragment, memo, useMemo } from 'react';
+
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
+
+import { Acceptance } from './Acceptance';
+import { AcceptanceCheck } from './AcceptanceCheck';
+import { AgentDetail } from './AgentDetail';
+import { Artifacts } from './Artifacts';
+import Header from './components/Header';
+import { PortalMoreMenuProvider } from './components/PortalMoreMenu/context';
+import { DashboardWidget } from './DashboardWidget';
+import { Document } from './Document';
+import { FilePreview } from './FilePreview';
+import { Goal } from './Goal';
+import { GoalMetric } from './GoalMetric';
+import { GoalNode } from './GoalNode';
+import { GoalNorthStar } from './GoalNorthStar';
+import { GoalReport, GoalReportChapter } from './GoalReport';
+import { GroupThread } from './GroupThread';
+import { HomeBody, HomeTitle } from './Home';
+import { LocalFile } from './LocalFile';
+import { MemoryDetail } from './MemoryDetail';
+import { MessageDetail } from './MessageDetail';
+import { Notebook } from './Notebook';
+import { Plugins } from './Plugins';
+import { TaskDetail } from './TaskDetail';
+import { TaskResult } from './TaskResult';
+import { Thread } from './Thread';
+import { Topic } from './Topic';
+import { TopicComments, TopicCommentThread } from './TopicComments';
+import { type PortalImpl } from './type';
+import { VerifyReport } from './VerifyReport';
+import { VerifyResult } from './VerifyResult';
+
+// View type to component mapping
+const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
+  [PortalViewType.Acceptance]: Acceptance,
+  [PortalViewType.AcceptanceCheck]: AcceptanceCheck,
+  [PortalViewType.AgentDetail]: AgentDetail,
+  [PortalViewType.Home]: {
+    Body: HomeBody,
+    Title: HomeTitle,
+  },
+  [PortalViewType.Artifact]: Artifacts,
+  [PortalViewType.DashboardWidget]: DashboardWidget,
+  [PortalViewType.Document]: Document,
+  [PortalViewType.Notebook]: Notebook,
+  [PortalViewType.FilePreview]: FilePreview,
+  [PortalViewType.Goal]: Goal,
+  [PortalViewType.GoalMetric]: GoalMetric,
+  [PortalViewType.GoalNode]: GoalNode,
+  [PortalViewType.GoalNorthStar]: GoalNorthStar,
+  [PortalViewType.GoalReport]: GoalReport,
+  [PortalViewType.GoalReportChapter]: GoalReportChapter,
+  [PortalViewType.LocalFile]: LocalFile,
+  [PortalViewType.MemoryDetail]: MemoryDetail,
+  [PortalViewType.MessageDetail]: MessageDetail,
+  [PortalViewType.ToolUI]: Plugins,
+  [PortalViewType.TaskDetail]: TaskDetail,
+  [PortalViewType.TaskResult]: TaskResult,
+  [PortalViewType.Thread]: Thread,
+  [PortalViewType.Topic]: Topic,
+  [PortalViewType.TopicCommentThread]: TopicCommentThread,
+  [PortalViewType.TopicComments]: TopicComments,
+  [PortalViewType.GroupThread]: GroupThread,
+  [PortalViewType.VerifyResult]: VerifyResult,
+  [PortalViewType.VerifyReport]: VerifyReport,
+};
+
+// Default Home component
+const HomeImpl: PortalImpl = {
+  Body: HomeBody,
+  Title: HomeTitle,
+};
+
+interface PortalContentProps {
+  onClose?: () => void;
+  renderBody?: (body: React.ReactNode) => React.ReactNode;
+  viewType?: PortalViewType | null;
+}
+
+/**
+ * Portal content with Wrapper support
+ * Uses the view stack to determine which component to render
+ */
+export const PortalContent = memo<PortalContentProps>(
+  ({ onClose, renderBody, viewType: viewTypeOverride }) => {
+    const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
+    const viewType = viewTypeOverride ?? currentViewType;
+    const ViewImpl = viewType ? VIEW_COMPONENTS[viewType] : HomeImpl;
+
+    const Wrapper = ViewImpl?.Wrapper || Fragment;
+    const CustomHeader = ViewImpl?.Header;
+    const Body = ViewImpl?.Body || HomeBody;
+    const Title = ViewImpl?.Title || HomeTitle;
+
+    const headerContent = CustomHeader ? (
+      <CustomHeader onClose={onClose} />
+    ) : (
+      <Header title={<Title />} onClose={onClose} />
+    );
+    const bodyContent = <Body />;
+    const moreMenuSource = useMemo(
+      () =>
+        ViewImpl?.useMoreMenu
+          ? { key: viewType ?? 'home', useMoreMenu: ViewImpl.useMoreMenu }
+          : null,
+      [ViewImpl, viewType],
+    );
+
+    return (
+      <Wrapper>
+        <PortalMoreMenuProvider value={moreMenuSource}>{headerContent}</PortalMoreMenuProvider>
+        {renderBody ? renderBody(bodyContent) : bodyContent}
+      </Wrapper>
+    );
+  },
+);

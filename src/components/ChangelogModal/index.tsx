@@ -1,0 +1,44 @@
+'use client';
+
+import { createModal } from '@lobehub/ui';
+import { t } from 'i18next';
+import { ArrowUpRightIcon } from 'lucide-react';
+import { lazy, Suspense } from 'react';
+
+import { CHANGELOG_URL } from '@/const/url';
+
+const ChangelogModalContent = lazy(() => import('./ChangelogModalContent'));
+
+export const openChangelogModal = () =>
+  createModal({
+    content: (
+      <Suspense fallback={null}>
+        <ChangelogModalContent />
+      </Suspense>
+    ),
+    footer: null,
+    maskClosable: true,
+    styles: {
+      content: { padding: 0 },
+    },
+    title: (
+      <a
+        href={CHANGELOG_URL}
+        rel="noopener noreferrer"
+        target="_blank"
+        style={{
+          alignItems: 'center',
+          color: 'inherit',
+          display: 'inline-flex',
+          gap: 6,
+          textDecoration: 'none',
+        }}
+      >
+        {t('changelog', { ns: 'common' })}
+        <ArrowUpRightIcon size={16} />
+      </a>
+    ),
+    width: 800,
+  });
+
+export default openChangelogModal;

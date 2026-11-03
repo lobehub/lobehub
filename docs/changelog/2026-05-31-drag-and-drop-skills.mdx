@@ -1,0 +1,40 @@
+---
+title: Platform Agents & Drag-Drop Skills
+description: >-
+  Run agents locally or on a remote device and drop skills straight into the
+  message box. v2.2.1 is here.
+tags:
+  - Platform Agents
+  - Skills
+  - Models
+---
+
+# Platform Agents & Drag-Drop Skills
+
+## Features
+
+- **Platform agents, local or remote (beta).** Create platform agents like OpenClaw and Hermes and choose, right from the composer, whether they run on your own machine or a remote device. A device switcher in the chat input swaps targets without leaving the conversation, and registered devices are remembered. On desktop, the recent-directories list can be reordered by drag-and-drop, and devices auto-register with a stable ID. Platform agents are in beta; turn them on under Settings → Advanced → Labs.
+- **Drag-and-drop skills and folders.** Drag a skill from the right panel into the message box and it becomes an action tag. Type `/` mid-sentence to open a menu of every installed skill, from built-ins to Skill Market skills to your own agents'. On desktop, drag a whole folder into chat and it appears as a `@localFile` reference instead of uploading every file inside.
+- **Bots that send files.** Discord, Telegram, Slack, Feishu, WeChat, LINE, and QQ can now exchange images, video, voice, and files, not just text.
+- **Page Agent sharing.** Share an agent's working pages with one click.
+- **Export an agent.** Download any agent's profile as a Markdown file.
+- **New models.** Claude Opus 4.8, DeepSeek V4 Flash/Pro, Gemini 3.5 Flash, Qwen 3.7 Max, intern-s2-preview, and step-3.7-flash.
+
+## Improvements
+
+- Non-Markdown documents render as read-only highlighted code, and you can open a thread chat inside the document preview.
+- Drop files and images directly into a task.
+- Cost estimates appear alongside replies.
+- Guided agent creation, and new topics aren't created until you send your first message.
+- Multi-select delete in the agent documents explorer.
+- Follow-up suggestions now appear in general chats, not just agent ones.
+
+## Fixes
+
+- Input drafts persist when you switch tabs.
+- The action bar stays open while you hover the next message.
+- Copying a user message no longer leaves escaped Markdown.
+- On desktop, Cmd +/−/0 shows a zoom indicator, and `~` paths expand correctly.
+- Empty replies retry instead of finishing silently, and market re-login shows the right modal when a session expires.
+- Topic list pagination is preserved after creating, deleting, or moving topics.
+- File preview now covers `.cjs`, `.mjs`, and extension-less text files. Bedrock structured output and Gemini diagnostics fixes also landed.

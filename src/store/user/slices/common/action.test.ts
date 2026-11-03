@@ -1,0 +1,500 @@
+import { DEFAULT_SETTINGS } from '@lobechat/config';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { DEFAULT_PREFERENCE } from '@/const/user';
+import { dailyRecommendResource } from '@/features/RecommendTaskTemplates/projection';
+import { cacheScope, replicaKeys } from '@/libs/replica';
+import type * as SWRLib from '@/libs/swr';
+import { userService } from '@/services/user';
+import { useUserStore } from '@/store/user';
+import { readUserDisplaySnapshot, writeUserDisplaySnapshot } from '@/store/user/displaySnapshot';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { type GlobalServerConfig } from '@/types/serverConfig';
+import { type UserInitializationState, type UserPreference } from '@/types/user';
+import { withSWR } from '~test-utils';
+
+import { initialCommonState } from './initialState';
+
+const swrMocks = vi.hoisted(() => ({
+  mutate: vi.fn(),
+}));
+
+vi.mock('@/libs/swr', async (importOriginal) => {
+  const actual = await importOriginal<typeof SWRLib>();
+
+  return {
+    ...actual,
+    mutate: swrMocks.mutate,
+  };
+});
+
+vi.mock('swr', async (importOriginal) => {
+  const modules = await importOriginal();
+  return {
+    ...(modules as any),
+    mutate: vi.fn(),
+  };
+});
+
+/**
+ * Pin the identity scope: the projection sets `user.id` from the payload, and
+ * an unmocked `useCacheScope` would recompute from that id mid-test.
+ */
+const SCOPE = 'user-common-test:personal';
+
+beforeEach(() => {
+  localStorage.clear();
+  swrMocks.mutate.mockReset();
+  swrMocks.mutate.mockResolvedValue(undefined);
+  vi.spyOn(cacheScope, 'get').mockReturnValue(SCOPE);
+  vi.spyOn(cacheScope, 'use').mockReturnValue(SCOPE);
+  useUserStore.setState({
+    ...initialCommonState,
+    defaultSettings: DEFAULT_SETTINGS,
+    isUserStateInitError: undefined,
+    onboarding: undefined,
+    preference: DEFAULT_PREFERENCE,
+    settings: {},
+    user: undefined,
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('createCommonSlice', () => {
+  describe('updateAvatar', () => {
+    it('should update avatar', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const avatar = 'data:image/png;base64,';
+
+      const spyOn = vi.spyOn(result.current, 'refreshUserState');
+      const updateAvatarSpy = vi.spyOn(userService, 'updateAvatar').mockResolvedValue({} as any);
+
+      await act(async () => {
+        await result.current.updateAvatar(avatar);
+      });
+
+      expect(updateAvatarSpy).toHaveBeenCalledWith('data:image/png;base64,');
+      expect(spyOn).toHaveBeenCalled();
+    });
+  });
+
+  describe('updateInterests', () => {
+    const recommendSyncKey = (scope: string) =>
+      replicaKeys.sync(dailyRecommendResource.name, dailyRecommendResource.version, scope, 'k', {});
+
+    it('optimistically updates user.interests before the service call resolves', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
+      });
+
+      let resolveService: () => void = () => {};
+      const updateSpy = vi.spyOn(userService, 'updateInterests').mockImplementation(
+        () =>
+          new Promise<void>((r) => {
+            resolveService = r;
+          }) as any,
+      );
+
+      let pending: Promise<void> | undefined;
+      act(() => {
+        pending = useUserStore.getState().updateInterests(['new']);
+      });
+
+      expect(useUserStore.getState().user?.interests).toEqual(['new']);
+
+      await act(async () => {
+        resolveService();
+        await pending;
+      });
+
+      expect(updateSpy).toHaveBeenCalledWith(['new']);
+    });
+
+    // Regression: interests stay out of the recommendation sync key, so an edit
+    // must re-run every mounted recommendation read of the active scope.
+    it('revalidates the task-template recommendation replica', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
+      });
+      vi.spyOn(userService, 'updateInterests').mockResolvedValue(undefined as any);
+
+      await useUserStore.getState().updateInterests(['new']);
+
+      const matchers = swrMocks.mutate.mock.calls
+        .map(([key]) => key)
+        .filter((key): key is (key: unknown) => boolean => typeof key === 'function');
+      expect(matchers.some((match) => match(recommendSyncKey(SCOPE)))).toBe(true);
+      expect(matchers.some((match) => match(recommendSyncKey('other-user:personal')))).toBe(false);
+      expect(
+        matchers.some((match) =>
+          match(replicaKeys.sync('agentBuilderSuggestions', 1, SCOPE, 'k', {})),
+        ),
+      ).toBe(false);
+    });
+
+    it('does not fail the interest update when recommendation cache invalidation fails', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
+      });
+
+      const cacheError = new Error('cache failed');
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(userService, 'updateInterests').mockResolvedValue(undefined as any);
+      swrMocks.mutate.mockImplementation((key) => {
+        if (typeof key === 'function' && key(recommendSyncKey(SCOPE)))
+          return Promise.reject(cacheError);
+
+        return Promise.resolve(undefined);
+      });
+
+      await expect(useUserStore.getState().updateInterests(['new'])).resolves.toBeUndefined();
+      await waitFor(() => {
+        expect(consoleSpy).toHaveBeenCalledWith(
+          '[taskTemplate:recommendationCache:invalidate]',
+          cacheError,
+        );
+      });
+      expect(useUserStore.getState().user?.interests).toEqual(['new']);
+    });
+  });
+
+  describe('useInitUserState', () => {
+    const mockServerConfig = {
+      defaultAgent: 'agent1',
+      languageModel: 'model1',
+      telemetry: {},
+      aiProvider: {},
+    } as GlobalServerConfig;
+
+    it('should not fetch user state if user is not login', async () => {
+      const mockUserConfig: any = undefined; // 模拟未初始化服务器的情况
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserConfig);
+      const successCallback = vi.fn();
+
+      const { result } = renderHook(
+        () =>
+          useUserStore().useInitUserState(false, mockServerConfig, {
+            onSuccess: successCallback,
+          }),
+        { wrapper: withSWR },
+      );
+
+      // 因为 initServer 为 false，所以不会触发 getUserState 的调用
+      expect(userService.getUserState).not.toHaveBeenCalled();
+      // 也不会触发 onSuccess 回调
+      expect(successCallback).not.toHaveBeenCalled();
+      // 确保状态未被错误更新
+      expect(useUserStore.getState().isUserStateInit).toBe(false);
+      expect(result.current.isValidating).toBe(false);
+    });
+
+    it('records a bootstrap failure of the active scope as the init error', async () => {
+      const failure = new Error('bootstrap failed');
+      vi.spyOn(userService, 'getUserState').mockRejectedValue(failure);
+      const errorCallback = vi.fn();
+
+      renderHook(
+        () => useUserStore().useInitUserState(true, mockServerConfig, { onError: errorCallback }),
+        { wrapper: withSWR },
+      );
+
+      await waitFor(() => expect(useUserStore.getState().isUserStateInitError).toBe(failure));
+      expect(errorCallback).toHaveBeenCalledWith(failure);
+    });
+
+    it('ignores a bootstrap failure that settles after the scope switched away', async () => {
+      let rejectBootstrap!: (error: Error) => void;
+      vi.spyOn(userService, 'getUserState').mockImplementation(
+        () =>
+          new Promise<UserInitializationState>((_resolve, reject) => {
+            rejectBootstrap = reject;
+          }),
+      );
+      const errorCallback = vi.fn();
+
+      renderHook(
+        () => useUserStore().useInitUserState(true, mockServerConfig, { onError: errorCallback }),
+        { wrapper: withSWR },
+      );
+      await waitFor(() => expect(userService.getUserState).toHaveBeenCalled());
+
+      // Identity / workspace switch while the previous scope's bootstrap is in
+      // flight: its failure belongs to the scope left behind.
+      vi.mocked(cacheScope.get).mockReturnValue('user-common-test:other-workspace');
+      await act(async () => {
+        rejectBootstrap(new Error('previous identity failed'));
+      });
+
+      // Give a (wrongly) forwarded error time to land before asserting it did not.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(useUserStore.getState().isUserStateInitError).toBeUndefined();
+      expect(errorCallback).not.toHaveBeenCalled();
+    });
+
+    it('should fetch user state correctly when user is login', async () => {
+      const mockUserState: UserInitializationState = {
+        userId: 'user-id',
+        isOnboard: true,
+        onboarding: { finishedAt: '2024-01-01T00:00:00Z', version: 1 },
+        preference: {
+          telemetry: true,
+        },
+        settings: {
+          general: { fontSize: 14, timezone: 'America/New_York' },
+        },
+        email: 'test@example.com',
+      };
+
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+      const successCallback = vi.fn();
+
+      renderHook(
+        () =>
+          useUserStore().useInitUserState(true, mockServerConfig, {
+            onSuccess: successCallback,
+          }),
+        {
+          wrapper: withSWR,
+        },
+      );
+
+      // 等待 replica 的 bootstrap 同步落库
+      await waitFor(() => expect(useUserStore.getState().isUserStateInit).toBe(true));
+
+      // 验证状态是否正确更新
+      const state = useUserStore.getState();
+      expect(state.user?.avatar).toBe(mockUserState.avatar);
+      expect(userGeneralSettingsSelectors.config(state)).toEqual(
+        expect.objectContaining({
+          fontSize: 14,
+          responseLanguage: expect.any(String),
+          timezone: 'America/New_York',
+        }),
+      );
+      expect(state.user?.email).toEqual(mockUserState.email);
+      expect(successCallback).toHaveBeenCalledWith(mockUserState);
+    });
+
+    it('should call switch language when language is auto', async () => {
+      const mockUserState: UserInitializationState = {
+        userId: 'user-id',
+        isOnboard: true,
+        preference: {
+          telemetry: true,
+        },
+        settings: {},
+      };
+
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      renderHook(() => useUserStore().useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(useUserStore.getState().isUserStateInit).toBe(true));
+    });
+
+    it('should fetch use server config correctly', async () => {
+      const mockUserState: UserInitializationState = {
+        userId: 'user-id',
+        isOnboard: true,
+        preference: {
+          telemetry: true,
+        },
+        settings: {},
+      };
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      renderHook(() => useUserStore().useInitUserState(true, mockServerConfig));
+
+      await waitFor(() => expect(useUserStore.getState().isUserStateInit).toBe(true));
+    });
+
+    it('should return saved preference when local storage has data', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      const savedPreference: UserPreference = {
+        ...DEFAULT_PREFERENCE,
+        hideSyncAlert: true,
+        guide: { topic: false, moveSettingsToAvatar: true },
+      };
+
+      const mockUserState: UserInitializationState = {
+        userId: 'user-id',
+        isOnboard: true,
+        preference: savedPreference,
+        settings: {
+          general: { fontSize: 14 },
+        },
+      };
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(useUserStore.getState().isUserStateInit).toBeTruthy();
+        expect(useUserStore.getState().preference).toEqual(savedPreference);
+      });
+    });
+
+    it('should persist the authoritative avatar and preference for the returned user', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const mockUserState: UserInitializationState = {
+        avatar: 'avatar-a',
+        preference: { lab: { enableProjects: true } },
+        settings: {},
+        userId: 'user-a',
+      };
+
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(readUserDisplaySnapshot('user-a')).toEqual({
+          avatar: 'avatar-a',
+          preference: { lab: { enableProjects: true } },
+        });
+      });
+      expect(readUserDisplaySnapshot('user-b')).toBeUndefined();
+    });
+
+    it('should clear a previously cached avatar when the authoritative state has none', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const mockUserState: UserInitializationState = {
+        preference: { lab: { enableProjects: true } },
+        settings: {},
+        userId: 'user-a',
+      };
+
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      writeUserDisplaySnapshot('user-a', { avatar: 'stale-avatar' });
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(readUserDisplaySnapshot('user-a')?.avatar).toBe('');
+      });
+    });
+
+    it('should handle the case when user state have avatar', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const mockUserState: UserInitializationState = {
+        userId: 'user-id',
+        isOnboard: true,
+        onboarding: { finishedAt: '2024-01-01T00:00:00Z', version: 1 },
+        preference: undefined as any,
+        settings: null as any,
+        avatar: 'abc',
+      };
+
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        const state = useUserStore.getState();
+        expect(state.isUserStateInit).toBeTruthy();
+        // 验证状态未被错误更新
+        expect(state.user?.avatar).toEqual('abc');
+        // When settings is null, auto-detect general settings will set them
+        expect(state.settings).toEqual({
+          general: { responseLanguage: expect.any(String), timezone: expect.any(String) },
+        });
+      });
+    });
+
+    it('should NOT auto-fill responseLanguage while onboarding is unfinished', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      const mockUserState: UserInitializationState = {
+        userId: 'user-id',
+        isOnboard: false,
+        // No onboarding.finishedAt: user is still in the onboarding flow.
+        preference: {} as any,
+        settings: { general: { fontSize: 14 } },
+      };
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(useUserStore.getState().isUserStateInit).toBeTruthy();
+        expect(useUserStore.getState().settings.general?.responseLanguage).toBeUndefined();
+      });
+    });
+
+    it('should return default preference when local storage is empty', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      const mockUserState: UserInitializationState = {
+        userId: 'user-id',
+        isOnboard: true,
+        preference: {} as any,
+        settings: {
+          general: { fontSize: 12 },
+        },
+      };
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(useUserStore.getState().isUserStateInit).toBeTruthy();
+        expect(useUserStore.getState().preference).toEqual(DEFAULT_PREFERENCE);
+      });
+    });
+  });
+
+  describe('useCheckTrace', () => {
+    it('should return undefined when shouldFetch is false', async () => {
+      const { result } = renderHook(() => useUserStore().useCheckTrace(false), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(result.current.data).toBeUndefined());
+    });
+
+    it('should return false when telemetry is already set', async () => {
+      vi.spyOn(userGeneralSettingsSelectors, 'telemetry').mockReturnValueOnce(true);
+
+      const { result } = renderHook(() => useUserStore().useCheckTrace(true), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(result.current.data).toBe(false));
+    });
+
+    it('should call messageService.messageCountToCheckTrace when needed', async () => {
+      vi.spyOn(userGeneralSettingsSelectors, 'telemetry').mockReturnValueOnce(undefined as any);
+
+      act(() => {
+        useUserStore.setState({
+          isUserCanEnableTrace: true,
+        });
+      });
+
+      const { result } = renderHook(() => useUserStore.getState().useCheckTrace(true), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(result.current.data).toBe(true));
+    });
+  });
+});

@@ -1,0 +1,4596 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
+import { agentShareWorkAccessScope, MessageGroupType } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { uuid } from '@/utils/uuid';
+
+import { getTestDB } from '../../../core/getTestDB';
+import {
+  agents,
+  agentsToSessions,
+  chatGroups,
+  chunks,
+  documents,
+  embeddings,
+  fileChunks,
+  files,
+  messageGroups,
+  messageQueries,
+  messageQueryChunks,
+  messages,
+  messagesFiles,
+  messageTranslates,
+  messageTTS,
+  sessions,
+  threads,
+  topics,
+  users,
+} from '../../../schemas';
+import type { LobeChatDatabase } from '../../../type';
+import { MessageModel, toVisitorMessage } from '../../message';
+import { WorkModel } from '../../work';
+import { codeEmbedding } from '../fixtures/embedding';
+
+const serverDB: LobeChatDatabase = await getTestDB();
+
+const userId = 'message-query-test';
+const otherUserId = 'message-query-test-other';
+const messageModel = new MessageModel(serverDB, userId);
+const embeddingsId = uuid();
+
+beforeEach(async () => {
+  // Clear tables before each test case
+  await serverDB.transaction(async (trx) => {
+    await trx.delete(users).where(eq(users.id, userId));
+    await trx.delete(users).where(eq(users.id, otherUserId));
+    await trx.insert(users).values([{ id: userId }, { id: otherUserId }]);
+
+    await trx.insert(sessions).values([
+      // { id: 'session1', userId },
+      // { id: 'session2', userId },
+      { id: '1', userId },
+    ]);
+    await trx.insert(files).values({
+      id: 'f1',
+      userId,
+      url: 'abc',
+      name: 'file-1',
+      fileType: 'image/png',
+      size: 1000,
+    });
+
+    await trx.insert(embeddings).values({
+      id: embeddingsId,
+      embeddings: codeEmbedding,
+      userId,
+    });
+  });
+});
+
+afterEach(async () => {
+  // Clear tables after each test case
+  await serverDB.delete(users).where(eq(users.id, userId));
+  await serverDB.delete(users).where(eq(users.id, otherUserId));
+});
+
+describe('MessageModel Query Tests', () => {
+  describe('query', () => {
+    it('should query messages by user ID', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        { id: '1', userId, role: 'user', content: 'message 1', createdAt: new Date('2023-01-01') },
+        { id: '2', userId, role: 'user', content: 'message 2', createdAt: new Date('2023-02-01') },
+        {
+          id: '3',
+          userId: otherUserId,
+          role: 'user',
+          content: 'message 3',
+          createdAt: new Date('2023-03-01'),
+        },
+      ]);
+
+      // Call query method
+      const result = await messageModel.query();
+
+      // Assert result
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('1');
+      expect(result[1].id).toBe('2');
+    });
+
+    it('reads usage from the dedicated column and falls back to metadata.usage', async () => {
+      await serverDB.insert(messages).values([
+        // dedicated column must win over the legacy metadata.usage
+        {
+          id: 'usage-col',
+          userId,
+          role: 'assistant',
+          content: 'a',
+          createdAt: new Date('2023-01-01'),
+          usage: { totalTokens: 100 } as any,
+          metadata: { usage: { totalTokens: 999 } },
+        },
+        // legacy row: only metadata.usage → falls back
+        {
+          id: 'usage-meta',
+          userId,
+          role: 'assistant',
+          content: 'b',
+          createdAt: new Date('2023-01-02'),
+          metadata: { usage: { totalTokens: 50 } },
+        },
+      ]);
+
+      const result = await messageModel.query();
+
+      expect(result.find((m) => m.id === 'usage-col')?.usage).toEqual({ totalTokens: 100 });
+      expect(result.find((m) => m.id === 'usage-meta')?.usage).toEqual({ totalTokens: 50 });
+    });
+
+    it('should return empty messages if not match the user ID', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        {
+          id: '1',
+          userId: otherUserId,
+          role: 'user',
+          content: '1',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: '2',
+          userId: otherUserId,
+          role: 'user',
+          content: '2',
+          createdAt: new Date('2023-02-01'),
+        },
+        {
+          id: '3',
+          userId: otherUserId,
+          role: 'user',
+          content: '3',
+          createdAt: new Date('2023-03-01'),
+        },
+      ]);
+
+      // Call query method
+      const result = await messageModel.query();
+
+      // Assert result
+      expect(result).toHaveLength(0);
+    });
+
+    it('should query messages with pagination', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        { id: '1', userId, role: 'user', content: 'message 1', createdAt: new Date('2023-01-01') },
+        { id: '2', userId, role: 'user', content: 'message 2', createdAt: new Date('2023-02-01') },
+        { id: '3', userId, role: 'user', content: 'message 3', createdAt: new Date('2023-03-01') },
+      ]);
+
+      // Test pagination
+      const result1 = await messageModel.query({ current: 0, pageSize: 2 });
+      expect(result1).toHaveLength(2);
+
+      const result2 = await messageModel.query({ current: 1, pageSize: 1 });
+      expect(result2).toHaveLength(1);
+      expect(result2[0].id).toBe('2');
+    });
+
+    it('should filter messages by sessionId', async () => {
+      // Create test data
+      await serverDB.insert(sessions).values([
+        { id: 'session1', userId },
+        { id: 'session2', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          id: '1',
+          userId,
+          role: 'user',
+          sessionId: 'session1',
+          content: 'message 1',
+          createdAt: new Date('2022-02-01'),
+        },
+        {
+          id: '2',
+          userId,
+          role: 'user',
+          sessionId: 'session1',
+          content: 'message 2',
+          createdAt: new Date('2023-02-02'),
+        },
+        { id: '3', userId, role: 'user', sessionId: 'session2', content: 'message 3' },
+      ]);
+
+      // Test filtering by sessionId
+      const result = await messageModel.query({ sessionId: 'session1' });
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('1');
+      expect(result[1].id).toBe('2');
+    });
+
+    it('should filter messages by topicId', async () => {
+      // Create test data
+      const sessionId = 'session1';
+      await serverDB.insert(sessions).values([{ id: sessionId, userId }]);
+      const topicId = 'topic1';
+      await serverDB.insert(topics).values([
+        { id: topicId, sessionId, userId },
+        { id: 'topic2', sessionId, userId },
+      ]);
+
+      await serverDB.insert(messages).values([
+        { id: '1', userId, role: 'user', topicId, content: '1', createdAt: new Date('2022-04-01') },
+        { id: '2', userId, role: 'user', topicId, content: '2', createdAt: new Date('2023-02-01') },
+        { id: '3', userId, role: 'user', topicId: 'topic2', content: 'message 3' },
+      ]);
+
+      // Test filtering by topicId
+      const result = await messageModel.query({ topicId });
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('1');
+      expect(result[1].id).toBe('2');
+    });
+
+    it('should filter messages by groupId and expose group metadata', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values([
+          { id: 'group-1', userId, title: 'Group 1' },
+          { id: 'group-2', userId, title: 'Group 2' },
+        ]);
+
+        await trx.insert(agents).values([
+          { id: 'agent-group', userId, title: 'Agent Group' },
+          { id: 'agent-other', userId, title: 'Agent Other' },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'group-message',
+            userId,
+            role: 'assistant',
+            content: 'group message',
+            groupId: 'group-1',
+            agentId: 'agent-group',
+            targetId: 'user',
+            createdAt: new Date('2024-01-01'),
+          },
+          {
+            id: 'other-message',
+            userId,
+            role: 'assistant',
+            content: 'other group message',
+            groupId: 'group-2',
+            agentId: 'agent-other',
+            targetId: 'user',
+            createdAt: new Date('2024-01-02'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.query({ groupId: 'group-1' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('group-message');
+      expect(result[0].groupId).toBe('group-1');
+      expect(result[0].agentId).toBe('agent-group');
+      expect(result[0].targetId).toBe('user');
+    });
+
+    it('should query messages with join', async () => {
+      // Create test data
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(messages).values([
+          {
+            id: '1',
+            userId,
+            role: 'user',
+            content: 'message 1',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: '2',
+            userId,
+            role: 'user',
+            content: 'message 2',
+            createdAt: new Date('2023-02-01'),
+          },
+          {
+            id: '3',
+            userId: otherUserId,
+            role: 'user',
+            content: 'message 3',
+            createdAt: new Date('2023-03-01'),
+          },
+        ]);
+        await trx.insert(files).values([
+          {
+            id: 'f-0',
+            url: 'abc',
+            name: 'file-1',
+            userId,
+            fileType: 'image/png',
+            metadata: { height: 600, ratio: 1.3333, width: 800 },
+            size: 1000,
+          },
+          { id: 'f-1', url: 'abc', name: 'file-1', userId, fileType: 'image/png', size: 100 },
+          { id: 'f-3', url: 'abc', name: 'file-3', userId, fileType: 'image/png', size: 400 },
+        ]);
+        await trx.insert(messageTTS).values([
+          { id: '1', userId },
+          { id: '2', voice: 'a', fileId: 'f-1', contentMd5: 'abc', userId },
+        ]);
+
+        await trx.insert(messagesFiles).values([
+          { fileId: 'f-0', messageId: '1', userId },
+          { fileId: 'f-3', messageId: '1', userId },
+        ]);
+      });
+
+      const domain = 'http://abc.com';
+      const postProcessUrl = vi.fn(
+        async (path: string | null, file: { id?: string | null }) => `${domain}/${file.id}/${path}`,
+      );
+      // Call query method
+      const result = await messageModel.query({}, { postProcessUrl });
+
+      // Assert result
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('1');
+      expect(result[0].imageList).toEqual([
+        {
+          alt: 'file-1',
+          height: 600,
+          id: 'f-0',
+          mimeType: 'image/png',
+          ratio: 1.3333,
+          url: `${domain}/f-0/abc`,
+          width: 800,
+        },
+        { alt: 'file-3', id: 'f-3', mimeType: 'image/png', url: `${domain}/f-3/abc` },
+      ]);
+      expect(postProcessUrl).toHaveBeenCalledWith(
+        'abc',
+        expect.objectContaining({ fileType: 'image/png', id: 'f-0' }),
+      );
+      expect(postProcessUrl).toHaveBeenCalledWith(
+        'abc',
+        expect.objectContaining({ fileType: 'image/png', id: 'f-3' }),
+      );
+      expect(result[1].id).toBe('2');
+      expect(result[1].imageList).toEqual([]);
+    });
+
+    it('should pass file id to postProcessUrl when querying messages by ids', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(messages).values({
+          id: 'query-by-id-message',
+          userId,
+          role: 'user',
+          content: 'message with file',
+          createdAt: new Date('2023-01-01'),
+        });
+        await trx.insert(files).values({
+          id: 'query-by-id-file',
+          url: 'files/query-by-id.png',
+          name: 'query-by-id.png',
+          userId,
+          fileType: 'image/png',
+          metadata: { height: 720, ratio: 1.7778, width: 1280 },
+          size: 1000,
+        });
+        await trx.insert(messagesFiles).values({
+          fileId: 'query-by-id-file',
+          messageId: 'query-by-id-message',
+          userId,
+        });
+      });
+
+      const postProcessUrl = vi.fn(
+        async (path: string | null, file: { id?: string | null }) => `/f/${file.id}/${path}`,
+      );
+
+      const result = await messageModel.queryByIds(['query-by-id-message'], { postProcessUrl });
+      expect(result[0].imageList).toEqual([
+        {
+          alt: 'query-by-id.png',
+          height: 720,
+          id: 'query-by-id-file',
+          mimeType: 'image/png',
+          ratio: 1.7778,
+          url: '/f/query-by-id-file/files/query-by-id.png',
+          width: 1280,
+        },
+      ]);
+      expect(postProcessUrl).toHaveBeenCalledWith(
+        'files/query-by-id.png',
+        expect.objectContaining({ fileType: 'image/png', id: 'query-by-id-file' }),
+      );
+    });
+
+    it('should hydrate sender in queryByIds like the main query path', async () => {
+      // Regression: messageGroup children are loaded through
+      // queryByIds; without the users join their sender was dropped and the
+      // client misattributed other members' messages to the viewer.
+      await serverDB.update(users).set({ fullName: 'Kermit' }).where(eq(users.id, otherUserId));
+      await serverDB.insert(messages).values({
+        content: 'sender hydration',
+        createdAt: new Date('2023-01-01'),
+        id: 'sender-hydration-message',
+        role: 'user',
+        userId: otherUserId,
+      });
+
+      const otherUserModel = new MessageModel(serverDB, otherUserId);
+      const [message] = await otherUserModel.queryByIds(['sender-hydration-message']);
+
+      expect(message.sender).toEqual({
+        avatar: null,
+        fullName: 'Kermit',
+        id: otherUserId,
+        username: null,
+      });
+    });
+
+    it('should keep sender for an avatar-less user in the main query path', async () => {
+      // Regression: drizzle nullifies a left-joined nested
+      // selection from its FIRST selected column. With `avatar` first, every
+      // avatar-less sender came back as `sender: null` and the client rendered
+      // the viewer's own identity on other members' messages.
+      await serverDB
+        .update(users)
+        .set({ avatar: null, fullName: 'Kermit', username: null })
+        .where(eq(users.id, otherUserId));
+      await serverDB.insert(messages).values({
+        content: 'avatar-less sender',
+        createdAt: new Date('2023-01-01'),
+        id: 'avatarless-sender-message',
+        role: 'user',
+        userId: otherUserId,
+      });
+
+      const otherUserModel = new MessageModel(serverDB, otherUserId);
+      const messagesResult = await otherUserModel.query();
+      const message = messagesResult.find((item) => item.id === 'avatarless-sender-message');
+
+      expect(message?.sender).toEqual({
+        avatar: null,
+        fullName: 'Kermit',
+        id: otherUserId,
+        username: null,
+      });
+    });
+
+    it('materializes safe audio metadata and only validated duration in both query paths', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(messages).values({
+          content: 'message with audio',
+          createdAt: new Date('2023-01-01'),
+          id: 'audio-duration-message',
+          role: 'user',
+          userId,
+        });
+        await trx.insert(files).values([
+          {
+            fileType: 'audio/mpeg',
+            id: 'audio-duration-valid',
+            metadata: { durationMs: 2500, transcript: 'must-not-leak' },
+            name: 'valid.mp3',
+            size: 1000,
+            url: 'files/valid.mp3',
+            userId,
+          },
+          {
+            fileType: 'audio/mpeg',
+            id: 'audio-duration-invalid',
+            metadata: { durationMs: -1, recording: 'must-not-leak' },
+            name: 'invalid.mp3',
+            size: 1000,
+            url: 'files/invalid.mp3',
+            userId,
+          },
+        ]);
+        await trx.insert(messagesFiles).values([
+          { fileId: 'audio-duration-valid', messageId: 'audio-duration-message', userId },
+          { fileId: 'audio-duration-invalid', messageId: 'audio-duration-message', userId },
+        ]);
+      });
+
+      const queried = (await messageModel.query()).find(
+        (message) => message.id === 'audio-duration-message',
+      );
+      const queriedById = (await messageModel.queryByIds(['audio-duration-message']))[0];
+
+      for (const message of [queried, queriedById]) {
+        expect(message?.audioList).toHaveLength(2);
+        expect(message?.audioList?.find((audio) => audio.id === 'audio-duration-valid')).toEqual({
+          alt: 'valid.mp3',
+          durationMs: 2500,
+          id: 'audio-duration-valid',
+          mimeType: 'audio/mpeg',
+          url: 'files/valid.mp3',
+        });
+        expect(message?.audioList?.find((audio) => audio.id === 'audio-duration-invalid')).toEqual({
+          alt: 'invalid.mp3',
+          id: 'audio-duration-invalid',
+          mimeType: 'audio/mpeg',
+          url: 'files/invalid.mp3',
+        });
+      }
+    });
+
+    it('should include translate, tts and other extra fields in query result', async () => {
+      // Create test data
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(messages).values([
+          {
+            id: '1',
+            userId,
+            role: 'user',
+            content: 'message 1',
+            createdAt: new Date('2023-01-01'),
+          },
+        ]);
+        await trx
+          .insert(messageTranslates)
+          .values([{ id: '1', content: 'translated', from: 'en', to: 'zh', userId }]);
+        await trx
+          .insert(messageTTS)
+          .values([{ id: '1', voice: 'voice1', fileId: 'f1', contentMd5: 'md5', userId }]);
+      });
+
+      // Call query method
+      const result = await messageModel.query();
+
+      // Assert result
+      expect(result[0].extra!.translate).toEqual({ content: 'translated', from: 'en', to: 'zh' });
+      expect(result[0].extra!.tts).toEqual({
+        contentMd5: 'md5',
+        file: 'f1',
+        voice: 'voice1',
+      });
+    });
+
+    it('should handle edge cases of pagination parameters', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        { id: '1', userId, role: 'user', content: 'message 1' },
+        { id: '2', userId, role: 'user', content: 'message 2' },
+        { id: '3', userId, role: 'user', content: 'message 3' },
+      ]);
+
+      // Test boundary cases for current and pageSize
+      const result1 = await messageModel.query({ current: 0, pageSize: 2 });
+      expect(result1).toHaveLength(2);
+
+      const result2 = await messageModel.query({ current: 1, pageSize: 2 });
+      expect(result2).toHaveLength(1);
+
+      const result3 = await messageModel.query({ current: 2, pageSize: 2 });
+      expect(result3).toHaveLength(0);
+    });
+
+    describe('newest-first pagination ', () => {
+      // A topic whose mainline exceeds pageSize must keep its LATEST turns
+      // (including the final answer) rather than the oldest, and the returned
+      // slice must be a single contiguous parentId chain so the renderer — which
+      // roots a slice at one parent — drops nothing.
+      const seedRounds = async (topicId: string, rounds: number, stepsPerRound: number) => {
+        await serverDB.insert(topics).values([{ id: topicId, userId }]);
+        const rows: any[] = [];
+        let seq = 0;
+        let prevId: string | null = null;
+        for (let r = 1; r <= rounds; r += 1) {
+          const uid = `${topicId}-u${r}`;
+          rows.push({
+            id: uid,
+            userId,
+            topicId,
+            role: 'user',
+            parentId: prevId,
+            content: `q${r}`,
+            createdAt: new Date(2023, 0, 1, 0, seq),
+          });
+          seq += 1;
+          prevId = uid;
+          for (let step = 1; step <= stepsPerRound; step += 1) {
+            const sid = `${topicId}-a${r}-${step}`;
+            rows.push({
+              id: sid,
+              userId,
+              topicId,
+              role: 'assistant',
+              parentId: prevId,
+              content: `a${r}.${step}`,
+              createdAt: new Date(2023, 0, 1, 0, seq),
+            });
+            seq += 1;
+            prevId = sid;
+          }
+        }
+        await serverDB.insert(messages).values(rows);
+        return { lastId: prevId as string };
+      };
+
+      // Every message except the single root must have its parent inside the slice.
+      const isContiguousChain = (result: { id: string; parentId?: string | null }[]) => {
+        const ids = new Set(result.map((m) => m.id));
+        return result.every((m, i) => i === 0 || (!!m.parentId && ids.has(m.parentId)));
+      };
+
+      it('keeps the newest turns (final answer) instead of the oldest when truncated', async () => {
+        const topicId = 't-lobe12011-newest';
+        // 5 rounds x (1 user + 2 assistant) = 15 mainline messages; page size 4.
+        const { lastId } = await seedRounds(topicId, 5, 2);
+
+        const result = await messageModel.query({ topicId, current: 0, pageSize: 4 });
+
+        // The final answer (newest message) must be present — pre-fix `asc + limit`
+        // returned the OLDEST 4 and dropped it entirely.
+        expect(result.map((m) => m.id)).toContain(lastId);
+        expect(result.at(-1)!.id).toBe(lastId);
+      });
+
+      it('aligns the lower boundary to a round start (mainline user message)', async () => {
+        const topicId = 't-lobe12011-align';
+        const { lastId } = await seedRounds(topicId, 5, 2); // page boundary lands mid-round
+
+        const result = await messageModel.query({ topicId, current: 0, pageSize: 4 });
+
+        // The page is anchored to the newest turns (the final answer is present)…
+        expect(result.map((m) => m.id)).toContain(lastId);
+        // …its oldest retained row is a user message — no partial round at the top…
+        expect(result[0].role).toBe('user');
+        // …and the slice is a single contiguous parentId chain (renderer-safe), so
+        // FlatListBuilder roots it at one parent and drops nothing.
+        expect(isContiguousChain(result as any)).toBe(true);
+      });
+
+      it('keeps an oversized single round whole rather than trimming to empty', async () => {
+        const topicId = 't-lobe12011-huge';
+        // One round of 1 user + 6 assistant steps = 7 messages; page size 4. The
+        // newest page contains no user message, so the never-empty guard keeps it.
+        const { lastId } = await seedRounds(topicId, 1, 6);
+
+        const result = await messageModel.query({ topicId, current: 0, pageSize: 4 });
+
+        expect(result).toHaveLength(4);
+        expect(result.every((m) => m.role !== 'user')).toBe(true);
+        expect(result.at(-1)!.id).toBe(lastId);
+      });
+    });
+
+    describe('round-cursor before pages', () => {
+      // Like seedRounds, but with a per-round step count so one round can dwarf
+      // the page size — the shape that amplifies the round-start trim.
+      const seedVariableRounds = async (topicId: string, stepsPerRound: number[]) => {
+        await serverDB.insert(topics).values([{ id: topicId, userId }]);
+        const rows: any[] = [];
+        let seq = 0;
+        let prevId: string | null = null;
+        stepsPerRound.forEach((steps, index) => {
+          const r = index + 1;
+          const uid = `${topicId}-u${r}`;
+          rows.push({
+            id: uid,
+            userId,
+            topicId,
+            role: 'user',
+            parentId: prevId,
+            content: `q${r}`,
+            createdAt: new Date(2023, 0, 1, 0, seq),
+          });
+          seq += 1;
+          prevId = uid;
+          for (let step = 1; step <= steps; step += 1) {
+            const sid = `${topicId}-a${r}-${step}`;
+            rows.push({
+              id: sid,
+              userId,
+              topicId,
+              role: 'assistant',
+              parentId: prevId,
+              content: `a${r}.${step}`,
+              createdAt: new Date(2023, 0, 1, 0, seq),
+            });
+            seq += 1;
+            prevId = sid;
+          }
+        });
+        await serverDB.insert(messages).values(rows);
+        return { allIds: rows.map((row) => row.id as string) };
+      };
+
+      const cursorOf = (message: { createdAt: Date | number | string; id: string }) => ({
+        createdAt: new Date(message.createdAt),
+        id: message.id,
+      });
+
+      it('reproduces the amplified trim: a giant mid-topic round shrinks page 0 to the last round', async () => {
+        const topicId = 't-lobe13716-repro';
+        // Rounds of 4 / 12 / 4 messages; page size 10. The newest 10 rows cut
+        // into the giant round 2, and the round-start trim jumps all the way to
+        // round 3 — page 0 keeps only 4 of the 20 messages.
+        await seedVariableRounds(topicId, [3, 11, 3]);
+
+        const page0 = await messageModel.query({ topicId, pageSize: 10 });
+
+        expect(page0).toHaveLength(4);
+        expect(page0[0].id).toBe(`${topicId}-u3`);
+        expect(page0.at(-1)!.id).toBe(`${topicId}-a3-3`);
+      });
+
+      it('walks the full history through before cursors with no gaps or duplicates', async () => {
+        const topicId = 't-lobe13716-walk';
+        const { allIds } = await seedVariableRounds(topicId, [3, 11, 3]);
+
+        const pageSize = 10;
+        const page0 = await messageModel.query({ topicId, pageSize });
+
+        // Page 1: the giant round's tail. A full page with no user message in
+        // view is kept whole (oversized-round guard), mid-round top and all.
+        const page1 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page0[0]),
+        });
+        expect(page1).toHaveLength(10);
+        // Contiguous join: page 1's newest row is the parent of page 0's oldest.
+        expect(page0[0].parentId).toBe(page1.at(-1)!.id);
+
+        // Page 2: everything left (6 rows < pageSize) — no trim on a partial page.
+        const page2 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page1[0]),
+        });
+        expect(page2).toHaveLength(6);
+        expect(page2[0].id).toBe(`${topicId}-u1`);
+        expect(page1[0].parentId).toBe(page2.at(-1)!.id);
+
+        // The three pages reassemble the exact full transcript, in order.
+        const walked = [...page2, ...page1, ...page0].map((m) => m.id);
+        expect(walked).toEqual(allIds);
+
+        // Walking past the beginning returns an empty page (the client's
+        // exhaustion signal alongside `page.length < pageSize`).
+        const page3 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page2[0]),
+        });
+        expect(page3).toHaveLength(0);
+      });
+
+      it('breaks createdAt ties by id so equal-timestamp rows are neither skipped nor duplicated', async () => {
+        const topicId = 't-lobe13716-tie';
+        await serverDB.insert(topics).values([{ id: topicId, userId }]);
+        const createdAt = new Date(2023, 0, 1, 0, 0);
+        await serverDB.insert(messages).values([
+          { id: `${topicId}-m1`, userId, topicId, role: 'user', content: 'q', createdAt },
+          { id: `${topicId}-m2`, userId, topicId, role: 'assistant', content: 'a1', createdAt },
+          { id: `${topicId}-m3`, userId, topicId, role: 'assistant', content: 'a2', createdAt },
+        ]);
+
+        const page0 = await messageModel.query({ topicId, pageSize: 2 });
+        expect(page0.map((m) => m.id)).toEqual([`${topicId}-m2`, `${topicId}-m3`]);
+
+        const page1 = await messageModel.query({
+          topicId,
+          pageSize: 2,
+          before: cursorOf(page0[0]),
+        });
+        expect(page1.map((m) => m.id)).toEqual([`${topicId}-m1`]);
+      });
+
+      it('windows group nodes to the before page instead of refetching the whole topic', async () => {
+        const topicId = 't-lobe13716-group';
+        await seedVariableRounds(topicId, [3, 11, 3]);
+
+        // One group inside the first before page's time window (minute 7.5) and
+        // one inside page 0's window (minute 18.5), each with a hidden member.
+        await serverDB.insert(messageGroups).values([
+          {
+            id: `${topicId}-g-old`,
+            content: 'old summary',
+            type: MessageGroupType.Compression,
+            topicId,
+            userId,
+            createdAt: new Date(2023, 0, 1, 0, 7, 30),
+          },
+          {
+            id: `${topicId}-g-new`,
+            content: 'new summary',
+            type: MessageGroupType.Compression,
+            topicId,
+            userId,
+            createdAt: new Date(2023, 0, 1, 0, 18, 30),
+          },
+        ]);
+        await serverDB.insert(messages).values([
+          {
+            id: `${topicId}-gm-old`,
+            userId,
+            topicId,
+            role: 'assistant',
+            content: 'grouped old',
+            messageGroupId: `${topicId}-g-old`,
+            createdAt: new Date(2023, 0, 1, 0, 7, 15),
+          },
+          {
+            id: `${topicId}-gm-new`,
+            userId,
+            topicId,
+            role: 'assistant',
+            content: 'grouped new',
+            messageGroupId: `${topicId}-g-new`,
+            createdAt: new Date(2023, 0, 1, 0, 18, 15),
+          },
+        ]);
+
+        const pageSize = 10;
+        const page0 = await messageModel.query({ topicId, pageSize });
+        // Page 0 keeps its existing behavior: every group node of the topic.
+        expect(page0.filter((m) => m.id.startsWith(`${topicId}-g-`)).map((m) => m.id)).toEqual([
+          `${topicId}-g-old`,
+          `${topicId}-g-new`,
+        ]);
+
+        const mainline = page0.find((m) => !m.id.startsWith(`${topicId}-g-`));
+        const page1 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(mainline!),
+        });
+        const page1GroupIds = page1
+          .filter((m) => m.id.startsWith(`${topicId}-g-`))
+          .map((m) => m.id);
+        // Only the group inside this page's time window — not the whole topic's.
+        expect(page1GroupIds).toEqual([`${topicId}-g-old`]);
+
+        const page1Mainline = page1.find((m) => !m.id.startsWith(`${topicId}-g-`));
+        const page2 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page1Mainline!),
+        });
+        expect(page2.some((m) => m.id.startsWith(`${topicId}-g-`))).toBe(false);
+      });
+    });
+
+    describe('query with messageQueries', () => {
+      it('should include ragQuery, ragQueryId and ragRawQuery in query results', async () => {
+        // Create test data
+        const messageId = 'msg-with-query';
+        const queryId = uuid();
+
+        await serverDB.insert(messages).values({
+          id: messageId,
+          userId,
+          role: 'user',
+          content: 'test message',
+        });
+
+        await serverDB.insert(messageQueries).values({
+          id: queryId,
+          messageId,
+          userQuery: 'original query',
+          rewriteQuery: 'rewritten query',
+          userId,
+        });
+
+        // Call query method
+        const result = await messageModel.query();
+
+        // Assert result
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe(messageId);
+        expect(result[0].ragQueryId).toBe(queryId);
+        expect(result[0].ragQuery).toBe('rewritten query');
+        expect(result[0].ragRawQuery).toBe('original query');
+      });
+
+      it('should handle multiple message queries for the same message', async () => {
+        // Create test data
+        const messageId = 'msg-multi-query';
+        const queryId1 = uuid();
+        const queryId2 = uuid();
+
+        await serverDB.insert(messages).values({
+          id: messageId,
+          userId,
+          role: 'user',
+          content: 'test message',
+        });
+
+        // Create two queries, the result should only contain one of them
+        // Note: since the messageQueries table has no sort field, which query is returned is non-deterministic
+        // but only one should be returned
+        await serverDB.insert(messageQueries).values([
+          {
+            id: queryId1,
+            messageId,
+            userQuery: 'original query 1',
+            rewriteQuery: 'rewritten query 1',
+            userId,
+          },
+          {
+            id: queryId2,
+            messageId,
+            userQuery: 'original query 2',
+            rewriteQuery: 'rewritten query 2',
+            userId,
+          },
+        ]);
+
+        // Call query method
+        const result = await messageModel.query();
+
+        // Assert result - should only contain one query (which one depends on database implementation)
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe(messageId);
+        // Verify the returned value is one of the two queries
+        expect([queryId1, queryId2]).toContain(result[0].ragQueryId);
+        expect(['rewritten query 1', 'rewritten query 2']).toContain(result[0].ragQuery);
+        expect(['original query 1', 'original query 2']).toContain(result[0].ragRawQuery);
+      });
+    });
+
+    it('should handle complex query with multiple joins and file chunks', async () => {
+      await serverDB.transaction(async (trx) => {
+        const chunk1Id = uuid();
+        const query1Id = uuid();
+        // Create base message
+        await trx.insert(messages).values({
+          id: 'msg1',
+          userId,
+          role: 'user',
+          content: 'test message',
+          createdAt: new Date('2023-01-01'),
+        });
+
+        // Create file
+        await trx.insert(files).values([
+          {
+            id: 'file1',
+            userId,
+            name: 'test.txt',
+            url: 'test-url',
+            fileType: 'text/plain',
+            size: 100,
+          },
+        ]);
+
+        // Create file chunk
+        await trx.insert(chunks).values({
+          id: chunk1Id,
+          text: 'chunk content',
+        });
+
+        // Associate message with file
+        await trx.insert(messagesFiles).values({
+          messageId: 'msg1',
+          userId,
+          fileId: 'file1',
+        });
+
+        // Create file chunk association
+        await trx.insert(fileChunks).values({
+          fileId: 'file1',
+          userId,
+          chunkId: chunk1Id,
+        });
+
+        // Create message query
+        await trx.insert(messageQueries).values({
+          id: query1Id,
+          messageId: 'msg1',
+          userId,
+          userQuery: 'original query',
+          rewriteQuery: 'rewritten query',
+        });
+
+        // Create message query chunk association
+        await trx.insert(messageQueryChunks).values({
+          messageId: 'msg1',
+          queryId: query1Id,
+          chunkId: chunk1Id,
+          similarity: '0.95',
+          userId,
+        });
+      });
+
+      const result = await messageModel.query();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].chunksList).toHaveLength(1);
+      expect(result[0].chunksList![0]).toMatchObject({
+        text: 'chunk content',
+        similarity: 0.95,
+      });
+    });
+
+    it('should handle null similarity in chunks and convert to number', async () => {
+      await serverDB.transaction(async (trx) => {
+        const chunk1Id = uuid();
+        const query1Id = uuid();
+
+        await trx.insert(messages).values({
+          id: 'msg1',
+          userId,
+          role: 'user',
+          content: 'test message',
+        });
+
+        await trx.insert(files).values({
+          id: 'file1',
+          userId,
+          name: 'test.txt',
+          url: 'test-url',
+          fileType: 'text/plain',
+          size: 100,
+        });
+
+        await trx.insert(chunks).values({
+          id: chunk1Id,
+          text: 'chunk content',
+        });
+
+        await trx.insert(fileChunks).values({
+          fileId: 'file1',
+          userId,
+          chunkId: chunk1Id,
+        });
+
+        await trx.insert(messageQueries).values({
+          id: query1Id,
+          messageId: 'msg1',
+          userId,
+          userQuery: 'query',
+          rewriteQuery: 'rewritten',
+        });
+
+        // Insert chunk with null similarity
+        await trx.insert(messageQueryChunks).values({
+          messageId: 'msg1',
+          queryId: query1Id,
+          chunkId: chunk1Id,
+          similarity: null as any,
+          userId,
+        });
+      });
+
+      const result = await messageModel.query();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].chunksList).toHaveLength(1);
+      // null should be converted to undefined
+      expect(result[0].chunksList![0].similarity).toBeUndefined();
+    });
+
+    it('should return empty arrays for files and chunks if none exist', async () => {
+      await serverDB.insert(messages).values({
+        id: 'msg1',
+        userId,
+        role: 'user',
+        content: 'test message',
+      });
+
+      const result = await messageModel.query();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].fileList).toEqual([]);
+      expect(result[0].imageList).toEqual([]);
+      expect(result[0].chunksList).toEqual([]);
+    });
+
+    it('should query messages in session with null topicId (only non-topic messages)', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([
+        { id: 'topic1', sessionId: 'session1', userId },
+        { id: 'topic2', sessionId: 'session1', userId },
+      ]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'msg-no-topic-1',
+          userId,
+          sessionId: 'session1',
+          topicId: null,
+          role: 'user',
+          content: 'message without topic 1',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'msg-no-topic-2',
+          userId,
+          sessionId: 'session1',
+          topicId: null,
+          role: 'assistant',
+          content: 'message without topic 2',
+          createdAt: new Date('2023-01-02'),
+        },
+        {
+          id: 'msg-topic1',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic1',
+          role: 'user',
+          content: 'message in topic1',
+          createdAt: new Date('2023-01-03'),
+        },
+        {
+          id: 'msg-topic2',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic2',
+          role: 'assistant',
+          content: 'message in topic2',
+          createdAt: new Date('2023-01-04'),
+        },
+      ]);
+
+      // Query with explicit null topicId should return only non-topic messages
+      const result = await messageModel.query({ sessionId: 'session1', topicId: null });
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('msg-no-topic-1');
+      expect(result[1].id).toBe('msg-no-topic-2');
+    });
+
+    it('should query messages in session with null groupId (only non-group messages)', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(chatGroups).values([
+        { id: 'group1', userId, title: 'Group 1' },
+        { id: 'group2', userId, title: 'Group 2' },
+      ]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'msg-no-group-1',
+          userId,
+          sessionId: 'session1',
+          groupId: null,
+          role: 'user',
+          content: 'message without group 1',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'msg-no-group-2',
+          userId,
+          sessionId: 'session1',
+          groupId: null,
+          role: 'assistant',
+          content: 'message without group 2',
+          createdAt: new Date('2023-01-02'),
+        },
+        {
+          id: 'msg-group1',
+          userId,
+          sessionId: 'session1',
+          groupId: 'group1',
+          role: 'user',
+          content: 'message in group1',
+          createdAt: new Date('2023-01-03'),
+        },
+        {
+          id: 'msg-group2',
+          userId,
+          sessionId: 'session1',
+          groupId: 'group2',
+          role: 'assistant',
+          content: 'message in group2',
+          createdAt: new Date('2023-01-04'),
+        },
+      ]);
+
+      // Query with explicit null groupId should return only non-group messages
+      const result = await messageModel.query({ sessionId: 'session1', groupId: null });
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('msg-no-group-1');
+      expect(result[1].id).toBe('msg-no-group-2');
+    });
+
+    it('should query inbox messages with null topicId when no sessionId specified', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'msg-inbox-no-topic',
+          userId,
+          sessionId: null, // inbox message
+          topicId: null,
+          role: 'user',
+          content: 'inbox message without topic',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'msg-session-no-topic',
+          userId,
+          sessionId: 'session1',
+          topicId: null,
+          role: 'user',
+          content: 'session message without topic',
+          createdAt: new Date('2023-01-02'),
+        },
+        {
+          id: 'msg-session-with-topic',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic1',
+          role: 'user',
+          content: 'session message with topic',
+          createdAt: new Date('2023-01-03'),
+        },
+      ]);
+
+      // When no sessionId specified (defaults to inbox), query with topicId null
+      // should return only inbox messages without topics
+      const result = await messageModel.query({ topicId: null });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('msg-inbox-no-topic');
+    });
+
+    it('should query messages with combined sessionId and topicId filters', async () => {
+      await serverDB.insert(sessions).values([
+        { id: 'session1', userId },
+        { id: 'session2', userId },
+      ]);
+      await serverDB.insert(topics).values([
+        { id: 'topic1', sessionId: 'session1', userId },
+        { id: 'topic2', sessionId: 'session1', userId },
+      ]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'msg-s1-t1',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic1',
+          role: 'user',
+          content: 'session1 topic1',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'msg-s1-t2',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic2',
+          role: 'user',
+          content: 'session1 topic2',
+          createdAt: new Date('2023-01-02'),
+        },
+        {
+          id: 'msg-s2',
+          userId,
+          sessionId: 'session2',
+          topicId: null,
+          role: 'user',
+          content: 'session2 no topic',
+          createdAt: new Date('2023-01-03'),
+        },
+      ]);
+
+      // Query specific session and topic combination
+      const result = await messageModel.query({ sessionId: 'session1', topicId: 'topic1' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('msg-s1-t1');
+    });
+
+    describe('query with agentId filter', () => {
+      // ========== Legacy data tests (messages with sessionId only) ==========
+      it('should query legacy messages by agentId through agentsToSessions lookup', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(sessions).values([
+            { id: 'session-for-agent', userId },
+            { id: 'session-other', userId },
+          ]);
+
+          await trx.insert(agents).values([{ id: 'agent1', userId, title: 'Agent 1' }]);
+
+          await trx
+            .insert(agentsToSessions)
+            .values([{ agentId: 'agent1', sessionId: 'session-for-agent', userId }]);
+
+          // Legacy messages: have sessionId but no agentId
+          await trx.insert(messages).values([
+            {
+              id: 'msg-agent-session',
+              userId,
+              sessionId: 'session-for-agent',
+              agentId: null,
+              role: 'user',
+              content: 'legacy message in agent session',
+              createdAt: new Date('2023-01-01'),
+            },
+            {
+              id: 'msg-other-session',
+              userId,
+              sessionId: 'session-other',
+              agentId: null,
+              role: 'user',
+              content: 'message in other session',
+              createdAt: new Date('2023-01-02'),
+            },
+          ]);
+        });
+
+        // Query with agentId should return legacy messages from the associated session
+        const result = await messageModel.query({ agentId: 'agent1' });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('msg-agent-session');
+      });
+
+      // ========== New data tests (messages with agentId directly) ==========
+      it('should query messages with direct agentId match', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(agents).values([{ id: 'agent2', userId, title: 'Agent 2' }]);
+
+          // New messages: have agentId directly stored
+          await trx.insert(messages).values([
+            {
+              id: 'msg-with-agent-id',
+              userId,
+              agentId: 'agent2',
+              sessionId: null,
+              role: 'user',
+              content: 'new message with agentId',
+              createdAt: new Date('2023-01-01'),
+            },
+            {
+              id: 'msg-without-agent-id',
+              userId,
+              agentId: null,
+              sessionId: null,
+              role: 'user',
+              content: 'message without agentId',
+              createdAt: new Date('2023-01-02'),
+            },
+          ]);
+        });
+
+        const result = await messageModel.query({ agentId: 'agent2' });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('msg-with-agent-id');
+      });
+
+      // ========== Mixed data tests (both legacy and new data) ==========
+      it('should query both legacy (sessionId) and new (agentId) messages using OR condition', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(sessions).values([{ id: 'session-for-mixed', userId }]);
+
+          await trx.insert(agents).values([{ id: 'agent-mixed', userId, title: 'Agent Mixed' }]);
+
+          await trx
+            .insert(agentsToSessions)
+            .values([{ agentId: 'agent-mixed', sessionId: 'session-for-mixed', userId }]);
+
+          // Mixed data: legacy message with sessionId and new message with agentId
+          await trx.insert(messages).values([
+            {
+              id: 'msg-legacy',
+              userId,
+              sessionId: 'session-for-mixed',
+              agentId: null,
+              role: 'user',
+              content: 'legacy message',
+              createdAt: new Date('2023-01-01'),
+            },
+            {
+              id: 'msg-new',
+              userId,
+              sessionId: null,
+              agentId: 'agent-mixed',
+              role: 'user',
+              content: 'new message',
+              createdAt: new Date('2023-01-02'),
+            },
+            {
+              id: 'msg-unrelated',
+              userId,
+              sessionId: null,
+              agentId: null,
+              role: 'user',
+              content: 'unrelated message',
+              createdAt: new Date('2023-01-03'),
+            },
+          ]);
+        });
+
+        const result = await messageModel.query({ agentId: 'agent-mixed' });
+
+        // Should return both legacy and new messages
+        expect(result).toHaveLength(2);
+        const ids = result.map((m) => m.id);
+        expect(ids).toContain('msg-legacy');
+        expect(ids).toContain('msg-new');
+      });
+
+      it('should not duplicate messages when both sessionId and agentId point to the same message', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(sessions).values([{ id: 'session-dedup', userId }]);
+
+          await trx.insert(agents).values([{ id: 'agent-dedup', userId, title: 'Agent Dedup' }]);
+
+          await trx
+            .insert(agentsToSessions)
+            .values([{ agentId: 'agent-dedup', sessionId: 'session-dedup', userId }]);
+
+          // Message with both sessionId and agentId (transition period data)
+          await trx.insert(messages).values([
+            {
+              id: 'msg-both',
+              userId,
+              sessionId: 'session-dedup',
+              agentId: 'agent-dedup',
+              role: 'user',
+              content: 'message with both ids',
+              createdAt: new Date('2023-01-01'),
+            },
+          ]);
+        });
+
+        const result = await messageModel.query({ agentId: 'agent-dedup' });
+
+        // Should not duplicate - only return once
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('msg-both');
+      });
+
+      // ========== Edge cases ==========
+      it('should return empty when agentId has no associated session and no direct messages', async () => {
+        await serverDB
+          .insert(agents)
+          .values([{ id: 'agent-no-data', userId, title: 'Agent No Data' }]);
+
+        const result = await messageModel.query({ agentId: 'agent-no-data' });
+
+        expect(result).toHaveLength(0);
+      });
+
+      it('should query messages by agentId only (no associated sessionId in agentsToSessions)', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx
+            .insert(agents)
+            .values([{ id: 'agent-no-session', userId, title: 'Agent No Session' }]);
+
+          // Message with agentId but agent has no session association
+          await trx.insert(messages).values([
+            {
+              id: 'msg-agent-only',
+              userId,
+              agentId: 'agent-no-session',
+              sessionId: null,
+              role: 'user',
+              content: 'agent only message',
+              createdAt: new Date('2023-01-01'),
+            },
+          ]);
+        });
+
+        const result = await messageModel.query({ agentId: 'agent-no-session' });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('msg-agent-only');
+      });
+
+      // ========== User isolation tests ==========
+      it('should only return messages belonging to the current user', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(sessions).values([
+            { id: 'session-isolation', userId },
+            { id: 'session-other-user', userId: otherUserId },
+          ]);
+
+          await trx.insert(agents).values([
+            { id: 'agent-isolation', userId, title: 'Agent Isolation' },
+            { id: 'agent-other', userId: otherUserId, title: 'Agent Other' },
+          ]);
+
+          await trx.insert(agentsToSessions).values([
+            { agentId: 'agent-isolation', sessionId: 'session-isolation', userId },
+            { agentId: 'agent-other', sessionId: 'session-other-user', userId: otherUserId },
+          ]);
+
+          await trx.insert(messages).values([
+            {
+              id: 'msg-user',
+              userId,
+              agentId: 'agent-isolation',
+              role: 'user',
+              content: 'user message',
+              createdAt: new Date('2023-01-01'),
+            },
+            {
+              id: 'msg-other-user',
+              userId: otherUserId,
+              agentId: 'agent-other',
+              role: 'user',
+              content: 'other user message',
+              createdAt: new Date('2023-01-02'),
+            },
+          ]);
+        });
+
+        const result = await messageModel.query({ agentId: 'agent-isolation' });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('msg-user');
+      });
+
+      // ========== Pagination tests ==========
+      it('should support pagination when querying by agentId', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(agents).values([{ id: 'agent-page', userId, title: 'Agent Page' }]);
+
+          await trx.insert(messages).values([
+            {
+              id: 'msg-page-1',
+              userId,
+              agentId: 'agent-page',
+              role: 'user',
+              content: 'page 1',
+              createdAt: new Date('2023-01-01'),
+            },
+            {
+              id: 'msg-page-2',
+              userId,
+              agentId: 'agent-page',
+              role: 'user',
+              content: 'page 2',
+              createdAt: new Date('2023-01-02'),
+            },
+            {
+              id: 'msg-page-3',
+              userId,
+              agentId: 'agent-page',
+              role: 'user',
+              content: 'page 3',
+              createdAt: new Date('2023-01-03'),
+            },
+          ]);
+        });
+
+        const result1 = await messageModel.query({
+          agentId: 'agent-page',
+          current: 0,
+          pageSize: 2,
+        });
+        // Page 0 returns the NEWEST page, re-sorted ascending: the
+        // two most recent messages, not the two oldest.
+        expect(result1).toHaveLength(2);
+        expect(result1[0].id).toBe('msg-page-2');
+        expect(result1[1].id).toBe('msg-page-3');
+
+        const result2 = await messageModel.query({
+          agentId: 'agent-page',
+          current: 1,
+          pageSize: 2,
+        });
+        // Page 1 walks further back in time to the older remainder.
+        expect(result2).toHaveLength(1);
+        expect(result2[0].id).toBe('msg-page-1');
+      });
+
+      it('should use topicId as the conversation boundary across agents', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(sessions).values([{ id: 'agent-session', userId }]);
+
+          await trx.insert(agents).values([
+            { id: 'agent1', userId, title: 'Agent 1' },
+            { id: 'agent2', userId, title: 'Agent 2' },
+          ]);
+
+          await trx
+            .insert(agentsToSessions)
+            .values([{ agentId: 'agent1', sessionId: 'agent-session', userId }]);
+
+          await trx.insert(topics).values([
+            { id: 'topic1', sessionId: 'agent-session', userId },
+            { id: 'topic2', sessionId: 'agent-session', userId },
+          ]);
+
+          await trx.insert(messages).values([
+            {
+              id: 'msg-topic1',
+              userId,
+              sessionId: 'agent-session',
+              topicId: 'topic1',
+              role: 'user',
+              content: 'message in topic1',
+              createdAt: new Date('2023-01-01'),
+            },
+            {
+              id: 'msg-topic2',
+              userId,
+              sessionId: 'agent-session',
+              topicId: 'topic2',
+              role: 'user',
+              content: 'message in topic2',
+              createdAt: new Date('2023-01-02'),
+            },
+            {
+              agentId: 'agent2',
+              content: 'cross-agent reply in topic1',
+              createdAt: new Date('2023-01-03'),
+              id: 'msg-topic1-agent2',
+              role: 'assistant',
+              topicId: 'topic1',
+              userId,
+            },
+          ]);
+        });
+
+        // agentId identifies the active/owning agent, but a concrete topic is
+        // the conversation boundary and includes delegated agent replies.
+        const result = await messageModel.query({ agentId: 'agent1', topicId: 'topic1' });
+
+        expect(result.map((message) => message.id)).toEqual(['msg-topic1', 'msg-topic1-agent2']);
+      });
+
+      it('should only lookup agentsToSessions for current user', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(sessions).values([
+            { id: 'user-session', userId },
+            { id: 'other-user-session', userId: otherUserId },
+          ]);
+
+          // Different agent IDs for different users (agent id is primary key)
+          await trx.insert(agents).values([
+            { id: 'user-agent', userId, title: 'User Agent' },
+            { id: 'other-user-agent', userId: otherUserId, title: 'Other User Agent' },
+          ]);
+
+          // Only create agentsToSessions for the other user
+          await trx
+            .insert(agentsToSessions)
+            .values([
+              { agentId: 'other-user-agent', sessionId: 'other-user-session', userId: otherUserId },
+            ]);
+
+          await trx.insert(messages).values([
+            {
+              id: 'msg-user',
+              userId,
+              sessionId: null, // inbox
+              agentId: null,
+              role: 'user',
+              content: 'user message',
+            },
+            {
+              id: 'msg-other-user',
+              userId: otherUserId,
+              sessionId: 'other-user-session',
+              role: 'user',
+              content: 'other user message',
+            },
+          ]);
+        });
+
+        // Query with other user's agentId - should not find association since it belongs to other user
+        // and no direct agentId match either
+        const result = await messageModel.query({ agentId: 'other-user-agent' });
+
+        // Should return empty (no agentId match and no session found for this user)
+        expect(result).toHaveLength(0);
+      });
+
+      // ========== Backward compatibility: sessionId query still works ==========
+      it('should still work with sessionId query (backward compatibility)', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(sessions).values([{ id: 'session-compat', userId }]);
+
+          await trx.insert(messages).values([
+            {
+              id: 'msg-session-compat',
+              userId,
+              sessionId: 'session-compat',
+              role: 'user',
+              content: 'message with sessionId',
+              createdAt: new Date('2023-01-01'),
+            },
+          ]);
+        });
+
+        // Query with sessionId should still work
+        const result = await messageModel.query({ sessionId: 'session-compat' });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('msg-session-compat');
+      });
+    });
+  });
+
+  describe('agent-share visitor isolation', () => {
+    const visitorUserId = 'message-query-visitor';
+    const visitorTopicId = 'topic-visitor-direct-read';
+
+    beforeEach(async () => {
+      // A visitor topic is stored under the CREATOR's userId; only `senderId`
+      // marks it as belonging to a share visitor.
+      await serverDB.insert(topics).values([
+        { id: visitorTopicId, senderId: visitorUserId, title: 'visitor topic', userId },
+        { id: 'topic-creator-own', title: 'creator topic', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'visitor secret',
+          id: 'visitor-direct-msg',
+          role: 'user',
+          topicId: visitorTopicId,
+          userId,
+        },
+        {
+          content: 'creator message',
+          id: 'creator-direct-msg',
+          role: 'user',
+          topicId: 'topic-creator-own',
+          userId,
+        },
+      ]);
+    });
+
+    it('hides visitor messages when the creator reads the visitor topic by id', async () => {
+      const result = await messageModel.query({ topicId: visitorTopicId });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('still returns the creator’s own topic messages', async () => {
+      const result = await messageModel.query({ topicId: 'topic-creator-own' });
+
+      expect(result.map((item) => item.id)).toEqual(['creator-direct-msg']);
+    });
+
+    it('keeps serving the visitor through queryForVisitor', async () => {
+      const result = await messageModel.queryForVisitor({ topicId: visitorTopicId });
+
+      expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
+    });
+
+    describe('Work summaries', () => {
+      const provenance = { shareId: 'share-works', topicId: visitorTopicId, visitorUserId };
+      const rootOperationId = 'op-visitor-works';
+
+      beforeEach(async () => {
+        await serverDB.insert(messages).values({
+          content: 'visitor reply',
+          id: 'visitor-anchor-msg',
+          metadata: { work: { rootOperationId } },
+          role: 'assistant',
+          topicId: visitorTopicId,
+          userId,
+        });
+        // A file Work the visitor's run registered under the share scope.
+        await new WorkModel(
+          serverDB,
+          userId,
+          undefined,
+          agentShareWorkAccessScope(provenance),
+        ).registerFile({
+          cumulativeCost: 0.42,
+          cumulativeUsage: { capturedAt: '2026-01-01T00:00:00.000Z', usage: { totalTokens: 9 } },
+          filePath: '/mnt/data/report.md',
+          metadata: { fileId: 'file-report', filePath: '/mnt/data/report.md' },
+          rootOperationId,
+          title: 'report.md',
+          toolCallId: `op:${rootOperationId}`,
+          toolIdentifier: 'lobe-cloud-sandbox',
+          toolName: 'writeFile',
+          topicId: visitorTopicId,
+          userId,
+        });
+      });
+
+      const findAnchor = (rows: { id: string }[]) =>
+        rows.find((item) => item.id === 'visitor-anchor-msg') as any;
+
+      it('skips Work assembly entirely without a share scope (fail closed)', async () => {
+        const result = await messageModel.queryForVisitor({
+          includeFileWorks: true,
+          topicId: visitorTopicId,
+        });
+
+        expect(findAnchor(result).works).toBeUndefined();
+      });
+
+      it('serves the share-scoped Works with the creator spend redacted', async () => {
+        const result = await messageModel.queryForVisitor(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          { workAccessScope: agentShareWorkAccessScope(provenance) },
+        );
+
+        const works = findAnchor(result).works;
+        expect(works).toHaveLength(1);
+        expect(works[0]).toMatchObject({ title: 'report.md', totalCost: null, type: 'file' });
+        expect(works[0].event).toMatchObject({ cumulativeCost: null, cumulativeUsage: null });
+        // The run executes as the creator: their account/workspace ids must not leak.
+        expect(works[0]).not.toHaveProperty('userId');
+        expect(works[0]).not.toHaveProperty('workspaceId');
+      });
+
+      it('keeps the spend snapshot when the share exposes model info', async () => {
+        const result = await messageModel.queryForVisitor(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          {
+            redaction: { showModelInfo: true },
+            workAccessScope: agentShareWorkAccessScope(provenance),
+          },
+        );
+
+        const works = findAnchor(result).works;
+        expect(works[0]).toMatchObject({ totalCost: 0.42 });
+        expect(works[0].event.cumulativeUsage).toMatchObject({ usage: { totalTokens: 9 } });
+        // `showModelInfo` exposes spend only, never the creator's identity.
+        expect(works[0]).not.toHaveProperty('userId');
+        expect(works[0]).not.toHaveProperty('workspaceId');
+      });
+
+      it('never resolves the visitor Works through the creator scope', async () => {
+        const result = await messageModel.query(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          { allowShareVisitor: true },
+        );
+
+        expect(findAnchor(result).works).toBeUndefined();
+      });
+    });
+
+    it('honours an explicit allowShareVisitor opt-in (agent runtime path)', async () => {
+      const result = await messageModel.query(
+        { topicId: visitorTopicId },
+        { allowShareVisitor: true },
+      );
+
+      expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
+    });
+
+    it('excludes visitor messages from queryTopicTranscript', async () => {
+      const visitorTranscript = await messageModel.queryTopicTranscript({
+        limit: 50,
+        offset: 0,
+        topicId: visitorTopicId,
+      });
+
+      expect(visitorTranscript.items).toHaveLength(0);
+      expect(visitorTranscript.total).toBe(0);
+
+      const ownTranscript = await messageModel.queryTopicTranscript({
+        limit: 50,
+        offset: 0,
+        topicId: 'topic-creator-own',
+      });
+
+      expect(ownTranscript.items.map((item) => item.id)).toEqual(['creator-direct-msg']);
+    });
+
+    it('keeps countByTopic working for the visitor turn cap when the runtime opts in', async () => {
+      // The per-topic turn cap depends on counting visitor messages, and after
+      // the ownership() flip the default scope excludes visitor rows. The
+      // share runtime (`reserveShareVisitorTurn` in
+      // `shareVisitorAbuseGuards.ts`) constructs `MessageModel` with
+      // `includeShareVisitor: true`; mirror that opt-in here.
+      const defaultCount = await messageModel.countByTopic({
+        role: 'user',
+        topicId: visitorTopicId,
+      });
+      expect(defaultCount).toBe(0);
+
+      const shareRuntimeMessageModel = new MessageModel(serverDB, userId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      const optedInCount = await shareRuntimeMessageModel.countByTopic({
+        role: 'user',
+        topicId: visitorTopicId,
+      });
+      expect(optedInCount).toBe(1);
+    });
+
+    it('hides synthetic message-group nodes when the creator reads a visitor topic', async () => {
+      // Regression for `queryMessageGroupNodes`: a creator's default
+      // `query({ topicId })` on a visitor topic returned no messages but
+      // still emitted the group's `compressedGroup` node (with its `content`
+      // summary) or `compareGroup` node, leaking the visitor's conversation
+      // shape.
+      await serverDB.insert(messageGroups).values([
+        {
+          content: 'visitor compression summary',
+          createdAt: new Date('2024-01-01T10:00:00Z'),
+          id: 'visitor-group-compress',
+          topicId: visitorTopicId,
+          type: MessageGroupType.Compression,
+          userId,
+        },
+        {
+          createdAt: new Date('2024-01-01T10:01:00Z'),
+          id: 'visitor-group-compare',
+          topicId: visitorTopicId,
+          type: MessageGroupType.Parallel,
+          userId,
+        },
+      ]);
+
+      const creatorResult = await messageModel.query({ topicId: visitorTopicId });
+      expect(creatorResult).toHaveLength(0);
+
+      const shareRuntimeModel = new MessageModel(serverDB, userId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      const runtimeResult = await shareRuntimeModel.query({ topicId: visitorTopicId });
+      const visitorResult = await messageModel.queryForVisitor({ topicId: visitorTopicId });
+
+      // Both visitor-facing paths still see the group nodes — this fix
+      // scopes the leak to the CREATOR's default read.
+      const runtimeIds = new Set(runtimeResult.map((m) => m.id));
+      expect(runtimeIds.has('visitor-group-compress')).toBe(true);
+      expect(runtimeIds.has('visitor-group-compare')).toBe(true);
+
+      const visitorIds = new Set(visitorResult.map((m) => m.id));
+      expect(visitorIds.has('visitor-group-compress')).toBe(true);
+      expect(visitorIds.has('visitor-group-compare')).toBe(true);
+    });
+  });
+
+  describe('toVisitorMessage', () => {
+    it('recursively sanitizes assistantGroup children in a compressedGroup node', async () => {
+      // Regression: `children` on an assistantGroup node inside
+      // `compressedMessages` carries full AssistantContentBlock data
+      // (`usage`, `error`, `tools`, `metadata`, `performance`, plus nested
+      // `council` messages with `sender`). The previous narrow snapshot
+      // sanitize only cleared `model`/`provider`, letting the rest leak.
+      const compressedGroupNode = {
+        compressedMessages: [
+          {
+            children: [
+              {
+                content: 'assistant reply',
+                error: {
+                  message: 'raw provider payload',
+                  type: 'ProviderBizError',
+                } as any,
+                id: 'assistant-child-1',
+                metadata: { usage: { totalTokens: 42 } } as any,
+                model: 'gpt-4o',
+                performance: { latency: 100 } as any,
+                provider: 'openai',
+                sender: { fullName: 'Creator', id: 'creator-user-id' } as any,
+                tools: [{ id: 't1', identifier: 'search' }] as any,
+                usage: { totalTokens: 42 } as any,
+                council: [
+                  {
+                    content: 'member reply',
+                    id: 'council-member-1',
+                    model: 'gpt-4o',
+                    provider: 'openai',
+                    role: 'assistant',
+                    sender: { fullName: 'Member', id: 'member-user-id' } as any,
+                    usage: { totalTokens: 7 } as any,
+                  },
+                ] as any,
+              } as any,
+            ],
+            content: '',
+            id: 'assistant-group-1',
+            role: 'assistantGroup',
+          } as any,
+        ],
+        content: 'summary',
+        id: 'compressed-group-1',
+        role: 'compressedGroup',
+      } as any;
+
+      const stripped = toVisitorMessage(compressedGroupNode);
+      const child = (stripped.compressedMessages as any[])[0].children[0];
+
+      expect(child.sender).toBeNull();
+      expect(child.usage).toBeUndefined();
+      expect(child.model).toBeUndefined();
+      expect(child.provider).toBeUndefined();
+      expect(child.metadata?.usage).toBeUndefined();
+      expect(child.error.type).not.toBe('ProviderBizError');
+      // council members must be recursed, not passed through verbatim
+      expect(child.council).toHaveLength(1);
+      expect(child.council[0].sender).toBeNull();
+      expect(child.council[0].usage).toBeUndefined();
+      expect(child.council[0].model).toBeUndefined();
+
+      // With `showModelInfo` the model snapshot survives on both the child
+      // and the recursed council members, and children stay attached.
+      const kept = toVisitorMessage(compressedGroupNode, { showModelInfo: true });
+      const keptChild = (kept.compressedMessages as any[])[0].children[0];
+      expect(keptChild.model).toBe('gpt-4o');
+      expect(keptChild.usage).toEqual({ totalTokens: 42 });
+      expect(keptChild.council[0].model).toBe('gpt-4o');
+      expect(keptChild.council[0].usage).toEqual({ totalTokens: 7 });
+    });
+
+    it('keeps the narrow snapshot for compareGroup children in both modes', async () => {
+      const compareGroupNode = {
+        children: [
+          {
+            content: 'variant',
+            createdAt: new Date('2024-01-01T10:00:00Z'),
+            id: 'variant-1',
+            model: 'gpt-4o',
+            provider: 'openai',
+            role: 'assistant',
+          },
+        ],
+        id: 'compare-group-1',
+        role: 'compareGroup',
+      } as any;
+
+      const stripped = toVisitorMessage(compareGroupNode);
+      expect((stripped.children as any[])[0].model).toBeNull();
+      expect((stripped.children as any[])[0].provider).toBeNull();
+      expect((stripped.children as any[])[0].content).toBe('variant');
+
+      const kept = toVisitorMessage(compareGroupNode, { showModelInfo: true });
+      expect((kept.children as any[])[0].model).toBe('gpt-4o');
+      expect((kept.children as any[])[0].provider).toBe('openai');
+    });
+  });
+
+  describe('queryAll', () => {
+    it('should return all messages belonging to the user in descending order', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        {
+          id: '1',
+          userId,
+          role: 'user',
+          content: 'message 1',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: '2',
+          userId,
+          role: 'user',
+          content: 'message 2',
+          createdAt: new Date('2023-02-01'),
+        },
+        {
+          id: '3',
+          userId: otherUserId,
+          role: 'user',
+          content: 'message 3',
+          createdAt: new Date('2023-03-01'),
+        },
+      ]);
+
+      // Call queryAll method
+      const result = await messageModel.queryAll();
+
+      // Assert result - descending by createdAt
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('2');
+      expect(result[1].id).toBe('1');
+    });
+
+    it('should filter by role and date range on the server side', async () => {
+      await serverDB.insert(messages).values([
+        {
+          id: 'q-user-old',
+          userId,
+          role: 'user',
+          content: 'old user message',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'q-user-new',
+          userId,
+          role: 'user',
+          content: 'recent user message',
+          createdAt: new Date('2023-02-01'),
+        },
+        {
+          id: 'q-assistant-new',
+          userId,
+          role: 'assistant',
+          content: 'recent assistant message',
+          createdAt: new Date('2023-02-01'),
+        },
+      ]);
+
+      const byRole = await messageModel.queryAll({ role: 'user' });
+      expect(byRole.map((m) => m.id)).toEqual(['q-user-new', 'q-user-old']);
+
+      const byRoleAndDate = await messageModel.queryAll({
+        role: 'user',
+        startDate: '2023-01-15',
+      });
+      expect(byRoleAndDate.map((m) => m.id)).toEqual(['q-user-new']);
+    });
+
+    it('should include agent name/title for messages bound to an agent', async () => {
+      await serverDB
+        .insert(agents)
+        .values([{ id: 'q-agent', name: 'Lobe', title: 'Diary Agent', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          agentId: 'q-agent',
+          content: 'assistant reply',
+          id: 'q-with-agent',
+          role: 'assistant',
+          userId,
+        },
+        { content: 'user question', id: 'q-without-agent', role: 'user', userId },
+      ]);
+
+      const result = await messageModel.queryAll();
+      const withAgent = result.find((m) => m.id === 'q-with-agent');
+      const withoutAgent = result.find((m) => m.id === 'q-without-agent');
+
+      expect(withAgent?.agentName).toBe('Lobe');
+      expect(withAgent?.agentTitle).toBe('Diary Agent');
+      expect(withoutAgent?.agentName).toBeNull();
+      expect(withoutAgent?.agentTitle).toBeNull();
+    });
+
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      // Visitor topics keep the creator's userId, so a bare ownership filter
+      // would dump visitor conversations into the creator's full export.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-query-all',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-msg',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-query-all',
+        },
+        { id: 'creator-msg', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.queryAll();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('creator-msg');
+    });
+  });
+
+  describe('findById', () => {
+    it('should find message by ID', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        { id: '1', userId, role: 'user', content: 'message 1' },
+        { id: '2', userId: otherUserId, role: 'user', content: 'message 2' },
+      ]);
+
+      // Call findById method
+      const result = await messageModel.findById('1');
+
+      // Assert result
+      expect(result?.id).toBe('1');
+      expect(result?.content).toBe('message 1');
+    });
+
+    it('should return undefined if message does not belong to user', async () => {
+      // Create test data
+      await serverDB
+        .insert(messages)
+        .values([{ id: '1', userId: otherUserId, role: 'user', content: 'message 1' }]);
+
+      // Call findById method
+      const result = await messageModel.findById('1');
+
+      // Assert result
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('queryBySessionId', () => {
+    it('should query messages by sessionId', async () => {
+      // Create test data
+      const sessionId = 'session1';
+      await serverDB.insert(sessions).values([
+        { id: 'session1', userId },
+        { id: 'session2', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          id: '1',
+          userId,
+          role: 'user',
+          sessionId,
+          content: 'message 1',
+          createdAt: new Date('2022-01-01'),
+        },
+        {
+          id: '2',
+          userId,
+          role: 'user',
+          sessionId,
+          content: 'message 2',
+          createdAt: new Date('2023-02-01'),
+        },
+        { id: '3', userId, role: 'user', sessionId: 'session2', content: 'message 3' },
+      ]);
+
+      // Call queryBySessionId method
+      const result = await messageModel.queryBySessionId(sessionId);
+
+      // Assert result
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('1');
+      expect(result[1].id).toBe('2');
+    });
+
+    it('should query inbox messages when sessionId is null', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'inbox-msg-1',
+          userId,
+          sessionId: null, // inbox message
+          role: 'user',
+          content: 'inbox message 1',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'inbox-msg-2',
+          userId,
+          sessionId: null, // inbox message
+          role: 'assistant',
+          content: 'inbox message 2',
+          createdAt: new Date('2023-01-02'),
+        },
+        {
+          id: 'session-msg',
+          userId,
+          sessionId: 'session1',
+          role: 'user',
+          content: 'session message',
+          createdAt: new Date('2023-01-03'),
+        },
+      ]);
+
+      // Query with null sessionId should return only inbox messages
+      const result = await messageModel.queryBySessionId(null);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('inbox-msg-1');
+      expect(result[1].id).toBe('inbox-msg-2');
+    });
+
+    it('excludes agent-share visitor messages from the null-session branch', async () => {
+      // Visitor messages carry no sessionId, so without the visitor predicate
+      // the inbox (null-session) branch would sweep them in.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-session',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-inbox-msg',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-session',
+        },
+        { id: 'creator-inbox-msg', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.queryBySessionId(null);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('creator-inbox-msg');
+    });
+
+    it('should query inbox messages when sessionId is undefined', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'inbox-msg',
+          userId,
+          sessionId: null,
+          role: 'user',
+          content: 'inbox message',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'session-msg',
+          userId,
+          sessionId: 'session1',
+          role: 'user',
+          content: 'session message',
+          createdAt: new Date('2023-01-02'),
+        },
+      ]);
+
+      // Query with undefined sessionId should also return inbox messages
+      const result = await messageModel.queryBySessionId(undefined);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('inbox-msg');
+    });
+
+    it('should query inbox messages when sessionId is INBOX_SESSION_ID', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'inbox-msg-1',
+          userId,
+          sessionId: null,
+          role: 'user',
+          content: 'inbox message 1',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'inbox-msg-2',
+          userId,
+          sessionId: null,
+          role: 'assistant',
+          content: 'inbox message 2',
+          createdAt: new Date('2023-01-02'),
+        },
+        {
+          id: 'session-msg',
+          userId,
+          sessionId: 'session1',
+          role: 'user',
+          content: 'session message',
+          createdAt: new Date('2023-01-03'),
+        },
+      ]);
+
+      // Query with INBOX_SESSION_ID should return only inbox messages
+      const result = await messageModel.queryBySessionId(INBOX_SESSION_ID);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('inbox-msg-1');
+      expect(result[1].id).toBe('inbox-msg-2');
+    });
+  });
+
+  // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+  const isServerDB = process.env.TEST_SERVER_DB === '1';
+  describe.skipIf(!isServerDB)('queryByKeyWord', () => {
+    it('should query messages by keyword', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        { id: '1', userId, role: 'user', content: 'apple', createdAt: new Date('2022-02-01') },
+        { id: '2', userId, role: 'user', content: 'banana' },
+        { id: '3', userId, role: 'user', content: 'pear' },
+        { id: '4', userId, role: 'user', content: 'apple pie', createdAt: new Date('2024-02-01') },
+      ]);
+
+      // Test querying messages with specific keyword
+      const result = await messageModel.queryByKeyword('apple');
+
+      // Assert result
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('4');
+      expect(result[1].id).toBe('1');
+    });
+
+    it('should return empty array when keyword is empty', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        { id: '1', userId, role: 'user', content: 'apple' },
+        { id: '2', userId, role: 'user', content: 'banana' },
+        { id: '3', userId, role: 'user', content: 'pear' },
+        { id: '4', userId, role: 'user', content: 'apple pie' },
+      ]);
+
+      // Test returning empty array when keyword is empty
+      const result = await messageModel.queryByKeyword('');
+
+      // Assert result
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('queryByKeyword with external candidates', () => {
+    it('drops tool and blank candidate messages while retaining summary-only tasks', async () => {
+      await serverDB.insert(messages).values([
+        { content: 'Internal tool output', id: 'candidate-tool', role: 'tool', userId },
+        { content: '\u00A0\t\n　', id: 'candidate-blank', role: 'assistant', userId },
+        { content: 'Visible response', id: 'candidate-visible', role: 'assistant', userId },
+        { content: '', id: 'candidate-summary', role: 'task', summary: 'Visible task', userId },
+      ]);
+      const model = new MessageModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates: vi.fn().mockResolvedValue({
+          candidates: [
+            { id: 'candidate-tool', score: 4 },
+            { id: 'candidate-blank', score: 3 },
+            { id: 'candidate-visible', score: 2 },
+            { id: 'candidate-summary', score: 1 },
+          ],
+          total: 4,
+        }),
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id).sort()).toEqual(['candidate-summary', 'candidate-visible']);
+    });
+
+    it('hydrates current-scope messages in the legacy recency order', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'Own older message',
+          createdAt: new Date('2026-08-20T00:00:00.000Z'),
+          id: 'candidate-message-old',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'Own recent message',
+          createdAt: new Date('2026-08-25T00:00:00.000Z'),
+          id: 'candidate-message-recent',
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'Other user message',
+          id: 'candidate-message-other',
+          role: 'user',
+          userId: otherUserId,
+        },
+      ]);
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'candidate-message-other', score: 12 },
+          { id: 'candidate-message-deleted', score: 10 },
+          { id: 'candidate-message-old', score: 8 },
+          { id: 'candidate-message-recent', score: 6 },
+        ],
+        total: 4,
+      });
+      const model = new MessageModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id)).toEqual([
+        'candidate-message-recent',
+        'candidate-message-old',
+      ]);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'messages',
+        filters: {},
+        pagination: {},
+        query: { fields: ['content'], text: 'candidate' },
+      });
+    });
+
+    it('hydrates candidate sets larger than the PostgreSQL bind-parameter limit', async () => {
+      await serverDB.insert(messages).values({
+        content: 'Matching message',
+        id: 'candidate-message-match',
+        role: 'user',
+        userId,
+      });
+      const candidates = Array.from({ length: 65_536 }, (_, index) => ({
+        id: `candidate-stale-${index}`,
+        score: 1,
+      }));
+      candidates.push({ id: 'candidate-message-match', score: 2 });
+      const model = new MessageModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates: vi.fn().mockResolvedValue({
+          candidates,
+          total: candidates.length,
+        }),
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id)).toEqual(['candidate-message-match']);
+    });
+  });
+
+  describe('query with files edge cases', () => {
+    it('should handle files with empty fileType', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+
+        // Create files with empty string fileType (tests the || '' branch)
+        await trx.insert(files).values([
+          {
+            id: 'file-empty-type',
+            userId,
+            url: 'unknown.bin',
+            name: 'unknown file',
+            fileType: '',
+            size: 1000,
+          },
+          {
+            id: 'file-image',
+            userId,
+            url: 'image.png',
+            name: 'test image',
+            fileType: 'image/png',
+            size: 2000,
+          },
+          {
+            id: 'file-video',
+            userId,
+            url: 'video.mp4',
+            name: 'test video',
+            fileType: 'video/mp4',
+            size: 3000,
+          },
+        ]);
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          id: messageId,
+          userId,
+          role: 'user',
+          content: 'Message with various fileTypes',
+          sessionId: 'session1',
+        });
+
+        await trx.insert(messagesFiles).values([
+          { messageId, fileId: 'file-empty-type', userId },
+          { messageId, fileId: 'file-image', userId },
+          { messageId, fileId: 'file-video', userId },
+        ]);
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].fileList).toHaveLength(1); // empty fileType should go to fileList
+      expect(result[0].fileList![0].id).toBe('file-empty-type');
+      expect(result[0].imageList).toHaveLength(1);
+      expect(result[0].imageList![0].id).toBe('file-image');
+      expect(result[0].videoList).toHaveLength(1);
+      expect(result[0].videoList![0].id).toBe('file-video');
+    });
+  });
+
+  describe('query with documents', () => {
+    it('should include document content when files have associated documents', async () => {
+      // Create a file with an associated document
+      const fileId = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+
+        await trx.insert(files).values({
+          id: fileId,
+          userId,
+          url: 'document.pdf',
+          name: 'test.pdf',
+          fileType: 'application/pdf',
+          size: 5000,
+        });
+
+        await trx.insert(documents).values({
+          fileId,
+          userId,
+          content: 'This is the document content for testing',
+          fileType: 'application/pdf',
+          sourceType: 'file',
+          source: 'document.pdf',
+          totalCharCount: 42,
+          totalLineCount: 1,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          id: messageId,
+          userId,
+          role: 'user',
+          content: 'Message with document',
+          sessionId: 'session1',
+        });
+
+        await trx.insert(messagesFiles).values({
+          messageId,
+          fileId,
+          userId,
+        });
+      });
+
+      // Query messages - this should trigger the documents processing code
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].fileList).toBeDefined();
+      expect(result[0].fileList).toHaveLength(1);
+      expect(result[0].fileList![0].id).toBe(fileId);
+      expect(result[0].fileList![0].content).toBe('This is the document content for testing');
+      expect(result[0].fileList![0].originalCharCount).toBeUndefined();
+    });
+
+    it('should report the original size of document text cut at parse time', async () => {
+      const fileId = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/csv',
+          id: fileId,
+          name: 'big.csv',
+          size: 5000,
+          url: 'big.csv',
+          userId,
+        });
+        await trx.insert(documents).values({
+          content: 'stored head',
+          fileId,
+          fileType: 'text/csv',
+          metadata: { originalCharCount: 9_000_000, truncated: true },
+          source: 'big.csv',
+          sourceType: 'file',
+          totalCharCount: 11,
+          totalLineCount: 1,
+          userId,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          content: 'Message with a capped document',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result[0].fileList![0]).toMatchObject({
+        content: 'stored head',
+        originalCharCount: 9_000_000,
+      });
+    });
+
+    it('should treat malformed originalCharCount metadata as absent', async () => {
+      const fileId = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/plain',
+          id: fileId,
+          name: 'note.txt',
+          size: 10,
+          url: 'note.txt',
+          userId,
+        });
+        await trx.insert(documents).values({
+          content: 'note',
+          fileId,
+          fileType: 'text/plain',
+          metadata: { originalCharCount: 'not-a-number' },
+          source: 'note.txt',
+          sourceType: 'file',
+          totalCharCount: 4,
+          totalLineCount: 1,
+          userId,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          content: 'Message with odd metadata',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result[0].fileList![0].content).toBe('note');
+      expect(result[0].fileList![0].originalCharCount).toBeUndefined();
+    });
+
+    it('should pick the oldest document when a file owns several', async () => {
+      const fileId = uuid();
+      const messageId = uuid();
+      const doc = {
+        fileId,
+        fileType: 'text/plain',
+        source: 'notes.txt',
+        sourceType: 'file',
+        totalLineCount: 1,
+        userId,
+      } as const;
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/plain',
+          id: fileId,
+          name: 'notes.txt',
+          size: 100,
+          url: 'notes.txt',
+          userId,
+        });
+        // Inserted newest first: without an explicit order, a first-wins read would take the newer copy.
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'page-editor copy',
+          createdAt: new Date('2026-02-01'),
+          totalCharCount: 16,
+        });
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'parse cache',
+          createdAt: new Date('2026-01-01'),
+          totalCharCount: 11,
+        });
+
+        await trx.insert(messages).values({
+          content: 'Message with a twice-parsed file',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      // Same document `DocumentModel.findByFileId` returns, which `readAttachment` pages through.
+      expect(result[0].fileList![0].content).toBe('parse cache');
+
+      const [byId] = await messageModel.queryByIds([messageId]);
+      expect(byId.fileList![0].content).toBe('parse cache');
+    });
+
+    it('should skip an agent-document upload placeholder in favor of the parse cache', async () => {
+      const fileId = uuid();
+      const messageId = uuid();
+      const doc = {
+        fileId,
+        source: 'notes.md',
+        sourceType: 'file',
+        totalLineCount: 1,
+        userId,
+      } as const;
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/markdown',
+          id: fileId,
+          name: 'notes.md',
+          size: 100,
+          url: 'notes.md',
+          userId,
+        });
+        // Older empty row written by `AgentDocumentsService.importFile`; bytes live in the file.
+        await trx.insert(documents).values({
+          ...doc,
+          content: '',
+          createdAt: new Date('2026-01-01'),
+          fileType: 'text/markdown',
+          totalCharCount: 0,
+        });
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'parse cache',
+          createdAt: new Date('2026-02-01'),
+          fileType: 'custom/document',
+          totalCharCount: 11,
+        });
+
+        await trx.insert(messages).values({
+          content: 'Message with an uploaded agent document',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+      expect(result[0].fileList![0].content).toBe('parse cache');
+
+      const [byId] = await messageModel.queryByIds([messageId]);
+      expect(byId.fileList![0].content).toBe('parse cache');
+    });
+  });
+
+  describe('query messages with threadId filter', () => {
+    it('should filter messages by threadId', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create threads first due to foreign key constraint
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'source-msg-1',
+            type: 'standalone',
+          },
+          {
+            id: 'thread2',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'source-msg-2',
+            type: 'standalone',
+          },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg-thread-1',
+            userId,
+            sessionId: 'session1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'message in thread 1',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg-thread-2',
+            userId,
+            sessionId: 'session1',
+            threadId: 'thread1',
+            role: 'assistant',
+            content: 'another message in thread 1',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg-thread-other',
+            userId,
+            sessionId: 'session1',
+            threadId: 'thread2',
+            role: 'user',
+            content: 'message in thread 2',
+            createdAt: new Date('2023-01-03'),
+          },
+          {
+            id: 'msg-no-thread',
+            userId,
+            sessionId: 'session1',
+            threadId: null,
+            role: 'user',
+            content: 'message without thread',
+            createdAt: new Date('2023-01-04'),
+          },
+        ]);
+      });
+
+      // Query messages in specific thread
+      const result = await messageModel.query({ sessionId: 'session1', threadId: 'thread1' });
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('msg-thread-1');
+      expect(result[1].id).toBe('msg-thread-2');
+    });
+
+    it('should query messages with null threadId (only non-thread messages)', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create thread first
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'source-msg-1',
+            type: 'standalone',
+          },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg-no-thread-1',
+            userId,
+            sessionId: 'session1',
+            threadId: null,
+            role: 'user',
+            content: 'message without thread 1',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg-no-thread-2',
+            userId,
+            sessionId: 'session1',
+            threadId: null,
+            role: 'assistant',
+            content: 'message without thread 2',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg-thread-1',
+            userId,
+            sessionId: 'session1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'message in thread 1',
+            createdAt: new Date('2023-01-03'),
+          },
+        ]);
+      });
+
+      // Query with explicit null threadId should return only non-thread messages
+      const result = await messageModel.query({ sessionId: 'session1', threadId: null });
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('msg-no-thread-1');
+      expect(result[1].id).toBe('msg-no-thread-2');
+    });
+
+    it('should query messages with combined sessionId, topicId and threadId filters', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create threads first
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'source-msg-1',
+            type: 'standalone',
+          },
+          {
+            id: 'thread2',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'source-msg-2',
+            type: 'standalone',
+          },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg-all-filters',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'message with all filters',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg-diff-thread',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread2',
+            role: 'user',
+            content: 'message with different thread',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg-no-thread',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'message without thread',
+            createdAt: new Date('2023-01-03'),
+          },
+        ]);
+      });
+
+      // Query specific session, topic and thread combination
+      const result = await messageModel.query({
+        sessionId: 'session1',
+        topicId: 'topic1',
+        threadId: 'thread1',
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('msg-all-filters');
+    });
+
+    it('should query messages by threadId with sessionId but without topicId', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create threads first
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'source-msg-1',
+            type: 'standalone',
+          },
+          {
+            id: 'thread2',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'source-msg-2',
+            type: 'standalone',
+          },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg-thread-1',
+            userId,
+            sessionId: 'session1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'message in thread 1',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg-thread-2',
+            userId,
+            sessionId: 'session1',
+            threadId: 'thread2',
+            role: 'user',
+            content: 'message in thread 2',
+            createdAt: new Date('2023-01-02'),
+          },
+        ]);
+      });
+
+      // Query by sessionId and threadId without topicId
+      const result = await messageModel.query({ sessionId: 'session1', threadId: 'thread1' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('msg-thread-1');
+    });
+  });
+
+  describe('findMessageQueriesById', () => {
+    it('should return undefined for non-existent message query', async () => {
+      const result = await messageModel.findMessageQueriesById('non-existent-id');
+      expect(result).toBeUndefined();
+    });
+
+    it('should return message query with embeddings', async () => {
+      const query1Id = uuid();
+      const embeddings1Id = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(messages).values({ id: 'msg1', userId, role: 'user', content: 'abc' });
+
+        await trx.insert(embeddings).values({
+          id: embeddings1Id,
+          embeddings: codeEmbedding,
+        });
+
+        await trx.insert(messageQueries).values({
+          id: query1Id,
+          messageId: 'msg1',
+          userQuery: 'test query',
+          rewriteQuery: 'rewritten query',
+          embeddingsId: embeddings1Id,
+          userId,
+        });
+      });
+
+      const result = await messageModel.findMessageQueriesById('msg1');
+
+      expect(result).toBeDefined();
+      expect(result).toMatchObject({
+        id: query1Id,
+        userQuery: 'test query',
+        rewriteQuery: 'rewritten query',
+        embeddings: codeEmbedding,
+      });
+    });
+  });
+
+  describe('getThreadParentMessages', () => {
+    it('should return only source message for Standalone thread type', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create main conversation messages
+        await trx.insert(messages).values([
+          {
+            id: 'msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'first message',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'second message',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg3',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'third message - source',
+            createdAt: new Date('2023-01-03'),
+          },
+          {
+            id: 'msg4',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'fourth message',
+            createdAt: new Date('2023-01-04'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.getThreadParentMessages({
+        sourceMessageId: 'msg3',
+        topicId: 'topic1',
+        threadType: 'standalone' as any,
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('msg3');
+      expect(result[0].content).toBe('third message - source');
+    });
+
+    it('should return all messages up to source message for Continuation thread type', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create main conversation messages
+        await trx.insert(messages).values([
+          {
+            id: 'msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'first message',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'second message',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg3',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'third message - source',
+            createdAt: new Date('2023-01-03'),
+          },
+          {
+            id: 'msg4',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'fourth message - after source',
+            createdAt: new Date('2023-01-04'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.getThreadParentMessages({
+        sourceMessageId: 'msg3',
+        topicId: 'topic1',
+        threadType: 'continuation' as any,
+      });
+
+      // Should include msg1, msg2, msg3 (up to and including source)
+      // Should NOT include msg4 (after source)
+      expect(result).toHaveLength(3);
+      expect(result[0].id).toBe('msg1');
+      expect(result[1].id).toBe('msg2');
+      expect(result[2].id).toBe('msg3');
+    });
+
+    it('should exclude messages from other threads in Continuation mode', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create thread first due to foreign key constraint
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'msg2',
+            type: 'standalone',
+          },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'main message 1',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'main message 2 - source',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg-in-thread',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'message in thread',
+            createdAt: new Date('2023-01-02T12:00:00'), // Same day but in thread
+          },
+          {
+            id: 'msg3',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'main message 3 - new source',
+            createdAt: new Date('2023-01-03'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.getThreadParentMessages({
+        sourceMessageId: 'msg3',
+        topicId: 'topic1',
+        threadType: 'continuation' as any,
+      });
+
+      // Should include msg1, msg2, msg3 (main conversation only)
+      // Should NOT include msg-in-thread (belongs to another thread)
+      expect(result).toHaveLength(3);
+      expect(result.map((m) => m.id)).toEqual(['msg1', 'msg2', 'msg3']);
+    });
+
+    it('should return empty array for non-existent source message', async () => {
+      const result = await messageModel.getThreadParentMessages({
+        sourceMessageId: 'non-existent',
+        topicId: 'topic1',
+        threadType: 'continuation' as any,
+      });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should return messages in chronological order', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Insert in non-chronological order
+        await trx.insert(messages).values([
+          {
+            id: 'msg3',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'third',
+            createdAt: new Date('2023-01-03'),
+          },
+          {
+            id: 'msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'first',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'second',
+            createdAt: new Date('2023-01-02'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.getThreadParentMessages({
+        sourceMessageId: 'msg3',
+        topicId: 'topic1',
+        threadType: 'continuation' as any,
+      });
+
+      // Should be in chronological order regardless of insert order
+      expect(result).toHaveLength(3);
+      expect(result[0].id).toBe('msg1');
+      expect(result[1].id).toBe('msg2');
+      expect(result[2].id).toBe('msg3');
+    });
+  });
+
+  describe('query with threadId - complete thread data', () => {
+    it('should return parent messages + thread messages for Continuation type', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create thread with Continuation type
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'msg2',
+            type: 'continuation',
+          },
+        ]);
+
+        // Create main conversation messages (parent messages)
+        await trx.insert(messages).values([
+          {
+            id: 'msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'first message',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'second message - source',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg3',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'third message - after source',
+            createdAt: new Date('2023-01-03'),
+          },
+          // Thread messages
+          {
+            id: 'thread-msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'thread message 1',
+            createdAt: new Date('2023-01-02T10:00:00'),
+          },
+          {
+            id: 'thread-msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'assistant',
+            content: 'thread message 2',
+            createdAt: new Date('2023-01-02T11:00:00'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.query({ threadId: 'thread1' });
+
+      // Should include parent messages (msg1, msg2) + thread messages (thread-msg1, thread-msg2)
+      // Should NOT include msg3 (after source message)
+      expect(result).toHaveLength(4);
+      expect(result.map((m) => m.id)).toEqual(['msg1', 'msg2', 'thread-msg1', 'thread-msg2']);
+    });
+
+    it('should return only source message + thread messages for Standalone type', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create thread with Standalone type
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'msg2',
+            type: 'standalone',
+          },
+        ]);
+
+        // Create main conversation messages
+        await trx.insert(messages).values([
+          {
+            id: 'msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'first message',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'second message - source',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg3',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'third message',
+            createdAt: new Date('2023-01-03'),
+          },
+          // Thread messages
+          {
+            id: 'thread-msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'thread message 1',
+            createdAt: new Date('2023-01-02T10:00:00'),
+          },
+          {
+            id: 'thread-msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'assistant',
+            content: 'thread message 2',
+            createdAt: new Date('2023-01-02T11:00:00'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.query({ threadId: 'thread1' });
+
+      // For Standalone: should include only source message (msg2) + thread messages
+      // Should NOT include msg1 or msg3
+      expect(result).toHaveLength(3);
+      expect(result.map((m) => m.id)).toEqual(['msg2', 'thread-msg1', 'thread-msg2']);
+    });
+
+    it('should return messages in chronological order', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create thread
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'msg2',
+            type: 'continuation',
+          },
+        ]);
+
+        // Insert messages in non-chronological order
+        await trx.insert(messages).values([
+          {
+            id: 'thread-msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'assistant',
+            content: 'thread message 2',
+            createdAt: new Date('2023-01-02T11:00:00'),
+          },
+          {
+            id: 'msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'first message',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'thread-msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'thread message 1',
+            createdAt: new Date('2023-01-02T10:00:00'),
+          },
+          {
+            id: 'msg2',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'second message - source',
+            createdAt: new Date('2023-01-02'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.query({ threadId: 'thread1' });
+
+      // Should be in chronological order: msg1 -> msg2 -> thread-msg1 -> thread-msg2
+      expect(result).toHaveLength(4);
+      expect(result[0].id).toBe('msg1');
+      expect(result[1].id).toBe('msg2');
+      expect(result[2].id).toBe('thread-msg1');
+      expect(result[3].id).toBe('thread-msg2');
+    });
+
+    it('should return only thread messages when thread has no sourceMessageId', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create thread without sourceMessageId
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: null,
+            type: 'continuation',
+          },
+        ]);
+
+        // Create messages
+        await trx.insert(messages).values([
+          {
+            id: 'msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'main message',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'thread-msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'thread message',
+            createdAt: new Date('2023-01-02'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.query({ threadId: 'thread1' });
+
+      // Should only return thread messages (fallback to original behavior)
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('thread-msg1');
+    });
+
+    it('should exclude messages from other threads', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+
+        // Create two threads
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'msg1',
+            type: 'continuation',
+          },
+          {
+            id: 'thread2',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'msg1',
+            type: 'continuation',
+          },
+        ]);
+
+        // Create messages
+        await trx.insert(messages).values([
+          {
+            id: 'msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'source message',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'thread1-msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'thread 1 message',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'thread2-msg1',
+            userId,
+            sessionId: 'session1',
+            topicId: 'topic1',
+            threadId: 'thread2',
+            role: 'user',
+            content: 'thread 2 message',
+            createdAt: new Date('2023-01-03'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.query({ threadId: 'thread1' });
+
+      // Should include parent (msg1) + thread1 messages only
+      // Should NOT include thread2 messages
+      expect(result).toHaveLength(2);
+      expect(result.map((m) => m.id)).toEqual(['msg1', 'thread1-msg1']);
+    });
+  });
+
+  describe('Group Chat message query scenarios', () => {
+    /**
+     * Scenario 1: Group Chat main channel
+     *
+     * In Group Chat, all messages in the main channel should have:
+     * - groupId: the same group ID
+     * - agentId: different for each agent (user, supervisor, agent-1, agent-2)
+     * - topicId: same topic or null
+     *
+     * When querying by groupId, should return ALL messages regardless of agentId
+     */
+    describe('main channel messages', () => {
+      it('should return all messages from user, supervisor, and multiple agents when querying by groupId', async () => {
+        await serverDB.transaction(async (trx) => {
+          // Create group and agents
+          await trx
+            .insert(chatGroups)
+            .values([{ id: 'group-chat-1', userId, title: 'Group Chat 1' }]);
+
+          await trx.insert(agents).values([
+            { id: 'supervisor-agent', userId, title: 'Supervisor' },
+            { id: 'agent-1', userId, title: 'Data Analyst' },
+            { id: 'agent-2', userId, title: 'Code Writer' },
+          ]);
+
+          await trx.insert(topics).values([{ id: 'topic-group-1', userId }]);
+
+          // Create messages from different agents in the same group
+          await trx.insert(messages).values([
+            // User message
+            {
+              id: 'msg-user',
+              userId,
+              role: 'user',
+              content: 'Analyze the weather data for Hangzhou',
+              groupId: 'group-chat-1',
+              agentId: 'supervisor-agent', // User message uses supervisor's agentId
+              topicId: 'topic-group-1',
+              createdAt: new Date('2024-01-01T10:00:00'),
+            },
+            // Supervisor's first response with tool call
+            {
+              id: 'msg-supervisor-1',
+              userId,
+              role: 'assistant',
+              content: 'I will delegate this to the Data Analyst.',
+              groupId: 'group-chat-1',
+              agentId: 'supervisor-agent',
+              topicId: 'topic-group-1',
+              createdAt: new Date('2024-01-01T10:01:00'),
+            },
+            // Tool message for delegation
+            {
+              id: 'msg-tool-delegate',
+              userId,
+              role: 'tool',
+              content: 'Triggered agent "agent-1" to respond.',
+              groupId: 'group-chat-1',
+              agentId: 'supervisor-agent',
+              topicId: 'topic-group-1',
+              createdAt: new Date('2024-01-01T10:01:30'),
+            },
+            // Agent-1 (Data Analyst) response
+            {
+              id: 'msg-agent1-response',
+              userId,
+              role: 'assistant',
+              content: 'Based on the weather data, Hangzhou has...',
+              groupId: 'group-chat-1',
+              agentId: 'agent-1',
+              topicId: 'topic-group-1',
+              createdAt: new Date('2024-01-01T10:02:00'),
+            },
+            // Supervisor asks Agent-2
+            {
+              id: 'msg-supervisor-2',
+              userId,
+              role: 'assistant',
+              content: 'Let me also get some code analysis.',
+              groupId: 'group-chat-1',
+              agentId: 'supervisor-agent',
+              topicId: 'topic-group-1',
+              createdAt: new Date('2024-01-01T10:03:00'),
+            },
+            // Agent-2 (Code Writer) response
+            {
+              id: 'msg-agent2-response',
+              userId,
+              role: 'assistant',
+              content: 'Here is the code to visualize the data...',
+              groupId: 'group-chat-1',
+              agentId: 'agent-2',
+              topicId: 'topic-group-1',
+              createdAt: new Date('2024-01-01T10:04:00'),
+            },
+          ]);
+        });
+
+        // Query by groupId - should return ALL messages from all agents
+        const result = await messageModel.query({
+          groupId: 'group-chat-1',
+          topicId: 'topic-group-1',
+        });
+
+        // Should return all 6 messages
+        expect(result).toHaveLength(6);
+
+        // Verify each message has correct agentId
+        const messageMap = new Map(result.map((m) => [m.id, m]));
+
+        expect(messageMap.get('msg-user')?.agentId).toBe('supervisor-agent');
+        expect(messageMap.get('msg-supervisor-1')?.agentId).toBe('supervisor-agent');
+        expect(messageMap.get('msg-tool-delegate')?.agentId).toBe('supervisor-agent');
+        expect(messageMap.get('msg-agent1-response')?.agentId).toBe('agent-1');
+        expect(messageMap.get('msg-supervisor-2')?.agentId).toBe('supervisor-agent');
+        expect(messageMap.get('msg-agent2-response')?.agentId).toBe('agent-2');
+
+        // All messages should have the same groupId
+        for (const msg of result) {
+          expect(msg.groupId).toBe('group-chat-1');
+        }
+
+        // Verify chronological order
+        expect(result.map((m) => m.id)).toEqual([
+          'msg-user',
+          'msg-supervisor-1',
+          'msg-tool-delegate',
+          'msg-agent1-response',
+          'msg-supervisor-2',
+          'msg-agent2-response',
+        ]);
+      });
+
+      it('should not return messages from different groups', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values([
+            { id: 'group-1', userId, title: 'Group 1' },
+            { id: 'group-2', userId, title: 'Group 2' },
+          ]);
+
+          await trx.insert(agents).values([
+            { id: 'agent-g1', userId, title: 'Agent G1' },
+            { id: 'agent-g2', userId, title: 'Agent G2' },
+          ]);
+
+          await trx.insert(messages).values([
+            {
+              id: 'msg-g1',
+              userId,
+              role: 'user',
+              content: 'Message in group 1',
+              groupId: 'group-1',
+              agentId: 'agent-g1',
+              createdAt: new Date('2024-01-01'),
+            },
+            {
+              id: 'msg-g2',
+              userId,
+              role: 'user',
+              content: 'Message in group 2',
+              groupId: 'group-2',
+              agentId: 'agent-g2',
+              createdAt: new Date('2024-01-02'),
+            },
+          ]);
+        });
+
+        const result = await messageModel.query({ groupId: 'group-1' });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('msg-g1');
+      });
+    });
+
+    /**
+     * Scenario 2: Agent's private trajectory (thread)
+     *
+     * When an agent executes a task, it may create messages in its own thread.
+     * These messages should:
+     * - Have the same groupId as the main conversation
+     * - Have the agent's agentId
+     * - Have a threadId pointing to the agent's execution trajectory
+     *
+     * When querying by threadId, should return only the agent's trajectory messages
+     */
+    describe('agent private trajectory (thread)', () => {
+      it('should return only agent-1 trajectory messages when querying by threadId', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx
+            .insert(chatGroups)
+            .values([{ id: 'group-chat-1', userId, title: 'Group Chat' }]);
+
+          await trx.insert(agents).values([
+            { id: 'supervisor', userId, title: 'Supervisor' },
+            { id: 'agent-1', userId, title: 'Data Analyst' },
+          ]);
+
+          await trx.insert(topics).values([{ id: 'topic-1', userId }]);
+
+          // Create thread for agent-1's execution trajectory
+          await trx.insert(threads).values([
+            {
+              id: 'agent-1-trajectory',
+              userId,
+              topicId: 'topic-1',
+              sourceMessageId: 'msg-delegate-to-agent1', // Source is the delegation message
+              type: 'standalone',
+            },
+          ]);
+
+          // Main channel messages
+          await trx.insert(messages).values([
+            // User's request
+            {
+              id: 'msg-user-request',
+              userId,
+              role: 'user',
+              content: 'Analyze weather data',
+              groupId: 'group-chat-1',
+              agentId: 'supervisor',
+              topicId: 'topic-1',
+              threadId: null,
+              createdAt: new Date('2024-01-01T10:00:00'),
+            },
+            // Supervisor delegates to agent-1
+            {
+              id: 'msg-delegate-to-agent1',
+              userId,
+              role: 'assistant',
+              content: 'Delegating to Data Analyst',
+              groupId: 'group-chat-1',
+              agentId: 'supervisor',
+              topicId: 'topic-1',
+              threadId: null,
+              createdAt: new Date('2024-01-01T10:01:00'),
+            },
+            // Agent-1's execution trajectory (in thread)
+            {
+              id: 'msg-agent1-step1',
+              userId,
+              role: 'assistant',
+              content: 'Starting data analysis...',
+              groupId: 'group-chat-1',
+              agentId: 'agent-1',
+              topicId: 'topic-1',
+              threadId: 'agent-1-trajectory',
+              createdAt: new Date('2024-01-01T10:02:00'),
+            },
+            {
+              id: 'msg-agent1-tool-call',
+              userId,
+              role: 'tool',
+              content: 'Fetched weather API data',
+              groupId: 'group-chat-1',
+              agentId: 'agent-1',
+              topicId: 'topic-1',
+              threadId: 'agent-1-trajectory',
+              createdAt: new Date('2024-01-01T10:02:30'),
+            },
+            {
+              id: 'msg-agent1-step2',
+              userId,
+              role: 'assistant',
+              content: 'Analysis complete. Temperature trend shows...',
+              groupId: 'group-chat-1',
+              agentId: 'agent-1',
+              topicId: 'topic-1',
+              threadId: 'agent-1-trajectory',
+              createdAt: new Date('2024-01-01T10:03:00'),
+            },
+            // Final response in main channel (no threadId)
+            {
+              id: 'msg-agent1-final',
+              userId,
+              role: 'assistant',
+              content: 'Here is my analysis summary...',
+              groupId: 'group-chat-1',
+              agentId: 'agent-1',
+              topicId: 'topic-1',
+              threadId: null,
+              createdAt: new Date('2024-01-01T10:04:00'),
+            },
+          ]);
+        });
+
+        // Query agent-1's trajectory by threadId
+        const trajectoryResult = await messageModel.query({
+          threadId: 'agent-1-trajectory',
+        });
+
+        // Should return source message + thread messages
+        expect(trajectoryResult).toHaveLength(4);
+        expect(trajectoryResult.map((m) => m.id)).toEqual([
+          'msg-delegate-to-agent1', // Source message
+          'msg-agent1-step1',
+          'msg-agent1-tool-call',
+          'msg-agent1-step2',
+        ]);
+
+        // All trajectory messages should have the same groupId and agent-1's agentId
+        for (const msg of trajectoryResult.slice(1)) {
+          // Skip source message
+          expect(msg.groupId).toBe('group-chat-1');
+          expect(msg.agentId).toBe('agent-1');
+          expect(msg.threadId).toBe('agent-1-trajectory');
+        }
+
+        // Query main channel by groupId (should include all non-thread messages)
+        const mainChannelResult = await messageModel.query({
+          groupId: 'group-chat-1',
+          topicId: 'topic-1',
+          threadId: null, // Explicitly null to get main channel only
+        });
+
+        // Should return main channel messages only
+        expect(mainChannelResult).toHaveLength(3);
+        expect(mainChannelResult.map((m) => m.id)).toEqual([
+          'msg-user-request',
+          'msg-delegate-to-agent1',
+          'msg-agent1-final',
+        ]);
+      });
+
+      it('should return separate trajectories for different agents', async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values([{ id: 'group-1', userId, title: 'Group' }]);
+
+          await trx.insert(agents).values([
+            { id: 'supervisor', userId, title: 'Supervisor' },
+            { id: 'agent-1', userId, title: 'Agent 1' },
+            { id: 'agent-2', userId, title: 'Agent 2' },
+          ]);
+
+          await trx.insert(topics).values([{ id: 'topic-1', userId }]);
+
+          // Create threads for each agent's trajectory
+          await trx.insert(threads).values([
+            {
+              id: 'agent-1-thread',
+              userId,
+              topicId: 'topic-1',
+              sourceMessageId: 'msg-source-1',
+              type: 'standalone',
+            },
+            {
+              id: 'agent-2-thread',
+              userId,
+              topicId: 'topic-1',
+              sourceMessageId: 'msg-source-2',
+              type: 'standalone',
+            },
+          ]);
+
+          await trx.insert(messages).values([
+            // Source messages
+            {
+              id: 'msg-source-1',
+              userId,
+              role: 'assistant',
+              content: 'Delegating to Agent 1',
+              groupId: 'group-1',
+              agentId: 'supervisor',
+              topicId: 'topic-1',
+              threadId: null,
+              createdAt: new Date('2024-01-01T10:00:00'),
+            },
+            {
+              id: 'msg-source-2',
+              userId,
+              role: 'assistant',
+              content: 'Delegating to Agent 2',
+              groupId: 'group-1',
+              agentId: 'supervisor',
+              topicId: 'topic-1',
+              threadId: null,
+              createdAt: new Date('2024-01-01T10:05:00'),
+            },
+            // Agent-1 trajectory
+            {
+              id: 'msg-agent1-work',
+              userId,
+              role: 'assistant',
+              content: 'Agent 1 working...',
+              groupId: 'group-1',
+              agentId: 'agent-1',
+              topicId: 'topic-1',
+              threadId: 'agent-1-thread',
+              createdAt: new Date('2024-01-01T10:01:00'),
+            },
+            // Agent-2 trajectory
+            {
+              id: 'msg-agent2-work',
+              userId,
+              role: 'assistant',
+              content: 'Agent 2 working...',
+              groupId: 'group-1',
+              agentId: 'agent-2',
+              topicId: 'topic-1',
+              threadId: 'agent-2-thread',
+              createdAt: new Date('2024-01-01T10:06:00'),
+            },
+          ]);
+        });
+
+        // Query agent-1's trajectory
+        const agent1Result = await messageModel.query({ threadId: 'agent-1-thread' });
+        expect(agent1Result).toHaveLength(2);
+        expect(agent1Result.map((m) => m.id)).toEqual(['msg-source-1', 'msg-agent1-work']);
+        expect(agent1Result[1].agentId).toBe('agent-1');
+
+        // Query agent-2's trajectory
+        const agent2Result = await messageModel.query({ threadId: 'agent-2-thread' });
+        expect(agent2Result).toHaveLength(2);
+        expect(agent2Result.map((m) => m.id)).toEqual(['msg-source-2', 'msg-agent2-work']);
+        expect(agent2Result[1].agentId).toBe('agent-2');
+
+        // Both trajectories should have the same groupId
+        expect(agent1Result[1].groupId).toBe('group-1');
+        expect(agent2Result[1].groupId).toBe('group-1');
+      });
+    });
+  });
+
+  describe('getLastMainThreadSpineMessageId', () => {
+    it('returns the latest non-tool main-thread message in a topic (tools excluded)', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'step',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // newest row, but a tool — must NOT be the spine
+          id: 'tool-1',
+          userId,
+          topicId: 'topic1',
+          role: 'tool',
+          parentId: 'a1',
+          content: 'result',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+        {
+          id: 'a2',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'final',
+          createdAt: new Date('2023-01-01T00:00:02'),
+        },
+      ]);
+
+      expect(await messageModel.getLastMainThreadSpineMessageId('topic1')).toBe('a2');
+    });
+
+    it('excludes signal-tagged reactive callbacks', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'spine',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'tool-1',
+          userId,
+          topicId: 'topic1',
+          role: 'tool',
+          parentId: 'a1',
+          content: 'result',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+        {
+          // newest, but a Monitor-stdout callback (metadata.signal) — excluded,
+          // so a normal turn doesn't re-mount onto a callback
+          id: 'cb-1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          parentId: 'tool-1',
+          content: 'callback',
+          metadata: {
+            signal: { sourceToolCallId: 'tc', sourceToolName: 'Monitor', type: 'tool-stdout' },
+          },
+          createdAt: new Date('2023-01-01T00:00:02'),
+        },
+      ]);
+
+      expect(await messageModel.getLastMainThreadSpineMessageId('topic1')).toBe('a1');
+    });
+
+    it('excludes subagent-thread messages and scopes to the current user', async () => {
+      const otherModel = new MessageModel(serverDB, otherUserId);
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+        await trx.insert(threads).values([
+          {
+            id: 'subagent-thread',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'a1',
+            type: 'standalone',
+          },
+        ]);
+        await trx.insert(messages).values([
+          {
+            id: 'a1',
+            userId,
+            topicId: 'topic1',
+            role: 'assistant',
+            threadId: null,
+            content: 'main',
+            createdAt: new Date('2023-01-01T00:00:00'),
+          },
+          {
+            // newer, but on a subagent thread — must not anchor the main wire
+            id: 'sub-asst',
+            userId,
+            topicId: 'topic1',
+            role: 'assistant',
+            threadId: 'subagent-thread',
+            content: 'subagent',
+            createdAt: new Date('2023-01-01T00:00:01'),
+          },
+        ]);
+      });
+
+      expect(await messageModel.getLastMainThreadSpineMessageId('topic1')).toBe('a1');
+      // another user sees nothing in this topic
+      expect(await otherModel.getLastMainThreadSpineMessageId('topic1')).toBeUndefined();
+    });
+  });
+
+  describe('getLatestSpineMessageId', () => {
+    it('returns the assistant turn, NOT a newer tool result child', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'final',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // newest row, but a tool result — an inline child of a1, never the
+          // spine head. A new user turn must parent off the assistant (a1).
+          id: 'tool-1',
+          userId,
+          topicId: 'topic1',
+          role: 'tool',
+          parentId: 'a1',
+          content: 'result',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('a1');
+    });
+
+    it('excludes signal-tagged reactive turns', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'final',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // newer, but a signal-tagged reactive callback — not part of the spine
+          id: 'sig-1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'monitor callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('a1');
+    });
+
+    it('scopes the main thread to threadId IS NULL (ignores thread messages)', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB
+        .insert(threads)
+        .values([
+          { id: 'thread1', userId, topicId: 'topic1', sourceMessageId: 'm1', type: 'standalone' },
+        ]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'm1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          threadId: null,
+          content: 'main tail',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // newer, but on a thread — must not be the main-thread tail
+          id: 't1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          threadId: 'thread1',
+          content: 'thread tail',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('m1');
+      // and when scoped to the thread, returns the thread tail
+      expect(
+        await messageModel.getLatestSpineMessageId({ topicId: 'topic1', threadId: 'thread1' }),
+      ).toBe('t1');
+    });
+
+    it('scopes to the current user and returns undefined for an empty topic', async () => {
+      const otherModel = new MessageModel(serverDB, otherUserId);
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'm1',
+          userId,
+          topicId: 'topic1',
+          role: 'user',
+          content: 'hi',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('m1');
+      // another user sees nothing in this topic
+      expect(await otherModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBeUndefined();
+      // unknown topic yields undefined
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'nope' })).toBeUndefined();
+    });
+  });
+
+  describe('isMessageDescendantOf', () => {
+    it('distinguishes a newer callback sibling from an advancement of the active branch', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        { id: 'shell', userId, topicId: 'topic1', role: 'assistant', content: '' },
+        {
+          id: 'tool',
+          userId,
+          topicId: 'topic1',
+          role: 'tool',
+          content: 'result',
+          parentId: 'shell',
+        },
+        {
+          id: 'active',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'main',
+          parentId: 'tool',
+        },
+        {
+          id: 'callback',
+          userId,
+          topicId: 'topic1',
+          role: 'taskCallback',
+          content: 'done',
+          parentId: 'shell',
+        },
+        {
+          id: 'callback-reply',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'reactive',
+          parentId: 'callback',
+        },
+      ]);
+
+      expect(
+        await messageModel.isMessageDescendantOf({
+          ancestorId: 'active',
+          descendantId: 'callback-reply',
+          topicId: 'topic1',
+        }),
+      ).toBe(false);
+      expect(
+        await messageModel.isMessageDescendantOf({
+          ancestorId: 'callback',
+          descendantId: 'callback-reply',
+          topicId: 'topic1',
+        }),
+      ).toBe(true);
+    });
+  });
+
+  // Fallback anchor used when `getLatestSpineMessageId` comes back empty. Without
+  // it a new user turn is persisted as a second root and the renderer emits the
+  // newest reply above older messages.
+  describe('getLatestNonToolMessageId', () => {
+    it('returns a toolless signal turn that the spine query skips', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'sig-1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'monitor callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+      ]);
+
+      // the spine query finds nothing to anchor on...
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBeUndefined();
+      // ...so the fallback keeps the next turn off a second root
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('sig-1');
+    });
+
+    it('never anchors on a tool result, even when it is the newest row', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'sig-1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'tool-1',
+          userId,
+          topicId: 'topic1',
+          role: 'tool',
+          parentId: 'sig-1',
+          content: 'result',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('sig-1');
+    });
+
+    it('scopes to thread, user, and returns undefined for an empty topic', async () => {
+      const otherModel = new MessageModel(serverDB, otherUserId);
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB
+        .insert(threads)
+        .values([
+          { id: 'thread1', userId, topicId: 'topic1', sourceMessageId: 'm1', type: 'standalone' },
+        ]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'm1',
+          userId,
+          topicId: 'topic1',
+          role: 'user',
+          threadId: null,
+          content: 'main tail',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 't1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          threadId: 'thread1',
+          content: 'thread tail',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('m1');
+      expect(
+        await messageModel.getLatestNonToolMessageId({ topicId: 'topic1', threadId: 'thread1' }),
+      ).toBe('t1');
+      expect(await otherModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBeUndefined();
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'nope' })).toBeUndefined();
+    });
+  });
+
+  // Regression for the signal-tag exclusion predicate. It used to be
+  // `metadata -> 'signal' IS NULL`, which crashes the production serverless
+  // Postgres engine when used as a WHERE qual (rt_fetch out-of-bounds, SQLSTATE
+  // XX000) and made the agent verifier fail to start. It was rewritten to
+  // `NOT COALESCE(jsonb_exists(metadata, 'signal'), false)`; these lock in the
+  // three metadata shapes the rewrite must handle. Server-DB (node-postgres)
+  // only — the client PGlite path is skipped.
+  describe.skipIf(!isServerDB)('getLatestSpineMessageId — signal predicate regression', () => {
+    it('keeps null and signal-free object metadata, excludes only signal-tagged', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          // null metadata — a spine candidate, must not be dropped by the predicate
+          id: 'null-meta',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'plain',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // object metadata without a `signal` key — also a spine candidate
+          id: 'obj-meta',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'has usage',
+          metadata: { usage: { totalTokens: 10 } } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+        {
+          // newest, but signal-tagged — the only row the predicate must exclude
+          id: 'sig-meta',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:02'),
+        },
+      ]);
+
+      // latest non-signal spine row is the signal-free object, not the newer
+      // signal-tagged callback
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('obj-meta');
+    });
+
+    it('returns the null-metadata row when it is the only spine candidate', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'null-only',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'plain',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'sig-newer',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      // guards the COALESCE: a naive `NOT jsonb_exists(metadata, 'signal')` yields
+      // NULL for null metadata and would wrongly drop this row
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('null-only');
+    });
+  });
+});

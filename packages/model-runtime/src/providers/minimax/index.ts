@@ -1,0 +1,500 @@
+import type Anthropic from '@anthropic-ai/sdk';
+import { minimax as minimaxChatModels, ModelProvider } from 'model-bank';
+
+import {
+  buildDefaultAnthropicPayload,
+  createAnthropicCompatibleParams,
+  createAnthropicCompatibleRuntime,
+} from '../../core/anthropicCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { resolveParameters } from '../../core/parameterResolver';
+import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
+import { createRouterRuntime } from '../../core/RouterRuntime';
+import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
+import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
+import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
+import { createMiniMaxImage } from './createImage';
+import { LobeMinimaxSpeechAI } from './createSpeech';
+import { createMiniMaxVideo } from './createVideo';
+
+const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimaxi.com/v1';
+const DEFAULT_MINIMAX_ANTHROPIC_BASE_URL = 'https://api.minimax.io/anthropic';
+const MINIMAX_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
+const MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
+const MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
+
+// All MiniMax speech models (`speech-2.8-hd`, `speech-02-turbo`, ...) share the t2a_v2 API.
+const MINIMAX_SPEECH_MODEL_PATTERN = /^speech-/i;
+
+const isMiniMaxM3Model = (model: string) => model.toLowerCase() === 'minimax-m3';
+// M3.1 Flash always thinks: it rejects disabled thinking and takes `reasoning_effort` instead.
+const isMiniMaxM3FlashModel = (model: string) => model.toLowerCase() === 'minimax-m3.1-flash';
+
+type MiniMaxSDKType = 'anthropic' | 'openai';
+
+const isEmptyContent = (content: unknown) =>
+  content === '' || content === null || content === undefined;
+
+// Require non-empty text: an empty-string `thinking` has never been validated
+// against MiniMax's Anthropic-compatible endpoint.
+const hasReasoningContent = (reasoning: any) =>
+  typeof reasoning?.content === 'string' && reasoning.content !== '';
+
+// MiniMax accepts `low`, `default`, and `high`, but rejects OpenAI's `auto`.
+// Omit `auto` so MiniMax applies its equivalent `default` behavior.
+const MINIMAX_UNSUPPORTED_IMAGE_DETAIL = 'auto';
+
+const normalizeMiniMaxImageDetail = (content: OpenAIChatMessage['content']) => {
+  if (!Array.isArray(content)) return content;
+
+  let changed = false;
+
+  const next = content.map((part) => {
+    if (part.type === 'image_url' && part.image_url.detail === MINIMAX_UNSUPPORTED_IMAGE_DETAIL) {
+      changed = true;
+      const { detail: _detail, ...imageUrl } = part.image_url;
+
+      return { ...part, image_url: imageUrl };
+    }
+
+    return part;
+  });
+
+  return changed ? next : content;
+};
+
+const normalizeMiniMaxAnthropicBaseURL = (baseURL?: string | null) =>
+  baseURL?.replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
+
+const normalizeMiniMaxOpenAIModelBaseURL = (baseURL?: string | null) => {
+  if (
+    !baseURL ||
+    normalizeMiniMaxAnthropicBaseURL(baseURL)?.replace(/\/$/, '') ===
+      DEFAULT_MINIMAX_ANTHROPIC_BASE_URL
+  ) {
+    return DEFAULT_MINIMAX_BASE_URL;
+  }
+
+  return baseURL
+    .replace(MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+    .replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1');
+};
+
+const resolveMiniMaxSDKType = (sdkType: unknown): MiniMaxSDKType | undefined => {
+  if (sdkType === undefined || sdkType === null || sdkType === '') return undefined;
+  if (sdkType === 'anthropic' || sdkType === 'openai') return sdkType;
+
+  throw new Error(`Unsupported MiniMax sdkType: ${String(sdkType)}`);
+};
+
+const buildThinkingBlock = (reasoning: any) =>
+  hasReasoningContent(reasoning)
+    ? { thinking: reasoning.content, type: 'thinking' as const }
+    : undefined;
+
+const toContentArray = (content: any) =>
+  Array.isArray(content)
+    ? content
+    : [{ text: isEmptyContent(content) ? ' ' : content, type: 'text' as const }];
+
+const normalizeMessagesForAnthropic = (messages: ChatStreamPayload['messages']) =>
+  messages.map((message: any) => {
+    if (message.role !== 'assistant') return message;
+
+    const { reasoning, ...rest } = message;
+    // Array content may already carry thinking parts built by the context
+    // engine (possibly Claude-signed or signature-only) — sanitize them for
+    // MiniMax's thinking contract instead of stacking another block on top.
+    const existingParts = Array.isArray(message.content)
+      ? sanitizeAnthropicThinkingParts(message.content)
+      : undefined;
+    const hasThinkingPart = existingParts?.some((part: any) => part.type === 'thinking');
+
+    const thinkingBlock = hasThinkingPart ? undefined : buildThinkingBlock(reasoning);
+
+    if (existingParts) {
+      const contentParts = thinkingBlock ? [thinkingBlock, ...existingParts] : existingParts;
+
+      return {
+        ...rest,
+        content: contentParts.length > 0 ? contentParts : [{ text: ' ', type: 'text' as const }],
+      };
+    }
+
+    if (!thinkingBlock) return rest;
+
+    return {
+      ...rest,
+      content: [thinkingBlock, ...toContentArray(message.content)],
+    };
+  });
+
+export const buildMiniMaxAnthropicPayload = async (
+  payload: ChatStreamPayload,
+): Promise<Anthropic.MessageCreateParams> => {
+  const resolvedMaxTokens =
+    payload.max_tokens ??
+    (await getModelPropertyWithFallback<number | undefined>(
+      payload.model,
+      'maxOutput',
+      ModelProvider.Minimax,
+    )) ??
+    64_000;
+
+  const isFlash = isMiniMaxM3FlashModel(payload.model);
+  const basePayload = await buildDefaultAnthropicPayload({
+    ...payload,
+    ...(isFlash && payload.reasoning_effort
+      ? { effort: payload.reasoning_effort as ChatStreamPayload['effort'] }
+      : {}),
+    enabledSearch: false,
+    max_tokens: resolvedMaxTokens,
+    messages: normalizeMessagesForAnthropic(payload.messages),
+  });
+  const { temperature: _temperature, top_p: _topP, ...restPayload } = basePayload;
+  const resolvedParams = resolveParameters(
+    {
+      temperature: payload.temperature,
+      top_p: payload.top_p,
+    },
+    {
+      normalizeTemperature: true,
+      topPRange: { max: 1, min: 0.01 },
+    },
+  );
+  // Open-weight M3 models do not support temperature
+  const finalTemperature =
+    isFlash ||
+    isMiniMaxM3Model(payload.model) ||
+    (resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0)
+      ? undefined
+      : resolvedParams.temperature;
+
+  return {
+    ...restPayload,
+    ...(finalTemperature !== undefined ? { temperature: finalTemperature } : {}),
+    ...(resolvedParams.top_p !== undefined ? { top_p: resolvedParams.top_p } : {}),
+  };
+};
+
+export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
+  const {
+    enabledSearch: _enabledSearch,
+    max_tokens: _maxTokens,
+    messages,
+    temperature,
+    thinking,
+    top_p,
+    ...params
+  } = payload;
+
+  const isFlash = isMiniMaxM3FlashModel(payload.model);
+  const isM3 = isMiniMaxM3Model(payload.model) || isFlash;
+
+  // Interleaved thinking
+  const processedMessages = messages.map((message: any) => {
+    let processed = message;
+
+    if (message.role === 'assistant' && message.reasoning) {
+      // Only process historical reasoning content without a signature
+      if (!message.reasoning.signature && message.reasoning.content) {
+        const { reasoning, ...messageWithoutReasoning } = message;
+        processed = {
+          ...messageWithoutReasoning,
+          reasoning_details: [
+            {
+              format: 'MiniMax-response-v1',
+              id: 'reasoning-text-0',
+              index: 0,
+              text: reasoning.content,
+              type: 'reasoning.text',
+            },
+          ],
+        };
+      } else {
+        // If there is a signature or no content, remove the reasoning field
+        const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
+        processed = messageWithoutReasoning;
+      }
+    }
+
+    const normalizedContent = normalizeMiniMaxImageDetail(processed.content);
+
+    return normalizedContent === processed.content
+      ? processed
+      : { ...processed, content: normalizedContent };
+  });
+
+  // MiniMax API enforces `input_tokens + max_tokens <= context_window`,
+  // so we must derive max_tokens dynamically from the actual input size
+  // when the caller did not specify one. Estimate against the sanitized
+  // messages (with stripped reasoning) — that's what we actually send.
+  const safeMaxTokens = resolveSafeMaxTokens(
+    { ...payload, messages: processedMessages },
+    minimaxChatModels,
+  );
+
+  // Resolve parameters with constraints
+  const resolvedParams = resolveParameters(
+    {
+      max_tokens: safeMaxTokens,
+      temperature,
+      top_p,
+    },
+    {
+      normalizeTemperature: !isM3,
+      temperatureRange: isM3 ? { max: 2, min: 0 } : undefined,
+      topPRange: isM3 ? { max: 1, min: 0 } : { max: 1, min: 0.01 },
+    },
+  );
+
+  // Minimax doesn't support temperature <= 0; open-weight M3 models do not support temperature
+  const finalTemperature =
+    isM3 || (resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0)
+      ? undefined
+      : resolvedParams.temperature;
+
+  const finalThinking = isFlash
+    ? {}
+    : isM3
+      ? thinking?.type === 'disabled'
+        ? { thinking: { type: 'disabled' } }
+        : thinking?.type === 'enabled' || thinking?.type === 'adaptive'
+          ? { thinking: { type: 'adaptive' } }
+          : {}
+      : thinking
+        ? { thinking }
+        : {};
+
+  const outputLimitParam = isM3
+    ? { max_completion_tokens: resolvedParams.max_tokens }
+    : { max_tokens: resolvedParams.max_tokens };
+
+  return {
+    ...params,
+    ...outputLimitParam,
+    messages: processedMessages,
+    reasoning_split: true,
+    temperature: finalTemperature,
+    ...finalThinking,
+    top_p: resolvedParams.top_p,
+  } as any;
+};
+
+export const openAIParams = {
+  baseURL: DEFAULT_MINIMAX_BASE_URL,
+  chatCompletion: {
+    handlePayload: buildMiniMaxOpenAIPayload,
+    handleTransformResponseToStream: (data) => {
+      const choices = data.choices || [];
+      const first = choices[0];
+      const message = first?.message as any;
+      const reasoningText = Array.isArray(message?.reasoning_details)
+        ? message.reasoning_details
+            .filter((detail: any) => detail.text)
+            .map((detail: any) => detail.text)
+            .join('')
+        : undefined;
+
+      return new ReadableStream({
+        start(controller) {
+          if (reasoningText) {
+            controller.enqueue({
+              choices: [
+                {
+                  delta: {
+                    content: null,
+                    reasoning_details: message.reasoning_details,
+                    role: 'assistant',
+                  } as any,
+                  finish_reason: null,
+                  index: first?.index ?? 0,
+                  logprobs: first?.logprobs ?? null,
+                },
+              ],
+              created: data.created,
+              id: data.id,
+              model: data.model,
+              object: 'chat.completion.chunk',
+            });
+          }
+
+          controller.enqueue({
+            choices: choices.map((choice: any) => ({
+              delta: {
+                content: choice.message.content,
+                role: choice.message.role,
+                tool_calls: choice.message.tool_calls?.map((tool: any, index: number) => ({
+                  function: tool.function,
+                  id: tool.id,
+                  index,
+                  type: tool.type,
+                })),
+              },
+              finish_reason: null,
+              index: choice.index,
+              logprobs: choice.logprobs,
+            })),
+            created: data.created,
+            id: data.id,
+            model: data.model,
+            object: 'chat.completion.chunk',
+          });
+
+          if (data.usage) {
+            controller.enqueue({
+              choices: [],
+              created: data.created,
+              id: data.id,
+              model: data.model,
+              object: 'chat.completion.chunk',
+              usage: data.usage,
+            });
+          }
+
+          controller.enqueue({
+            choices: choices.map((choice: any) => ({
+              delta: {
+                content: null,
+                role: choice.message.role,
+              },
+              finish_reason: choice.finish_reason,
+              index: choice.index,
+              logprobs: choice.logprobs,
+            })),
+            created: data.created,
+            id: data.id,
+            model: data.model,
+            object: 'chat.completion.chunk',
+          });
+          controller.close();
+        },
+      });
+    },
+  },
+  createImage: createMiniMaxImage,
+  createVideo: createMiniMaxVideo,
+  debug: {
+    chatCompletion: () => process.env.DEBUG_MINIMAX_CHAT_COMPLETION === '1',
+  },
+  handlePollVideoStatus: async (inferenceId: string, options: any) => {
+    const { pollMiniMaxVideoStatus } = await import('./createVideo');
+    return pollMiniMaxVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || '',
+    });
+  },
+  provider: ModelProvider.Minimax,
+} satisfies OpenAICompatibleFactoryOptions;
+
+export const LobeMinimaxOpenAI = createOpenAICompatibleRuntime(openAIParams);
+
+type MiniMaxOpenAIRuntimeOptions = ConstructorParameters<typeof LobeMinimaxOpenAI>[0];
+
+const fetchMiniMaxModelsWithOpenAI = ({ options }: { options?: MiniMaxOpenAIRuntimeOptions }) => {
+  const runtime = new LobeMinimaxOpenAI({
+    ...options,
+    baseURL: normalizeMiniMaxOpenAIModelBaseURL(options?.baseURL),
+  });
+
+  return runtime.models();
+};
+
+export const anthropicParams = createAnthropicCompatibleParams({
+  baseURL: DEFAULT_MINIMAX_ANTHROPIC_BASE_URL,
+  chatCompletion: {
+    handlePayload: buildMiniMaxAnthropicPayload,
+  },
+  customClient: {},
+  debug: {
+    chatCompletion: () => process.env.DEBUG_MINIMAX_CHAT_COMPLETION === '1',
+  },
+  provider: ModelProvider.Minimax,
+});
+
+export const LobeMinimaxAnthropicAI = createAnthropicCompatibleRuntime(anthropicParams);
+
+const createAnthropicRouter = ({
+  baseURL,
+  baseURLPattern,
+}: {
+  baseURL?: string;
+  baseURLPattern?: RegExp;
+} = {}) => ({
+  apiType: 'anthropic' as const,
+  ...(baseURLPattern ? { baseURLPattern } : {}),
+  id: 'anthropic-compatible',
+  options: {
+    ...(baseURL ? { baseURL } : {}),
+    remark: 'anthropic-compatible',
+  },
+  runtime: LobeMinimaxAnthropicAI,
+});
+
+const createOpenAIRouter = () => ({
+  apiType: 'openai' as const,
+  id: 'openai-compatible',
+  options: { remark: 'openai-compatible' },
+  runtime: LobeMinimaxOpenAI,
+});
+
+// Speech uses the OpenAI-style `/v1` root on the configured host: global (`api.minimax.io`)
+// and China (`api.minimaxi.com`) keys only work on their own region's endpoint.
+const normalizeMiniMaxSpeechBaseURL = (baseURL?: string | null) =>
+  baseURL
+    ? baseURL
+        .replace(MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+        .replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1')
+    : DEFAULT_MINIMAX_BASE_URL;
+
+// Speech always goes to the native t2a_v2 API, whatever SDK type serves chat; the
+// Anthropic-compatible runtime has no speech support.
+const createSpeechRouter = (baseURL?: string | null) => ({
+  apiType: 'openai' as const,
+  id: 'speech',
+  options: {
+    baseURL: normalizeMiniMaxSpeechBaseURL(baseURL),
+    remark: 'speech',
+  },
+  runtime: LobeMinimaxSpeechAI,
+});
+
+export const params: CreateRouterRuntimeOptions = {
+  id: ModelProvider.Minimax,
+  models: fetchMiniMaxModelsWithOpenAI,
+  routers: (options, context) => {
+    // Match the upstream id too, so an alias mapped onto `speech-*` still reaches t2a_v2.
+    if (
+      context?.model &&
+      MINIMAX_SPEECH_MODEL_PATTERN.test(
+        resolveMappedModelId(context.model, { modelIdMapping: options.modelIdMapping }),
+      )
+    ) {
+      return [createSpeechRouter(options.baseURL)];
+    }
+
+    const sdkType = resolveMiniMaxSDKType(options.sdkType);
+
+    if (sdkType === 'anthropic') {
+      return [
+        createAnthropicRouter({
+          baseURL: normalizeMiniMaxAnthropicBaseURL(options.baseURL),
+        }),
+      ];
+    }
+
+    if (sdkType === 'openai') {
+      return [createOpenAIRouter()];
+    }
+
+    return [
+      createAnthropicRouter({ baseURLPattern: MINIMAX_ANTHROPIC_BASE_URL_PATTERN }),
+      createOpenAIRouter(),
+    ];
+  },
+};
+
+export const LobeMinimaxAI = createRouterRuntime(params);

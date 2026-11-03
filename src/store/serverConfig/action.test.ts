@@ -1,0 +1,190 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type GlobalRuntimeConfig } from '@/types/serverConfig';
+
+import { initServerConfigStore } from './store';
+
+// Mock SWR
+let mockSWRData: GlobalRuntimeConfig | undefined;
+let mockSWRError: Error | undefined;
+
+vi.mock('@/libs/swr', () => ({
+  useOnlyFetchOnceSWR: vi.fn((key, fetcher, options) => {
+    const { onError, onSuccess } = options || {};
+    // Simulate SWR behavior
+    if (mockSWRData && onSuccess) {
+      onSuccess(mockSWRData);
+    }
+
+    if (mockSWRError && onError) {
+      onError(mockSWRError);
+    }
+
+    return {
+      data: mockSWRData,
+      error: mockSWRError,
+      isLoading: false,
+      isValidating: false,
+      mutate: vi.fn(),
+    };
+  }),
+}));
+
+const mockGlobalConfig: GlobalRuntimeConfig = {
+  serverConfig: {
+    telemetry: {
+      langfuse: undefined,
+    },
+    aiProvider: {},
+  },
+  serverFeatureFlags: {
+    enableDevDock: true,
+    enableWebrtc: true,
+  },
+} as any;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.resetModules();
+
+  mockSWRData = mockGlobalConfig;
+  mockSWRError = undefined;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  mockSWRData = undefined;
+  mockSWRError = undefined;
+});
+
+describe('ServerConfigAction', () => {
+  describe('useInitServerConfig', () => {
+    it('should return SWR response', () => {
+      const store = initServerConfigStore({});
+
+      const swrResponse = store.getState().useInitServerConfig();
+
+      expect(swrResponse).toBeDefined();
+      expect(swrResponse.data).toBeDefined();
+      expect(swrResponse.isLoading).toBe(false);
+    });
+
+    it('should update store state on successful fetch', () => {
+      const store = initServerConfigStore({});
+
+      store.getState().useInitServerConfig();
+
+      const state = store.getState();
+
+      expect(state.serverConfig).toBeDefined();
+      expect(state.featureFlags).toBeDefined();
+      expect(state.canAccessDevDock).toBe(true);
+      expect(state.serverConfigLoaded).toBe(true);
+    });
+
+    it('should mark server config as initialized when the fetch fails', () => {
+      mockSWRData = undefined;
+      mockSWRError = new Error('network error');
+
+      const store = initServerConfigStore({});
+
+      store.getState().useInitServerConfig();
+
+      expect(store.getState().serverConfigInit).toBe(true);
+      // The fallback is not a loaded config: consumers that prune data
+      // against server-gated catalogs must keep waiting.
+      expect(store.getState().serverConfigLoaded).toBe(false);
+      expect(store.getState().serverConfig).toEqual({ aiProvider: {}, telemetry: {} });
+      expect(store.getState().canAccessDevDock).toBe(false);
+    });
+
+    it('should pass a fetcher function that calls globalService', async () => {
+      const { useOnlyFetchOnceSWR } = vi.mocked(await import('@/libs/swr'));
+
+      const store = initServerConfigStore({});
+
+      store.getState().useInitServerConfig();
+
+      expect(useOnlyFetchOnceSWR).toHaveBeenCalled();
+
+      // Verify the second argument is a function
+      const fetcherArg = (useOnlyFetchOnceSWR as any).mock.calls[0][1];
+      expect(typeof fetcherArg).toBe('function');
+    });
+  });
+
+  describe('onSuccess callback', () => {
+    it('should set serverConfig and featureFlags correctly', () => {
+      const customConfig: GlobalRuntimeConfig = {
+        serverConfig: {
+          telemetry: { langfuse: { publicKey: 'test-key' } },
+          aiProvider: {},
+        },
+        serverFeatureFlags: {
+          enableDevDock: false,
+          enableWebrtc: false,
+        },
+      } as any;
+
+      mockSWRData = customConfig;
+
+      const store = initServerConfigStore({});
+
+      store.getState().useInitServerConfig();
+
+      const state = store.getState();
+
+      expect(state.serverConfig).toBeDefined();
+      expect(state.featureFlags).toBeDefined();
+      expect(state.canAccessDevDock).toBe(false);
+    });
+
+    it('should update both serverConfig and serverFeatureFlags in store', () => {
+      const store = initServerConfigStore({});
+
+      const initialState = store.getState();
+      expect(initialState.serverConfig).toBeDefined();
+
+      store.getState().useInitServerConfig();
+
+      const updatedState = store.getState();
+      expect(updatedState.serverConfig).toEqual(mockGlobalConfig.serverConfig);
+      expect(updatedState.featureFlags).toEqual(mockGlobalConfig.serverFeatureFlags);
+      expect(updatedState.canAccessDevDock).toBe(true);
+    });
+  });
+
+  describe('SWR integration', () => {
+    it('should use correct SWR key', async () => {
+      const { useOnlyFetchOnceSWR } = vi.mocked(await import('@/libs/swr'));
+
+      const store = initServerConfigStore({});
+      store.getState().useInitServerConfig();
+
+      expect(useOnlyFetchOnceSWR).toHaveBeenCalledWith(
+        'serverConfig:get',
+        expect.any(Function),
+        expect.objectContaining({
+          onError: expect.any(Function),
+          onSuccess: expect.any(Function),
+        }),
+      );
+    });
+
+    it('should pass globalService.getGlobalConfig as fetcher', async () => {
+      const { useOnlyFetchOnceSWR } = vi.mocked(await import('@/libs/swr'));
+
+      const store = initServerConfigStore({});
+      store.getState().useInitServerConfig();
+
+      expect(useOnlyFetchOnceSWR).toHaveBeenCalledWith(
+        'serverConfig:get',
+        expect.any(Function),
+        expect.any(Object),
+      );
+
+      const fetcherArg = (useOnlyFetchOnceSWR as any).mock.calls[0][1];
+      expect(typeof fetcherArg).toBe('function');
+    });
+  });
+});

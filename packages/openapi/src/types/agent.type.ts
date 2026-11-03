@@ -1,0 +1,212 @@
+import type { LobeAgentAgencyConfig, LobeAgentChatConfig } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types/agent/graph';
+import { z } from 'zod';
+
+import type { PublicAgent, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
+import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
+import { PaginationQuerySchema } from './common.type';
+
+// ==================== Agent CRUD Types ====================
+
+/**
+ * Create Agent request parameters
+ */
+export interface CreateAgentRequest {
+  agencyConfig?: Pick<LobeAgentAgencyConfig, 'enableGraphMode' | 'graph'>;
+  avatar?: string;
+  chatConfig?: LobeAgentChatConfig;
+  description?: string;
+  model?: string;
+  params?: Record<string, unknown>;
+  personal?: boolean;
+  plugins?: Array<{ identifier: string; mode?: 'pinned' | 'auto' | 'disabled' }>;
+  provider?: string;
+  systemRole?: string;
+  title: string;
+}
+
+export type GetAgentsRequest = IPaginationQuery & { personal?: boolean };
+
+export const GetAgentsQuerySchema = PaginationQuerySchema.extend({
+  personal: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
+});
+
+export const CreateAgentRequestSchema = z.object({
+  agencyConfig: z
+    .object({
+      enableGraphMode: z.boolean().nullish(),
+      graph: AgentGraphSchema.nullish(),
+    })
+    .nullish(),
+  avatar: z.string().nullish(),
+  chatConfig: z
+    .object({
+      disableContextCaching: z.boolean().nullish(),
+      displayMode: z.enum(['chat', 'docs']).nullish(),
+      enableCompressHistory: z.boolean().nullish(),
+      enableHistoryCount: z.boolean().nullish(),
+      enableMaxTokens: z.boolean().nullish(),
+      enableReasoning: z.boolean().nullish(),
+      enableReasoningEffort: z.boolean().nullish(),
+      historyCount: z.number().nullish(),
+      reasoningBudgetToken: z.number().nullish(),
+      reasoningEffort: z.enum(['low', 'medium', 'high']).nullish(),
+      searchFCModel: z.string().nullish(),
+      searchMode: z.enum(['disabled', 'enabled']).nullish(),
+      useModelBuiltinSearch: z.boolean().nullish(),
+    })
+    .nullish(),
+  description: z.string().nullish(),
+  model: z.string().nullish(),
+  plugins: z
+    .array(
+      z
+        .object({
+          identifier: z.string().min(1).max(255),
+          mode: z.enum(['pinned', 'auto', 'disabled']).optional(),
+        })
+        .strict(),
+    )
+    .max(100)
+    .refine(
+      (items) => new Set(items.map((item) => item.identifier)).size === items.length,
+      'Duplicate plugin identifiers',
+    )
+    .optional(),
+  params: z.record(z.string(), z.unknown()).nullish(),
+  personal: z.boolean().optional(),
+  provider: z.string().nullish(),
+  systemRole: z.string().nullish(),
+  title: z.string().min(1, 'Title cannot be empty'),
+});
+
+/**
+ * Update Agent request parameters
+ */
+export type UpdateAgentRequest = CreateAgentRequest & {
+  id: string;
+};
+
+export const UpdateAgentRequestSchema = CreateAgentRequestSchema.partial();
+
+/**
+ * Delete Agent request parameters
+ */
+export interface AgentDeleteRequest {
+  agentId: string;
+  migrateSessionTo?: string;
+}
+
+export const AgentDeleteRequestSchema = z.object({
+  agentId: z.string().min(1, 'Agent ID cannot be empty'),
+  migrateSessionTo: z.string().nullish(),
+});
+
+// ==================== Agent Batch Operations ====================
+
+/**
+ * Batch delete Agents request parameters
+ */
+export interface BatchDeleteAgentsRequest {
+  agentIds: string[];
+  migrateSessionTo?: string;
+}
+
+/**
+ * Batch update Agents request parameters
+ */
+export interface BatchUpdateAgentsRequest {
+  agentIds: string[];
+  updateData: {
+    avatar?: string;
+    description?: string;
+    model?: string;
+    provider?: string;
+    systemRole?: string;
+  };
+}
+
+/**
+ * Batch operation result type
+ */
+export interface BatchOperationResult {
+  errors?: Array<{
+    error: string;
+    id: string;
+  }>;
+  failed: number;
+  success: number;
+  total: number;
+}
+
+// ==================== Agent Session Relations ====================
+
+/**
+ * Agent-Session link operation request parameters
+ */
+export interface AgentSessionLinkRequest {
+  sessionId: string;
+}
+
+/**
+ * Agent-Session batch link operation request parameters
+ */
+export interface AgentSessionBatchLinkRequest {
+  sessionIds: string[];
+}
+
+/**
+ * Create Session for Agent request parameters
+ */
+export interface CreateSessionForAgentRequest {
+  agentId: string;
+  avatar?: string;
+  backgroundColor?: string;
+  description?: string;
+  title?: string;
+}
+
+/**
+ * Agent-Session relationship response type
+ */
+export interface AgentSessionRelation {
+  agentId: string;
+  session: {
+    avatar: string | null;
+    description: string | null;
+    id: string;
+    title: string | null;
+    updatedAt: Date;
+  };
+  sessionId: string;
+}
+
+// ==================== Agent Response Types ====================
+
+/**
+ * Agent list response type
+ */
+export type AgentListResponse = PaginationQueryResponse<{
+  agents: PublicAgent[];
+}>;
+
+/**
+ * Agent detail response type, includes complete configuration information
+ */
+export interface AgentDetailResponse extends PublicAgent {
+  files?: Array<PublicFile & { enabled?: boolean | null }>;
+  knowledgeBases?: Array<PublicKnowledgeBase & { enabled?: boolean | null }>;
+}
+
+// ==================== Common Schemas ====================
+
+export const AgentIdParamSchema = z.object({
+  id: z.string().min(1, 'Agent ID cannot be empty'),
+});
+
+export const DuplicateAgentSchema = z
+  .object({ title: z.string().trim().min(1).max(255).optional() })
+  .strict();

@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "اتصال به {{provider}}",
+  "action.connect.error": "اتصال ناموفق بود، لطفاً دوباره تلاش کنید.",
+  "action.connect.popupBlocked": "پنجره پاپ‌آپ اتصال مسدود شده است. برای ادامه، پاپ‌آپ‌ها را در مرورگر خود مجاز کنید.",
+  "action.connect.short": "اتصال",
+  "action.connecting": "در انتظار تأیید...",
+  "action.create.error": "ایجاد وظیفه ناموفق بود. لطفاً دوباره تلاش کنید.",
+  "action.create.success": "وظیفه زمان‌بندی شده اضافه شد. آن را در Lobe AI پیدا کنید.",
+  "action.createButton": "افزودن وظیفه",
+  "action.creating": "در حال ایجاد...",
+  "action.dismiss.error": "رد کردن ناموفق بود. لطفاً دوباره تلاش کنید.",
+  "action.dismiss.tooltip": "علاقه‌ای ندارم",
+  "action.refresh.button": "تازه‌سازی",
+  "card.templateTag": "الگو",
+  "schedule.daily": "هر روز ساعت {{time}}",
+  "schedule.editableAfterCreateTooltip": "می‌توانید برنامه را پس از ایجاد وظیفه تنظیم کنید.",
+  "schedule.weekly": "هر {{weekday}} ساعت {{time}}",
+  "section.title": "این وظایف زمان‌بندی‌شده را امتحان کنید"
+}

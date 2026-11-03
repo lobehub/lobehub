@@ -1,0 +1,32 @@
+---
+title: "Model Runtime & Authentication Improvements \U0001F527"
+description: >-
+  Improves model runtime reliability, authentication stability, and mobile
+  experience, including Claude Opus 4.6 support on Bedrock.
+tags:
+  - Model Runtime
+  - Authentication
+  - Claude Opus 4.6
+  - Notebook
+---
+
+# Model Runtime & Authentication Improvements 🔧
+
+This release focuses on runtime reliability and sign-in stability across web and mobile. It reduces authentication friction in daily use and makes model execution paths more dependable.
+
+## Runtime and Authentication Updates
+
+On the runtime side, Bedrock now supports Claude Opus 4.6. The server runtime also includes a better-integrated Notebook tool with improved prompts, and OpenAI Responses API calls now support end-user information when needed.
+
+Authentication was strengthened across providers. Microsoft authentication issues were fixed, OIDC account linking is now more reliable, and Feishu SSO behavior was improved to reduce sign-in friction.
+
+This update also includes cross-platform and architecture polish. Topic lists now scroll vertically on mobile, multimodal image rendering issues are fixed, Anthropic factory logic has been extracted for cleaner runtime structure, and Moonshot has been migrated to RouterRuntime.
+
+## Improvements and fixes
+
+- Improved task display behavior.
+- Enhanced local-system tool implementation.
+- Fixed PDF parsing in Docker.
+- Fixed editor content loss after send errors.
+- Added custom avatars in the group chat sidebar.
+- Added notifications for file upload storage limit errors.

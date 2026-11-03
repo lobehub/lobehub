@@ -1,0 +1,277 @@
+import { DocumentLoadFormat, DocumentLoadRule, PolicyLoad } from '@lobechat/agent-templates';
+import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_SOURCE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  WEB_DOCUMENT_SOURCE_TYPE,
+} from '@lobechat/const';
+import { describe, expect, it } from 'vitest';
+
+import type { AgentDocumentWithRules } from '@/database/models/agentDocuments';
+import {
+  normalizeAgentDocumentPosition,
+  toAgentContextDocument,
+  toAgentContextDocuments,
+} from '@/utils/agentDocumentContextMapping';
+
+const buildDoc = (overrides: Partial<AgentDocumentWithRules> = {}): AgentDocumentWithRules =>
+  ({
+    accessPublic: 0,
+    accessSelf: 31,
+    accessShared: 0,
+    agentId: 'agent-1',
+    category: AGENT_DOCUMENT_CATEGORY,
+    content: 'body',
+    createdAt: new Date('2026-05-01T00:00:00.000Z'),
+    deleteReason: null,
+    deletedAt: null,
+    deletedByAgentId: null,
+    deletedByUserId: null,
+    description: 'a description',
+    documentId: 'doc-row-1',
+    editorData: null,
+    fileType: 'article',
+    filename: 'doc.md',
+    id: 'agent-doc-1',
+    isFolder: false,
+    isSkillBundle: false,
+    isSkillIndex: false,
+    loadRules: {},
+    metadata: null,
+    parentId: null,
+    policy: null,
+    policyLoad: PolicyLoad.PROGRESSIVE,
+    policyLoadFormat: DocumentLoadFormat.RAW,
+    policyLoadPosition: 'before-first-user',
+    policyLoadRule: 'always',
+    source: 'https://example.com/post',
+    sourceType: WEB_DOCUMENT_SOURCE_TYPE,
+    templateId: null,
+    title: 'Doc title',
+    updatedAt: new Date('2026-05-21T00:00:00.000Z'),
+    userId: 'user-1',
+    ...overrides,
+  }) as AgentDocumentWithRules;
+
+describe('toAgentContextDocument', () => {
+  // Regression: — server-side mapper used to drop sourceType, which
+  // disabled the "hide web-crawled docs from the progressive index" filter for
+  // every chat that went through RuntimeExecutors. Keep this lock tight so any
+  // future field addition that forgets one side trips here.
+  it('propagates sourceType so the progressive web-doc filter can fire', () => {
+    expect(
+      toAgentContextDocument(buildDoc({ sourceType: WEB_DOCUMENT_SOURCE_TYPE })).sourceType,
+    ).toBe(WEB_DOCUMENT_SOURCE_TYPE);
+    expect(
+      toAgentContextDocument(buildDoc({ sourceType: AGENT_DOCUMENT_SOURCE_TYPE })).sourceType,
+    ).toBe(AGENT_DOCUMENT_SOURCE_TYPE);
+    expect(toAgentContextDocument(buildDoc({ sourceType: 'file' })).sourceType).toBe('file');
+  });
+
+  it('propagates updatedAt so sortByRecency has a real timestamp', () => {
+    const ts = new Date('2026-05-21T12:34:56.000Z');
+    expect(toAgentContextDocument(buildDoc({ updatedAt: ts })).updatedAt).toBe(ts);
+  });
+
+  it('propagates createdAt so the index can mark docs created during the current run', () => {
+    const ts = new Date('2026-09-23T22:57:58.000Z');
+    expect(toAgentContextDocument(buildDoc({ createdAt: ts })).createdAt).toBe(ts);
+  });
+
+  it('maps a fully populated row into the AgentContextDocument shape', () => {
+    const doc = buildDoc({
+      description: 'web-crawled article',
+      filename: 'crawl.md',
+      id: 'agent-doc-2',
+      loadRules: { priority: 3, rule: DocumentLoadRule.ALWAYS },
+      policyLoad: PolicyLoad.PROGRESSIVE,
+      policyLoadFormat: DocumentLoadFormat.RAW,
+      policyLoadPosition: 'before-first-user',
+      sourceType: 'web',
+      templateId: 'claw',
+      title: 'Crawled',
+      updatedAt: new Date('2026-05-21T00:00:00.000Z'),
+    });
+
+    expect(toAgentContextDocument(doc)).toEqual({
+      content: 'body',
+      contentCharCount: 4,
+      createdAt: doc.createdAt,
+      description: 'web-crawled article',
+      filename: 'crawl.md',
+      id: 'agent-doc-2',
+      loadPosition: 'before-first-user',
+      loadRules: { priority: 3, rule: DocumentLoadRule.ALWAYS },
+      policyId: 'claw',
+      policyLoad: PolicyLoad.PROGRESSIVE,
+      policyLoadFormat: DocumentLoadFormat.RAW,
+      sourceType: 'web',
+      title: 'Crawled',
+      updatedAt: new Date('2026-05-21T00:00:00.000Z'),
+    });
+  });
+
+  it('prefers policy.context overrides over the indexed projection fields', () => {
+    const doc = buildDoc({
+      policy: {
+        context: { policyLoadFormat: 'file', position: 'system-append' },
+      } as AgentDocumentWithRules['policy'],
+      policyLoadFormat: DocumentLoadFormat.RAW,
+      policyLoadPosition: 'before-first-user',
+    });
+
+    const mapped = toAgentContextDocument(doc);
+    expect(mapped.loadPosition).toBe('system-append');
+    expect(mapped.policyLoadFormat).toBe('file');
+  });
+
+  it('coerces null description / sourceType / updatedAt into undefined', () => {
+    const mapped = toAgentContextDocument(
+      buildDoc({
+        description: null,
+        sourceType: null as unknown as AgentDocumentWithRules['sourceType'],
+        updatedAt: null as unknown as Date,
+      }),
+    );
+
+    expect(mapped.description).toBeUndefined();
+    expect(mapped.sourceType).toBeUndefined();
+    expect(mapped.updatedAt).toBeUndefined();
+  });
+
+  it('drops unknown loadPosition values rather than smuggling them through', () => {
+    const mapped = toAgentContextDocument(
+      buildDoc({ policyLoadPosition: 'definitely-not-a-real-position' }),
+    );
+    expect(mapped.loadPosition).toBeUndefined();
+  });
+});
+
+describe('toAgentContextDocuments', () => {
+  it('preserves order and maps each row through toAgentContextDocument', () => {
+    const rows = [
+      buildDoc({ id: 'a', sourceType: WEB_DOCUMENT_SOURCE_TYPE }),
+      buildDoc({ id: 'b', sourceType: AGENT_DOCUMENT_SOURCE_TYPE }),
+      buildDoc({ id: 'c', sourceType: 'file' }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.map((d) => d.id)).toEqual(['a', 'b', 'c']);
+    expect(result.map((d) => d.sourceType)).toEqual([
+      WEB_DOCUMENT_SOURCE_TYPE,
+      AGENT_DOCUMENT_SOURCE_TYPE,
+      'file',
+    ]);
+  });
+
+  // Regression: — folder VFS nodes (plain folders + skill bundles)
+  // carry empty content but inherit loadRules/loadPosition, so they used to
+  // leak into the injection candidate pool as empty slots. They must never
+  // become context documents.
+  it('drops folder rows (plain folders and skill bundles) from context', () => {
+    const rows = [
+      buildDoc({ id: 'doc', isFolder: false }),
+      buildDoc({ id: 'folder', isFolder: true, fileType: CUSTOM_FOLDER_FILE_TYPE }),
+      buildDoc({ id: 'bundle', isFolder: true, isSkillBundle: true, fileType: 'skills/bundle' }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.map((d) => d.id)).toEqual(['doc']);
+  });
+
+  // Children inherit their `custom/folder` parent's title so the progressive
+  // folder row is still dropped — only its title survives, on the children.
+  it('stamps folderTitle on children of a custom/folder and drops the folder row', () => {
+    const rows = [
+      buildDoc({
+        documentId: 'folder-doc',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        id: 'folder-agentdoc',
+        isFolder: true,
+        title: 'dailyBrief',
+      }),
+      buildDoc({ id: 'child-1', parentId: 'folder-doc', sourceType: 'file' }),
+      buildDoc({ id: 'child-2', parentId: 'folder-doc', sourceType: 'file' }),
+      buildDoc({ id: 'root', parentId: null, sourceType: 'file' }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.map((d) => d.id)).toEqual(['child-1', 'child-2', 'root']);
+    expect(result.map((d) => d.folderTitle)).toEqual(['dailyBrief', 'dailyBrief', undefined]);
+    expect(result.map((d) => d.parentId)).toEqual(['folder-doc', 'folder-doc', undefined]);
+  });
+
+  // A workflow document holds its run records; they fold under it like folder
+  // contents, and the parent document itself stays in the index.
+  it('stamps the parent title on children of an ordinary document', () => {
+    const rows = [
+      buildDoc({ documentId: 'sop-doc', id: 'sop', sourceType: 'file', title: 'Fix-round SOP' }),
+      buildDoc({ documentId: 'run-1', id: 'run-1', parentId: 'sop-doc', sourceType: 'file' }),
+      buildDoc({ documentId: 'run-2', id: 'run-2', parentId: 'sop-doc', sourceType: 'file' }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.map((d) => d.id)).toEqual(['sop', 'run-1', 'run-2']);
+    expect(result.map((d) => [d.folderTitle, d.parentKind])).toEqual([
+      [undefined, undefined],
+      ['Fix-round SOP', 'document'],
+      ['Fix-round SOP', 'document'],
+    ]);
+  });
+
+  it('does not treat web clips or skill rows as parents', () => {
+    const rows = [
+      buildDoc({ documentId: 'web-doc', id: 'web', sourceType: 'web' }),
+      buildDoc({ documentId: 'skill-doc', fileType: 'skills/index', id: 'skill' }),
+      buildDoc({ documentId: 'a', id: 'a', parentId: 'web-doc', sourceType: 'file' }),
+      buildDoc({ documentId: 'b', id: 'b', parentId: 'skill-doc', sourceType: 'file' }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.filter((d) => d.folderTitle)).toEqual([]);
+  });
+
+  it('keeps non-folder skill rows such as the SKILL.md index', () => {
+    const rows = [
+      buildDoc({
+        id: 'skill-index',
+        isFolder: false,
+        isSkillIndex: true,
+        fileType: 'skills/index',
+      }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.map((d) => d.id)).toEqual(['skill-index']);
+  });
+});
+
+describe('normalizeAgentDocumentPosition', () => {
+  it('accepts every position in AGENT_DOCUMENT_INJECTION_POSITIONS', () => {
+    for (const position of [
+      'after-first-user',
+      'before-first-user',
+      'before-system',
+      'context-end',
+      'manual',
+      'on-demand',
+      'system-append',
+      'system-replace',
+    ] as const) {
+      expect(normalizeAgentDocumentPosition(position)).toBe(position);
+    }
+  });
+
+  it('returns undefined for nullish or unknown positions', () => {
+    expect(normalizeAgentDocumentPosition(null)).toBeUndefined();
+    expect(normalizeAgentDocumentPosition(undefined)).toBeUndefined();
+    expect(normalizeAgentDocumentPosition('')).toBeUndefined();
+    expect(normalizeAgentDocumentPosition('not-a-position')).toBeUndefined();
+  });
+});

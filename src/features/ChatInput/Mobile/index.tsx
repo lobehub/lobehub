@@ -1,0 +1,99 @@
+'use client';
+
+import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
+import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { memo } from 'react';
+
+import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
+import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
+import { useChatInputStore } from '@/features/ChatInput/store';
+import dynamic from '@/libs/next/dynamic';
+
+import ActionBar from '../ActionBar';
+import InputEditor from '../InputEditor';
+import SendArea from '../SendArea';
+
+const FilePreview = dynamic(() => import('./FilePreview'), { ssr: false });
+
+const styles = createStaticStyles(({ css }) => ({
+  container: css``,
+  fullscreen: css`
+    position: absolute;
+    z-index: 100;
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+    padding: 12px;
+
+    background: ${cssVar.colorBgLayout};
+  `,
+  leftActions: css`
+    flex: none;
+    min-width: 0;
+
+    > * {
+      flex: none !important;
+    }
+  `,
+  leftSlot: css`
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+  `,
+}));
+
+const DesktopChatInput = memo(() => {
+  const [slashMenuRef, expand] = useChatInputStore((s) => [s.slashMenuRef, s.expand]);
+  const leftActions = useChatInputStore((s) => s.leftActions);
+
+  const fileNode = leftActions.flat().includes('fileUpload') && <FilePreview />;
+
+  return (
+    <>
+      {!expand && fileNode}
+      <Flexbox
+        className={cx(styles.container, expand && styles.fullscreen)}
+        gap={8}
+        paddingBlock={'0 12px'}
+        paddingInline={12}
+      >
+        <ChatInput
+          fullscreen={expand}
+          slashMenuRef={slashMenuRef}
+          footer={
+            <ChatInputActionBar
+              left={<div />}
+              right={<SendArea hideContextWindow={false} />}
+              style={{
+                paddingRight: 8,
+              }}
+            />
+          }
+          header={
+            <ChatInputActionBar
+              left={
+                <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
+                  <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
+                    <Flexbox horizontal align={'center'} className={styles.leftActions}>
+                      <ActionBar disableCollapse />
+                    </Flexbox>
+                    <ComposerExpandButton />
+                  </Flexbox>
+                  <ChatInputNotice />
+                </Flexbox>
+              }
+            />
+          }
+        >
+          {expand && fileNode}
+          <InputEditor defaultRows={1} />
+        </ChatInput>
+      </Flexbox>
+    </>
+  );
+});
+
+DesktopChatInput.displayName = 'DesktopChatInput';
+
+export default DesktopChatInput;

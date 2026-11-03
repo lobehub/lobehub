@@ -1,0 +1,37 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`chainSummaryTitle > should use the default model if the token count is below the GPT-3.5 limit 1`] = `
+{
+  "messages": [
+    {
+      "content": "You are a professional conversation summarizer. Generate a concise title that captures the essence of the conversation.
+
+Rules:
+- Return one JSON object with a single "title" string matching the supplied schema
+- No explanations or additional fields
+- Maximum 15 words
+- Maximum 80 characters
+- No punctuation marks
+- Use the language specified by the locale code: en-US
+- The title should accurately reflect the main topic of the conversation
+- Keep it short and to the point",
+      "role": "system",
+    },
+    {
+      "content": "<task>
+Generate a concise title that captures the essence of the conversation.
+</task>
+
+<conversation>
+<assistant>
+Hello, how can I assist you?
+</assistant>
+<user>
+I need help with my account.
+</user>
+</conversation>",
+      "role": "user",
+    },
+  ],
+}
+`;

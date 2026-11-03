@@ -1,0 +1,59 @@
+---
+title: Prompt Variables and Claude 4 Reasoning Model Support
+description: >-
+  LobeHub introduces prompt variables for reusable templates and adds full
+  support for Claude 4 reasoning models with web search integration.
+tags:
+  - Prompt Variables
+  - Claude 4
+  - Reasoning Models
+---
+
+# Prompt Variables and Claude 4 Reasoning Model Support
+
+From May through June, LobeHub focused on making repeated workflows easier to run. Prompt variables let you reuse prompt structures with different inputs. Claude 4 support brings the latest reasoning capabilities with integrated web search. Expanded crawling and file handling round out the update.
+
+## Reusable prompts with variables
+
+You can now use placeholder variables in prompts and the input box. The same prompt structure can be reused with different dynamic values, reducing manual editing when you run similar tasks repeatedly.
+
+In practice, this works well for:
+
+- Templates that need a name, date, or topic inserted each time
+- Structured analysis where only the source material changes
+- Repeated workflows with consistent formatting but variable content
+
+Variables are defined with simple syntax and filled in at runtime, so you spend less time retyping and more time getting results.
+
+## Claude 4 with web search and beta features
+
+Anthropic Claude 4 reasoning models are now fully integrated. The implementation includes Web Search tool support and Beta Header compatibility, so Claude 4 can use the same reasoning and retrieval capabilities that power other advanced workflows.
+
+This means you can:
+
+- Run complex reasoning tasks with transparent chain-of-thought
+- Combine reasoning with live web retrieval in a single conversation
+- Access the latest Claude capabilities as they become available
+
+## Broader provider and content support
+
+ModelScope joins the provider lineup, expanding the range of models available without changing how you work. Search and crawling support has been extended across more platforms for better content coverage.
+
+File uploads now work directly in chat context, with improved parsing for PDF and XLSX files. This makes it easier to reference documents and spreadsheets within ongoing conversations.
+
+## Access control and security improvements
+
+Protected page access has been added for sensitive workflows. Clerk middleware route protection has been improved to handle authentication edge cases more reliably.
+
+## Improvements and fixes
+
+- Enhanced PDF and XLSX content extraction accuracy
+- Improved file upload handling in chat context
+- Better route protection for authenticated pages
+- Provider-specific optimizations for Claude 4 token handling
+
+## Credits
+
+Huge thanks to these contributors:
+
+@arvinxx @hezhijie0327 @lobehub-team

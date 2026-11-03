@@ -1,0 +1,14 @@
+{
+  "actions.followOnX": "Folgen Sie uns auf X",
+  "actions.subscribeToUpdates": "Für Updates abonnieren",
+  "actions.versions": "Versionsdetails",
+  "addedWhileAway": "Während Ihrer Abwesenheit haben wir neue Funktionen eingeführt.",
+  "allChangelog": "Alle Änderungsprotokolle anzeigen",
+  "description": "Bleiben Sie über neue Funktionen und Verbesserungen von {{appName}} auf dem Laufenden",
+  "pagination.next": "Nächste Seite",
+  "pagination.older": "Frühere Änderungen anzeigen",
+  "readDetails": "Details lesen",
+  "title": "Änderungsprotokoll",
+  "versionDetails": "Versionsdetails",
+  "welcomeBack": "Willkommen zurück!"
+}

@@ -1,0 +1,195 @@
+import type {
+  ActivityListParams,
+  ActivityListResult,
+  UserMemoryActivity,
+  UserMemoryActivityInsert,
+} from '@lobechat/types';
+import type { SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
+
+import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
+import { userMemories, userMemoriesActivities } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { buildUserMemoryWhere } from './where';
+
+export class UserMemoryActivityModel {
+  private userId: string;
+  private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
+
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
+    this.userId = userId;
+    this.db = db;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
+  }
+
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
+  }
+
+  create = async (params: Omit<UserMemoryActivityInsert, 'userId'>) => {
+    const [result] = await this.db
+      .insert(userMemoriesActivities)
+      .values({ ...params, userId: this.userId })
+      .returning();
+
+    return result;
+  };
+
+  delete = async (id: string) => {
+    return this.db.transaction(async (tx) => {
+      const activity = await tx.query.userMemoriesActivities.findFirst({
+        where: and(eq(userMemoriesActivities.id, id), this.memoryWhere(userMemoriesActivities)),
+      });
+
+      if (!activity || !activity.userMemoryId) {
+        return { success: false };
+      }
+
+      await tx
+        .delete(userMemories)
+        .where(and(eq(userMemories.id, activity.userMemoryId), this.memoryWhere(userMemories)));
+
+      return { success: true };
+    });
+  };
+
+  deleteAll = async () => {
+    return this.db.delete(userMemoriesActivities).where(this.memoryWhere(userMemoriesActivities));
+  };
+
+  query = async (limit = 50) => {
+    return this.db.query.userMemoriesActivities.findMany({
+      limit,
+      orderBy: [desc(userMemoriesActivities.createdAt)],
+      where: this.memoryWhere(userMemoriesActivities),
+    });
+  };
+
+  queryList = async (params: ActivityListParams = {}): Promise<ActivityListResult> => {
+    const { order = 'desc', page = 1, pageSize = 20, q, sort, status, tags, types } = params;
+
+    const normalizedPage = Math.max(1, page);
+    const normalizedPageSize = Math.min(Math.max(pageSize, 1), 100);
+    const offset = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedQuery = typeof q === 'string' ? q.trim() : '';
+    const bm25MatchQuery = normalizedQuery
+      ? normalizeBm25MatchQuery(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
+      : '';
+    const candidateResult =
+      normalizedQuery && this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+        ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'memoryActivities',
+            filters: {
+              ...(status?.length ? { memoryStatus: status } : {}),
+              ...(tags?.length ? { memoryTagMatch: 'any' as const, memoryTags: tags } : {}),
+              ...(types?.length ? { memoryTypes: types } : {}),
+            },
+            pagination: {},
+            query: {
+              fields: ['parent_title', 'narrative', 'notes', 'feedback'],
+              text: normalizedQuery,
+            },
+          })
+        : undefined;
+    const candidateIds = candidateResult?.candidates.map(({ id }) => id);
+
+    const conditions: Array<SQL | undefined> = [
+      this.memoryWhere(userMemoriesActivities),
+      candidateIds ? inJsonStringArray(userMemoriesActivities.id, candidateIds) : undefined,
+      normalizedQuery && !candidateIds
+        ? sql`(${userMemories.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('title', ${bm25MatchQuery}, conjunction_mode => true)]) OR ${userMemoriesActivities.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('narrative', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('notes', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('feedback', ${bm25MatchQuery}, conjunction_mode => true)]))`
+        : undefined,
+      types && types.length > 0 ? inArray(userMemoriesActivities.type, types) : undefined,
+      status && status.length > 0 ? inArray(userMemoriesActivities.status, status) : undefined,
+      tags && tags.length > 0
+        ? or(
+            ...tags.map(
+              (tag) =>
+                sql<boolean>`
+                  COALESCE(${tag} = ANY(${userMemoriesActivities.tags}), false)
+                  OR COALESCE(${tag} = ANY(${userMemories.tags}), false)
+                `,
+            ),
+          )
+        : undefined,
+    ];
+
+    const filters = conditions.filter((condition): condition is SQL => condition !== undefined);
+    const whereClause = filters.length > 0 ? and(...filters) : undefined;
+
+    const applyOrder = order === 'asc' ? asc : desc;
+    const sortColumn =
+      sort === 'startsAt' ? userMemoriesActivities.startsAt : userMemoriesActivities.capturedAt;
+
+    const orderByClauses = [
+      applyOrder(sortColumn),
+      applyOrder(userMemoriesActivities.updatedAt),
+      applyOrder(userMemoriesActivities.createdAt),
+    ];
+
+    const joinCondition = and(
+      eq(userMemories.id, userMemoriesActivities.userMemoryId),
+      this.memoryWhere(userMemories),
+    );
+
+    const [rows, totalResult] = await Promise.all([
+      this.db
+        .select({
+          associatedLocations: userMemoriesActivities.associatedLocations,
+          associatedObjects: userMemoriesActivities.associatedObjects,
+          associatedSubjects: userMemoriesActivities.associatedSubjects,
+          capturedAt: userMemoriesActivities.capturedAt,
+          createdAt: userMemoriesActivities.createdAt,
+          endsAt: userMemoriesActivities.endsAt,
+          id: userMemoriesActivities.id,
+          narrative: userMemoriesActivities.narrative,
+          notes: userMemoriesActivities.notes,
+          startsAt: userMemoriesActivities.startsAt,
+          status: userMemoriesActivities.status,
+          tags: userMemoriesActivities.tags,
+          timezone: userMemoriesActivities.timezone,
+          title: userMemories.title,
+          type: userMemoriesActivities.type,
+          updatedAt: userMemoriesActivities.updatedAt,
+        })
+        .from(userMemoriesActivities)
+        .innerJoin(userMemories, joinCondition)
+        .where(whereClause)
+        .orderBy(...orderByClauses)
+        .limit(normalizedPageSize)
+        .offset(offset),
+      this.db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(userMemoriesActivities)
+        .innerJoin(userMemories, joinCondition)
+        .where(whereClause),
+    ]);
+
+    return {
+      items: rows,
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total: Number(totalResult[0]?.count ?? 0),
+    };
+  };
+
+  findById = async (id: string) => {
+    return this.db.query.userMemoriesActivities.findFirst({
+      where: and(eq(userMemoriesActivities.id, id), this.memoryWhere(userMemoriesActivities)),
+    });
+  };
+
+  update = async (id: string, value: Partial<UserMemoryActivity>) => {
+    return this.db
+      .update(userMemoriesActivities)
+      .set({ ...value, updatedAt: new Date() })
+      .where(and(eq(userMemoriesActivities.id, id), this.memoryWhere(userMemoriesActivities)));
+  };
+}

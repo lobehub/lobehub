@@ -1,0 +1,79 @@
+import { LOADING_FLAT } from '@lobechat/const';
+import { type UIChatMessage } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
+import { memo } from 'react';
+
+import { messageStateSelectors, useConversationStore } from '../../../store';
+import { CollapsedMessage } from '../../AssistantGroup/components/CollapsedMessage';
+import DisplayContent from '../../components/DisplayContent';
+import FileChunks from '../../components/FileChunks';
+import ImageFileListViewer from '../../components/ImageFileListViewer';
+import { NoReplyNotice, resolveNoReplyReason } from '../../components/NoReplyNotice';
+import Reasoning, { hasRenderableReasoning } from '../../components/Reasoning';
+import SearchGrounding from '../../components/SearchGrounding';
+import { useMarkdown } from '../useMarkdown';
+
+const MessageContent = memo<UIChatMessage>(
+  ({ id, tools, content, chunksList, search, imageList, metadata, ...props }) => {
+    const { drawer, markdownProps } = useMarkdown(id, !!tools?.length, content);
+    // Use ConversationStore instead of ChatStore
+    const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+    const isCreating = useConversationStore(messageStateSelectors.isMessageCreating(id));
+    const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
+    const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
+
+    const isLoading = generating || isCreating;
+    const isToolCallGenerating = isLoading && (content === LOADING_FLAT || !content) && !!tools;
+
+    const showSearch = !!search && (!!search.citations?.length || !!search.imageResults?.length);
+    const showImageItems = !!imageList && imageList.length > 0;
+
+    // remove \n to avoid empty content
+    // refs: https://github.com/lobehub/lobe-chat/pull/6153
+    const showReasoning =
+      hasRenderableReasoning(props.reasoning) || (!props.reasoning && isReasoning);
+
+    const showFileChunks = !!chunksList && chunksList.length > 0;
+
+    const noReplyReason = resolveNoReplyReason({
+      content,
+      hasOtherOutput: !!tools?.length || showImageItems || !!metadata?.isMultimodal,
+      isGenerating: isLoading,
+    });
+
+    if (isCollapsed) return <CollapsedMessage content={content} id={id} />;
+
+    return (
+      <Flexbox gap={8} id={id}>
+        {drawer}
+        {showSearch && (
+          <SearchGrounding
+            citations={search?.citations}
+            imageResults={search?.imageResults}
+            imageSearchQueries={search?.imageSearchQueries}
+            searchQueries={search?.searchQueries}
+          />
+        )}
+        {showFileChunks && <FileChunks data={chunksList} />}
+        {showReasoning && <Reasoning {...props.reasoning} id={id} />}
+        {noReplyReason ? (
+          <NoReplyNotice reason={noReplyReason} />
+        ) : (
+          <DisplayContent
+            content={content}
+            generating={isLoading}
+            hasImages={showImageItems}
+            id={id}
+            isMultimodal={metadata?.isMultimodal}
+            isToolCallGenerating={isToolCallGenerating}
+            markdownProps={markdownProps}
+            tempDisplayContent={metadata?.tempDisplayContent}
+          />
+        )}
+        {showImageItems && <ImageFileListViewer items={imageList} />}
+      </Flexbox>
+    );
+  },
+);
+
+export default MessageContent;

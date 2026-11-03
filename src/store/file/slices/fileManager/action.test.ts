@@ -1,0 +1,1284 @@
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
+import { createReplicaState } from '@/libs/replica';
+import { mutate } from '@/libs/swr';
+import { lambdaClient } from '@/libs/trpc/client';
+import { fileService } from '@/services/file';
+import { ragService } from '@/services/rag';
+import { type FileListItem } from '@/types/files';
+import { type UploadFileItem } from '@/types/files/upload';
+import { unzipFile } from '@/utils/unzipFile';
+import { withSWR } from '~test-utils';
+
+import { useFileStore as useStore } from '../../store';
+import * as resourceHooks from '../resource/hooks';
+
+// Mock i18next translation function
+vi.mock('i18next', () => ({
+  t: (key: string, options?: any) => {
+    // Return a mock translation string that includes the options for verification
+    if (key === 'uploadDock.fileQueueInfo' && options?.count !== undefined) {
+      return `Uploading ${options.count} files, ${options.remaining} queued`;
+    }
+    return key;
+  },
+}));
+
+// Mock message
+// Mock unzipFile
+vi.mock('@/utils/unzipFile', () => ({
+  unzipFile: vi.fn(),
+}));
+
+// Mock p-map to run sequentially for easier testing
+vi.mock('p-map', () => ({
+  default: vi.fn(async (items, mapper) => {
+    return Promise.all(items.map(mapper));
+  }),
+}));
+
+// Mock @/libs/swr mutate
+vi.mock('@/libs/swr', async () => {
+  const actual = await vi.importActual('@/libs/swr');
+  return {
+    ...actual,
+    mutate: vi.fn(),
+  };
+});
+
+// Mock lambdaClient
+vi.mock('@/libs/trpc/client', () => ({
+  lambdaClient: {
+    file: {
+      getFileItemById: { query: vi.fn() },
+      getFiles: { query: vi.fn() },
+      getKnowledgeItems: { query: vi.fn() },
+      removeFileAsyncTask: { mutate: vi.fn() },
+    },
+  },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  useStore.setState(
+    {
+      creatingChunkingTaskIds: [],
+      creatingEmbeddingTaskIds: [],
+      dockUploadFileList: [],
+      fileDetailMap: {},
+      fileDetailReplica: createReplicaState(),
+      fileList: [],
+      fileListMeta: undefined,
+      fileListReplica: createReplicaState(),
+      folderBreadcrumbMap: {},
+      folderBreadcrumbReplica: createReplicaState(),
+      resourceList: [],
+      resourceMap: new Map(),
+    },
+    false,
+  );
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('FileManagerActions', () => {
+  describe('cancelUploads', () => {
+    it('should abort matched uploads and update their status in a batch', () => {
+      const { result } = renderHook(() => useStore());
+      const controller1 = new AbortController();
+      const controller2 = new AbortController();
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+
+      act(() => {
+        useStore.setState({
+          dockUploadFileList: [
+            {
+              abortController: controller1,
+              file: new File([], 'test-1.txt'),
+              id: 'file-1',
+              status: 'pending',
+            },
+            {
+              abortController: controller2,
+              file: new File([], 'test-2.txt'),
+              id: 'file-2',
+              status: 'uploading',
+            },
+            { file: new File([], 'test-3.txt'), id: 'file-3', status: 'success' },
+          ] as UploadFileItem[],
+        });
+      });
+
+      act(() => {
+        result.current.cancelUploads(['file-1', 'file-2', 'file-404']);
+      });
+
+      expect(controller1.signal.aborted).toBe(true);
+      expect(controller2.signal.aborted).toBe(true);
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        ids: ['file-1', 'file-2'],
+        status: 'cancelled',
+        type: 'updateFileStatuses',
+      });
+    });
+  });
+
+  describe('retryDockUpload', () => {
+    it('keeps the item in place and restarts a transient failed upload', async () => {
+      const { result } = renderHook(() => useStore());
+      const upload = vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue({
+        id: 'persisted-file',
+        url: 'https://example.com/file.png',
+      });
+      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      act(() => {
+        useStore.setState({
+          dockUploadFileList: [
+            {
+              error: 'Upload failed',
+              file: new File([], 'retry.png', { type: 'image/png' }),
+              id: 'upload-1',
+              status: 'error',
+            },
+          ],
+        });
+      });
+
+      await act(async () => {
+        await result.current.retryDockUpload('upload-1');
+      });
+
+      expect(upload).toHaveBeenCalledTimes(1);
+      expect(result.current.dockUploadFileList[0]).toEqual(
+        expect.objectContaining({ error: undefined, id: 'upload-1', status: 'pending' }),
+      );
+    });
+  });
+
+  describe('dispatchDockFileList', () => {
+    it('should update dockUploadFileList with new value', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        result.current.dispatchDockFileList({
+          atStart: true,
+          files: [{ file: new File([], 'test.txt'), id: 'file-1', status: 'pending' }],
+          type: 'addFiles',
+        });
+      });
+
+      expect(result.current.dockUploadFileList).toHaveLength(1);
+      expect(result.current.dockUploadFileList[0].id).toBe('file-1');
+    });
+
+    it('should not update state if reducer returns same value', () => {
+      const { result } = renderHook(() => useStore());
+
+      const initialList = result.current.dockUploadFileList;
+
+      // This tests the early return when value hasn't changed
+      act(() => {
+        useStore.setState({ dockUploadFileList: initialList });
+      });
+
+      expect(result.current.dockUploadFileList).toBe(initialList);
+    });
+
+    it('should handle updateFileStatus dispatch', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          dockUploadFileList: [
+            { file: new File([], 'test.txt'), id: 'file-1', status: 'pending' },
+          ] as UploadFileItem[],
+        });
+      });
+
+      act(() => {
+        result.current.dispatchDockFileList({
+          id: 'file-1',
+          status: 'success',
+          type: 'updateFileStatus',
+        });
+      });
+
+      expect(result.current.dockUploadFileList[0].status).toBe('success');
+    });
+
+    it('should handle updateFileStatuses dispatch', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          dockUploadFileList: [
+            { file: new File([], 'test-1.txt'), id: 'file-1', status: 'pending' },
+            { file: new File([], 'test-2.txt'), id: 'file-2', status: 'uploading' },
+            { file: new File([], 'test-3.txt'), id: 'file-3', status: 'success' },
+          ] as UploadFileItem[],
+        });
+      });
+
+      act(() => {
+        result.current.dispatchDockFileList({
+          ids: ['file-1', 'file-2'],
+          status: 'cancelled',
+          type: 'updateFileStatuses',
+        });
+      });
+
+      expect(result.current.dockUploadFileList[0].status).toBe('cancelled');
+      expect(result.current.dockUploadFileList[1].status).toBe('cancelled');
+      expect(result.current.dockUploadFileList[2].status).toBe('success');
+    });
+
+    it('should handle removeFile dispatch', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          dockUploadFileList: [
+            { file: new File([], 'test.txt'), id: 'file-1', status: 'pending' },
+          ] as UploadFileItem[],
+        });
+      });
+
+      act(() => {
+        result.current.dispatchDockFileList({
+          id: 'file-1',
+          type: 'removeFile',
+        });
+      });
+
+      expect(result.current.dockUploadFileList).toHaveLength(0);
+    });
+  });
+
+  describe('embeddingChunks', () => {
+    it('should toggle embedding ids and create tasks', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createEmbeddingChunksTask')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      const toggleSpy = vi.spyOn(result.current, 'toggleEmbeddingIds');
+
+      await act(async () => {
+        await result.current.embeddingChunks(['file-1', 'file-2']);
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1', 'file-2']);
+      expect(createTaskSpy).toHaveBeenCalledTimes(2);
+      expect(createTaskSpy).toHaveBeenCalledWith('file-1');
+      expect(createTaskSpy).toHaveBeenCalledWith('file-2');
+      expect(refreshSpy).toHaveBeenCalled();
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1', 'file-2'], false);
+    });
+
+    it('should handle errors gracefully and still complete', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(ragService, 'createEmbeddingChunksTask').mockRejectedValue(new Error('Task failed'));
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      const toggleSpy = vi.spyOn(result.current, 'toggleEmbeddingIds');
+
+      await act(async () => {
+        await result.current.embeddingChunks(['file-1']);
+      });
+
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(refreshSpy).toHaveBeenCalled();
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1'], false);
+    });
+
+    it('should use linked file id when embedding a file-backed document resource', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          resourceMap: new Map([
+            [
+              'docs_1',
+              {
+                createdAt: new Date(),
+                fileId: 'file_1',
+                fileType: 'text/plain',
+                id: 'docs_1',
+                name: 'Document-backed file',
+                size: 1,
+                sourceType: 'file',
+                updatedAt: new Date(),
+              },
+            ],
+          ]),
+        });
+      });
+
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createEmbeddingChunksTask')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      const toggleSpy = vi.spyOn(result.current, 'toggleEmbeddingIds');
+
+      await act(async () => {
+        await result.current.embeddingChunks(['docs_1']);
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1']);
+      expect(createTaskSpy).toHaveBeenCalledWith('file_1');
+      expect(refreshSpy).toHaveBeenCalled();
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1'], false);
+    });
+  });
+
+  describe('parseFilesToChunks', () => {
+    it('should toggle parsing ids and create parse tasks', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createParseFileTask')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      const toggleSpy = vi.spyOn(result.current, 'toggleParsingIds');
+
+      await act(async () => {
+        await result.current.parseFilesToChunks(['file-1', 'file-2']);
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1', 'file-2']);
+      expect(createTaskSpy).toHaveBeenCalledTimes(2);
+      expect(createTaskSpy).toHaveBeenCalledWith('file-1', undefined);
+      expect(createTaskSpy).toHaveBeenCalledWith('file-2', undefined);
+      expect(refreshSpy).toHaveBeenCalled();
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1', 'file-2'], false);
+    });
+
+    it('should pass skipExist parameter to createParseFileTask', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createParseFileTask')
+        .mockResolvedValue(undefined as any);
+      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.parseFilesToChunks(['file-1'], { skipExist: true });
+      });
+
+      expect(createTaskSpy).toHaveBeenCalledWith('file-1', true);
+    });
+
+    it('should use linked file id when parsing a file-backed document resource', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          resourceMap: new Map([
+            [
+              'docs_1',
+              {
+                createdAt: new Date(),
+                fileId: 'file_1',
+                fileType: 'text/plain',
+                id: 'docs_1',
+                name: 'Document-backed file',
+                size: 1,
+                sourceType: 'file',
+                updatedAt: new Date(),
+              },
+            ],
+          ]),
+        });
+      });
+
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createParseFileTask')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      const toggleSpy = vi.spyOn(result.current, 'toggleParsingIds');
+
+      await act(async () => {
+        await result.current.parseFilesToChunks(['docs_1'], { skipExist: true });
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1']);
+      expect(createTaskSpy).toHaveBeenCalledWith('file_1', true);
+      expect(refreshSpy).toHaveBeenCalled();
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1'], false);
+    });
+
+    it('should resolve off-screen document ids before creating parse tasks', async () => {
+      const { result } = renderHook(() => useStore());
+
+      vi.spyOn(fileService, 'getKnowledgeItem').mockResolvedValue({
+        fileId: 'file_1',
+        id: 'docs_1',
+      } as any);
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createParseFileTask')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.parseFilesToChunks(['docs_1'], { skipExist: true });
+      });
+
+      expect(fileService.getKnowledgeItem).toHaveBeenCalledWith('docs_1');
+      expect(createTaskSpy).toHaveBeenCalledWith('file_1', true);
+      expect(refreshSpy).toHaveBeenCalled();
+    });
+
+    it('should handle errors gracefully', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(ragService, 'createParseFileTask').mockRejectedValue(new Error('Parse failed'));
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      const toggleSpy = vi.spyOn(result.current, 'toggleParsingIds');
+
+      await act(async () => {
+        await result.current.parseFilesToChunks(['file-1']);
+      });
+
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(refreshSpy).toHaveBeenCalled();
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1'], false);
+    });
+  });
+
+  describe('pushDockFileList', () => {
+    it('should filter blacklisted files and upload', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const validFile = new File(['content'], 'valid.txt', { type: 'text/plain' });
+      const blacklistedFile = new File(['content'], FILE_UPLOAD_BLACKLIST[0], {
+        type: 'text/plain',
+      });
+
+      const uploadSpy = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'http://example.com/file-1' });
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+      const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([validFile, blacklistedFile]);
+      });
+
+      // Should only dispatch for the valid file
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        atStart: true,
+        files: [
+          expect.objectContaining({ file: validFile, id: expect.any(String), status: 'pending' }),
+        ],
+        type: 'addFiles',
+      });
+      expect(uploadSpy).toHaveBeenCalledTimes(1);
+      expect(uploadSpy).toHaveBeenCalledWith({
+        abortController: expect.any(AbortController),
+        file: validFile,
+        knowledgeBaseId: undefined,
+        onStatusUpdate: expect.any(Function),
+        parentId: undefined,
+        uploadId: expect.any(String),
+      });
+      // Should auto-parse text files
+      expect(parseSpy).toHaveBeenCalledWith(['file-1'], { skipExist: false });
+    });
+
+    it('should upload files with knowledgeBaseId', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+
+      const uploadSpy = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'http://example.com/file-1' });
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([file], 'kb-123');
+      });
+
+      expect(uploadSpy).toHaveBeenCalledWith({
+        abortController: expect.any(AbortController),
+        file,
+        knowledgeBaseId: 'kb-123',
+        onStatusUpdate: expect.any(Function),
+        parentId: undefined,
+        uploadId: expect.any(String),
+      });
+    });
+
+    it('should call onStatusUpdate during upload', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+
+      const uploadSpy = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockImplementation(async ({ onStatusUpdate, uploadId }) => {
+          onStatusUpdate?.({
+            id: uploadId!,
+            type: 'updateFile',
+            value: { status: 'uploading' },
+          });
+          return { id: 'file-1', url: 'http://example.com/file-1' };
+        });
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+
+      await act(async () => {
+        await result.current.pushDockFileList([file]);
+      });
+
+      expect(uploadSpy).toHaveBeenCalled();
+      expect(dispatchSpy).toHaveBeenCalled();
+    });
+
+    it('should handle empty file list', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const uploadSpy = vi.spyOn(result.current, 'uploadWithProgress');
+      const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks');
+
+      await act(async () => {
+        await result.current.pushDockFileList([]);
+      });
+
+      expect(uploadSpy).not.toHaveBeenCalled();
+      expect(parseSpy).not.toHaveBeenCalled();
+    });
+
+    it('should auto-embed files that support chunking', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const textFile = new File(['text content'], 'doc.txt', { type: 'text/plain' });
+      const pdfFile = new File(['pdf content'], 'doc.pdf', { type: 'application/pdf' });
+
+      vi.spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValueOnce({ id: 'file-1', url: 'http://example.com/file-1' })
+        .mockResolvedValueOnce({ id: 'file-2', url: 'http://example.com/file-2' });
+      const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([textFile, pdfFile]);
+      });
+
+      // Should auto-parse both files that support chunking
+      expect(parseSpy).toHaveBeenCalledWith(['file-1', 'file-2'], { skipExist: false });
+    });
+
+    it('should skip auto-embed for unsupported file types (images/videos/audio)', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const imageFile = new File(['image content'], 'image.png', { type: 'image/png' });
+      const videoFile = new File(['video content'], 'video.mp4', { type: 'video/mp4' });
+      const audioFile = new File(['audio content'], 'audio.mp3', { type: 'audio/mpeg' });
+
+      vi.spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValueOnce({ id: 'file-1', url: 'http://example.com/file-1' })
+        .mockResolvedValueOnce({ id: 'file-2', url: 'http://example.com/file-2' })
+        .mockResolvedValueOnce({ id: 'file-3', url: 'http://example.com/file-3' });
+      const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([imageFile, videoFile, audioFile]);
+      });
+
+      // Should not auto-parse unsupported files
+      expect(parseSpy).not.toHaveBeenCalled();
+    });
+
+    // https://github.com/lobehub/lobehub/issues/19620
+    it('should skip auto-embed for formats no chunking loader can parse', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const dwgFile = new File(['dwg content'], 'floor-plan.dwg', { type: '' });
+      const binFile = new File(['bin content'], 'model.dxf', {
+        type: 'application/octet-stream',
+      });
+
+      vi.spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValueOnce({ id: 'file-1', url: 'http://example.com/file-1' })
+        .mockResolvedValueOnce({ id: 'file-2', url: 'http://example.com/file-2' });
+      const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([dwgFile, binFile]);
+      });
+
+      expect(parseSpy).not.toHaveBeenCalled();
+    });
+
+    it('should auto-embed only supported files in mixed upload', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const textFile = new File(['text content'], 'doc.txt', { type: 'text/plain' });
+      const imageFile = new File(['image content'], 'image.png', { type: 'image/png' });
+      const pdfFile = new File(['pdf content'], 'doc.pdf', { type: 'application/pdf' });
+
+      vi.spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValueOnce({ id: 'file-1', url: 'http://example.com/file-1' })
+        .mockResolvedValueOnce({ id: 'file-2', url: 'http://example.com/file-2' })
+        .mockResolvedValueOnce({ id: 'file-3', url: 'http://example.com/file-3' });
+      const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([textFile, imageFile, pdfFile]);
+      });
+
+      // Should only auto-parse text and pdf files, skip image
+      expect(parseSpy).toHaveBeenCalledWith(['file-1', 'file-3'], { skipExist: false });
+    });
+
+    it('should skip auto-embed when upload fails', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const textFile = new File(['text content'], 'doc.txt', { type: 'text/plain' });
+
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue(undefined);
+      const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([textFile]);
+      });
+
+      // Should not auto-parse when upload returns undefined
+      expect(parseSpy).not.toHaveBeenCalled();
+    });
+
+    it('should enforce file count limit and queue excess files', async () => {
+      const { result } = renderHook(() => useStore());
+
+      // Create more files than the limit
+      const totalFiles = MAX_UPLOAD_FILE_COUNT + 5;
+      const files = Array.from(
+        { length: totalFiles },
+        (_, i) => new File(['content'], `file-${i}.txt`, { type: 'text/plain' }),
+      );
+
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue({
+        id: 'file-1',
+        url: 'http://example.com/file-1',
+      });
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+
+      await act(async () => {
+        await result.current.pushDockFileList(files);
+      });
+
+      // Should add all files to dock (not just first MAX_UPLOAD_FILE_COUNT)
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        atStart: true,
+        files: expect.arrayContaining([
+          expect.objectContaining({ file: expect.any(File), status: 'pending' }),
+        ]),
+        type: 'addFiles',
+      });
+
+      // Verify all files were dispatched
+      const dispatchCall = dispatchSpy.mock.calls.find((call) => call[0].type === 'addFiles');
+      expect(dispatchCall?.[0]).toHaveProperty('files');
+      if (dispatchCall && 'files' in dispatchCall[0]) {
+        expect(dispatchCall[0].files).toHaveLength(totalFiles);
+      }
+    });
+
+    it('should extract ZIP files and upload contents', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const zipFile = new File(['zip content'], 'archive.zip', { type: 'application/zip' });
+      const extractedFiles = [
+        new File(['file1'], 'file1.txt', { type: 'text/plain' }),
+        new File(['file2'], 'file2.txt', { type: 'text/plain' }),
+      ];
+
+      vi.mocked(unzipFile).mockResolvedValue(extractedFiles);
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue({
+        id: 'file-1',
+        url: 'http://example.com/file-1',
+      });
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+
+      await act(async () => {
+        await result.current.pushDockFileList([zipFile]);
+      });
+
+      // Should extract ZIP file
+      expect(unzipFile).toHaveBeenCalledWith(zipFile);
+
+      // Should upload extracted files
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        atStart: true,
+        files: extractedFiles.map((file) =>
+          expect.objectContaining({ file, id: expect.any(String), status: 'pending' }),
+        ),
+        type: 'addFiles',
+      });
+    });
+
+    it('should handle ZIP extraction errors gracefully', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const zipFile = new File(['zip content'], 'archive.zip', { type: 'application/zip' });
+
+      vi.mocked(unzipFile).mockRejectedValue(new Error('Extraction failed'));
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue({
+        id: 'file-1',
+        url: 'http://example.com/file-1',
+      });
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+
+      await act(async () => {
+        await result.current.pushDockFileList([zipFile]);
+      });
+
+      // Should log error
+      expect(consoleErrorSpy).toHaveBeenCalled();
+
+      // Should fallback to uploading the ZIP file itself
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        atStart: true,
+        files: [
+          expect.objectContaining({ file: zipFile, id: expect.any(String), status: 'pending' }),
+        ],
+        type: 'addFiles',
+      });
+    });
+
+    it('should insert optimistic resources and replace them with real resources after upload', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue({
+        id: 'file-1',
+        url: 'http://example.com/file-1',
+      });
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([file]);
+      });
+
+      expect(result.current.resourceList).toEqual([
+        expect.objectContaining({
+          fileType: 'text/plain',
+          id: 'file-1',
+          name: 'test.txt',
+          size: file.size,
+          url: 'http://example.com/file-1',
+        }),
+      ]);
+      expect(result.current.resourceMap.has('file-1')).toBe(true);
+    });
+
+    it('should remove optimistic resources when upload returns undefined', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([file]);
+      });
+
+      expect(result.current.resourceList).toEqual([]);
+      expect(result.current.resourceMap.size).toBe(0);
+    });
+  });
+
+  describe('reEmbeddingChunks', () => {
+    it('should skip if already creating task', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({ creatingEmbeddingTaskIds: ['file-1'] });
+      });
+
+      const toggleSpy = vi.spyOn(result.current, 'toggleEmbeddingIds');
+
+      await act(async () => {
+        await result.current.reEmbeddingChunks('file-1');
+      });
+
+      expect(toggleSpy).not.toHaveBeenCalled();
+      expect(lambdaClient.file.removeFileAsyncTask.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should remove old task and create new embedding task', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const toggleSpy = vi.spyOn(result.current, 'toggleEmbeddingIds');
+      vi.mocked(lambdaClient.file.removeFileAsyncTask.mutate).mockResolvedValue(undefined as any);
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createEmbeddingChunksTask')
+        .mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.reEmbeddingChunks('file-1');
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1']);
+      expect(lambdaClient.file.removeFileAsyncTask.mutate).toHaveBeenCalledWith({
+        id: 'file-1',
+        type: 'embedding',
+      });
+      expect(createTaskSpy).toHaveBeenCalledWith('file-1');
+      expect(refreshSpy).toHaveBeenCalledTimes(2);
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1'], false);
+    });
+
+    it('should use linked file id when retrying embedding for a file-backed document', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          resourceMap: new Map([
+            [
+              'docs_1',
+              {
+                createdAt: new Date(),
+                fileId: 'file_1',
+                fileType: 'text/plain',
+                id: 'docs_1',
+                name: 'Document-backed file',
+                size: 1,
+                sourceType: 'file',
+                updatedAt: new Date(),
+              },
+            ],
+          ]),
+        });
+      });
+
+      const toggleSpy = vi.spyOn(result.current, 'toggleEmbeddingIds');
+      vi.mocked(lambdaClient.file.removeFileAsyncTask.mutate).mockResolvedValue(undefined as any);
+      const createTaskSpy = vi
+        .spyOn(ragService, 'createEmbeddingChunksTask')
+        .mockResolvedValue(undefined as any);
+      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.reEmbeddingChunks('docs_1');
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1']);
+      expect(lambdaClient.file.removeFileAsyncTask.mutate).toHaveBeenCalledWith({
+        id: 'file_1',
+        type: 'embedding',
+      });
+      expect(createTaskSpy).toHaveBeenCalledWith('file_1');
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1'], false);
+    });
+  });
+
+  describe('reParseFile', () => {
+    it('should toggle parsing and retry parse', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const toggleSpy = vi.spyOn(result.current, 'toggleParsingIds');
+      const retrySpy = vi.spyOn(ragService, 'retryParseFile').mockResolvedValue(undefined as any);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.reParseFile('file-1');
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1']);
+      expect(retrySpy).toHaveBeenCalledWith('file-1');
+      expect(refreshSpy).toHaveBeenCalled();
+      expect(toggleSpy).toHaveBeenCalledWith(['file-1'], false);
+    });
+
+    it('should use linked file id when retrying parse for a file-backed document', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          resourceMap: new Map([
+            [
+              'docs_1',
+              {
+                createdAt: new Date(),
+                fileId: 'file_1',
+                fileType: 'text/plain',
+                id: 'docs_1',
+                name: 'Document-backed file',
+                size: 1,
+                sourceType: 'file',
+                updatedAt: new Date(),
+              },
+            ],
+          ]),
+        });
+      });
+
+      const toggleSpy = vi.spyOn(result.current, 'toggleParsingIds');
+      const retrySpy = vi.spyOn(ragService, 'retryParseFile').mockResolvedValue(undefined as any);
+      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.reParseFile('docs_1');
+      });
+
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1']);
+      expect(retrySpy).toHaveBeenCalledWith('file_1');
+      expect(toggleSpy).toHaveBeenCalledWith(['file_1'], false);
+    });
+  });
+
+  describe('refreshFileList', () => {
+    it('should revalidate the list replica and revalidate resources by default', async () => {
+      const { result } = renderHook(() => useStore());
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.refreshFileList();
+      });
+
+      // The replica's revalidate fans the list entry out through the SWR driver.
+      expect(mutate).toHaveBeenCalledWith(expect.any(Function));
+      expect(revalidateResourcesSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should skip resource revalidation when explicitly disabled', async () => {
+      const { result } = renderHook(() => useStore());
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.refreshFileList({ revalidateResources: false });
+      });
+
+      expect(mutate).toHaveBeenCalledWith(expect.any(Function));
+      expect(revalidateResourcesSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeFileItem', () => {
+    it('should remove file and refresh list', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const removeSpy = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.removeFileItem('file-1');
+      });
+
+      expect(removeSpy).toHaveBeenCalledWith('file-1');
+      expect(refreshSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('removeFiles', () => {
+    it('should remove multiple files and refresh list', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const removeSpy = vi.spyOn(fileService, 'removeFiles').mockResolvedValue(undefined);
+      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.removeFiles(['file-1', 'file-2']);
+      });
+
+      expect(removeSpy).toHaveBeenCalledWith(['file-1', 'file-2']);
+      expect(refreshSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleEmbeddingIds', () => {
+    it('should add ids when loading is true', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        result.current.toggleEmbeddingIds(['file-1', 'file-2'], true);
+      });
+
+      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-1', 'file-2']);
+    });
+
+    it('should remove ids when loading is false', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({ creatingEmbeddingTaskIds: ['file-1', 'file-2', 'file-3'] });
+      });
+
+      act(() => {
+        result.current.toggleEmbeddingIds(['file-1', 'file-2'], false);
+      });
+
+      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-3']);
+    });
+
+    it('should toggle ids when loading is undefined', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({ creatingEmbeddingTaskIds: ['file-1'] });
+      });
+
+      act(() => {
+        result.current.toggleEmbeddingIds(['file-1', 'file-2']);
+      });
+
+      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-2']);
+    });
+
+    it('should handle empty initial state', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        result.current.toggleEmbeddingIds(['file-1'], true);
+      });
+
+      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-1']);
+    });
+
+    it('should not duplicate ids', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({ creatingEmbeddingTaskIds: ['file-1'] });
+      });
+
+      act(() => {
+        result.current.toggleEmbeddingIds(['file-1'], true);
+      });
+
+      expect(result.current.creatingEmbeddingTaskIds).toEqual(['file-1']);
+    });
+  });
+
+  describe('toggleParsingIds', () => {
+    it('should add ids when loading is true', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        result.current.toggleParsingIds(['file-1', 'file-2'], true);
+      });
+
+      expect(result.current.creatingChunkingTaskIds).toEqual(['file-1', 'file-2']);
+    });
+
+    it('should remove ids when loading is false', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({ creatingChunkingTaskIds: ['file-1', 'file-2', 'file-3'] });
+      });
+
+      act(() => {
+        result.current.toggleParsingIds(['file-1', 'file-2'], false);
+      });
+
+      expect(result.current.creatingChunkingTaskIds).toEqual(['file-3']);
+    });
+
+    it('should toggle ids when loading is undefined', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({ creatingChunkingTaskIds: ['file-1'] });
+      });
+
+      act(() => {
+        result.current.toggleParsingIds(['file-1', 'file-2']);
+      });
+
+      expect(result.current.creatingChunkingTaskIds).toEqual(['file-2']);
+    });
+
+    it('should handle empty initial state', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        result.current.toggleParsingIds(['file-1'], true);
+      });
+
+      expect(result.current.creatingChunkingTaskIds).toEqual(['file-1']);
+    });
+
+    it('should not duplicate ids', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({ creatingChunkingTaskIds: ['file-1'] });
+      });
+
+      act(() => {
+        result.current.toggleParsingIds(['file-1'], true);
+      });
+
+      expect(result.current.creatingChunkingTaskIds).toEqual(['file-1']);
+    });
+  });
+
+  describe('useFetchKnowledgeItem', () => {
+    const mockFile: FileListItem = {
+      chunkCount: null,
+      chunkingError: null,
+      createdAt: new Date(),
+      embeddingError: null,
+      fileType: 'text/plain',
+      finishEmbedding: false,
+      id: 'file-1',
+      name: 'test.txt',
+      size: 100,
+      sourceType: 'file',
+      updatedAt: new Date(),
+      url: 'http://example.com/test.txt',
+    };
+
+    it('should not fetch when id is undefined', () => {
+      const { result } = renderHook(() => useStore());
+
+      renderHook(() => result.current.useFetchKnowledgeItem(undefined));
+
+      expect(lambdaClient.file.getFileItemById.query).not.toHaveBeenCalled();
+    });
+
+    it('reads the fetched item from the replica view when id is provided', async () => {
+      const { result } = renderHook(() => useStore());
+
+      vi.mocked(lambdaClient.file.getFileItemById.query).mockResolvedValue(mockFile);
+
+      const { result: itemResult } = renderHook(
+        () => result.current.useFetchKnowledgeItem('file-1'),
+        { wrapper: withSWR },
+      );
+
+      await waitFor(() => {
+        expect(itemResult.current.data).toEqual(mockFile);
+      });
+      // The value is the replica view, not a value flowing out of the hook.
+      expect(useStore.getState().fileDetailMap['file-1']?.file).toEqual(mockFile);
+    });
+
+    it('maps a server "not found" to undefined data instead of a permanent loading state', async () => {
+      const { result } = renderHook(() => useStore());
+
+      // `getKnowledgeItem` resolves `null` (not a throw) for a missing document id.
+      vi.mocked(lambdaClient.file.getFileItemById.query).mockResolvedValue(undefined as any);
+
+      const { result: itemResult } = renderHook(
+        () => result.current.useFetchKnowledgeItem('file-missing'),
+        { wrapper: withSWR },
+      );
+
+      await waitFor(() => {
+        expect(itemResult.current.data).toBeUndefined();
+        expect(itemResult.current.isLoading).toBe(false);
+      });
+      expect(useStore.getState().fileDetailMap['file-missing']).toEqual({ file: null });
+    });
+
+    it('treats a NOT_FOUND from the file endpoint as a confirmed absence, not an error', async () => {
+      const { result } = renderHook(() => useStore());
+
+      // `getFileItemById` throws NOT_FOUND for a deleted / inaccessible `file_*`.
+      vi.mocked(lambdaClient.file.getFileItemById.query).mockRejectedValue(
+        Object.assign(new Error('File not found'), { data: { code: 'NOT_FOUND' } }),
+      );
+
+      const { result: itemResult } = renderHook(
+        () => result.current.useFetchKnowledgeItem('file-deleted'),
+        { wrapper: withSWR },
+      );
+
+      await waitFor(() => {
+        expect(itemResult.current.data).toBeUndefined();
+        expect(itemResult.current.isLoading).toBe(false);
+      });
+      // Not an error state: the response folded a "not found" page value.
+      expect(itemResult.current.error).toBeUndefined();
+      expect(useStore.getState().fileDetailMap['file-deleted']).toEqual({ file: null });
+    });
+  });
+
+  describe('useFetchKnowledgeItems', () => {
+    const makeFile = (id: string, size = 100): FileListItem => ({
+      chunkCount: null,
+      chunkingError: null,
+      createdAt: new Date(),
+      embeddingError: null,
+      fileType: 'text/plain',
+      finishEmbedding: false,
+      id,
+      name: `${id}.txt`,
+      size,
+      sourceType: 'file',
+      updatedAt: new Date(),
+      url: `http://example.com/${id}.txt`,
+    });
+
+    it('paints the fetched head page into the store list view', async () => {
+      const { result } = renderHook(() => useStore());
+      const mockFiles = [makeFile('file-1'), makeFile('file-2', 200)];
+
+      vi.mocked(lambdaClient.file.getKnowledgeItems.query).mockResolvedValue({
+        hasMore: false,
+        items: mockFiles,
+      });
+
+      renderHook(() => result.current.useFetchKnowledgeItems({ category: 'all' }), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(useStore.getState().fileList).toEqual(mockFiles));
+      expect(useStore.getState().fileListMeta?.hasMore).toBe(false);
+      expect(lambdaClient.file.getKnowledgeItems.query).toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'all', limit: 50, offset: 0 }),
+      );
+    });
+
+    it('appends the next page through the replica when loadMoreKnowledgeItems runs', async () => {
+      const { result } = renderHook(() => useStore());
+      const firstPage = Array.from({ length: 50 }, (_, i) => makeFile(`file-${i}`));
+      const secondPage = Array.from({ length: 5 }, (_, i) => makeFile(`file-${50 + i}`));
+
+      vi.mocked(lambdaClient.file.getKnowledgeItems.query).mockImplementation(
+        async (params: any) =>
+          (params?.offset ?? 0) === 0
+            ? { hasMore: true, items: firstPage }
+            : { hasMore: false, items: secondPage },
+      );
+
+      renderHook(() => result.current.useFetchKnowledgeItems({ category: 'all', limit: 50 }), {
+        wrapper: withSWR,
+      });
+      await waitFor(() => expect(useStore.getState().fileList).toHaveLength(50));
+      expect(useStore.getState().fileListMeta?.hasMore).toBe(true);
+
+      await act(async () => {
+        await useStore.getState().loadMoreKnowledgeItems();
+      });
+
+      const list = useStore.getState().fileList;
+      expect(list).toHaveLength(55);
+      expect(list[50].id).toBe('file-50');
+      expect(useStore.getState().fileListMeta?.hasMore).toBe(false);
+      expect(lambdaClient.file.getKnowledgeItems.query).toHaveBeenLastCalledWith(
+        expect.objectContaining({ limit: 50, offset: 50 }),
+      );
+    });
+  });
+});

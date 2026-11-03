@@ -1,0 +1,290 @@
+import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
+import { isDesktop } from '@lobechat/const';
+import { uuid } from '@lobechat/utils';
+
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+import { getSystemLanguage } from '@/utils/client/systemLanguage';
+
+import { resolveEffectiveWorkingDirectory } from '../effectiveWorkingDirectory';
+import { globalAgentContextManager } from '../GlobalAgentContextManager';
+
+const placeholderVariablesRegex = /\{\{(.*?)\}\}/g;
+
+const WORKING_DIRECTORY_UNSPECIFIED = '(not specified, use user Home directory as default)';
+
+/**
+ * The effective working directory as an actual filesystem path, or `undefined`
+ * when nothing is configured (or off-desktop). This is the SAME resolution the
+ * `{{workingDirectory}}` system-prompt placeholder shows the model — keep them
+ * sourced from here so what the prompt promises ("defaults to the working
+ * directory") matches what tools actually search. Unlike the placeholder, this
+ * returns `undefined` instead of a human-readable "(not specified…)" string, so
+ * callers can safely use it as a path / scope default.
+ *
+ * Pass `topicId` for async work (e.g. a streaming tool call) so the directory is
+ * bound to the topic that *started* the request, not whatever topic is active
+ * now — the user may have switched topics mid-stream, and reading global
+ * active-topic state would then search the wrong project. Omit it (prompt-build
+ * time) to resolve against the active topic.
+ */
+export const getEffectiveWorkingDirectoryPath = (topicId?: string | null): string | undefined =>
+  resolveEffectiveWorkingDirectory(useChatStore.getState(), topicId);
+
+/**
+ * Temporal placeholders rendered from the browser's own clock and locale.
+ *
+ * Only `parsePlaceholderVariables` (client-side text expansion) still uses
+ * these. Agent runs render their temporal placeholders through the shared
+ * context engineering core (`@lobechat/mecha`), localized to the user's
+ * timezone the same way on every host.
+ */
+export const TEMPORAL_VARIABLE_GENERATORS = {
+  /**
+   * Time-related template variables
+   *
+   * | Value | Example |
+   * |-------|---------|
+   * | `{{date}}` | 12/25/2023 |
+   * | `{{datetime}}` | 12/25/2023, 2:30:45 PM |
+   * | `{{day}}` | 25 |
+   * | `{{hour}}` | 14 |
+   * | `{{iso}}` | 2023-12-25T14:30:45.123Z |
+   * | `{{locale}}` | zh-CN |
+   * | `{{minute}}` | 30 |
+   * | `{{month}}` | 12 |
+   * | `{{second}}` | 45 |
+   * | `{{time}}` | 2:30:45 PM |
+   * | `{{timestamp}}` | 1703538645123 |
+   * | `{{timezone}}` | America/New_York |
+   * | `{{weekday}}` | Monday |
+   * | `{{year}}` | 2023 |
+   *
+   */
+  date: () => new Date().toLocaleDateString(),
+  datetime: () => new Date().toLocaleString(),
+  day: () => new Date().getDate().toString().padStart(2, '0'),
+  hour: () => new Date().getHours().toString().padStart(2, '0'),
+  iso: () => new Date().toISOString(),
+  minute: () => new Date().getMinutes().toString().padStart(2, '0'),
+  month: () => (new Date().getMonth() + 1).toString().padStart(2, '0'),
+  second: () => new Date().getSeconds().toString().padStart(2, '0'),
+  time: () => new Date().toLocaleTimeString(),
+  timestamp: () => Date.now().toString(),
+  timezone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  weekday: () => new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+  year: () => new Date().getFullYear().toString(),
+};
+
+/**
+ * Placeholders only this host can answer: the signed-in user, the desktop
+ * device paths, the active agent's model. Handed to the context engineering
+ * core as `variables`, where they override its defaults and leak guards.
+ */
+export const HOST_VARIABLE_GENERATORS = {
+  /** `{{locale}}` — the browser's locale, e.g. zh-CN. */
+  locale: () => Intl.DateTimeFormat().resolvedOptions().locale,
+  /**
+   * User information template variables
+   *
+   * | Value | Example |
+   * |-------|---------|
+   * | `{{email}}` | demo@lobehub.com |
+   * | `{{nickname}}` | Community User |
+   * | `{{username}}` | LobeChat |
+   *
+   */
+  email: () => userProfileSelectors.email(useUserStore.getState()) ?? '',
+  nickname: () => userProfileSelectors.nickName(useUserStore.getState()) ?? '',
+  username: () =>
+    userProfileSelectors.displayUserName(useUserStore.getState()) ??
+    userProfileSelectors.fullName(useUserStore.getState()) ??
+    '',
+
+  /**
+   * Random value template variables
+   *
+   * | Value | Example |
+   * |-------|---------|
+   * | `{{random}}` | 100041 |
+   * | `{{random_bool}}` | true |
+   * | `{{random_float}}` | 76.02 |
+   * | `{{random_hex}}` | de0dbd |
+   * | `{{random_int}}` | 68 |
+   * | `{{random_string}}` | wqn9zfrqe7h |
+   *
+   */
+  random: () => Math.floor(Math.random() * 1_000_000 + 1).toString(),
+  random_bool: () => (Math.random() > 0.5 ? 'true' : 'false'),
+  random_float: () => (Math.random() * 100).toFixed(2),
+  random_hex: () =>
+    Math.floor(Math.random() * 16_777_215)
+      .toString(16)
+      .padStart(6, '0'),
+  random_int: () => Math.floor(Math.random() * 100 + 1).toString(),
+  random_string: () => Math.random().toString(36).slice(2, 15),
+  random_digit: () => Math.floor(Math.random() * 10).toString(),
+
+  /**
+   * UUID-type template variables
+   *
+   * | Value | Example |
+   * |-------|---------|
+   * | `{{uuid}}` | dd90b35-669f-4e87-beb8-ac6877f6995d |
+   * | `{{uuid_short}}` | dd90b35 |
+   *
+   */
+  uuid: () => uuid(),
+  uuid_short: () => uuid().split('-')[0],
+
+  /**
+   * Platform-related template variables
+   *
+   * | Value | Example |
+   * |-------|---------|
+   * | `{{language}}` | zh-CN |
+   * | `{{platform}}` | MacIntel |
+   * | `{{user_agent}}` | Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0 |
+   *
+   */
+  language: () => (typeof navigator !== 'undefined' ? getSystemLanguage() : ''),
+  platform: () => (typeof navigator !== 'undefined' ? navigator.platform : ''),
+  user_agent: () => (typeof navigator !== 'undefined' ? navigator.userAgent : ''),
+
+  /**
+   * Model-related template variables
+   *
+   * | Value | Example |
+   * |-------|---------|
+   * | `{{model}}` | gpt-4o |
+   * | `{{provider}}` | openai |
+   *
+   */
+  model: () => agentSelectors.currentAgentModel(useAgentStore.getState()),
+  provider: () => agentSelectors.currentAgentModelProvider(useAgentStore.getState()),
+
+  /**
+   * Desktop app path-related template variables (only available in Electron)
+   *
+   * | Value | Example |
+   * |-------|---------|
+   * | `{{homePath}}` | /Users/username |
+   * | `{{desktopPath}}` | /Users/username/Desktop |
+   * | `{{documentsPath}}` | /Users/username/Documents |
+   * | `{{downloadsPath}}` | /Users/username/Downloads |
+   * | `{{musicPath}}` | /Users/username/Music |
+   * | `{{picturesPath}}` | /Users/username/Pictures |
+   * | `{{videosPath}}` | /Users/username/Videos |
+   * | `{{userDataPath}}` | /Users/username/Library/Application Support/LobeChat |
+   * | `{{workingDirectory}}` | /Users/username/Projects/my-project |
+   * | `{{defaultShell}}` | PowerShell 7+ (pwsh) |
+   * | `{{shellSyntaxGuidance}}` | Write PowerShell syntax; ... |
+   * | `{{arch}}` | arm64 |
+   *
+   */
+  arch: () => globalAgentContextManager.getContext().arch ?? '',
+  homePath: () => globalAgentContextManager.getContext().homePath ?? '',
+  // Fallback keeps the surrounding prompt sentence readable when the desktop
+  // context has not (yet) provided the detected shell.
+  defaultShell: () =>
+    globalAgentContextManager.getContext().defaultShell ??
+    'the platform default shell (PowerShell on Windows, /bin/sh on macOS/Linux)',
+  // Syntax rules matching the shell above, so the model never sees guidance
+  // for a shell it is not running in (see getShellSyntaxGuidance).
+  shellSyntaxGuidance: () =>
+    getShellSyntaxGuidance(globalAgentContextManager.getContext().defaultShell),
+  desktopPath: () => globalAgentContextManager.getContext().desktopPath ?? '',
+  documentsPath: () => globalAgentContextManager.getContext().documentsPath ?? '',
+  downloadsPath: () => globalAgentContextManager.getContext().downloadsPath ?? '',
+  musicPath: () => globalAgentContextManager.getContext().musicPath ?? '',
+  picturesPath: () => globalAgentContextManager.getContext().picturesPath ?? '',
+  videosPath: () => globalAgentContextManager.getContext().videosPath ?? '',
+  userDataPath: () => globalAgentContextManager.getContext().userDataPath ?? '',
+  /**
+   * Working directory: topic-level override takes priority over agent-level value
+   */
+  workingDirectory: () => {
+    if (!isDesktop) return '';
+    return getEffectiveWorkingDirectoryPath() ?? WORKING_DIRECTORY_UNSPECIFIED;
+  },
+} as Record<string, () => string>;
+
+/**
+ * Extract all {{variable}} placeholder variable names from text
+ * @param text String containing template variables
+ * @returns Array of variable names, e.g., ['date', 'nickname']
+ */
+const extractPlaceholderVariables = (text: string): string[] => {
+  const matches = [...text.matchAll(placeholderVariablesRegex)];
+  return matches.map((m) => m[1].trim());
+};
+
+/**
+ * Replace template variables with actual values, supporting recursive parsing of nested variables
+ * @param text - Original text containing variables
+ * @param depth - Recursion depth, default 1, set higher to support {{date}} within {{text}} etc.
+ * @returns Replaced text
+ */
+export const VARIABLE_GENERATORS: Record<string, () => string> = {
+  ...TEMPORAL_VARIABLE_GENERATORS,
+  ...HOST_VARIABLE_GENERATORS,
+};
+
+export const parsePlaceholderVariables = (text: string, depth = 2): string => {
+  let result = text;
+
+  // Recursive parsing to handle cases where {{text}} contains additional preset variables
+  for (let i = 0; i < depth; i++) {
+    try {
+      const variables = Object.fromEntries(
+        extractPlaceholderVariables(result)
+          .map((key) => [key, VARIABLE_GENERATORS[key]?.()])
+          .filter(([, value]) => value !== undefined),
+      );
+
+      const replaced = result.replaceAll(
+        placeholderVariablesRegex,
+        (match, key) => variables[key.trim()] ?? match,
+      );
+      if (replaced === result) break;
+
+      result = replaced;
+    } catch {
+      break;
+    }
+  }
+
+  return result;
+};
+
+/**
+ * Parse message content, replace placeholder variables
+ * @param messages Original message array
+ * @returns Processed message array
+ */
+export const parsePlaceholderVariablesMessages = (messages: any[]): any[] =>
+  messages.map((message) => {
+    if (!message?.content) return message;
+
+    const { content } = message;
+
+    // Process string type directly
+    if (typeof content === 'string') {
+      return { ...message, content: parsePlaceholderVariables(content) };
+    }
+
+    // Process text elements in array type
+    if (Array.isArray(content)) {
+      return {
+        ...message,
+        content: content.map((item) =>
+          item?.type === 'text' ? { ...item, text: parsePlaceholderVariables(item.text) } : item,
+        ),
+      };
+    }
+
+    return message;
+  });

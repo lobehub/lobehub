@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "Отвори работната директория в",
+  "errors.appNotInstalled": "{{appName}} не е инсталиран",
+  "errors.launchFailed": "Неуспешно отваряне в {{appName}}: {{error}}",
+  "errors.pathNotFound": "Пътят не е намерен: {{path}}",
+  "errors.unknown": "неизвестна грешка",
+  "tooltip": "Отвори в {{appName}}"
+}

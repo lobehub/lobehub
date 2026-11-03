@@ -1,0 +1,22 @@
+{
+  "error.invalidFormat.desc": "Você ainda pode lê-lo. O layout pode diferir do original.",
+  "error.invalidFormat.ownerHint": "Re-salve no editor para restaurar o layout original.",
+  "error.invalidFormat.title": "Esta página não pôde ser exibida em seu formato original",
+  "popover.copyLink": "Copiar link",
+  "popover.copyLinkSuccess": "Link copiado",
+  "popover.linkHint": "Qualquer pessoa com o link pode visualizar esta página",
+  "popover.permissionLink": "Qualquer pessoa com o link",
+  "popover.permissionPrivate": "Privado",
+  "popover.permissionWorkspace": "Qualquer pessoa no espaço de trabalho",
+  "popover.privateHint": "Somente você pode acessar esta página",
+  "popover.sectionViews_one": "{{count}} visualização",
+  "popover.sectionViews_other": "{{count}} visualizações",
+  "popover.title": "Compartilhar página",
+  "popover.updateError": "Falha ao atualizar as configurações de compartilhamento",
+  "popover.visibility": "Visibilidade",
+  "popover.visibilityUpdated": "Visibilidade atualizada",
+  "popover.workspaceHint": "Qualquer pessoa neste espaço de trabalho pode visualizar esta página",
+  "shareButton.label": "Compartilhar",
+  "shell.sharedBy": "Compartilhado por {{name}}",
+  "shell.updatedAt": "Atualizado {{relative}}"
+}

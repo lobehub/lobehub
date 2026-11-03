@@ -1,0 +1,458 @@
+import { toast } from '@lobehub/ui';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { INBOX_SESSION_ID } from '@/const/session';
+import { agentService } from '@/services/agent';
+import { chatGroupService } from '@/services/chatGroup';
+import { homeService } from '@/services/home';
+import { sessionService } from '@/services/session';
+import type * as AgentStoreModule from '@/store/agent';
+import { getAgentStoreState } from '@/store/agent';
+import { useHomeStore } from '@/store/home';
+import type * as SessionStoreModule from '@/store/session';
+import { getSessionStoreState } from '@/store/session';
+import { useUserStore } from '@/store/user';
+
+// Mock dependencies
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  toast: {
+    error: vi.fn(),
+    loading: vi.fn(() => ({ close: vi.fn() })),
+    success: vi.fn(),
+  },
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: vi.fn(() => null),
+  useActiveWorkspaceId: vi.fn(() => null),
+}));
+
+vi.mock('@/store/session', async (importOriginal) => {
+  const actual = await importOriginal<typeof SessionStoreModule>();
+
+  return {
+    ...actual,
+    getSessionStoreState: vi.fn(() => ({
+      activeId: 'test-session',
+      switchSession: vi.fn(),
+    })),
+  };
+});
+
+vi.mock('@/store/agent', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStoreModule>();
+
+  return {
+    ...actual,
+    getAgentStoreState: vi.fn(() => ({
+      invalidateAvailableAgents: vi.fn(),
+      setActiveAgentId: vi.fn(),
+    })),
+    useAgentStore: actual.useAgentStore,
+  };
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('createSidebarUISlice', () => {
+  // ========== Agent Operations ==========
+  describe('pinAgent', () => {
+    it('should pin an agent and refresh agent list', async () => {
+      const mockAgentId = 'agent-123';
+      vi.spyOn(agentService, 'updateAgentPinned').mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.pinAgent(mockAgentId, true);
+      });
+
+      expect(agentService.updateAgentPinned).toHaveBeenCalledWith(mockAgentId, true);
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+
+    it('should unpin an agent and refresh agent list', async () => {
+      const mockAgentId = 'agent-123';
+      vi.spyOn(agentService, 'updateAgentPinned').mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.pinAgent(mockAgentId, false);
+      });
+
+      expect(agentService.updateAgentPinned).toHaveBeenCalledWith(mockAgentId, false);
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+  });
+
+  describe('pinAgentGroup', () => {
+    it('should pin an agent group and refresh agent list', async () => {
+      const mockGroupId = 'group-123';
+      vi.spyOn(chatGroupService, 'updateGroup').mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.pinAgentGroup(mockGroupId, true);
+      });
+
+      expect(chatGroupService.updateGroup).toHaveBeenCalledWith(mockGroupId, { pinned: true });
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+
+    it('should unpin an agent group and refresh agent list', async () => {
+      const mockGroupId = 'group-123';
+      vi.spyOn(chatGroupService, 'updateGroup').mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.pinAgentGroup(mockGroupId, false);
+      });
+
+      expect(chatGroupService.updateGroup).toHaveBeenCalledWith(mockGroupId, { pinned: false });
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+  });
+
+  describe('pin in workspace mode', () => {
+    // Regression: pinning is part of the SHARED sidebar arrangement. It briefly
+    // wrote a per-member preference instead, which split the sidebar into two
+    // mental models; it must go back to the shared column in both scopes.
+    it('should write agent pin to the shared column, not a per-member preference', async () => {
+      vi.mocked(getActiveWorkspaceId).mockReturnValue('ws-1');
+      const spyOnPreference = vi.spyOn(useUserStore.getState(), 'updateWorkspaceUserPreference');
+      const spyOnShared = vi
+        .spyOn(agentService, 'updateAgentPinned')
+        .mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.pinAgent('agent-123', true);
+      });
+
+      expect(spyOnShared).toHaveBeenCalledWith('agent-123', true);
+      expect(spyOnPreference).not.toHaveBeenCalled();
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+
+    it('should write group pin to the shared column, not a per-member preference', async () => {
+      vi.mocked(getActiveWorkspaceId).mockReturnValue('ws-1');
+      const spyOnPreference = vi.spyOn(useUserStore.getState(), 'updateWorkspaceUserPreference');
+      const spyOnShared = vi
+        .spyOn(chatGroupService, 'updateGroup')
+        .mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.pinAgentGroup('group-123', false);
+      });
+
+      expect(spyOnShared).toHaveBeenCalledWith('group-123', { pinned: false });
+      expect(spyOnPreference).not.toHaveBeenCalled();
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+  });
+
+  describe('removeAgent', () => {
+    it('should remove an agent and refresh agent list', async () => {
+      const mockAgentId = 'agent-123';
+      vi.spyOn(agentService, 'removeAgent').mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.removeAgent(mockAgentId);
+      });
+
+      expect(agentService.removeAgent).toHaveBeenCalledWith(mockAgentId);
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+
+    it('should switch to inbox when removing the active session', async () => {
+      const mockAgentId = 'active-agent';
+      const mockSwitchSession = vi.fn();
+
+      vi.mocked(getSessionStoreState).mockReturnValue({
+        activeId: mockAgentId,
+        switchSession: mockSwitchSession,
+      } as any);
+
+      vi.spyOn(agentService, 'removeAgent').mockResolvedValueOnce(undefined as any);
+      vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.removeAgent(mockAgentId);
+      });
+
+      expect(mockSwitchSession).not.toHaveBeenCalledWith(INBOX_SESSION_ID);
+    });
+  });
+
+  describe('duplicateAgent', () => {
+    it('should duplicate an agent and switch to the new agent', async () => {
+      const mockAgentId = 'agent-123';
+      const mockNewAgentId = 'new-agent-456';
+      const mockSetActiveAgentId = vi.fn();
+
+      vi.mocked(getAgentStoreState).mockReturnValue({
+        invalidateAvailableAgents: vi.fn(),
+        setActiveAgentId: mockSetActiveAgentId,
+      } as any);
+
+      vi.spyOn(agentService, 'duplicateAgent').mockResolvedValueOnce({ agentId: mockNewAgentId });
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.duplicateAgent(mockAgentId, 'Copied Agent');
+      });
+
+      expect(agentService.duplicateAgent).toHaveBeenCalledWith(mockAgentId, 'Copied Agent');
+      expect(spyOnRefresh).toHaveBeenCalled();
+      expect(mockSetActiveAgentId).toHaveBeenCalledWith(mockNewAgentId);
+    });
+
+    it('should show an error toast when duplication fails', async () => {
+      const mockAgentId = 'agent-123';
+
+      vi.spyOn(agentService, 'duplicateAgent').mockResolvedValueOnce(null);
+      vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.duplicateAgent(mockAgentId, 'Test');
+      });
+
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it('should use provided title when duplicating', async () => {
+      const mockAgentId = 'agent-123';
+      const mockNewAgentId = 'new-agent-456';
+
+      vi.mocked(getAgentStoreState).mockReturnValue({
+        invalidateAvailableAgents: vi.fn(),
+        setActiveAgentId: vi.fn(),
+      } as any);
+
+      vi.spyOn(agentService, 'duplicateAgent').mockResolvedValueOnce({ agentId: mockNewAgentId });
+      vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.duplicateAgent(mockAgentId, 'Custom Title');
+      });
+
+      expect(agentService.duplicateAgent).toHaveBeenCalledWith(mockAgentId, 'Custom Title');
+    });
+  });
+
+  describe('updateAgentGroup', () => {
+    it('should update agent group and refresh agent list', async () => {
+      const mockAgentId = 'agent-123';
+      const mockGroupId = 'group-456';
+      vi.spyOn(homeService, 'updateAgentSessionGroupId').mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.updateAgentGroup(mockAgentId, mockGroupId);
+      });
+
+      expect(homeService.updateAgentSessionGroupId).toHaveBeenCalledWith(mockAgentId, mockGroupId);
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+
+    it('should set group to default when groupId is null', async () => {
+      const mockAgentId = 'agent-123';
+      vi.spyOn(homeService, 'updateAgentSessionGroupId').mockResolvedValueOnce(undefined as any);
+      vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.updateAgentGroup(mockAgentId, null);
+      });
+
+      expect(homeService.updateAgentSessionGroupId).toHaveBeenCalledWith(mockAgentId, null);
+    });
+
+    // Regression: folder membership is shared. It briefly wrote a per-member
+    // assignment map in workspace mode, so one member's tidy-up was invisible
+    // to everyone else.
+    it('should write the shared column in workspace mode too', async () => {
+      vi.mocked(getActiveWorkspaceId).mockReturnValue('ws-1');
+      const spyOnPreference = vi.spyOn(useUserStore.getState(), 'updateWorkspaceUserPreference');
+      vi.spyOn(homeService, 'updateAgentSessionGroupId').mockResolvedValueOnce(undefined as any);
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.updateAgentGroup('agent-123', 'group-456');
+      });
+
+      expect(homeService.updateAgentSessionGroupId).toHaveBeenCalledWith('agent-123', 'group-456');
+      expect(spyOnPreference).not.toHaveBeenCalled();
+    });
+  });
+
+  // ========== Group Operations ==========
+  describe('addGroup', () => {
+    it('should add a group and refresh agent list', async () => {
+      const mockName = 'New Group';
+      const mockId = 'group-789';
+      vi.spyOn(sessionService, 'createSessionGroup').mockResolvedValueOnce(mockId);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      let returnedId: string;
+      await act(async () => {
+        returnedId = await result.current.addGroup(mockName);
+      });
+
+      expect(sessionService.createSessionGroup).toHaveBeenCalledWith(
+        mockName,
+        undefined,
+        undefined,
+      );
+      expect(spyOnRefresh).toHaveBeenCalled();
+      expect(returnedId!).toBe(mockId);
+    });
+  });
+
+  describe('removeGroup', () => {
+    it('should remove a group and refresh agent list', async () => {
+      const mockGroupId = 'group-123';
+      vi.spyOn(sessionService, 'removeSessionGroup').mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.removeGroup(mockGroupId);
+      });
+
+      expect(sessionService.removeSessionGroup).toHaveBeenCalledWith(mockGroupId);
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+  });
+
+  describe('updateGroupName', () => {
+    it('should update group name and refresh agent list', async () => {
+      const mockGroupId = 'group-123';
+      const mockName = 'Updated Name';
+      vi.spyOn(sessionService, 'updateSessionGroup').mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.updateGroupName(mockGroupId, mockName);
+      });
+
+      expect(sessionService.updateSessionGroup).toHaveBeenCalledWith(mockGroupId, {
+        name: mockName,
+      });
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+  });
+
+  describe('updateGroupSort', () => {
+    it('should update group sort order and refresh agent list', async () => {
+      const mockItems: any[] = [
+        { id: 'group-1', name: 'Group 1' },
+        { id: 'group-2', name: 'Group 2' },
+      ];
+      vi.spyOn(sessionService, 'updateSessionGroupOrder').mockResolvedValueOnce(undefined as any);
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+
+      const { result } = renderHook(() => useHomeStore());
+
+      await act(async () => {
+        await result.current.updateGroupSort(mockItems);
+      });
+
+      expect(sessionService.updateSessionGroupOrder).toHaveBeenCalledWith([
+        { id: 'group-1', sort: 0 },
+        { id: 'group-2', sort: 1 },
+      ]);
+      expect(spyOnRefresh).toHaveBeenCalled();
+    });
+  });
+
+  // ========== UI State Actions ==========
+  describe('setAgentUpdatingId', () => {
+    it('should set agent updating id', () => {
+      const { result } = renderHook(() => useHomeStore());
+
+      act(() => {
+        result.current.setAgentUpdatingId('agent-456');
+      });
+
+      expect(result.current.agentUpdatingId).toBe('agent-456');
+    });
+
+    it('should clear agent updating id when set to null', () => {
+      const { result } = renderHook(() => useHomeStore());
+
+      act(() => {
+        result.current.setAgentUpdatingId('agent-456');
+      });
+
+      act(() => {
+        result.current.setAgentUpdatingId(null);
+      });
+
+      expect(result.current.agentUpdatingId).toBeNull();
+    });
+  });
+
+  describe('setGroupUpdatingId', () => {
+    it('should set group updating id', () => {
+      const { result } = renderHook(() => useHomeStore());
+
+      act(() => {
+        result.current.setGroupUpdatingId('group-456');
+      });
+
+      expect(result.current.groupUpdatingId).toBe('group-456');
+    });
+
+    it('should clear group updating id when set to null', () => {
+      const { result } = renderHook(() => useHomeStore());
+
+      act(() => {
+        result.current.setGroupUpdatingId('group-456');
+      });
+
+      act(() => {
+        result.current.setGroupUpdatingId(null);
+      });
+
+      expect(result.current.groupUpdatingId).toBeNull();
+    });
+  });
+});

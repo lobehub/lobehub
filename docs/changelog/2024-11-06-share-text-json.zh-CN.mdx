@@ -1,0 +1,32 @@
+---
+title: 支持导出对话为 Markdown 或 OpenAI JSON 格式
+description: LobeHub v1.28.0 新增 Markdown 与 OpenAI 格式 JSON 导出，方便将对话转为文档、 调试数据或训练语料。
+tags:
+  - 文本格式导出
+  - Markdown 导出
+  - OpenAI JSON
+---
+
+# 支持导出对话为 Markdown 或 OpenAI JSON 格式
+
+v1.28.0 让对话导出更加实用。现在可以将聊天内容下载为 **Markdown** 用于文档整理，或 **OpenAI 格式 JSON** 用于调试与训练，无需手动复制粘贴。
+
+## 更顺畅的文档工作流
+
+Markdown 导出将对话转为整洁可读的文档。写作者可以快速收录有价值的交流，直接导入笔记、知识库或报告，省去手动排版。
+
+![将对话导出为 Markdown 格式文本](/blog/assets/29b13dc042e3b839ad8865354afe2fac.webp)
+
+## 开发者友好的 API 格式
+
+JSON 导出遵循 OpenAI messages 规范。导出的对话可直接用于 API 调试工具，或作为结构化训练数据用于模型微调。
+
+Tool Calling 数据保持原始结构，便于分析和改进 Agent 调用外部工具的行为。
+
+![将对话导出为 OpenAI 接口规范的 JSON](/blog/assets/5bbb4b421d6df63780b3c7a05f5a102d.webp)
+
+## 体验优化
+
+- 新增 Markdown 导出选项
+- 新增 OpenAI 格式 JSON 导出，保留完整消息结构
+- 导出时保留 Tool Calling 原始数据

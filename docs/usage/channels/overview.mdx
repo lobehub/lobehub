@@ -1,0 +1,170 @@
+---
+title: Channels Overview
+description: >-
+  Connect your LobeHub agents to external messaging platforms like Discord,
+  Slack, Telegram, LINE, QQ, WeChat, Feishu, and Lark; check the announced
+  status of WhatsApp and iMessage; and let users interact with AI assistants
+  directly in their favorite chat apps.
+tags:
+  - Channels
+  - Message Channels
+  - Integration
+  - Discord
+  - Slack
+  - Telegram
+  - LINE
+  - QQ
+  - WeChat
+  - Feishu
+  - Lark
+  - WhatsApp
+  - iMessage
+---
+
+# Channels
+
+**Channels connect an Agent to a bot that you configure.** First create or connect a bot on Discord, Slack, Telegram, or another supported platform. Then bind that bot to one Agent in LobeHub. When someone messages the bot, they are talking to that Agent.
+
+```text
+Users or group members → Your bot → One bound Agent
+```
+
+## Should I use Channels or Messenger?
+
+- **Choose Channels** when you want your own bot name and identity, or want teammates, customers, or community members to use a specific Agent.
+- **Choose [Messenger](/docs/usage/messenger/overview)** when you only want to use your Agents through LobeHub's official bot and do not want to create a bot or manage tokens.
+
+| | **Channels** | **Messenger** |
+| --- | --- | --- |
+| Chat entry | A bot you create or connect | A LobeHub-managed bot or service |
+| Agent relationship | Each channel is bound to one Agent | Each linked account selects an active Agent and can switch it |
+| Who uses it | You, approved users, a team, or a community | The user whose platform account is linked to LobeHub |
+| Configured at | **Agent → Channels** | **Settings → Messenger** |
+| What you set up | Platform bot or app credentials and access rules | Account link and active Agent |
+
+Access policies decide whether a Channel is private or shared. You can restrict your bot to yourself or selected users.
+
+> \[!NOTE]
+>
+> WeChat requires a paid personal plan. The [2026-07-08 announcement](/changelog/2026-07-08-wechat-chat-adjustment) covers new connections, reconnections, and continued use after the notice period. It gives an expected effective time of July 10, 2026 at 12:00 PM ET (July 11 at 00:00 Beijing time). The option can be absent without an eligible plan.
+
+## Supported Platforms
+
+### Available Now
+
+| Platform                                   | Description                                                                                   |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| [Discord](/docs/usage/channels/discord)    | Connect to Discord servers for channel chat and direct messages                               |
+| [Slack](/docs/usage/channels/slack)        | Connect to Slack for channel and direct message conversations                                 |
+| [Telegram](/docs/usage/channels/telegram)  | Connect to Telegram for private and group conversations                                       |
+| [LINE](/docs/usage/channels/line)          | Connect to LINE Messaging API for direct and group chats                                      |
+| [QQ](/docs/usage/channels/qq)              | Connect to QQ for group chats and direct messages                                             |
+| [WeChat (微信)](/docs/usage/channels/wechat) | Connect to WeChat via iLink Bot for direct messages (Pro; group support unconfirmed)          |
+| [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)                                    |
+| [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)                                |
+
+### Coming Soon
+
+| Platform                                      | Status and description                                                                 |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [WhatsApp](/docs/usage/channels/whatsapp)     | Coming Soon; configuration is not available. Planned for mobile customer support and follow-up. |
+| [iMessage](/docs/usage/channels/imessage)     | Coming Soon; currently a placeholder. Existing Labs documentation does not mean general availability. |
+
+## How It Works
+
+Each Channel belongs to the current Agent. LobeHub passes incoming platform messages to that Agent and sends its reply back to the original conversation.
+
+- **One Agent can connect to several platforms** — for example, Discord, Slack, and Telegram at the same time.
+- **Different Agents can use different bots** — useful for separate teams, customers, or communities.
+- **Access can be restricted** — supported platforms include controls for DMs, groups, users, and channels.
+- **Credentials are encrypted** — bot tokens and app secrets are encrypted before storage.
+
+## Getting Started
+
+1. Navigate to your agent's settings and select the **Channels** tab
+2. Choose a platform that is currently available and follow its setup guide:
+   - [Discord](/docs/usage/channels/discord)
+   - [Slack](/docs/usage/channels/slack)
+   - [Telegram](/docs/usage/channels/telegram)
+   - [LINE](/docs/usage/channels/line)
+   - [QQ](/docs/usage/channels/qq)
+   - [WeChat (微信)](/docs/usage/channels/wechat)
+   - [Feishu (飞书)](/docs/usage/channels/feishu)
+   - [Lark](/docs/usage/channels/lark)
+
+WhatsApp and iMessage currently appear as **Coming Soon** and cannot be configured as generally available channels. See the [WhatsApp status page](/docs/usage/channels/whatsapp) and [iMessage preview page](/docs/usage/channels/imessage).
+
+If **WeChat** is absent from the list, check that your personal account meets the paid-plan requirements above.
+
+## Feature Support
+
+Text messages are supported across all platforms. Some features vary by platform:
+
+| Feature                | Discord | Slack | Telegram | LINE    | QQ  | WeChat | Feishu  | Lark    |
+| ---------------------- | ------- | ----- | -------- | ------- | --- | ------ | ------- | ------- |
+| Text messages          | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
+| Direct messages        | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
+| Group chats            | Yes     | Yes   | Yes      | Yes     | Yes | Unconfirmed | Yes     | Yes     |
+| Reactions              | Yes     | Yes   | Yes      | No      | No  | No     | Partial | Partial |
+| Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | Yes    | Yes     | Yes     |
+
+Repository documentation does not confirm WeChat group support. This guide covers direct messages only. The July 8 announcement changes paid access, not group support. See [WeChat](/docs/usage/channels/wechat).
+
+## Allowed Users (global)
+
+The **Allowed Users** list at the top of **Advanced Settings** is a *global* user gate. When populated, only the listed users can interact with the bot — in DMs **and** in group `@mentions` — regardless of DM Policy or Group Policy mode. Leave it empty to disable user-level filtering and let per-scope policies decide on their own.
+
+Behaviour when populated:
+
+| Surface                      | Non-allowlisted sender                                                                                                                                                                                      |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **DM**                       | Blocked. Sender receives a one-line "you aren't authorized to send direct messages" notice in the same DM.                                                                                                  |
+| **Group / channel @mention** | Blocked. A short "you aren't authorized to interact with this bot" notice is posted in the same thread the @-mention arrived on (on Discord this is the auto-created reply thread, not the parent channel). |
+
+Add one entry per row. Each row holds a platform user ID (required) and an optional **Note** — a private label that's only ever shown back to you on the settings page. The note is what saves you from having to remember whether `U01ABCXYZ` was Alice or the on-call account six months from now; the runtime ignores it entirely.
+
+> **Anti-lockout**: if you have **Your Platform User ID** set (the AI-tools field), that ID is implicitly trusted by the global allowlist. Forgetting to add yourself to **Allowed Users** when scoping the bot to friends won't lock you out.
+
+## Direct Message Policy
+
+DM Policy only governs DMs — group `@mentions` are gated independently by **Group Policy** below. The user-level filter from the global **Allowed Users** is also applied; per-scope policy stacks on top.
+
+| Policy        | Behavior                                                                                                                                                                                                                                                                                           |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Open**      | Any user on the platform can DM the bot (subject to the global allowlist when set). Best for public-facing assistants.                                                                                                                                                                             |
+| **Allowlist** | DMs require the sender to be in **Allowed Users**. Distinct from `Open` only when the list is empty: `Allowlist` then **fails closed** (no DMs); `Open` still lets anyone DM.                                                                                                                      |
+| **Pairing**   | Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. The owner approves via `/approve <code>`, which appends the applicant to **Allowed Users** so future DMs flow normally. Requires **Your Platform User ID** and a configured Redis. |
+| **Disabled**  | The bot ignores all DMs entirely. Use this when the bot should only reply in shared channels via `@mention`.                                                                                                                                                                                       |
+
+## Group Policy
+
+For the same group-capable platforms, each channel has a **Group Policy** that controls where the bot responds to `@mentions`. This is independent of DM Policy: a `groupPolicy=disabled` bot still accepts DMs (subject to DM Policy), and vice versa.
+
+| Policy        | Behavior                                                                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Open**      | Respond to `@mentions` in any group, channel, or thread the bot can read. Default.                                     |
+| **Allowlist** | Respond only when the channel / group / chat ID is in **Allowed Channels**. Use to limit a bot to specific channels or groups. |
+| **Disabled**  | Ignore all non-DM traffic. The bot becomes DM-only.                                                                    |
+
+When **Allowlist** is selected, **Allowed Channels** appears as a row editor — one entry per channel / group / chat ID, with an optional note (e.g. `#general`) shown only to you so you can recognise each ID later.
+
+> **Discord parent channels**: an `@mention` in a Discord channel automatically spawns a reply thread, so the inbound thread ID is *not* what Discord's "Copy Channel ID" gives you. You can paste the **parent channel ID** here — the bot accepts any auto-created reply thread under it. Pasting a specific thread ID instead works too, in which case only that thread is allowed.
+
+### Per-platform defaults
+
+Platforms that expose both policies default to **Open**. To restrict access, select **Allowlist** or **Disabled** per channel. The WeChat setup covers direct messages and does not expose these two policy settings. This does not establish group-chat support.
+
+### Finding a user's platform ID
+
+- **Discord** — Enable Developer Mode in user settings, right-click the user, and choose **Copy User ID**.
+- **Slack** — Open the user's profile → click the `⋮` menu → **Copy member ID** (starts with `U`).
+- **Telegram** — Ask the user to message [@userinfobot](https://t.me/userinfobot), or read `from.id` from the bot's incoming update.
+- **QQ** — Use the `openid` from the OpenAPI event payload — `user_openid` for private (C2C) messages, `member_openid` for group messages (the public-facing QQ number is not guaranteed to be the platform ID).
+- **Feishu / Lark** — Use the `open_id` from the event payload, or the **User ID** displayed in the developer portal.
+
+### Finding a channel / group ID
+
+- **Discord** — Enable Developer Mode, right-click the channel, and choose **Copy Channel ID**.
+- **Slack** — Open the channel's About panel and copy the channel ID at the bottom (starts with `C`).
+- **Telegram** — Forward a message from the group to [@userinfobot](https://t.me/userinfobot), or read `chat.id` from the bot's incoming update (group IDs are negative).
+- **Feishu / Lark** — Use the `chat_id` from the event payload.

@@ -1,0 +1,369 @@
+import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
+
+export const TaskApiName = {
+  /** Add a comment to a task */
+  addTaskComment: 'addTaskComment',
+
+  /** Create a new task, optionally as a subtask of another task */
+  createTask: 'createTask',
+
+  /** Confirm and start a goal-driven task with automatic delivery acceptance */
+  createGoal: 'createGoal',
+
+  /** Create multiple tasks in a single call (batched) */
+  createTasks: 'createTasks',
+
+  /** Delete a task */
+  deleteTask: 'deleteTask',
+
+  /** Delete a task comment */
+  deleteTaskComment: 'deleteTaskComment',
+
+  /** Edit a task's name, description, instruction, priority, parent, or dependencies */
+  editTask: 'editTask',
+
+  /** List tasks with optional filters */
+  listTasks: 'listTasks',
+
+  /** List workspace members that can be assigned tasks (resolves names → user ids) */
+  listWorkspaceMembers: 'listWorkspaceMembers',
+
+  /** Trigger an async run of a single task (real execution, not just status) */
+  runTask: 'runTask',
+
+  /** Trigger async runs for multiple tasks in one call */
+  runTasks: 'runTasks',
+
+  /** Configure (or clear) the recurring schedule of a task */
+  setTaskSchedule: 'setTaskSchedule',
+
+  /** Configure (or clear) the delivery-acceptance (verify) gate of a task */
+  setTaskVerify: 'setTaskVerify',
+
+  /** Update a task comment */
+  updateTaskComment: 'updateTaskComment',
+
+  /** Update a task's status (e.g. complete, cancel) */
+  updateTaskStatus: 'updateTaskStatus',
+
+  /** View details of a specific task */
+  viewTask: 'viewTask',
+} as const;
+
+export type TaskApiNameType = (typeof TaskApiName)[keyof typeof TaskApiName];
+
+// ==================== createTask ====================
+
+export interface CreateTaskParams {
+  assigneeAgentId?: string;
+  /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
+  assigneeUserId?: string;
+  instruction: string;
+  /** Model the task runs with; omitted pins the assignee agent's current model. */
+  model?: string;
+  name: string;
+  parentIdentifier?: string;
+  priority?: number;
+  /** Provider for `model`; omitted is resolved from the assignee agent. */
+  provider?: string;
+  sortOrder?: number;
+}
+
+export interface CreateTaskState {
+  /** Short human-facing description, when the task has one. */
+  description?: string | null;
+  identifier?: string;
+  /** Display name of the created task. */
+  name?: string | null;
+  /** Parent task identifier when created as a subtask. */
+  parentIdentifier?: string;
+  /** Priority level (0 = none … 4 = low). */
+  priority?: number | null;
+  /** Lifecycle status the task was created in (usually `backlog`). */
+  status?: TaskStatus;
+  success: boolean;
+  taskId?: string;
+}
+
+// ==================== createGoal ====================
+
+export interface GoalCriterionDraft {
+  description?: string;
+  instruction?: string;
+  onFail?: 'auto_repair' | 'manual';
+  required?: boolean;
+  title: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType?: 'agent' | 'llm' | 'program';
+}
+
+export interface CreateGoalParams {
+  criteria: GoalCriterionDraft[];
+  /** ISO-8601 calendar-time budget; past it the coordinator stops dispatching. */
+  deadline?: string | null;
+  instruction: string;
+  maxIterations?: number | null;
+  maxTotalCost?: number | null;
+  name: string;
+}
+
+export interface CreateGoalState {
+  /** The `goals` row the Goal Graph was created as — what the card opens. */
+  goalId?: string;
+  name?: string;
+  startedAt?: string;
+  success: boolean;
+  /** The responsible task the first coordinator tick dispatched, when it got that far. */
+  taskId?: string;
+}
+
+// ==================== createTasks (batch) ====================
+
+export interface CreateTasksParams {
+  /** Array of tasks to create in a single call. */
+  tasks: CreateTaskParams[];
+}
+
+export interface CreateTasksItemResult {
+  error?: string;
+  identifier?: string;
+  name: string;
+  success: boolean;
+  taskId?: string;
+}
+
+export interface CreateTasksState {
+  /** Number of failed creations. */
+  failed: number;
+  results: CreateTasksItemResult[];
+  /** Number of successful creations. */
+  succeeded: number;
+}
+
+// ==================== listTasks ====================
+
+export interface ListTasksParams {
+  assigneeAgentId?: string;
+  limit?: number;
+  offset?: number;
+  parentIdentifier?: string;
+  priorities?: number[];
+  statuses?: TaskStatus[];
+}
+
+export interface ListTasksState {
+  count: number;
+  success: boolean;
+  total?: number;
+}
+
+// ==================== listWorkspaceMembers ====================
+
+export interface ListWorkspaceMembersParams {
+  /** Cap on the members returned (default 50, max 100). */
+  limit?: number;
+  /** Case-insensitive match on name, @handle, email, linked IM identity, or an exact user id. */
+  query?: string;
+}
+
+export interface ListWorkspaceMembersState {
+  /** Members actually returned (after `query` and `limit`). */
+  count: number;
+  query?: string;
+  success: boolean;
+  /** Members matching `query` before the `limit` cap. */
+  total: number;
+}
+
+// ==================== viewTask ====================
+
+export interface ViewTaskParams {
+  identifier?: string;
+}
+
+export interface ViewTaskState {
+  identifier?: string;
+  success: boolean;
+  taskId?: string;
+}
+
+// ==================== task comments ====================
+
+export interface AddTaskCommentParams {
+  content: string;
+  identifier?: string;
+}
+
+export interface AddTaskCommentState {
+  commentId?: string;
+  identifier: string;
+  success: boolean;
+  taskId?: string;
+}
+
+export interface UpdateTaskCommentParams {
+  commentId: string;
+  content: string;
+}
+
+export interface UpdateTaskCommentState {
+  commentId: string;
+  success: boolean;
+}
+
+export interface DeleteTaskCommentParams {
+  commentId: string;
+}
+
+export interface DeleteTaskCommentState {
+  commentId: string;
+  success: boolean;
+}
+
+// ==================== editTask ====================
+
+export interface EditTaskParams {
+  addDependencies?: string[];
+  assigneeAgentId?: string | null;
+  /** Workspace member (user id) to assign the task to; `null` clears the human assignee. */
+  assigneeUserId?: string | null;
+  description?: string;
+  identifier: string;
+  instruction?: string;
+  /** Task model override; `null` clears it so the task follows the assignee agent again. */
+  model?: string | null;
+  name?: string;
+  parentIdentifier?: string | null;
+  priority?: number;
+  /** Provider for the task model; `null` clears it. */
+  provider?: string | null;
+  removeDependencies?: string[];
+}
+
+export interface EditTaskState {
+  identifier: string;
+  success: boolean;
+  taskId?: string;
+}
+
+// ==================== runTask / runTasks ====================
+
+export interface RunTaskParams {
+  /** Optional existing topic to continue (rather than creating a new topic). */
+  continueTopicId?: string;
+  identifier: string;
+  /** Replaces the task's pinned model, for this run and later ones. */
+  model?: string;
+  /** Optional extra prompt prepended to the task instruction for this run. */
+  prompt?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
+}
+
+export interface RunTaskState {
+  identifier: string;
+  operationId?: string;
+  success: boolean;
+  taskId?: string;
+  topicId?: string;
+}
+
+export interface RunTasksParams {
+  /** Identifiers of tasks to run, in execution order. */
+  identifiers: string[];
+  /** Replaces the pinned model of every task in the batch, for this run and later ones. */
+  model?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
+}
+
+export interface RunTasksItemResult {
+  error?: string;
+  identifier: string;
+  operationId?: string;
+  refs?: string[];
+  success: boolean;
+  taskId?: string;
+  topicId?: string;
+}
+
+export interface RunTasksState {
+  failed: number;
+  results: RunTasksItemResult[];
+  succeeded: number;
+}
+
+// ==================== setTaskSchedule ====================
+
+export interface SetTaskScheduleParams {
+  /** Switch automation mode. Pass null to disable automation entirely. */
+  automationMode?: TaskAutomationMode | null;
+  /** Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear. */
+  heartbeatInterval?: number;
+  identifier: string;
+  /** Cap on the number of scheduled executions; null = unlimited. */
+  maxExecutions?: number | null;
+  /** Cron expression for scheduled mode. Pass null to clear. */
+  schedulePattern?: string | null;
+  /** IANA timezone for the cron expression. Pass null to clear. */
+  scheduleTimezone?: string | null;
+}
+
+export interface SetTaskScheduleState {
+  automationMode?: TaskAutomationMode | null;
+  identifier: string;
+  success: boolean;
+  taskId?: string;
+}
+
+// ==================== setTaskVerify ====================
+
+export interface SetTaskVerifyParams {
+  /** Turn the verify gate on/off. Pass null to clear the flag. */
+  enabled?: boolean | null;
+  identifier: string;
+  /** Cap on verify repair / re-run iterations (1-10). Pass null to clear. */
+  maxIterations?: number | null;
+  /** One-sentence acceptance requirement; the source criteria are synthesized from. Pass null to clear. */
+  requirement?: string | null;
+  /** Agent that executes the verify run. Pass null to fall back to the built-in verify agent. */
+  verifierAgentId?: string | null;
+  /** Ad-hoc acceptance criteria ids (references verify_criteria.id). Pass null to clear. */
+  verifyCriteriaIds?: string[] | null;
+  /** Reuse a rubric template (references verify_rubrics.id). Pass null to clear. */
+  verifyRubricId?: string | null;
+}
+
+export interface SetTaskVerifyState {
+  enabled?: boolean | null;
+  identifier: string;
+  success: boolean;
+  taskId?: string;
+}
+
+// ==================== updateTaskStatus ====================
+
+export interface UpdateTaskStatusParams {
+  error?: string;
+  identifier?: string;
+  status: TaskStatus;
+}
+
+export interface UpdateTaskStatusState {
+  identifier?: string;
+  status: TaskStatus;
+  success: boolean;
+  taskId?: string;
+}
+
+// ==================== deleteTask ====================
+
+export interface DeleteTaskParams {
+  identifier: string;
+}
+
+export interface DeleteTaskState {
+  identifier: string;
+  success: boolean;
+  taskId?: string;
+}

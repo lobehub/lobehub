@@ -1,0 +1,179 @@
+import { toast } from '@lobehub/ui';
+import { t } from 'i18next';
+
+import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
+import { isGenerationPromptModerationError } from '@/business/client/isGenerationPromptModerationError';
+import { imageService } from '@/services/image';
+import { type StoreSetter } from '@/store/types';
+
+import { type ImageStore } from '../../store';
+import { generationBatchSelectors } from '../generationBatch/selectors';
+import { imageGenerationConfigSelectors } from '../generationConfig/selectors';
+import { generationTopicSelectors } from '../generationTopic';
+
+type Setter = StoreSetter<ImageStore>;
+export const createCreateImageSlice = (set: Setter, get: () => ImageStore, _api?: unknown) =>
+  new CreateImageActionImpl(set, get, _api);
+
+export class CreateImageActionImpl {
+  readonly #get: () => ImageStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ImageStore, _api?: unknown) {
+    // keep signature aligned with StateCreator params: (set, get, api)
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  async createImage() {
+    this.#set(
+      { blockedPrompt: undefined, isCreating: true },
+      false,
+      'createImage/startCreateImage',
+    );
+
+    const store = this.#get();
+    const imageNum = imageGenerationConfigSelectors.imageNum(store);
+    const parameters = imageGenerationConfigSelectors.parameters(store);
+    const provider = imageGenerationConfigSelectors.provider(store);
+    const model = imageGenerationConfigSelectors.model(store);
+    const activeGenerationTopicId = generationTopicSelectors.activeGenerationTopicId(store);
+    const { createGenerationTopic, switchGenerationTopic, setTopicBatchLoaded } = store;
+
+    if (!parameters) {
+      throw new TypeError('parameters is not initialized');
+    }
+
+    if (!parameters.prompt) {
+      throw new TypeError('prompt is empty');
+    }
+
+    // Track the final topic ID to use for image creation
+    let finalTopicId = activeGenerationTopicId;
+
+    // 1. Create generation topic if not exists
+    const generationTopicId = activeGenerationTopicId;
+    let isNewTopic = false;
+
+    if (!generationTopicId) {
+      isNewTopic = true;
+      const prompts = [parameters.prompt];
+      const newGenerationTopicId = await createGenerationTopic(prompts);
+      finalTopicId = newGenerationTopicId;
+
+      // 2. Initialize empty batch array to avoid skeleton screen
+      setTopicBatchLoaded(newGenerationTopicId);
+
+      // 3. Switch to the new topic (now it has empty data, so no skeleton screen)
+      switchGenerationTopic(newGenerationTopicId);
+    }
+
+    try {
+      // 4. If it's a new topic, set the creating state after topic creation
+      if (isNewTopic) {
+        this.#set(
+          { isCreatingWithNewTopic: true },
+          false,
+          'createImage/startCreateImageWithNewTopic',
+        );
+      }
+
+      // 5. Create image via service
+      await imageService.createImage({
+        generationTopicId: finalTopicId!,
+        provider,
+        model,
+        imageNum,
+        params: parameters as any,
+      });
+
+      // 6. Only refresh generation batches if it's not a new topic
+      if (!isNewTopic) {
+        await this.#get().refreshGenerationBatches();
+      }
+
+      // 7. Clear the prompt input after successful image creation
+      this.#set(
+        (state) => ({
+          parameters: { ...state.parameters, prompt: '' },
+        }),
+        false,
+        'createImage/clearPrompt',
+      );
+    } catch (error) {
+      // A rejected prompt is shown on the prompt input, where the user fixes it.
+      if (isGenerationPromptModerationError(error)) {
+        this.#set({ blockedPrompt: parameters.prompt }, false, 'createImage/promptBlocked');
+      }
+      handleLobeHubModelDeprecatedError(error);
+      throw error;
+    } finally {
+      // 8. Reset all creating states
+      if (isNewTopic) {
+        this.#set(
+          { isCreating: false, isCreatingWithNewTopic: false },
+          false,
+          'createImage/endCreateImageWithNewTopic',
+        );
+      } else {
+        this.#set({ isCreating: false }, false, 'createImage/endCreateImage');
+      }
+    }
+  }
+
+  dismissBlockedPrompt() {
+    this.#set({ blockedPrompt: undefined }, false, 'dismissBlockedPrompt');
+  }
+
+  async recreateImage(generationBatchId: string) {
+    this.#set({ isCreating: true }, false, 'recreateImage/startCreateImage');
+
+    const store = this.#get();
+    const activeGenerationTopicId = generationTopicSelectors.activeGenerationTopicId(store);
+    if (!activeGenerationTopicId) {
+      throw new Error('No active generation topic');
+    }
+
+    const { removeGenerationBatch } = store;
+    const batch = generationBatchSelectors.getGenerationBatchByBatchId(generationBatchId)(store)!;
+
+    // Use batch.generations.length to preserve original imageNum (not UI config)
+    const imageNum = batch.generations.length;
+
+    try {
+      // 1. Create the replacement first: the server can reject the stored config (e.g. a param
+      // the model no longer declares), and the original batch must survive that rejection.
+      await imageService.createImage({
+        generationTopicId: activeGenerationTopicId,
+        provider: batch.provider,
+        model: batch.model,
+        imageNum,
+        params: batch.config as any,
+      });
+
+      // 2. Delete the batch being replaced. The replacement is already queued, so a failed
+      // cleanup must not surface as a failed regenerate: retrying would queue and charge again.
+      try {
+        await removeGenerationBatch(generationBatchId, activeGenerationTopicId);
+      } catch (error) {
+        console.error('[recreateImage] failed to remove the replaced batch', error);
+      }
+
+      // 3. Refresh generation batches to show the real data
+      await store.refreshGenerationBatches();
+    } catch (error) {
+      // Regenerating reuses the batch's prompt, not the input's, so there is no
+      // input to annotate; fall back to a toast.
+      if (isGenerationPromptModerationError(error)) {
+        toast.error(t('generation.promptModeration.blocked', { ns: 'common' }));
+      }
+      handleLobeHubModelDeprecatedError(error);
+      throw error;
+    } finally {
+      this.#set({ isCreating: false }, false, 'recreateImage/endCreateImage');
+    }
+  }
+}
+
+export type CreateImageAction = Pick<CreateImageActionImpl, keyof CreateImageActionImpl>;

@@ -1,0 +1,65 @@
+---
+title: 配置腾讯云 COS 存储服务
+description: 详细步骤配置腾讯云 COS 存储服务，确保文件存储顺利进行。
+tags:
+  - 腾讯云 COS
+  - S3 存储
+  - 文件存储
+  - 环境变量
+---
+
+# 配置腾讯云 COS 存储服务
+
+在服务端数据库中我们需要配置 S3 存储服务来存储文件。
+
+## 配置步骤
+
+<Steps>
+  ### 配置并获取 S3 存储桶
+
+  你需要首先前往 [腾讯云 COS](https://console.cloud.tencent.com/cos/bucket) 并创建一个新的存储桶（Bucket）：
+
+  <Image alt={'腾讯云 COS 存储界面'} src={'/blog/assets0f244d5fe648127774636a54ae9ffafc.webp'} />
+
+  创建存储桶时将指定其名称，下文以 `lobe` 为例。选择 `公有读私有写`，地域随意，其余配置一概默认即可，然后点击创建。
+
+  <Image alt={'COS 创建存储桶'} src={'/blog/assets2ad69e4e124f49710fcedf8e9827f2f3.webp'} />
+
+  ### 获取存储桶相关环境变量
+
+  在 COS 存储桶的概览设置中，可以看到桶配置的信息：
+
+  <Image alt={'查看存储桶的相关信息'} src={'/blog/assetsc51018f1581b769727ad1bb3bb641567.webp'} />
+
+  其对应的环境变量为：
+
+  ```shell
+  # 存储桶的名称
+  S3_BUCKET=lobe-130xxxxxx2
+  # 存储桶的请求端点，注意没有前面的桶名
+  S3_ENDPOINT=https://cos.ap-chengdu.myqcloud.com
+  # 桶的区域
+  S3_REGION=ap-chengdu
+  ```
+
+  <Callout type={'warning'}>
+    请注意，`S3_ENDPOINT` 的值为 `https://cos.ap-chengdu.myqcloud.com`，而不是 `https://lobe-130xxxxxx2.cos.ap-chengdu.myqcloud.com`
+
+    且此处 URL 的 `https://` 不可缺失，须保持 URL 的完整性
+  </Callout>
+
+  ### 配置跨域
+
+  在左侧 `安全管理 - 跨域访问 CORS 设置` 中，添加以下配置并保存：
+
+  <Image alt={'配置跨域'} src={'/blog/assetsb6af626eeb0e1e638d80dc9ff7a6eba9.webp'} />
+
+  ### 获取 S3 秘钥
+
+  前往 [腾讯云 API 密钥管理](https://console.cloud.tencent.com/cam/capi) 创建一个新的 SecretId 和 SecretKey，填写为 `S3_ACCESS_KEY_ID` 和 `S3_SECRET_ACCESS_KEY` 即可。
+</Steps>
+
+### 附加说明
+
+- 对于对象存储，你可以选择设置 CDN 加速，以提高不同区域的访问速度，提高并发的同时减少下行费用。
+- 创建 API 密钥时，推荐使用角色管理，以提高安全性。

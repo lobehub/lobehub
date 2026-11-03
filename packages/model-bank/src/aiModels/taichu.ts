@@ -1,0 +1,229 @@
+import type { AIChatModelCard } from '../types/aiModel';
+
+// https://cloud.zidongtaichu.com/taichu/maas/#/modellist
+
+const taichuChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'taichu_o1 is a next-generation reasoning large model that achieves human-like chain-of-thought through multimodal interaction and reinforcement learning. It supports complex decision-making simulations and, while maintaining high-precision output, reveals interpretable reasoning pathways. It is well-suited for strategy analysis, deep thinking, and similar scenarios.',
+    displayName: 'Taichu-O1',
+    enabled: true,
+    family: 'taichu',
+    id: 'taichu_o1',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      vision: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'The No-Thinking version of the Taichu4.0-VL 2B model features lower memory usage, a lightweight design, fast response speed, and strong multimodal understanding capabilities.',
+    displayName: 'Taichu4.0-VL-2B-NoThinking',
+    family: 'taichu',
+    id: 'taichu4_vl_2b_nothinking',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'The Thinking version of the Taichu4.0-VL 3B model efficiently performs multimodal understanding and reasoning tasks, with comprehensive upgrades in visual comprehension, visual localization, OCR recognition, and related capabilities.',
+    displayName: 'Taichu4.0-VL-3B-Thinking',
+    family: 'taichu',
+    id: 'taichu4_vl_3b',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'The No-Thinking version of the Taichu4.0-VL 32B model is designed for complex image-and-text understanding and visual knowledge QA scenarios, excelling in image captioning, visual question answering, video comprehension, and visual localization tasks.',
+    displayName: 'Taichu4.0-VL-32B-NoThinking',
+    family: 'taichu',
+    id: 'taichu4_vl_32b_nothinking',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'The Thinking version of the Taichu4.0-VL 32B model is suited for complex multimodal understanding and reasoning tasks, demonstrating outstanding performance in multimodal mathematical reasoning, multimodal agent capabilities, and general image and visual comprehension.',
+    displayName: 'Taichu4.0-VL-32B-Thinking',
+    family: 'taichu',
+    id: 'taichu4_vl_32b',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    contextWindowTokens: 32_768,
+    description:
+      'The Zidong Taichu large language model is a high-performance text-generation model developed using fully domestic full-stack technologies. Through structured compression of a hundred-billion-parameter base model and task-specific optimization, it significantly enhances complex text comprehension and knowledge reasoning capabilities. It excels in scenarios such as long-document analysis, cross-lingual information extraction, and knowledge-constrained generation.',
+    displayName: 'Taichu-LLM-2B',
+    family: 'taichu',
+    id: 'taichu_llm_2b',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.9, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    contextWindowTokens: 32_768,
+    description:
+      'The Zidong Taichu large language model is a high-performance text-generation model developed using fully domestic full-stack technologies. Through structured compression of a hundred-billion-parameter base model and task-specific optimization, it significantly enhances complex text comprehension and knowledge reasoning capabilities. It excels in scenarios such as long-document analysis, cross-lingual information extraction, and knowledge-constrained generation.',
+    displayName: 'Taichu-LLM-14B',
+    family: 'taichu',
+    id: 'taichu_llm_14b',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'The Zidong Taichu large language model is a high-performance text-generation model developed using fully domestic full-stack technologies. Through structured compression of a hundred-billion-parameter base model and task-specific optimization, it significantly enhances complex text comprehension and knowledge reasoning capabilities. It excels in scenarios such as long-document analysis, cross-lingual information extraction, and knowledge-constrained generation.',
+    displayName: 'Taichu-LLM',
+    family: 'taichu',
+    id: 'taichu_llm',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'DeepSeek-R1 is a reinforcement-learning-driven reasoning model that addresses repetition and readability issues. Before RL, it uses cold-start data to further improve reasoning performance. It matches OpenAI-o1 on math, coding, and reasoning tasks, with carefully designed training improving overall results.',
+    displayName: 'DeepSeek R1',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
+    id: 'deepseek_r1',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'DeepSeek-R1-Distill-Qwen-14B is distilled from Qwen2.5-14B and fine-tuned on 800K curated samples generated by DeepSeek-R1, delivering strong reasoning.',
+    displayName: 'DeepSeek R1 Distill Qwen 14B',
+    family: 'deepseek',
+    generation: 'deepseek-r1-distill',
+    id: 'deepseek_r1_distill_qwen_14b',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'DeepSeek-R1-Distill-Qwen-32B is distilled from Qwen2.5-32B and fine-tuned on 800K curated samples generated by DeepSeek-R1, excelling in math, coding, and reasoning.',
+    displayName: 'DeepSeek R1 Distill Qwen 32B',
+    family: 'deepseek',
+    generation: 'deepseek-r1-distill',
+    id: 'deepseek_r1_distill_qwen_32b',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'DeepSeek-R1-Distill-Llama-70B is distilled from Llama-3.3-70B-Instruct. As part of the DeepSeek-R1 series, it is fine-tuned on DeepSeek-R1-generated samples and performs strongly in math, coding, and reasoning.',
+    displayName: 'DeepSeek R1 Distill Llama 70B',
+    family: 'deepseek',
+    generation: 'deepseek-r1-distill',
+    id: 'deepseek_r1_distill_llama_70b',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'Mid-sized reasoning model in the Qwen family. Compared with standard instruction-tuned models, QwQ’s thinking and reasoning abilities significantly boost downstream performance, especially on hard problems.',
+    displayName: 'QwQ 32B',
+    family: 'qwen',
+    generation: 'qwq',
+    id: 'qwq_32b',
+    type: 'chat',
+  },
+];
+
+export const allModels = [...taichuChatModels];
+
+export default allModels;

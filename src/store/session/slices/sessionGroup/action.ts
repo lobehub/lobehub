@@ -1,0 +1,57 @@
+import { toast } from '@lobehub/ui';
+import { t } from 'i18next';
+
+import { sessionService } from '@/services/session';
+import { type SessionStore } from '@/store/session';
+import { type StoreSetter } from '@/store/types';
+import { type SessionGroupItem } from '@/types/session';
+
+import { type SessionGroupsDispatch } from './reducer';
+import { sessionGroupsReducer } from './reducer';
+
+type Setter = StoreSetter<SessionStore>;
+export const createSessionGroupSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
+  new SessionGroupActionImpl(set, get, _api);
+
+export class SessionGroupActionImpl {
+  readonly #get: () => SessionStore;
+
+  constructor(set: Setter, get: () => SessionStore, _api?: unknown) {
+    void _api;
+    void set;
+    this.#get = get;
+  }
+
+  addSessionGroup = async (name: string): Promise<string> => {
+    const id = await sessionService.createSessionGroup(name);
+
+    return id;
+  };
+
+  removeSessionGroup = async (id: string): Promise<void> => {
+    await sessionService.removeSessionGroup(id);
+  };
+
+  updateSessionGroupName = async (id: string, name: string): Promise<void> => {
+    await sessionService.updateSessionGroup(id, { name });
+  };
+
+  updateSessionGroupSort = async (items: SessionGroupItem[]): Promise<void> => {
+    const sortMap = items.map((item, index) => ({ id: item.id, sort: index }));
+
+    this.#get().internal_dispatchSessionGroups({ sortMap, type: 'updateSessionGroupOrder' });
+
+    const loadingToast = toast.loading(t('sessionGroup.sorting', { ns: 'chat' }));
+
+    await sessionService.updateSessionGroupOrder(sortMap);
+    loadingToast.close();
+    toast.success(t('sessionGroup.sortSuccess', { ns: 'chat' }));
+  };
+
+  internal_dispatchSessionGroups = (payload: SessionGroupsDispatch): void => {
+    const nextSessionGroups = sessionGroupsReducer(this.#get().sessionGroups, payload);
+    this.#get().internal_processSessions(this.#get().sessions, nextSessionGroups);
+  };
+}
+
+export type SessionGroupAction = Pick<SessionGroupActionImpl, keyof SessionGroupActionImpl>;

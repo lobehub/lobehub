@@ -1,0 +1,190 @@
+'use client';
+
+import { createStaticStyles, cssVar, DraggablePanel } from '@lobehub/ui';
+import { type ReactNode } from 'react';
+import { Activity, memo, Suspense, useMemo, useRef } from 'react';
+
+import NavPanelUpgradeEntry from '@/business/client/features/NavPanelUpgradeEntry';
+import { isDesktop } from '@/const/version';
+import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';
+import Footer from '@/features/HomeSidebar/Footer';
+import { USER_DROPDOWN_ICON_ID } from '@/features/NavPanel/constants';
+import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
+import { useGlobalStore } from '@/store/global';
+import {
+  NAV_PANEL_MAX_WIDTH,
+  NAV_PANEL_MIN_WIDTH,
+  systemStatusSelectors,
+} from '@/store/global/selectors';
+import { isMacOS } from '@/utils/platform';
+
+import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
+import { BACK_BUTTON_ID } from './BackButton';
+
+const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
+  content: css`
+    position: relative;
+
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+
+    height: 100%;
+    min-height: 100%;
+    max-height: 100%;
+  `,
+  inner: css`
+    position: relative;
+
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 240px;
+    max-width: 100%;
+    min-height: 0;
+  `,
+  layer: css`
+    position: absolute;
+    inset: 0;
+
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+
+    min-width: 240px;
+    max-width: 100%;
+    min-height: 100%;
+    max-height: 100%;
+  `,
+  panel: css`
+    user-select: none;
+    height: 100%;
+    color: ${cssVar.colorTextSecondary};
+    background: ${isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout};
+
+    * {
+      user-select: none;
+    }
+
+    #${TOGGLE_BUTTON_ID} {
+      width: 0 !important;
+      opacity: 0;
+      transition:
+        opacity,
+        width 0.2s ${cssVar.motionEaseOut};
+    }
+
+    #${USER_DROPDOWN_ICON_ID} {
+      width: 0 !important;
+      opacity: 0;
+      transition:
+        opacity,
+        width 0.2s ${cssVar.motionEaseOut};
+    }
+    #${BACK_BUTTON_ID} {
+      width: 24px !important;
+    }
+
+    &:hover {
+      #${TOGGLE_BUTTON_ID} {
+        width: 32px !important;
+        opacity: 1;
+      }
+
+      #${USER_DROPDOWN_ICON_ID} {
+        width: 14px !important;
+        opacity: 1;
+      }
+    }
+  `,
+}));
+
+interface NavPanelDraggableProps {
+  activeContent: {
+    key: string;
+    node: ReactNode;
+  };
+  homeContent?: ReactNode;
+}
+
+const classNames = {
+  content: draggableStyles.content,
+};
+
+const hiddenLayerStyle = { display: 'none' };
+
+export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, homeContent }) => {
+  const [expand, togglePanel, isStatusInit] = useGlobalStore((s) => [
+    systemStatusSelectors.showLeftPanel(s),
+    s.toggleLeftPanel,
+    systemStatusSelectors.isStatusInit(s),
+  ]);
+  const handleSizeChange = useNavPanelSizeChangeHandler();
+
+  // Defer DraggablePanel mount until system status hydrates; otherwise defaultSize
+  // captures the pre-hydration default and the DOM drifts off NavigationBar's live width.
+  const defaultWidthRef = useRef(0);
+  if (defaultWidthRef.current === 0 && isStatusInit) {
+    defaultWidthRef.current = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
+  }
+
+  const styles = useMemo(
+    () => ({
+      background: isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout,
+      zIndex: 11,
+    }),
+    [],
+  );
+
+  if (defaultWidthRef.current === 0) {
+    const pendingWidth = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
+    return <div aria-hidden style={{ flexShrink: 0, height: '100%', width: pendingWidth }} />;
+  }
+
+  const defaultSize = { height: '100%', width: defaultWidthRef.current };
+  const isHomeActive = activeContent.key === 'home';
+
+  return (
+    <DraggablePanel
+      className={draggableStyles.panel}
+      classNames={classNames}
+      defaultSize={defaultSize}
+      expand={expand}
+      expandable={false}
+      maxWidth={NAV_PANEL_MAX_WIDTH}
+      minWidth={NAV_PANEL_MIN_WIDTH}
+      placement="left"
+      showBorder={false}
+      style={styles}
+      onExpandChange={togglePanel}
+      onSizeDragging={handleSizeChange}
+    >
+      <div className={draggableStyles.inner}>
+        {/* Home stays mounted while a route-owned panel is active so its list
+            state survives the round trip. Activity keeps the fibers but not the
+            visibility, so the layer is force-hidden like HomeLayout does. */}
+        {homeContent && (
+          <Activity mode={isHomeActive ? 'visible' : 'hidden'} name="NavPanelHome">
+            <div
+              className={draggableStyles.layer}
+              style={isHomeActive ? undefined : hiddenLayerStyle}
+            >
+              {homeContent}
+            </div>
+          </Activity>
+        )}
+        {!isHomeActive && (
+          <div className={draggableStyles.layer} key={activeContent.key}>
+            {activeContent.node}
+          </div>
+        )}
+      </div>
+      <Suspense fallback={null}>
+        <NavPanelUpgradeEntry />
+      </Suspense>
+      <Suspense>
+        <Footer />
+      </Suspense>
+    </DraggablePanel>
+  );
+});

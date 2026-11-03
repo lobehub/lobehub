@@ -1,0 +1,42 @@
+---
+title: Faster Chat Context & Codex Quota
+description: >-
+  Reuse recent inputs, restore or forward messages, attach local files as path
+  context, and see Codex quota details from the chat input.
+tags:
+  - Chat
+  - Agents
+  - Codex
+  - Workspace
+---
+
+# Faster Chat Context & Codex Quota
+
+This week focuses on the small controls that keep an active conversation moving. You can bring back recent prompts, reuse messages with their attachments, pass context to another Agent, and see more of what your local coding Agent can use before you run it.
+
+## Features
+
+- **Jump through input history with arrow keys.** Press Up or Down in the composer to move through recent prompts, with a preview picker to confirm the text before sending it again.
+- **Restore rich messages to the input.** "Restore to input" brings a previous user message back into the composer, including attached images and files, so you can adjust it instead of rebuilding it by hand.
+- **Forward context to another Agent.** Select messages and send them to another Agent when a conversation has context worth reusing in a different workflow.
+- **Drag local files as path context.** When you are working from a selected local directory, dragging a local file into chat adds it as a path node the Agent can reference.
+- **Check Codex quota before running.** Codex controls now show remaining quota and reset counts from the input bar, alongside speed and worktree controls for local coding sessions.
+- **See Agent-level usage.** Agent stats now surface token, usage, and cost details at the Agent level, making it easier to understand which Agents drive spend.
+
+## Improvements
+
+- **Chat menus are easier to scan.** Input menus are grouped into sections, working-directory and Git controls are clearer, and completed Agent turns fold into cleaner summaries.
+- **Agent documents are easier to browse.** Document folders can collapse into a progressive index row, missing documents show a clear not-found state, and document lists refresh after edits.
+- **Task progress is easier to check.** Task topic chats open in a floating panel, and run cards show the latest message so you can judge progress without opening every detail page.
+- **Reviews and verification reports are clearer.** The review panel now uses a two-pane diff with a file tree, and verification reports separate system errors from rejected delivery checks.
+- **Provider behavior is more predictable.** AIHubMix can use a configured proxy URL, Vertex image uploads no longer leak base64 into text, and provider content-filter errors stop retrying needlessly.
+- **Skill and connector surfaces are clearer.** Skill tags show descriptions and open their `SKILL.md`, connected connector details respect connection status, and custom MCP connectors appear in the mention picker.
+
+## Fixes
+
+- **Chat creation and replies are more stable.** Sending while a topic is being created now queues correctly, optimistic topics stay in the right project group, and final answers stay visible after folded turns.
+- **Workspace scoping is tighter.** Home recents, Skill Store imports, removing Agents from groups, knowledge-base file access, and user-supplied URL fetches now stay scoped to the active workspace and caller.
+- **Desktop and local Agent flows recover better.** The desktop app detects user-local Claude Code installs, preserves local paths on drag, routes human-intervention replies to the right conversation, and keeps the topics tab title accurate.
+- **Task and document edge cases are fixed.** Missing document and task states no longer hang or crash, task run routing is corrected, and large document reads are capped to protect the conversation context.
+- **Agent runtime failures are less confusing.** Remote Agent dispatch, oversized command output, cached input usage, workflow run cancellation, and single `@agent` routing in gateway mode now handle their edge cases cleanly.
+- **Security hardening.** URL fetching, skill import paths, knowledge-base file resolution, and workspace ownership checks were tightened to reduce cross-scope access risk.

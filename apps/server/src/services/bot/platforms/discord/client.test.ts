@@ -1,0 +1,575 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { DiscordClientFactory } from './client';
+
+describe('DiscordGatewayClient', () => {
+  const createClient = () =>
+    new DiscordClientFactory().createClient(
+      {
+        applicationId: 'app-123',
+        credentials: { botToken: 'token', publicKey: 'public-key' },
+        platform: 'discord',
+        settings: {},
+      },
+      {},
+    );
+
+  describe('shouldSubscribe', () => {
+    it('should not subscribe to top-level guild channels', () => {
+      const client = createClient();
+
+      expect(client.shouldSubscribe?.('discord:guild-1:channel-1')).toBe(false);
+    });
+
+    it('should subscribe to Discord threads', () => {
+      const client = createClient();
+
+      expect(client.shouldSubscribe?.('discord:guild-1:channel-1:thread-1')).toBe(true);
+    });
+
+    it('should subscribe to DMs', () => {
+      const client = createClient();
+
+      expect(client.shouldSubscribe?.('discord:@me:dm-channel-1')).toBe(true);
+    });
+  });
+
+  describe('shouldExpireIdleTopic', () => {
+    it('keeps the topic of a Discord guild thread regardless of idle time', () => {
+      const client = createClient();
+
+      expect(client.shouldExpireIdleTopic?.('discord:guild-1:channel-1:thread-1')).toBe(false);
+    });
+
+    it('expires idle topics in DMs', () => {
+      const client = createClient();
+
+      expect(client.shouldExpireIdleTopic?.('discord:@me:dm-channel-1')).toBe(true);
+    });
+  });
+
+  describe('isSoloBotConversation', () => {
+    const installFakeApi = (client: any) => {
+      const listThreadMembers = vi.fn().mockResolvedValue([]);
+      client.discord = { listThreadMembers };
+      return listThreadMembers;
+    };
+
+    it('checks the real Discord thread id for a guild thread', async () => {
+      const client = createClient() as any;
+      const listThreadMembers = installFakeApi(client);
+      listThreadMembers.mockResolvedValue([
+        { member: { user: { bot: false, id: 'alice' } } },
+        { member: { user: { bot: true, id: 'app-123' } } },
+      ]);
+
+      await expect(
+        client.isSoloBotConversation('discord:guild-1:channel-1:thread-1'),
+      ).resolves.toBe(true);
+      expect(listThreadMembers).toHaveBeenCalledWith('thread-1');
+    });
+
+    it('fails closed without a guild thread segment', async () => {
+      const client = createClient() as any;
+      const listThreadMembers = installFakeApi(client);
+
+      const guildChannel = await client.isSoloBotConversation('discord:guild-1:channel-1');
+      const dm = await client.isSoloBotConversation('discord:@me:dm-1');
+      expect(guildChannel).toBe(false);
+      expect(dm).toBe(false);
+      expect(listThreadMembers).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('extraGroupAllowlistChannels', () => {
+    // Operators paste the parent channel ID (Discord "Copy Channel ID")
+    // into groupAllowFrom; @-mentions arrive routed through an auto-created
+    // reply thread, so `thread.channelId` is the thread, not the parent.
+    // This hook surfaces the parent so the allowlist still matches.
+    it('returns the parent channel ID when the thread segment is present', () => {
+      const client = createClient();
+
+      expect(
+        client.extraGroupAllowlistChannels?.('discord:guild-1:channel-1:auto-thread-id'),
+      ).toEqual(['channel-1']);
+    });
+
+    it('returns an empty list for top-level channels (parent already supplied)', () => {
+      const client = createClient();
+
+      expect(client.extraGroupAllowlistChannels?.('discord:guild-1:channel-1')).toEqual([]);
+    });
+
+    it('returns an empty list for DMs (no parent concept)', () => {
+      const client = createClient();
+
+      expect(client.extraGroupAllowlistChannels?.('discord:@me:dm-channel-1')).toEqual([]);
+    });
+  });
+
+  describe('extractFiles', () => {
+    // Discord is the easy case: attachments come with public CDN URLs that
+    // require no auth and survive `Message.toJSON` unchanged. extractFiles
+    // just walks `att.url` and (Discord-specific) digs into
+    // `raw.referenced_message.attachments` for quoted-message attachments.
+
+    const makeMessage = (overrides: Record<string, unknown>) =>
+      ({
+        attachments: [],
+        id: 'msg-1',
+        text: '',
+        ...overrides,
+      }) as any;
+
+    it('returns undefined when no attachments are present', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(makeMessage({ attachments: [] }));
+      expect(result).toBeUndefined();
+    });
+
+    it('forwards direct attachments by URL with metadata', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(
+        makeMessage({
+          attachments: [
+            {
+              mimeType: 'image/png',
+              name: 'screenshot.png',
+              size: 4321,
+              type: 'image',
+              url: 'https://cdn.discordapp.com/attachments/123/456/screenshot.png',
+            },
+          ],
+        }),
+      );
+
+      expect(result).toEqual([
+        {
+          mimeType: 'image/png',
+          name: 'screenshot.png',
+          size: 4321,
+          url: 'https://cdn.discordapp.com/attachments/123/456/screenshot.png',
+        },
+      ]);
+    });
+
+    it('skips direct attachments missing url', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(
+        makeMessage({
+          attachments: [
+            { mimeType: 'image/png', name: 'orphan.png', type: 'image' },
+            {
+              mimeType: 'image/png',
+              name: 'good.png',
+              type: 'image',
+              url: 'https://cdn.discordapp.com/attachments/123/456/good.png',
+            },
+          ],
+        }),
+      );
+      expect(result).toEqual([
+        {
+          mimeType: 'image/png',
+          name: 'good.png',
+          size: undefined,
+          url: 'https://cdn.discordapp.com/attachments/123/456/good.png',
+        },
+      ]);
+    });
+
+    it('picks up referenced (quoted) message attachments via raw payload', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(
+        makeMessage({
+          attachments: [],
+          raw: {
+            referenced_message: {
+              attachments: [
+                {
+                  content_type: 'image/jpeg',
+                  filename: 'quoted.jpg',
+                  size: 100,
+                  url: 'https://cdn.discordapp.com/attachments/123/456/quoted.jpg',
+                },
+              ],
+            },
+          },
+        }),
+      );
+
+      expect(result).toEqual([
+        {
+          mimeType: 'image/jpeg',
+          name: 'quoted.jpg',
+          size: 100,
+          url: 'https://cdn.discordapp.com/attachments/123/456/quoted.jpg',
+        },
+      ]);
+    });
+
+    it('combines direct and referenced attachments in order', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(
+        makeMessage({
+          attachments: [
+            {
+              mimeType: 'image/png',
+              name: 'direct.png',
+              type: 'image',
+              url: 'https://cdn.discordapp.com/attachments/123/456/direct.png',
+            },
+          ],
+          raw: {
+            referenced_message: {
+              attachments: [
+                {
+                  content_type: 'image/jpeg',
+                  filename: 'quoted.jpg',
+                  size: 100,
+                  url: 'https://cdn.discordapp.com/attachments/123/456/quoted.jpg',
+                },
+              ],
+            },
+          },
+        }),
+      );
+
+      expect(result).toHaveLength(2);
+      expect((result as any)?.[0]?.name).toBe('direct.png');
+      expect((result as any)?.[1]?.name).toBe('quoted.jpg');
+    });
+
+    it('returns undefined when neither direct nor referenced attachments have urls', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(
+        makeMessage({
+          attachments: [{ mimeType: 'image/png', name: 'no-url.png', type: 'image' }],
+          raw: { referenced_message: { attachments: [] } },
+        }),
+      );
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('openThreadForChannelWake ()', () => {
+    // The chat-sdk Discord adapter only auto-spawns a reply thread on
+    // @-mention. For the watch-keyword wake path the bot would otherwise
+    // reply directly in the parent channel; this hook opens a thread off
+    // the triggering message so the conversation stays isolated.
+
+    const installFakeApi = (client: any, impl: () => any) => {
+      // The client is constructed in the factory and holds its own
+      // DiscordApi via a private field. Reach in and replace the one
+      // method we care about for these tests.
+      client.discord = {
+        ...client.discord,
+        startThreadFromMessage: vi.fn(impl),
+      };
+      return client.discord.startThreadFromMessage as ReturnType<typeof vi.fn>;
+    };
+
+    it('spawns a thread off the triggering message for a top-level guild channel', async () => {
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => ({ id: 'new-thread-1' }));
+
+      const result = await client.openThreadForChannelWake('discord:guild-1:channel-1', {
+        id: 'msg-99',
+      });
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0][0]).toBe('channel-1');
+      expect(spy.mock.calls[0][1]).toBe('msg-99');
+      expect(result).toBe('discord:guild-1:channel-1:new-thread-1');
+    });
+
+    it('returns undefined for DMs (guildId === @me)', async () => {
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => ({ id: 'never-called' }));
+
+      const result = await client.openThreadForChannelWake('discord:@me:dm-1', { id: 'msg-1' });
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined when the threadId already has a thread segment', async () => {
+      // 4-segment IDs already deliver replies inside a sub-thread; no
+      // need to spawn another.
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => ({ id: 'never-called' }));
+
+      const result = await client.openThreadForChannelWake(
+        'discord:guild-1:channel-1:existing-thread',
+        { id: 'msg-1' },
+      );
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined when the message has no usable id', async () => {
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => ({ id: 'never-called' }));
+
+      expect(
+        await client.openThreadForChannelWake('discord:guild-1:channel-1', undefined),
+      ).toBeUndefined();
+      expect(
+        await client.openThreadForChannelWake('discord:guild-1:channel-1', {}),
+      ).toBeUndefined();
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('returns undefined and swallows the error when the Discord API rejects', async () => {
+      // Best-effort contract: a thread-creation failure must NOT bubble
+      // up to the router, since the router would then drop the user's
+      // message. Falling back to a channel-level reply is the safer
+      // failure mode.
+      const client = createClient() as any;
+      const spy = installFakeApi(client, async () => {
+        throw new Error('boom');
+      });
+
+      const result = await client.openThreadForChannelWake('discord:guild-1:channel-1', {
+        id: 'msg-99',
+      });
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('sanitizeUserInput / resolveMentions', () => {
+    // Real Discord ids are numeric snowflakes; the mention regex only matches those.
+    const createNumericClient = () =>
+      new DiscordClientFactory().createClient(
+        {
+          applicationId: '2000',
+          credentials: { botToken: 'token', publicKey: 'public-key' },
+          platform: 'discord',
+          settings: {},
+        },
+        {},
+      );
+    const raw = {
+      mentions: [
+        { global_name: 'Shadow Arvin', id: '111', username: 'shadow' },
+        { bot: true, global_name: null, id: '2000', username: 'Lobo' },
+      ],
+    };
+
+    it('names every mention and only strips the leading self mention', () => {
+      const client = createNumericClient();
+      expect(client.sanitizeUserInput!('<@111> 我搞了个 <@2000> 来抢你的活', { raw } as any)).toBe(
+        '@Shadow Arvin (<@111>) 我搞了个 @Lobo 来抢你的活',
+      );
+      expect(client.sanitizeUserInput!('<@2000> /new', { raw } as any)).toBe('/new');
+    });
+
+    it('resolveMentions keeps the self mention as a name', () => {
+      const client = createNumericClient();
+      expect(client.resolveMentions!('<@2000> hi <@111>', { raw } as any)).toBe(
+        '@Lobo hi @Shadow Arvin (<@111>)',
+      );
+    });
+  });
+
+  describe('extractAuthorLocale', () => {
+    const makeMessage = (overrides: Record<string, unknown>) =>
+      ({
+        attachments: [],
+        id: 'msg-1',
+        text: '',
+        ...overrides,
+      }) as any;
+
+    it('returns the user locale from an INTERACTION_CREATE payload', () => {
+      const client = createClient();
+      expect(
+        client.extractAuthorLocale!(
+          makeMessage({ raw: { locale: 'pt-BR', guild_locale: 'en-US' } }),
+        ),
+      ).toBe('pt-BR');
+    });
+
+    it('falls back to guild_locale when the user-level field is missing', () => {
+      const client = createClient();
+      expect(client.extractAuthorLocale!(makeMessage({ raw: { guild_locale: 'zh-CN' } }))).toBe(
+        'zh-CN',
+      );
+    });
+
+    it('returns undefined for plain MESSAGE_CREATE payloads (Discord does not expose user locale there)', () => {
+      const client = createClient();
+      expect(
+        client.extractAuthorLocale!(
+          makeMessage({ raw: { author: { id: '123', username: 'alice' } } }),
+        ),
+      ).toBeUndefined();
+      expect(client.extractAuthorLocale!(makeMessage({ raw: {} }))).toBeUndefined();
+      expect(client.extractAuthorLocale!(makeMessage({}))).toBeUndefined();
+    });
+  });
+
+  describe('getBotNames', () => {
+    const withApi = (getBotNames: ReturnType<typeof vi.fn>) => {
+      const client = createClient() as any;
+      client.discord = { getBotNames };
+
+      return client as { botNames?: { expiresAt: number }; getBotNames: () => Promise<string[]> };
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('reads the names once and serves them from memory for an hour', async () => {
+      const read = vi.fn().mockResolvedValue(['Shadow Arvin']);
+      const client = withApi(read);
+
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+
+      expect(read).toHaveBeenCalledTimes(1);
+    });
+
+    it('picks up a rename once the hour has passed', async () => {
+      vi.useFakeTimers();
+      const read = vi.fn().mockResolvedValueOnce(['Old Name']).mockResolvedValue(['New Name']);
+      const client = withApi(read);
+
+      await client.getBotNames();
+      vi.advanceTimersByTime(60 * 60 * 1000 + 1);
+
+      await expect(client.getBotNames()).resolves.toEqual(['New Name']);
+    });
+
+    it('keeps the last known names when a refresh fails, and waits before asking again', async () => {
+      vi.useFakeTimers();
+      const read = vi
+        .fn()
+        .mockResolvedValueOnce(['Shadow Arvin'])
+        .mockRejectedValue(new Error('429'));
+      const client = withApi(read);
+
+      await client.getBotNames();
+      vi.advanceTimersByTime(60 * 60 * 1000 + 1);
+
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+      // One failed refresh, not one per message.
+      expect(read).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(60 * 1000 + 1);
+      await client.getBotNames();
+      expect(read).toHaveBeenCalledTimes(3);
+    });
+
+    it('throws when there is no name to fall back on, so the caller retries on the next message', async () => {
+      const client = withApi(vi.fn().mockRejectedValue(new Error('down')));
+
+      await expect(client.getBotNames()).rejects.toThrow('down');
+    });
+  });
+  describe('getBotNames in a server', () => {
+    const withApi = (api: Record<string, ReturnType<typeof vi.fn>>) => {
+      const client = createClient() as any;
+      client.discord = api;
+
+      return client as { getBotNames: (threadId?: string) => Promise<string[]> };
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('adds the nickname the bot goes by in that server', async () => {
+      const getGuildNickname = vi.fn().mockResolvedValue('Nasa');
+      const client = withApi({
+        getBotNames: vi.fn().mockResolvedValue(['Shadow Arvin']),
+        getGuildNickname,
+      });
+
+      await expect(client.getBotNames('discord:guild-1:chan-1:thread-1')).resolves.toEqual([
+        'Shadow Arvin',
+        'Nasa',
+      ]);
+      await client.getBotNames('discord:guild-1:chan-2');
+
+      expect(getGuildNickname).toHaveBeenCalledTimes(1);
+      expect(getGuildNickname).toHaveBeenCalledWith('guild-1', expect.any(String));
+    });
+
+    it('asks nothing about a server for a DM or without a conversation', async () => {
+      const getGuildNickname = vi.fn();
+      const client = withApi({
+        getBotNames: vi.fn().mockResolvedValue(['Shadow Arvin']),
+        getGuildNickname,
+      });
+
+      await expect(client.getBotNames('discord:@me:dm-1')).resolves.toEqual(['Shadow Arvin']);
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+      expect(getGuildNickname).not.toHaveBeenCalled();
+    });
+
+    it('keeps the account names when the nickname cannot be read, and waits before asking again', async () => {
+      vi.useFakeTimers();
+      const getGuildNickname = vi.fn().mockRejectedValue(new Error('403'));
+      const client = withApi({
+        getBotNames: vi.fn().mockResolvedValue(['Shadow Arvin']),
+        getGuildNickname,
+      });
+
+      await expect(client.getBotNames('discord:guild-1:chan-1')).resolves.toEqual(['Shadow Arvin']);
+      await client.getBotNames('discord:guild-1:chan-1');
+      expect(getGuildNickname).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(60 * 1000 + 1);
+      await client.getBotNames('discord:guild-1:chan-1');
+      expect(getGuildNickname).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('reply threads chosen by the bot', () => {
+    it('offers the channel or a thread only at the top level of a server channel', () => {
+      const client = createClient() as any;
+      const message = { id: 'msg-1', raw: { id: 'msg-1' } };
+
+      expect(client.getReplyTargets('discord:guild-1:chan-1', message)).toEqual({
+        channel: 'discord:guild-1:chan-1',
+        namesThread: true,
+        openThread: expect.any(Function),
+      });
+      expect(client.getReplyTargets('discord:guild-1:chan-1:thread-1', message)).toBeUndefined();
+      expect(client.getReplyTargets('discord:@me:dm-1', message)).toBeUndefined();
+      expect(client.getReplyTargets('telegram:chat-1', message)).toBeUndefined();
+    });
+
+    it('names the thread it opens after the subject', async () => {
+      const client = createClient() as any;
+      const startThreadFromMessage = vi.fn().mockResolvedValue({ id: 'thread-9' });
+      client.discord = { ...client.discord, startThreadFromMessage };
+
+      const result = await client
+        .getReplyTargets('discord:guild-1:chan-1', { id: 'msg-1', raw: { id: 'msg-1' } })
+        .openThread('  昨天部署失败排查 ');
+
+      expect(startThreadFromMessage).toHaveBeenCalledWith('chan-1', 'msg-1', '昨天部署失败排查');
+      expect(result).toBe('discord:guild-1:chan-1:thread-9');
+    });
+
+    it('installs the mention-thread patch only when the router asks for it', () => {
+      const createDiscordThread = vi.fn();
+      const adapter = { createDiscordThread };
+      const chatBot = { adapters: new Map([['discord', adapter]]) } as any;
+      const client = createClient() as any;
+
+      client.applyChatPatches(chatBot);
+      expect(adapter.createDiscordThread).toBe(createDiscordThread);
+
+      client.applyChatPatches(chatBot, { deferMentionThread: async () => true });
+      expect(adapter.createDiscordThread).not.toBe(createDiscordThread);
+    });
+  });
+});

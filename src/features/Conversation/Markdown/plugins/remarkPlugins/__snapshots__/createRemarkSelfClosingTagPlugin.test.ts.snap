@@ -1,0 +1,393 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`createRemarkSelfClosingTagPlugin > should handle multiple tags in unordered list with directories and files 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "position": {
+            "end": {
+              "column": 32,
+              "line": 1,
+              "offset": 31,
+            },
+            "start": {
+              "column": 1,
+              "line": 1,
+              "offset": 0,
+            },
+          },
+          "type": "text",
+          "value": "我已查看了你桌面上 test 文件夹的目录，里面包含以下项目：",
+        },
+      ],
+      "position": {
+        "end": {
+          "column": 32,
+          "line": 1,
+          "offset": 31,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0,
+        },
+      },
+      "type": "paragraph",
+    },
+    {
+      "children": [
+        {
+          "checked": null,
+          "children": [
+            {
+              "data": {
+                "hName": "localFile",
+                "hProperties": {
+                  "isDirectory": true,
+                  "name": ".config",
+                  "path": "/Users/user/Desktop/test/.config",
+                },
+              },
+              "type": "localFile",
+            },
+          ],
+          "position": {
+            "end": {
+              "column": 87,
+              "line": 3,
+              "offset": 119,
+            },
+            "start": {
+              "column": 1,
+              "line": 3,
+              "offset": 33,
+            },
+          },
+          "spread": false,
+          "type": "listItem",
+        },
+        {
+          "checked": null,
+          "children": [
+            {
+              "data": {
+                "hName": "localFile",
+                "hProperties": {
+                  "isDirectory": true,
+                  "name": ".venv",
+                  "path": "/Users/user/Desktop/test/.venv",
+                },
+              },
+              "type": "localFile",
+            },
+          ],
+          "position": {
+            "end": {
+              "column": 79,
+              "line": 4,
+              "offset": 198,
+            },
+            "start": {
+              "column": 1,
+              "line": 4,
+              "offset": 120,
+            },
+          },
+          "spread": false,
+          "type": "listItem",
+        },
+      ],
+      "ordered": false,
+      "position": {
+        "end": {
+          "column": 79,
+          "line": 4,
+          "offset": 198,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+          "offset": 33,
+        },
+      },
+      "spread": false,
+      "start": null,
+      "type": "list",
+    },
+  ],
+  "position": {
+    "end": {
+      "column": 79,
+      "line": 4,
+      "offset": 198,
+    },
+    "start": {
+      "column": 1,
+      "line": 1,
+      "offset": 0,
+    },
+  },
+  "type": "root",
+}
+`;
+
+exports[`createRemarkSelfClosingTagPlugin > should handle tag within a list item and generate snapshot 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "checked": null,
+          "children": [
+            {
+              "children": [
+                {
+                  "position": {
+                    "end": {
+                      "column": 26,
+                      "line": 2,
+                      "offset": 26,
+                    },
+                    "start": {
+                      "column": 4,
+                      "line": 2,
+                      "offset": 4,
+                    },
+                  },
+                  "type": "text",
+                  "value": "文件名：飞机全书 一部明晰可见的历史.pdf",
+                },
+              ],
+              "position": {
+                "end": {
+                  "column": 26,
+                  "line": 2,
+                  "offset": 26,
+                },
+                "start": {
+                  "column": 4,
+                  "line": 2,
+                  "offset": 4,
+                },
+              },
+              "type": "paragraph",
+            },
+            {
+              "children": [
+                {
+                  "checked": null,
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "position": {
+                            "end": {
+                              "column": 10,
+                              "line": 3,
+                              "offset": 36,
+                            },
+                            "start": {
+                              "column": 6,
+                              "line": 3,
+                              "offset": 32,
+                            },
+                          },
+                          "type": "text",
+                          "value": "路径1：",
+                        },
+                        {
+                          "data": {
+                            "hName": "localFile",
+                            "hProperties": {
+                              "name": "飞机全书 一部明晰可见的历史.pdf",
+                              "path": "/Users/abc/Zotero/storage/ASBMAURK/飞机全书 一部明晰可见的历史.pdf",
+                            },
+                          },
+                          "type": "localFile",
+                        },
+                      ],
+                      "position": {
+                        "end": {
+                          "column": 110,
+                          "line": 3,
+                          "offset": 136,
+                        },
+                        "start": {
+                          "column": 6,
+                          "line": 3,
+                          "offset": 32,
+                        },
+                      },
+                      "type": "paragraph",
+                    },
+                  ],
+                  "position": {
+                    "end": {
+                      "column": 110,
+                      "line": 3,
+                      "offset": 136,
+                    },
+                    "start": {
+                      "column": 4,
+                      "line": 3,
+                      "offset": 30,
+                    },
+                  },
+                  "spread": false,
+                  "type": "listItem",
+                },
+                {
+                  "checked": null,
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "position": {
+                            "end": {
+                              "column": 56,
+                              "line": 4,
+                              "offset": 192,
+                            },
+                            "start": {
+                              "column": 6,
+                              "line": 4,
+                              "offset": 142,
+                            },
+                          },
+                          "type": "text",
+                          "value": "路径2：/Users/abc/Downloads/测试 PDF/飞机全书 一部明晰可见的历史.pdf",
+                        },
+                      ],
+                      "position": {
+                        "end": {
+                          "column": 56,
+                          "line": 4,
+                          "offset": 192,
+                        },
+                        "start": {
+                          "column": 6,
+                          "line": 4,
+                          "offset": 142,
+                        },
+                      },
+                      "type": "paragraph",
+                    },
+                  ],
+                  "position": {
+                    "end": {
+                      "column": 56,
+                      "line": 4,
+                      "offset": 192,
+                    },
+                    "start": {
+                      "column": 4,
+                      "line": 4,
+                      "offset": 140,
+                    },
+                  },
+                  "spread": false,
+                  "type": "listItem",
+                },
+              ],
+              "ordered": false,
+              "position": {
+                "end": {
+                  "column": 56,
+                  "line": 4,
+                  "offset": 192,
+                },
+                "start": {
+                  "column": 4,
+                  "line": 3,
+                  "offset": 30,
+                },
+              },
+              "spread": false,
+              "start": null,
+              "type": "list",
+            },
+          ],
+          "position": {
+            "end": {
+              "column": 56,
+              "line": 4,
+              "offset": 192,
+            },
+            "start": {
+              "column": 1,
+              "line": 2,
+              "offset": 1,
+            },
+          },
+          "spread": false,
+          "type": "listItem",
+        },
+      ],
+      "ordered": true,
+      "position": {
+        "end": {
+          "column": 56,
+          "line": 4,
+          "offset": 192,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+          "offset": 1,
+        },
+      },
+      "spread": false,
+      "start": 1,
+      "type": "list",
+    },
+    {
+      "children": [
+        {
+          "position": {
+            "end": {
+              "column": 75,
+              "line": 6,
+              "offset": 268,
+            },
+            "start": {
+              "column": 1,
+              "line": 6,
+              "offset": 194,
+            },
+          },
+          "type": "text",
+          "value": "这是一本 PDF 格式的书，并且在你的 Zotero 和 Downloads 文件夹里都能找到。如果需要进一步操作，比如阅读或者提取内容，可以告诉我",
+        },
+      ],
+      "position": {
+        "end": {
+          "column": 75,
+          "line": 6,
+          "offset": 268,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+          "offset": 194,
+        },
+      },
+      "type": "paragraph",
+    },
+  ],
+  "position": {
+    "end": {
+      "column": 1,
+      "line": 7,
+      "offset": 269,
+    },
+    "start": {
+      "column": 1,
+      "line": 1,
+      "offset": 0,
+    },
+  },
+  "type": "root",
+}
+`;

@@ -1,0 +1,109 @@
+---
+title: 旧版身份验证（NextAuth 和 Clerk）
+description: NextAuth 和 Clerk 这两种旧版身份验证方法的历史参考文档，二者均已从 LobeHub 移除，请改用 Better Auth。
+tags:
+  - 身份验证服务
+  - Next Auth
+  - Clerk
+  - 旧版
+---
+
+# 旧版身份验证
+
+<Callout type={'warning'}>
+  **旧版提示**：NextAuth 和 Clerk 已从 LobeHub 中完全移除。设置已移除的 NextAuth/Clerk 变量（`NEXT_AUTH*` / `NEXTAUTH*`、Clerk 密钥、`AUTH_URL`、`NEXT_PUBLIC_AUTH_URL`、`ACCESS_CODE` 等）会在构建 / 启动阶段失败。**`AUTH_SECRET` 并未废弃**，[Better Auth](/zh/docs/self-hosting/auth) 仍需要它。本页仅供历史迁移参考。
+</Callout>
+
+以下认证方式（NextAuth、Clerk）已从 LobeHub 移除。已废弃的 NextAuth/Clerk 变量会导致部署失败；`AUTH_SECRET` 仍由 Better Auth 使用。本页面仅供历史迁移参考。
+
+## Clerk
+
+Clerk 是一个全面的身份验证解决方案，它提供了简单而强大的 API 和服务来处理用户认证和会话管理。
+
+LobeHub 与 Clerk 做了深度集成，能够为用户提供安全、便捷的登录和注册体验。
+
+在 LobeHub 的环境变量中设置 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` 和 `CLERK_SECRET_KEY`，即可开启和使用 Clerk。
+
+<Callout type={'info'}>
+  详细的 Clerk 配置请参阅 [Clerk 配置指南](/zh/docs/self-hosting/auth/clerk)。
+</Callout>
+
+<Callout type={'tip'}>
+  如需从 Clerk 迁移到 Better Auth，请参阅 [Clerk 迁移指南](/zh/docs/self-hosting/migration/v2/auth/clerk-to-betterauth)。
+</Callout>
+
+## Next Auth
+
+<Callout type={'tip'}>
+  如需从 NextAuth 迁移到 Better Auth，请参阅 [NextAuth 迁移指南](/zh/docs/self-hosting/migration/v2/auth/nextauth-to-betterauth)。
+</Callout>
+
+在使用 NextAuth 之前，请先在 LobeHub 的环境变量中设置以下变量：
+
+| 环境变量                             | 类型      | 描述                                                                                                                       |
+| -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | *(已废弃)* | 用于启用 NextAuth 服务。NextAuth 已从 LobeHub 中移除，设置该变量会导致部署在构建 / 启动阶段失败。                                                         |
+| `NEXT_AUTH_SECRET`               | *(已废弃)* | 旧版 NextAuth 密钥名。设置该变量会导致部署在构建 / 启动阶段失败。请改用 Better Auth 仍在使用的 `AUTH_SECRET`（见 [Better Auth](/zh/docs/self-hosting/auth)）。 |
+| `AUTH_URL`                       | *(已废弃)* | 曾用于指定 Auth.js 在执行 OAuth 验证时的回调地址。设置该变量会导致部署在构建 / 启动阶段失败。                                                                 |
+| `NEXT_AUTH_SSO_PROVIDERS`        | *(已废弃)* | 曾用于同时启用多个身份验证源，以逗号 `,` 分割，例如 `auth0,microsoft-entra-id,authentik`。设置该变量会导致部署在构建 / 启动阶段失败。                                |
+| `NEXT_AUTH_SSO_SESSION_STRATEGY` | *(已废弃)* | Auth.js 的会话策略。设置该变量会导致部署在构建 / 启动阶段失败。                                                                                    |
+
+目前支持的身份验证服务有：
+
+<Cards>
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/auth0'} title={'Auth0'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/microsoft-entra-id'} title={'Microsoft Entra ID'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/authentik'} title={'Authentik'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/github'} title={'Github'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/zitadel'} title={'ZITADEL'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/authelia'} title={'Authelia'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/logto'} title={'Logto'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/keycloak'} title={'Keycloak'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/okta'} title={'Okta'} />
+</Cards>
+
+点击即可查看对应平台的配置文档。
+
+## 进阶配置
+
+同时启用多个身份验证源请设置 `NEXT_AUTH_SSO_PROVIDERS` 环境变量，以逗号 `,` 分割，例如 `auth0,microsoft-entra-id,authentik`。
+
+顺序为 SSO 提供商的显示顺序。
+
+| SSO 提供商               | 值                       | 额外功能      |
+| --------------------- | ----------------------- | --------- |
+| Auth0                 | `auth0`                 |           |
+| Authenlia             | `authenlia`             |           |
+| Authentik             | `authentik`             |           |
+| Casdoor               | `casdoor`               | `Webhook` |
+| Cloudflare Zero Trust | `cloudflare-zero-trust` |           |
+| Github                | `github`                |           |
+| Logto                 | `logto`                 | `Webhook` |
+| Microsoft Entra ID    | `microsoft-entra-id`    |           |
+| ZITADEL               | `zitadel`               |           |
+| Keycloak              | `keycloak`              |           |
+| Okta                  | `okta`                  |           |
+
+## 额外功能
+
+### Webhook 支持
+
+允许 LobeHub 在身份提供商中用户信息更新时接收通知。支持的提供商包括 Casdoor 和 Logto。请参考具体提供商文档进行配置。
+
+### 数据库会话
+
+允许会话存储在数据库中，详情请参阅 [Auth.js 会话文档](https://authjs.dev/concepts/session-strategies#database-session)。
+
+## 其他 SSO 提供商
+
+请参考 [NextAuth.js](https://next-auth.js.org/providers) 文档，欢迎提交 Pull Request。

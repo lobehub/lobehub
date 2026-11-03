@@ -1,0 +1,234 @@
+import { GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
+import type { ChatTopicStatus } from '@lobechat/types';
+import { type DropdownItem } from '@lobehub/ui';
+import { Icon, toast } from '@lobehub/ui';
+import {
+  Archive,
+  ArchiveRestore,
+  ExternalLink,
+  Hash,
+  Link2,
+  LucideCopy,
+  PanelTop,
+  PencilLine,
+  Trash,
+  Wand2,
+} from 'lucide-react';
+import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { isDesktop } from '@/const/version';
+import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { useFavoriteMenuItem } from '@/features/Favorites';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { usePermission } from '@/hooks/usePermission';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { useChatStore } from '@/store/chat';
+import { useElectronStore } from '@/store/electron';
+import { useGlobalStore } from '@/store/global';
+
+interface TopicItemDropdownMenuProps {
+  id?: string;
+  status?: ChatTopicStatus | null;
+  title: string;
+  toggleEditing: (visible?: boolean) => void;
+}
+
+export const useTopicItemDropdownMenu = ({
+  id,
+  status,
+  title,
+  toggleEditing,
+}: TopicItemDropdownMenuProps): (() => DropdownItem[]) => {
+  const { t } = useTranslation(['topic', 'common']);
+
+  const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const { allowed: canCreateTopic } = usePermission('create_content');
+  const { allowed: canEditTopic } = usePermission('edit_own_content');
+
+  const openGroupTopicInNewWindow = useGlobalStore((s) => s.openGroupTopicInNewWindow);
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
+  const addTab = useElectronStore((s) => s.addTab);
+  const appOrigin = useAppOrigin();
+  // A favorite adds the topic to the home sidebar's Favorites section. A topic
+  // still titled `...` is being named, so it waits for its real title.
+  const favoriteMenuItem = useFavoriteMenuItem(
+    id && activeGroupId
+      ? {
+          path: GROUP_CHAT_TOPIC_URL(activeGroupId, id),
+          snapshotReady: !!title && title !== '...',
+          targetId: id,
+          title,
+          type: 'topic',
+        }
+      : undefined,
+    { showHotkey: false },
+  );
+
+  const [
+    autoRenameTopicTitle,
+    duplicateTopic,
+    removeTopic,
+    markTopicCompleted,
+    unmarkTopicCompleted,
+  ] = useChatStore((s) => [
+    s.autoRenameTopicTitle,
+    s.duplicateTopic,
+    s.removeTopic,
+    s.markTopicCompleted,
+    s.unmarkTopicCompleted,
+  ]);
+
+  const isCompleted = status === 'completed';
+
+  return useCallback(() => {
+    if (!id) return [];
+
+    return [
+      {
+        disabled: !canEditTopic,
+        icon: <Icon icon={isCompleted ? ArchiveRestore : Archive} />,
+        key: 'markCompleted',
+        label: isCompleted ? t('actions.unmarkCompleted') : t('actions.markCompleted'),
+        onClick: () => {
+          if (isCompleted) {
+            unmarkTopicCompleted(id);
+          } else {
+            markTopicCompleted(id);
+          }
+        },
+        sfSymbol: isCompleted ? 'tray.and.arrow.up' : 'archivebox',
+      },
+      ...(favoriteMenuItem ? [favoriteMenuItem] : []),
+      {
+        type: 'divider' as const,
+      },
+      {
+        disabled: !canEditTopic,
+        icon: <Icon icon={Wand2} />,
+        key: 'autoRename',
+        label: t('actions.autoRename'),
+        onClick: () => {
+          autoRenameTopicTitle(id);
+        },
+        sfSymbol: 'wand.and.stars',
+      },
+      {
+        disabled: !canEditTopic,
+        icon: <Icon icon={PencilLine} />,
+        key: 'rename',
+        label: t('rename', { ns: 'common' }),
+        onClick: () => {
+          toggleEditing(true);
+        },
+        sfSymbol: 'pencil',
+      },
+      {
+        type: 'divider' as const,
+      },
+      ...(isDesktop
+        ? [
+            {
+              icon: <Icon icon={PanelTop} />,
+              key: 'openInNewTab',
+              label: t('actions.openInNewTab'),
+              onClick: () => {
+                if (!activeGroupId) return;
+                const url = buildWorkspaceAwarePath(
+                  GROUP_CHAT_TOPIC_URL(activeGroupId, id),
+                  activeWorkspaceSlug,
+                );
+                addTab(url);
+                navigate(url, { escape: true });
+              },
+            },
+            {
+              icon: <Icon icon={ExternalLink} />,
+              key: 'openInNewWindow',
+              label: t('actions.openInNewWindow'),
+              onClick: () => {
+                if (activeGroupId) openGroupTopicInNewWindow(activeGroupId, id);
+              },
+            },
+            {
+              type: 'divider' as const,
+            },
+          ]
+        : []),
+      {
+        icon: <Icon icon={Hash} />,
+        key: 'copySessionId',
+        label: t('actions.copySessionId'),
+        onClick: () => {
+          navigator.clipboard.writeText(id);
+          toast.success(t('actions.copySessionIdSuccess'));
+        },
+      },
+      {
+        icon: <Icon icon={Link2} />,
+        key: 'copyLink',
+        label: t('actions.copyLink'),
+        onClick: () => {
+          if (!activeGroupId) return;
+          const url = `${appOrigin}${buildWorkspaceAwarePath(
+            GROUP_CHAT_TOPIC_URL(activeGroupId, id),
+            activeWorkspaceSlug,
+          )}`;
+          navigator.clipboard.writeText(url);
+          toast.success(t('actions.copyLinkSuccess'));
+        },
+      },
+      {
+        disabled: !canCreateTopic,
+        icon: <Icon icon={LucideCopy} />,
+        key: 'duplicate',
+        label: t('actions.duplicate'),
+        onClick: () => {
+          duplicateTopic(id);
+        },
+      },
+      {
+        type: 'divider' as const,
+      },
+      {
+        danger: true,
+        disabled: !canEditTopic,
+        icon: <Icon icon={Trash} />,
+        key: 'delete',
+        label: t('delete', { ns: 'common' }),
+        onClick: () => {
+          void confirmRemoveTopic({
+            onConfirm: async (removeFiles) => {
+              await removeTopic(id, removeFiles);
+            },
+            topicIds: [id],
+          });
+        },
+        sfSymbol: 'trash',
+      },
+    ].filter(Boolean) as DropdownItem[];
+  }, [
+    id,
+    isCompleted,
+    canCreateTopic,
+    canEditTopic,
+    activeGroupId,
+    activeWorkspaceSlug,
+    appOrigin,
+    autoRenameTopicTitle,
+    duplicateTopic,
+    favoriteMenuItem,
+    markTopicCompleted,
+    unmarkTopicCompleted,
+    removeTopic,
+    openGroupTopicInNewWindow,
+    addTab,
+    navigate,
+    toggleEditing,
+    t,
+  ]);
+};

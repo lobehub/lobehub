@@ -1,0 +1,36 @@
+'use client';
+
+import { type FC } from 'react';
+import { Suspense } from 'react';
+import { Outlet } from 'react-router';
+
+import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
+import Loading from '@/components/Loading/BrandTextLoading';
+import { RouteMetaBridge } from '@/features/RouteMeta';
+import { useMobileNavigation } from '@/hooks/useMobileNavigation';
+import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
+import dynamic from '@/libs/next/dynamic';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+
+import NavBar from './NavBar';
+
+const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
+
+const MobileMainLayout: FC = () => {
+  const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
+  const { showNav } = useMobileNavigation();
+  return (
+    <WorkspaceContextSlot>
+      <RouteMetaBridge />
+      <Suspense fallback={null}>{showCloudPromotion && <CloudBanner mobile />}</Suspense>
+      <Suspense fallback={<Loading debugId="MobileMainLayout > Outlet" />}>
+        <Outlet />
+        {showNav && <NavBar />}
+      </Suspense>
+      {/* Global search: the sidebars mobile opens as drawers trigger it. */}
+      <CmdkLazy />
+    </WorkspaceContextSlot>
+  );
+};
+
+export default MobileMainLayout;

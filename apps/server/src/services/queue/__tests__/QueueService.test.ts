@@ -1,0 +1,638 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Mock appEnv before importing QueueService
+const mockAppEnv = {
+  enableQueueAgentRuntime: false,
+};
+
+const qstashMocks = vi.hoisted(() => ({
+  client: vi.fn(),
+  publishJSON: vi.fn(),
+}));
+
+vi.mock('@/envs/app', () => ({
+  appEnv: mockAppEnv,
+}));
+
+vi.mock('@/libs/qstash', () => ({
+  OtelQstashClient: qstashMocks.client.mockImplementation(function () {
+    return {
+      publishJSON: qstashMocks.publishJSON,
+    };
+  }),
+}));
+
+describe('QueueService', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    // Reset to default local mode
+    mockAppEnv.enableQueueAgentRuntime = false;
+    qstashMocks.client.mockClear();
+    qstashMocks.publishJSON.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  describe('Local Execution Mode (default)', () => {
+    it('should return LocalQueueServiceImpl when enableQueueAgentRuntime is false', async () => {
+      const { createQueueServiceModule, LocalQueueServiceImpl } = await import('../impls');
+      const impl = createQueueServiceModule();
+      expect(impl).toBeInstanceOf(LocalQueueServiceImpl);
+    });
+
+    it('should return true for isLocalExecution when in local mode', async () => {
+      const { QueueService } = await import('../QueueService');
+      const service = new QueueService();
+      expect(service.isLocalExecution()).toBe(true);
+    });
+
+    it('should schedule message and return task ID in local mode', async () => {
+      const { QueueService } = await import('../QueueService');
+      const service = new QueueService();
+
+      const taskId = await service.scheduleMessage({
+        context: { phase: 'user_input' } as any,
+        endpoint: 'http://test.com',
+        operationId: 'test-op',
+        priority: 'normal',
+        stepIndex: 0,
+      });
+
+      expect(taskId).toMatch(/^local-test-op-0-\d+$/);
+    });
+
+    it('deduplicates retries with the same stable execution key', async () => {
+      vi.useFakeTimers();
+      const execution = vi.fn().mockResolvedValue(undefined);
+      const { LocalQueueServiceImpl } = await import('../impls/local');
+      const impl = new LocalQueueServiceImpl();
+      impl.setExecutionCallback(execution);
+      const message = {
+        context: { phase: 'user_input' } as any,
+        deduplicationId: 'agent-intervention:op-stable:0',
+        delay: 0,
+        endpoint: 'http://test.com',
+        operationId: 'op-stable',
+        priority: 'normal' as const,
+        stepIndex: 0,
+      };
+
+      const [firstTaskId, retryTaskId] = await Promise.all([
+        impl.scheduleMessage(message),
+        impl.scheduleMessage(message),
+      ]);
+
+      expect(retryTaskId).toBe(firstTaskId);
+      await vi.runAllTimersAsync();
+      expect(execution).toHaveBeenCalledTimes(1);
+    });
+
+    it('should schedule batch messages in local mode', async () => {
+      const { QueueService } = await import('../QueueService');
+      const service = new QueueService();
+
+      const taskIds = await service.scheduleBatchMessages([
+        {
+          context: { phase: 'user_input' } as any,
+          endpoint: 'http://test.com',
+          operationId: 'test-op-1',
+          priority: 'normal',
+          stepIndex: 0,
+        },
+        {
+          context: { phase: 'user_input' } as any,
+          endpoint: 'http://test.com',
+          operationId: 'test-op-2',
+          priority: 'normal',
+          stepIndex: 0,
+        },
+      ]);
+
+      expect(taskIds).toHaveLength(2);
+      expect(taskIds[0]).toMatch(/^local-test-op-1-0-\d+$/);
+      expect(taskIds[1]).toMatch(/^local-test-op-2-0-\d+$/);
+    });
+
+    it('should handle cancelScheduledTask gracefully in local mode (no-op)', async () => {
+      const { QueueService } = await import('../QueueService');
+      const service = new QueueService();
+
+      // Should not throw, just logs a warning
+      await expect(service.cancelScheduledTask('task-123')).resolves.toBeUndefined();
+    });
+
+    it('should return queue stats in local mode', async () => {
+      const { QueueService } = await import('../QueueService');
+      const service = new QueueService();
+
+      const stats = await service.getQueueStats();
+      expect(stats).toEqual({
+        completedCount: 0,
+        failedCount: 0,
+        pendingCount: 0,
+        processingCount: 0,
+      });
+    });
+
+    it('should return healthy status for healthCheck in local mode', async () => {
+      const { QueueService } = await import('../QueueService');
+      const service = new QueueService();
+
+      const result = await service.healthCheck();
+      expect(result).toEqual({
+        healthy: true,
+        message: 'Local queue service healthy, 0 pending executions',
+      });
+    });
+  });
+
+  describe('Queue Mode (AGENT_RUNTIME_MODE=queue)', () => {
+    it('should throw error when QSTASH_TOKEN is not set', async () => {
+      mockAppEnv.enableQueueAgentRuntime = true;
+      delete process.env.QSTASH_TOKEN;
+
+      const { createQueueServiceModule } = await import('../impls');
+
+      expect(() => createQueueServiceModule()).toThrow(
+        'QSTASH_TOKEN is required when AGENT_RUNTIME_MODE=queue',
+      );
+    });
+
+    it('should create QStashQueueServiceImpl when QSTASH_TOKEN is set', async () => {
+      mockAppEnv.enableQueueAgentRuntime = true;
+      process.env.QSTASH_TOKEN = 'test-qstash-token';
+
+      const { createQueueServiceModule } = await import('../impls');
+      const impl = createQueueServiceModule();
+
+      expect(impl).not.toBeNull();
+      expect(impl?.constructor.name).toBe('QStashQueueServiceImpl');
+
+      // Cleanup
+      delete process.env.QSTASH_TOKEN;
+    });
+
+    it('should return false for isLocalExecution when in queue mode', async () => {
+      mockAppEnv.enableQueueAgentRuntime = true;
+      process.env.QSTASH_TOKEN = 'test-qstash-token';
+
+      const { QueueService } = await import('../QueueService');
+      const service = new QueueService();
+
+      expect(service.isLocalExecution()).toBe(false);
+
+      // Cleanup
+      delete process.env.QSTASH_TOKEN;
+    });
+
+    it('should round sub-second delays up to 1s for QStash', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+      const result = impl.scheduleMessage({
+        context: { phase: 'user_input' } as any,
+        delay: 500,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-test',
+        priority: 'high',
+        stepIndex: 0,
+      });
+
+      await expect(result).resolves.toBe('msg-test');
+
+      const request = qstashMocks.publishJSON.mock.calls[0][0];
+      expect(request).toMatchObject({ delay: 1 });
+      expect(request.body.timestamp).toEqual(expect.any(Number));
+    });
+
+    it('should publish zero delay immediately without a QStash delay', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+      const result = impl.scheduleMessage({
+        context: { phase: 'user_input' } as any,
+        delay: 0,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-test',
+        priority: 'high',
+        stepIndex: 0,
+      });
+
+      await expect(result).resolves.toBe('msg-test');
+
+      const request = qstashMocks.publishJSON.mock.calls[0][0];
+      expect(request).not.toHaveProperty('delay');
+    });
+
+    it('should pass second-granularity delays through to QStash', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+
+      await impl.scheduleMessage({
+        context: { phase: 'user_input' } as any,
+        delay: 1500,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-test',
+        priority: 'high',
+        stepIndex: 0,
+      });
+
+      expect(qstashMocks.publishJSON.mock.calls[0][0]).toMatchObject({ delay: 2 });
+    });
+
+    it('forwards flow control so deliveries sharing a key are serialized', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+
+      await impl.scheduleMessage({
+        delay: 20_000,
+        endpoint: 'https://example.com/api/agent/webhooks/bot-wake-flush',
+        flowControl: { key: 'agent-signal.run.scope.c1', parallelism: 1 },
+        operationId: 'op-test',
+        stepIndex: 0,
+      });
+      await impl.scheduleMessage({
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-test-2',
+        stepIndex: 0,
+      });
+
+      expect(qstashMocks.publishJSON.mock.calls[0][0]).toMatchObject({
+        delay: 20,
+        flowControl: { key: 'agent-signal.run.scope.c1', parallelism: 1 },
+      });
+      expect(qstashMocks.publishJSON.mock.calls[1][0]).not.toHaveProperty('flowControl');
+    });
+
+    it('clamps an oversized body instead of letting the publish blow the QStash quota', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // A tool that failed with ~12 MB of command output — the shape that used
+      // to 500 the publish and take the whole operation down with it.
+      const runawayOutput = 'x'.repeat(12 * 1024 * 1024);
+
+      await impl.scheduleMessage({
+        context: {
+          payload: { toolsResult: [{ content: runawayOutput }] },
+          phase: 'llm_result',
+        } as any,
+        delay: 0,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-oversized',
+        priority: 'normal',
+        stepIndex: 7,
+      });
+
+      const request = qstashMocks.publishJSON.mock.calls[0][0];
+      const clamped = request.body.context.payload.toolsResult[0].content;
+      expect(clamped.length).toBeLessThan(runawayOutput.length);
+      expect(clamped).toContain('characters omitted so the step could be scheduled');
+      expect(Buffer.byteLength(JSON.stringify(request.body), 'utf8')).toBeLessThan(9 * 1024 * 1024);
+      // Shape is preserved so the worker still reads the step it expects.
+      expect(request.body).toMatchObject({ operationId: 'op-oversized', stepIndex: 7 });
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('agent.queue.oversized_message_clamped'),
+      );
+
+      warn.mockRestore();
+    });
+
+    /**
+     * Fragmented oversize: the MCP contract keeps every raw content block in
+     * `state`, so a body can pass the quota through hundreds of mid-sized
+     * strings that a single generous clamp pass would leave untouched.
+     */
+    it('tightens the clamp until a fragmented oversized body actually fits', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const blocks = Array.from({ length: 525 }, () => ({ text: 'y'.repeat(20_000) }));
+
+      await impl.scheduleMessage({
+        context: { payload: { state: { content: blocks } }, phase: 'llm_result' } as any,
+        delay: 0,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-fragmented',
+        priority: 'normal',
+        stepIndex: 3,
+      });
+
+      const request = qstashMocks.publishJSON.mock.calls[0][0];
+      expect(Buffer.byteLength(JSON.stringify(request.body), 'utf8')).toBeLessThan(9 * 1024 * 1024);
+      expect(request.body.context.payload.state.content).toHaveLength(525);
+      expect(request.body.context.payload.state.content[0].text).toContain(
+        'characters omitted so the step could be scheduled',
+      );
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('"stringKeep":4000'));
+
+      warn.mockRestore();
+    });
+
+    it('encodes logical deduplication keys as stable QStash-safe opaque IDs', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+
+      const publish = async (deduplicationId: string) => {
+        await impl.scheduleMessage({
+          context: { phase: 'user_input' } as any,
+          deduplicationId,
+          delay: 0,
+          endpoint: 'https://example.com/api/agent/run',
+          operationId: 'op-stable',
+          priority: 'high',
+          stepIndex: 0,
+        });
+
+        return qstashMocks.publishJSON.mock.calls.at(-1)![0].deduplicationId;
+      };
+
+      const logicalId = 'agent-intervention:op_intervention_9979660c87f7db5cdac6836bc90e9038:0';
+      const first = await publish(logicalId);
+      const retry = await publish(logicalId);
+      const different = await publish(`${logicalId}:retry`);
+
+      expect(first).toBe('a2d899f251f8376646eb59522e64e447805aaf2e7b97d80b2935d2e0d293ffcb');
+      expect(retry).toBe(first);
+      expect(different).not.toBe(first);
+
+      for (const unsafeOrBoundaryId of [
+        'unsafe id/with?characters=#and-non-ascii-审批',
+        'x'.repeat(63),
+        'x'.repeat(64),
+        'x'.repeat(65),
+      ]) {
+        const providerId = await publish(unsafeOrBoundaryId);
+
+        expect(providerId).toHaveLength(64);
+        expect(providerId).toMatch(/^[a-f\d]{64}$/);
+      }
+    });
+  });
+
+  describe('isQueueAgentRuntimeEnabled', () => {
+    it('should return false when enableQueueAgentRuntime is false', async () => {
+      mockAppEnv.enableQueueAgentRuntime = false;
+      const { isQueueAgentRuntimeEnabled } = await import('../impls');
+      expect(isQueueAgentRuntimeEnabled()).toBe(false);
+    });
+
+    it('should return true when enableQueueAgentRuntime is true', async () => {
+      mockAppEnv.enableQueueAgentRuntime = true;
+      const { isQueueAgentRuntimeEnabled } = await import('../impls');
+      expect(isQueueAgentRuntimeEnabled()).toBe(true);
+    });
+  });
+
+  describe('calculateDelay', () => {
+    it('should return base delay for high priority', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: false,
+        priority: 'high',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(200);
+    });
+
+    it('should return base delay for normal priority', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(1000);
+    });
+
+    it('should return base delay for low priority', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: false,
+        priority: 'low',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(5000);
+    });
+
+    it('should add delay for tool calls', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: true,
+        priority: 'normal',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(2000); // 1000 base + 1000 for tool calls
+    });
+
+    it('should add exponential backoff for errors', async () => {
+      const { QueueService } = await import('../QueueService');
+
+      const delay1 = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 1,
+      });
+      expect(delay1).toBe(2000); // 1000 base + 1000 * 1
+
+      const delay5 = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 5,
+      });
+      expect(delay5).toBe(6000); // 1000 base + 1000 * 5
+
+      const delay15 = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 15,
+      });
+      expect(delay15).toBe(11000); // 1000 base + 10000 (max)
+    });
+
+    it('should combine tool calls and error delays', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: true,
+        priority: 'high',
+        stepIndex: 2,
+      });
+      expect(delay).toBe(3200); // 200 base + 1000 for tools + 2000 for errors
+    });
+
+    it('should handle high priority with tool calls only', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: true,
+        priority: 'high',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(1200); // 200 base + 1000 for tool calls
+    });
+
+    it('should handle low priority with tool calls only', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: true,
+        priority: 'low',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(6000); // 5000 base + 1000 for tool calls
+    });
+
+    it('should handle high priority with errors at stepIndex 0', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'high',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(200); // 200 base + 0 for errors (0 * 1000)
+    });
+
+    it('should handle low priority with errors at various stepIndex', async () => {
+      const { QueueService } = await import('../QueueService');
+
+      const delay1 = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'low',
+        stepIndex: 1,
+      });
+      expect(delay1).toBe(6000); // 5000 base + 1000
+
+      const delay3 = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'low',
+        stepIndex: 3,
+      });
+      expect(delay3).toBe(8000); // 5000 base + 3000
+
+      const delay12 = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'low',
+        stepIndex: 12,
+      });
+      expect(delay12).toBe(15000); // 5000 base + 10000 (max)
+    });
+
+    it('should handle all flags combined - normal priority', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: true,
+        priority: 'normal',
+        stepIndex: 3,
+      });
+      expect(delay).toBe(5000); // 1000 base + 1000 for tools + 3000 for errors
+    });
+
+    it('should handle all flags combined - low priority', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: true,
+        priority: 'low',
+        stepIndex: 4,
+      });
+      expect(delay).toBe(10000); // 5000 base + 1000 for tools + 4000 for errors
+    });
+
+    it('should cap exponential backoff at 10 seconds for stepIndex 10', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 10,
+      });
+      expect(delay).toBe(11000); // 1000 base + 10000 (max, not 10000)
+    });
+
+    it('should cap exponential backoff at 10 seconds for stepIndex 11', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 11,
+      });
+      expect(delay).toBe(11000); // 1000 base + 10000 (max, not 11000)
+    });
+
+    it('should cap exponential backoff at 10 seconds for stepIndex 100', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 100,
+      });
+      expect(delay).toBe(11000); // 1000 base + 10000 (max, not 100000)
+    });
+
+    it('should handle maximum delay scenario - low priority with all flags and high stepIndex', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: true,
+        priority: 'low',
+        stepIndex: 50,
+      });
+      expect(delay).toBe(16000); // 5000 base + 1000 for tools + 10000 (max for errors)
+    });
+
+    it('should handle minimum delay scenario - high priority with no flags', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: false,
+        priority: 'high',
+        stepIndex: 100, // stepIndex doesn't matter without errors
+      });
+      expect(delay).toBe(200); // 200 base only
+    });
+
+    it('should handle errors at exact boundary stepIndex 10', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: true,
+        priority: 'high',
+        stepIndex: 10,
+      });
+      expect(delay).toBe(11200); // 200 base + 1000 for tools + 10000 (exactly at max)
+    });
+  });
+});

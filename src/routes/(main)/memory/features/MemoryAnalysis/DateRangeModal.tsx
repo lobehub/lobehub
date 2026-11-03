@@ -1,0 +1,99 @@
+'use client';
+
+import {
+  Button,
+  createModal,
+  DayjsDateRangePicker as DateRangePicker,
+  type DayjsDateRangeValue,
+  Flexbox,
+  type ModalInstance,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
+import dayjs, { type Dayjs } from 'dayjs';
+import { t as i18nT } from 'i18next';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useMemoryAnalysisAsyncTask } from '@/routes/(main)/memory/features/MemoryAnalysis/useTask';
+import { memoryExtractionService } from '@/services/userMemory/extraction';
+
+const DateRangeContent = memo(() => {
+  const { t } = useTranslation('memory');
+  const { close } = useModalContext();
+
+  const { refresh } = useMemoryAnalysisAsyncTask();
+  const [range, setRange] = useState<DayjsDateRangeValue | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const disabledDate = useCallback((current: Dayjs) => current.isAfter(dayjs(), 'day'), []);
+
+  const footerNote = useMemo(
+    () =>
+      range?.[0] || range?.[1]
+        ? t('analysis.modal.rangeSelected', {
+            end: range[1] ? range[1].format('YYYY/MM/DD') : t('analysis.range.end'),
+            start: range[0] ? range[0].format('YYYY/MM/DD') : t('analysis.range.start'),
+          })
+        : t('analysis.modal.rangePlaceholder'),
+    [range, t],
+  );
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const [from, to] = range ?? [null, null];
+      const result = await memoryExtractionService.requestFromChatTopics({
+        fromDate: from?.toDate(),
+        toDate: to?.endOf('day').toDate(),
+      });
+
+      await refresh();
+      toast.success(result.deduped ? t('analysis.toast.deduped') : t('analysis.toast.started'));
+      close();
+    } catch (error) {
+      console.error(error);
+      toast.error(t('analysis.toast.failed'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Flexbox gap={16}>
+      <Flexbox gap={12}>
+        <Text type={'secondary'}>{t('analysis.modal.helper')}</Text>
+        <DateRangePicker
+          allowClear
+          disabledDate={disabledDate}
+          format={'YYYY/MM/DD'}
+          style={{ width: '100%' }}
+          value={range}
+          onChange={setRange}
+        />
+        <Text fontSize={12} type={'secondary'}>
+          {footerNote}
+        </Text>
+      </Flexbox>
+      <Flexbox horizontal gap={8} justify={'flex-end'}>
+        <Button disabled={submitting} onClick={close}>
+          {t('analysis.modal.cancel')}
+        </Button>
+        <Button loading={submitting} type={'primary'} onClick={handleSubmit}>
+          {t('analysis.modal.submit')}
+        </Button>
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+DateRangeContent.displayName = 'DateRangeContent';
+
+export const createDateRangeModal = (): ModalInstance =>
+  createModal({
+    content: <DateRangeContent />,
+    footer: null,
+    maskClosable: true,
+    title: i18nT('analysis.modal.title', { ns: 'memory' }),
+  });

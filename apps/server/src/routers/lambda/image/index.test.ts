@@ -1,0 +1,852 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
+
+import { imageRouter } from './index';
+
+// Use vi.hoisted for variables used in vi.mock factory
+const {
+  mockServerDB,
+  mockGetKeyFromFullUrl,
+  mockGetFullFileUrl,
+  mockAsyncTaskModelUpdate,
+  mockChargeAfterGenerate,
+  mockChargeBeforeGenerate,
+  mockCreateAsyncCaller,
+  mockGenerationTopicFindById,
+  mockFindUserById,
+  mockGetAiProviderModelList,
+  mockInsertValues,
+  mockIsLobeHubModelAvailable,
+  mockResolveBusinessModelMapping,
+} = vi.hoisted(() => ({
+  mockServerDB: {
+    transaction: vi.fn(),
+  },
+  mockGetKeyFromFullUrl: vi.fn(),
+  mockGetFullFileUrl: vi.fn(),
+  mockAsyncTaskModelUpdate: vi.fn(),
+  mockChargeAfterGenerate: vi.fn(),
+  mockChargeBeforeGenerate: vi.fn(),
+  mockCreateAsyncCaller: vi.fn(),
+  mockGenerationTopicFindById: vi.fn(),
+  mockFindUserById: vi.fn(),
+  mockGetAiProviderModelList: vi.fn(),
+  mockInsertValues: [] as unknown[],
+  mockIsLobeHubModelAvailable: vi.fn(),
+  mockResolveBusinessModelMapping: vi.fn(),
+}));
+
+// Mock debug
+vi.mock('debug', () => ({
+  default: () => () => {},
+}));
+
+// Mock database adaptor
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(async () => mockServerDB),
+}));
+
+// Mock FileService
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(function () {
+    return {
+      getKeyFromFullUrl: mockGetKeyFromFullUrl,
+      getFullFileUrl: mockGetFullFileUrl,
+    };
+  }),
+}));
+
+// Mock AsyncTaskModel
+vi.mock('@/database/models/asyncTask', () => ({
+  AsyncTaskModel: vi.fn(function () {
+    return {
+      update: mockAsyncTaskModelUpdate,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/generationTopic', () => ({
+  GenerationTopicModel: vi.fn(function () {
+    return {
+      findById: mockGenerationTopicFindById,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: {
+    findById: mockFindUserById,
+  },
+}));
+
+vi.mock('@/database/repositories/aiInfra', () => ({
+  AiInfraRepos: vi.fn(function () {
+    return { getAiProviderModelList: mockGetAiProviderModelList };
+  }),
+}));
+
+vi.mock('@/server/globalConfig', () => ({
+  getServerGlobalConfig: vi.fn(async () => ({ aiProvider: {} })),
+}));
+
+// Mock chargeBeforeGenerate
+vi.mock('@/business/server/image-generation/chargeBeforeGenerate', () => ({
+  chargeBeforeGenerate: (params: any) => mockChargeBeforeGenerate(params),
+}));
+
+vi.mock('@/business/server/image-generation/chargeAfterGenerate', () => ({
+  chargeAfterGenerate: (params: any) => mockChargeAfterGenerate(params),
+}));
+
+// The failure-reconciliation path is gated on ENABLE_BUSINESS_FEATURES, which
+// is false in the OSS default const package.
+vi.mock('@lobechat/business-const', async (importOriginal) => ({
+  ...((await importOriginal()) as any),
+  ENABLE_BUSINESS_FEATURES: true,
+}));
+
+vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
+  ...((await importOriginal()) as any),
+  resolveBusinessModelMapping: (...args: [string, string]) =>
+    mockResolveBusinessModelMapping(...args),
+}));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  isLobeHubModelAvailable: (
+    ...args: [
+      string,
+      string,
+      { getUserEmail?: () => Promise<string | null | undefined>; userEmail?: string | null }?,
+    ]
+  ) => mockIsLobeHubModelAvailable(...args),
+}));
+
+// Mock async caller
+vi.mock('@/server/routers/async/caller', () => ({
+  createAsyncCaller: mockCreateAsyncCaller,
+}));
+
+// Mock drizzle-orm
+vi.mock('drizzle-orm', () => ({
+  and: vi.fn(function (...args) {
+    return args;
+  }),
+  eq: vi.fn(function (a, b) {
+    return { a, b };
+  }),
+}));
+
+// Mock database schemas
+vi.mock('@/database/schemas', () => ({
+  asyncTasks: { id: 'asyncTasks.id', userId: 'asyncTasks.userId' },
+  generationBatches: { id: 'generationBatches.id' },
+  generations: { id: 'generations.id', userId: 'generations.userId' },
+}));
+
+// Mock seed generator
+vi.mock('@/utils/number', () => ({
+  generateUniqueSeeds: vi.fn(function (count: number) {
+    return Array.from({ length: count }, (_, i) => 1000 + i);
+  }),
+}));
+
+describe('imageRouter', () => {
+  const mockUserId = 'test-user-id';
+  const mockAsyncCallerCreateImage = vi.fn();
+
+  const createMockCtx = (overrides = {}) => ({
+    userId: mockUserId,
+    ...overrides,
+  });
+
+  const createDefaultInput = (overrides = {}) => ({
+    generationTopicId: 'topic-1',
+    imageNum: 2,
+    model: 'stable-diffusion',
+    params: {
+      prompt: 'a beautiful sunset',
+      width: 512,
+      height: 512,
+    },
+    provider: 'test-provider',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockInsertValues.length = 0;
+
+    // Default mock implementations
+    mockResolveBusinessModelMapping.mockImplementation(
+      async (_provider: string, model: string) => ({
+        resolvedModelId: model,
+      }),
+    );
+    mockChargeBeforeGenerate.mockResolvedValue(undefined);
+    mockGetKeyFromFullUrl.mockResolvedValue(null);
+    mockGetFullFileUrl.mockResolvedValue(null);
+    mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
+    mockIsLobeHubModelAvailable.mockResolvedValue(true);
+    mockGetAiProviderModelList.mockResolvedValue([]);
+    mockGenerationTopicFindById.mockResolvedValue({ id: 'topic-1' });
+
+    // Setup default transaction mock
+    const mockBatch = {
+      id: 'batch-1',
+      generationTopicId: 'topic-1',
+      model: 'stable-diffusion',
+      provider: 'test-provider',
+      config: {},
+      userId: mockUserId,
+    };
+
+    const mockGenerations = [
+      { id: 'gen-1', generationBatchId: 'batch-1', seed: 1000, userId: mockUserId },
+      { id: 'gen-2', generationBatchId: 'batch-1', seed: 1001, userId: mockUserId },
+    ];
+
+    const mockAsyncTasks = [
+      { id: 'task-1', status: AsyncTaskStatus.Pending, type: AsyncTaskType.ImageGeneration },
+      { id: 'task-2', status: AsyncTaskStatus.Pending, type: AsyncTaskType.ImageGeneration },
+    ];
+
+    let insertCallCount = 0;
+    mockServerDB.transaction.mockImplementation(async (callback) => {
+      insertCallCount = 0;
+      const tx = {
+        insert: vi.fn().mockReturnValue({
+          values: vi.fn(function (value) {
+            mockInsertValues.push(value);
+            return {
+              returning: vi.fn().mockImplementation(function () {
+                insertCallCount++;
+                if (insertCallCount === 1) return [mockBatch];
+                if (insertCallCount === 2) return mockGenerations;
+                // For async tasks, return one at a time
+                const taskIndex = insertCallCount - 3;
+                return [mockAsyncTasks[taskIndex] || mockAsyncTasks[0]];
+              }),
+            };
+          }),
+        }),
+        update: vi.fn().mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue(undefined),
+          }),
+        }),
+      };
+
+      return callback(tx);
+    });
+
+    mockAsyncCallerCreateImage.mockResolvedValue(undefined);
+    mockCreateAsyncCaller.mockResolvedValue({
+      image: {
+        createImage: mockAsyncCallerCreateImage,
+      },
+    });
+  });
+
+  describe('createImage', () => {
+    it('should create image generation batch and generations successfully', async () => {
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      const result = await caller.createImage(input);
+
+      expect(result.success).toBe(true);
+      expect(result.data.batch).toBeDefined();
+      expect(result.data.batch.id).toBe('batch-1');
+      expect(result.data.generations).toHaveLength(2);
+      expect(mockServerDB.transaction).toHaveBeenCalled();
+    });
+
+    it('should validate mapped model id before rejecting deprecated lobehub image models', async () => {
+      mockResolveBusinessModelMapping.mockResolvedValue({
+        requestedModelId: 'onboarding-image',
+        resolvedModelId: 'gpt-image-1',
+      });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        model: 'onboarding-image',
+        provider: 'lobehub',
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+      const result = await caller.createImage(input);
+
+      expect(result.success).toBe(true);
+      expect(mockResolveBusinessModelMapping).toHaveBeenCalledWith('lobehub', 'onboarding-image');
+      expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith('gpt-image-1', 'image', {
+        getUserEmail: expect.any(Function),
+      });
+      const availabilityOptions = mockIsLobeHubModelAvailable.mock.calls.at(-1)?.[2];
+      expect(mockFindUserById).not.toHaveBeenCalled();
+      await expect(availabilityOptions!.getUserEmail!()).resolves.toBe('user@example.com');
+      expect(mockFindUserById).toHaveBeenCalledWith(mockServerDB, mockUserId);
+      expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
+    });
+
+    it('should reject inaccessible generation topic before charging or creating records', async () => {
+      mockGenerationTopicFindById.mockResolvedValue(undefined);
+
+      const caller = imageRouter.createCaller(createMockCtx({ workspaceId: 'workspace-1' }));
+
+      await expect(caller.createImage(createDefaultInput())).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'Invalid generation topic',
+      });
+
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
+    it('should reject unavailable lobehub image models before creating async tasks', async () => {
+      mockIsLobeHubModelAvailable.mockResolvedValue(false);
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        model: 'restricted-image-model',
+        provider: 'lobehub',
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+
+      await expect(caller.createImage(input)).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'LobeHubModelDeprecated',
+      });
+
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
+    it('should reject params the model does not declare before charging or creating records', async () => {
+      mockGetAiProviderModelList.mockResolvedValue([
+        {
+          id: 'gpt-image-2.5',
+          parameters: { prompt: { default: '' }, size: { default: 'auto', enum: ['auto'] } },
+          type: 'image',
+        },
+      ]);
+
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(
+        caller.createImage(createDefaultInput({ model: 'gpt-image-2.5', provider: 'lobehub' })),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'Unsupported parameters for gpt-image-2.5: height, width. Supported: prompt, size',
+      });
+
+      expect(mockGetAiProviderModelList).toHaveBeenCalledWith('lobehub', { type: 'image' });
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+    });
+
+    it('should accept params declared by the model', async () => {
+      mockGetAiProviderModelList.mockResolvedValue([
+        {
+          id: 'stable-diffusion',
+          parameters: {
+            height: { default: 512 },
+            prompt: { default: '' },
+            width: { default: 512 },
+          },
+          type: 'image',
+        },
+      ]);
+
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(caller.createImage(createDefaultInput())).resolves.toMatchObject({
+        success: true,
+      });
+    });
+
+    it('should reject an empty prompt before charging or creating records', async () => {
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(
+        caller.createImage(createDefaultInput({ params: { prompt: '  ' } })),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+    });
+
+    it('should convert imageUrls to S3 keys for database storage', async () => {
+      mockGetKeyFromFullUrl
+        .mockResolvedValueOnce('files/image1.jpg')
+        .mockResolvedValueOnce('files/image2.jpg');
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        params: {
+          prompt: 'test prompt',
+          imageUrls: [
+            'https://s3.amazonaws.com/bucket/files/image1.jpg',
+            'https://s3.amazonaws.com/bucket/files/image2.jpg',
+          ],
+        },
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockGetKeyFromFullUrl).toHaveBeenCalledTimes(2);
+      expect(mockGetKeyFromFullUrl).toHaveBeenCalledWith(
+        'https://s3.amazonaws.com/bucket/files/image1.jpg',
+      );
+      expect(mockGetKeyFromFullUrl).toHaveBeenCalledWith(
+        'https://s3.amazonaws.com/bucket/files/image2.jpg',
+      );
+    });
+
+    it('should convert single imageUrl to S3 key for database storage', async () => {
+      mockGetKeyFromFullUrl.mockResolvedValue('files/single-image.jpg');
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        params: {
+          prompt: 'test prompt',
+          imageUrl: 'https://s3.amazonaws.com/bucket/files/single-image.jpg',
+        },
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockGetKeyFromFullUrl).toHaveBeenCalledWith(
+        'https://s3.amazonaws.com/bucket/files/single-image.jpg',
+      );
+    });
+
+    it('should handle failed URL to key conversion gracefully for imageUrls', async () => {
+      mockGetKeyFromFullUrl.mockResolvedValue(null);
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        params: {
+          prompt: 'test prompt',
+          imageUrls: ['https://example.com/image.jpg'],
+        },
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+      const result = await caller.createImage(input);
+
+      // Should still succeed, just with empty imageUrls in config
+      expect(result.success).toBe(true);
+    });
+
+    it('should throw error when imageUrls conversion fails and URLs remain', async () => {
+      mockGetKeyFromFullUrl.mockRejectedValue(new Error('Conversion failed'));
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        params: {
+          prompt: 'test prompt',
+          imageUrls: ['https://example.com/image.jpg'],
+        },
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+
+      // When conversion fails, the original URL is kept but validateNoUrlsInConfig
+      // will detect it and throw an error to prevent storing URLs in database
+      await expect(caller.createImage(input)).rejects.toThrow(
+        'Invalid configuration: Found full URL instead of key',
+      );
+    });
+
+    it('should throw error when single imageUrl conversion fails and URL remains', async () => {
+      mockGetKeyFromFullUrl.mockRejectedValue(new Error('Conversion failed'));
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        params: {
+          prompt: 'test prompt',
+          imageUrl: 'https://example.com/image.jpg',
+        },
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+
+      // When conversion fails, the original URL is kept but validateNoUrlsInConfig
+      // will detect it and throw an error to prevent storing URLs in database
+      await expect(caller.createImage(input)).rejects.toThrow(
+        'Invalid configuration: Found full URL instead of key',
+      );
+    });
+
+    it('should return charge result when chargeBeforeGenerate returns a value', async () => {
+      const chargeResult = {
+        success: true as const,
+        data: {
+          batch: { id: 'charged-batch' },
+          generations: [{ asyncTaskId: 'charged-task', id: 'charged-gen' }],
+        },
+      };
+      mockChargeBeforeGenerate.mockResolvedValue(chargeResult);
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      const result = await caller.createImage(input);
+
+      expect(result).toEqual(chargeResult);
+      // Should not proceed with database transaction
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+    });
+
+    it('should call chargeBeforeGenerate with correct parameters', async () => {
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockChargeBeforeGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generationTopicId: 'topic-1',
+          imageNum: 2,
+          model: 'stable-diffusion',
+          provider: 'test-provider',
+          userId: mockUserId,
+        }),
+      );
+    });
+
+    it('threads per-generation prechargeItems into each asyncTask metadata', async () => {
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      // insertValues: [0] batch, [1] generations[], [2] task#1, [3] task#2
+      expect(mockInsertValues[2]).toEqual(
+        expect.objectContaining({ metadata: { precharge: { reservationKey: 'k-1' } } }),
+      );
+      expect(mockInsertValues[3]).toEqual(
+        expect.objectContaining({ metadata: { precharge: { reservationKey: 'k-2' } } }),
+      );
+    });
+
+    it('forwards the caller spend attribution to the charge and every asyncTask', async () => {
+      // A share visitor's image generation bills the agent CREATOR, so the
+      // origin must reach both the reserve-time charge and the async settle —
+      // otherwise the spend escapes the per-agent monthly cap.
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+      const spendOrigin = {
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        trigger: 'agent_share',
+      };
+
+      const caller = imageRouter.createCaller(createMockCtx({ spendOrigin }));
+      await caller.createImage(createDefaultInput());
+
+      expect(mockChargeBeforeGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ spendOrigin }),
+      );
+      expect(mockInsertValues[2]).toEqual(
+        expect.objectContaining({
+          metadata: { precharge: { reservationKey: 'k-1' }, spendOrigin },
+        }),
+      );
+      expect(mockInsertValues[3]).toEqual(
+        expect.objectContaining({
+          metadata: { precharge: { reservationKey: 'k-2' }, spendOrigin },
+        }),
+      );
+    });
+
+    it('stores spend attribution on the asyncTask even without a precharge handle', async () => {
+      mockChargeBeforeGenerate.mockResolvedValue({ prechargeItems: undefined });
+      const spendOrigin = {
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        trigger: 'agent_share',
+      };
+
+      const caller = imageRouter.createCaller(createMockCtx({ spendOrigin }));
+      await caller.createImage(createDefaultInput());
+
+      expect(mockInsertValues[2]).toEqual(expect.objectContaining({ metadata: { spendOrigin } }));
+    });
+
+    it('leaves asyncTask metadata unset when there are no prechargeItems', async () => {
+      mockChargeBeforeGenerate.mockResolvedValue({ prechargeItems: undefined });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockInsertValues[2]).toEqual(expect.objectContaining({ metadata: undefined }));
+    });
+
+    it('should trigger async image generation tasks', async () => {
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
+    });
+
+    it('should persist and forward workspaceId for background image tasks', async () => {
+      const ctx = createMockCtx({ workspaceId: 'workspace-1' });
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockInsertValues[0]).toEqual(expect.objectContaining({ workspaceId: 'workspace-1' }));
+      expect(mockInsertValues[1]).toEqual(
+        expect.arrayContaining([expect.objectContaining({ workspaceId: 'workspace-1' })]),
+      );
+      expect(mockInsertValues[2]).toEqual(expect.objectContaining({ workspaceId: 'workspace-1' }));
+      expect(mockInsertValues[3]).toEqual(expect.objectContaining({ workspaceId: 'workspace-1' }));
+      expect(mockAsyncCallerCreateImage).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'workspace-1' }),
+      );
+    });
+
+    it('does not fail the request or the tasks when the background call rejects', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      mockAsyncCallerCreateImage.mockRejectedValue(
+        new Error('Unexpected token \'<\', "<!DOCTYPE "... is not valid JSON'),
+      );
+
+      try {
+        const caller = imageRouter.createCaller(createMockCtx());
+        const result = await caller.createImage(createDefaultInput());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(result.success).toBe(true);
+        expect(mockAsyncTaskModelUpdate).not.toHaveBeenCalled();
+        expect(unhandled).not.toHaveBeenCalled();
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Async image task %s request failed: %O',
+          expect.any(String),
+          expect.any(Error),
+        );
+      } finally {
+        process.off('unhandledRejection', unhandled);
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it('should handle async caller creation failure', async () => {
+      mockCreateAsyncCaller.mockRejectedValue(new Error('Caller creation failed'));
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      const result = await caller.createImage(input);
+
+      // Should still return success as the database records were created
+      expect(result.success).toBe(true);
+      // Should update async task status to error
+      expect(mockAsyncTaskModelUpdate).toHaveBeenCalled();
+    });
+
+    it('reconciles per-generation billing handles when async startup fails', async () => {
+      mockCreateAsyncCaller.mockRejectedValue(new Error('Caller creation failed'));
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      // The async router never runs for these tasks, so the billing handles
+      // must be reconciled here — one isError charge per generation.
+      expect(mockChargeAfterGenerate).toHaveBeenCalledTimes(2);
+      expect(mockChargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isError: true,
+          prechargeResult: { reservationKey: 'k-1' },
+        }),
+      );
+      expect(mockChargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isError: true,
+          prechargeResult: { reservationKey: 'k-2' },
+        }),
+      );
+    });
+
+    it('skips failure billing reconciliation when there are no precharge items', async () => {
+      mockCreateAsyncCaller.mockRejectedValue(new Error('Caller creation failed'));
+      mockChargeBeforeGenerate.mockResolvedValue(undefined);
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockChargeAfterGenerate).not.toHaveBeenCalled();
+    });
+
+    it('should update all task statuses to error when async processing fails', async () => {
+      mockCreateAsyncCaller.mockRejectedValue(new Error('Processing failed'));
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      // Should update both tasks to error status
+      expect(mockAsyncTaskModelUpdate).toHaveBeenCalledTimes(2);
+      expect(mockAsyncTaskModelUpdate).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          status: AsyncTaskStatus.Error,
+        }),
+      );
+    });
+
+    it('should generate unique seeds when seed param is provided', async () => {
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        params: {
+          prompt: 'test prompt',
+          seed: 42,
+        },
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockServerDB.transaction).toHaveBeenCalled();
+    });
+
+    it('should use null seeds when seed param is not provided', async () => {
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        params: {
+          prompt: 'test prompt',
+          // No seed param
+        },
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockServerDB.transaction).toHaveBeenCalled();
+    });
+
+    it('should pass with valid key-based imageUrls', async () => {
+      mockGetKeyFromFullUrl.mockResolvedValue('files/valid-key.jpg');
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        params: {
+          prompt: 'test prompt',
+          imageUrls: ['files/valid-key.jpg'],
+        },
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+      const result = await caller.createImage(input);
+
+      expect(result.success).toBe(true);
+    });
+
+    describe('development environment URL conversion', () => {
+      beforeEach(() => {
+        vi.stubEnv('NODE_ENV', 'development');
+      });
+
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it('should convert single imageUrl to S3 URL in development mode', async () => {
+        mockGetKeyFromFullUrl.mockResolvedValue('files/image-key.jpg');
+        mockGetFullFileUrl.mockResolvedValue('https://s3.amazonaws.com/bucket/files/image-key.jpg');
+
+        const ctx = createMockCtx();
+        const input = createDefaultInput({
+          params: {
+            prompt: 'test prompt',
+            imageUrl: 'http://localhost:3000/f/file-id',
+          },
+        });
+
+        const caller = imageRouter.createCaller(ctx);
+        const result = await caller.createImage(input);
+
+        expect(result.success).toBe(true);
+        expect(mockGetFullFileUrl).toHaveBeenCalledWith('files/image-key.jpg');
+      });
+
+      it('should convert multiple imageUrls to S3 URLs in development mode', async () => {
+        mockGetKeyFromFullUrl
+          .mockResolvedValueOnce('files/image1.jpg')
+          .mockResolvedValueOnce('files/image2.jpg');
+        mockGetFullFileUrl
+          .mockResolvedValueOnce('https://s3.amazonaws.com/bucket/files/image1.jpg')
+          .mockResolvedValueOnce('https://s3.amazonaws.com/bucket/files/image2.jpg');
+
+        const ctx = createMockCtx();
+        const input = createDefaultInput({
+          params: {
+            prompt: 'test prompt',
+            imageUrls: ['http://localhost:3000/f/id1', 'http://localhost:3000/f/id2'],
+          },
+        });
+
+        const caller = imageRouter.createCaller(ctx);
+        const result = await caller.createImage(input);
+
+        expect(result.success).toBe(true);
+        expect(mockGetFullFileUrl).toHaveBeenCalledTimes(2);
+        expect(mockGetFullFileUrl).toHaveBeenCalledWith('files/image1.jpg');
+        expect(mockGetFullFileUrl).toHaveBeenCalledWith('files/image2.jpg');
+      });
+
+      it('should not convert URLs when getFullFileUrl returns null', async () => {
+        mockGetKeyFromFullUrl.mockResolvedValue('files/image-key.jpg');
+        mockGetFullFileUrl.mockResolvedValue(null);
+
+        const ctx = createMockCtx();
+        const input = createDefaultInput({
+          params: {
+            prompt: 'test prompt',
+            imageUrl: 'http://localhost:3000/f/file-id',
+          },
+        });
+
+        const caller = imageRouter.createCaller(ctx);
+        const result = await caller.createImage(input);
+
+        expect(result.success).toBe(true);
+        expect(mockGetFullFileUrl).toHaveBeenCalled();
+      });
+    });
+  });
+});

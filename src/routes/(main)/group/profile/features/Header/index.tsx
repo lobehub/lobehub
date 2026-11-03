@@ -1,0 +1,161 @@
+'use client';
+
+import { createStaticStyles, type DropdownItem, Flexbox, Icon } from '@lobehub/ui';
+import { Crown, Sparkles, Users, UsersRound } from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
+
+import AddGroupMemberModal from '@/features/AddAgentMemberModal';
+import MobileHeaderNav from '@/features/NavHeader/MobileHeaderNav';
+import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
+import { usePermission } from '@/hooks/usePermission';
+import { parseAsString, useQueryState } from '@/hooks/useQueryParam';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
+
+import AgentBuilderToggle from './AgentBuilderToggle';
+import ChromeTabs from './ChromeTabs';
+import { type ChromeTabItem } from './ChromeTabs';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  header: css`
+    overflow: hidden;
+    flex: none;
+
+    width: 100%;
+    height: 44px;
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  tabsWrapper: css`
+    scrollbar-width: none;
+
+    overflow-x: auto;
+
+    /* A swipe past the tabs' edge must not fire the browser back gesture. */
+    overscroll-behavior-x: none;
+    flex: 1;
+
+    min-width: 0;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  `,
+}));
+
+const Header = memo(() => {
+  const { t } = useTranslation('chat');
+  const { allowed: canEdit, reason } = usePermission('edit_own_content');
+
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  const { gid } = useParams<{ gid: string }>();
+  const members = useAgentGroupStore((s) => agentGroupSelectors.getGroupAgents(gid ?? '')(s));
+  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const addAgentsToGroup = useAgentGroupStore((s) => s.addAgentsToGroup);
+  const createAgentInGroup = useAgentGroupStore((s) => s.createAgentInGroup);
+  const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
+
+  // Use URL query param for selected tab
+  const [selectedTabId, setSelectedTabId] = useQueryState(
+    'tab',
+    parseAsString.withDefault('group'),
+  );
+
+  const existingMemberIds = useMemo(() => members.map((a) => a.id), [members]);
+
+  const tabItems = useMemo<ChromeTabItem[]>(() => {
+    const items: ChromeTabItem[] = [
+      {
+        icon: <Users size={16} />,
+        id: 'group',
+        title: t('group.profile.groupSettings'),
+      },
+    ];
+
+    // Add agent tabs
+    for (const agent of members) {
+      items.push({
+        avatar: agent.isSupervisor ? undefined : agent.avatar || undefined,
+        icon: agent.isSupervisor ? <Crown size={16} /> : undefined,
+        id: agent.id,
+        isExternal: !agent.isSupervisor && !agent.virtual,
+        title: agent.isSupervisor ? t('group.profile.supervisor') : agent.title || 'Untitled Agent',
+      });
+    }
+
+    return items;
+  }, [members, t]);
+
+  const handleAddMembers = async (agentIds: string[]) => {
+    if (!activeGroupId) return;
+    await addAgentsToGroup(activeGroupId, agentIds);
+    setShowAddModal(false);
+  };
+
+  const handleCreateMember = async () => {
+    if (!activeGroupId) return;
+    const newAgentId = await createAgentInGroup(activeGroupId, {
+      title: t('group.profile.addMember.newMemberTitle'),
+    });
+    // Jump to the newly created member so the user can configure it right away
+    if (newAgentId) setSelectedTabId(newAgentId);
+  };
+
+  const addMenuItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        icon: <Icon icon={Sparkles} />,
+        key: 'create-new',
+        label: t('group.profile.addMember.createNew'),
+        onClick: handleCreateMember,
+      },
+      {
+        icon: <Icon icon={UsersRound} />,
+        key: 'add-existing',
+        label: t('group.profile.addMember.addExisting'),
+        onClick: () => setShowAddModal(true),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeGroupId, t],
+  );
+
+  return (
+    <>
+      <Flexbox horizontal align="center" className={styles.header} gap={4} justify="space-between">
+        {isMobileSurface() ? <MobileHeaderNav /> : !showLeftPanel && <ToggleLeftPanelButton />}
+        <div className={styles.tabsWrapper}>
+          <ChromeTabs
+            activeId={selectedTabId}
+            addDisabled={!canEdit}
+            addDisabledReason={reason}
+            addMenuItems={addMenuItems}
+            items={tabItems}
+            onChange={setSelectedTabId}
+          />
+        </div>
+        <Flexbox horizontal align="center" flex="none" gap={8} style={{ marginInlineStart: 12 }}>
+          <AgentBuilderToggle />
+        </Flexbox>
+      </Flexbox>
+      {activeGroupId && (
+        <AddGroupMemberModal
+          existingMembers={existingMemberIds}
+          groupId={activeGroupId}
+          open={showAddModal}
+          onCancel={() => setShowAddModal(false)}
+          onConfirm={handleAddMembers}
+        />
+      )}
+    </>
+  );
+});
+
+export default Header;

@@ -1,0 +1,227 @@
+// @vitest-environment node
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { AgentRuntimeErrorType } from '../../../types/error';
+import {
+  LobeDeepSeekAI,
+  LobeDeepSeekAnthropicAI,
+  LobeDeepSeekOpenAI,
+  openAIParams,
+} from '../index';
+import { anthropicBaseURL, defaultOpenAIBaseURL } from './testUtils';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('LobeDeepSeekAI', () => {
+  const createRuntime = ({
+    baseURL,
+    sdkType,
+  }: {
+    baseURL?: string;
+    sdkType?: string;
+  } = {}) =>
+    new LobeDeepSeekAI({
+      apiKey: 'test',
+      ...(baseURL ? { baseURL } : {}),
+      ...(sdkType ? { sdkType } : {}),
+    });
+
+  const resolveRouter = async (baseURL?: string, sdkType?: string) => {
+    const runtime = createRuntime({ baseURL, sdkType });
+
+    return (runtime as any).resolveMatchedRouter('deepseek-v4-pro');
+  };
+
+  const resolveFirstRouterOption = async (baseURL: string, sdkType: string) => {
+    const runtime = createRuntime({ baseURL, sdkType });
+    const router = await (runtime as any).resolveMatchedRouter('deepseek-v4-pro');
+    const routerOptions = (runtime as any).normalizeRouterOptions(router);
+
+    return {
+      option: routerOptions[0],
+      router,
+    };
+  };
+
+  describe('RouterRuntime baseURL routing', () => {
+    it('should route to Anthropic format by default', async () => {
+      const router = await resolveRouter();
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('anthropic-compatible');
+    });
+
+    it('should route to Anthropic format when baseURL ends with /anthropic', async () => {
+      const router = await resolveRouter(anthropicBaseURL);
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('anthropic-compatible');
+    });
+
+    it('should route to Anthropic format when baseURL ends with /anthropic/', async () => {
+      const router = await resolveRouter(`${anthropicBaseURL}/`);
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('anthropic-compatible');
+    });
+
+    it('should route to OpenAI format when baseURL ends with /v1', async () => {
+      const router = await resolveRouter(defaultOpenAIBaseURL);
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('openai-compatible');
+    });
+
+    it('should route custom non-Anthropic baseURL to OpenAI format', async () => {
+      const router = await resolveRouter('https://api.deepseek.com');
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('openai-compatible');
+    });
+
+    it('should route to Anthropic format when sdkType is anthropic', async () => {
+      const router = await resolveRouter('https://aihubmix.com/v1/messages', 'anthropic');
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('anthropic-compatible');
+    });
+
+    it('should normalize /v1/messages before creating an Anthropic SDK runtime', async () => {
+      const { option } = await resolveFirstRouterOption(
+        'https://aihubmix.com/v1/messages',
+        'anthropic',
+      );
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe('https://aihubmix.com');
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toBe('https://aihubmix.com');
+    });
+
+    it('should let Anthropic-compatible runtime normalize /v1 baseURL', async () => {
+      const { option } = await resolveFirstRouterOption('https://aihubmix.com/v1', 'anthropic');
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe('https://aihubmix.com/v1');
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toBe('https://aihubmix.com');
+    });
+
+    it('should normalize /anthropic/v1/messages before creating an Anthropic SDK runtime', async () => {
+      const { option } = await resolveFirstRouterOption(
+        'https://api.deepseek.com/anthropic/v1/messages',
+        'anthropic',
+      );
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe(anthropicBaseURL);
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toBe(anthropicBaseURL);
+    });
+
+    it('should let sdkType override legacy baseURL suffix routing', async () => {
+      const router = await resolveRouter(anthropicBaseURL, 'openai');
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('openai-compatible');
+    });
+
+    it('should reject unsupported sdkType values', async () => {
+      await expect(resolveRouter(defaultOpenAIBaseURL, 'invalid')).rejects.toThrow(
+        'Unsupported DeepSeek sdkType: invalid',
+      );
+    });
+
+    it.each([
+      ['the default Anthropic runtime', undefined, undefined, 'https://api.deepseek.com/v1/models'],
+      ['an Anthropic baseURL', anthropicBaseURL, undefined, 'https://api.deepseek.com/v1/models'],
+      [
+        'an explicit Anthropic sdkType',
+        'https://aihubmix.com/v1/messages',
+        'anthropic',
+        'https://aihubmix.com/v1/models',
+      ],
+    ])(
+      'should use OpenAI-compatible model discovery for %s',
+      async (_, baseURL, sdkType, expectedURL) => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+          new Response(JSON.stringify({ data: [{ id: 'deepseek-chat' }], object: 'list' }), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 200,
+          }),
+        );
+        const runtime = createRuntime({ baseURL, sdkType });
+
+        const models = await runtime.models();
+        const [request] = fetchSpy.mock.calls[0]!;
+        const requestURL = request instanceof Request ? request.url : String(request);
+
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        expect(requestURL).toBe(expectedURL);
+        expect(models).toContainEqual(expect.objectContaining({ id: 'deepseek-chat' }));
+      },
+    );
+  });
+});
+
+describe('LobeDeepSeekOpenAI', () => {
+  it('should reject oversized Flash alias prompts before calling the upstream API', async () => {
+    const runtime = new LobeDeepSeekOpenAI({ apiKey: 'test_api_key' });
+    const create = vi
+      .spyOn(runtime.client.chat.completions, 'create')
+      .mockRejectedValue(new Error('Unexpected upstream request'));
+
+    await expect(
+      runtime.chat({
+        messages: [{ content: 'lorem ipsum dolor '.repeat(400_000), role: 'user' }],
+        model: 'deepseek-flash',
+        temperature: 0,
+      }),
+    ).rejects.toMatchObject({
+      error: {
+        ctx: 1_000_000,
+        model: 'deepseek-flash',
+        type: 'context_exceeded_pre_flight',
+      },
+      errorType: AgentRuntimeErrorType.ExceededContextWindow,
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  describe('init', () => {
+    it('should correctly initialize with an API key', () => {
+      const runtime = new LobeDeepSeekOpenAI({ apiKey: 'test_api_key' });
+
+      expect(runtime).toBeInstanceOf(LobeDeepSeekOpenAI);
+      expect((runtime as any).baseURL).toEqual(defaultOpenAIBaseURL);
+    });
+  });
+});
+
+describe('LobeDeepSeekAnthropicAI', () => {
+  describe('init', () => {
+    it('should correctly initialize with an API key', () => {
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test_api_key' });
+
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toEqual(anthropicBaseURL);
+    });
+  });
+});
+
+describe('Debug Configuration', () => {
+  it('should disable debug by default', () => {
+    delete process.env.DEBUG_DEEPSEEK_CHAT_COMPLETION;
+    const result = openAIParams.debug.chatCompletion();
+    expect(result).toBe(false);
+  });
+
+  it('should enable debug when env is set', () => {
+    process.env.DEBUG_DEEPSEEK_CHAT_COMPLETION = '1';
+    const result = openAIParams.debug.chatCompletion();
+    expect(result).toBe(true);
+    delete process.env.DEBUG_DEEPSEEK_CHAT_COMPLETION;
+  });
+});

@@ -1,0 +1,121 @@
+import type {
+  ActivityMemoryItemSchema,
+  AddIdentityActionSchema,
+  ContextMemoryItemSchema,
+  ExperienceMemoryItemSchema,
+  PreferenceMemoryItemSchema,
+  RemoveIdentityActionSchema,
+  UpdateIdentityToolInputSchema,
+} from '@lobechat/memory-user-memory/schemas';
+import type { QueryTaxonomyOptionsResult, SearchMemoryResult } from '@lobechat/types';
+import type { z } from 'zod';
+
+export const MemoryApiName = {
+  addActivityMemory: 'addActivityMemory',
+  addContextMemory: 'addContextMemory',
+  addExperienceMemory: 'addExperienceMemory',
+  addIdentityMemory: 'addIdentityMemory',
+  addPreferenceMemory: 'addPreferenceMemory',
+  queryTaxonomyOptions: 'queryTaxonomyOptions',
+  removeIdentityMemory: 'removeIdentityMemory',
+  searchUserMemory: 'searchUserMemory',
+  updateIdentityMemory: 'updateIdentityMemory',
+} as const;
+
+export type MemoryApiNameType = (typeof MemoryApiName)[keyof typeof MemoryApiName];
+
+/** APIs available to an Agent Share visitor when the creator grants read access. */
+export const MEMORY_READ_API_NAMES: ReadonlySet<MemoryApiNameType> = new Set([
+  MemoryApiName.queryTaxonomyOptions,
+  MemoryApiName.searchUserMemory,
+]);
+
+/**
+ * APIs that mutate the user's memory store. Single source of truth shared by
+ * the Agent Share server gate (which strips them from visitor runs
+ * unconditionally) and the share settings picker (which pre-disables them),
+ * so adding a write API here keeps both sides in step.
+ */
+export const MEMORY_WRITE_API_NAMES: ReadonlySet<MemoryApiNameType> = new Set([
+  MemoryApiName.addActivityMemory,
+  MemoryApiName.addContextMemory,
+  MemoryApiName.addExperienceMemory,
+  MemoryApiName.addIdentityMemory,
+  MemoryApiName.addPreferenceMemory,
+  MemoryApiName.removeIdentityMemory,
+  MemoryApiName.updateIdentityMemory,
+]);
+
+/** @deprecated Use MemoryApiName instead */
+export const UserMemoryApiName = MemoryApiName;
+
+// ==================== Inspector Types ====================
+
+// Search
+
+// SearchUserMemoryState is the same as SearchMemoryResult (executor returns result directly as state)
+export type SearchUserMemoryState = SearchMemoryResult & {
+  /**
+   * Total across the five buckets, pinned by the read-path projector before it
+   * drops them. The collapsed chip shows only this number; the card itself
+   * hydrates the real buckets when the row is expanded.
+   */
+  resultCount?: number;
+};
+export type QueryTaxonomyOptionsState = QueryTaxonomyOptionsResult;
+
+// Add Context
+export type AddContextMemoryParams = z.infer<typeof ContextMemoryItemSchema>;
+export interface AddContextMemoryState {
+  contextId?: string;
+  memoryId?: string;
+}
+
+// Add Activity
+export type AddActivityMemoryParams = z.infer<typeof ActivityMemoryItemSchema>;
+export interface AddActivityMemoryState {
+  activityId?: string;
+  memoryId?: string;
+}
+
+// Add Experience
+export type AddExperienceMemoryParams = z.infer<typeof ExperienceMemoryItemSchema>;
+export interface AddExperienceMemoryState {
+  experienceId?: string;
+  memoryId?: string;
+}
+
+// Add Identity
+export type AddIdentityMemoryParams = z.infer<typeof AddIdentityActionSchema>;
+export interface AddIdentityMemoryState {
+  identityId?: string;
+  memoryId?: string;
+}
+
+// Add Preference
+export type AddPreferenceMemoryParams = z.infer<typeof PreferenceMemoryItemSchema>;
+export interface AddPreferenceMemoryState {
+  memoryId?: string;
+  preferenceId?: string;
+}
+
+// Update Identity
+/** Raw tool arguments: the model may send null for fields it leaves unchanged. */
+export type UpdateIdentityMemoryParams = z.input<typeof UpdateIdentityToolInputSchema>;
+export interface UpdateIdentityMemoryState {
+  identityId?: string;
+}
+
+// Remove Identity
+export type RemoveIdentityMemoryParams = z.infer<typeof RemoveIdentityActionSchema>;
+export interface RemoveIdentityMemoryState {
+  identityId?: string;
+  reason?: string;
+}
+
+export {
+  type QueryTaxonomyOptionsParams,
+  type QueryTaxonomyOptionsResult,
+  type SearchMemoryParams,
+  type SearchMemoryResult,
+} from '@lobechat/types';

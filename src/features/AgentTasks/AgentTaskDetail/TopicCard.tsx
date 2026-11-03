@@ -1,0 +1,444 @@
+import type { TaskDetailActivity } from '@lobechat/types';
+import { formatDuration } from '@lobechat/utils';
+import {
+  ActionIcon,
+  Avatar,
+  Block,
+  confirmModal,
+  cssVar,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Markdown,
+  stopPropagation,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleDot,
+  CircleStop,
+  Copy,
+  ExternalLink,
+  MessageCircle,
+  MessagesSquare,
+  MoreHorizontal,
+  Trash,
+} from 'lucide-react';
+import type { KeyboardEvent } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
+import CollapsibleContent from '@/components/CollapsibleContent';
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
+import { useActivityTime } from '@/hooks/useActivityTime';
+import { usePermission } from '@/hooks/usePermission';
+import { useTaskStore } from '@/store/task';
+import { isForbiddenError } from '@/utils/forbiddenError';
+
+import { styles } from '../shared/style';
+import RunReplyEditor from './RunReplyEditor';
+import RunVerifyDetail from './RunVerifyDetail';
+import RunVerifyTag from './RunVerifyTag';
+import { shouldShowRunFollowUp } from './shouldShowRunFollowUp';
+import TopicStatusIcon from './TopicStatusIcon';
+import { resolveRunAgentId, useRunFollowUp } from './useRunFollowUp';
+import { useRunAcceptanceWait } from './useTaskAcceptanceWait';
+
+// The run's last message (`content`) is the raw assistant output — markdown, and
+// often long. Render it as rich text, but keep it a bounded preview in the feed:
+// the shared collapse clamps it with a fade and offers "show more", while the
+// run drawer remains available from the explicit overflow action. The preview
+// itself is reading content, not an unlabeled navigation target.
+//
+// It also stays interactive. While the whole card was one big button to the run
+// drawer, the body carried `pointer-events: none` so clicks fell through to it;
+// the card stopped being that button, and the rule was left behind killing every
+// link, code-copy and text selection in the output with nothing to fall through
+// to. Anything added here that swallows clicks has to earn it again.
+const RUN_CONTENT_MAX_HEIGHT = 160;
+
+const RunContent = memo<{ content: string; unclamped?: boolean }>(({ content, unclamped }) =>
+  // The delivery is the reason the result panel exists. Clamping it a second
+  // time — the card already collapses — meant opening a task and meeting five
+  // lines behind a "show all", which is no way to review anything. Older runs
+  // keep the clamp: there the list is the point.
+  unclamped ? (
+    <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
+      {content}
+    </Markdown>
+  ) : (
+    <CollapsibleContent key={content} maxHeight={RUN_CONTENT_MAX_HEIGHT}>
+      <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
+        {content}
+      </Markdown>
+    </CollapsibleContent>
+  ),
+);
+
+interface TopicCardProps {
+  activity: TaskDetailActivity;
+  /**
+   * Whether the run body starts open. A goal loop can produce many rounds, and
+   * an all-expanded feed buries the newest result under older ones — the list
+   * opens only the latest and collapses the rest.
+   */
+  defaultExpanded?: boolean;
+  /** The run the reader came to read: its delivery renders in full. */
+  primary?: boolean;
+}
+
+const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, primary }) => {
+  const { t } = useTranslation('chat');
+  const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
+  const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
+  const cancelTopic = useTaskStore((s) => s.cancelTopic);
+  const deleteTopic = useTaskStore((s) => s.deleteTopic);
+  const { canFollowUp, submitFollowUp } = useRunFollowUp(activity);
+  const { allowed: canEditTask } = usePermission('create_content');
+  const [commenting, setCommenting] = useState(false);
+  const isRunning = activity.status === 'running';
+  const acceptanceWait = useRunAcceptanceWait(activity);
+  // A run cannot be answered while it is still going: the follow-up is a turn
+  // in the same conversation, so it would land mid-run.
+  const showRunFollowUp = shouldShowRunFollowUp(canFollowUp, isRunning);
+  const hasBody = Boolean(
+    activity.summary || activity.content || showRunFollowUp || activity.verify?.total,
+  );
+  // A verdict with no results behind it has nothing to move down to, so it
+  // stays in the header no matter what the body is doing.
+  const verifyDetailOpen = bodyExpanded && Boolean(activity.verify?.total);
+
+  const finalDuration =
+    !isRunning && activity.time && activity.completedAt
+      ? new Date(activity.completedAt).getTime() - new Date(activity.time).getTime()
+      : null;
+
+  const [elapsed, setElapsed] = useState(() =>
+    isRunning && activity.time ? Date.now() - new Date(activity.time).getTime() : 0,
+  );
+
+  useEffect(() => {
+    if (!isRunning || !activity.time) return;
+    const interval = setInterval(() => {
+      setElapsed(Date.now() - new Date(activity.time!).getTime());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isRunning, activity.time]);
+
+  const handleOpen = useCallback(() => {
+    if (!activity.id) return;
+    openTopicDrawer(activity.id, {
+      agentId: resolveRunAgentId(activity),
+      title: activity.title,
+    });
+  }, [activity, openTopicDrawer]);
+
+  const handleTitleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      handleOpen();
+    },
+    [handleOpen],
+  );
+
+  const handleCopyId = useCallback(() => {
+    if (activity.id) void navigator.clipboard.writeText(activity.id);
+  }, [activity.id]);
+
+  const handleCopyOperationId = useCallback(() => {
+    if (activity.operationId) void navigator.clipboard.writeText(activity.operationId);
+  }, [activity.operationId]);
+
+  const handleStop = useCallback(() => {
+    if (!activity.id) return;
+    const topicId = activity.id;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('taskDetail.topicMenu.stopConfirm.content', {
+        defaultValue:
+          'The current run will be canceled. Generated messages are kept and you can re-run the task later.',
+      }),
+      okText: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop Run' }),
+      onOk: async () => {
+        await cancelTopic(topicId);
+      },
+      title: t('taskDetail.topicMenu.stopConfirm.title', { defaultValue: 'Stop Run?' }),
+    });
+  }, [activity.id, cancelTopic, t]);
+
+  // The server gates `task.deleteTopic` behind the same edit permission as
+  // every other task mutation — a workspace viewer's confirm would only ever
+  // come back FORBIDDEN. Route that through the shared toast instead of
+  // letting the mutation reject silently into the confirm modal.
+  const handleDelete = useCallback(() => {
+    if (!canEditTask || !activity.id) return;
+    const topicId = activity.id;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('taskDetail.topicMenu.deleteConfirm.content', {
+        defaultValue:
+          'This run and its messages will be permanently deleted. This action cannot be undone.',
+      }),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onOk: async () => {
+        try {
+          await deleteTopic(topicId);
+        } catch (error) {
+          toast.error(
+            isForbiddenError(error)
+              ? t('manageOnlyCreator', { ns: 'common' })
+              : t('operationFailed', { ns: 'common' }),
+          );
+        }
+      },
+      title: t('taskDetail.topicMenu.deleteConfirm.title', { defaultValue: 'Delete Run?' }),
+    });
+  }, [activity.id, canEditTask, deleteTopic, t]);
+
+  const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
+  const durationText = isRunning
+    ? formatDuration(elapsed)
+    : finalDuration != null && finalDuration >= 0
+      ? formatDuration(finalDuration)
+      : '';
+
+  const menuItems: DropdownItem[] = [
+    ...(isRunning && activity.id
+      ? [
+          {
+            danger: true,
+            icon: CircleStop,
+            key: 'stop',
+            label: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop Run' }),
+            onClick: handleStop,
+          },
+          { type: 'divider' as const },
+        ]
+      : []),
+    {
+      icon: ExternalLink,
+      key: 'open',
+      label: t('taskDetail.topicMenu.open', { defaultValue: 'Open Run' }),
+      onClick: handleOpen,
+    },
+    {
+      disabled: !activity.id,
+      icon: Copy,
+      key: 'copy',
+      label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy Topic ID' }),
+      onClick: handleCopyId,
+    },
+    {
+      disabled: !activity.operationId,
+      icon: Copy,
+      key: 'copyOperationId',
+      label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy Operation ID' }),
+      onClick: handleCopyOperationId,
+    },
+    { type: 'divider' as const },
+    {
+      danger: true,
+      // A running topic is deleted server-side via interrupt-then-remove, but
+      // the row already offers an explicit Stop for that case — keep delete
+      // scoped to finished runs so this menu doesn't offer two destructive
+      // exits for the same in-flight state. Also gated on edit permission,
+      // matching the server's `task.deleteTopic` authorization.
+      disabled: !activity.id || isRunning || !canEditTask,
+      icon: Trash,
+      key: 'delete',
+      label: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onClick: handleDelete,
+    },
+  ];
+
+  const isAgent = activity.author?.type === 'agent';
+
+  // An agent that simply never set an avatar is still an agent — it gets the
+  // same default face it wears everywhere else, not a placeholder dot. The dot
+  // stays for rows with no author at all.
+  const avatarNode = isAgent ? (
+    <AgentAvatar
+      agentId={activity.author?.id}
+      avatar={activity.author?.avatar}
+      name={activity.author?.name}
+      shape={'circle'}
+      size={24}
+    />
+  ) : activity.author?.avatar ? (
+    <Avatar avatar={activity.author.avatar} size={24} />
+  ) : (
+    <div className={styles.activityAvatar}>
+      <CircleDot size={12} />
+    </div>
+  );
+
+  return (
+    // The primary result is not one card among many — it is the agent reporting
+    // what this task produced, and it should read like a document rather than a
+    // boxed activity row. The outline, the inner padding and the duplicated
+    // summary line all belong to the list presentation; a report drops them and
+    // lets the delivery own the surface.
+    <Block
+      gap={primary ? 12 : 8}
+      paddingBlock={primary ? 0 : 8}
+      paddingInline={primary ? 0 : 8}
+      style={primary ? undefined : { borderRadius: cssVar.borderRadiusLG }}
+      variant={primary ? 'borderless' : 'outlined'}
+    >
+      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>
+          {isAgent && activity.author?.id ? (
+            <AgentProfilePopup
+              agent={{ avatar: activity.author.avatar, title: activity.author.name }}
+              agentId={activity.author.id}
+              trigger={'hover'}
+            >
+              {avatarNode}
+            </AgentProfilePopup>
+          ) : (
+            avatarNode
+          )}
+          <TopicStatusIcon
+            size={16}
+            // The topic of a verify-bound run is `completed` while its task
+            // stays running until the acceptance round settles.
+            status={acceptanceWait ? 'awaiting_acceptance' : activity.status}
+          />
+          {activity.sourceTaskIdentifier && (
+            <Tag
+              size={'small'}
+              style={{ flexShrink: 0 }}
+              title={t('taskDetail.topicSource', { identifier: activity.sourceTaskIdentifier })}
+            >
+              {activity.sourceTaskIdentifier}
+            </Tag>
+          )}
+          <Text
+            ellipsis
+            aria-disabled={activity.id ? undefined : true}
+            role={activity.id ? 'button' : undefined}
+            style={{ cursor: activity.id ? 'pointer' : undefined }}
+            tabIndex={activity.id ? 0 : -1}
+            weight={500}
+            onClick={handleOpen}
+            onKeyDown={handleTitleKeyDown}
+          >
+            {activity.title}
+          </Text>
+          {activity.seq != null && (
+            <Text fontSize={12} style={{ flexShrink: 0 }} type={'secondary'}>
+              #{activity.seq}
+            </Text>
+          )}
+          {/* Only mark machine-opened rounds: a `manual` tag on every row the
+              user started themselves is noise, absence already means manual. */}
+          {activity.trigger && activity.trigger !== 'manual' && (
+            <Tag
+              size={'small'}
+              style={{ flexShrink: 0 }}
+              title={t(`taskDetail.runTrigger.${activity.trigger}` as const)}
+            >
+              {t(`taskDetail.runTrigger.${activity.trigger}` as const)}
+            </Tag>
+          )}
+          {durationText && (
+            <Text fontSize={12} style={{ flexShrink: 0 }} type={'secondary'}>
+              · {durationText}
+            </Text>
+          )}
+          {/* The verdict rides the header only while the run is folded; once
+              open it moves down to sit on the checklist that justifies it. */}
+          {!verifyDetailOpen && <RunVerifyTag verify={activity.verify} />}
+        </Flexbox>
+
+        <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+          {startedAt && (
+            <Text fontSize={12} title={startedAtTitle} type={'secondary'}>
+              {startedAt}
+            </Text>
+          )}
+          {hasBody && (
+            <Flexbox onClick={stopPropagation}>
+              <ActionIcon
+                icon={bodyExpanded ? ChevronDown : ChevronRight}
+                size={'small'}
+                title={t(bodyExpanded ? 'taskDetail.runCollapse' : 'taskDetail.runExpand')}
+                onClick={() => setBodyExpanded((open) => !open)}
+              />
+            </Flexbox>
+          )}
+          <Flexbox onClick={stopPropagation}>
+            <DropdownMenu items={menuItems}>
+              <ActionIcon icon={MoreHorizontal} size={'small'} />
+            </DropdownMenu>
+          </Flexbox>
+        </Flexbox>
+      </Flexbox>
+
+      {hasBody && bodyExpanded && (
+        <Flexbox gap={primary ? 12 : 8} paddingInline={primary ? 0 : 4}>
+          {activity.summary && !(primary && activity.content) && (
+            <Text
+              fontSize={13}
+              style={{ color: cssVar.colorTextDescription, whiteSpace: 'pre-wrap' }}
+            >
+              {activity.summary}
+            </Text>
+          )}
+          {activity.content && <RunContent content={activity.content} unclamped={primary} />}
+          {/* The verdict's evidence, next to the delivery it judged — reading
+              one should never require leaving for the acceptance page. */}
+          {activity.verify && (
+            <Flexbox onClick={stopPropagation}>
+              <RunVerifyDetail
+                extra={<RunVerifyTag verify={activity.verify} />}
+                operationId={activity.operationId}
+              />
+            </Flexbox>
+          )}
+          {showRunFollowUp &&
+            (commenting ? (
+              <Flexbox onClick={stopPropagation}>
+                <RunReplyEditor
+                  onCancel={() => setCommenting(false)}
+                  onSubmit={async (text) => {
+                    // Close the editor only once the message was accepted: a
+                    // refused send keeps the draft so it can be retried.
+                    if (await submitFollowUp(text)) setCommenting(false);
+                  }}
+                />
+              </Flexbox>
+            ) : (
+              <Flexbox horizontal gap={4} justify={'flex-end'} onClick={stopPropagation}>
+                {/* The run's own conversation was reachable only by clicking the
+                    title, which said nothing about being a door. Asking the
+                    agent a follow-up is the natural next move after reading a
+                    delivery, so it gets a real affordance — it sends into that
+                    conversation and opens it. */}
+                <ActionIcon
+                  icon={MessagesSquare}
+                  size={'small'}
+                  title={t('taskDetail.openRunChat')}
+                  onClick={handleOpen}
+                />
+                <ActionIcon
+                  icon={MessageCircle}
+                  size={'small'}
+                  title={t('taskDetail.runFollowUp')}
+                  onClick={() => setCommenting(true)}
+                />
+              </Flexbox>
+            ))}
+        </Flexbox>
+      )}
+    </Block>
+  );
+});
+
+export default TopicCard;

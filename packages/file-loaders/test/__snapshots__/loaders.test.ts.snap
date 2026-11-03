@@ -1,0 +1,136 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`loadFile Integration Tests > PDF Handling > should load content from a pdf file using filePath 1`] = `
+{
+  "content": "<page pageNumber="1">
+123
+</page>",
+  "fileType": "pdf",
+  "filename": "test.pdf",
+  "metadata": {
+    "loaderSpecific": {
+      "pdfInfo": {
+        "CreationDate": "D:20250419143655Z00'00'",
+        "Creator": "Pages文稿",
+        "EncryptFilterName": null,
+        "IsAcroFormPresent": false,
+        "IsCollectionPresent": false,
+        "IsLinearized": false,
+        "IsSignaturesPresent": false,
+        "IsXFAPresent": false,
+        "Language": null,
+        "ModDate": "D:20250419143655Z00'00'",
+        "PDFFormatVersion": "1.3",
+        "Producer": "macOS 版本15.3.2（版号24D81） Quartz PDFContext",
+        "Title": "test",
+      },
+      "pdfMetadata": null,
+      "pdfVersion": "5.4.530",
+    },
+  },
+  "pages": [
+    {
+      "charCount": 3,
+      "lineCount": 1,
+      "metadata": {
+        "pageNumber": 1,
+      },
+      "pageContent": "123",
+    },
+  ],
+  "totalCharCount": 3,
+  "totalLineCount": 1,
+}
+`;
+
+exports[`loadFile Integration Tests > Text Handling (.txt, .csv, .md, etc.) > should load content from a test.csv file using filePath 1`] = `
+{
+  "content": "ID,Name,Value
+1,Alpha,100
+2,Beta,200
+3,Gamma,300
+",
+  "fileType": "csv",
+  "filename": "test.csv",
+  "metadata": {
+    "loaderSpecific": undefined,
+  },
+  "pages": [
+    {
+      "charCount": 49,
+      "lineCount": 5,
+      "metadata": {
+        "lineNumberEnd": 5,
+        "lineNumberStart": 1,
+      },
+      "pageContent": "ID,Name,Value
+1,Alpha,100
+2,Beta,200
+3,Gamma,300
+",
+    },
+  ],
+  "totalCharCount": 49,
+  "totalLineCount": 5,
+}
+`;
+
+exports[`loadFile Integration Tests > Text Handling (.txt, .csv, .md, etc.) > should load content from a test.md file using filePath 1`] = `
+{
+  "content": "# Markdown Test
+
+This is a test.
+",
+  "fileType": "md",
+  "filename": "test.md",
+  "metadata": {
+    "loaderSpecific": undefined,
+  },
+  "pages": [
+    {
+      "charCount": 33,
+      "lineCount": 4,
+      "metadata": {
+        "lineNumberEnd": 4,
+        "lineNumberStart": 1,
+      },
+      "pageContent": "# Markdown Test
+
+This is a test.
+",
+    },
+  ],
+  "totalCharCount": 33,
+  "totalLineCount": 4,
+}
+`;
+
+exports[`loadFile Integration Tests > Text Handling (.txt, .csv, .md, etc.) > should load content from a test.txt file using filePath 1`] = `
+{
+  "content": "This is line 1.
+This is line 2.
+End of text file.
+",
+  "fileType": "txt",
+  "filename": "test.txt",
+  "metadata": {
+    "loaderSpecific": undefined,
+  },
+  "pages": [
+    {
+      "charCount": 50,
+      "lineCount": 4,
+      "metadata": {
+        "lineNumberEnd": 4,
+        "lineNumberStart": 1,
+      },
+      "pageContent": "This is line 1.
+This is line 2.
+End of text file.
+",
+    },
+  ],
+  "totalCharCount": 50,
+  "totalLineCount": 4,
+}
+`;

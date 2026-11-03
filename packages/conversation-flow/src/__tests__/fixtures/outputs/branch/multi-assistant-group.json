@@ -1,0 +1,392 @@
+{
+  "contextTree": [
+    {
+      "id": "msg-user-1",
+      "type": "message"
+    },
+    {
+      "activeBranchIndex": 2,
+      "branches": [
+        [
+          {
+            "children": [
+              {
+                "id": "msg-assistant-1",
+                "tools": ["msg-tool-1"],
+                "type": "message"
+              },
+              {
+                "id": "msg-assistant-2",
+                "tools": ["msg-tool-2"],
+                "type": "message"
+              },
+              {
+                "id": "msg-assistant-3",
+                "type": "message"
+              }
+            ],
+            "id": "msg-assistant-1",
+            "type": "assistantGroup"
+          }
+        ],
+        [
+          {
+            "children": [
+              {
+                "id": "msg-assistant-4",
+                "tools": ["msg-tool-3", "msg-tool-4"],
+                "type": "message"
+              },
+              {
+                "id": "msg-assistant-5",
+                "type": "message"
+              }
+            ],
+            "id": "msg-assistant-4",
+            "type": "assistantGroup"
+          }
+        ],
+        [
+          {
+            "children": [
+              {
+                "id": "msg-assistant-6",
+                "tools": ["msg-tool-5"],
+                "type": "message"
+              },
+              {
+                "id": "msg-assistant-7",
+                "type": "message"
+              }
+            ],
+            "id": "msg-assistant-6",
+            "type": "assistantGroup"
+          }
+        ]
+      ],
+      "id": "branch-msg-user-1-0",
+      "parentMessageId": "msg-user-1",
+      "type": "branch"
+    }
+  ],
+  "flatList": [
+    {
+      "content": "杭州和北京天气如何",
+      "createdAt": 1704067200000,
+      "id": "msg-user-1",
+      "metadata": {
+        "activeBranchIndex": 2
+      },
+      "parentId": null,
+      "role": "user",
+      "updatedAt": 1704067200000
+    },
+    {
+      "id": "msg-assistant-6",
+      "role": "assistantGroup",
+      "content": "",
+      "parentId": "msg-user-1",
+      "createdAt": 1704067240000,
+      "updatedAt": 1704067240000,
+      "branch": {
+        "activeBranchIndex": 2,
+        "count": 3
+      },
+      "children": [
+        {
+          "content": "",
+          "id": "msg-assistant-6",
+          "tools": [
+            {
+              "apiName": "search",
+              "arguments": "{\"query\":\"杭州 天气 现在 北京 天气 现在\"}",
+              "id": "call-5",
+              "identifier": "lobe-web-browsing",
+              "type": "builtin",
+              "result": {
+                "content": "<searchResults>\n  <item title=\"Weather Portal\" url=\"https://weather3.example.com/\">Weather data...</item>\n</searchResults>",
+                "id": "msg-tool-5",
+                "state": {
+                  "query": "杭州 天气 现在 北京 天气 现在",
+                  "results": [
+                    {
+                      "title": "Weather Portal",
+                      "url": "https://weather3.example.com/"
+                    }
+                  ]
+                }
+              },
+              "result_msg_id": "msg-tool-5"
+            }
+          ],
+          "usage": {
+            "totalInputTokens": 3441,
+            "totalOutputTokens": 186,
+            "totalTokens": 3627
+          }
+        },
+        {
+          "content": "好的——我可以立刻去查并把结果发给你。",
+          "id": "msg-assistant-7",
+          "usage": {
+            "totalInputTokens": 7604,
+            "totalOutputTokens": 584,
+            "totalTokens": 8188
+          }
+        }
+      ],
+      "usage": {
+        "totalInputTokens": 11045,
+        "totalOutputTokens": 770,
+        "totalTokens": 11815
+      }
+    }
+  ],
+  "messageMap": {
+    "msg-assistant-1": {
+      "content": "",
+      "createdAt": 1704067202000,
+      "id": "msg-assistant-1",
+      "metadata": {
+        "totalInputTokens": 3441,
+        "totalOutputTokens": 310,
+        "totalTokens": 3751
+      },
+      "parentId": "msg-user-1",
+      "role": "assistant",
+      "tools": [
+        {
+          "apiName": "search",
+          "arguments": "{\"query\":\"杭州 北京 天气 现在\"}",
+          "id": "call-1",
+          "identifier": "lobe-web-browsing",
+          "type": "builtin"
+        }
+      ],
+      "updatedAt": 1704067202000
+    },
+    "msg-assistant-2": {
+      "content": "",
+      "createdAt": 1704067208000,
+      "id": "msg-assistant-2",
+      "metadata": {
+        "totalInputTokens": 4128,
+        "totalOutputTokens": 183,
+        "totalTokens": 4311
+      },
+      "parentId": "msg-tool-1",
+      "role": "assistant",
+      "tools": [
+        {
+          "apiName": "search",
+          "arguments": "{\"query\":\"杭州 天气 北京 天气\"}",
+          "id": "call-2",
+          "identifier": "lobe-web-browsing",
+          "type": "builtin"
+        }
+      ],
+      "updatedAt": 1704067208000
+    },
+    "msg-assistant-3": {
+      "content": "你是想看现在的实时天气，还是未来几天的天气预报？",
+      "createdAt": 1704067214000,
+      "id": "msg-assistant-3",
+      "metadata": {
+        "totalInputTokens": 6135,
+        "totalOutputTokens": 508,
+        "totalTokens": 6643
+      },
+      "parentId": "msg-tool-2",
+      "reasoning": {
+        "content": "用户询问天气，我需要确认他们想要的是实时天气还是预报。"
+      },
+      "role": "assistant",
+      "updatedAt": 1704067214000
+    },
+    "msg-assistant-4": {
+      "content": "",
+      "createdAt": 1704067220000,
+      "id": "msg-assistant-4",
+      "metadata": {
+        "totalInputTokens": 3440,
+        "totalOutputTokens": 369,
+        "totalTokens": 3809
+      },
+      "parentId": "msg-user-1",
+      "role": "assistant",
+      "tools": [
+        {
+          "apiName": "search",
+          "arguments": "{\"query\":\"!google 杭州 天气\"}",
+          "id": "call-3",
+          "identifier": "lobe-web-browsing",
+          "type": "builtin"
+        },
+        {
+          "apiName": "search",
+          "arguments": "{\"query\":\"!google 北京 天气\"}",
+          "id": "call-4",
+          "identifier": "lobe-web-browsing",
+          "type": "builtin"
+        }
+      ],
+      "updatedAt": 1704067220000
+    },
+    "msg-assistant-5": {
+      "content": "我可以帮你查天气 —— 想确认一下你的偏好再去查实时数据。",
+      "createdAt": 1704067229000,
+      "id": "msg-assistant-5",
+      "metadata": {
+        "totalInputTokens": 6425,
+        "totalOutputTokens": 675,
+        "totalTokens": 7100
+      },
+      "parentId": "msg-tool-4",
+      "role": "assistant",
+      "updatedAt": 1704067229000
+    },
+    "msg-assistant-6": {
+      "content": "",
+      "createdAt": 1704067240000,
+      "id": "msg-assistant-6",
+      "metadata": {
+        "totalInputTokens": 3441,
+        "totalOutputTokens": 186,
+        "totalTokens": 3627
+      },
+      "parentId": "msg-user-1",
+      "role": "assistant",
+      "tools": [
+        {
+          "apiName": "search",
+          "arguments": "{\"query\":\"杭州 天气 现在 北京 天气 现在\"}",
+          "id": "call-5",
+          "identifier": "lobe-web-browsing",
+          "type": "builtin"
+        }
+      ],
+      "updatedAt": 1704067240000
+    },
+    "msg-assistant-7": {
+      "content": "好的——我可以立刻去查并把结果发给你。",
+      "createdAt": 1704067246000,
+      "id": "msg-assistant-7",
+      "metadata": {
+        "totalInputTokens": 7604,
+        "totalOutputTokens": 584,
+        "totalTokens": 8188
+      },
+      "parentId": "msg-tool-5",
+      "role": "assistant",
+      "updatedAt": 1704067246000
+    },
+    "msg-tool-1": {
+      "content": "<searchResults>\n  <item title=\"Weather Site\" url=\"https://weather.example.com/\">Weather information...</item>\n</searchResults>",
+      "createdAt": 1704067205000,
+      "id": "msg-tool-1",
+      "parentId": "msg-assistant-1",
+      "plugin": {
+        "apiName": "search",
+        "identifier": "lobe-web-browsing",
+        "type": "builtin"
+      },
+      "pluginState": {
+        "query": "杭州 北京 天气 现在",
+        "results": [
+          {
+            "content": "Weather information...",
+            "title": "Weather Site",
+            "url": "https://weather.example.com/"
+          }
+        ]
+      },
+      "role": "tool",
+      "tool_call_id": "call-1",
+      "updatedAt": 1704067205000
+    },
+    "msg-tool-2": {
+      "content": "<searchResults>\n  <item title=\"Weather Info\" url=\"https://weather2.example.com/\">More weather...</item>\n</searchResults>",
+      "createdAt": 1704067211000,
+      "id": "msg-tool-2",
+      "parentId": "msg-assistant-2",
+      "plugin": {
+        "apiName": "search",
+        "identifier": "lobe-web-browsing",
+        "type": "builtin"
+      },
+      "role": "tool",
+      "tool_call_id": "call-2",
+      "updatedAt": 1704067211000
+    },
+    "msg-tool-3": {
+      "content": "<searchResults />",
+      "createdAt": 1704067223000,
+      "id": "msg-tool-3",
+      "parentId": "msg-assistant-4",
+      "plugin": {
+        "apiName": "search",
+        "identifier": "lobe-web-browsing",
+        "type": "builtin"
+      },
+      "pluginState": {
+        "query": "!google 杭州 天气",
+        "results": []
+      },
+      "role": "tool",
+      "tool_call_id": "call-3",
+      "updatedAt": 1704067223000
+    },
+    "msg-tool-4": {
+      "content": "<searchResults />",
+      "createdAt": 1704067226000,
+      "id": "msg-tool-4",
+      "parentId": "msg-assistant-4",
+      "plugin": {
+        "apiName": "search",
+        "identifier": "lobe-web-browsing",
+        "type": "builtin"
+      },
+      "pluginState": {
+        "query": "!google 北京 天气",
+        "results": []
+      },
+      "role": "tool",
+      "tool_call_id": "call-4",
+      "updatedAt": 1704067226000
+    },
+    "msg-tool-5": {
+      "content": "<searchResults>\n  <item title=\"Weather Portal\" url=\"https://weather3.example.com/\">Weather data...</item>\n</searchResults>",
+      "createdAt": 1704067243000,
+      "id": "msg-tool-5",
+      "parentId": "msg-assistant-6",
+      "plugin": {
+        "apiName": "search",
+        "identifier": "lobe-web-browsing",
+        "type": "builtin"
+      },
+      "pluginState": {
+        "query": "杭州 天气 现在 北京 天气 现在",
+        "results": [
+          {
+            "title": "Weather Portal",
+            "url": "https://weather3.example.com/"
+          }
+        ]
+      },
+      "role": "tool",
+      "tool_call_id": "call-5",
+      "updatedAt": 1704067243000
+    },
+    "msg-user-1": {
+      "content": "杭州和北京天气如何",
+      "createdAt": 1704067200000,
+      "id": "msg-user-1",
+      "metadata": {
+        "activeBranchIndex": 2
+      },
+      "parentId": null,
+      "role": "user",
+      "updatedAt": 1704067200000
+    }
+  }
+}

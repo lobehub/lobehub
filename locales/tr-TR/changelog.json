@@ -1,0 +1,14 @@
+{
+  "actions.followOnX": "X'te bizi takip edin",
+  "actions.subscribeToUpdates": "Güncellemeler için abone olun",
+  "actions.versions": "Sürüm detayları",
+  "addedWhileAway": "Uzak kaldığınız sürede yeni özellikler ekledik.",
+  "allChangelog": "Tüm değişiklik kayıtlarını görüntüle",
+  "description": "{{appName}} uygulamasındaki yeni özellikler ve iyileştirmelerden haberdar olun",
+  "pagination.next": "Sonraki Sayfa",
+  "pagination.older": "Geçmiş Değişiklikleri Görüntüle",
+  "readDetails": "Detayları oku",
+  "title": "Değişiklik Günlüğü",
+  "versionDetails": "Sürüm detayları",
+  "welcomeBack": "Tekrar hoş geldiniz!"
+}

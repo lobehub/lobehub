@@ -1,0 +1,950 @@
+// @vitest-environment node
+import type { ClientSecretPayload } from '@lobechat/types';
+import { ModelProvider } from 'model-bank';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { LobeOpenAI } from '../providers/openai';
+import { providerRuntimeMap } from '../runtimeMap';
+import type { ChatStreamCallbacks, ChatStreamPayload } from '../types';
+import type { CreateImagePayload } from '../types/image';
+import type { CreateVideoPayload } from '../types/video';
+import { ModelRuntime, type ModelRuntimeHooks } from './ModelRuntime';
+
+vi.mock('../providers/lobehub', () => ({
+  LobeHubAI: class LobeHubAI {},
+}));
+
+/**
+ * Mock createTraceOptions for testing purposes.
+ * This avoids importing from @/server/modules/ModelRuntime which has database dependencies.
+ */
+const createMockTraceOptions = (callbacks?: Partial<ChatStreamCallbacks>) => ({
+  callback: {
+    onCompletion: callbacks?.onCompletion ?? vi.fn(),
+    onFinal: callbacks?.onFinal ?? vi.fn(),
+    onStart: callbacks?.onStart ?? vi.fn(),
+    onToolsCalling: callbacks?.onToolsCalling ?? vi.fn(),
+  } as ChatStreamCallbacks,
+  headers: new Headers(),
+});
+
+const specialProviders = [
+  { id: 'openai', payload: { apiKey: 'user-openai-key', baseURL: 'user-endpoint' } },
+  {
+    id: ModelProvider.Azure,
+    payload: {
+      apiKey: 'user-azure-key',
+      baseURL: 'https://user-azure.openai.azure.com',
+      apiVersion: '2024-06-01',
+    },
+    runtimeBaseURL: 'https://user-azure.openai.azure.com/openai/v1',
+  },
+  {
+    id: ModelProvider.AzureAI,
+    payload: {
+      apiKey: 'user-azure-key',
+      baseURL: 'user-azure-endpoint',
+    },
+  },
+  {
+    id: ModelProvider.Bedrock,
+    payload: {
+      accessKeyId: 'user-aws-id',
+      accessKeySecret: 'user-aws-secret',
+      region: 'user-aws-region',
+    },
+  },
+  {
+    id: ModelProvider.Ollama,
+    payload: { baseURL: 'https://user-ollama-url' },
+  },
+  {
+    id: ModelProvider.Cloudflare,
+    payload: { baseURLOrAccountID: 'https://user-ollama-url' },
+  },
+];
+
+const testRuntime = (providerId: string, payload?: any, runtimeBaseURL?: string) => {
+  describe(`${providerId} provider runtime`, () => {
+    it('should initialize correctly', async () => {
+      const jwtPayload: ClientSecretPayload = { apiKey: 'user-key', ...payload };
+      const runtime = await ModelRuntime.initializeWithProvider(providerId, jwtPayload);
+
+      // @ts-ignore
+      expect(runtime['_runtime']).toBeInstanceOf(providerRuntimeMap[providerId]);
+
+      if (payload?.baseURL) {
+        expect(runtime['_runtime'].baseURL).toBe(runtimeBaseURL ?? payload.baseURL);
+      }
+    });
+  });
+};
+
+let mockModelRuntime: ModelRuntime;
+beforeEach(async () => {
+  const jwtPayload: ClientSecretPayload = { apiKey: 'user-openai-key', baseURL: 'user-endpoint' };
+  mockModelRuntime = await ModelRuntime.initializeWithProvider(ModelProvider.OpenAI, jwtPayload);
+});
+
+describe('ModelRuntime', () => {
+  describe('should initialize with various providers', () => {
+    const providers = Object.values(ModelProvider).filter((i) => i !== 'lobehub');
+    const specialProviderIds = [ModelProvider.VertexAI, ...specialProviders.map((p) => p.id)];
+
+    const generalTestProviders = providers.filter(
+      (provider) => !specialProviderIds.includes(provider),
+    );
+
+    generalTestProviders.forEach((provider) => {
+      testRuntime(provider);
+    });
+
+    specialProviders.forEach(({ id, payload, runtimeBaseURL }) =>
+      testRuntime(id, payload, runtimeBaseURL),
+    );
+  });
+
+  describe('ModelRuntime chat method', () => {
+    it('should run correctly', async () => {
+      const payload: ChatStreamPayload = {
+        messages: [{ role: 'user', content: 'Hello, world!' }],
+        model: 'text-davinci-002',
+        temperature: 0,
+      };
+
+      vi.spyOn(LobeOpenAI.prototype, 'chat').mockResolvedValue(new Response(''));
+
+      await mockModelRuntime.chat(payload);
+    });
+    it('should handle options with callbacks correctly', async () => {
+      const payload: ChatStreamPayload = {
+        messages: [{ role: 'user', content: 'Hello, world!' }],
+        model: 'text-davinci-002',
+        temperature: 0,
+      };
+
+      vi.spyOn(LobeOpenAI.prototype, 'chat').mockResolvedValue(new Response(''));
+
+      await mockModelRuntime.chat(payload, createMockTraceOptions());
+    });
+
+    describe('callback', () => {
+      const payload: ChatStreamPayload = {
+        messages: [{ role: 'user', content: 'Hello, world!' }],
+        model: 'text-davinci-002',
+        temperature: 0,
+      };
+
+      it('should call onToolsCalling correctly', async () => {
+        const onToolsCallingMock = vi.fn();
+
+        vi.spyOn(LobeOpenAI.prototype, 'chat').mockImplementation(
+          async (_payload, { callback }: any) => {
+            if (callback?.onToolsCalling) {
+              await callback.onToolsCalling();
+            }
+            return new Response('abc');
+          },
+        );
+
+        await mockModelRuntime.chat(
+          payload,
+          createMockTraceOptions({ onToolsCalling: onToolsCallingMock }),
+        );
+
+        expect(onToolsCallingMock).toHaveBeenCalled();
+      });
+
+      it('should call onStart correctly', async () => {
+        const onStartMock = vi.fn();
+
+        vi.spyOn(LobeOpenAI.prototype, 'chat').mockImplementation(
+          async (_payload, { callback }: any) => {
+            if (callback?.onStart) {
+              callback.onStart();
+            }
+            return new Response('Success');
+          },
+        );
+
+        await mockModelRuntime.chat(payload, createMockTraceOptions({ onStart: onStartMock }));
+
+        expect(onStartMock).toHaveBeenCalled();
+      });
+
+      it('should call onCompletion correctly', async () => {
+        const onCompletionMock = vi.fn();
+
+        vi.spyOn(LobeOpenAI.prototype, 'chat').mockImplementation(
+          async (_payload, { callback }: any) => {
+            if (callback?.onCompletion) {
+              await callback.onCompletion({ text: 'Test completion' });
+            }
+            return new Response('Success');
+          },
+        );
+
+        await mockModelRuntime.chat(
+          payload,
+          createMockTraceOptions({ onCompletion: onCompletionMock }),
+        );
+
+        expect(onCompletionMock).toHaveBeenCalledWith({ text: 'Test completion' });
+      });
+
+      it('should call onFinal correctly', async () => {
+        const onFinalMock = vi.fn();
+
+        vi.spyOn(LobeOpenAI.prototype, 'chat').mockImplementation(
+          async (_payload, { callback }: any) => {
+            if (callback?.onFinal) {
+              await callback.onFinal('Test completion');
+            }
+            return new Response('Success');
+          },
+        );
+
+        await mockModelRuntime.chat(payload, createMockTraceOptions({ onFinal: onFinalMock }));
+
+        expect(onFinalMock).toHaveBeenCalledWith('Test completion');
+      });
+    });
+  });
+
+  describe('ModelRuntime generateObject method', () => {
+    it('should run correctly', async () => {
+      const payload = {
+        model: 'gpt-4',
+        messages: [{ role: 'user' as const, content: 'Generate a JSON object' }],
+        schema: {
+          name: 'PersonSchema',
+          schema: {
+            type: 'object' as const,
+            properties: { name: { type: 'string' } },
+          },
+        },
+      };
+
+      const mockResponse = { name: 'John Doe' };
+
+      vi.spyOn(LobeOpenAI.prototype, 'generateObject').mockResolvedValue(mockResponse);
+
+      const result = await mockModelRuntime.generateObject(payload);
+
+      expect(LobeOpenAI.prototype.generateObject).toHaveBeenCalledWith(payload, undefined);
+      expect(result).toBe(mockResponse);
+    });
+  });
+
+  describe('ModelRuntime createImage method', () => {
+    it('should run correctly', async () => {
+      const payload: CreateImagePayload = {
+        model: 'dall-e-3',
+        params: {
+          prompt: 'A beautiful sunset over mountains',
+          width: 1024,
+          height: 1024,
+        },
+      };
+
+      const mockResponse = {
+        imageUrl: 'https://example.com/image.jpg',
+        width: 1024,
+        height: 1024,
+      };
+
+      vi.spyOn(LobeOpenAI.prototype, 'createImage').mockResolvedValue(mockResponse);
+
+      const result = await mockModelRuntime.createImage(payload);
+
+      expect(LobeOpenAI.prototype.createImage).toHaveBeenCalledWith(payload, undefined);
+      expect(result).toBe(mockResponse);
+    });
+
+    it('should handle undefined createImage method gracefully', async () => {
+      const payload: CreateImagePayload = {
+        model: 'dall-e-3',
+        params: {
+          prompt: 'A beautiful sunset over mountains',
+          width: 1024,
+          height: 1024,
+        },
+      };
+
+      // Mock runtime without createImage method
+      const runtimeWithoutCreateImage = {
+        createImage: undefined,
+      };
+
+      // @ts-ignore - testing edge case
+      mockModelRuntime['_runtime'] = runtimeWithoutCreateImage;
+
+      const result = await mockModelRuntime.createImage(payload);
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should forward options to the underlying runtime', async () => {
+      const payload: CreateImagePayload = {
+        model: 'dall-e-3',
+        params: { prompt: 'a cat', width: 512, height: 512 },
+      };
+      const mockResponse = { imageUrl: 'x', width: 512, height: 512 };
+      const createImage = vi.fn().mockResolvedValue(mockResponse);
+
+      // @ts-ignore - injecting a minimal runtime for this case
+      mockModelRuntime['_runtime'] = { createImage };
+
+      const options = { metadata: { trigger: 'image' } };
+      const result = await mockModelRuntime.createImage(payload, options);
+
+      expect(createImage).toHaveBeenCalledWith(payload, options);
+      expect(result).toBe(mockResponse);
+    });
+  });
+
+  describe('ModelRuntime createVideo method', () => {
+    it('should forward payload and options to the underlying runtime', async () => {
+      const payload: CreateVideoPayload = {
+        model: 'sora-1',
+        params: { prompt: 'a cat' } as any,
+      };
+      const createVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
+
+      // @ts-ignore - injecting a minimal runtime for this case
+      mockModelRuntime['_runtime'] = {
+        createVideo,
+        getVideoGenerationCapabilities: () => ({ completionModes: ['polling'] }),
+      };
+
+      const options = {
+        metadata: { trigger: 'video' },
+        preferredCompletionMode: 'webhook' as const,
+      };
+      const result = await mockModelRuntime.createVideo(payload, options);
+
+      expect(createVideo).toHaveBeenCalledWith(payload, options);
+      expect(result).toEqual({ completionMode: 'polling', inferenceId: 'job-1' });
+    });
+
+    it('should preserve completion mode from an orchestrating runtime', async () => {
+      const payload: CreateVideoPayload = {
+        model: 'sora-1',
+        params: { prompt: 'a cat' } as any,
+      };
+      const response = { completionMode: 'webhook' as const, inferenceId: 'job-2' };
+      const createVideo = vi.fn().mockResolvedValue(response);
+
+      // @ts-ignore - injecting a minimal composite runtime for this case
+      mockModelRuntime['_runtime'] = {
+        createVideo,
+        orchestratesVideoGenerationCompletion: true,
+      };
+
+      await expect(mockModelRuntime.createVideo(payload)).resolves.toBe(response);
+    });
+
+    it('should handle undefined createVideo method gracefully', async () => {
+      const payload: CreateVideoPayload = {
+        model: 'sora-1',
+        params: { prompt: 'a cat' } as any,
+      };
+
+      // @ts-ignore - testing edge case
+      mockModelRuntime['_runtime'] = { createVideo: undefined };
+
+      const result = await mockModelRuntime.createVideo(payload);
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('ModelRuntime models method', () => {
+    it('should run correctly', async () => {
+      const mockModels = [
+        { id: 'gpt-4', name: 'GPT-4' },
+        { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
+      ];
+
+      vi.spyOn(LobeOpenAI.prototype, 'models').mockResolvedValue(mockModels);
+
+      const result = await mockModelRuntime.models();
+
+      expect(LobeOpenAI.prototype.models).toHaveBeenCalled();
+      expect(result).toBe(mockModels);
+    });
+
+    it('should handle undefined models method gracefully', async () => {
+      // Mock runtime without models method
+      const runtimeWithoutModels = {
+        models: undefined,
+      };
+
+      // @ts-ignore - testing edge case
+      mockModelRuntime['_runtime'] = runtimeWithoutModels;
+
+      const result = await mockModelRuntime.models();
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('ModelRuntime embeddings method', () => {
+    it('should run correctly', async () => {
+      const payload = {
+        model: 'text-embedding-ada-002',
+        input: 'Hello world',
+      };
+
+      const mockEmbeddings = [[0.1, 0.2, 0.3]];
+
+      vi.spyOn(LobeOpenAI.prototype, 'embeddings').mockResolvedValue(mockEmbeddings);
+
+      const result = await mockModelRuntime.embeddings(payload);
+
+      expect(LobeOpenAI.prototype.embeddings).toHaveBeenCalledWith(payload, undefined);
+      expect(result).toBe(mockEmbeddings);
+    });
+
+    it('should handle options correctly', async () => {
+      const payload = {
+        model: 'text-embedding-ada-002',
+        input: 'Hello world',
+      };
+
+      const options = {};
+
+      const mockEmbeddings = [[0.1, 0.2, 0.3]];
+
+      vi.spyOn(LobeOpenAI.prototype, 'embeddings').mockResolvedValue(mockEmbeddings);
+
+      const result = await mockModelRuntime.embeddings(payload, options);
+
+      expect(LobeOpenAI.prototype.embeddings).toHaveBeenCalledWith(payload, options);
+      expect(result).toBe(mockEmbeddings);
+    });
+
+    it('should handle undefined embeddings method gracefully', async () => {
+      const payload = {
+        model: 'text-embedding-ada-002',
+        input: 'Hello world',
+      };
+
+      // Mock runtime without embeddings method
+      const runtimeWithoutEmbeddings = {
+        embeddings: undefined,
+      };
+
+      // @ts-ignore - testing edge case
+      mockModelRuntime['_runtime'] = runtimeWithoutEmbeddings;
+
+      const result = await mockModelRuntime.embeddings(payload);
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('ModelRuntime pullModel method', () => {
+    it('should run correctly', async () => {
+      const params = {
+        model: 'llama2',
+      };
+
+      const mockResponse = new Response('Success');
+      const mockPullModel = vi.fn().mockResolvedValue(mockResponse);
+
+      // Mock runtime with pullModel method
+      mockModelRuntime['_runtime'].pullModel = mockPullModel;
+
+      const result = await mockModelRuntime.pullModel(params);
+
+      expect(mockPullModel).toHaveBeenCalledWith(params, undefined);
+      expect(result).toBe(mockResponse);
+    });
+
+    it('should handle options correctly', async () => {
+      const params = {
+        model: 'llama2',
+      };
+
+      const options = {};
+
+      const mockResponse = new Response('Success');
+      const mockPullModel = vi.fn().mockResolvedValue(mockResponse);
+
+      // Mock runtime with pullModel method
+      mockModelRuntime['_runtime'].pullModel = mockPullModel;
+
+      const result = await mockModelRuntime.pullModel(params, options);
+
+      expect(mockPullModel).toHaveBeenCalledWith(params, options);
+      expect(result).toBe(mockResponse);
+    });
+
+    it('should handle undefined pullModel method gracefully', async () => {
+      const params = {
+        model: 'llama2',
+      };
+
+      // Mock runtime without pullModel method
+      const runtimeWithoutPullModel = {
+        pullModel: undefined,
+      };
+
+      // @ts-ignore - testing edge case
+      mockModelRuntime['_runtime'] = runtimeWithoutPullModel;
+
+      const result = await mockModelRuntime.pullModel(params);
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('hooks', () => {
+    const createMockRuntime = (hooks?: ModelRuntimeHooks) => {
+      const mockRuntimeAI = {
+        chat: vi.fn(),
+        embeddings: vi.fn(),
+        generateObject: vi.fn(),
+        transcribe: vi.fn(),
+      } as any;
+      return { runtime: new ModelRuntime(mockRuntimeAI, hooks), mockRuntimeAI };
+    };
+
+    const chatPayload: ChatStreamPayload = {
+      messages: [{ role: 'user', content: 'hi' }],
+      model: 'gpt-4',
+      temperature: 0,
+    };
+
+    const genObjPayload = {
+      messages: [{ role: 'user' as const, content: 'gen' }],
+      model: 'gpt-4',
+      schema: { name: 'test', schema: { type: 'object' as const, properties: {} } },
+    };
+
+    describe('chat hooks', () => {
+      it('beforeChat is called before runtime.chat', async () => {
+        const beforeChat = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ beforeChat });
+        mockRuntimeAI.chat.mockResolvedValue(new Response(''));
+
+        await runtime.chat(chatPayload);
+
+        expect(beforeChat).toHaveBeenCalledWith(chatPayload, {});
+        expect(mockRuntimeAI.chat).toHaveBeenCalled();
+      });
+
+      it('forwards beforeChat option mutations to runtime.chat', async () => {
+        const pricingContext = { plan: 'premium', scope: 'personal' } as const;
+        const beforeChat: ModelRuntimeHooks['beforeChat'] = async (_payload, options) => {
+          if (options) options.pricingContext = pricingContext;
+        };
+        const { runtime, mockRuntimeAI } = createMockRuntime({ beforeChat });
+        mockRuntimeAI.chat.mockResolvedValue(new Response(''));
+
+        await runtime.chat(chatPayload);
+
+        expect(mockRuntimeAI.chat).toHaveBeenCalledWith(chatPayload, { pricingContext });
+      });
+
+      it('beforeChat throwing aborts chat call', async () => {
+        const beforeChat = vi.fn().mockRejectedValue(new Error('budget exceeded'));
+        const { runtime, mockRuntimeAI } = createMockRuntime({ beforeChat });
+
+        await expect(runtime.chat(chatPayload)).rejects.toThrow('budget exceeded');
+        expect(mockRuntimeAI.chat).not.toHaveBeenCalled();
+      });
+
+      it('beforeChat throwing triggers onChatError before re-throwing', async () => {
+        const budgetError = { errorType: 'FreePlanLimit', error: { message: 'Budget exceeded' } };
+        const beforeChat = vi.fn().mockRejectedValue(budgetError);
+        const onChatError = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ beforeChat, onChatError });
+
+        await expect(runtime.chat(chatPayload)).rejects.toBe(budgetError);
+        expect(mockRuntimeAI.chat).not.toHaveBeenCalled();
+        expect(onChatError).toHaveBeenCalledWith(budgetError, {
+          options: undefined,
+          payload: chatPayload,
+        });
+      });
+
+      it('onChatFinal is injected into callback chain, existing onFinal called first', async () => {
+        const callOrder: string[] = [];
+        const existingOnFinal = vi.fn().mockImplementation(() => callOrder.push('existing'));
+        const onChatFinal = vi.fn().mockImplementation(() => callOrder.push('hook'));
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onChatFinal });
+
+        mockRuntimeAI.chat.mockImplementation(async (_p: any, opts: any) => {
+          await opts?.callback?.onFinal?.({ id: 'msg-1', text: 'hello' });
+          return new Response('');
+        });
+
+        await runtime.chat(chatPayload, { callback: { onFinal: existingOnFinal } });
+
+        expect(existingOnFinal).toHaveBeenCalled();
+        expect(onChatFinal).toHaveBeenCalled();
+        expect(callOrder).toEqual(['existing', 'hook']);
+      });
+
+      it('onChatFinal receives data and context', async () => {
+        const onChatFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onChatFinal });
+        const options = { callback: {} };
+        const finalData = { id: 'msg-1', text: 'hello' };
+
+        mockRuntimeAI.chat.mockImplementation(async (_p: any, opts: any) => {
+          await opts?.callback?.onFinal?.(finalData);
+          return new Response('');
+        });
+
+        await runtime.chat(chatPayload, options);
+
+        expect(onChatFinal).toHaveBeenCalledWith(finalData, {
+          options,
+          payload: chatPayload,
+        });
+      });
+
+      it('onChatError is called when chat throws, error is re-thrown', async () => {
+        const chatError = { errorType: 'ProviderBizError', error: new Error('fail') };
+        const onChatError = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onChatError });
+        mockRuntimeAI.chat.mockRejectedValue(chatError);
+
+        await expect(runtime.chat(chatPayload)).rejects.toBe(chatError);
+        expect(onChatError).toHaveBeenCalledWith(chatError, {
+          options: undefined,
+          payload: chatPayload,
+        });
+      });
+
+      it('works without hooks (undefined)', async () => {
+        const { runtime, mockRuntimeAI } = createMockRuntime(undefined);
+        mockRuntimeAI.chat.mockResolvedValue(new Response(''));
+
+        await expect(runtime.chat(chatPayload)).resolves.toBeInstanceOf(Response);
+      });
+
+      it('handleChatStreamError forwards a stream failure to onChatStreamError', async () => {
+        const streamError = { errorType: 'ProviderBizError', error: { message: 'fail' } };
+        const options = { metadata: { trigger: 'chat' } };
+        const onChatStreamError = vi.fn();
+        const { runtime } = createMockRuntime({ onChatStreamError });
+
+        await runtime.handleChatStreamError(streamError, { options, payload: chatPayload });
+
+        expect(onChatStreamError).toHaveBeenCalledWith(streamError, {
+          options,
+          payload: chatPayload,
+        });
+      });
+
+      it('handleChatStreamError keeps a failing hook from replacing the stream error', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const onChatStreamError = vi.fn().mockRejectedValue(new Error('hook failed'));
+        const { runtime } = createMockRuntime({ onChatStreamError });
+
+        await expect(
+          runtime.handleChatStreamError(new Error('stream failed'), { payload: chatPayload }),
+        ).resolves.toBeUndefined();
+        expect(consoleError).toHaveBeenCalled();
+        consoleError.mockRestore();
+      });
+    });
+
+    describe('generateObject hooks', () => {
+      it('beforeGenerateObject is called before runtime.generateObject', async () => {
+        const beforeGenerateObject = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ beforeGenerateObject });
+        mockRuntimeAI.generateObject.mockResolvedValue({ result: 'ok' });
+
+        await runtime.generateObject(genObjPayload);
+
+        expect(beforeGenerateObject).toHaveBeenCalledWith(genObjPayload, {});
+        expect(mockRuntimeAI.generateObject).toHaveBeenCalled();
+      });
+
+      it('beforeGenerateObject throwing aborts generateObject call', async () => {
+        const beforeGenerateObject = vi.fn().mockRejectedValue(new Error('budget exceeded'));
+        const { runtime, mockRuntimeAI } = createMockRuntime({ beforeGenerateObject });
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toThrow('budget exceeded');
+        expect(mockRuntimeAI.generateObject).not.toHaveBeenCalled();
+      });
+
+      it('beforeGenerateObject throwing triggers onGenerateObjectError before re-throwing', async () => {
+        const budgetError = { errorType: 'FreePlanLimit', error: { message: 'Budget exceeded' } };
+        const beforeGenerateObject = vi.fn().mockRejectedValue(budgetError);
+        const onGenerateObjectError = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({
+          beforeGenerateObject,
+          onGenerateObjectError,
+        });
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(budgetError);
+        expect(mockRuntimeAI.generateObject).not.toHaveBeenCalled();
+        expect(onGenerateObjectError).toHaveBeenCalledWith(budgetError, {
+          options: undefined,
+          payload: genObjPayload,
+        });
+      });
+
+      it('onGenerateObjectFinal wraps onUsage, existing onUsage called first', async () => {
+        const callOrder: string[] = [];
+        const existingOnUsage = vi.fn().mockImplementation(() => callOrder.push('existing'));
+        const onGenerateObjectFinal = vi.fn().mockImplementation(() => callOrder.push('hook'));
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectFinal });
+        const usage = { totalTokens: 100, promptTokens: 50, completionTokens: 50 };
+
+        mockRuntimeAI.generateObject.mockImplementation(async (_p: any, opts: any) => {
+          await opts?.onUsage?.(usage);
+          return { result: 'ok' };
+        });
+
+        await runtime.generateObject(genObjPayload, { onUsage: existingOnUsage });
+
+        expect(existingOnUsage).toHaveBeenCalledWith(usage);
+        expect(onGenerateObjectFinal).toHaveBeenCalled();
+        expect(callOrder).toEqual(['existing', 'hook']);
+      });
+
+      it('onGenerateObjectFinal receives synthetic speed metrics', async () => {
+        const nowSpy = vi
+          .spyOn(Date, 'now')
+          .mockReturnValueOnce(1000)
+          .mockReturnValueOnce(2000)
+          .mockReturnValueOnce(2500);
+        const onGenerateObjectFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectFinal });
+        const usage = { totalInputTokens: 100, totalOutputTokens: 20, totalTokens: 120 };
+
+        mockRuntimeAI.generateObject.mockImplementation(async (_p: any, opts: any) => {
+          await opts?.onUsage?.(usage);
+          return { result: 'ok' };
+        });
+
+        try {
+          await runtime.generateObject(genObjPayload);
+
+          expect(onGenerateObjectFinal).toHaveBeenCalledWith(
+            {
+              speed: {
+                duration: 500,
+                latency: 500,
+                tps: 40,
+                ttft: 0,
+              },
+              usage,
+            },
+            { options: undefined, payload: genObjPayload },
+          );
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
+      it('onGenerateObjectError is called when generateObject throws, error is re-thrown', async () => {
+        const genError = { errorType: 'ProviderBizError', error: new Error('fail') };
+        const onGenerateObjectError = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectError });
+        mockRuntimeAI.generateObject.mockRejectedValue(genError);
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(genError);
+        expect(onGenerateObjectError).toHaveBeenCalledWith(genError, {
+          options: undefined,
+          payload: genObjPayload,
+        });
+      });
+
+      it('works without hooks (undefined)', async () => {
+        const { runtime, mockRuntimeAI } = createMockRuntime(undefined);
+        mockRuntimeAI.generateObject.mockResolvedValue({ result: 'ok' });
+
+        await expect(runtime.generateObject(genObjPayload)).resolves.toEqual({ result: 'ok' });
+      });
+
+      it('onGenerateObjectComplete fires on success with output, latency and usage', async () => {
+        const onGenerateObjectComplete = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        const usage = { totalInputTokens: 50, totalOutputTokens: 20, cost: 0.001 };
+        mockRuntimeAI.generateObject.mockImplementation(async (_p: any, opts: any) => {
+          await opts?.onUsage?.(usage);
+          return { result: 'ok' };
+        });
+
+        await runtime.generateObject(genObjPayload);
+
+        expect(onGenerateObjectComplete).toHaveBeenCalledTimes(1);
+        const [data, context] = onGenerateObjectComplete.mock.calls[0];
+        expect(data).toMatchObject({ output: { result: 'ok' }, success: true, usage });
+        expect(data.latencyMs).toBeGreaterThanOrEqual(0);
+        expect(context.payload).toBe(genObjPayload);
+      });
+
+      it('onGenerateObjectComplete fires on failure with structured error and is awaited before throw', async () => {
+        const onGenerateObjectComplete = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        const cause = new Error('boom');
+        mockRuntimeAI.generateObject.mockRejectedValue(cause);
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(cause);
+        expect(onGenerateObjectComplete).toHaveBeenCalledTimes(1);
+        const [data] = onGenerateObjectComplete.mock.calls[0];
+        expect(data.success).toBe(false);
+        expect(data.error?.message).toBe('boom');
+        // Fallback chain: plain Error has no errorType/code, so name wins.
+        expect(data.error?.code).toBe('Error');
+      });
+
+      it('onGenerateObjectComplete prefers errorType from ChatCompletionErrorPayload over name/code', async () => {
+        const onGenerateObjectComplete = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        // Shape that openaiCompatibleFactory.handleError throws on real provider errors.
+        const cause = {
+          endpoint: 'https://api.example.com',
+          error: { status: 401 },
+          errorType: 'InvalidProviderAPIKey',
+          message: 'invalid key',
+          provider: 'openai',
+        };
+        mockRuntimeAI.generateObject.mockRejectedValue(cause);
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(cause);
+        const [data] = onGenerateObjectComplete.mock.calls[0];
+        expect(data.error?.code).toBe('InvalidProviderAPIKey');
+        expect(data.error?.message).toBe('invalid key');
+      });
+
+      it('onGenerateObjectComplete keeps the provider body when the payload has no message', async () => {
+        const onGenerateObjectComplete = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        // Production shape of a refined upstream rejection: the body is the only description,
+        // and it is the part that names which field the provider refused.
+        const cause = {
+          endpoint: 'https://api.example.com',
+          error: {
+            error: { code: 'invalid_value', param: 'input[1].content[0].type' },
+            status: 400,
+          },
+          errorType: 'UpstreamHttpError',
+          provider: 'azure',
+        };
+        mockRuntimeAI.generateObject.mockRejectedValue(cause);
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(cause);
+        const [data] = onGenerateObjectComplete.mock.calls[0];
+        expect(data.error?.code).toBe('UpstreamHttpError');
+        expect(data.error?.message).toContain('input[1].content[0].type');
+      });
+
+      it('onGenerateObjectComplete falls back to error.name for AI SDK errors', async () => {
+        const onGenerateObjectComplete = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        // Mimic an unwrapped Vercel AI SDK error (e.g. AI_TypeValidationError).
+        class AI_TypeValidationError extends Error {
+          name = 'AI_TypeValidationError';
+        }
+        const cause = new AI_TypeValidationError('schema mismatch');
+        mockRuntimeAI.generateObject.mockRejectedValue(cause);
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(cause);
+        const [data] = onGenerateObjectComplete.mock.calls[0];
+        expect(data.error?.code).toBe('AI_TypeValidationError');
+      });
+
+      it('hook errors thrown from onGenerateObjectComplete are swallowed and do not surface', async () => {
+        const onGenerateObjectComplete = vi.fn().mockRejectedValue(new Error('hook broke'));
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        mockRuntimeAI.generateObject.mockResolvedValue({ result: 'ok' });
+
+        await expect(runtime.generateObject(genObjPayload)).resolves.toEqual({ result: 'ok' });
+        expect(onGenerateObjectComplete).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('embeddings hooks', () => {
+      const embeddingsPayload = { model: 'text-embedding-ada-002', input: 'hello' };
+
+      it('beforeEmbeddings throwing triggers onEmbeddingsError before re-throwing', async () => {
+        const budgetError = { errorType: 'FreePlanLimit', error: { message: 'Budget exceeded' } };
+        const beforeEmbeddings = vi.fn().mockRejectedValue(budgetError);
+        const onEmbeddingsError = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({
+          beforeEmbeddings,
+          onEmbeddingsError,
+        });
+
+        await expect(runtime.embeddings(embeddingsPayload)).rejects.toBe(budgetError);
+        expect(mockRuntimeAI.embeddings).not.toHaveBeenCalled();
+        expect(onEmbeddingsError).toHaveBeenCalledWith(budgetError, {
+          options: undefined,
+          payload: embeddingsPayload,
+        });
+      });
+    });
+
+    describe('transcribe hooks', () => {
+      const transcribePayload = {
+        file: new Blob([new Uint8Array([1, 2, 3])]),
+        model: 'gpt-4o-transcribe',
+      };
+
+      it('passes provider usage to onTranscribeFinal after beforeTranscribe', async () => {
+        const usage = { cost: 0.0004, inputAudioTokens: 59, outputTextTokens: 21 };
+        const beforeTranscribe = vi.fn();
+        const onTranscribeFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({
+          beforeTranscribe,
+          onTranscribeFinal,
+        });
+        mockRuntimeAI.transcribe.mockImplementation(async (_payload: any, options: any) => {
+          await options.onUsage(usage);
+          return { text: 'hello' };
+        });
+
+        const options = { user: 'u1' };
+        const result = await runtime.transcribe(transcribePayload, options);
+
+        expect(result).toEqual({ text: 'hello' });
+        expect(beforeTranscribe).toHaveBeenCalledWith(transcribePayload, options);
+        expect(onTranscribeFinal).toHaveBeenCalledWith(
+          { latencyMs: expect.any(Number), usage },
+          { options, payload: transcribePayload },
+        );
+      });
+
+      it('still fires onTranscribeFinal without usage so reservations can be released', async () => {
+        const onTranscribeFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onTranscribeFinal });
+        mockRuntimeAI.transcribe.mockResolvedValue({ text: 'hello' });
+
+        await runtime.transcribe(transcribePayload);
+
+        expect(onTranscribeFinal).toHaveBeenCalledWith(
+          { latencyMs: expect.any(Number), usage: undefined },
+          { options: undefined, payload: transcribePayload },
+        );
+      });
+
+      it('calls onTranscribeError and re-throws when the provider fails', async () => {
+        const providerError = { errorType: 'ProviderBizError', error: { message: 'boom' } };
+        const onTranscribeError = vi.fn();
+        const onTranscribeFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({
+          onTranscribeError,
+          onTranscribeFinal,
+        });
+        mockRuntimeAI.transcribe.mockRejectedValue(providerError);
+
+        await expect(runtime.transcribe(transcribePayload)).rejects.toBe(providerError);
+        expect(onTranscribeFinal).not.toHaveBeenCalled();
+        expect(onTranscribeError).toHaveBeenCalledWith(providerError, {
+          options: undefined,
+          payload: transcribePayload,
+        });
+      });
+    });
+  });
+});

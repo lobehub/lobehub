@@ -1,0 +1,106 @@
+---
+title: Messenger Overview
+description: >-
+  Connect your LobeHub account to LobeHub Messenger on Telegram, Slack,
+  Discord, and WeChat. Link once, pick an active agent, and chat with your assistants
+  from the chat apps you already use — no bot setup required.
+tags:
+  - Messenger
+  - Telegram
+  - Slack
+  - Discord
+  - WeChat
+  - Integration
+---
+
+# Messenger
+
+**Messenger lets you use your own Agents through a LobeHub-managed bot.** You do not create a bot. Link your Telegram, Slack, Discord, or WeChat account, then choose the active Agent. Messages you send to the official bot are routed to that Agent.
+
+```text
+You → LobeHub-managed bot or service → Your active Agent
+```
+
+You can switch Agents inside the same official bot. Switching changes the Agent behind the conversation; it does not open another bot or chat.
+
+Manage Messenger from **Settings → Messenger** in LobeHub.
+
+## Should I use Messenger or Channels?
+
+- **Choose Messenger** when you want to use your Agents from a familiar chat app and want LobeHub to manage the bot.
+- **Choose [Channels](/docs/usage/channels/overview)** when you want your own bot identity for teammates, customers, or community members to use with a specific Agent.
+
+| | **Messenger** | **Channels** |
+| --- | --- | --- |
+| Chat entry | A LobeHub-managed bot or service | A bot you create or connect |
+| Agent relationship | Each linked account selects an active Agent and can switch it | Each channel is bound to one Agent |
+| Who uses it | The user whose platform account is linked to LobeHub | You, approved users, a team, or a community |
+| Configured at | **Settings → Messenger** | **Agent → Channels** |
+| What you set up | Account link and active Agent | Platform bot or app credentials and access rules |
+
+Public versus private access is not the distinction. A Channel can also be restricted to you or selected users.
+
+## Supported Platforms
+
+| Platform     | Setup model                              | Guide                                                     |
+| ------------ | ---------------------------------------- | --------------------------------------------------------- |
+| **Telegram** | Global bot — any account can DM directly | [Use LobeHub on Telegram](/docs/usage/messenger/telegram) |
+| **Slack**    | Per-workspace install + per-member link  | [Use LobeHub on Slack](/docs/usage/messenger/slack)       |
+| **Discord**  | Per-server install + per-member link     | [Use LobeHub on Discord](/docs/usage/messenger/discord)   |
+| **WeChat**   | QR-code account link (Pro)               | [Use LobeHub on WeChat](/docs/usage/messenger/wechat)     |
+
+If a platform card does not appear at **Settings → Messenger**, it has not been enabled on your deployment yet — check back later or ask your administrator.
+
+{/* TODO: screenshot — Settings → Messenger landing screen showing the four platform cards */}
+
+## How It Works
+
+1. Link your platform account to your LobeHub account. Depending on the platform, this uses a confirmation link, OAuth, or a QR code.
+2. Select the active Agent. Messages you send to the LobeHub-managed bot are routed to it. In a Slack workspace or Discord server where the official bot is installed, channel `@mentions` can also use your active Agent.
+3. Send `/agents`, or use **Settings → Messenger**, to select another Agent. The next message uses the new selection.
+4. If workspaces are enabled, `/switch` changes between your personal scope and a team workspace.
+5. Disconnecting your personal link leaves the official bot on the platform, but your messages are no longer routed to LobeHub until you link again.
+
+A LobeHub account keeps one personal link for Telegram, Discord, and WeChat. Slack links are stored separately for each workspace.
+
+## Common Commands
+
+- `/agents` — list and switch the active Agent.
+- `/switch` — switch between personal and workspace scopes; hidden when no workspace is available.
+- `/new` — start a new conversation.
+- `/mode` — show or switch Agent / Chat mode.
+- `/stop` — stop the current execution.
+- `/feedback <message>` — send feedback to the LobeHub team.
+- `/help` — show available commands.
+
+On platforms other than WeChat, an unlinked user can send `/start` to begin linking. WeChat uses QR-code linking.
+
+## Switching the Active Agent
+
+You can switch the agent that answers your messages at any time:
+
+- **From the bot** — send `/agents` and pick a different agent.
+- **From LobeHub** — open **Settings → Messenger**, select the platform, and use the agent picker on your link row.
+
+Changes take effect immediately for the next message you send.
+
+## Disconnecting
+
+Telegram and WeChat only have a personal account link. Slack and Discord also show workspace or server installations, so they have two different disconnect actions:
+
+| Action                                       | Effect                                                                                                                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Disconnect** on a *user* row               | Unlinks **your** LobeHub account from the platform account. Inbound messages stop until you repeat that platform's linking flow.                                                         |
+| **Disconnect** on a *workspace / server* row | Applies only to platforms with workspace or server installs. It removes the install audit entry. On Slack, this also freezes the workspace bot for everyone. On Discord, the bot stays in the server until a server admin kicks it. |
+
+You can re-link at any time by repeating that platform's linking flow.
+
+## Common Errors
+
+These messages can appear on platforms that use one-time confirmation links:
+
+- **"This link is already used"** — The one-time confirm link can only be used once. Return to the bot and send `/start` again to issue a new link.
+- **"This account is already linked"** — The platform account is bound to a different LobeHub account. Sign in to that account to manage it, or unlink it there before retrying.
+- **"Another \<platform> account is already linked"** — Your LobeHub account already has a link on this platform. Disconnect the existing link in **Settings → Messenger** before linking a new one.
+
+For platform-specific issues, see the troubleshooting section on each platform's guide.

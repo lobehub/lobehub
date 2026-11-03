@@ -1,0 +1,133 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`EditorRuntime > modifyNodes > error handling > should normalize single operation to array 1`] = `
+"# Title
+
+Single op
+
+First paragraph. 
+
+Second paragraph. 
+
+"
+`;
+
+exports[`EditorRuntime > modifyNodes > insert > should insert multiple nodes after same node 1`] = `
+"# Title
+
+Insert 1
+
+Insert 2
+
+Insert 3
+
+First paragraph. 
+
+Second paragraph. 
+
+"
+`;
+
+exports[`EditorRuntime > modifyNodes > insert > should insert single node after existing node 1`] = `
+"# Title
+
+New inserted paragraph
+
+First paragraph. 
+
+Second paragraph. 
+
+"
+`;
+
+exports[`EditorRuntime > modifyNodes > mixed operations > should handle insert, modify, and remove in single call 1`] = `
+"# Updated title
+
+New content
+
+First paragraph. 
+
+Second paragraph. 
+
+"
+`;
+
+exports[`EditorRuntime > modifyNodes > modify > should modify existing node content 1`] = `
+"# Title
+
+Modified content here
+
+Second paragraph. 
+
+"
+`;
+
+exports[`EditorRuntime > modifyNodes > modify > should modify multiple nodes at once 1`] = `
+"# Title
+
+Modified first
+
+Modified second
+
+"
+`;
+
+exports[`EditorRuntime > modifyNodes > remove > should remove existing node 1`] = `
+"<?xml version="1.0" encoding="UTF-8"?>
+<root>
+  <h1 id="ll63">
+    <span id="lqqe">Title</span>
+  </h1>
+  <p id="m7fb">
+    <span id="mczm">Second paragraph.</span>
+  </p>
+</root>"
+`;
+
+exports[`EditorRuntime > modifyNodes > remove > should remove multiple nodes 1`] = `
+"# Title
+
+"
+`;
+
+exports[`EditorRuntime > replaceText > should replace all occurrences by default 1`] = `
+"Hi world. This is a test. Hi again. Testing the world. 
+
+"
+`;
+
+exports[`EditorRuntime > replaceText > should support regex first occurrence only 1`] = `
+"X world. This is a test. Hello again. Testing the world. 
+
+"
+`;
+
+exports[`EditorRuntime > replaceText > should support regex patterns with optional groups 1`] = `
+"Hello world. This is a demo. Hello again. Testing the world. 
+
+"
+`;
+
+exports[`EditorRuntime > replaceText > should support regex with alternation 1`] = `
+"X X. This is a test. X again. Testing the X. 
+
+"
+`;
+
+exports[`EditorRuntime > replaceText > should support regex with character classes 1`] = `
+"Guest and Guest are online. 
+
+"
+`;
+
+exports[`EditorRuntime > replaceText > should support regex with quantifiers 1`] = `
+"Hi world! Hi again! 
+
+"
+`;
+
+exports[`EditorRuntime > replaceText > should support regex with word boundaries 1`] = `
+"Hello universe. This is a test. Hello again. Testing the universe. 
+
+"
+`;

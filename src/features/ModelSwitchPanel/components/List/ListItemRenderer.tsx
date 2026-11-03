@@ -1,0 +1,268 @@
+import {
+  ActionIcon,
+  Block,
+  cssVar,
+  cx,
+  DropdownMenuPopup,
+  DropdownMenuPortal,
+  DropdownMenuPositioner,
+  DropdownMenuSubmenuRoot,
+  DropdownMenuSubmenuTrigger,
+  Flexbox,
+  Icon,
+  menuSharedStyles,
+} from '@lobehub/ui';
+import { LucideArrowRight, LucideBolt } from 'lucide-react';
+import { memo, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
+
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { ProviderItemRender } from '@/components/ModelSelect';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+
+import { styles } from '../../styles';
+import { type ListItem } from '../../types';
+import { menuKey } from '../../utils';
+import ModelDetailPanel from '../ModelDetailPanel';
+import { ModelRowRender } from './ModelRowRender';
+import { MultipleProvidersModelItem } from './MultipleProvidersModelItem';
+
+interface ListItemRendererProps {
+  activeKey: string;
+  /** Muted text shown after the active model's name, e.g. its reasoning effort */
+  activeSecondaryText?: string;
+  isModelRestricted?: (modelId: string, providerId: string) => boolean;
+  item: ListItem;
+  newLabel: string;
+  onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
+  onClose: () => void;
+  onModelChange: (modelId: string, providerId: string) => void;
+  onRestrictedModelClick?: () => void;
+  proLabel?: string;
+  subscribeScroll?: (cb: () => void) => () => void;
+}
+
+export const ListItemRenderer = memo<ListItemRendererProps>(
+  ({
+    activeKey,
+    activeSecondaryText,
+    isModelRestricted,
+    item,
+    newLabel,
+    onBeforeModelSelect,
+    onModelChange,
+    onClose,
+    onRestrictedModelClick,
+    proLabel,
+    subscribeScroll,
+  }) => {
+    const { t } = useTranslation('components');
+    const navigate = useWorkspaceAwareNavigate();
+    const activeSlug = useActiveWorkspaceSlug();
+    const [detailOpen, setDetailOpen] = useState(false);
+
+    const selectModel = async (modelId: string, providerId: string) => {
+      onClose();
+      if ((await onBeforeModelSelect?.(modelId, providerId)) === false) return;
+
+      onModelChange(modelId, providerId);
+    };
+
+    useEffect(() => {
+      return subscribeScroll?.(() => setDetailOpen(false));
+    }, [subscribeScroll]);
+
+    switch (item.type) {
+      case 'no-provider': {
+        return (
+          <Block
+            clickable
+            horizontal
+            className={styles.menuItem}
+            gap={8}
+            key="no-provider"
+            style={{ color: cssVar.colorTextTertiary }}
+            variant={'borderless'}
+            onClick={() => {
+              onClose();
+              navigate('/settings/provider/all');
+            }}
+          >
+            {t('ModelSwitchPanel.emptyProvider')}
+            <Icon icon={LucideArrowRight} />
+          </Block>
+        );
+      }
+
+      case 'group-header': {
+        return (
+          <Flexbox
+            horizontal
+            className={styles.groupHeader}
+            justify="space-between"
+            key={`header-${item.provider.id}`}
+            paddingBlock={'12px 4px'}
+            paddingInline={'12px 8px'}
+          >
+            <ProviderItemRender
+              logo={item.provider.logo}
+              name={item.provider.name}
+              provider={item.provider.id}
+              source={item.provider.source}
+            />
+            <ActionIcon
+              className="settings-icon"
+              icon={LucideBolt}
+              size="small"
+              title={t('ModelSwitchPanel.goToSettings')}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const url = urlJoin('/settings/provider', item.provider.id || 'all');
+                if (e.ctrlKey || e.metaKey) {
+                  window.open(buildWorkspaceAwarePath(url, activeSlug), '_blank');
+                } else {
+                  navigate(url);
+                }
+                onClose();
+              }}
+            />
+          </Flexbox>
+        );
+      }
+
+      case 'empty-model': {
+        return (
+          <Flexbox
+            horizontal
+            className={styles.menuItem}
+            gap={8}
+            key={`empty-${item.provider.id}`}
+            style={{ color: cssVar.colorTextTertiary }}
+            onClick={() => {
+              onClose();
+              navigate(`/settings/provider/${item.provider.id}`);
+            }}
+          >
+            {t('ModelSwitchPanel.emptyModel')}
+            <Icon icon={LucideArrowRight} />
+          </Flexbox>
+        );
+      }
+
+      case 'provider-model-item': {
+        const key = menuKey(item.provider.id, item.model.id);
+        const isActive = key === activeKey;
+        const restricted = isModelRestricted?.(item.model.id, item.provider.id);
+
+        return (
+          <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
+            <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
+              <DropdownMenuSubmenuTrigger
+                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+                style={{ paddingBlock: 8, paddingInline: 8 }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDetailOpen(false);
+                  if (restricted) {
+                    onRestrictedModelClick?.();
+                    onClose();
+                    return;
+                  }
+                  void selectModel(item.model.id, item.provider.id);
+                }}
+              >
+                <ModelRowRender
+                  activeEffortLabel={activeSecondaryText}
+                  isActive={isActive}
+                  model={item.model}
+                  newLabel={newLabel}
+                  proBadgeLabel={restricted ? proLabel : undefined}
+                  provider={item.provider.id}
+                />
+              </DropdownMenuSubmenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
+                  <DropdownMenuPopup className={styles.detailPopup}>
+                    <ModelDetailPanel model={item.model.id} provider={item.provider.id} />
+                  </DropdownMenuPopup>
+                </DropdownMenuPositioner>
+              </DropdownMenuPortal>
+            </DropdownMenuSubmenuRoot>
+          </Flexbox>
+        );
+      }
+
+      case 'model-item-single': {
+        const singleProvider = item.data.providers[0];
+        const key = menuKey(singleProvider.id, item.data.model.id);
+        const isActive = key === activeKey;
+        const restricted = isModelRestricted?.(item.data.model.id, singleProvider.id);
+
+        return (
+          <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
+            <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
+              <DropdownMenuSubmenuTrigger
+                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+                style={{ paddingBlock: 8, paddingInline: 8 }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDetailOpen(false);
+                  if (restricted) {
+                    onRestrictedModelClick?.();
+                    onClose();
+                    return;
+                  }
+                  void selectModel(item.data.model.id, singleProvider.id);
+                }}
+              >
+                <ModelRowRender
+                  activeEffortLabel={activeSecondaryText}
+                  isActive={isActive}
+                  model={item.data.model}
+                  newLabel={newLabel}
+                  proBadgeLabel={restricted ? proLabel : undefined}
+                  provider={singleProvider.id}
+                />
+              </DropdownMenuSubmenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={16}>
+                  <DropdownMenuPopup className={styles.detailPopup}>
+                    <ModelDetailPanel model={item.data.model.id} provider={singleProvider.id} />
+                  </DropdownMenuPopup>
+                </DropdownMenuPositioner>
+              </DropdownMenuPortal>
+            </DropdownMenuSubmenuRoot>
+          </Flexbox>
+        );
+      }
+
+      case 'model-item-multiple': {
+        return (
+          <Flexbox key={item.data.displayName} style={{ marginBlock: 1, marginInline: 4 }}>
+            <MultipleProvidersModelItem
+              activeKey={activeKey}
+              activeSecondaryText={activeSecondaryText}
+              data={item.data}
+              isModelRestricted={isModelRestricted}
+              newLabel={newLabel}
+              proLabel={proLabel}
+              onBeforeModelSelect={onBeforeModelSelect}
+              onClose={onClose}
+              onModelChange={onModelChange}
+              onRestrictedModelClick={onRestrictedModelClick}
+            />
+          </Flexbox>
+        );
+      }
+
+      default: {
+        return null;
+      }
+    }
+  },
+);
+
+ListItemRenderer.displayName = 'ListItemRenderer';

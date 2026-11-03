@@ -1,0 +1,29 @@
+{
+  "name": "@lobechat/builtin-tool-web-onboarding",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./agentMarketplace": "./src/agentMarketplace/index.ts",
+    "./agentMarketplace/client": "./src/agentMarketplace/client/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts",
+    "./utils": "./src/ExecutionRuntime/utils.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/const": "workspace:*",
+    "@lobechat/markdown-patch": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^6.0.4",
+    "react": "*",
+    "react-i18next": "*",
+    "swr": "^2"
+  }
+}

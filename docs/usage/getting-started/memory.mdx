@@ -1,0 +1,339 @@
+---
+title: Memory
+description: >-
+  Help Agents recall your context and preferences with structured memories
+  you can review, edit, and delete.
+tags:
+  - LobeHub
+  - Memory
+  - Personalization
+  - Memory Agent
+  - Privacy
+  - Context
+---
+
+# Memory
+
+With Memory enabled, Agents can save useful context and preferences from your conversations and refer to them later, reducing what you need to repeat.
+
+Memory organizes details such as your role, work context, preferences, and habits. You can review and update these details at any time.
+
+## How Memory Can Help
+
+Without Memory, you may need to:
+
+- You repeat context constantly
+- Agents forget your preferences between sessions
+- Restate your preferred format or tone
+
+With Memory, Agents can adapt responses using saved context. You can review and correct entries to keep them current.
+
+## How Memory Is Saved and Used
+
+Memory works in four steps:
+
+<Steps>
+  ### Conversation Analysis
+
+  As you interact, the Memory Agent analyzes conversations for insights: explicit preferences, implicit patterns, project context, and communication style.
+
+  ### Memory Extraction
+
+  Relevant details are saved as entries such as preferences, facts, or ongoing context.
+
+  ### Storage and Indexing
+
+  You can search, edit, or delete saved entries. If new information conflicts with an older entry, update the saved memory.
+
+  ### Contextual Recall
+
+  When a memory is relevant to your request, an Agent can use it in the response.
+</Steps>
+
+### Review and Control
+
+Automatic extraction saves useful context from conversations. In the Memory panel, you can review and edit saved entries, delete unwanted content, or add memories manually.
+
+### User Memory vs. Agent Self-Learning (Labs)
+
+This page covers **user memory**: information about you, such as preferences, background, and ongoing projects, that can help personalize responses.
+
+**Agent self-learning (Labs)** is a separate experimental capability for reusable working methods and experience. User Memory stores personal context instead. Enabling Memory does not enable self-learning or train the underlying model.
+
+## Types of Memory
+
+### Personal Preferences
+
+How you like to work and communicate:
+
+```yaml
+Communication Style:
+  - Preference: Concise responses
+  - Detail level: Technical, skip basics
+  - Tone: Professional but conversational
+  - Format: Bullet points preferred over paragraphs
+
+Work Preferences:
+  - Work hours: 9 AM - 6 PM EST
+  - Decision-making: Data-driven, wants multiple options
+  - Feedback: Direct and actionable
+```
+
+### Personal Context
+
+Who you are and what you're doing: role, organization, team, current projects, key stakeholders.
+
+```yaml
+Professional Context:
+  - Role: Senior Product Manager
+  - Company: B2B SaaS startup, 50 employees
+  - Team: 3 engineers, 1 designer, 1 analyst
+  - Current project: Mobile app redesign, Q2 launch
+```
+
+### Skills and Knowledge
+
+What you know and what you're learning. Helps Agents calibrate their explanations to your level.
+
+### Patterns and Habits
+
+Recurring behaviors and workflows: weekly meetings, common requests, decision-making criteria, typical project workflows.
+
+### Historical Context
+
+Past projects and decisions: lessons learned, reasoning behind past choices, key collaborators.
+
+## Understanding Agent Memory
+
+Agent Memory is a built-in plugin in LobeHub. It automatically identifies and extracts key information from your conversations, building a structured memory base. These memories are applied in future interactions, making communication more personalized and efficient. It saves summaries of useful context and preferences rather than a verbatim transcript.
+
+![Agent Memory Interface](/blog/assets6ebefe8183f31de4de5bac1a921fb153.webp)
+
+## Enabling Memory
+
+Enable Memory separately for each Agent. You can turn it on from the Agent Profile page or directly in a conversation.
+
+### Enable from Agent Profile
+
+Go to the Agent Profile page, click **+ Add Plugin**, and check **Memory** to enable it.
+
+![Add Memory Plugin from Agent Profile](/blog/assets27b2bf8596f8e65d545322c66a0d81a2.webp)
+
+### Enable in a Conversation
+
+Open a conversation, click the plugin icon below the chat input, and check **Memory** to activate it.
+
+![Enable Memory Plugin in Conversation](/blog/assets07820089deb72e5636024ae7e3d1855f.webp)
+
+## Managing Memory
+
+### View Memory
+
+Click the **Memory** icon at the bottom of the left sidebar to open the Memory panel. It displays all memories extracted from your conversations, organized by type. Each memory shows:
+
+- **Title** — A concise summary, e.g. "Dislikes coffee"
+- **Preference Weight** — How strongly the Agent prioritizes this memory. Higher weight = more influence in conversations.
+- **Created Time** — When the memory was extracted
+- **Memory Instruction** — The behavioral rule derived from the conversation, e.g. "Avoid recommending coffee unless the user explicitly requests it; suggest non-coffee alternatives."
+- **Possible Actions** — How the Agent might apply this memory, e.g. "Offer tea, hot chocolate, juice, or decaf options depending on context."
+- **Tags** — For categorization and search
+
+![Memory Management Panel](/blog/assetseb9b70814679291052dfa4618a44a856.webp)
+
+### Search Memory
+
+Use the search function to quickly find specific memories. You can also open the command menu at any time and search for memories there. Filter by keyword, category, date range, or confidence level.
+
+### Edit Memory
+
+Modify any memory instruction to better reflect your actual needs and preferences.
+
+![Editing Memory](/blog/assetsd6eba2b1881977c9533ba86c1cd3dfce.webp)
+
+### Delete Memory
+
+Select a memory and click the delete button to remove it. You can also bulk delete by category or clear all memories.
+
+![Deleting Memory](/blog/assetse14ddb728d66905c164664b8b5e044d3.webp)
+
+## The Memory Agent
+
+The **Memory Agent** is a built-in Agent dedicated to managing your personal Memory:
+
+- **Extraction** — Analyzes conversations to identify valuable insights worth keeping
+- **Organization** — Categorizes and structures memories for easy retrieval
+- **Maintenance** — Identifies outdated or conflicting memories and suggests updates
+- **Application** — Determines when to inject relevant memories into an Agent's context
+
+### Interacting with the Memory Agent
+
+Talk directly to the Memory Agent to request additions or updates, or to review memories. Check the Memory panel afterward to verify that a requested change was saved:
+
+- "Remember that I prefer morning meetings over afternoon ones."
+- "What do you know about my current projects?"
+- "Update my role: I'm now VP of Product, not Senior PM."
+- "What do you remember about my communication preferences?"
+
+## Advanced Memory Features
+
+### Memory Categories
+
+Organize memories by category:
+
+- **Professional**: Work-related context and preferences
+- **Personal**: Personal interests and habits
+- **Projects**: Project-specific information
+- **Skills**: Knowledge and expertise areas
+- **Relationships**: Colleagues, stakeholders, contacts
+- **Custom**: Use custom categories if your version supports them
+
+### Memory Confidence Levels
+
+Confidence helps you assess how well a memory is supported. Use these examples when you review entries:
+
+<AccordionGroup>
+  <Accordion title="High Confidence">
+    **Source**: Explicit statements, repeated patterns
+
+    **Example**: "I always need data to back up product decisions"
+
+    **Review guidance**: Check that the explicit statement is still current
+  </Accordion>
+
+  <Accordion title="Medium Confidence">
+    **Source**: Inferred from behavior, occasional patterns
+
+    **Example**: User often asks for competitive analysis
+
+    **Review guidance**: Confirm that the inferred pattern reflects your preference
+  </Accordion>
+
+  <Accordion title="Low Confidence">
+    **Source**: Single occurrence, ambiguous statements
+
+    **Example**: User mentioned interest in a topic once
+
+    **Review guidance**: Clarify ambiguous information or remove it if it is not useful
+  </Accordion>
+</AccordionGroup>
+
+### Memory Relationships
+
+Related memories can provide richer context: for example, your role, current project, timeline, and stakeholders.
+
+### Memory Search
+
+Start with keyword search. Other filters and source details depend on your version; use them when available:
+
+- **Keyword search**: Search memory content
+- **Category filter**: Show only specific categories
+- **Date range**: Memories from specific timeframe
+- **Source conversation**: Find where memory originated
+- **Confidence level**: Filter by how certain the memory is
+
+## Using Memory Effectively
+
+### Getting Started
+
+When you first use LobeHub, help Agents learn about you quickly:
+
+<Steps>
+  ### Share Professional Context
+
+  Tell agents about your role, team, organization, and current projects.
+
+  ### State Preferences Explicitly
+
+  Be clear about how you like to communicate, what level of detail you need, and your preferred formats.
+
+  - ✅ "I always want PRDs to include a competitive analysis section"
+  - ❌ "Add competitive analysis" (too vague to memorize)
+
+  ### Add Manual Memories
+
+  Create memories for important facts, recurring contexts, and preferences. Review the saved entries for accuracy.
+</Steps>
+
+### Natural Conversation with Memory
+
+After you establish the initial context, continue working normally. Relevant memories can help an Agent:
+
+**Without Memory:**
+
+- Agent asks: "What format would you like?" / "Who are the stakeholders?" / "What sections should I include?"
+
+**With Memory:**
+
+- Use your preferred template
+- Include sections you often request, such as user research
+- Refer to saved stakeholder information when relevant
+
+### Refining Over Time
+
+You can update Memory as your situation changes:
+
+- When an Agent gets something wrong, correct it: "Actually, I prefer X instead of Y." Then check the Memory panel and edit the saved entry if needed.
+- As your situation changes, tell Agents: "I'm now leading the mobile team in addition to web."
+- Review your Memory panel monthly — remove outdated entries, add new information.
+
+## Privacy and Control
+
+Use the Memory panel to review, edit, delete, or clear saved entries. Keep passwords, financial details, and other sensitive information out of Memory.
+
+To remove saved information, delete it from the Memory panel. When cleaning up personal information, you can also review your conversation history.
+
+For storage, access, sharing, and model-training policies, consult the privacy terms for your service or ask your deployment administrator.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start with Key Context">
+    Have a conversation with the Memory Agent when you first start: "Let me tell you about myself and how I work." Cover your role, priorities, communication preferences, and common workflows.
+  </Accordion>
+
+  <Accordion title="Be Explicit About Preferences">
+    "I always want PRDs to include a competitive analysis section" is memorable. "Add competitive analysis" is too vague.
+  </Accordion>
+
+  <Accordion title="Correct Mistakes Immediately">
+    When an Agent misremembers, say: "That's not right. I prefer X instead of Y." Check the saved entry afterward and edit it directly if it is still incorrect.
+  </Accordion>
+
+  <Accordion title="Review Monthly">
+    Remove outdated context, update changed preferences, add new important information.
+  </Accordion>
+
+  <Accordion title="Don't Store Sensitive Data">
+    Avoid passwords, financial details, or highly personal information. Memory works best for work preferences, professional context, and general patterns.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Agent Not Recalling Memories">
+    **Checks**: Is the saved memory relevant and accurate? Is the Memory plugin enabled for this Agent?
+
+    **Solutions**: State the preference explicitly, review or manually add the relevant entry, and check the Memory plugin. Recall depends on relevance to the current request.
+  </Accordion>
+
+  <Accordion title="Incorrect Memories">
+    **Solutions**: Edit the memory directly, tell agent "That's not correct, actually...", or delete and recreate the memory.
+  </Accordion>
+
+  <Accordion title="Too Many Irrelevant Memories">
+    **Solutions**: Delete low-value memories, be more specific in conversations to avoid ambiguity.
+  </Accordion>
+
+  <Accordion title="Memory Not Extracting">
+    **Solutions**: Be more explicit in stating preferences, manually add important memories, check whether the Memory plugin is enabled, then verify the saved entries in the Memory panel.
+  </Accordion>
+</AccordionGroup>
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+
+  <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
+
+  <Card href={'/docs/usage/agent/chain-of-thought'} title={'Chain of Thought'} />
+</Cards>

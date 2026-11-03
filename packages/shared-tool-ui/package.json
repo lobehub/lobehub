@@ -1,0 +1,34 @@
+{
+  "name": "@lobechat/shared-tool-ui",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./ask-user": "./src/AskUserQuestion/index.ts",
+    "./components": "./src/components/index.ts",
+    "./goal-command": "./src/utils/goalCommand.ts",
+    "./inspectors": "./src/Inspector/index.ts",
+    "./inspectors/github-labels": "./src/Inspector/GitHub/labels.ts",
+    "./inspectors/linear-labels": "./src/Inspector/Linear/labels.ts",
+    "./pending-hotkeys": "./src/pendingHotkeys.ts",
+    "./renders": "./src/Render/index.ts",
+    "./secret-input": "./src/SecretInput/index.ts",
+    "./styles": "./src/styles.ts"
+  },
+  "dependencies": {
+    "@lobechat/tool-runtime": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "anser": "^2.3.5"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^6.0.4",
+    "lucide-react": "*",
+    "path-browserify-esm": "*",
+    "react": "*",
+    "react-dom": "*",
+    "react-i18next": "*"
+  }
+}

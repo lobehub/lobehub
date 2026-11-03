@@ -1,0 +1,258 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`htmlToMarkdown > should transform terms.html to markdown 1`] = `
+{
+  "content": " Lasted Updated at
+
+2024-03-01 
+
+ Welcome to LobeHub! Please carefully read the following Terms of Use (hereinafter referred to as the "Agreement"). This Agreement constitutes a legally binding agreement between You and LobeHub regarding the access and use of the LobeHub software applications, services, and websites (collectively referred to as the "Services").
+
+ By accessing or using the Services in any way, You acknowledge that You have read, understood, and agreed to be bound by all the terms of this Agreement. If You do not agree to any part of this Agreement, You are not permitted to continue accessing or using the Services.
+
+##  Definitions[ ](https://lobehub.com/zh/terms#definitions) 
+
+ The words of which the initial letter is capitalized have meanings defined under the following conditions. The following definitions shall have the same meaning regardless of whether they appear in singular or in plural.
+
+* **Affiliate** means an entity that controls, is controlled by or is under common control with a party, where "control" means ownership of 50% or more of the shares, equity interest or other securities entitled to vote for election of directors or other managing authority.
+* **Agreement** means this Terms of Use Agreement.
+* **Company** (referred to as either "the Company", "We", "Us" or "Our" in this Agreement) refers to LobeHub LLC.
+* **Service** means the LobeHub software applications, services, and website.
+* **You** means the individual accessing or using the Services, or the company, or other legal entity on behalf of which such individual is accessing or using the Services, as applicable.
+
+##  Our Services[ ](https://lobehub.com/zh/terms#our-services) 
+
+ LobeHub provides a platform and interface that enables users to interact with artificial intelligence technologies, including but not limited to natural language processing models or content generation models developed independently or provided by third parties such as Google, Microsoft, OpenAI, and other commercial companies as well as open-source communities. The Service facilitates functions such as information retrieval, content creation, and automation through user interaction with AI systems. Additionally, it utilizes cloud technology to provide capabilities like data synchronization, vector data storage, server-side functionalities, etc., to enhance the interactive experience with AI models.
+
+##  Eligibility[ ](https://lobehub.com/zh/terms#eligibility) 
+
+ By accessing or using the Services, You represent and warrant to the Company that You: (1)Are of legal age (18 years and above). (2)Have legal capacity and agree to abide by these terms. (3)Will use the Services in accordance with this Agreement and all applicable laws. (4)Will not use the Services for any illegal, harmful, dangerous, or offensive purposes.
+
+Examples of prohibited activities include but are not limited to:
+
+* Illegal activities
+* Infringement of intellectual property rights
+* Generating harmful, unsafe, deceptive, or illegal content
+* Impersonation, fraud
+
+ If You do not comply with the usage conditions, We reserve the right to suspend or terminate Your account and refuse any and all current or future use of the Services (or any part thereof).
+
+##  Account Registration[ ](https://lobehub.com/zh/terms#account-registration) 
+
+ To access the Services, You must register an account by providing true, accurate, up-to-date, and complete information. You are solely responsible for all activities that occur under Your account, including maintaining the security of Your account and restricting access. You must immediately notify LobeHub of any unauthorized account use or other security breaches.
+
+ Please ensure to keep Your password secure and take responsibility for all use of Your account and password. If We deem the chosen username inappropriate, containing obscene content, or otherwise offensive, We reserve the right to delete, revoke, or modify that username.
+
+##  Purchases and Payments[ ](https://lobehub.com/zh/terms#purchases-and-payments) 
+
+ You agree to provide current, complete, and accurate purchase and account information for all purchases made using the Services. You also agree to promptly update Your account and payment information, including email address, payment method, and payment card expiration date, to allow us to complete Your transactions and contact You when necessary. Sales tax will be added to the purchase price as required by law.
+
+ You agree to pay all charges at the current purchase price and authorize us to charge any such amounts to Your chosen payment provider at the time of purchase. If Your order requires recurring charges, You agree that We may charge Your payment method on a recurring basis at the specified intervals without obtaining prior approval for each recurring charge until the relevant order is canceled. We reserve the right to correct any errors or pricing errors even after payment has been requested or accepted.
+
+ We may utilize third-party payment processing services (such as Stripe) for payment processing. You may use a valid card (credit or debit card) for payment, subject to verification and authorization by Your card issuer. We will not be liable for any delays or failure to provide Services resulting from payment failures due to authorization issues or any reasons related to third-party payment providers.
+
+ We reserve the right to refuse or cancel Your order at any time for certain reasons, including but not limited to: (1) Service availability, (2) errors in Service description or pricing, (3) order errors, (4) suspected fraud or unauthorized or illegal transactions. We reserve the right, at our sole discretion, to limit or prohibit orders placed by dealers, resellers, or distributors.
+
+##  Fee Changes[ ](https://lobehub.com/zh/terms#fee-changes) 
+
+ We reserve the right to adjust the Service fees at our discretion and at any time. Any changes in fees will take effect immediately upon the change. Services that have already been paid for and purchased will not be affected.
+
+ If Your order requires recurring automatic billing, the revised price will take effect on the next billing cycle. We will notify You in advance of any fee adjustments so that You have the opportunity to cancel the order before the adjustment takes effect. If You do not cancel the order and continue to use the Services, You agree to pay the revised fee amount.
+
+##  Refunds[ ](https://lobehub.com/zh/terms#refunds) 
+
+ For Services that have been purchased but not used, We support refunds within 30 days of payment. However, for Services that have been used or purchased for more than 30 days, We will not accept refund requests.
+
+ For subscription-based Services where partial usage has occurred, Your refund request will be reviewed on a case-by-case basis, and the final decision on approving the refund will be at the Company's discretion.
+
+##  Content[ ](https://lobehub.com/zh/terms#content) 
+
+ Our Services allows You to generate and publish content. You are responsible for the legality, reliability, and appropriateness of the content generated using the AI ability. We do not assume responsibility for user-generated content on the Services. You explicitly understand and agree that You are solely responsible for the content You post and all activities conducted under Your account, whether by Yourself or by third parties using Your account.
+
+ By generating and publishing content in the Services, You grant us the rights and licenses necessary to use, modify, publicly perform, publicly display, copy, and distribute such content within the Services. You retain full ownership of all content created, published, or displayed within the Services and are responsible for maintaining these rights. You agree that this license includes the permission for us to provide Your content to other Service users for their use under these terms. Additionally, You declare and warrant that: (1) the content is owned by You or You have the legal right to use and authorize it to us under this agreement. (2) posting the shared information in the Services will not infringe upon the privacy rights, image rights, copyrights, contractual relationships, or other individual rights of others.
+
+ All content generated by You is by default stored locally on the client-side, and You are responsible for the storage and backup of Your content.
+
+ Additionally, We offer optional cloud sync content functionality. By using this feature, You agree that We may retain complete and accurate copies of any content in locations independent of the Services in our manner. However, We cannot guarantee that data will not be lost or damaged. Data or content loss or damage can occur due to various reasons, such as pre-existing damage before synchronization or changes during synchronization.
+
+ We do not assume any responsibility for the security and integrity of content in the event of content damage or loss under any circumstances.
+
+##  Intellectual Property Rights[ ](https://lobehub.com/zh/terms#intellectual-property-rights) 
+
+ LobeHub reserves all rights to the technology, software, first-party content, and data within the Services, including but not limited to patents, trademarks, trade secrets, copyrights, and other intellectual property rights. Your permission to use the Services does not grant You any ownership or title. You are not permitted to copy, modify, adapt, translate, create derivative works, reverse engineer, disassemble, or decompile the Services or any part thereof. If You wish to participate in collaborative technical development, please engage through our GitHub open-source community and adhere to the relevant open-source licenses.
+
+##  Privacy and Security[ ](https://lobehub.com/zh/terms#privacy-and-security) 
+
+ LobeHub employs industry-standard technical, managerial, and physical security measures to protect the security, confidentiality, and integrity of Your data. However, We cannot guarantee that unauthorized access, hacking attacks, data loss, or other breaches will never occur. LobeHub is not liable for any damages or liabilities related to security incidents. Please refer to our Privacy Policy for more detailed information.
+
+##  Termination of Services[ ](https://lobehub.com/zh/terms#termination-of-services) 
+
+ You may close Your account and cease using the Services at any time. In the event of a violation of the terms of the agreement, LobeHub may immediately suspend or terminate Your access to the Services. Upon termination, You will immediately lose the right to access or use the Services. LobeHub will not be liable to You or any third party for the termination of the Services.
+
+##  Disclaimer of Warranties[ ](https://lobehub.com/zh/terms#disclaimer-of-warranties) 
+
+ The Services provided by LobeHub are provided on an "as-is" basis, and without any form of guarantee. We explicitly disclaim all warranties, whether express, implied, statutory, or otherwise, including but not limited to warranties of merchantability, fitness for a particular purpose, and non-infringement. Your use of the Services is at Your own risk.
+
+##  Limitation of Liability[ ](https://lobehub.com/zh/terms#limitation-of-liability) 
+
+ In no event shall LobeHub, its Affiliates, directors, employees, or agents be liable for any direct, indirect, punitive, incidental, special, or consequential damages arising from or related to Your use or inability to use the Services. This limitation applies regardless of the basis or form of action.
+
+##  Modification of Terms[ ](https://lobehub.com/zh/terms#modification-of-terms) 
+
+ We may revise this agreement periodically, and the new version of the agreement will replace the previous version. We will indicate the "last updated" date at the beginning and provide notice within the Services to inform You of significant changes. It is Your responsibility to regularly review these legal terms to stay informed of any updates. By continuing to use the Services after the revised legal terms are posted, You will be deemed to have understood and accepted any changes to the revised legal terms.
+
+##  Governing Law and Jurisdiction[ ](https://lobehub.com/zh/terms#governing-law-and-jurisdiction) 
+
+ This agreement shall be governed by the laws of the State of Delaware, and You agree to submit to the exclusive jurisdiction of the state and federal courts located in Delaware for the resolution of any disputes related to this agreement or the Services. You may also be required to comply with the laws of Your local jurisdiction, state, country, or international laws when using the Services.
+
+##  Conclusion[ ](https://lobehub.com/zh/terms#conclusion) 
+
+ This agreement represents the entire agreement between You and LobeHub regarding the use of the Services. It supersedes any prior agreements or understandings. The failure of LobeHub to enforce any provision of this agreement does not constitute a waiver of its rights.
+
+ By accessing or using the LobeHub Services, You acknowledge that You have read, understood, and agreed to be bound by this agreement. If You have any questions regarding this agreement, please contact us at[support@lobehub.com](mailto:support@lobehub.com).",
+  "description": "Lasted Updated at",
+  "length": 18284,
+  "title": "Terms of Service · LobeHub",
+}
+`;
+
+exports[`htmlToMarkdown > should transform yingchao.html to markdown 1`] = `
+{
+  "content": " 资讯 
+
+ 全部  NBA  CBA  英超  法甲  意甲  德甲  西甲  综合  专题  预测 
+
+ 比赛 
+
+ 全部  NBA  CBA  FIBA  英超  法甲  意甲  德甲  西甲  美职联  沙特联  欧洲杯  美洲杯 
+
+ 视频 
+
+ 回放  集锦 
+
+ 图库 
+
+ 图集  壁纸 
+
+ 数据 
+
+ NBA  CBA  英超  德甲  西甲  意甲  法甲  美职联  沙特联  球员PK  球知  百科 
+
+ 装备 
+
+ 最新  最热 
+
+ 发现 
+
+ 推荐  关注 
+
+NBA CBA 英超 德甲 西甲 意甲 法甲 美职联 沙特联 球员PK 球知 百科 
+
+球队 场次 胜/平/负 积分 进/失球 净胜球 
+
+1 
+
+利物浦 
+
+28 20/7/1 67 66/26 40 2 
+
+阿森纳 
+
+27 15/9/3 54 51/23 28 3 
+
+诺丁汉森林 
+
+27 14/6/7 48 44/33 11 4 
+
+曼城 
+
+27 14/5/8 47 53/37 16 5 
+
+切尔西 
+
+27 13/7/7 46 52/36 16 6 
+
+纽卡斯尔 
+
+27 13/5/9 44 46/38 8 7 
+
+伯恩茅斯 
+
+27 12/7/8 43 45/32 13 8 
+
+布莱顿 
+
+27 11/10/6 43 44/39 5 9 
+
+富勒姆 
+
+27 11/9/7 42 40/36 4 10 
+
+阿斯顿维拉 
+
+28 11/9/8 42 40/45 \\-5 11 
+
+布伦特福德 
+
+27 11/5/11 38 48/43 5 12 
+
+水晶宫 
+
+27 9/9/9 36 35/33 2 13 
+
+热刺 
+
+27 10/3/14 33 53/39 14 14 
+
+曼联 
+
+27 9/6/12 33 33/39 \\-6 15 
+
+埃弗顿 
+
+27 7/11/9 32 30/34 \\-4 16 
+
+西汉姆 
+
+26 8/6/12 30 30/47 \\-17 17 
+
+狼队 
+
+27 6/4/17 22 37/56 \\-19 18 
+
+伊普斯维奇 
+
+27 3/8/16 17 26/57 \\-31 19 
+
+莱切斯特 
+
+26 4/5/17 17 25/59 \\-34 20 
+
+南安普敦 
+
+27 2/3/22 9 19/65 \\-46 
+
+关于我们
+
+ 关于我们  免责声明  联系我们  用户协议  隐私政策  账户注销  成长规则  侵权投诉 
+
+服务
+
+ 篮球百科  建议反馈 
+
+copyright © 2016 - 2025 qiumiwu.com All Rights Reserved 
+
+粤公网安备 44190002004105号 粤ICP备16062857号 增值电信业务经营许可证粤B2-20210041 粤网文\\[2021\\]4047-607号 
+
+客服微信 qiumiwu 
+
+意见反馈 
+
+温馨提示
+
+扫描二维码，下载球迷屋App，获得更好的使用体验",
+  "description": "球迷屋为您提供2024-2025赛季英超积分排行榜，包含所有英超球队的全部赛季的排行榜数据，包含了英超球队的排名、场次、胜平负、进球、失球、积分等等详细积分数据，让大家迅速了解英超积分排行榜的数据。",
+  "length": 201,
+  "title": "英超排行榜|英超积分榜2024-2025赛季 - 球迷屋",
+}
+`;

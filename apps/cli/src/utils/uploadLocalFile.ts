@@ -1,0 +1,145 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
+import { resolveMimeType } from '@lobechat/utils/mimeType';
+
+import type { TrpcClient } from '../api/client';
+import { rasterDimensions } from './rasterDimensions';
+
+export interface UploadLocalFileOptions {
+  knowledgeBaseId?: string;
+  parentId?: string;
+}
+
+export interface UploadFileBufferInput {
+  /** Raw file bytes to upload. */
+  buffer: Buffer;
+  /** Display name; its extension seeds the S3 pathname. */
+  fileName: string;
+  /** MIME type sent as the S3 `Content-Type` and stored on the record. */
+  fileType: string;
+}
+
+/**
+ * Upload an in-memory buffer to S3 via a pre-signed URL and create the file
+ * record — the buffer-based core behind {@link uploadLocalFile}.
+ *
+ * @returns the created file record (`{ id, url, ... }`)
+ */
+export const uploadFileBuffer = async (
+  client: TrpcClient,
+  { buffer, fileName, fileType }: UploadFileBufferInput,
+  options: UploadLocalFileOptions = {},
+) => {
+  if (buffer.length > MAX_UPLOAD_FILE_SIZE) throw new Error(UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
+
+  // Compute SHA-256 hash for deduplication
+  const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+
+  const ext = path.extname(fileName).toLowerCase().slice(1);
+  const date = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  const dimensions = fileType.startsWith('image/') ? rasterDimensions(buffer) : undefined;
+
+  // 1. Dedup: if the same bytes are already stored (and the object still
+  // exists), skip the S3 upload entirely and reuse the existing url.
+  const existing = (await client.file.checkFileHash.mutate({ hash })) as {
+    isExist?: boolean;
+    url?: string;
+  };
+
+  let pathname: string;
+  let reservedPathname: string | undefined;
+  if (existing?.isExist && existing.url) {
+    pathname = existing.url;
+  } else {
+    // 2. Get a pre-signed upload URL and PUT the bytes to S3
+    pathname = ext ? `files/${date}/${hash}.${ext}` : `files/${date}/${hash}`;
+    reservedPathname = pathname;
+    try {
+      const presigned = await client.upload.createS3PreSignedUrl.mutate({
+        pathname,
+        size: buffer.length,
+      });
+
+      const presignedUrl = typeof presigned === 'string' ? presigned : (presigned as any).url;
+      const uploadRes = await fetch(presignedUrl, {
+        body: buffer,
+        headers: { 'Content-Type': fileType },
+        method: 'PUT',
+      }).catch((error: unknown) => {
+        // undici only says "fetch failed"; the socket-level cause is what
+        // tells a reset/timeout apart from a DNS or proxy problem.
+        const cause = (error as { cause?: { code?: string; message?: string } })?.cause;
+        const detail = cause?.code || cause?.message;
+        throw new Error(
+          `Upload to storage failed: ${(error as Error)?.message ?? String(error)}${detail ? ` (${detail})` : ''}`,
+        );
+      });
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+      }
+    } catch (error) {
+      await client.upload.abortS3Upload.mutate({ pathname }).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  // 3. Create the file record
+  try {
+    return await client.file.createFile.mutate({
+      fileType,
+      hash,
+      knowledgeBaseId: options.knowledgeBaseId,
+      metadata: {
+        date,
+        dirname: '',
+        filename: fileName,
+        path: pathname,
+        ...dimensions,
+      },
+      name: fileName,
+      parentId: options.parentId,
+      size: buffer.length,
+      url: pathname,
+    });
+  } catch (error) {
+    if (reservedPathname) {
+      await client.upload.abortS3Upload
+        .mutate({ pathname: reservedPathname })
+        .catch(() => undefined);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Read a file from the local filesystem, upload it to S3 via a pre-signed URL,
+ * and create the corresponding file record. Shared by `file upload` and
+ * `kb upload`.
+ *
+ * @returns the created file record
+ */
+export const uploadLocalFile = async (
+  client: TrpcClient,
+  filePath: string,
+  options: UploadLocalFileOptions = {},
+) => {
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`File not found: ${resolved}`);
+  }
+
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile()) {
+    throw new Error(`Not a file: ${resolved}`);
+  }
+  if (stat.size > MAX_UPLOAD_FILE_SIZE) throw new Error(UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
+
+  const fileName = path.basename(resolved);
+  const fileBuffer = fs.readFileSync(resolved);
+
+  const fileType = await resolveMimeType(fileName, fileBuffer);
+  return uploadFileBuffer(client, { buffer: fileBuffer, fileName, fileType }, options);
+};

@@ -1,0 +1,1022 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { getTestDB } from '../../../core/getTestDB';
+import * as Schema from '../../../schemas';
+import { HomeRepository } from '../index';
+
+const clientDB = await getTestDB();
+
+const userId = 'test-user-id';
+const otherUserId = 'other-user-id';
+let homeRepo: HomeRepository;
+
+beforeEach(async () => {
+  await clientDB.delete(Schema.users);
+
+  // Create test users
+  await clientDB.transaction(async (tx) => {
+    await tx.insert(Schema.users).values([{ id: userId }, { id: otherUserId }]);
+  });
+
+  homeRepo = new HomeRepository(clientDB, userId);
+});
+
+afterEach(async () => {
+  await clientDB.delete(Schema.users);
+});
+
+describe('HomeRepository', () => {
+  describe('getSidebarAgentList', () => {
+    it('should return empty lists when no agents exist', async () => {
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.pinned).toEqual([]);
+      expect(result.ungrouped).toEqual([]);
+      expect(result.groups).toEqual([]);
+    });
+
+    it('should return non-virtual agents without agentsToSessions relationship', async () => {
+      // Create an agent without session relationship (e.g., duplicated agent)
+      const agentId = 'standalone-agent';
+
+      await clientDB.insert(Schema.agents).values({
+        id: agentId,
+        userId,
+        title: 'Standalone Agent',
+        description: 'Agent without session',
+        pinned: false,
+        virtual: false,
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      // Agent should appear in ungrouped list even without agentsToSessions
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe(agentId);
+      expect(result.ungrouped[0].title).toBe('Standalone Agent');
+    });
+
+    it('should return pinned non-virtual agents without agentsToSessions relationship', async () => {
+      // Create a pinned agent without session relationship
+      const agentId = 'pinned-standalone';
+
+      await clientDB.insert(Schema.agents).values({
+        id: agentId,
+        userId,
+        title: 'Pinned Standalone Agent',
+        pinned: true,
+        virtual: false,
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      // Agent should appear in pinned list
+      expect(result.pinned).toHaveLength(1);
+      expect(result.pinned[0].id).toBe(agentId);
+      expect(result.pinned[0].pinned).toBe(true);
+    });
+
+    it('should return mixed agents with and without session relationships', async () => {
+      // Agent with session
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: 'with-session',
+          userId,
+          title: 'Agent With Session',
+          pinned: false,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-1',
+          slug: 'session-1',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'with-session',
+          sessionId: 'session-1',
+          userId,
+        });
+      });
+
+      // Agent without session (e.g., duplicated)
+      await clientDB.insert(Schema.agents).values({
+        id: 'without-session',
+        userId,
+        title: 'Agent Without Session',
+        pinned: false,
+        virtual: false,
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      // Both agents should appear
+      expect(result.ungrouped).toHaveLength(2);
+      expect(result.ungrouped.map((a) => a.id)).toContain('with-session');
+      expect(result.ungrouped.map((a) => a.id)).toContain('without-session');
+    });
+
+    it('should return agents with pinned status from agents table', async () => {
+      // Create an agent with pinned=true
+      const agentId = 'agent-1';
+      const sessionId = 'session-1';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          userId,
+          title: 'Pinned Agent',
+          pinned: true,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: sessionId,
+          slug: 'session-1',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId,
+          sessionId,
+          userId,
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.pinned).toHaveLength(1);
+      expect(result.pinned[0].id).toBe(agentId);
+      expect(result.pinned[0].pinned).toBe(true);
+      expect(result.pinned[0].title).toBe('Pinned Agent');
+      expect(result.ungrouped).toHaveLength(0);
+    });
+
+    it('should return unpinned agents in ungrouped list', async () => {
+      // Create an agent with pinned=false
+      const agentId = 'agent-2';
+      const sessionId = 'session-2';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          userId,
+          title: 'Unpinned Agent',
+          pinned: false,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: sessionId,
+          slug: 'session-2',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId,
+          sessionId,
+          userId,
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe(agentId);
+      expect(result.ungrouped[0].pinned).toBe(false);
+      expect(result.pinned).toHaveLength(0);
+    });
+
+    it('should not include virtual agents', async () => {
+      const agentId = 'virtual-agent';
+      const sessionId = 'virtual-session';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          userId,
+          title: 'Virtual Agent',
+          pinned: false,
+          virtual: true, // virtual agent
+        });
+        await tx.insert(Schema.sessions).values({
+          id: sessionId,
+          slug: 'virtual-session',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId,
+          sessionId,
+          userId,
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.pinned).toHaveLength(0);
+      expect(result.ungrouped).toHaveLength(0);
+    });
+
+    it('should correctly categorize multiple agents by pinned status', async () => {
+      // Create multiple agents with different pinned status
+      await clientDB.transaction(async (tx) => {
+        // Pinned agent 1
+        await tx.insert(Schema.agents).values({
+          id: 'pinned-1',
+          userId,
+          title: 'Pinned 1',
+          pinned: true,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-pinned-1',
+          slug: 'session-pinned-1',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'pinned-1',
+          sessionId: 'session-pinned-1',
+          userId,
+        });
+
+        // Pinned agent 2
+        await tx.insert(Schema.agents).values({
+          id: 'pinned-2',
+          userId,
+          title: 'Pinned 2',
+          pinned: true,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-pinned-2',
+          slug: 'session-pinned-2',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'pinned-2',
+          sessionId: 'session-pinned-2',
+          userId,
+        });
+
+        // Unpinned agent
+        await tx.insert(Schema.agents).values({
+          id: 'unpinned-1',
+          userId,
+          title: 'Unpinned 1',
+          pinned: false,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-unpinned-1',
+          slug: 'session-unpinned-1',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'unpinned-1',
+          sessionId: 'session-unpinned-1',
+          userId,
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.pinned).toHaveLength(2);
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.pinned.map((a) => a.id)).toContain('pinned-1');
+      expect(result.pinned.map((a) => a.id)).toContain('pinned-2');
+      expect(result.ungrouped[0].id).toBe('unpinned-1');
+    });
+
+    it('should not return agents from other users', async () => {
+      // Create agent for other user
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: 'other-agent',
+          userId: otherUserId,
+          title: 'Other User Agent',
+          pinned: true,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'other-session',
+          slug: 'other-session',
+          userId: otherUserId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'other-agent',
+          sessionId: 'other-session',
+          userId: otherUserId,
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.pinned).toHaveLength(0);
+      expect(result.ungrouped).toHaveLength(0);
+    });
+
+    it('should not count system-triggered unread topics in agent sidebar badges', async () => {
+      const agentId = 'agent-with-system-unread';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          pinned: false,
+          title: 'Agent With System Unread',
+          userId,
+          virtual: false,
+        });
+        await tx.insert(Schema.topics).values([
+          {
+            agentId,
+            id: 'regular-unread-topic',
+            status: 'unread',
+            title: 'Regular unread topic',
+            userId,
+          },
+          {
+            agentId,
+            id: 'document-unread-topic',
+            status: 'unread',
+            title: 'Document unread topic',
+            trigger: 'document',
+            userId,
+          },
+          {
+            agentId,
+            id: 'channel-unread-topic',
+            status: 'unread',
+            title: 'Channel unread topic',
+            trigger: 'channel',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe(agentId);
+      expect(result.ungrouped[0].unreadCount).toBe(1);
+    });
+
+    it('should not count agent-share visitor unread topics in agent sidebar badges', async () => {
+      // Agent-share visitor topics keep the creator's userId, but a non-null
+      // senderId marks them as visitor traffic that must not bump the
+      // creator's own unread badge.
+      const agentId = 'agent-with-visitor-unread';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          pinned: false,
+          title: 'Agent With Visitor Unread',
+          userId,
+          virtual: false,
+        });
+        await tx.insert(Schema.topics).values([
+          {
+            agentId,
+            id: 'visitor-unread-topic',
+            status: 'unread',
+            senderId: 'visitor-user-x',
+            title: 'Visitor unread topic',
+            userId,
+          },
+          {
+            agentId,
+            id: 'creator-unread-topic',
+            status: 'unread',
+            title: 'Creator unread topic',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe(agentId);
+      expect(result.ungrouped[0].unreadCount).toBe(1);
+    });
+
+    it('should not count agent-share visitor unread topics in chat group unread badges', async () => {
+      const groupId = 'group-with-visitor-unread';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.chatGroups).values({
+          id: groupId,
+          userId,
+          title: 'Group With Visitor Unread',
+          pinned: false,
+        });
+        await tx.insert(Schema.topics).values([
+          {
+            groupId,
+            id: 'visitor-unread-group-topic',
+            status: 'unread',
+            senderId: 'visitor-user-x',
+            title: 'Visitor unread topic',
+            userId,
+          },
+          {
+            groupId,
+            id: 'creator-unread-group-topic',
+            status: 'unread',
+            title: 'Creator unread topic',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      const group = result.ungrouped.find((i) => i.id === groupId);
+      expect(group).toBeDefined();
+      expect(group!.unreadCount).toBe(1);
+    });
+
+    describe('agents.pinned is the only sidebar pin source', () => {
+      it('should ignore sessions.pinned when agents.pinned is null', async () => {
+        // Simulate legacy data: agents.pinned is null, but sessions.pinned is true
+        const agentId = 'legacy-agent';
+        const sessionId = 'legacy-session';
+
+        await clientDB.transaction(async (tx) => {
+          await tx.insert(Schema.agents).values({
+            id: agentId,
+            userId,
+            title: 'Legacy Agent',
+            virtual: false,
+          });
+          await tx.insert(Schema.sessions).values({
+            id: sessionId,
+            slug: 'legacy-session',
+            userId,
+            pinned: true, // Legacy: pinned was stored on session
+          });
+          await tx.insert(Schema.agentsToSessions).values({
+            agentId,
+            sessionId,
+            userId,
+          });
+        });
+
+        const result = await homeRepo.getSidebarAgentList();
+
+        // Should fallback to sessions.pinned = true
+        expect(result.pinned).toHaveLength(0);
+        expect(result.ungrouped).toHaveLength(1);
+        expect(result.ungrouped[0].id).toBe(agentId);
+        expect(result.ungrouped[0].pinned).toBe(false);
+      });
+
+      it('should use agents.pinned when both agents.pinned and sessions.pinned exist (agents.pinned takes priority)', async () => {
+        // agents.pinned = false, sessions.pinned = true
+        // agents.pinned should take priority
+        const agentId = 'priority-agent';
+        const sessionId = 'priority-session';
+
+        await clientDB.transaction(async (tx) => {
+          await tx.insert(Schema.agents).values({
+            id: agentId,
+            userId,
+            title: 'Priority Agent',
+            pinned: false, // Agent says not pinned
+            virtual: false,
+          });
+          await tx.insert(Schema.sessions).values({
+            id: sessionId,
+            slug: 'priority-session',
+            userId,
+            pinned: true, // Session says pinned (legacy)
+          });
+          await tx.insert(Schema.agentsToSessions).values({
+            agentId,
+            sessionId,
+            userId,
+          });
+        });
+
+        const result = await homeRepo.getSidebarAgentList();
+
+        // agents.pinned = false should take priority
+        expect(result.pinned).toHaveLength(0);
+        expect(result.ungrouped).toHaveLength(1);
+        expect(result.ungrouped[0].id).toBe(agentId);
+        expect(result.ungrouped[0].pinned).toBe(false);
+      });
+
+      it('should return pinned=false when both agents.pinned and sessions.pinned are null', async () => {
+        const agentId = 'both-null-agent';
+        const sessionId = 'both-null-session';
+
+        await clientDB.transaction(async (tx) => {
+          await tx.insert(Schema.agents).values({
+            id: agentId,
+            userId,
+            title: 'Both Null Agent',
+            pinned: null,
+            virtual: false,
+          });
+          await tx.insert(Schema.sessions).values({
+            id: sessionId,
+            slug: 'both-null-session',
+            userId,
+            pinned: null,
+          });
+          await tx.insert(Schema.agentsToSessions).values({
+            agentId,
+            sessionId,
+            userId,
+          });
+        });
+
+        const result = await homeRepo.getSidebarAgentList();
+
+        // Both null should default to false
+        expect(result.pinned).toHaveLength(0);
+        expect(result.ungrouped).toHaveLength(1);
+        expect(result.ungrouped[0].pinned).toBe(false);
+      });
+    });
+  });
+
+  // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+  const isServerDB = process.env.TEST_SERVER_DB === '1';
+  describe.skipIf(!isServerDB)('searchAgents', () => {
+    beforeEach(async () => {
+      // Create test agents for search
+      await clientDB.transaction(async (tx) => {
+        // Pinned agent
+        await tx.insert(Schema.agents).values({
+          id: 'search-pinned',
+          userId,
+          title: 'Searchable Pinned Agent',
+          description: 'A pinned agent for testing',
+          pinned: true,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-search-pinned',
+          slug: 'session-search-pinned',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'search-pinned',
+          sessionId: 'session-search-pinned',
+          userId,
+        });
+
+        // Unpinned agent
+        await tx.insert(Schema.agents).values({
+          id: 'search-unpinned',
+          userId,
+          title: 'Searchable Unpinned Agent',
+          description: 'An unpinned agent for testing',
+          pinned: false,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-search-unpinned',
+          slug: 'session-search-unpinned',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'search-unpinned',
+          sessionId: 'session-search-unpinned',
+          userId,
+        });
+
+        // Agent without session (e.g., duplicated agent)
+        await tx.insert(Schema.agents).values({
+          id: 'search-standalone',
+          userId,
+          title: 'Standalone Searchable Agent',
+          description: 'A standalone agent without session',
+          pinned: false,
+          virtual: false,
+        });
+      });
+    });
+
+    it('should return empty array for empty keyword', async () => {
+      const result = await homeRepo.searchAgents('');
+      expect(result).toEqual([]);
+    });
+
+    it('should search agents without agentsToSessions relationship', async () => {
+      const result = await homeRepo.searchAgents('Standalone');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('search-standalone');
+      expect(result[0].title).toBe('Standalone Searchable Agent');
+    });
+
+    it('should search and return mixed agents with and without session relationships', async () => {
+      // Search for "Searchable" should return all 3 agents
+      const result = await homeRepo.searchAgents('Searchable');
+
+      expect(result).toHaveLength(3);
+      expect(result.map((a) => a.id)).toContain('search-pinned');
+      expect(result.map((a) => a.id)).toContain('search-unpinned');
+      expect(result.map((a) => a.id)).toContain('search-standalone');
+    });
+
+    it('should search agents by title and return correct pinned status', async () => {
+      const result = await homeRepo.searchAgents('Searchable Pinned');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('search-pinned');
+      expect(result[0].pinned).toBe(true);
+    });
+
+    it('should search agents by description', async () => {
+      const result = await homeRepo.searchAgents('unpinned agent for testing');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('search-unpinned');
+      expect(result[0].pinned).toBe(false);
+    });
+
+    it('should return multiple matching agents with correct pinned status', async () => {
+      const result = await homeRepo.searchAgents('Searchable');
+
+      // 3 agents: search-pinned, search-unpinned, search-standalone
+      expect(result).toHaveLength(3);
+
+      const pinnedAgent = result.find((a) => a.id === 'search-pinned');
+      const unpinnedAgent = result.find((a) => a.id === 'search-unpinned');
+      const standaloneAgent = result.find((a) => a.id === 'search-standalone');
+
+      expect(pinnedAgent).toBeDefined();
+      expect(pinnedAgent!.pinned).toBe(true);
+      expect(unpinnedAgent).toBeDefined();
+      expect(unpinnedAgent!.pinned).toBe(false);
+      expect(standaloneAgent).toBeDefined();
+      expect(standaloneAgent!.pinned).toBe(false);
+    });
+
+    it('should not return virtual agents in search', async () => {
+      // Add a virtual agent
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: 'virtual-search',
+          userId,
+          title: 'Searchable Virtual Agent',
+          pinned: false,
+          virtual: true,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-virtual-search',
+          slug: 'session-virtual-search',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'virtual-search',
+          sessionId: 'session-virtual-search',
+          userId,
+        });
+      });
+
+      const result = await homeRepo.searchAgents('Virtual');
+
+      expect(result).toHaveLength(0);
+    });
+
+    describe('agents.pinned is the only search pin source', () => {
+      it('should ignore sessions.pinned when agents.pinned is null', async () => {
+        // Create legacy agent with pinned on session only
+        await clientDB.transaction(async (tx) => {
+          await tx.insert(Schema.agents).values({
+            id: 'legacy-search',
+            userId,
+            title: 'Legacy Searchable Agent',
+            description: 'A legacy agent',
+            pinned: null, // No pinned on agent
+            virtual: false,
+          });
+          await tx.insert(Schema.sessions).values({
+            id: 'session-legacy-search',
+            slug: 'session-legacy-search',
+            userId,
+            pinned: true, // Pinned on session (legacy)
+          });
+          await tx.insert(Schema.agentsToSessions).values({
+            agentId: 'legacy-search',
+            sessionId: 'session-legacy-search',
+            userId,
+          });
+        });
+
+        const result = await homeRepo.searchAgents('Legacy Searchable');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('legacy-search');
+        expect(result[0].pinned).toBe(false);
+      });
+
+      it('should prioritize agents.pinned over sessions.pinned in search results', async () => {
+        // Create agent where agents.pinned differs from sessions.pinned
+        await clientDB.transaction(async (tx) => {
+          await tx.insert(Schema.agents).values({
+            id: 'priority-search',
+            userId,
+            title: 'Priority Searchable Agent',
+            pinned: false, // Agent says not pinned
+            virtual: false,
+          });
+          await tx.insert(Schema.sessions).values({
+            id: 'session-priority-search',
+            slug: 'session-priority-search',
+            userId,
+            pinned: true, // Session says pinned
+          });
+          await tx.insert(Schema.agentsToSessions).values({
+            agentId: 'priority-search',
+            sessionId: 'session-priority-search',
+            userId,
+          });
+        });
+
+        const result = await homeRepo.searchAgents('Priority Searchable');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('priority-search');
+        expect(result[0].pinned).toBe(false); // agents.pinned should take priority
+      });
+    });
+  });
+
+  describe('searchAgents with external candidates', () => {
+    it('hydrates only current-scope non-virtual agents and chat groups', async () => {
+      await clientDB.insert(Schema.agents).values([
+        { id: 'candidate-agent-own', title: 'Own agent', userId },
+        { id: 'candidate-agent-virtual', title: 'Virtual agent', userId, virtual: true },
+        { id: 'candidate-agent-other', title: 'Other agent', userId: otherUserId },
+      ]);
+      await clientDB.insert(Schema.chatGroups).values([
+        { id: 'candidate-group-own', title: 'Own group', userId },
+        { id: 'candidate-group-other', title: 'Other group', userId: otherUserId },
+      ]);
+      const ftsSearchCandidates = vi.fn().mockImplementation(({ entity }) =>
+        Promise.resolve({
+          candidates:
+            entity === 'agents'
+              ? [
+                  { id: 'candidate-agent-other', score: 12 },
+                  { id: 'candidate-agent-virtual', score: 10 },
+                  { id: 'candidate-agent-deleted', score: 8 },
+                  { id: 'candidate-agent-own', score: 6 },
+                ]
+              : [
+                  { id: 'candidate-group-other', score: 12 },
+                  { id: 'candidate-group-deleted', score: 10 },
+                  { id: 'candidate-group-own', score: 8 },
+                ],
+          total: 4,
+        }),
+      );
+      const repo = new HomeRepository(clientDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await repo.searchAgents('candidate');
+
+      expect(result.map(({ id }) => id).sort()).toEqual([
+        'candidate-agent-own',
+        'candidate-group-own',
+      ]);
+      expect(ftsSearchCandidates).toHaveBeenCalledTimes(2);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'agents',
+        filters: { excludeVirtual: true },
+        pagination: {},
+        query: { fields: ['title', 'description'], text: 'candidate' },
+      });
+    });
+  });
+
+  describe('getSidebarAgentList - heterogeneous type', () => {
+    it('should expose heterogeneousType from agencyConfig.heterogeneousProvider.type', async () => {
+      await clientDB.insert(Schema.agents).values({
+        id: 'hetero-agent',
+        userId,
+        title: 'Hetero Agent',
+        pinned: false,
+        virtual: false,
+        agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe('hetero-agent');
+      expect(result.ungrouped[0].heterogeneousType).toBe('claude-code');
+    });
+
+    it('should leave heterogeneousType unset when agencyConfig has no heterogeneousProvider', async () => {
+      await clientDB.insert(Schema.agents).values({
+        id: 'no-hetero-agent',
+        userId,
+        title: 'No Hetero Agent',
+        pinned: false,
+        virtual: false,
+        agencyConfig: { executionTarget: 'none' },
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      // heterogeneousType resolves to null and is stripped by cleanObject
+      expect(result.ungrouped[0].heterogeneousType).toBeUndefined();
+    });
+  });
+
+  describe('getSidebarAgentList - session group resolution', () => {
+    it('should use agents.sessionGroupId to place agent into a folder', async () => {
+      // Folder + agent that references the folder directly via agents.sessionGroupId
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.sessionGroups).values({
+          id: 'folder-direct',
+          name: 'Direct Folder',
+          sort: 0,
+          userId,
+        });
+        await tx.insert(Schema.agents).values({
+          id: 'agent-direct-group',
+          userId,
+          title: 'Direct Group Agent',
+          pinned: false,
+          virtual: false,
+          sessionGroupId: 'folder-direct',
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.groups).toHaveLength(1);
+      expect(result.groups[0].id).toBe('folder-direct');
+      expect(result.groups[0].items).toHaveLength(1);
+      expect(result.groups[0].items[0].id).toBe('agent-direct-group');
+      expect(result.ungrouped).toHaveLength(0);
+    });
+
+    it('should ignore sessions.groupId when agents.sessionGroupId is set', async () => {
+      // agents.sessionGroupId points to folder A; sessions.groupId points to folder B.
+      // The agent must land in folder A.
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.sessionGroups).values([
+          { id: 'folder-a', name: 'Folder A', sort: 0, userId },
+          { id: 'folder-b', name: 'Folder B', sort: 1, userId },
+        ]);
+        await tx.insert(Schema.agents).values({
+          id: 'agent-priority-group',
+          userId,
+          title: 'Priority Group Agent',
+          pinned: false,
+          virtual: false,
+          sessionGroupId: 'folder-a',
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-priority-group',
+          slug: 'session-priority-group',
+          userId,
+          groupId: 'folder-b',
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'agent-priority-group',
+          sessionId: 'session-priority-group',
+          userId,
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      const folderA = result.groups.find((g) => g.id === 'folder-a');
+      const folderB = result.groups.find((g) => g.id === 'folder-b');
+      expect(folderA?.items.map((i) => i.id)).toContain('agent-priority-group');
+      expect(folderB?.items).toHaveLength(0);
+    });
+
+    it('should ignore sessions.groupId when agents.sessionGroupId is null', async () => {
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.sessionGroups).values({
+          id: 'folder-fallback',
+          name: 'Fallback Folder',
+          sort: 0,
+          userId,
+        });
+        await tx.insert(Schema.agents).values({
+          id: 'agent-fallback-group',
+          userId,
+          title: 'Fallback Group Agent',
+          pinned: false,
+          virtual: false,
+          // sessionGroupId intentionally not set
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-fallback-group',
+          slug: 'session-fallback-group',
+          userId,
+          groupId: 'folder-fallback',
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'agent-fallback-group',
+          sessionId: 'session-fallback-group',
+          userId,
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.groups).toHaveLength(1);
+      expect(result.groups[0].id).toBe('folder-fallback');
+      expect(result.groups[0].items).toHaveLength(0);
+      expect(result.ungrouped.map((item) => item.id)).toContain('agent-fallback-group');
+    });
+  });
+
+  describe('getSidebarAgentList - chat group member avatars', () => {
+    it('should fall back to member avatars when chat group has no custom avatar', async () => {
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.chatGroups).values({
+          id: 'cg-members',
+          userId,
+          title: 'Members Group',
+          pinned: false,
+        });
+        await tx.insert(Schema.agents).values([
+          {
+            id: 'cg-member-1',
+            userId,
+            title: 'Member One',
+            avatar: '🤖',
+            backgroundColor: '#101010',
+            virtual: true,
+          },
+          {
+            id: 'cg-member-2',
+            userId,
+            title: 'Member Two',
+            avatar: '👤',
+            // no backgroundColor -> exercises `?? undefined` branch
+            virtual: true,
+          },
+        ]);
+        await tx.insert(Schema.chatGroupsAgents).values([
+          { agentId: 'cg-member-1', chatGroupId: 'cg-members', order: 0, userId },
+          { agentId: 'cg-member-2', chatGroupId: 'cg-members', order: 1, userId },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      const group = result.ungrouped.find((i) => i.id === 'cg-members');
+      expect(group).toBeDefined();
+      expect(group!.type).toBe('group');
+      expect(Array.isArray(group!.avatar)).toBe(true);
+      const avatars = group!.avatar as Array<{ avatar: string; background?: string }>;
+      expect(avatars).toHaveLength(2);
+      expect(avatars[0]).toEqual({ avatar: '🤖', background: '#101010' });
+      // member without a backgroundColor should omit `background`
+      expect(avatars[1]).toEqual({ avatar: '👤', background: undefined });
+    });
+
+    it('should skip members without an avatar when building member avatar list', async () => {
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.chatGroups).values({
+          id: 'cg-noavatar',
+          userId,
+          title: 'No Avatar Members Group',
+          pinned: false,
+        });
+        await tx.insert(Schema.agents).values([
+          {
+            id: 'cg-has-avatar',
+            userId,
+            title: 'Has Avatar',
+            avatar: '🎉',
+            virtual: true,
+          },
+          {
+            id: 'cg-null-avatar',
+            userId,
+            title: 'No Avatar',
+            // avatar omitted -> should be skipped
+            virtual: true,
+          },
+        ]);
+        await tx.insert(Schema.chatGroupsAgents).values([
+          { agentId: 'cg-has-avatar', chatGroupId: 'cg-noavatar', order: 0, userId },
+          { agentId: 'cg-null-avatar', chatGroupId: 'cg-noavatar', order: 1, userId },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      const group = result.ungrouped.find((i) => i.id === 'cg-noavatar');
+      expect(group).toBeDefined();
+      const avatars = group!.avatar as Array<{ avatar: string; background?: string }>;
+      // only the member with an avatar is included
+      expect(avatars).toHaveLength(1);
+      expect(avatars[0].avatar).toBe('🎉');
+    });
+  });
+});

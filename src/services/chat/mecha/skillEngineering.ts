@@ -1,0 +1,133 @@
+import { isDesktop } from '@lobechat/const';
+import type { OperationSkillSet } from '@lobechat/context-engine';
+import { assembleSkillPool } from '@lobechat/mecha';
+import { resourcesTreePrompt } from '@lobechat/prompts';
+import type { SkillItem } from '@lobechat/types';
+import debug from 'debug';
+
+import { agentSkillService } from '@/services/skill';
+import { getToolStoreState } from '@/store/tool';
+import { agentSkillsSelectors } from '@/store/tool/slices/agentSkills/selectors';
+import { loadBuiltinSkills } from '@/store/tool/slices/builtin/loadBuiltinSkills';
+
+const log = debug('context-engine:resolveClientSkills');
+
+/**
+ * Build the full content payload for a DB skill detail, appending its resource
+ * tree when present (mirrors the activateSkill executor output).
+ */
+const buildDbSkillContent = (detail: SkillItem): string | undefined => {
+  if (!detail.content) return undefined;
+
+  const hasResources = !!(detail.resources && Object.keys(detail.resources).length > 0);
+  return hasResources
+    ? detail.content + '\n\n' + resourcesTreePrompt(detail.name, detail.resources!)
+    : detail.content;
+};
+
+/**
+ * Build a client-side OperationSkillSet via SkillEngine.
+ *
+ * Sources:
+ * 1. Builtin skills (e.g., Artifacts) - from toolStore.builtinSkills
+ * 2. DB skills (user/market) - from the `agentSkillList` replica
+ *
+ * Pinned skills (ids in `pluginIds`) carry their full `content` so the
+ * SkillContextProvider can inject it directly into the system prompt instead of
+ * only listing them under `<available_skills>`. Builtin content is already in
+ * memory; DB content is fetched on demand (store cache first) and only for the
+ * pinned skills, to avoid bulk network calls when auto mode exposes every skill.
+ *
+ * Platform-specific skills (e.g. agent-browser on desktop only) are filtered
+ * by the shared rule, which the desktop client satisfies by being the
+ * execution device itself.
+ */
+export const resolveClientSkills = async (
+  pluginIds?: string[],
+  disabledIds?: string[],
+  skillActivateMode?: 'auto' | 'manual',
+  /** Selectable for this turn even in manual mode, without being pinned. */
+  turnSkillIds?: string[],
+): Promise<OperationSkillSet> => {
+  // The list is only fetched by mounted views (tool popover, side panel), so a
+  // send right after a page load would otherwise see no DB skills. A failed
+  // load must not block the send; fall back to whatever the store holds.
+  try {
+    await getToolStoreState().ensureAgentSkillsLoaded();
+  } catch (error) {
+    log('Failed to load agent skills before building the skill pool: %O', error);
+  }
+
+  const toolState = getToolStoreState();
+  const pinnedIds = new Set(pluginIds ?? []);
+  const disabledIdSet = new Set(disabledIds ?? []);
+
+  // Pinned skills are marked `activated` so SkillContextProvider injects their
+  // content directly; non-pinned ones stay in <available_skills>. Disabled
+  // skills are dropped from the candidate pool entirely — not just left
+  // unpinned — so a disabled skill is neither listed nor resolvable by name via
+  // `activateSkill`.
+  const builtinMetas = (await loadBuiltinSkills())
+    .filter((s) => !disabledIdSet.has(s.identifier))
+    .map((s) => ({
+      activated: pinnedIds.has(s.identifier) && !!s.content,
+      content: s.content,
+      description: s.description,
+      identifier: s.identifier,
+      name: s.name,
+    }));
+
+  const dbMetas = await Promise.all(
+    agentSkillsSelectors
+      .getAgentSkills(toolState)
+      .filter((s) => !disabledIdSet.has(s.identifier))
+      .map(async (s) => {
+        const meta = {
+          description: s.description ?? '',
+          identifier: s.identifier,
+          name: s.name,
+        };
+
+        // Only pinned DB skills need full content for direct injection; the list
+        // query (SkillListItem) does not carry content, so fetch it on demand.
+        if (!pinnedIds.has(s.identifier)) return meta;
+
+        // Skills bundled as a ZIP (scripts/resources) must be activated via the
+        // activateSkill tool so the server mounts their bundle for execScript /
+        // readReference — that runtime mount is keyed off stepContext.activatedSkills,
+        // which operation-level pinning does not populate. Pre-injecting their
+        // content would instruct the model to run scripts from an unmounted bundle,
+        // so leave bundled skills in <available_skills> and let the model activate them.
+        if (s.zipFileHash) return meta;
+
+        try {
+          const detail =
+            agentSkillsSelectors.getAgentSkillDetail(s.id)(toolState) ??
+            (await agentSkillService.getById(s.id));
+          const content = detail && buildDbSkillContent(detail);
+          // Mark activated only when content is available, otherwise the skill would
+          // be excluded from both the activated and the <available_skills> lists.
+          return content ? { ...meta, activated: true, content } : meta;
+        } catch (error) {
+          // A single skill's content fetch must never break the whole request;
+          // degrade gracefully by listing the skill without injected content.
+          log('Failed to load content for pinned skill %s: %O', s.identifier, error);
+          return meta;
+        }
+      }),
+  );
+
+  // Precedence, name dedupe and the device-only builtin gate are the shared
+  // rules; the browser scans no project directory and mounts no
+  // agent-document bundles, so it supplies two of the four sources.
+  return assembleSkillPool(
+    { builtin: builtinMetas, db: dbMetas },
+    {
+      // The desktop app is itself the execution device.
+      canExecuteOnDevice: isDesktop,
+      enabledPluginIds: pluginIds,
+      skillActivateMode,
+      turnSkillIds,
+    },
+  );
+};

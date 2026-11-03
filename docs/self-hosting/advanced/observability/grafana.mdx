@@ -1,0 +1,73 @@
+---
+title: 'Observability with Grafana, Prometheus, and Tempo'
+description: >-
+  Monitor and analyze your LobeHub instance using Grafana dashboards, Prometheus
+  metrics, and Tempo traces. This guide covers setup, configuration for
+  self-hosted deployments.
+tags:
+  - Observability
+  - Grafana
+  - Prometheus
+  - Tempo
+---
+
+# Observability with [Grafana](https://grafana.com/), [Prometheus](https://prometheus.io/), and [Tempo](https://grafana.com/docs/tempo/latest/)
+
+LobeHub supports advanced observability for self-hosted deployments using open-source tools:
+
+- **Grafana** for dashboards and visualization
+- **Prometheus** for metrics collection
+- **Tempo** for distributed tracing
+- **otel-collector** ingesting other OpenTelemetry supported data
+
+We provided Docker Compose (`docker-compose`) file presets to bootstrap the observability stack with advanced self-hosting features.
+This guide will help you set up and use these tools to monitor your LobeHub instance.
+
+## Prerequisites
+
+- `docker` CLI
+- OrbStack (macOS), or Docker Desktop Windows
+- `docker-compose` plugin enabled (check through `docker compose version`)
+
+## 1. Deploy
+
+```bash
+curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/production/grafana/docker-compose.yml
+curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/production/grafana/.env.example
+mv .env.example .env
+```
+
+1. Update the password & secrets in the `.env` file as needed.
+2. Start the stack with the correct profile:
+
+   ```sh
+   docker compose up -d
+   ```
+
+   This will launch Grafana, Prometheus, Tempo, and the otel-collector alongside LobeHub with Casdoor, Minio, and other advanced services.
+
+## 2. Access Grafana Dashboards
+
+- Open Grafana in your browser at [http://localhost:3000](http://localhost:3000) (or your server's IP).
+- Default login (if required):
+  - **Username:** admin
+  - **Password:** (see your environment or Docker Compose file)
+
+## 3. Explore traces & metrics
+
+Click on "Explore" in the left sidebar to access the query editor to run ad-hoc queries against your Prometheus and Tempo data sources.
+
+## 4. Troubleshooting
+
+- Ensure all containers are running: `docker compose ps`
+- Check logs for any service: `docker compose logs <service-name>`
+- Verify Prometheus and Tempo are scraping and receiving data from LobeHub and otel-collector.
+
+## See Also
+
+- [Langfuse Observability](https://lobehub.com/docs/self-hosting/advanced/observability/langfuse)
+- [Self-Hosting Overview](https://lobehub.com/docs/self-hosting/start)
+
+---
+
+For questions or feedback, open an issue on GitHub or join our community discussions.

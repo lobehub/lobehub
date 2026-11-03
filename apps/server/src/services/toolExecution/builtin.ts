@@ -1,0 +1,374 @@
+import { builtinTools } from '@lobechat/builtin-tools';
+import { COMPOSIO_APP_TYPES } from '@lobechat/const';
+import { type LobeChatDatabase } from '@lobechat/database';
+import {
+  type ChatToolPayload,
+  isWorkSkillProvider,
+  type WorkRegistrationIntent,
+} from '@lobechat/types';
+import { detectTruncatedJSON, safeParseJSON } from '@lobechat/utils';
+import debug from 'debug';
+
+import { UserModel } from '@/database/models/user';
+import { isShareBlockedBuiltinDispatch } from '@/server/services/aiAgent/shareGate';
+import { ComposioService } from '@/server/services/composio';
+import { MarketService } from '@/server/services/market';
+
+import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
+import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
+import { resolveBuiltinToolWorkIntent } from './workRegistration';
+
+const log = debug('lobe-server:builtin-tools-executor');
+
+const COMPOSIO_IDENTIFIERS = new Set(COMPOSIO_APP_TYPES.map((type) => type.identifier));
+const isComposioIdentifier = (identifier: string) => COMPOSIO_IDENTIFIERS.has(identifier);
+
+/**
+ * Market rejects a trusted-client token 5 minutes after it was minted, while one
+ * executor can outlive that (the inline step loop keeps it for a whole
+ * `/api/agent/run` invocation). Rebuild the MarketService — and so re-mint the
+ * token — well before the deadline.
+ */
+const MARKET_SERVICE_MAX_AGE_MS = 4 * 60 * 1000;
+
+/** Market's 401 code for a trusted-client token it refuses (expired, skewed, …). */
+const INVALID_TRUST_TOKEN = 'invalid_trust_token';
+
+/**
+ * Declared API names for a builtin tool, read from its manifest — the
+ * authoritative source. Runtime instances declare their APIs as prototype
+ * methods (`async sendMessage() {}`), which `Object.keys` cannot see, so the
+ * manifest, not the instance, is the correct source for a recovery hint.
+ */
+const getManifestApiNames = (identifier: string): string[] =>
+  (builtinTools.find((tool) => tool.identifier === identifier)?.manifest?.api ?? []).map(
+    (api) => api.name,
+  );
+
+/**
+ * Required parameter names declared by a builtin API. Prefers the manifest the
+ * run was assembled with, falling back to the static builtin manifest.
+ */
+const getRequiredParams = (
+  identifier: string,
+  apiName: string,
+  context: ToolExecutionContext,
+): string[] => {
+  const manifest =
+    context.toolManifestMap?.[identifier] ??
+    builtinTools.find((tool) => tool.identifier === identifier)?.manifest;
+  const required = manifest?.api?.find((api) => api.name === apiName)?.parameters?.required;
+  return Array.isArray(required) ? required : [];
+};
+
+/**
+ * Fallback when a manifest isn't available (e.g. a runtime registered without a
+ * matching manifest entry): collect callable names across the whole prototype
+ * chain — both own arrow-field methods and class prototype methods — which
+ * `Object.keys` alone would miss.
+ */
+const collectRuntimeApiNames = (runtime: Record<string, any>): string[] => {
+  const names = new Set<string>();
+  for (
+    let cur: object | null = runtime;
+    cur && cur !== Object.prototype;
+    cur = Object.getPrototypeOf(cur)
+  ) {
+    for (const key of Object.getOwnPropertyNames(cur)) {
+      if (key !== 'constructor' && typeof runtime[key] === 'function') names.add(key);
+    }
+  }
+  return [...names];
+};
+
+export class BuiltinToolsExecutor implements IToolExecutor {
+  private db: LobeChatDatabase;
+  private userId: string;
+  private _marketService?: { createdAt: number; service: MarketService };
+
+  constructor(db: LobeChatDatabase, userId: string) {
+    this.db = db;
+    this.userId = userId;
+  }
+
+  private async getMarketService({ fresh }: { fresh?: boolean } = {}): Promise<MarketService> {
+    if (
+      !fresh &&
+      this._marketService &&
+      Date.now() - this._marketService.createdAt < MARKET_SERVICE_MAX_AGE_MS
+    )
+      return this._marketService.service;
+
+    let accessToken: string | undefined;
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      accessToken = (settings?.market as any)?.accessToken;
+    } catch {
+      // non-fatal — MarketService will fall back to trustedClientToken
+    }
+
+    const service = new MarketService({
+      accessToken,
+      userInfo: { userId: this.userId },
+    });
+    this._marketService = { createdAt: Date.now(), service };
+    return service;
+  }
+
+  async execute(
+    payload: ChatToolPayload,
+    context: ToolExecutionContext,
+  ): Promise<ToolExecutionResult> {
+    const { identifier, apiName, arguments: argsStr, source } = payload;
+
+    // An empty arguments string means the call reached us without any argument
+    // deltas (not generated, or dropped by the provider / an OpenAI-compatible
+    // proxy in transit). Falling back to `{}` for an API with required params
+    // surfaced as a misleading tool error (e.g. "command is required") that the
+    // model blamed on the platform. APIs without required params keep `{}`.
+    if (!argsStr?.trim()) {
+      const required = getRequiredParams(identifier, apiName, context);
+      if (required.length > 0) {
+        const message =
+          `The tool call arrived with an empty arguments string, so the tool was not invoked. ` +
+          `The arguments were either not generated or lost in transit before reaching the tool. ` +
+          `Resend the call with the complete JSON arguments, including the required parameters: ` +
+          `${required.join(', ')}.`;
+        log('Rejected empty arguments for %s:%s', identifier, apiName);
+        return {
+          content: message,
+          error: { code: 'EMPTY_ARGUMENTS', message },
+          success: false,
+        };
+      }
+    }
+
+    const parsed = safeParseJSON(argsStr);
+
+    // When JSON.parse fails, return a dedicated error rather than silently
+    // falling back to `{}`. Passing `{}` to the tool produced generic
+    // "required field missing" errors, which led the model to retry with the
+    // same broken payload. Distinguish a truncated payload from plain
+    // malformed JSON, and echo the raw arguments string so the model can
+    // verify it is exactly what it produced.
+    //
+    // The truncation cause is unknown at this point: an exhausted output
+    // budget and an upstream that closed the stream early look identical.
+    // Naming max_tokens made models tell users the platform caps output and
+    // that they should raise a setting, which was wrong for interrupted streams
+    // so the message lists both causes and asks the model not to
+    // assert either one.
+    if (parsed === undefined && argsStr?.trim()) {
+      const truncationReason = detectTruncatedJSON(argsStr);
+      const explanation = truncationReason
+        ? `The tool call arguments JSON appears to be truncated (${truncationReason}), ` +
+          `so the tool was not invoked. The output was cut off before the call was complete, ` +
+          `either because the output length limit was reached or because the response stream ` +
+          `was interrupted; the cause cannot be determined here, so do not tell the user it ` +
+          `was a specific limit or setting. ` +
+          `If the arguments carry large content, split it into smaller pieces across several calls. ` +
+          `Do not resend the same truncated arguments.`
+        : `The tool call arguments string is not valid JSON and could not be parsed, ` +
+          `so the tool was not invoked. Fix the JSON syntax and try again.`;
+      const content = `${explanation}\n\nThe received arguments string was:\n${argsStr}`;
+      const code = truncationReason ? 'TRUNCATED_ARGUMENTS' : 'INVALID_JSON_ARGUMENTS';
+      log('Rejected invalid arguments for %s:%s (%s): %s', identifier, apiName, code, argsStr);
+      return {
+        content,
+        error: { code, message: explanation },
+        success: false,
+      };
+    }
+
+    const args = parsed || {};
+
+    // Share-visitor gate at the ACTUAL dispatch site. The assembly-time tool-set
+    // trim (`applyShareGateToToolSet`) only shapes what the model is offered —
+    // this executor runs whatever call reaches it, so a resume path, recovery
+    // hint, or future tool-discovery route that bypasses assembly must still
+    // clear the FULL gate here: master default-deny allowlist, the owner's
+    // `toolGrants` picker, and the per-API data-tool rules. `humanIntervention`
+    // is not a block reason: the visitor approves granted tools like any
+    // other run, so the approval itself already happened upstream. Non-builtin
+    // identifiers pass through (governed by the share's `toolGrants` at
+    // assembly). Fail closed: block, never throw open.
+    if (
+      context.agentShareVisitor &&
+      isShareBlockedBuiltinDispatch(context.agentShareVisitor, identifier, apiName, args)
+    ) {
+      log('Share gate blocked builtin dispatch: %s:%s', identifier, apiName);
+      return {
+        content: `The tool API ${identifier}:${apiName} is not available in this shared conversation.`,
+        error: { code: 'SHARE_GATE_BLOCKED', message: 'Tool call blocked by agent share gate' },
+        success: false,
+      };
+    }
+
+    log(
+      'Executing builtin tool: %s:%s (source: %s) with args: %O',
+      identifier,
+      apiName,
+      source,
+      args,
+    );
+
+    // Route LobeHub Skills to MarketService
+    if (source === 'lobehubSkill') {
+      const callSkill = (marketService: MarketService) =>
+        marketService.executeLobehubSkill({
+          args,
+          context: {
+            topicId: context.topicId,
+          },
+          provider: identifier,
+          timeoutMs: context.executionTimeoutMs,
+          toolName: apiName,
+        });
+
+      let result = await callSkill(await this.getMarketService());
+
+      // Market refuses the token at its auth middleware, before the skill runs,
+      // so re-minting and retrying once cannot repeat a side effect.
+      if (result.error?.code === INVALID_TRUST_TOKEN) {
+        log('Trust token rejected for %s:%s, retrying with a fresh token', identifier, apiName);
+        result = await callSkill(await this.getMarketService({ fresh: true }));
+      }
+
+      if (result.success && isWorkSkillProvider(identifier)) {
+        // Defer Work registration to the agent runtime so the version is written
+        // ONCE with its cumulative cost (known only after execution). Carry the
+        // UNTRUNCATED payload here: the runtime only sees the truncated
+        // `content`, but skill identity (issue/PR url, number, …) lives
+        // exclusively in the raw result.
+        return {
+          ...result,
+          workRegistration: {
+            args,
+            data: safeParseJSON(result.content) ?? result.content,
+            provider: identifier,
+            toolName: apiName,
+            type: 'skill',
+          },
+        };
+      }
+
+      return result;
+    }
+
+    // Route Composio tools to ComposioService. Build it request-scoped: agentId
+    // and workspaceId live on the per-call context (not known at construction),
+    // so a workspace run resolves workspace connectors and a
+    // service-account agent runs off its own Composio account
+    // (Agent > Workspace/Personal).
+    if (source === 'composio') {
+      const composioService = new ComposioService({
+        db: this.db,
+        userId: this.userId,
+        workspaceId: context.workspaceId,
+      });
+      return composioService.executeComposioTool({
+        agentId: context.agentId,
+        args,
+        identifier,
+        toolSlug: apiName,
+      });
+    }
+
+    // A Composio app reaching here was not routed as `composio`, which only
+    // happens when its connection is not ACTIVE (e.g. a stale activation or a
+    // resumed run whose toolset predates a status change). Say so instead of
+    // claiming the tool is unimplemented.
+    if (isComposioIdentifier(identifier) && !hasServerRuntime(identifier)) {
+      const appLabel =
+        COMPOSIO_APP_TYPES.find((type) => type.identifier === identifier)?.label ?? identifier;
+      const message =
+        `${appLabel} is not connected (the Composio connection is pending, expired, or was removed), ` +
+        `so "${apiName}" cannot run. Ask the user to reconnect ${appLabel} in Settings → Connectors, ` +
+        `then retry in a new message.`;
+      return {
+        content: message,
+        error: { code: 'COMPOSIO_NOT_CONNECTED', message },
+        success: false,
+      };
+    }
+
+    // Use server runtime registry (handles both pre-instantiated and per-request runtimes)
+    if (!hasServerRuntime(identifier)) {
+      throw new Error(`Builtin tool "${identifier}" is not implemented`);
+    }
+
+    // Await runtime in case factory is async
+    const runtime = await getServerRuntime(identifier, context);
+
+    if (typeof runtime[apiName] !== 'function') {
+      // An unknown apiName is almost always a model hallucination (calling an
+      // API that the tool never declared in its manifest). Return a structured,
+      // recoverable error listing the tool's real APIs instead of throwing a
+      // hard error the model cannot act on. The throw here also sits outside
+      // the try/catch below, so it would otherwise surface as an uncaught
+      // failure rather than a tool result.
+      //
+      // Prefer the manifest's declared API names; most runtimes declare their
+      // APIs as prototype methods that `Object.keys(runtime)` cannot see, which
+      // would collapse the hint to an empty list. Fall back to a prototype-chain
+      // walk only when no manifest is available.
+      const manifestApis = getManifestApiNames(identifier);
+      const availableApis =
+        manifestApis.length > 0 ? manifestApis : collectRuntimeApiNames(runtime);
+      const message =
+        `Builtin tool "${identifier}" has no API named "${apiName}". ` +
+        `Available APIs: ${availableApis.join(', ')}. ` +
+        `Do not call APIs that are not listed above.`;
+      log('Unknown apiName for %s: %s (available: %o)', identifier, apiName, availableApis);
+      return {
+        content: message,
+        error: { code: 'UNKNOWN_API', message },
+        success: false,
+      };
+    }
+
+    try {
+      // Install a sink for runtimes whose Work registration is a side-effect
+      // decoupled from the returned result (the agentDocuments runtime emits its
+      // intent here instead of writing the version directly).
+      let collectedWorkIntent: WorkRegistrationIntent | undefined;
+      context.onWorkRegistration = (intent) => {
+        collectedWorkIntent = intent;
+      };
+
+      const result = await runtime[apiName](args, context);
+
+      // Manifest-driven Work registration: resolve the intent from the API's
+      // declarative `work` config + result/args and hand it to the agent
+      // runtime, which persists the Work version ONCE with its cumulative cost.
+      // Falls back to the intent a runtime emitted via `onWorkRegistration`
+      // (documents). No-op unless the API declares a `work` config or emits one.
+      //
+      // Best-effort: Work-intent resolution is post-hoc bookkeeping over an
+      // already-successful tool call, so a bug in the resolver must not turn a
+      // succeeded mutation into a reported tool failure. Isolate it from the
+      // execution try/catch below and swallow-and-log instead.
+      let workRegistration: WorkRegistrationIntent | undefined;
+      try {
+        workRegistration =
+          resolveBuiltinToolWorkIntent(identifier, apiName, { args, result }) ??
+          collectedWorkIntent;
+      } catch (workError) {
+        log(
+          'Work registration intent resolution failed for %s:%s: %O',
+          identifier,
+          apiName,
+          workError,
+        );
+      }
+
+      return workRegistration ? { ...result, workRegistration } : result;
+    } catch (e) {
+      const error = e as Error;
+      console.error('Error executing builtin tool %s:%s: %O', identifier, apiName, error);
+
+      return { content: error.message, error, success: false };
+    }
+  }
+}

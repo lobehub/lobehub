@@ -1,0 +1,403 @@
+import { describe, expect, it } from 'vitest';
+
+import { DEFAULT_MESSAGE_OPERATION_STATE, DEFAULT_OPERATION_STATE } from '../types/operation';
+import { type State } from './initialState';
+import { conversationSelectors, dataSelectors } from './selectors';
+
+// Helper to create a mock state
+const createMockState = (overrides: Partial<State> = {}): State => ({
+  // Input state
+  chatInputOverlayHeight: 0,
+  editor: null,
+  inputMessage: '',
+
+  // MessageState
+  heteroOverloadRetryAttempts: {},
+  heteroOverloadWaitOpIds: {},
+  messageEditingIds: [],
+  messageLoadingIds: [],
+  pendingArgsUpdates: new Map(),
+  selectedMessageIds: [],
+  selectionMode: false,
+
+  // VirtuaList state
+  activeIndex: null,
+  atBottom: true,
+  isScrolling: false,
+  virtuaScrollMethods: null,
+  visibleItems: new Map(),
+
+  // Core state
+  composerTarget: { contextKey: 'main_session-1_new', writable: true },
+  context: {
+    agentId: 'session-1',
+    topicId: null,
+    threadId: null,
+  },
+  dbMessages: [],
+  displayMessages: [],
+  hooks: {},
+  isLoadingEarlierMessages: false,
+  messageReplica: { entries: {} } as State['messageReplica'],
+  messagesInit: false,
+  operationState: DEFAULT_OPERATION_STATE,
+  skipFetch: false,
+  ...overrides,
+});
+
+describe('conversationSelectors', () => {
+  describe('Context Selectors', () => {
+    describe('context', () => {
+      it('should return the full context', () => {
+        const store = createMockState({
+          context: {
+            agentId: 'session-1',
+            topicId: 'topic-1',
+            threadId: 'thread-1',
+          },
+        });
+
+        const result = conversationSelectors.context(store);
+
+        expect(result).toEqual({
+          agentId: 'session-1',
+          topicId: 'topic-1',
+          threadId: 'thread-1',
+        });
+      });
+    });
+
+    describe('sessionId', () => {
+      it('should return sessionId from context', () => {
+        const store = createMockState({
+          context: { agentId: 'my-session', topicId: null, threadId: null },
+        });
+
+        expect(conversationSelectors.agentId(store)).toBe('my-session');
+      });
+    });
+
+    describe('topicId', () => {
+      it('should return topicId when set', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-123', threadId: null },
+        });
+
+        expect(conversationSelectors.topicId(store)).toBe('topic-123');
+      });
+
+      it('should return null when topicId is not set', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: null, threadId: null },
+        });
+
+        expect(conversationSelectors.topicId(store)).toBeNull();
+      });
+    });
+
+    describe('threadId', () => {
+      it('should return threadId when set', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', threadId: 'thread-456' },
+        });
+
+        expect(conversationSelectors.threadId(store)).toBe('thread-456');
+      });
+
+      it('should return null when threadId is not set', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: null, threadId: null },
+        });
+
+        expect(conversationSelectors.threadId(store)).toBeNull();
+      });
+    });
+
+    describe('isThread', () => {
+      it('should return true when threadId is set', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', threadId: 'thread-1' },
+        });
+
+        expect(conversationSelectors.isThread(store)).toBe(true);
+      });
+
+      it('should return false when threadId is null', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', threadId: null },
+        });
+
+        expect(conversationSelectors.isThread(store)).toBe(false);
+      });
+    });
+
+    describe('isTopic', () => {
+      it('should return true when topicId is set', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', threadId: null },
+        });
+
+        expect(conversationSelectors.isTopic(store)).toBe(true);
+      });
+
+      it('should return false when topicId is null', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: null, threadId: null },
+        });
+
+        expect(conversationSelectors.isTopic(store)).toBe(false);
+      });
+    });
+
+    describe('isSharePage', () => {
+      it('should return true on a topic share link', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', topicShareId: 'share-1' },
+        });
+
+        expect(conversationSelectors.isSharePage(store)).toBe(true);
+      });
+
+      it('should return true for a shared-agent visitor', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', agentShareId: 'agent-share-1', topicId: 'topic-1' },
+        });
+
+        expect(conversationSelectors.isSharePage(store)).toBe(true);
+      });
+
+      it('should return false in the owner conversation', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', threadId: null },
+        });
+
+        expect(conversationSelectors.isSharePage(store)).toBe(false);
+      });
+    });
+  });
+
+  describe('UI State Selectors', () => {
+    describe('editor', () => {
+      it('should return editor instance when set', () => {
+        const mockEditor = { getJSONState: () => ({}) };
+        const store = createMockState({ editor: mockEditor });
+
+        expect(conversationSelectors.editor(store)).toBe(mockEditor);
+      });
+
+      it('should return null when editor is not set', () => {
+        const store = createMockState({ editor: null });
+
+        expect(conversationSelectors.editor(store)).toBeNull();
+      });
+    });
+
+    describe('inputMessage', () => {
+      it('should return input message', () => {
+        const store = createMockState({ inputMessage: 'Hello, world!' });
+
+        expect(conversationSelectors.inputMessage(store)).toBe('Hello, world!');
+      });
+
+      it('should return empty string when no input', () => {
+        const store = createMockState({ inputMessage: '' });
+
+        expect(conversationSelectors.inputMessage(store)).toBe('');
+      });
+    });
+
+    describe('hasInput', () => {
+      it('should return true when input has content', () => {
+        const store = createMockState({ inputMessage: 'Hello' });
+
+        expect(conversationSelectors.hasInput(store)).toBe(true);
+      });
+
+      it('should return false when input is empty', () => {
+        const store = createMockState({ inputMessage: '' });
+
+        expect(conversationSelectors.hasInput(store)).toBe(false);
+      });
+
+      it('should return false when input has only whitespace', () => {
+        const store = createMockState({ inputMessage: '   ' });
+
+        expect(conversationSelectors.hasInput(store)).toBe(false);
+      });
+    });
+  });
+
+  describe('Hook Selectors', () => {
+    describe('hooks', () => {
+      it('should return hooks object', () => {
+        const mockHooks = {
+          onBeforeSendMessage: async () => true,
+          onAfterSendMessage: async () => {},
+        };
+        const store = createMockState({ hooks: mockHooks });
+
+        expect(conversationSelectors.hooks(store)).toBe(mockHooks);
+      });
+
+      it('should return empty object when no hooks', () => {
+        const store = createMockState({ hooks: {} });
+
+        expect(conversationSelectors.hooks(store)).toEqual({});
+      });
+    });
+
+    describe('hook', () => {
+      it('should return specific hook when exists', () => {
+        const onBeforeSendMessage = async () => true;
+        const store = createMockState({
+          hooks: { onBeforeSendMessage },
+        });
+
+        const hookSelector = conversationSelectors.hook('onBeforeSendMessage');
+        expect(hookSelector(store)).toBe(onBeforeSendMessage);
+      });
+
+      it('should return undefined when hook does not exist', () => {
+        const store = createMockState({ hooks: {} });
+
+        const hookSelector = conversationSelectors.hook('onBeforeSendMessage');
+        expect(hookSelector(store)).toBeUndefined();
+      });
+    });
+  });
+
+  describe('Message State Selectors', () => {
+    describe('isMessageGenerating', () => {
+      it('only checks the requested message id', () => {
+        const store = createMockState({
+          displayMessages: [
+            {
+              children: [
+                { content: 'first', id: 'block-1' },
+                { content: 'second', id: 'block-2' },
+              ],
+              content: '',
+              id: 'group-1',
+              role: 'assistantGroup',
+            } as any,
+          ],
+          operationState: {
+            ...DEFAULT_OPERATION_STATE,
+            getMessageOperationState: (messageId) => ({
+              ...DEFAULT_MESSAGE_OPERATION_STATE,
+              isGenerating: messageId === 'block-2',
+            }),
+          },
+        });
+
+        expect(conversationSelectors.isMessageGenerating('group-1')(store)).toBe(false);
+      });
+    });
+
+    describe('isAssistantGroupItemGenerating', () => {
+      it('returns true for an assistantGroup when any child block is generating', () => {
+        const store = createMockState({
+          displayMessages: [
+            {
+              children: [
+                { content: 'first', id: 'block-1' },
+                { content: 'second', id: 'block-2' },
+              ],
+              content: '',
+              id: 'group-1',
+              role: 'assistantGroup',
+            } as any,
+          ],
+          operationState: {
+            ...DEFAULT_OPERATION_STATE,
+            getMessageOperationState: (messageId) => ({
+              ...DEFAULT_MESSAGE_OPERATION_STATE,
+              isGenerating: messageId === 'block-2',
+            }),
+          },
+        });
+
+        expect(conversationSelectors.isAssistantGroupItemGenerating('group-1')(store)).toBe(true);
+      });
+
+      it('returns true for a child block when its assistantGroup is generating', () => {
+        const store = createMockState({
+          displayMessages: [
+            {
+              children: [
+                { content: 'first', id: 'block-1' },
+                { content: 'second', id: 'block-2' },
+              ],
+              content: '',
+              id: 'group-1',
+              role: 'assistantGroup',
+            } as any,
+          ],
+          operationState: {
+            ...DEFAULT_OPERATION_STATE,
+            getMessageOperationState: (messageId) => ({
+              ...DEFAULT_MESSAGE_OPERATION_STATE,
+              isGenerating: messageId === 'group-1',
+            }),
+          },
+        });
+
+        expect(conversationSelectors.isAssistantGroupItemGenerating('block-2')(store)).toBe(true);
+      });
+    });
+  });
+});
+
+describe('dataSelectors', () => {
+  describe('getToolMessageCreatedAt', () => {
+    const createToolMessage = (
+      createdAt: Date | number | string,
+      id = 'tool-message-1',
+      toolCallId = 'tool-call-1',
+    ) =>
+      ({
+        createdAt,
+        id,
+        role: 'tool',
+        tool_call_id: toolCallId,
+      }) as unknown as State['dbMessages'][number];
+
+    it.each([
+      ['number', 2000, 2000],
+      ['Date', new Date(2000), 2000],
+    ])('normalizes a %s createdAt to epoch milliseconds', (_, createdAt, expected) => {
+      const store = createMockState({ dbMessages: [createToolMessage(createdAt)] });
+
+      expect(dataSelectors.getToolMessageCreatedAt('tool-message-1')(store)).toBe(expected);
+    });
+
+    it('resolves the current result row when Codex reuses a tool call id', () => {
+      const store = createMockState({
+        dbMessages: [
+          createToolMessage(1000, 'old-result', 'item_1'),
+          createToolMessage(5000, 'current-result', 'item_1'),
+        ],
+      });
+
+      expect(dataSelectors.getToolMessageCreatedAt('current-result')(store)).toBe(5000);
+    });
+
+    it('returns undefined when the tool message is absent', () => {
+      expect(
+        dataSelectors.getToolMessageCreatedAt('tool-message-1')(createMockState()),
+      ).toBeUndefined();
+    });
+
+    it('returns undefined while the result message id is unavailable', () => {
+      const store = createMockState({ dbMessages: [createToolMessage(2000)] });
+
+      expect(dataSelectors.getToolMessageCreatedAt(undefined)(store)).toBeUndefined();
+    });
+
+    it('returns undefined for an invalid createdAt', () => {
+      const store = createMockState({ dbMessages: [createToolMessage('not-a-date')] });
+
+      expect(dataSelectors.getToolMessageCreatedAt('tool-message-1')(store)).toBeUndefined();
+    });
+  });
+});

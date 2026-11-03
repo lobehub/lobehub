@@ -1,0 +1,72 @@
+---
+title: 在 LobeHub 中配置微信身份验证
+description: 学习如何在 LobeHub 中配置微信 SSO，包括在微信开放平台创建应用。
+tags:
+  - 微信
+  - 身份验证
+  - LobeHub
+  - 单点登录
+---
+
+# 配置微信身份验证
+
+[微信开放平台](https://open.weixin.qq.com/) 支持第三方应用接入微信登录功能。
+
+<Callout type={'warning'}>
+  微信网页登录需要经过认证的微信开放平台账号，以及通过微信审核的网站应用。此流程需要在中国进行企业认证。
+</Callout>
+
+<Steps>
+  ### 在微信开放平台创建网站应用
+
+  1. 前往 [微信开放平台](https://open.weixin.qq.com/)
+  2. 注册并验证开发者账号
+  3. 前往 **管理中心** > **网站应用**
+  4. 点击 **创建网站应用**
+  5. 填写应用信息并提交审核
+
+  ### 配置 OAuth 设置
+
+  应用审核通过后：
+
+  1. 进入应用设置
+  2. 在 **网站信息** 中配置回调域名
+
+  <Callout type={'info'}>
+    回调域名格式：
+
+    - **回调域名**: `your-domain.com`（不含协议和路径）
+    - **完整回调 URL**: `https://your-domain.com/api/auth/callback/wechat`
+  </Callout>
+
+  3. 记下 **AppID** 和 **AppSecret**
+
+  ### 配置环境变量
+
+  | 环境变量                 | 类型 | 描述                                     |
+  | -------------------- | -- | -------------------------------------- |
+  | `AUTH_SECRET`        | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS` | 必选 | 填写 `wechat`                            |
+  | `AUTH_WECHAT_ID`     | 必选 | 微信开放平台的 AppID                          |
+  | `AUTH_WECHAT_SECRET` | 必选 | 微信开放平台的 AppSecret                      |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#wechat)
+    可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功后，用户将可以通过微信身份认证并使用 LobeHub。
+</Callout>
+
+## 注意事项
+
+- 微信登录使用扫码方式，用户需要使用微信手机端扫码
+- 需要经过认证的微信开放平台账号
+- 回调域名需要在中国进行 ICP 备案
+
+## 相关资源
+
+- [微信开放平台](https://open.weixin.qq.com/)
+- [微信登录文档](https://developers.weixin.qq.com/doc/oplatform/Website_App/WeChat_Login/Wechat_Login.html)

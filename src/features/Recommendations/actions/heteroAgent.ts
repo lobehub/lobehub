@@ -1,0 +1,70 @@
+import {
+  DroidIcon,
+  type HeterogeneousAgentClientConfig,
+} from '@lobechat/heterogeneous-agents/client';
+import {
+  Amp,
+  ClaudeCode,
+  CodeBuddy,
+  Codex,
+  Cursor,
+  Devin,
+  Grok,
+  Kimi,
+  OpenCode,
+  Pi,
+  Qoder,
+  Trae,
+} from '@lobehub/icons';
+import { createElement } from 'react';
+
+import type { RecommendedAction } from './types';
+
+const avatarIcons = {
+  'amp': Amp.Avatar,
+  'claude-code': ClaudeCode.Avatar,
+  'codebuddy': CodeBuddy.Avatar,
+  'codex': Codex.Avatar,
+  'cursor': Cursor.Avatar,
+  'droid': DroidIcon.Avatar,
+  'devin': Devin.Avatar,
+  'grok-build': Grok.Avatar,
+  'kimi-code': Kimi.Avatar,
+  'opencode': OpenCode.Avatar,
+  'pi': Pi.Avatar,
+  'qoder': Qoder.Avatar,
+  'trae': Trae.Avatar,
+} as const satisfies Record<HeterogeneousAgentClientConfig['type'], unknown>;
+
+/**
+ * Build a "Add <Brand> agent" recommendation card for a heterogeneous CLI agent
+ * (Claude Code, Codex, …). Eligible only on desktop, when the local CLI is
+ * detected, and when the user hasn't already added an agent of that type.
+ */
+export const buildHeteroAgentAction = (
+  config: HeterogeneousAgentClientConfig,
+): RecommendedAction => {
+  const Avatar = avatarIcons[config.type];
+
+  return {
+    ctaKey: 'recommendations.heteroAgent.cta',
+    descriptionKey: 'recommendations.heteroAgent.description',
+    execute: (ctx) => ctx.createHeteroAgent(config),
+    i18nValues: { name: config.title },
+    id: `hetero-agent:${config.type}`,
+    isEligible: (ctx) => {
+      if (!ctx.isDesktop) return false;
+      if (!ctx.heteroDetections[config.type]?.available) return false;
+      return !ctx.agents.some((a) => a.heterogeneousType === config.type);
+    },
+    priority: 10,
+    renderIcon: (size) =>
+      createElement(Avatar, {
+        shape: 'square',
+        size,
+        style: { borderRadius: 8 },
+      }),
+    tagKey: 'recommendations.heteroAgent.tag',
+    titleKey: 'recommendations.heteroAgent.title',
+  };
+};

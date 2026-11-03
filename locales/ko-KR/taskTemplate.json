@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "{{provider}} 연결",
+  "action.connect.error": "연결에 실패했습니다. 다시 시도해 주세요.",
+  "action.connect.popupBlocked": "연결 팝업이 차단되었습니다. 계속하려면 브라우저에서 팝업을 허용하세요.",
+  "action.connect.short": "연결",
+  "action.connecting": "승인을 기다리는 중…",
+  "action.create.error": "작업 생성에 실패했습니다. 다시 시도해 주세요.",
+  "action.create.success": "예약된 작업이 추가되었습니다. Lobe AI에서 확인하세요.",
+  "action.createButton": "작업 추가",
+  "action.creating": "생성 중...",
+  "action.dismiss.error": "해제에 실패했습니다. 다시 시도해 주세요.",
+  "action.dismiss.tooltip": "관심 없음",
+  "action.refresh.button": "새로고침",
+  "card.templateTag": "템플릿",
+  "schedule.daily": "매일 {{time}}",
+  "schedule.editableAfterCreateTooltip": "작업을 생성한 후 일정 조정이 가능합니다.",
+  "schedule.weekly": "매주 {{weekday}} {{time}}",
+  "section.title": "이 예약된 작업을 시도해 보세요"
+}

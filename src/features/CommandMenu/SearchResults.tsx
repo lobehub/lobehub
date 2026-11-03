@@ -1,0 +1,735 @@
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
+import { Command } from 'cmdk';
+import dayjs from 'dayjs';
+import {
+  Bot,
+  Brain,
+  ChevronRight,
+  FileText,
+  Folder,
+  Library,
+  ListTodo,
+  MessageCircle,
+  MessageSquare,
+  Plug,
+  Puzzle,
+  Sparkles,
+  Users,
+} from 'lucide-react';
+import { memo, type ReactNode, useLayoutEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
+import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
+import { docsFilePath, docsPagePath } from '@/features/ResourceHome/paths';
+import { libraryFolderPath, libraryItemPath } from '@/features/ResourceManager/utils/resourcePath';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useImageStore } from '@/store/image';
+import { generationTopicSelectors as imageGenerationTopicSelectors } from '@/store/image/slices/generationTopic/selectors';
+import { useVideoStore } from '@/store/video';
+import { generationTopicSelectors as videoGenerationTopicSelectors } from '@/store/video/slices/generationTopic/selectors';
+import { markdownToTxt } from '@/utils/markdownToTxt';
+
+import type { CommandMenuResultClick } from './analytics';
+import { CommandItem } from './components';
+import { styles } from './styles';
+import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
+import { type ValidSearchType } from './utils/queryParser';
+import { createVisibleResultPositionMap } from './utils/visibleResultPosition';
+
+interface SearchResultsProps {
+  isLoading: boolean;
+  onClose: () => void;
+  onResultClick: (input: CommandMenuResultClick) => void;
+  onSetTypeFilter: (typeFilter: ValidSearchType | undefined) => void;
+  onTypeFilterChange: () => void;
+  onVisibleResultCountChange: (count: number) => void;
+  results: FtsSearchResult[];
+  searchQuery: string;
+  typeFilter: ValidSearchType | undefined;
+}
+
+interface LocalGenerationTopicResult {
+  createdAt: Date;
+  id: string;
+  title: string;
+  updatedAt: Date;
+}
+
+/**
+ * Search results from unified search index.
+ */
+const SearchResults = memo<SearchResultsProps>(
+  ({
+    isLoading,
+    onClose,
+    onResultClick,
+    onSetTypeFilter,
+    onTypeFilterChange,
+    onVisibleResultCountChange,
+    results,
+    searchQuery,
+    typeFilter,
+  }) => {
+    const { t } = useTranslation('common');
+    const { t: tChat } = useTranslation('chat');
+    const { t: tImage } = useTranslation('image');
+    const { t: tVideo } = useTranslation('video');
+    const navigate = useWorkspaceAwareNavigate();
+    const { menuContext } = useCommandMenuContext();
+    const imageTopics = useImageStore(imageGenerationTopicSelectors.generationTopics);
+    const activeImageTopicId = useImageStore((s) => s.activeGenerationTopicId);
+    const videoTopics = useVideoStore(videoGenerationTopicSelectors.generationTopics);
+    const activeVideoTopicId = useVideoStore((s) => s.activeGenerationTopicId);
+
+    const handleNavigate = (result: FtsSearchResult, position: number) => {
+      onResultClick({ position, resultType: result.type });
+      switch (result.type) {
+        case 'agent': {
+          navigate(`/agent/${result.id}?agent=${result.id}`);
+          break;
+        }
+        case 'chatGroup': {
+          navigate(`/group/${result.id}`);
+          break;
+        }
+        case 'topic': {
+          if (result.agentId) {
+            navigate(AGENT_CHAT_TOPIC_URL(result.agentId, result.id));
+          } else if (result.groupId) {
+            navigate(GROUP_CHAT_TOPIC_URL(result.groupId, result.id));
+          } else {
+            navigate('/');
+          }
+          break;
+        }
+        case 'message': {
+          // Navigate to the topic/agent (or group) where the message lives
+          if (result.topicId && result.agentId) {
+            navigate(`${AGENT_CHAT_TOPIC_URL(result.agentId, result.topicId)}#${result.id}`);
+          } else if (result.topicId && result.groupId) {
+            navigate(`${GROUP_CHAT_TOPIC_URL(result.groupId, result.topicId)}#${result.id}`);
+          } else if (result.agentId) {
+            navigate(`/agent/${result.agentId}#${result.id}`);
+          } else if (result.groupId) {
+            navigate(`${GROUP_CHAT_URL(result.groupId)}#${result.id}`);
+          } else {
+            navigate('/');
+          }
+          break;
+        }
+        case 'file': {
+          // Open the file inside its library, or over the Docs home
+          const fileUrl = result.knowledgeBaseId
+            ? libraryItemPath(result.knowledgeBaseId, result.id)
+            : docsFilePath(result.id);
+          console.info('[SearchResults] File navigation:', {
+            fileDetails: result,
+            url: fileUrl,
+          });
+          navigate(fileUrl);
+          break;
+        }
+        case 'folder': {
+          // Open the folder inside its library, or the library gallery without one
+          navigate(
+            result.knowledgeBaseId
+              ? libraryFolderPath(result.knowledgeBaseId, result.id)
+              : '/resource/library',
+          );
+          break;
+        }
+        case 'page': {
+          navigate(docsPagePath(result.id));
+          break;
+        }
+        case 'mcp': {
+          navigate(`/community/mcp/${result.identifier}`);
+          break;
+        }
+        case 'plugin': {
+          navigate(`/community/mcp/${result.identifier}`);
+          break;
+        }
+        case 'communityAgent': {
+          navigate(`/community/agent/${result.identifier}`);
+          break;
+        }
+        case 'memory': {
+          navigate(`/memory/preferences?preferenceId=${result.id}`);
+          break;
+        }
+        case 'knowledgeBase': {
+          navigate(`/resource/library/${result.id}`);
+          break;
+        }
+        case 'task': {
+          navigate(taskDetailPath(result.identifier ?? result.id, undefined, result.title));
+          break;
+        }
+      }
+      onClose();
+    };
+
+    const getIcon = (type: FtsSearchResult['type']) => {
+      switch (type) {
+        case 'agent': {
+          return <Sparkles size={16} />;
+        }
+        case 'chatGroup': {
+          return <Users size={16} />;
+        }
+        case 'topic': {
+          return <MessageSquare size={16} />;
+        }
+        case 'message': {
+          return <MessageCircle size={16} />;
+        }
+        case 'file': {
+          return <FileText size={16} />;
+        }
+        case 'folder': {
+          return <Folder size={16} />;
+        }
+        case 'page': {
+          return <FileText size={16} />;
+        }
+        case 'mcp': {
+          return <Puzzle size={16} />;
+        }
+        case 'plugin': {
+          return <Plug size={16} />;
+        }
+        case 'communityAgent': {
+          return <Bot size={16} />;
+        }
+        case 'memory': {
+          return <Brain size={16} />;
+        }
+        case 'knowledgeBase': {
+          return <Library size={16} />;
+        }
+        case 'task': {
+          return <ListTodo size={16} />;
+        }
+      }
+    };
+
+    const getTypeLabel = (type: FtsSearchResult['type']) => {
+      switch (type) {
+        case 'agent': {
+          return t('cmdk.search.agent');
+        }
+        case 'chatGroup': {
+          return t('cmdk.search.chatGroup');
+        }
+        case 'topic': {
+          return t('cmdk.search.topic');
+        }
+        case 'message': {
+          return t('cmdk.search.message');
+        }
+        case 'file': {
+          return t('cmdk.search.file');
+        }
+        case 'folder': {
+          return t('cmdk.search.folder');
+        }
+        case 'page': {
+          return t('cmdk.search.page');
+        }
+        case 'mcp': {
+          return t('cmdk.search.mcp');
+        }
+        case 'plugin': {
+          return t('cmdk.search.plugin');
+        }
+        case 'communityAgent': {
+          return t('cmdk.search.assistant');
+        }
+        case 'memory': {
+          return t('cmdk.search.memory');
+        }
+        case 'knowledgeBase': {
+          return t('cmdk.search.knowledgeBase');
+        }
+        case 'task': {
+          return t('cmdk.search.task');
+        }
+      }
+    };
+
+    const getItemValue = (result: FtsSearchResult) => {
+      const meta = [
+        result.type === 'task' ? result.identifier : undefined,
+        result.title,
+        result.description,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      // Prefix with "search-result" to ensure these items rank after built-in commands
+      // Include ID to ensure uniqueness when multiple items have the same title
+      return `search-result ${result.type} ${result.id} ${meta}`.trim();
+    };
+
+    const getDescription = (result: FtsSearchResult) => {
+      if (!result.description) return null;
+      // Sanitize markdown content for message search results
+      if (result.type === 'message') {
+        return markdownToTxt(result.description);
+      }
+      return result.description;
+    };
+
+    const getSubtitle = (result: FtsSearchResult): ReactNode => {
+      const description = getDescription(result);
+
+      // Topic results: prefix with agent identity (avatar + title) so users can
+      // distinguish topics with the same name (e.g. customer email) across agents.
+      if (result.type === 'topic') {
+        const formattedDate = dayjs(result.createdAt).format('MMM D, YYYY');
+        if (!result.agent) {
+          return description ? `${description} · ${formattedDate}` : formattedDate;
+        }
+        return (
+          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
+            <AgentAvatar
+              agentId={result.agentId}
+              avatar={result.agent.avatar}
+              background={result.agent.backgroundColor || undefined}
+              name={agentDisplayName(result.agent, t('defaultAgent'))}
+              shape={'circle'}
+              size={14}
+            />
+            <span style={{ flex: 'none' }}>
+              {agentDisplayName(result.agent, t('defaultAgent'))}
+            </span>
+            <span style={{ flex: 'none' }}>·</span>
+            <span style={{ flex: 'none' }}>{formattedDate}</span>
+            {description && (
+              <>
+                <span style={{ flex: 'none' }}>·</span>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {description}
+                </span>
+              </>
+            )}
+          </Flexbox>
+        );
+      }
+
+      // Task results: identifier first so the ID the user typed stays visible.
+      if (result.type === 'task') {
+        const status = tChat(`taskDetail.status.${result.status}` as any, {
+          defaultValue: result.status,
+        });
+        return [result.identifier, status, description].filter(Boolean).join(' · ');
+      }
+
+      // For message results, append creation date
+      if (result.type === 'message') {
+        const formattedDate = dayjs(result.createdAt).format('MMM D, YYYY');
+        if (description) {
+          return `${description} · ${formattedDate}`;
+        }
+        return formattedDate;
+      }
+
+      return description;
+    };
+
+    const handleSearchMore = (type: ValidSearchType) => {
+      onTypeFilterChange();
+      onSetTypeFilter(type);
+    };
+
+    const localImageTopicResults: LocalGenerationTopicResult[] =
+      menuContext === 'painting'
+        ? (imageTopics || [])
+            .filter((topic) => {
+              const title = topic.title || tImage('topic.untitled');
+              return title.toLowerCase().includes(searchQuery.toLowerCase());
+            })
+            .sort((a, b) => {
+              if (a.id === activeImageTopicId) return -1;
+              if (b.id === activeImageTopicId) return 1;
+              return b.updatedAt.getTime() - a.updatedAt.getTime();
+            })
+            .slice(0, 8)
+            .map((topic) => ({
+              createdAt: topic.createdAt,
+              id: topic.id,
+              title: topic.title || tImage('topic.untitled'),
+              updatedAt: topic.updatedAt,
+            }))
+        : [];
+
+    const localVideoTopicResults: LocalGenerationTopicResult[] =
+      menuContext === 'video'
+        ? (videoTopics || [])
+            .filter((topic) => {
+              const title = topic.title || tVideo('topic.untitled');
+              return title.toLowerCase().includes(searchQuery.toLowerCase());
+            })
+            .sort((a, b) => {
+              if (a.id === activeVideoTopicId) return -1;
+              if (b.id === activeVideoTopicId) return 1;
+              return b.updatedAt.getTime() - a.updatedAt.getTime();
+            })
+            .slice(0, 8)
+            .map((topic) => ({
+              createdAt: topic.createdAt,
+              id: topic.id,
+              title: topic.title || tVideo('topic.untitled'),
+              updatedAt: topic.updatedAt,
+            }))
+        : [];
+
+    const hasResults = results.length > 0;
+    const hasLocalTopicResults =
+      localImageTopicResults.length > 0 || localVideoTopicResults.length > 0;
+
+    // Group results by type
+    const messageResults = results.filter((r) => r.type === 'message');
+    const chatGroupResults = results.filter((r) => r.type === 'chatGroup');
+    const agentResults = results.filter((r) => r.type === 'agent');
+    const topicResults = results.filter((r) => r.type === 'topic');
+    const fileResults = results.filter((r) => r.type === 'file');
+    const folderResults = results.filter((r) => r.type === 'folder');
+    const pageResults = results.filter((r) => r.type === 'page');
+    const memoryResults = results.filter((r) => r.type === 'memory');
+    const mcpResults = results.filter((r) => r.type === 'mcp');
+    const pluginResults = results.filter((r) => r.type === 'plugin');
+    const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
+    const taskResults = results.filter((r) => r.type === 'task');
+    const assistantResults = results.filter((r) => r.type === 'communityAgent');
+    const localResultCount = localImageTopicResults.length + localVideoTopicResults.length;
+    const visibleResultPositions = createVisibleResultPositionMap<FtsSearchResult>(
+      [
+        taskResults,
+        messageResults,
+        agentResults,
+        chatGroupResults,
+        topicResults,
+        pageResults,
+        memoryResults,
+        fileResults,
+        folderResults,
+        knowledgeBaseResults,
+        mcpResults,
+        pluginResults,
+        assistantResults,
+      ],
+      localResultCount,
+    );
+    const visibleResultCount = localResultCount + visibleResultPositions.size;
+
+    useLayoutEffect(() => {
+      onVisibleResultCountChange(visibleResultCount);
+    }, [onVisibleResultCountChange, visibleResultCount]);
+
+    // Don't render anything if no results and not loading — except in the
+    // unfiltered view, which always carries the permanent marketplace entries
+    // below (the aggregate response is DB-only, so a query whose matches live
+    // only in the marketplace would otherwise dead-end with no visible route).
+    if (!hasResults && !hasLocalTopicResults && !isLoading && typeFilter) {
+      return null;
+    }
+
+    // Render a single result item with type prefix (like "Message > content")
+    const renderResultItem = (result: FtsSearchResult) => {
+      const typeLabel = getTypeLabel(result.type);
+      const subtitle = getSubtitle(result);
+
+      // Hide type prefix when filtering by specific type
+      const showTypePrefix = !typeFilter;
+
+      // Create title with or without type prefix
+      const titleWithPrefix = showTypePrefix ? (
+        <>
+          <span style={{ opacity: 0.5 }}>{typeLabel}</span>
+          <ChevronRight
+            size={14}
+            style={{
+              display: 'inline',
+              marginInline: '6px',
+              opacity: 0.5,
+              verticalAlign: 'middle',
+            }}
+          />
+          {result.title}
+        </>
+      ) : (
+        result.title
+      );
+
+      return (
+        <CommandItem
+          forceMount
+          description={subtitle}
+          icon={getIcon(result.type)}
+          key={result.id}
+          title={titleWithPrefix}
+          value={getItemValue(result)}
+          variant="detailed"
+          onSelect={() => handleNavigate(result, visibleResultPositions.get(result) ?? 1)}
+        />
+      );
+    };
+
+    // Marketplace types are absent from the aggregate response (it is DB-only),
+    // so their "Search More" entries must not depend on a non-zero result count.
+    const MARKETPLACE_TYPES: ValidSearchType[] = ['mcp', 'plugin', 'communityAgent'];
+
+    // Helper to render "Search More" button
+    const renderSearchMore = (type: ValidSearchType, count: number) => {
+      // Don't show if already filtering by this type
+      if (typeFilter) return null;
+
+      // Show if there are results (might have more); marketplace entries always
+      // show — they are the only visible route into the explicit marketplace search
+      if (count === 0 && !MARKETPLACE_TYPES.includes(type)) return null;
+
+      const typeLabel = getTypeLabel(type);
+      const titleText = `${t('cmdk.search.searchMore', { type: typeLabel })} with "${searchQuery}"`;
+
+      return (
+        <Command.Item
+          forceMount
+          key={`search-more-${type}`}
+          keywords={[`zzz-action-${type}`]}
+          value={`zzz-action-${type}-search-more`}
+          onSelect={() => handleSearchMore(type)}
+        >
+          <div className={styles.itemContent}>
+            <div className={styles.itemIcon}>{getIcon(type)}</div>
+            <div className={styles.itemDetails}>
+              <div className={styles.itemTitle}>{titleText}</div>
+            </div>
+          </div>
+        </Command.Item>
+      );
+    };
+
+    return (
+      <>
+        {localImageTopicResults.length > 0 && (
+          <Command.Group forceMount>
+            {localImageTopicResults.map((result, index) => {
+              const formattedDate = dayjs(result.updatedAt).format('MMM D, YYYY');
+              return (
+                <CommandItem
+                  forceMount
+                  description={formattedDate}
+                  icon={<MessageSquare size={16} />}
+                  key={`image-topic-${result.id}`}
+                  value={`local-image-topic ${result.id} ${result.title}`}
+                  variant="detailed"
+                  title={
+                    <>
+                      <span style={{ opacity: 0.5 }}>{t('tab.image')}</span>
+                      <ChevronRight
+                        size={14}
+                        style={{
+                          display: 'inline',
+                          marginInline: '6px',
+                          opacity: 0.5,
+                          verticalAlign: 'middle',
+                        }}
+                      />
+                      {result.title}
+                    </>
+                  }
+                  onSelect={() => {
+                    onResultClick({ position: index + 1, resultType: 'imageTopic' });
+                    navigate(`/image?topic=${result.id}`);
+                    onClose();
+                  }}
+                />
+              );
+            })}
+          </Command.Group>
+        )}
+
+        {localVideoTopicResults.length > 0 && (
+          <Command.Group forceMount>
+            {localVideoTopicResults.map((result, index) => {
+              const formattedDate = dayjs(result.updatedAt).format('MMM D, YYYY');
+              return (
+                <CommandItem
+                  forceMount
+                  description={formattedDate}
+                  icon={<MessageSquare size={16} />}
+                  key={`video-topic-${result.id}`}
+                  value={`local-video-topic ${result.id} ${result.title}`}
+                  variant="detailed"
+                  title={
+                    <>
+                      <span style={{ opacity: 0.5 }}>{t('tab.video')}</span>
+                      <ChevronRight
+                        size={14}
+                        style={{
+                          display: 'inline',
+                          marginInline: '6px',
+                          opacity: 0.5,
+                          verticalAlign: 'middle',
+                        }}
+                      />
+                      {result.title}
+                    </>
+                  }
+                  onSelect={() => {
+                    onResultClick({
+                      position: localImageTopicResults.length + index + 1,
+                      resultType: 'videoTopic',
+                    });
+                    navigate(`/video?topic=${result.id}`);
+                    onClose();
+                  }}
+                />
+              );
+            })}
+          </Command.Group>
+        )}
+
+        {/* Render search results grouped by type without headers */}
+        {taskResults.length > 0 && (
+          <Command.Group forceMount>
+            {taskResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('task', taskResults.length)}
+          </Command.Group>
+        )}
+
+        {messageResults.length > 0 && (
+          <Command.Group forceMount>
+            {messageResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('message', messageResults.length)}
+          </Command.Group>
+        )}
+
+        {agentResults.length > 0 && (
+          <Command.Group forceMount>
+            {agentResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('agent', agentResults.length)}
+          </Command.Group>
+        )}
+
+        {chatGroupResults.length > 0 && (
+          <Command.Group forceMount>
+            {chatGroupResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('chatGroup', chatGroupResults.length)}
+          </Command.Group>
+        )}
+
+        {topicResults.length > 0 && (
+          <Command.Group forceMount>
+            {topicResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('topic', topicResults.length)}
+          </Command.Group>
+        )}
+
+        {pageResults.length > 0 && (
+          <Command.Group forceMount>
+            {pageResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('page', pageResults.length)}
+          </Command.Group>
+        )}
+
+        {memoryResults.length > 0 && (
+          <Command.Group forceMount>
+            {memoryResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('memory', memoryResults.length)}
+          </Command.Group>
+        )}
+
+        {fileResults.length > 0 && (
+          <Command.Group forceMount>
+            {fileResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('file', fileResults.length)}
+          </Command.Group>
+        )}
+
+        {folderResults.length > 0 && (
+          <Command.Group forceMount>
+            {folderResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('folder', folderResults.length)}
+          </Command.Group>
+        )}
+
+        {knowledgeBaseResults.length > 0 && (
+          <Command.Group forceMount>
+            {knowledgeBaseResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('knowledgeBase', knowledgeBaseResults.length)}
+          </Command.Group>
+        )}
+
+        {mcpResults.length > 0 && (
+          <Command.Group forceMount>
+            {mcpResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('mcp', mcpResults.length)}
+          </Command.Group>
+        )}
+
+        {pluginResults.length > 0 && (
+          <Command.Group forceMount>
+            {pluginResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('plugin', pluginResults.length)}
+          </Command.Group>
+        )}
+
+        {assistantResults.length > 0 && (
+          <Command.Group forceMount>
+            {assistantResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('communityAgent', assistantResults.length)}
+          </Command.Group>
+        )}
+
+        {/* Marketplace typed-search entries as the no-result fallback; see
+            shouldShowMarketplaceFallback for the rationale. */}
+        {shouldShowMarketplaceFallback({
+          hasLocalTopicResults,
+          hasResults,
+          isLoading,
+          typeFilter,
+        }) && (
+          <Command.Group forceMount>
+            {renderSearchMore('mcp', mcpResults.length)}
+            {renderSearchMore('plugin', pluginResults.length)}
+            {renderSearchMore('communityAgent', assistantResults.length)}
+          </Command.Group>
+        )}
+
+        {/* Show loading skeleton below existing results */}
+        {isLoading && (
+          <Command.Group forceMount>
+            {[1, 2, 3].map((i) => (
+              <Command.Item
+                disabled
+                key={`skeleton-${i}`}
+                keywords={[searchQuery]}
+                value={`${searchQuery}-loading-skeleton-${i}`}
+              >
+                <div className={styles.skeleton} style={{ height: 20, width: 20 }} />
+                <div style={{ display: 'flex', flex: 1, flexDirection: 'column', gap: 4 }}>
+                  <div className={styles.skeleton} style={{ width: `${60 + i * 10}%` }} />
+                  <div
+                    className={styles.skeleton}
+                    style={{ height: 12, width: `${40 + i * 5}%` }}
+                  />
+                </div>
+              </Command.Item>
+            ))}
+          </Command.Group>
+        )}
+      </>
+    );
+  },
+);
+
+SearchResults.displayName = 'SearchResults';
+
+export default SearchResults;

@@ -1,0 +1,78 @@
+'use client';
+
+import type { BuiltinInspectorProps } from '@lobechat/types';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
+import { cssVar, cx } from '@lobehub/ui';
+import { Plus } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { FilePathDisplay } from '../../components/FilePathDisplay';
+import { inspectorTextStyles, shinyTextStyles } from '../../styles';
+
+interface WriteFileArgs {
+  content?: string;
+  file_path?: string;
+  filePath?: string;
+  path?: string;
+}
+
+export const createWriteLocalFileInspector = (translationKey: string) => {
+  const Inspector = memo<BuiltinInspectorProps<WriteFileArgs, any>>(
+    ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+      const { t } = useTranslation('plugin');
+
+      const filePath =
+        args?.path ||
+        args?.filePath ||
+        args?.file_path ||
+        partialArgs?.path ||
+        partialArgs?.filePath ||
+        partialArgs?.file_path ||
+        '';
+      const lineCount = args?.content?.split('\n').length;
+
+      if (isArgumentsStreaming) {
+        if (!filePath)
+          return (
+            <div className={inspectorTextStyles.root}>
+              <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
+            </div>
+          );
+
+        return (
+          <div className={inspectorTextStyles.root}>
+            <span className={shinyTextStyles.shinyText} style={{ marginInlineEnd: 6 }}>
+              {t(translationKey as any)}:
+            </span>
+            <FilePathDisplay filePath={filePath} />
+          </div>
+        );
+      }
+
+      return (
+        <div className={inspectorTextStyles.root}>
+          <span
+            className={cx(isLoading && shinyTextStyles.shinyText)}
+            style={{ marginInlineEnd: 6 }}
+          >
+            {t(translationKey as any)}:
+          </span>
+          <FilePathDisplay filePath={filePath} />
+          {!isLoading && lineCount && (
+            <>
+              {' '}
+              <Text code as={'span'} color={cssVar.colorSuccess} fontSize={12}>
+                <Icon icon={Plus} size={12} />
+                {lineCount}
+              </Text>
+            </>
+          )}
+        </div>
+      );
+    },
+  );
+  Inspector.displayName = 'WriteLocalFileInspector';
+  return Inspector;
+};

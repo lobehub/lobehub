@@ -1,0 +1,462 @@
+{
+  "contextTree": [
+    {
+      "id": "msg_6zcyh1hELkzOmu",
+      "type": "message"
+    },
+    {
+      "id": "msg_xXSCL5uzwDANSn",
+      "type": "message"
+    },
+    {
+      "id": "msg_HhaoxginXhbfU9",
+      "type": "message"
+    },
+    {
+      "activeBranchIndex": 1,
+      "branches": [
+        [
+          {
+            "id": "msg_h5nXrbCVGj2uWy",
+            "type": "message"
+          }
+        ],
+        [
+          {
+            "id": "msg_eEAXz3HLKeAmEQ",
+            "type": "message"
+          },
+          {
+            "id": "msg_nSG0QuSDSmYlXj",
+            "type": "message"
+          }
+        ],
+        [
+          {
+            "id": "msg_GjcBeBlQ69teA7",
+            "type": "message"
+          },
+          {
+            "id": "msg_VMXrVH9hXeCP1R",
+            "type": "message"
+          }
+        ]
+      ],
+      "id": "branch-msg_HhaoxginXhbfU9-0",
+      "parentMessageId": "msg_HhaoxginXhbfU9",
+      "type": "branch"
+    },
+    {
+      "id": "msg_wpUElxuYslyASJ",
+      "type": "message"
+    },
+    {
+      "id": "msg_LHG8QeuqpcFZml",
+      "type": "message"
+    },
+    {
+      "id": "msg_jEKKxHQbz5duC6",
+      "type": "message"
+    }
+  ],
+  "flatList": [
+    {
+      "id": "msg_6zcyh1hELkzOmu",
+      "role": "user",
+      "content": "你好",
+      "createdAt": "2025-11-07T07:19:44.264Z",
+      "updatedAt": "2025-11-07T07:19:44.264Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    {
+      "id": "msg_xXSCL5uzwDANSn",
+      "role": "assistant",
+      "content": "你好！我是您的AI助手，很高兴为您服务！我可以帮您：\n\n🔍 **搜索网络信息** - 查找最新资讯、技术文档、学术资料等\n💻 **搜索GitHub代码** - 查找真实项目中的代码示例和实现模式\n📄 **浏览网页内容** - 获取特定网页的详细信息\n\n请告诉我您需要什么帮助？比如：\n- 想了解某个技术概念或库的使用方法\n- 需要查找最新的新闻或资讯\n- 想看看其他开发者如何实现特定功能\n- 需要获取某个网页的详细内容\n\n我会根据您的需求选择最合适的工具来为您提供帮助！",
+      "metadata": {
+        "tps": 21.633839199225054,
+        "cost": 0.000171,
+        "ttft": 1287,
+        "latency": 7481,
+        "duration": 6194,
+        "totalTokens": 3934,
+        "inputTextTokens": 3800,
+        "outputTextTokens": 134,
+        "totalInputTokens": 3800,
+        "inputCachedTokens": 3776,
+        "totalOutputTokens": 134,
+        "inputCacheMissTokens": 24
+      },
+      "createdAt": "2025-11-07T07:19:44.908Z",
+      "updatedAt": "2025-11-07T07:19:53.454Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_6zcyh1hELkzOmu",
+      "chunksList": [],
+      "extra": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "fileList": [],
+      "imageList": [],
+      "model": "deepseek-chat",
+      "provider": "deepseek",
+      "videoList": []
+    },
+    {
+      "id": "msg_HhaoxginXhbfU9",
+      "role": "user",
+      "content": "你好",
+      "metadata": {
+        "activeBranchIndex": 1
+      },
+      "createdAt": "2025-11-07T07:21:05.366Z",
+      "updatedAt": "2025-11-07T07:24:17.810Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_xXSCL5uzwDANSn",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    {
+      "id": "msg_eEAXz3HLKeAmEQ",
+      "role": "assistant",
+      "content": "你好！😊 我是您的AI助手，很高兴再次与您交流！\n\n我可以为您提供多种帮助：\n\n🔍 **网络搜索** - 查找最新资讯、技术文档、学术资料等\n💻 **GitHub代码搜索** - 查找真实项目中的代码示例和实现模式\n📄 **网页内容抓取** - 获取特定网页的详细信息\n\n请告诉我您需要什么帮助？比如：\n- 想了解某个编程概念或库的使用方法\n- 需要查找最新的技术资讯或新闻\n- 想看看其他开发者如何实现特定功能\n- 需要获取某个网页的详细内容\n\n我会根据您的需求选择最合适的工具来为您服务！",
+      "metadata": {
+        "tps": 23.98775093569241,
+        "cost": 0.000179,
+        "ttft": 1522,
+        "latency": 7400,
+        "duration": 5878,
+        "totalTokens": 4076,
+        "inputTextTokens": 3935,
+        "outputTextTokens": 141,
+        "totalInputTokens": 3935,
+        "inputCachedTokens": 3904,
+        "totalOutputTokens": 141,
+        "inputCacheMissTokens": 31
+      },
+      "createdAt": "2025-11-07T07:21:41.587Z",
+      "updatedAt": "2025-11-07T07:21:48.866Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_HhaoxginXhbfU9",
+      "chunksList": [],
+      "extra": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "fileList": [],
+      "imageList": [],
+      "model": "deepseek-chat",
+      "provider": "deepseek",
+      "videoList": [],
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 3
+      }
+    },
+    {
+      "id": "msg_nSG0QuSDSmYlXj",
+      "role": "user",
+      "content": "你好",
+      "createdAt": "2025-11-07T07:23:33.255Z",
+      "updatedAt": "2025-11-07T07:23:33.255Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_eEAXz3HLKeAmEQ",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    {
+      "id": "msg_wpUElxuYslyASJ",
+      "role": "assistant",
+      "content": "今天天气怎么样？",
+      "createdAt": "2025-11-07T07:24:15.934Z",
+      "updatedAt": "2025-11-07T07:24:15.934Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    {
+      "id": "msg_LHG8QeuqpcFZml",
+      "role": "user",
+      "content": "你好",
+      "createdAt": "2025-11-07T07:35:12.401Z",
+      "updatedAt": "2025-11-07T07:35:12.401Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_wpUElxuYslyASJ",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    {
+      "id": "msg_jEKKxHQbz5duC6",
+      "role": "assistant",
+      "content": "...",
+      "createdAt": "2025-11-07T07:35:13.056Z",
+      "updatedAt": "2025-11-07T07:35:13.056Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_LHG8QeuqpcFZml",
+      "chunksList": [],
+      "extra": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "fileList": [],
+      "imageList": [],
+      "model": "deepseek-chat",
+      "provider": "deepseek",
+      "videoList": []
+    }
+  ],
+  "messageMap": {
+    "msg_6zcyh1hELkzOmu": {
+      "id": "msg_6zcyh1hELkzOmu",
+      "role": "user",
+      "content": "你好",
+      "createdAt": "2025-11-07T07:19:44.264Z",
+      "updatedAt": "2025-11-07T07:19:44.264Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    "msg_xXSCL5uzwDANSn": {
+      "id": "msg_xXSCL5uzwDANSn",
+      "role": "assistant",
+      "content": "你好！我是您的AI助手，很高兴为您服务！我可以帮您：\n\n🔍 **搜索网络信息** - 查找最新资讯、技术文档、学术资料等\n💻 **搜索GitHub代码** - 查找真实项目中的代码示例和实现模式\n📄 **浏览网页内容** - 获取特定网页的详细信息\n\n请告诉我您需要什么帮助？比如：\n- 想了解某个技术概念或库的使用方法\n- 需要查找最新的新闻或资讯\n- 想看看其他开发者如何实现特定功能\n- 需要获取某个网页的详细内容\n\n我会根据您的需求选择最合适的工具来为您提供帮助！",
+      "metadata": {
+        "tps": 21.633839199225054,
+        "cost": 0.000171,
+        "ttft": 1287,
+        "latency": 7481,
+        "duration": 6194,
+        "totalTokens": 3934,
+        "inputTextTokens": 3800,
+        "outputTextTokens": 134,
+        "totalInputTokens": 3800,
+        "inputCachedTokens": 3776,
+        "totalOutputTokens": 134,
+        "inputCacheMissTokens": 24
+      },
+      "createdAt": "2025-11-07T07:19:44.908Z",
+      "updatedAt": "2025-11-07T07:19:53.454Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_6zcyh1hELkzOmu",
+      "chunksList": [],
+      "extra": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "fileList": [],
+      "imageList": [],
+      "model": "deepseek-chat",
+      "provider": "deepseek",
+      "videoList": []
+    },
+    "msg_HhaoxginXhbfU9": {
+      "id": "msg_HhaoxginXhbfU9",
+      "role": "user",
+      "content": "你好",
+      "metadata": {
+        "activeBranchIndex": 1
+      },
+      "createdAt": "2025-11-07T07:21:05.366Z",
+      "updatedAt": "2025-11-07T07:24:17.810Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_xXSCL5uzwDANSn",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    "msg_h5nXrbCVGj2uWy": {
+      "id": "msg_h5nXrbCVGj2uWy",
+      "role": "assistant",
+      "content": "你好！很高兴再次与您交流！😊\n\n我是您的AI助手，可以为您提供多种帮助：\n\n**我能做什么：**\n- 🔍 **网络搜索** - 查找最新资讯、技术文档、学术资料等\n- 💻 **GitHub代码搜索** - 查找真实项目中的代码示例和最佳实践\n- 📄 **网页内容获取** - 提取特定网页的详细信息\n\n**例如您可以问我：**\n- \"帮我搜索一下React Hooks的最佳实践\"\n- \"查找Python中如何处理异常的真实代码示例\"\n- \"获取某个技术博客的最新文章内容\"\n- \"了解当前热门的技术趋势\"\n\n请告诉我您今天需要什么帮助？我会根据您的具体需求选择最合适的工具来为您服务！",
+      "metadata": {
+        "tps": 20.645337708504236,
+        "cost": 0.000216,
+        "ttft": 1524,
+        "latency": 8838,
+        "duration": 7314,
+        "totalTokens": 4086,
+        "inputTextTokens": 3935,
+        "outputTextTokens": 151,
+        "totalInputTokens": 3935,
+        "inputCachedTokens": 3776,
+        "totalOutputTokens": 151,
+        "inputCacheMissTokens": 159
+      },
+      "createdAt": "2025-11-07T07:21:11.767Z",
+      "updatedAt": "2025-11-07T07:21:20.560Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_HhaoxginXhbfU9",
+      "chunksList": [],
+      "extra": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "fileList": [],
+      "imageList": [],
+      "model": "deepseek-chat",
+      "provider": "deepseek",
+      "videoList": []
+    },
+    "msg_eEAXz3HLKeAmEQ": {
+      "id": "msg_eEAXz3HLKeAmEQ",
+      "role": "assistant",
+      "content": "你好！😊 我是您的AI助手，很高兴再次与您交流！\n\n我可以为您提供多种帮助：\n\n🔍 **网络搜索** - 查找最新资讯、技术文档、学术资料等\n💻 **GitHub代码搜索** - 查找真实项目中的代码示例和实现模式\n📄 **网页内容抓取** - 获取特定网页的详细信息\n\n请告诉我您需要什么帮助？比如：\n- 想了解某个编程概念或库的使用方法\n- 需要查找最新的技术资讯或新闻\n- 想看看其他开发者如何实现特定功能\n- 需要获取某个网页的详细内容\n\n我会根据您的需求选择最合适的工具来为您服务！",
+      "metadata": {
+        "tps": 23.98775093569241,
+        "cost": 0.000179,
+        "ttft": 1522,
+        "latency": 7400,
+        "duration": 5878,
+        "totalTokens": 4076,
+        "inputTextTokens": 3935,
+        "outputTextTokens": 141,
+        "totalInputTokens": 3935,
+        "inputCachedTokens": 3904,
+        "totalOutputTokens": 141,
+        "inputCacheMissTokens": 31
+      },
+      "createdAt": "2025-11-07T07:21:41.587Z",
+      "updatedAt": "2025-11-07T07:21:48.866Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_HhaoxginXhbfU9",
+      "chunksList": [],
+      "extra": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "fileList": [],
+      "imageList": [],
+      "model": "deepseek-chat",
+      "provider": "deepseek",
+      "videoList": []
+    },
+    "msg_GjcBeBlQ69teA7": {
+      "id": "msg_GjcBeBlQ69teA7",
+      "role": "assistant",
+      "content": "你好！我是您的AI助手，很高兴为您服务！\n\n我可以为您提供以下帮助：\n\n🔍 **网络搜索** - 查找最新的新闻、技术文档、学术资料等\n💻 **GitHub代码搜索** - 查找真实项目中的代码示例和最佳实践\n📄 **网页内容获取** - 获取特定网页的详细信息\n\n请告诉我您需要什么帮助？比如：\n- 想了解某个技术概念或库的使用方法\n- 需要查找最新的新闻或资讯\n- 想看看其他开发者如何实现特定功能\n- 需要获取某个网页的详细内容\n\n我会根据您的需求选择最合适的工具来为您提供帮助！",
+      "metadata": {
+        "tps": 23.99573409171703,
+        "cost": 0.000176,
+        "ttft": 1194,
+        "latency": 6820,
+        "duration": 5626,
+        "totalTokens": 4070,
+        "inputTextTokens": 3935,
+        "outputTextTokens": 135,
+        "totalInputTokens": 3935,
+        "inputCachedTokens": 3904,
+        "totalOutputTokens": 135,
+        "inputCacheMissTokens": 31
+      },
+      "createdAt": "2025-11-07T07:22:25.223Z",
+      "updatedAt": "2025-11-07T07:22:32.162Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_HhaoxginXhbfU9",
+      "chunksList": [],
+      "extra": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "fileList": [],
+      "imageList": [],
+      "model": "deepseek-chat",
+      "provider": "deepseek",
+      "videoList": []
+    },
+    "msg_nSG0QuSDSmYlXj": {
+      "id": "msg_nSG0QuSDSmYlXj",
+      "role": "user",
+      "content": "你好",
+      "createdAt": "2025-11-07T07:23:33.255Z",
+      "updatedAt": "2025-11-07T07:23:33.255Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_eEAXz3HLKeAmEQ",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    "msg_VMXrVH9hXeCP1R": {
+      "id": "msg_VMXrVH9hXeCP1R",
+      "role": "user",
+      "content": "你是谁？",
+      "createdAt": "2025-11-07T07:23:49.990Z",
+      "updatedAt": "2025-11-07T07:23:49.990Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_GjcBeBlQ69teA7",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    "msg_wpUElxuYslyASJ": {
+      "id": "msg_wpUElxuYslyASJ",
+      "role": "assistant",
+      "content": "今天天气怎么样？",
+      "createdAt": "2025-11-07T07:24:15.934Z",
+      "updatedAt": "2025-11-07T07:24:15.934Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    "msg_LHG8QeuqpcFZml": {
+      "id": "msg_LHG8QeuqpcFZml",
+      "role": "user",
+      "content": "你好",
+      "createdAt": "2025-11-07T07:35:12.401Z",
+      "updatedAt": "2025-11-07T07:35:12.401Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_wpUElxuYslyASJ",
+      "chunksList": [],
+      "extra": {},
+      "fileList": [],
+      "imageList": [],
+      "videoList": []
+    },
+    "msg_jEKKxHQbz5duC6": {
+      "id": "msg_jEKKxHQbz5duC6",
+      "role": "assistant",
+      "content": "...",
+      "createdAt": "2025-11-07T07:35:13.056Z",
+      "updatedAt": "2025-11-07T07:35:13.056Z",
+      "topicId": "tpc_ruVgxvO16Ljh",
+      "parentId": "msg_LHG8QeuqpcFZml",
+      "chunksList": [],
+      "extra": {
+        "model": "deepseek-chat",
+        "provider": "deepseek"
+      },
+      "fileList": [],
+      "imageList": [],
+      "model": "deepseek-chat",
+      "provider": "deepseek",
+      "videoList": []
+    }
+  }
+}

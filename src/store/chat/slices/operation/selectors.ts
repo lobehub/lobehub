@@ -1,0 +1,1115 @@
+import { type ChatStoreState } from '@/store/chat/initialState';
+import { messageMapKey, type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+
+import { type Operation, type OperationType } from './types';
+import {
+  AI_RUNTIME_OPERATION_TYPES,
+  INPUT_LOADING_OPERATION_TYPES,
+  isQueueBlockingOperation,
+  QUEUE_BLOCKING_OPERATION_TYPES,
+  SEND_NOW_CANCEL_REASON,
+  TOPIC_VISIBLY_RUNNING_OPERATION_TYPES,
+} from './types';
+
+// === Basic Queries ===
+/**
+ * Get all operations
+ */
+const getAllOperations = (s: ChatStoreState): Operation[] => {
+  return Object.values(s.operations);
+};
+
+/**
+ * Get operations for current context (active agent and topic)
+ */
+const getCurrentContextOperations = (s: ChatStoreState): Operation[] => {
+  const { activeAgentId, activeGroupId, activeThreadId, activeTopicId } = s;
+  if (!activeAgentId) return [];
+
+  // Must include groupId/threadId so the key matches how operations are stored
+  // (operationsByContext is keyed by the full messageMapKey(context)); otherwise
+  // group operations are never found.
+  const contextKey = messageMapKey({
+    agentId: activeAgentId,
+    groupId: activeGroupId,
+    threadId: activeThreadId,
+    topicId: activeTopicId,
+  });
+  const operationIds = s.operationsByContext[contextKey] || [];
+  return operationIds.map((id) => s.operations[id]).filter(Boolean);
+};
+
+/**
+ * Get all running operations
+ */
+const getRunningOperations = (s: ChatStoreState): Operation[] => {
+  return Object.values(s.operations).filter((op) => op.status === 'running');
+};
+
+const isRunningOperation = (op: Operation): boolean =>
+  op.status === 'running' && !op.metadata.isAborting;
+
+const isVisiblyRunningOperation = (op: Operation): boolean =>
+  isRunningOperation(op) && !op.metadata.visibleLoadingDone;
+
+/**
+ * Get operation by ID
+ */
+const getOperationById =
+  (operationId: string) =>
+  (s: ChatStoreState): Operation | undefined => {
+    return s.operations[operationId];
+  };
+
+/**
+ * Get operation context from message ID
+ * Useful for automatic context retrieval
+ */
+const getOperationContextFromMessage =
+  (messageId: string) =>
+  (s: ChatStoreState): Operation['context'] | undefined => {
+    const operationId = s.messageOperationMap[messageId];
+    if (!operationId) return undefined;
+
+    const operation = s.operations[operationId];
+    return operation?.context;
+  };
+
+/**
+ * Walk up the parent chain from an operation until the owning AI runtime
+ * operation (see AI_RUNTIME_OPERATION_TYPES) is found. Returns undefined when
+ * the chain has no runtime ancestor (e.g. a standalone tool operation).
+ */
+const findRootRuntimeOperation =
+  (operationId: string) =>
+  (s: ChatStoreState): Operation | undefined => {
+    let currentOp: Operation | undefined = s.operations[operationId];
+    while (currentOp) {
+      if (AI_RUNTIME_OPERATION_TYPES.includes(currentOp.type)) return currentOp;
+
+      const parentId: string | undefined = currentOp.parentOperationId;
+      currentOp = parentId ? s.operations[parentId] : undefined;
+    }
+    return undefined;
+  };
+
+/**
+ * Get operations by message ID
+ */
+const getOperationsByMessage =
+  (messageId: string) =>
+  (s: ChatStoreState): Operation[] => {
+    const operationIds = s.operationsByMessage[messageId] || [];
+    return operationIds.map((id) => s.operations[id]).filter(Boolean);
+  };
+
+/**
+ * Get operations by type
+ */
+const getOperationsByType =
+  (type: OperationType) =>
+  (s: ChatStoreState): Operation[] => {
+    const operationIds = s.operationsByType[type] || [];
+    return operationIds.map((id) => s.operations[id]).filter(Boolean);
+  };
+
+// === Status Checks ===
+/**
+ * Check if there's any running operation
+ */
+const hasAnyRunningOperation = (s: ChatStoreState): boolean => {
+  return Object.values(s.operations).some((op) => op.status === 'running');
+};
+
+/**
+ * Check if there's a running operation of specific type
+ */
+const hasRunningOperationType =
+  (type: OperationType) =>
+  (s: ChatStoreState): boolean => {
+    const operationIds = s.operationsByType[type] || [];
+    return operationIds.some((id) => {
+      const op = s.operations[id];
+      return op && op.status === 'running';
+    });
+  };
+
+/**
+ * Check if can interrupt (has running operations that can be cancelled)
+ */
+const canInterrupt = (s: ChatStoreState): boolean => {
+  const currentOps = getCurrentContextOperations(s);
+  return currentOps.some((op) => op.status === 'running');
+};
+
+/**
+ * Check if can send message (no blocking operations running)
+ */
+const canSendMessage = (s: ChatStoreState): boolean => {
+  // Cannot send if there's any running operation in current context
+  const currentOps = getCurrentContextOperations(s);
+  const hasRunningOp = currentOps.some((op) => op.status === 'running');
+
+  return !hasRunningOp;
+};
+
+// === UI Helpers ===
+/**
+ * Get active operation types (for debugging/display)
+ */
+const getActiveOperationTypes = (s: ChatStoreState): OperationType[] => {
+  const runningOps = getRunningOperations(s);
+  const types = new Set(runningOps.map((op) => op.type));
+  return Array.from(types);
+};
+
+/**
+ * Get current operation label for UI display
+ * Returns the label of the most recent running operation in current context
+ */
+const getCurrentOperationLabel = (s: ChatStoreState): string => {
+  const currentOps = getCurrentContextOperations(s);
+  const runningOps = currentOps.filter((op) => op.status === 'running');
+
+  if (runningOps.length === 0) return '';
+
+  // Get the most recent running operation
+  const latestOp = runningOps.reduce((latest, op) => {
+    return op.metadata.startTime > latest.metadata.startTime ? op : latest;
+  });
+
+  return latestOp.label || latestOp.type;
+};
+
+/**
+ * Get current operation progress
+ * Returns the progress of the most recent running operation with progress info
+ */
+const getCurrentOperationProgress = (s: ChatStoreState): number | undefined => {
+  const currentOps = getCurrentContextOperations(s);
+  const runningOps = currentOps.filter((op) => op.status === 'running');
+
+  if (runningOps.length === 0) return undefined;
+
+  // Find the most recent operation with progress
+  const opsWithProgress = runningOps.filter((op) => op.metadata.progress);
+
+  if (opsWithProgress.length === 0) return undefined;
+
+  const latestOp = opsWithProgress.reduce((latest, op) => {
+    return op.metadata.startTime > latest.metadata.startTime ? op : latest;
+  });
+
+  return latestOp.metadata.progress?.percentage;
+};
+
+/**
+ * Get operations by context (agentId, topicId, threadId, scope, groupId, subAgentId).
+ *
+ * Operations are indexed by `operationsByContext` under the full `messageMapKey`,
+ * which keys on scope/group/subAgent in addition to agent+topic. Callers that
+ * live inside a group or thread/sub-agent conversation MUST pass the matching
+ * scope/group info — omitting them computes the 'main' scope key, which silently
+ * returns an empty list and causes flows like approve/reject to fall back to the
+ * wrong branch. Same-shape input as messageMapKey for consistency.
+ */
+const getOperationsByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): Operation[] => {
+    const contextKey = messageMapKey(context);
+    const operationIds = s.operationsByContext[contextKey] || [];
+    return operationIds
+      .map((id) => s.operations[id])
+      .filter((op): op is Operation => {
+        if (!op) return false;
+        // Also filter by threadId if provided
+        const opThreadId = op.context.threadId ?? null;
+        const contextThreadId = context.threadId ?? null;
+        return opThreadId === contextThreadId;
+      });
+  };
+
+/**
+ * Whether a later conversation operation has taken ownership of this context.
+ *
+ * A run can publish `visible_output_end` before its terminal snapshot arrives,
+ * which intentionally lets the next send start. The old snapshot must not then
+ * replace the newer turn's optimistic messages. Status is deliberately ignored:
+ * the newer send may already have handed off to its runtime (or even settled),
+ * but its later registration in the context index still proves that the older
+ * snapshot is superseded. The index is local insertion order, so it remains
+ * monotonic even when restored server timestamps and the client clock differ.
+ * Child operations stay within their parent's turn and therefore cannot claim
+ * conversation ownership from that turn's terminal reconciliation.
+ */
+const hasNewerConversationOperation =
+  (operationId: string, context: Operation['context']) =>
+  (s: ChatStoreState): boolean => {
+    const operation = s.operations[operationId];
+    if (!operation || !context.agentId) return false;
+
+    const operations = getOperationsByContext({ ...context, agentId: context.agentId })(s);
+    const operationIndex = operations.findIndex((candidate) => candidate.id === operationId);
+    if (operationIndex < 0) return false;
+
+    return operations
+      .slice(operationIndex + 1)
+      .some(
+        (candidate) =>
+          !candidate.parentOperationId && QUEUE_BLOCKING_OPERATION_TYPES.includes(candidate.type),
+      );
+  };
+
+/**
+ * Check if there's a running operation in a specific context
+ * Use this for loading states in components that display a specific conversation
+ */
+const hasRunningOperationByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    const operations = getOperationsByContext(context)(s);
+    return operations.some((op) => op.status === 'running' && !op.metadata.isAborting);
+  };
+
+/**
+ * Check if agent runtime is running in a specific context
+ * Checks all AI runtime operation types (see AI_RUNTIME_OPERATION_TYPES)
+ */
+const isAgentRuntimeRunningByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+
+    const operations = getOperationsByContext(context)(s);
+
+    return operations.some(
+      (op) =>
+        AI_RUNTIME_OPERATION_TYPES.includes(op.type) &&
+        op.status === 'running' &&
+        !op.metadata.isAborting,
+    );
+  };
+
+/**
+ * Check if agent runtime should still show visible loading in a specific context.
+ * The underlying operation may remain running for terminal bookkeeping after a
+ * producer has emitted visible_output_end.
+ */
+const isAgentRuntimeVisiblyRunningByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+
+    const operations = getOperationsByContext(context)(s);
+
+    return operations.some(
+      (op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type) && isVisiblyRunningOperation(op),
+    );
+  };
+
+/**
+ * All live queue-blocking operation ids in a context (see
+ * `isQueueBlockingOperation` — the same predicate the enqueue check uses, so
+ * "Send now" cancels exactly what a fresh send would have queued behind and
+ * never fires at an op that already stopped holding the queue). "Send now"
+ * cancels every one of them, not just
+ * the first: a retry via delAndRegenerate/delAndResendThread runs an outer
+ * wrapper `regenerate` op AND an inner regenerateUserMessage `regenerate` op at
+ * once, so cancelling only one would leave the queue blocked and make "Send now"
+ * a no-op during that retry window.
+ */
+const getRunningQueueBlockingOperationIds =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): string[] => {
+    if (!context.agentId) return [];
+    const hasQueuedMessages = getQueuedMessages(context)(s).length > 0;
+    return getOperationsByContext(context)(s)
+      .filter((op) => isQueueBlockingOperation(op, { hasQueuedMessages }))
+      .map((op) => op.id);
+  };
+
+/**
+ * Whether the run a context's queue waits behind sends it only once the whole
+ * run ends, instead of at the next step boundary.
+ *
+ * Heterogeneous CLI runs (Claude Code, Codex, …) cannot hand the turn back
+ * mid-run: a local `execHeterogeneousAgent` drains the queue after the CLI
+ * exits, and a Gateway run the server dispatched to an external producer
+ * (`heteroType`) drains it in `heteroFinish`. Read from the running operation,
+ * not the conversation's agent config, which can differ from what actually
+ * runs (an `@Agent` route, a legacy CLI agent recovered from its model id).
+ *
+ * A Gateway run whose producer went unreported (`heteroType` undefined: an
+ * older server or topic marker) may be a CLI run, so it promises the later
+ * timing, as the Gateway lifecycle treats it (`heteroType !== null`). A group
+ * member's run is skipped: its supervisor's run owns the queue.
+ *
+ * With nothing holding the queue locally, the queue still waits behind its
+ * idle host: a Gateway CLI socket that closes without its terminal completes
+ * the local op, yet the server keeps the producer running until `heteroFinish`.
+ */
+const isQueueDrainedAtRunEnd =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+    const hasQueuedMessages = getQueuedMessages(context)(s).length > 0;
+    const isCliRun = (op: Operation) => {
+      if (op.type === 'execHeterogeneousAgent') return true;
+      if (op.type !== 'execServerAgentRuntime') return false;
+
+      const parent = op.parentOperationId ? s.operations[op.parentOperationId] : undefined;
+      return parent?.type !== 'execServerAgentRuntime' && op.metadata.heteroType !== null;
+    };
+
+    const blocking = getOperationsByContext(context)(s).filter((op) =>
+      isQueueBlockingOperation(op, { hasQueuedMessages }),
+    );
+    if (blocking.length > 0) return blocking.some(isCliRun);
+
+    const host = getIdleQueueHost(context)(s);
+    return !!host && isCliRun(host);
+  };
+
+const getOperationTurnStartTime = (op: Operation) =>
+  op.metadata.turnStartTime ?? op.metadata.startTime;
+
+const isTurnTimedOperation = (op: Operation) =>
+  AI_RUNTIME_OPERATION_TYPES.includes(op.type) || op.metadata.turnStartTime !== undefined;
+
+const getLatestAgentRuntimeTurnStartTime =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): number | undefined => {
+    if (!context.agentId) return undefined;
+
+    let latest: Operation | undefined;
+    for (const op of getOperationsByContext(context)(s)) {
+      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type)) continue;
+      if (!latest || op.metadata.startTime > latest.metadata.startTime) latest = op;
+    }
+
+    return latest ? getOperationTurnStartTime(latest) : undefined;
+  };
+
+/**
+ * Get the earliest start time for a running agent runtime operation in a
+ * specific context. This anchors visible elapsed-time UI to the top-level
+ * runtime op instead of short-lived sub-operations.
+ */
+const getAgentRuntimeStartTimeByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): number | undefined => {
+    if (!context.agentId) return undefined;
+
+    const operations = getOperationsByContext(context)(s);
+    let startTime: number | undefined;
+
+    for (const op of operations) {
+      if (
+        op.status !== 'running' ||
+        op.metadata.isAborting ||
+        !AI_RUNTIME_OPERATION_TYPES.includes(op.type)
+      ) {
+        continue;
+      }
+
+      const turnStartTime = getOperationTurnStartTime(op);
+      startTime = startTime === undefined ? turnStartTime : Math.min(startTime, turnStartTime);
+    }
+
+    return startTime;
+  };
+
+/**
+ * Get the earliest start time for a visibly running agent runtime operation.
+ */
+const getVisibleAgentRuntimeStartTimeByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): number | undefined => {
+    if (!context.agentId) return undefined;
+
+    const operations = getOperationsByContext(context)(s);
+    let startTime: number | undefined;
+
+    for (const op of operations) {
+      if (!isTurnTimedOperation(op) || !isVisiblyRunningOperation(op)) {
+        continue;
+      }
+
+      const turnStartTime = getOperationTurnStartTime(op);
+      startTime = startTime === undefined ? turnStartTime : Math.min(startTime, turnStartTime);
+    }
+
+    return startTime;
+  };
+
+/**
+ * Check if input should show loading state in a specific context
+ * Includes sendMessage in addition to AI runtime operations,
+ * so the input stays in loading state from the moment user sends until AI finishes
+ */
+const isInputLoadingByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+
+    const operations = getOperationsByContext(context)(s);
+
+    return operations.some(
+      (op) =>
+        INPUT_LOADING_OPERATION_TYPES.includes(op.type) &&
+        op.status === 'running' &&
+        !op.metadata.isAborting,
+    );
+  };
+
+/**
+ * Check if input should show visible loading state in a specific context.
+ */
+const isInputVisiblyLoadingByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+
+    const operations = getOperationsByContext(context)(s);
+
+    const hasVisiblyRunning = operations.some(
+      (op) => INPUT_LOADING_OPERATION_TYPES.includes(op.type) && isVisiblyRunningOperation(op),
+    );
+    if (hasVisiblyRunning) return true;
+
+    // A queued message is a follow-up the user already sent while a prior op was
+    // running; it gets no op of its own until that op ends and the queue drains.
+    // In the window where the prior op has finished its *visible* output
+    // (visibleLoadingDone) but hasn't reached its terminal end yet, there is no
+    // visibly-running op and no op for the queued message, so the input would
+    // look idle even though a send is pending. Keep the visible loading on while
+    // some INPUT_LOADING op is still running to absorb the queue. Gate on a
+    // still-running op so a stale queue left by a cancelled/errored run (which
+    // never drains) doesn't pin the indicator on forever.
+    const hasRunning = operations.some(
+      (op) => INPUT_LOADING_OPERATION_TYPES.includes(op.type) && isRunningOperation(op),
+    );
+    if (hasRunning) return getQueuedMessages(context)(s).length > 0;
+
+    return isSteerHandoffPending(context)(s);
+  };
+
+// === Backward Compatibility ===
+
+/**
+ * Check if a specific agent has running AI runtime operations
+ * Used for agent list item loading states where we need per-agent granularity
+ */
+const isAgentRunning =
+  (agentId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const type of AI_RUNTIME_OPERATION_TYPES) {
+      const operationIds = s.operationsByType[type] || [];
+      const hasRunning = operationIds.some((id) => {
+        const op = s.operations[id];
+        return op && isRunningOperation(op) && op.context.agentId === agentId;
+      });
+      if (hasRunning) return true;
+    }
+    return false;
+  };
+
+/**
+ * Check if a specific agent should still show visible runtime loading.
+ */
+const isAgentVisiblyRunning =
+  (agentId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const type of AI_RUNTIME_OPERATION_TYPES) {
+      const operationIds = s.operationsByType[type] || [];
+      const hasRunning = operationIds.some((id) => {
+        const op = s.operations[id];
+        return op && isVisiblyRunningOperation(op) && op.context.agentId === agentId;
+      });
+      if (hasRunning) return true;
+    }
+    return false;
+  };
+
+/** Check visible runtime loading across all agents and topics in a chat group. */
+const isGroupVisiblyRunning =
+  (groupId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const type of AI_RUNTIME_OPERATION_TYPES) {
+      const operationIds = s.operationsByType[type] || [];
+      if (
+        operationIds.some((id) => {
+          const op = s.operations[id];
+          return op && isVisiblyRunningOperation(op) && op.context.groupId === groupId;
+        })
+      )
+        return true;
+    }
+    return false;
+  };
+
+/**
+ * Whether a turn is visibly in progress for a topic on THIS client — the whole
+ * send → run pipeline (see TOPIC_VISIBLY_RUNNING_OPERATION_TYPES), matched by
+ * the operation context's topicId regardless of agent/group/thread.
+ *
+ * Drives the sidebar topic spinner. Persisted `topic.status === 'running'`
+ * covers runs owned by other clients / the server; this covers what status
+ * cannot: client-mode runs (which never persist a status) and the startup
+ * window of gateway/hetero runs before the server writes `running`.
+ *
+ * Whatever this reports as running must also be retirable by
+ * `settleAllUnbackedTopicRuns` — see TOPIC_VISIBLY_RUNNING_OPERATION_TYPES.
+ */
+const isTopicVisiblyRunning =
+  (topicId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const type of TOPIC_VISIBLY_RUNNING_OPERATION_TYPES) {
+      const operationIds = s.operationsByType[type] || [];
+      const hasRunning = operationIds.some((id) => {
+        const op = s.operations[id];
+        return op && isVisiblyRunningOperation(op) && op.context.topicId === topicId;
+      });
+      if (hasRunning) return true;
+    }
+    return false;
+  };
+
+/**
+ * Topic ids with a visibly-running turn on this client. Set form of
+ * `isTopicVisiblyRunning` for list-level consumers (byStatus grouping, project
+ * group badges). Builds a new Set per call — subscribe with an equality fn or
+ * use it inside a selector that already recomputes per store change.
+ */
+const visiblyRunningTopicIds = (s: ChatStoreState): Set<string> => {
+  const ids = new Set<string>();
+  for (const type of TOPIC_VISIBLY_RUNNING_OPERATION_TYPES) {
+    for (const id of s.operationsByType[type] || []) {
+      const op = s.operations[id];
+      if (op && isVisiblyRunningOperation(op) && op.context.topicId) {
+        ids.add(op.context.topicId);
+      }
+    }
+  }
+  return ids;
+};
+
+/**
+ * Whether ANY topic row is visibly running on this client. Backs the sidebar's
+ * candidate gate for the stale-run sweep: without a candidate there is nothing
+ * to retire, so the sweep must not poll the server at all.
+ */
+const hasVisiblyRunningTopic = (s: ChatStoreState): boolean => {
+  for (const type of TOPIC_VISIBLY_RUNNING_OPERATION_TYPES) {
+    for (const id of s.operationsByType[type] || []) {
+      const op = s.operations[id];
+      if (op && isVisiblyRunningOperation(op) && op.context.topicId) return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * Check if agent runtime is running (including both main window and thread)
+ * Checks all AI runtime operation types (see AI_RUNTIME_OPERATION_TYPES)
+ * Excludes operations that are aborting (cleaning up after cancellation)
+ */
+const isAgentRuntimeRunning = (s: ChatStoreState): boolean => {
+  // Check all AI runtime operation types
+  for (const type of AI_RUNTIME_OPERATION_TYPES) {
+    const operationIds = s.operationsByType[type] || [];
+    const hasRunning = operationIds.some((id) => {
+      const op = s.operations[id];
+      // Exclude operations that are aborting (user already cancelled, just cleaning up)
+      return op && isRunningOperation(op);
+    });
+    if (hasRunning) return true;
+  }
+  return false;
+};
+
+/**
+ * Check if any AI runtime operation should still show visible loading.
+ */
+const isAgentRuntimeVisiblyRunning = (s: ChatStoreState): boolean => {
+  for (const type of AI_RUNTIME_OPERATION_TYPES) {
+    const operationIds = s.operationsByType[type] || [];
+    const hasRunning = operationIds.some((id) => {
+      const op = s.operations[id];
+      return op && isVisiblyRunningOperation(op);
+    });
+    if (hasRunning) return true;
+  }
+  return false;
+};
+
+/**
+ * Check if agent runtime is running in main window only
+ * Used for main window UI state (e.g., send button loading)
+ * Excludes thread operations and operations from other topics to prevent cross-contamination
+ */
+const isMainWindowAgentRuntimeRunning = (s: ChatStoreState): boolean => {
+  // Check all AI runtime operation types
+  for (const type of AI_RUNTIME_OPERATION_TYPES) {
+    const operationIds = s.operationsByType[type] || [];
+
+    const hasRunning = operationIds.some((id) => {
+      const op = s.operations[id];
+      if (!op || !isRunningOperation(op) || op.metadata.inThread) {
+        return false;
+      }
+
+      // For group operations, check groupId
+      if (op.context.groupId) {
+        return s.activeGroupId === op.context.groupId;
+      }
+
+      // Agent must match
+      if (s.activeAgentId !== op.context.agentId) return false;
+
+      // Topic comparison: normalize null/undefined (both mean "default topic")
+      // activeTopicId can be null (initial state) or undefined (after topic operations)
+      // Operation context topicId can also be null or undefined
+      const activeTopicId = s.activeTopicId ?? null;
+      const opTopicId = op.context.topicId ?? null;
+
+      return activeTopicId === opTopicId;
+    });
+
+    if (hasRunning) return true;
+  }
+
+  return false;
+};
+
+/**
+ * Check if a main-window AI runtime operation should still show visible loading.
+ */
+const isMainWindowAgentRuntimeVisiblyRunning = (s: ChatStoreState): boolean => {
+  for (const type of AI_RUNTIME_OPERATION_TYPES) {
+    const operationIds = s.operationsByType[type] || [];
+
+    const hasRunning = operationIds.some((id) => {
+      const op = s.operations[id];
+      if (!op || !isVisiblyRunningOperation(op) || op.metadata.inThread) {
+        return false;
+      }
+
+      if (op.context.groupId) {
+        return s.activeGroupId === op.context.groupId;
+      }
+
+      if (s.activeAgentId !== op.context.agentId) return false;
+
+      const activeTopicId = s.activeTopicId ?? null;
+      const opTopicId = op.context.topicId ?? null;
+
+      return activeTopicId === opTopicId;
+    });
+
+    if (hasRunning) return true;
+  }
+
+  return false;
+};
+
+/**
+ * Check if continuing (for backward compatibility)
+ */
+const isContinuing = (s: ChatStoreState): boolean => {
+  return hasRunningOperationType('continue')(s);
+};
+
+/**
+ * Check if in search workflow (for backward compatibility)
+ */
+const isInSearchWorkflow = (s: ChatStoreState): boolean => {
+  return hasRunningOperationType('searchWorkflow')(s);
+};
+
+/**
+ * Check if a specific message is being processed (any operation type)
+ */
+const isMessageProcessing =
+  (messageId: string) =>
+  (s: ChatStoreState): boolean => {
+    const operations = getOperationsByMessage(messageId)(s);
+    return operations.some((op) => op.status === 'running');
+  };
+
+/**
+ * Check if a specific message is being generated (AI generation only)
+ * Checks all AI runtime operation types (see AI_RUNTIME_OPERATION_TYPES)
+ */
+const isMessageGenerating =
+  (messageId: string) =>
+  (s: ChatStoreState): boolean => {
+    const operations = getOperationsByMessage(messageId)(s);
+    return operations.some(
+      (op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type) && op.status === 'running',
+    );
+  };
+
+/**
+ * Check if a specific message is being created (CRUD operation only)
+ * Checks message creation operations:
+ * - User messages: sendMessage
+ * - Assistant messages: createAssistantMessage
+ */
+const isMessageCreating =
+  (messageId: string) =>
+  (s: ChatStoreState): boolean => {
+    const operations = getOperationsByMessage(messageId)(s);
+    return operations.some(
+      (op) =>
+        (op.type === 'sendMessage' || op.type === 'createAssistantMessage') &&
+        op.status === 'running',
+    );
+  };
+
+/**
+ * Check if any message in a list is being processed
+ */
+const isAnyMessageLoading =
+  (messageIds: string[]) =>
+  (s: ChatStoreState): boolean => {
+    return messageIds.some((id) => isMessageProcessing(id)(s));
+  };
+
+/**
+ * Get the deepest running operation for a message (leaf node in operation tree)
+ * Operations form a tree structure via parentOperationId/childOperationIds
+ * This returns the most specific (deepest) running operation for UI display
+ */
+const getDeepestRunningOperationByMessage =
+  (messageId: string) =>
+  (s: ChatStoreState): Operation | undefined => {
+    const operations = getOperationsByMessage(messageId)(s);
+    const runningOps = operations.filter((op) => op.status === 'running');
+
+    if (runningOps.length === 0) return undefined;
+
+    const runningOpIds = new Set(runningOps.map((op) => op.id));
+
+    // A leaf running operation has no running children
+    return runningOps.find((op) => {
+      const childIds = op.childOperationIds || [];
+      return !childIds.some((childId) => runningOpIds.has(childId));
+    });
+  };
+
+/**
+ * Check if a specific message is being regenerated
+ */
+const isMessageRegenerating =
+  (messageId: string) =>
+  (s: ChatStoreState): boolean => {
+    const operations = getOperationsByMessage(messageId)(s);
+    return operations.some((op) => op.type === 'regenerate' && op.status === 'running');
+  };
+
+/**
+ * Check if a specific message is continuing generation
+ */
+const isMessageContinuing =
+  (messageId: string) =>
+  (s: ChatStoreState): boolean => {
+    const operations = getOperationsByMessage(messageId)(s);
+    return operations.some((op) => op.type === 'continue' && op.status === 'running');
+  };
+
+/**
+ * Check if a specific message is in reasoning state
+ */
+const isMessageInReasoning =
+  (messageId: string) =>
+  (s: ChatStoreState): boolean => {
+    const operations = getOperationsByMessage(messageId)(s);
+    return operations.some((op) => op.type === 'reasoning' && op.status === 'running');
+  };
+
+/**
+ * Check if a specific message is in tool calling (plugin API invocation)
+ */
+const isMessageInToolCalling =
+  (messageId: string) =>
+  (s: ChatStoreState): boolean => {
+    const operations = getOperationsByMessage(messageId)(s);
+    return operations.some((op) => op.type === 'toolCalling' && op.status === 'running');
+  };
+
+/**
+ * Find a running tool operation start time by operation type.
+ */
+const getRunningToolOperationStartTime = (
+  type: OperationType,
+  toolCallId: string,
+  s: ChatStoreState,
+) => {
+  const operationIds = s.operationsByType[type] ?? [];
+  let startTime: number | undefined;
+
+  for (const id of operationIds) {
+    const operation = s.operations[id];
+    if (
+      !operation ||
+      operation.status !== 'running' ||
+      operation.metadata.tool_call_id !== toolCallId
+    ) {
+      continue;
+    }
+
+    startTime =
+      startTime === undefined
+        ? operation.metadata.startTime
+        : Math.min(startTime, operation.metadata.startTime);
+  }
+
+  return startTime;
+};
+
+/**
+ * Get the stable start time for a running tool call.
+ * Prefer the actual execution phase; fall back to the parent tool call while
+ * the execution operation has not been created yet.
+ */
+const getRunningToolCallStartTime =
+  (toolCallId: string) =>
+  (s: ChatStoreState): number | undefined => {
+    return (
+      getRunningToolOperationStartTime('executeToolCall', toolCallId, s) ??
+      getRunningToolOperationStartTime('toolCalling', toolCallId, s)
+    );
+  };
+
+/**
+ * Check if currently aborting (cleaning up after user cancellation)
+ * Used to show "Cleaning up tool calls..." message
+ */
+const isAborting = (s: ChatStoreState): boolean => {
+  const currentOps = getCurrentContextOperations(s);
+  return currentOps.some((op) => op.status === 'running' && op.metadata.isAborting);
+};
+
+/**
+ * Check if a specific message is aborting
+ */
+const isMessageAborting =
+  (messageId: string) =>
+  (s: ChatStoreState): boolean => {
+    const operations = getOperationsByMessage(messageId)(s);
+    return operations.some((op) => op.status === 'running' && op.metadata.isAborting);
+  };
+
+/**
+ * Check if regenerating (for backward compatibility)
+ */
+const isRegenerating = (s: ChatStoreState): boolean => {
+  return hasRunningOperationType('regenerate')(s);
+};
+
+/**
+ * Check if sending message (for backward compatibility)
+ * Equivalent to: hasRunningOperationType('sendMessage')
+ */
+const isSendingMessage = (s: ChatStoreState): boolean => {
+  return hasRunningOperationType('sendMessage')(s);
+};
+
+// === Unread Completion ===
+//
+// Unread is now a persisted topic status (`topics.status === 'unread'`), so
+// these selectors derive from the loaded topic map. The cross-agent badge on the
+// home sidebar reads the server-computed `SidebarAgentItem.unreadCount` instead,
+// since the home list doesn't load every agent's topics into `topicDataMap`.
+
+/**
+ * Number of topics with an unread completed generation for the given agent,
+ * counted from the agent's loaded topic bucket.
+ */
+const agentUnreadCount =
+  (agentId: string) =>
+  (s: ChatStoreState): number => {
+    const items = s.topicDataMap[topicMapKey({ agentId })]?.items;
+    if (!items) return 0;
+    let count = 0;
+    for (const topic of items) if (topic.status === 'unread') count += 1;
+    return count;
+  };
+
+/**
+ * Whether the agent has any unread completed generation (from loaded topics).
+ */
+const isAgentUnreadCompleted =
+  (agentId: string) =>
+  (s: ChatStoreState): boolean =>
+    agentUnreadCount(agentId)(s) > 0;
+
+/**
+ * Whether a specific topic has an unread completed generation. Scans the loaded
+ * topic buckets since topic items don't carry their agentId in this scope.
+ */
+const isTopicUnreadCompleted =
+  (topicId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const data of Object.values(s.topicDataMap)) {
+      const topic = data.items?.find((t) => t.id === topicId);
+      if (topic) return topic.status === 'unread';
+    }
+    return false;
+  };
+
+/**
+ * Number of topics with an unread completed generation among the given topic ids.
+ * Used to surface an aggregated unread indicator on a collapsed topic group.
+ */
+const unreadCompletedCountForTopics =
+  (topicIds: string[]) =>
+  (s: ChatStoreState): number => {
+    if (topicIds.length === 0) return 0;
+    const wanted = new Set(topicIds);
+    let count = 0;
+    for (const data of Object.values(s.topicDataMap)) {
+      if (!data.items) continue;
+      for (const topic of data.items) {
+        if (wanted.has(topic.id) && topic.status === 'unread') count += 1;
+      }
+    }
+    return count;
+  };
+
+// ━━━ Message Queue Selectors ━━━
+
+/**
+ * Get queued messages count for a context
+ */
+const queuedMessageCount =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): number =>
+    // Delegate to getQueuedMessages so the count keys off the SAME full context
+    // (threadId / scope / documentId / ...) the queue is stored under. A reduced
+    // agentId/groupId/topicId key here would report 0 for thread / page /
+    // group_agent follow-ups, so QueueTray would never mount even though the
+    // input is pinned loading by a real queued message.
+    getQueuedMessages(context)(s).length;
+
+/**
+ * Get all queued messages for a context
+ */
+const getQueuedMessages = (context: MessageMapKeyInput) => (s: ChatStoreState) => {
+  if (!context.agentId) return [];
+  // Build the key from the FULL context (threadId / scope / subAgentId /
+  // documentId), matching both the enqueue side (`messageMapKey(operationContext)`
+  // in conversationLifecycle) and getOperationsByContext. A reduced
+  // agentId/groupId/topicId key collapses thread / page / group_agent
+  // conversations onto the main-scope bucket, so their queued follow-ups would
+  // never be found.
+  return s.queuedMessages[messageMapKey(context)] ?? [];
+};
+
+const getIdleQueueHost = (context: MessageMapKeyInput) => (s: ChatStoreState) => {
+  if (getQueuedMessages(context)(s).length === 0) return;
+
+  let latest: Operation | undefined;
+  for (const op of getOperationsByContext(context)(s)) {
+    if (!INPUT_LOADING_OPERATION_TYPES.includes(op.type)) continue;
+    if (isRunningOperation(op)) return;
+    if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type)) continue;
+    if (!latest || op.metadata.startTime > latest.metadata.startTime) latest = op;
+  }
+
+  return latest;
+};
+
+// A successful top-level run always drains its queue into a steered send, so a
+// queue sitting behind a completed run is the hand-off window, not a stale queue.
+const isDrainingQueueHost = (host?: Operation): boolean =>
+  host?.status === 'completed' && !host.metadata.endedWithoutCompletion;
+
+const isQueueDrainPending = (context: MessageMapKeyInput) => (s: ChatStoreState) =>
+  isDrainingQueueHost(getIdleQueueHost(context)(s));
+
+// Send now keeps its item queued until the interrupt is confirmed; that wait is
+// part of the hand-off too, but its own send must not be re-queued.
+const isSteerHandoffPending = (context: MessageMapKeyInput) => (s: ChatStoreState) => {
+  const host = getIdleQueueHost(context)(s);
+  if (isDrainingQueueHost(host)) return true;
+
+  return host?.status === 'cancelled' && host.metadata.cancelReason === SEND_NOW_CANCEL_REASON;
+};
+
+/**
+ * Operation Selectors
+ */
+export const operationSelectors = {
+  canInterrupt,
+  canSendMessage,
+  findRootRuntimeOperation,
+  getActiveOperationTypes,
+  getAllOperations,
+  getCurrentContextOperations,
+  getCurrentOperationLabel,
+  getCurrentOperationProgress,
+  getDeepestRunningOperationByMessage,
+  getVisibleAgentRuntimeStartTimeByContext,
+  getOperationById,
+  getOperationContextFromMessage,
+  getAgentRuntimeStartTimeByContext,
+  getLatestAgentRuntimeTurnStartTime,
+  getOperationsByContext,
+  getOperationsByMessage,
+  getOperationsByType,
+  getRunningOperations,
+  getRunningQueueBlockingOperationIds,
+  getRunningToolCallStartTime,
+  hasAnyRunningOperation,
+  hasNewerConversationOperation,
+  hasRunningOperationByContext,
+  hasRunningOperationType,
+  /** @deprecated Use isAgentRuntimeRunning instead */
+  isAIGenerating: isAgentRuntimeRunning,
+
+  agentUnreadCount,
+
+  isAborting,
+
+  isAgentRunning,
+  isAgentVisiblyRunning,
+  isGroupVisiblyRunning,
+  isAgentRuntimeRunning,
+  isAgentRuntimeVisiblyRunning,
+  isAgentUnreadCompleted,
+  isAgentRuntimeRunningByContext,
+  isAgentRuntimeVisiblyRunningByContext,
+  isInputLoadingByContext,
+  isInputVisiblyLoadingByContext,
+  isAnyMessageLoading,
+  isContinuing,
+  isInSearchWorkflow,
+  isMainWindowAgentRuntimeRunning,
+  isMainWindowAgentRuntimeVisiblyRunning,
+  isMessageAborting,
+  isMessageContinuing,
+  isMessageCreating,
+  isMessageGenerating,
+  isMessageInReasoning,
+  isMessageInToolCalling,
+  isMessageProcessing,
+  isMessageRegenerating,
+  isRegenerating,
+  isQueueDrainedAtRunEnd,
+  isQueueDrainPending,
+  isSendingMessage,
+  isSteerHandoffPending,
+  hasVisiblyRunningTopic,
+  isTopicUnreadCompleted,
+  isTopicVisiblyRunning,
+  unreadCompletedCountForTopics,
+  visiblyRunningTopicIds,
+
+  // Message Queue
+  getIdleQueueHost,
+  getQueuedMessages,
+  queuedMessageCount,
+};

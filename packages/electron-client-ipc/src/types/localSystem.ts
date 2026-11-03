@@ -1,0 +1,823 @@
+import type { LocalFilePreviewFailure } from './localFilePreviewFailure';
+
+// Define types for local file operations
+export interface LocalFileItem {
+  contentType?: string;
+  createdTime: Date;
+  /** Search engine used to find this file (e.g., 'mdfind', 'fd', 'find', 'fast-glob') */
+  engine?: string;
+  isDirectory: boolean;
+  lastAccessTime: Date;
+  // Spotlight specific metadata
+  metadata?: {
+    [key: string]: any;
+  };
+  modifiedTime: Date;
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
+export type ListLocalFileSortBy = 'name' | 'modifiedTime' | 'createdTime' | 'size';
+export type ListLocalFileSortOrder = 'asc' | 'desc';
+
+export interface ListLocalFileParams {
+  /**
+   * Working directory a relative `path` resolves against (the device-bound
+   * directory, injected by the server runtime — not model-supplied). Absolute
+   * paths ignore it; absent → the daemon's process cwd.
+   */
+  cwd?: string;
+  /**
+   * Maximum number of files to return
+   * @default 100
+   */
+  limit?: number;
+  /**
+   * Directory path to list
+   */
+  path: string;
+  /**
+   * Field to sort by
+   * @default 'modifiedTime'
+   */
+  sortBy?: ListLocalFileSortBy;
+  /**
+   * Sort order
+   * @default 'desc'
+   */
+  sortOrder?: ListLocalFileSortOrder;
+}
+
+export interface ListLocalFilesResult {
+  /**
+   * List of files (truncated to limit)
+   */
+  files: LocalFileItem[];
+  /**
+   * Total count of files before truncation
+   */
+  totalCount: number;
+}
+
+export interface MoveLocalFileParams {
+  newPath: string;
+  oldPath: string;
+}
+
+export interface MoveLocalFilesParams {
+  /** Working directory each item's relative paths resolve against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  items: MoveLocalFileParams[];
+}
+
+export interface LocalMoveFilesResultItem {
+  error?: string; // Error message if this specific item failed
+  newPath?: string; // The final path after moving/renaming, if successful
+  sourcePath: string; // The original path of the item being moved/renamed
+  success: boolean; // Whether the operation for this specific item was successful
+}
+
+export interface RenameLocalFileParams {
+  newName: string;
+  path: string;
+}
+
+export interface RenameLocalFileResult {
+  error?: any;
+  newPath: string;
+  success: boolean;
+}
+
+export interface CreateLocalFileParams {
+  /** Initial content. Defaults to an empty file. */
+  content?: string;
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+export interface CreateLocalDirectoryParams {
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+/** Result of creating a file or folder. Never overwrites: an existing entry fails. */
+export interface CreateLocalEntryResult {
+  error?: string;
+  path: string;
+  success: boolean;
+}
+
+export interface CopyLocalFileItem {
+  sourcePath: string;
+  /** Omit to duplicate next to the source as `name copy.ext` / `name copy 2.ext`. */
+  targetPath?: string;
+}
+
+export interface CopyLocalFilesParams {
+  /** Working directory each item's relative paths resolve against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  items: CopyLocalFileItem[];
+}
+
+export interface LocalCopyFilesResultItem {
+  error?: string;
+  sourcePath: string;
+  success: boolean;
+  /** The path the copy was written to, when it succeeded. */
+  targetPath?: string;
+}
+
+export interface HashLocalFileParams {
+  path: string;
+}
+
+export interface LocalFileStatsParams {
+  path: string;
+}
+
+/** Basic facts about a local file, so a model can plan how to read it before opening it. */
+export interface LocalFileStats {
+  /** Number of lines; omitted for binary files and files too large to scan. */
+  lineCount?: number;
+  /** Detected MIME type, when it can be determined. */
+  mimeType?: string;
+  /** Size in bytes. */
+  size: number;
+}
+
+export interface LocalReadFileParams {
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  fullContent?: boolean;
+  loc?: [number, number];
+  path: string;
+}
+
+export interface LocalReadFilesParams {
+  /** Working directory each relative path resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  paths: string[];
+}
+
+export interface WriteLocalFileParams {
+  /**
+   * Content to write
+   */
+  content: string;
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+
+  /**
+   * File path to write to
+   */
+  path: string;
+}
+
+export interface AuditSafePathsParams {
+  paths: string[];
+  resolveAgainstScope: string;
+}
+
+export interface AuditSafePathsResult {
+  allSafe: boolean;
+}
+
+export type LocalFilePreviewAccept = 'image';
+
+export interface LocalFilePreviewUrlParams {
+  accept?: LocalFilePreviewAccept;
+  /**
+   * Allows previewing one user-selected file outside approved workspace roots.
+   * This is only for renderer previews and must not expand agent file access.
+   */
+  allowExternalFile?: boolean;
+  path: string;
+  /**
+   * Exposes sibling workspace resources through the same short-lived preview
+   * session. Intended for HTML documents whose relative URLs must resolve as
+   * they do on disk. User-approved external files are restricted to their
+   * containing directory.
+   */
+  resourceScope?: 'workspace';
+  workingDirectory: string;
+}
+
+export interface LocalFilePreviewUrlResult extends LocalFilePreviewFailure {
+  success: boolean;
+  url?: string;
+}
+
+export interface LocalFilePreviewText {
+  content: string;
+  contentType: string;
+  type: 'text';
+}
+
+export interface LocalFilePreviewImage {
+  base64: string;
+  contentType: string;
+  type: 'image';
+}
+
+/**
+ * Binary document (pdf / office) small enough to preview in-app, carried as
+ * base64 so it survives IPC / RPC serialization. Oversized documents stay on
+ * the `binary` / `pdf` unsupported variants.
+ */
+export interface LocalFilePreviewDocument {
+  base64: string;
+  contentType: string;
+  type: 'document';
+}
+
+export interface LocalFilePreviewUnsupported {
+  contentType: string;
+  type: 'binary' | 'pdf' | 'video';
+}
+
+export type LocalFilePreview =
+  | LocalFilePreviewDocument
+  | LocalFilePreviewImage
+  | LocalFilePreviewText
+  | LocalFilePreviewUnsupported;
+
+export interface LocalFilePreviewResult extends LocalFilePreviewFailure {
+  preview?: LocalFilePreview;
+  success: boolean;
+}
+
+export interface LocalReadFileResult {
+  /**
+   * Character count of the content within the specified `loc` range.
+   */
+  charCount: number;
+  /**
+   * Content of the file within the specified `loc` range.
+   */
+  content: string;
+  createdTime: Date;
+  filename: string;
+  fileType: string;
+  /**
+   * File record id of the uploaded image. Present only when
+   * {@link LocalReadFileResult.isImage} is true and the main process
+   * successfully uploaded the bytes to file storage.
+   */
+  imageFileId?: string;
+  /**
+   * Durable URL of the uploaded image. The main process uploads image reads
+   * to file storage directly (base64 never crosses IPC or reaches the DB);
+   * the tool layer forwards this URL to vision models. Absent when the
+   * upload was declined/failed — `content` then carries a placeholder.
+   */
+  imageUrl?: string;
+  /**
+   * True when the path resolves to an image file. The binary is NOT placed
+   * in `content`; instead {@link LocalReadFileResult.imageUrl} references
+   * the uploaded bytes so vision models can inspect the image.
+   */
+  isImage?: boolean;
+  /**
+   * Line count of the content within the specified `loc` range.
+   */
+  lineCount: number;
+  loc: [number, number];
+  modifiedTime: Date;
+  /**
+   * Total character count of the entire file.
+   */
+  totalCharCount: number;
+  /**
+   * Total line count of the entire file.
+   */
+  totalLineCount: number;
+  /**
+   * True when the content was cut at the output character cap before the
+   * requested `loc` window ended.
+   */
+  truncated?: boolean;
+}
+
+export interface LocalSearchFilesParams {
+  // Content options
+  contentContains?: string; // Search for files containing specific text
+
+  // Time options (ISO 8601 date strings)
+  createdAfter?: string;
+  createdBefore?: string;
+
+  // Result options
+  detailed?: boolean;
+
+  // Path options
+  directory?: string; // Limit search to specific directory
+
+  exclude?: string[]; // Paths to exclude from search
+  // File type options
+  fileTypes?: string[]; // File extensions to filter (e.g., ['pdf', 'docx'])
+  // Basic search
+  keywords: string;
+  limit?: number;
+
+  liveUpdate?: boolean;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
+
+  /** Working directory scope. When `directory` is not specified, used as the default search location. */
+  scope?: string;
+  sortBy?: 'name' | 'date' | 'size';
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface ProjectFileIndexEntry {
+  /**
+   * Directory whose children were deliberately left out of the index because
+   * Git collapsed it (`git ls-files --directory` reports a fully ignored
+   * directory as a single entry). The row is expandable, but its children must
+   * be fetched on demand via `listProjectDirectory`.
+   */
+  collapsed?: boolean;
+  /** Whether Git ignore rules match this file or directory. */
+  gitIgnored?: boolean;
+  isDirectory: boolean;
+  name: string;
+  path: string;
+  relativePath: string;
+}
+
+export interface ProjectFileIndexParams {
+  /** Working directory used to resolve the project root. Defaults to Electron process cwd. */
+  scope?: string;
+}
+
+export interface ProjectFileIndexResult {
+  entries: ProjectFileIndexEntry[];
+  indexedAt: string;
+  root: string;
+  source: 'git' | 'glob' | 'sandbox';
+  /**
+   * The host stopped short of the whole tree. Set only by hosts that cap a
+   * listing; a tree that is missing entries and does not say so is worse than
+   * one that refuses, because it reads as complete.
+   */
+  truncated?: boolean;
+}
+
+export interface ProjectDirectoryListParams {
+  /** Cap on returned children; the caller is told when more exist. */
+  limit?: number;
+  /** Directory to list, relative to `root`. A trailing slash is tolerated. */
+  relativePath: string;
+  /** Project root the returned `relativePath`s are resolved against. */
+  root: string;
+}
+
+export interface ProjectDirectoryListResult {
+  entries: ProjectFileIndexEntry[];
+  /** True when the directory holds more children than `limit` returned. */
+  truncated: boolean;
+}
+
+export interface TrashLocalFilesParams {
+  paths: string[];
+}
+
+export interface TrashLocalFilesResultItem {
+  /** Error message if this specific path failed. */
+  error?: string;
+  /** The path as it was requested, so the caller can reconcile its own rows. */
+  path: string;
+  success: boolean;
+}
+
+export interface TrashLocalFilesResult {
+  /**
+   * Per-path outcome, in request order. A batch is not atomic: an earlier path
+   * can already be in the trash when a later one fails, so the caller needs
+   * this to reconcile its tree and to retry only what is left.
+   */
+  items: TrashLocalFilesResultItem[];
+  /** True only when every path was trashed. */
+  success: boolean;
+}
+
+export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  changedOnly?: boolean;
+  excludeIgnored?: boolean;
+  limit?: number;
+  query: string;
+}
+
+export interface ProjectFileSearchResult {
+  entries: ProjectFileIndexEntry[];
+  root: string;
+  searchedAt: string;
+  source: 'git' | 'glob';
+}
+
+export interface OpenLocalFileParams {
+  path: string;
+}
+
+export interface OpenLocalFolderParams {
+  isDirectory?: boolean;
+  path: string;
+}
+
+// Shell command types
+export interface RunCommandParams {
+  agentId?: string;
+  command: string;
+  cwd?: string;
+  description?: string;
+  /** Merged into the child process environment (after `process.env`). */
+  env?: Record<string, string>;
+  run_in_background?: boolean;
+  /**
+   * Run this command inside the device sandbox (writes confined to `cwd` + the
+   * OS temp dir, no network). Set by the caller that knows the agent picked the
+   * "Local Sandbox" execution environment — the server device-proxy for
+   * gateway-routed runs, the client executor for in-process desktop runs. The
+   * model never supplies it: the manifest doesn't expose it, and it is a
+   * user-owned security decision, not a per-call one.
+   *
+   * Absent/false keeps the historical unsandboxed path, so nothing changes for
+   * agents that never opted in. When true the sandbox is mandatory — a host
+   * that cannot provide one fails the command instead of downgrading.
+   */
+  sandbox?: boolean;
+  /**
+   * Let a sandboxed command reach the package-registry allowlist. Ignored
+   * unless `sandbox` is true. Never means "the network is open" — the backend
+   * refuses a catch-all allowlist, so this opens a fixed, named set of
+   * registries and forges and nothing else.
+   */
+  sandboxNetwork?: boolean;
+  timeout?: number;
+  topicId?: string;
+}
+
+/**
+ * Whether this device can actually run sandboxed commands, as reported by the
+ * desktop main process. The renderer needs the real answer (not a platform
+ * guess) before offering the "Local Sandbox" option: SRT supports macOS and
+ * Linux only, and on Linux it additionally depends on host binaries that may be
+ * missing.
+ */
+export interface DeviceSandboxCapabilityResult {
+  available: boolean;
+  /**
+   * The app can provision the backend itself on this host (one UAC prompt on
+   * Windows). Lets the UI offer a setup button instead of a dead end — a user
+   * who installed the desktop app should not have to run anything by hand
+   * before the sandbox works.
+   */
+  canInstall: boolean;
+  /** What to do by hand when the app cannot install it (e.g. Linux packages). */
+  instructions?: string;
+  /** Human-readable explanation when `available` is false. */
+  reason?: string;
+}
+
+/**
+ * Result of a user-initiated sandbox setup, plus the capability re-read
+ * afterwards so the caller never has to guess whether it took.
+ */
+export interface DeviceSandboxInstallResult {
+  capability: DeviceSandboxCapabilityResult;
+  /** Failure detail when `status` is `failed`. */
+  error?: string;
+  /** `cancelled` means the user dismissed the elevation prompt — not a failure. */
+  status: 'cancelled' | 'failed' | 'installed' | 'not-installable';
+}
+
+export interface EnsureSandboxWorkspaceParams {
+  /** Scopes the workspace per agent, so two agents never share a fence root. */
+  agentId: string;
+}
+
+export interface EnsureSandboxWorkspaceResult {
+  /**
+   * Absolute path of the created directory. Absent when it could not be
+   * created — the caller then leaves the working directory unset rather than
+   * pointing it at something that does not exist.
+   */
+  path?: string;
+  /** Why the directory could not be created. */
+  reason?: string;
+}
+
+export interface RunCommandResult {
+  duration_ms?: number;
+  error?: string;
+  exit_code?: number;
+  output?: string;
+  output_files?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
+  /**
+   * Whether the command was actually confined by the device sandbox — what
+   * happened, not what was requested. Absent when no sandbox was asked for.
+   */
+  sandboxed?: boolean;
+  shell_id?: string;
+  stderr?: string;
+  stdout?: string;
+  success: boolean;
+}
+
+export interface GetCommandOutputParams {
+  filter?: string;
+  shell_id: string;
+  /**
+   * Maximum time to wait for this observation before returning.
+   * Does not kill the process when the timeout elapses.
+   */
+  timeout?: number;
+}
+
+export interface GetCommandOutputResult {
+  duration_ms?: number;
+  error?: string;
+  /**
+   * Present only after the command has exited.
+   * `0` means success, non-zero means the command finished with an error.
+   * `undefined` means the command is still running.
+   */
+  exit_code?: number;
+  output: string;
+  output_files?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
+  stderr: string;
+  stdout: string;
+  success: boolean;
+}
+
+/**
+ * User preference for the shell that runs agent commands on Windows.
+ * `auto` = pwsh 7 → Windows PowerShell 5.1 → cmd.exe detection chain.
+ */
+export type WindowsShellMode = 'auto' | 'gitbash';
+
+export interface DesktopShellSettings {
+  /** Shell currently used to execute commands (after applying the mode). */
+  currentShell: {
+    displayName: string;
+    path: string;
+  };
+  /** Whether Git for Windows is installed — controls showing the Git Bash option. */
+  gitBashAvailable: boolean;
+  /** Detected Git Bash executable path, when available. */
+  gitBashPath?: string;
+  mode: WindowsShellMode;
+}
+
+export interface SetShellModeParams {
+  mode: WindowsShellMode;
+}
+
+export interface KillCommandParams {
+  shell_id: string;
+}
+
+export interface KillCommandResult {
+  error?: string;
+  success: boolean;
+}
+
+// Grep types — declared locally to keep this package leaf-only (no reverse
+// dependency on `@lobechat/local-file-shell`). The shape mirrors the
+// definition in `local-file-shell/types`; the two must stay in sync, but
+// they're structurally compatible by design.
+export interface GrepContentParams {
+  '-A'?: number;
+  '-B'?: number;
+  '-C'?: number;
+  '-i'?: boolean;
+  '-n'?: boolean;
+  'glob'?: string;
+  'head_limit'?: number;
+  'multiline'?: boolean;
+  'output_mode'?: 'content' | 'count' | 'files_with_matches';
+  /** Legacy alias for `scope`. Takes precedence when set; prefer `scope` (the manifest-documented name) for new callers. */
+  'path'?: string;
+  'pattern': string;
+  /** Working directory scope. Limits the search to this directory. Defaults to `process.cwd()`. */
+  'scope'?: string;
+  /** Preferred search tool: 'rg' | 'ag' | 'grep' */
+  'tool'?: 'ag' | 'grep' | 'rg';
+  'type'?: string;
+}
+
+export interface GrepContentResult {
+  /** Search engine used: 'rg' | 'ag' | 'grep' | 'nodejs' */
+  engine?: string;
+  error?: string;
+  matches: string[];
+  success: boolean;
+  total_matches: number;
+}
+
+// Glob types — same rationale as Grep above.
+export interface GlobFilesParams {
+  /** Maximum number of results to collect. When omitted, callers may apply their own default. */
+  limit?: number;
+  pattern: string;
+  /** Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory. */
+  scope?: string;
+}
+
+export interface GlobFilesResult {
+  /** Search engine used: 'fd' | 'find' | 'fast-glob' */
+  engine?: string;
+  error?: string;
+  files: string[];
+  success: boolean;
+  total_files: number;
+}
+
+// Edit types
+export interface EditLocalFileParams {
+  /** Working directory a relative `file_path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  file_path: string;
+  new_string: string;
+  old_string: string;
+  replace_all?: boolean;
+}
+
+export interface EditLocalFileResult {
+  diffText?: string;
+  error?: string;
+  linesAdded?: number;
+  linesDeleted?: number;
+  replacements: number;
+  success: boolean;
+}
+
+// Open Dialog types
+export interface ShowOpenDialogParams {
+  /**
+   * File type filters
+   */
+  filters?: { extensions: string[]; name: string }[];
+  /**
+   * Allow selecting multiple files
+   */
+  multiple?: boolean;
+  /**
+   * Dialog title
+   */
+  title?: string;
+}
+
+export interface ShowOpenDialogResult {
+  /**
+   * Whether the dialog was cancelled
+   */
+  canceled: boolean;
+  /**
+   * The selected file paths (empty if cancelled)
+   */
+  filePaths: string[];
+}
+
+// Pick File (dialog + read in one IPC call)
+export interface PickFileParams {
+  filters?: { extensions: string[]; name: string }[];
+  title?: string;
+}
+
+export interface PickFileResult {
+  canceled: boolean;
+  file?: {
+    data: Uint8Array;
+    mimeType: string;
+    name: string;
+  };
+}
+
+// Save Dialog types
+export interface ShowSaveDialogParams {
+  /**
+   * Default file name
+   */
+  defaultPath?: string;
+  /**
+   * File type filters
+   */
+  filters?: { extensions: string[]; name: string }[];
+  /**
+   * Dialog title
+   */
+  title?: string;
+}
+
+export interface ShowSaveDialogResult {
+  /**
+   * Whether the dialog was cancelled
+   */
+  canceled: boolean;
+  /**
+   * The selected file path (undefined if cancelled)
+   */
+  filePath?: string;
+}
+
+export interface PrepareSkillDirectoryParams {
+  forceRefresh?: boolean;
+  url: string;
+  zipHash: string;
+}
+
+export interface PrepareSkillDirectoryResult {
+  error?: string;
+  extractedDir: string;
+  success: boolean;
+  zipPath: string;
+}
+
+export interface ResolveSkillResourcePathParams {
+  path: string;
+  url: string;
+  zipHash: string;
+}
+
+export interface ResolveSkillResourcePathResult {
+  error?: string;
+  fullPath?: string;
+  success: boolean;
+}
+
+export type ProjectSkillScope = 'device' | 'project';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+
+export interface ProjectSkillItem {
+  description?: string;
+  /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
+  fileCount: number;
+  /**
+   * Relative paths (within `skillDir`) of all regular files under the skill,
+   * sorted lexicographically and capped to a safe maximum. Includes `SKILL.md`.
+   */
+  files: string[];
+  name: string;
+  /** Absolute path to the SKILL.md file. */
+  path: string;
+  /** Approved root used by the host preview protocol for this skill. */
+  previewRoot: string;
+  /** Skill filesystem scope: project cwd or execution-device home. */
+  scope: ProjectSkillScope;
+  /** Directory containing the SKILL.md (e.g. `<root>/.agents/skills/spa-routes`). */
+  skillDir: string;
+  /** Source directory the skill was discovered in. */
+  source: ProjectSkillSource;
+}
+
+export interface ListProjectSkillsParams {
+  /** Working directory used to resolve the project root. */
+  scope: string;
+}
+
+export interface ListProjectSkillsResult {
+  root: string;
+  skills: ProjectSkillItem[];
+  /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
+  source: ProjectSkillSource | null;
+}
+
+export interface InitWorkspaceParams {
+  /** Working directory used to resolve the project root. */
+  scope: string;
+}
+
+/**
+ * Project-root agent instructions (`AGENTS.md` / `CLAUDE.md`) read in one shot
+ * during workspace init. Full body is carried (capped) so the server can inject
+ * it into the system role and the web UI can render it without a second call.
+ * Mirrors `WorkspaceInstructions` in `@lobechat/types` (kept local — this is a
+ * leaf package with no `@lobechat/types` dependency).
+ */
+export interface WorkspaceInstructionsItem {
+  content: string;
+  source: 'AGENTS.md' | 'CLAUDE.md';
+}
+
+/**
+ * One-call workspace scan: project-root instructions + project skills (both
+ * `.agents/skills` and `.claude/skills`, merged). Mirrors `WorkspaceInitResult`
+ * in `@lobechat/types`; the server narrows `skills` to `ProjectSkillMeta` when
+ * caching onto `devices.workingDirs[].workspace`.
+ */
+export interface InitWorkspaceResult {
+  instructions: WorkspaceInstructionsItem[];
+  root: string;
+  skills: ProjectSkillItem[];
+}

@@ -1,0 +1,976 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import { LobeZhipuAI, params } from './index';
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
+
+// Mock the console.error to avoid polluting test output
+vi.spyOn(console, 'error').mockImplementation(() => {});
+
+let instance: LobeOpenAICompatibleRuntime;
+
+beforeEach(() => {
+  instance = new LobeZhipuAI({ apiKey: 'test' });
+
+  // Mock chat.completions.create
+  vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
+    new ReadableStream() as any,
+  );
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('LobeZhipuAI - custom features', () => {
+  describe('Debug Configuration', () => {
+    it('should disable debug by default', () => {
+      delete process.env.DEBUG_ZHIPU_CHAT_COMPLETION;
+      const result = params.debug.chatCompletion();
+      expect(result).toBe(false);
+    });
+
+    it('should enable debug when env is set', () => {
+      process.env.DEBUG_ZHIPU_CHAT_COMPLETION = '1';
+      const result = params.debug.chatCompletion();
+      expect(result).toBe(true);
+      delete process.env.DEBUG_ZHIPU_CHAT_COMPLETION;
+    });
+  });
+
+  describe('handlePayload', () => {
+    it('should send mapped model id when modelIdMapping is configured', async () => {
+      const mappedInstance = new LobeZhipuAI({
+        apiKey: 'test',
+        modelIdMapping: { 'glm-4-alltools': 'upstream-glm-deployment' },
+      });
+      vi.spyOn(mappedInstance['client'].chat.completions, 'create').mockResolvedValue(
+        new ReadableStream() as any,
+      );
+
+      await mappedInstance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'glm-4-alltools',
+        temperature: 2,
+        top_p: 2,
+      });
+
+      expect(mappedInstance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'upstream-glm-deployment',
+          temperature: 0.99,
+          top_p: 0.99,
+        }),
+        expect.anything(),
+      );
+    });
+
+    describe('Web Search Feature', () => {
+      it('should add web_search tool when enabledSearch is true', async () => {
+        await instance.chat({
+          enabledSearch: true,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4',
+          temperature: 0,
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tools: expect.arrayContaining([
+              expect.objectContaining({
+                type: 'web_search',
+                web_search: expect.objectContaining({
+                  enable: true,
+                  result_sequence: 'before',
+                  search_engine: 'search_std',
+                  search_result: true,
+                }),
+              }),
+            ]),
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should use custom search engine from env', async () => {
+        process.env.ZHIPU_SEARCH_ENGINE = 'search_pro';
+
+        const payload = params.chatCompletion.handlePayload({
+          enabledSearch: true,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4',
+        });
+
+        expect(payload.tools).toContainEqual(
+          expect.objectContaining({
+            type: 'web_search',
+            web_search: expect.objectContaining({
+              search_engine: 'search_pro',
+            }),
+          }),
+        );
+
+        delete process.env.ZHIPU_SEARCH_ENGINE;
+      });
+
+      it('should merge web_search with existing tools', async () => {
+        const existingTool = {
+          type: 'function' as const,
+          function: { name: 'test_tool', parameters: {} },
+        };
+
+        await instance.chat({
+          enabledSearch: true,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4',
+          temperature: 0,
+          tools: [existingTool],
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tools: expect.arrayContaining([
+              existingTool,
+              expect.objectContaining({ type: 'web_search' }),
+            ]),
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should not add web_search tool when enabledSearch is false', async () => {
+        await instance.chat({
+          enabledSearch: false,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4',
+          temperature: 0,
+        });
+
+        const callArgs = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(callArgs.tools).toBeUndefined();
+      });
+
+      it('should use existing tools without web_search when enabledSearch is not set', async () => {
+        const existingTool = {
+          type: 'function' as const,
+          function: { name: 'test_tool', parameters: {} },
+        };
+
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4',
+          temperature: 0,
+          tools: [existingTool],
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tools: [existingTool],
+          }),
+          expect.anything(),
+        );
+      });
+    });
+
+    describe('Model-specific max_tokens constraints', () => {
+      it('should limit max_tokens to 1024 for glm-4v models', async () => {
+        await instance.chat({
+          max_tokens: 2000,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4v',
+          temperature: 0.5,
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            max_tokens: 1024,
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should limit max_tokens to 15300 for glm-zero-preview model', async () => {
+        await instance.chat({
+          max_tokens: 20000,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-zero-preview',
+          temperature: 0.5,
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            max_tokens: 15_300,
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should allow max_tokens lower than constraint for glm-4v', async () => {
+        await instance.chat({
+          max_tokens: 512,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4v',
+          temperature: 0.5,
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            max_tokens: 512,
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should not limit max_tokens for other models', async () => {
+        await instance.chat({
+          max_tokens: 4000,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4',
+          temperature: 0.5,
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            max_tokens: 4000,
+          }),
+          expect.anything(),
+        );
+      });
+    });
+
+    describe('glm-4-alltools temperature and top_p constraints', () => {
+      it('should clamp temperature to [0.01, 0.99] for glm-4-alltools', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4-alltools',
+          temperature: 0,
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            temperature: 0.01,
+          }),
+          expect.anything(),
+        );
+      });
+      it('should clamp top_p to [0.01, 0.99] for glm-4-alltools', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4-alltools',
+          temperature: 0.5,
+          top_p: 0,
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            top_p: 0.01,
+          }),
+          expect.anything(),
+        );
+      });
+      it('should normalize and preserve temperature in range for glm-4-alltools', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4-alltools',
+          temperature: 1, // Will be normalized to 0.5
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            temperature: 0.5,
+          }),
+          expect.anything(),
+        );
+      });
+    });
+
+    describe('Temperature normalization', () => {
+      it('should normalize temperature by dividing by 2', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4',
+          temperature: 1,
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            temperature: 0.5,
+          }),
+          expect.anything(),
+        );
+      });
+    });
+
+    describe('Thinking mode for GLM-4.5 models', () => {
+      it('should include thinking type for glm-4.5 models', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4.5',
+          temperature: 0.5,
+          thinking: { type: 'enabled', budget_tokens: 1000 },
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            thinking: { type: 'enabled' },
+          }),
+          expect.anything(),
+        );
+      });
+    });
+
+    describe('tool_stream for streaming tool calls', () => {
+      it.each([
+        ['glm-4.6', true, true],
+        ['glm-4.7', true, true],
+        ['glm-5', true, true],
+        ['glm-5.1', true, true],
+        ['glm-5.2', true, true],
+        ['glm-5.3', true, true],
+        ['glm-5.3-flash', true, true],
+        ['glm-6', true, true],
+        ['glm-4.5', true, undefined],
+        ['glm-5-turbo', true, undefined],
+        ['glm-4', true, undefined],
+        ['glm-5.2', false, undefined],
+        ['glm-5.1', false, undefined],
+      ] as const)('model=%s stream=%s → tool_stream=%s', (model, stream, expected) => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model,
+          stream,
+          temperature: 0.5,
+        });
+
+        expect(payload.tool_stream).toBe(expected);
+      });
+
+      it('should allow compatible channels to disable tool_stream without disabling Zhipu payload handling', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [
+              { content: 'Hello', reasoning: { content: 'cached thought' }, role: 'user' },
+            ],
+            model: 'glm-5.2',
+            preserveThinking: true,
+            stream: true,
+            temperature: 0.5,
+            thinking: { type: 'enabled' },
+          },
+          { disableToolStream: true },
+        );
+
+        expect(payload.tool_stream).toBeUndefined();
+        expect(payload.thinking).toEqual({ clear_thinking: false, type: 'enabled' });
+        expect(payload.messages).toEqual([
+          { content: 'Hello', reasoning_content: 'cached thought', role: 'user' },
+        ]);
+      });
+
+      it('should suppress tool_stream for Fireworks-hosted GLM streams', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            stream: true,
+            temperature: 0.5,
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.tool_stream).toBeUndefined();
+      });
+    });
+
+    describe('GLM-5.2 optional params', () => {
+      it('should forward reasoning_effort with thinking enabled for Z.ai', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.2',
+          reasoning_effort: 'max',
+          temperature: 1,
+          thinking: { type: 'enabled' },
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+
+      it('should omit thinking when Fireworks handles GLM-5.2 reasoning_effort', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            preserveThinking: true,
+            reasoning_effort: 'max',
+            temperature: 1,
+            thinking: { type: 'enabled' },
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toBeUndefined();
+        expect(payload.reasoning_history).toBe('preserved');
+      });
+
+      it('should omit reasoning_effort when Fireworks handles disabled thinking', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            reasoning_effort: 'max',
+            temperature: 1,
+            thinking: { type: 'disabled' },
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.reasoning_effort).toBeUndefined();
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+      });
+
+      it('should keep disabled thinking with reasoning_effort for Z.ai', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.2',
+          reasoning_effort: 'max',
+          temperature: 1,
+          thinking: { type: 'disabled' },
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+      });
+    });
+
+    describe('GLM-5.3 always-on thinking', () => {
+      it.each(['glm-5.3', 'glm-5.3-flash'])(
+        'should coerce disabled thinking to enabled for %s',
+        (model) => {
+          const payload = params.chatCompletion.handlePayload({
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model,
+            reasoning_effort: 'low',
+            temperature: 1,
+            thinking: { type: 'disabled' },
+          });
+
+          expect(payload.reasoning_effort).toBe('low');
+          expect(payload.thinking).toEqual({ type: 'enabled' });
+        },
+      );
+
+      it('should enable thinking when the payload omits it', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.3',
+          reasoning_effort: 'max',
+          temperature: 1,
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+    });
+
+    describe('preserve thinking mapping', () => {
+      it('should map preserveThinking=true to clear_thinking=false and convert reasoning content', () => {
+        const payload = {
+          messages: [
+            { content: 'hello', role: 'user' },
+            {
+              content: 'answer',
+              reasoning: { content: 'reasoning content' },
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+          preserveThinking: true,
+          thinking: { budget_tokens: 1024, type: 'enabled' },
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toEqual({ clear_thinking: false, type: 'enabled' });
+        expect(result.messages).toEqual([
+          { content: 'hello', role: 'user' },
+          {
+            content: 'answer',
+            reasoning_content: 'reasoning content',
+            role: 'assistant',
+          },
+        ]);
+      });
+
+      it('should still convert reasoning to reasoning_content when preserveThinking is absent', () => {
+        const payload = {
+          messages: [
+            {
+              content: 'answer',
+              reasoning: { content: 'reasoning content' },
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toBeUndefined();
+        expect(result.messages).toEqual([
+          {
+            content: 'answer',
+            reasoning_content: 'reasoning content',
+            role: 'assistant',
+          },
+        ]);
+      });
+
+      it('should map preserveThinking=false to clear_thinking=true', () => {
+        const payload = {
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'glm-4.7',
+          preserveThinking: false,
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toEqual({ clear_thinking: true });
+      });
+
+      it('should keep caller-provided reasoning_content', () => {
+        const payload = {
+          messages: [
+            {
+              content: 'answer',
+              reasoning_content: 'existing reasoning content',
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+          preserveThinking: true,
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.messages).toEqual([
+          {
+            content: 'answer',
+            reasoning_content: 'existing reasoning content',
+            role: 'assistant',
+          },
+        ]);
+      });
+    });
+
+    describe('Preserve other payload properties', () => {
+      it('should preserve all other properties', async () => {
+        await instance.chat({
+          frequency_penalty: 0.5,
+          max_tokens: 100,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-4',
+          presence_penalty: 0.3,
+          temperature: 0.5,
+          top_p: 0.9,
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            frequency_penalty: 0.5,
+            max_tokens: 100,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-4',
+            presence_penalty: 0.3,
+            temperature: 0.25, // Normalized from 0.5
+            top_p: 0.9,
+          }),
+          expect.anything(),
+        );
+      });
+    });
+  });
+
+  describe('handleStream', () => {
+    describe('Tool calls index fixing for GLM-4.5', () => {
+      const chunk = (delta: unknown, model = 'glm-4.5') => ({
+        choices: delta === undefined ? undefined : [{ delta, finish_reason: null, index: 0 }],
+        created: 1234567890,
+        id: 'chatcmpl-123',
+        model,
+        object: 'chat.completion.chunk',
+      });
+
+      const runStream = async (chunks: unknown[]) => {
+        const source = new ReadableStream({
+          start(controller) {
+            for (const c of chunks) controller.enqueue(c);
+            controller.close();
+          },
+        });
+
+        const out = params.chatCompletion.handleStream!(
+          source as any,
+          {
+            callbacks: {},
+            inputStartAt: Date.now(),
+            payload: { model: 'glm-4.5' },
+          } as any,
+        );
+
+        const reader = (out as ReadableStream).getReader();
+        let text = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          text += typeof value === 'string' ? value : new TextDecoder().decode(value as any);
+        }
+        return text;
+      };
+
+      const toolCallEvents = (sse: string) =>
+        sse
+          .split('\n')
+          .filter((line) => line.startsWith('data: [{'))
+          .map((line) => JSON.parse(line.slice('data: '.length)));
+
+      it('should fix negative tool_calls index to positive', async () => {
+        const sse = await runStream([
+          chunk({
+            tool_calls: [
+              { index: -1, id: 'call_1', function: { name: 'tool1', arguments: '{}' } },
+              { index: -1, id: 'call_2', function: { name: 'tool2', arguments: '{}' } },
+            ],
+          }),
+        ]);
+
+        expect(sse).toContain('event: tool_calls');
+        expect(toolCallEvents(sse)[0].map((c: any) => c.index)).toEqual([0, 1]);
+      });
+
+      it('should preserve positive tool_calls index', async () => {
+        const sse = await runStream([
+          chunk(
+            {
+              tool_calls: [
+                { index: 0, id: 'call_1', function: { name: 'tool1', arguments: '{}' } },
+                { index: 1, id: 'call_2', function: { name: 'tool2', arguments: '{}' } },
+              ],
+            },
+            'glm-4',
+          ),
+        ]);
+
+        expect(toolCallEvents(sse)[0].map((c: any) => c.index)).toEqual([0, 1]);
+      });
+
+      it('should fix only the negative entry among mixed indices', async () => {
+        const sse = await runStream([
+          chunk({
+            tool_calls: [
+              { index: 0, id: 'call_1', function: { name: 'tool1', arguments: '{}' } },
+              { index: -1, id: 'call_2', function: { name: 'tool2', arguments: '{}' } },
+              { index: 2, id: 'call_3', function: { name: 'tool3', arguments: '{}' } },
+            ],
+          }),
+        ]);
+
+        expect(toolCallEvents(sse)[0].map((c: any) => c.index)).toEqual([0, 1, 2]);
+      });
+
+      it('should reindex negative tool_calls across separate chunks', async () => {
+        const sse = await runStream([
+          chunk({ tool_calls: [{ index: -1, id: 'call_1', function: { name: 'tool1' } }] }),
+          chunk({ tool_calls: [{ index: -1, function: { arguments: '{"a":1}' } }] }),
+        ]);
+
+        const events = toolCallEvents(sse);
+        expect(events.at(-1)[0]).toMatchObject({ index: 0 });
+        expect(sse).toContain('{\\"a\\":1}');
+      });
+
+      it('should filter out incomplete placeholder tool_call chunks from proxies', async () => {
+        // Some proxies (e.g. aihubmix) send an empty placeholder before the real
+        // chunk when tool_stream is on; letting it through throws ZodError in
+        // parseToolCalls.
+        const sse = await runStream([
+          chunk(
+            { tool_calls: [{ function: { arguments: '' }, index: 0, type: 'function' }] },
+            'glm-5',
+          ),
+          chunk(
+            {
+              tool_calls: [
+                {
+                  function: { arguments: '{"expression":"1+1"}', name: 'calculator' },
+                  id: 'tool-abc123',
+                  index: 0,
+                  type: 'function',
+                },
+              ],
+            },
+            'glm-5',
+          ),
+        ]);
+
+        const events = toolCallEvents(sse);
+        expect(events).toHaveLength(1);
+        expect(events[0][0]).toMatchObject({ id: 'tool-abc123', index: 0 });
+      });
+
+      it('should drop the delta when every tool_call is a placeholder', async () => {
+        const sse = await runStream([
+          chunk({ tool_calls: [{ function: { arguments: '' }, index: 0, type: 'function' }] }),
+        ]);
+
+        expect(toolCallEvents(sse)).toHaveLength(0);
+      });
+
+      it('should pass through chunks without tool_calls', async () => {
+        const sse = await runStream([chunk({ content: 'Hello' }, 'glm-4')]);
+
+        expect(sse).toContain('event: text');
+        expect(sse).toContain('"Hello"');
+      });
+
+      it('should pass through chunks without choices', async () => {
+        const sse = await runStream([chunk(undefined, 'glm-4')]);
+
+        expect(toolCallEvents(sse)).toHaveLength(0);
+      });
+
+      it('should emit no tool_calls for an empty tool_calls array', async () => {
+        const sse = await runStream([chunk({ tool_calls: [] }, 'glm-4')]);
+
+        expect(toolCallEvents(sse)).toHaveLength(0);
+      });
+    });
+  });
+
+  describe('exports', () => {
+    it('should export params object', () => {
+      expect(params).toBeDefined();
+      expect(params.provider).toBe('zhipu');
+      expect(params.baseURL).toBe('https://open.bigmodel.cn/api/paas/v4');
+      expect(params.chatCompletion).toBeDefined();
+      expect(params.debug).toBeDefined();
+      expect(params.models).toBeDefined();
+    });
+
+    it('should export chatCompletion configuration with handlePayload', () => {
+      expect(params.chatCompletion.handlePayload).toBeDefined();
+      expect(typeof params.chatCompletion.handlePayload).toBe('function');
+    });
+
+    it('should export chatCompletion configuration with handleStream', () => {
+      expect(params.chatCompletion.handleStream).toBeDefined();
+      expect(typeof params.chatCompletion.handleStream).toBe('function');
+    });
+
+    it('should export debug configuration', () => {
+      expect(params.debug.chatCompletion).toBeDefined();
+      expect(typeof params.debug.chatCompletion).toBe('function');
+    });
+
+    it('should export models function', () => {
+      expect(params.models).toBeDefined();
+      expect(typeof params.models).toBe('function');
+    });
+  });
+
+  describe('models', () => {
+    const mockFetch = vi.fn();
+    const originalFetch = global.fetch;
+
+    beforeEach(() => {
+      global.fetch = mockFetch;
+      vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('should fetch and process models with correct headers', async () => {
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          rows: [
+            {
+              description: 'GLM-4 model',
+              modelCode: 'glm-4',
+              modelName: 'GLM-4',
+            },
+            {
+              description: 'GLM-4V model',
+              modelCode: 'glm-4v',
+              modelName: 'GLM-4V',
+            },
+          ],
+        }),
+      });
+
+      const mockClient = { apiKey: 'test_api_key' };
+      await params.models({ client: mockClient as any });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://open.bigmodel.cn/api/fine-tuning/model_center/list?pageSize=100&pageNum=1',
+        {
+          headers: {
+            'Authorization': 'Bearer test_api_key',
+            'Bigmodel-Organization': 'lobehub',
+            'Bigmodel-Project': 'lobechat',
+          },
+          method: 'GET',
+        },
+      );
+    });
+
+    it('should process model list correctly', async () => {
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          rows: [
+            {
+              description: 'GLM-4 model',
+              modelCode: 'glm-4',
+              modelName: 'GLM-4',
+            },
+          ],
+        }),
+      });
+
+      const mockClient = { apiKey: 'test_api_key' };
+      const models = await params.models({ client: mockClient as any });
+
+      expect(models).toBeDefined();
+      expect(Array.isArray(models)).toBe(true);
+    });
+
+    it('should transform modelCode to id and modelName to displayName', async () => {
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          rows: [
+            {
+              description: 'Test model',
+              modelCode: 'test-model-code',
+              modelName: 'Test Model Name',
+            },
+          ],
+        }),
+      });
+
+      const mockClient = { apiKey: 'test_api_key' };
+      const models = await params.models({ client: mockClient as any });
+
+      // processModelList will merge with LOBE_DEFAULT_MODEL_LIST
+      // Check that fetch was called and data was processed
+      expect(mockFetch).toHaveBeenCalled();
+      expect(models).toBeDefined();
+    });
+
+    it('should handle empty model list', async () => {
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          rows: [],
+        }),
+      });
+
+      const mockClient = { apiKey: 'test_api_key' };
+      const models = await params.models({ client: mockClient as any });
+
+      expect(models).toEqual([]);
+    });
+
+    it('should handle multiple models', async () => {
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          rows: [
+            {
+              description: 'GLM-4 model',
+              modelCode: 'glm-4',
+              modelName: 'GLM-4',
+            },
+            {
+              description: 'GLM-4V model',
+              modelCode: 'glm-4v',
+              modelName: 'GLM-4V',
+            },
+            {
+              description: 'GLM-4-Air model',
+              modelCode: 'glm-4-air',
+              modelName: 'GLM-4-Air',
+            },
+          ],
+        }),
+      });
+
+      const mockClient = { apiKey: 'test_api_key' };
+      const models = await params.models({ client: mockClient as any });
+
+      expect(models).toBeDefined();
+      expect(Array.isArray(models)).toBe(true);
+    });
+
+    it('should include description in model data', async () => {
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          rows: [
+            {
+              description: 'This is a test description',
+              modelCode: 'glm-4',
+              modelName: 'GLM-4',
+            },
+          ],
+        }),
+      });
+
+      const mockClient = { apiKey: 'test_api_key' };
+      await params.models({ client: mockClient as any });
+
+      // Verify the API was called correctly
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test_api_key',
+          }),
+        }),
+      );
+    });
+
+    it('should handle API errors gracefully', async () => {
+      mockFetch.mockRejectedValue(new Error('API Error'));
+
+      const mockClient = { apiKey: 'test_api_key' };
+
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('API Error');
+    });
+
+    it('should use correct API endpoint', async () => {
+      mockFetch.mockResolvedValue({
+        json: async () => ({ rows: [] }),
+      });
+
+      const mockClient = { apiKey: 'test_api_key' };
+      await params.models({ client: mockClient as any });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://open.bigmodel.cn/api/fine-tuning/model_center/list?pageSize=100&pageNum=1',
+        expect.anything(),
+      );
+    });
+  });
+});

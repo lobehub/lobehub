@@ -1,0 +1,1022 @@
+import { type LobeToolManifest } from '@lobechat/context-engine';
+import { CacheRevalidate, CacheTag } from '@lobechat/types';
+import {
+  MarketSDK,
+  type OrgRef,
+  orgRefToPathSegment,
+  type RunBuildInToolsContext,
+} from '@lobehub/market-sdk';
+import debug from 'debug';
+import { type NextRequest } from 'next/server';
+import pMap from 'p-map';
+
+import { type TrustedClientUserInfo } from '@/libs/trusted-client';
+import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
+import { redisService } from '@/server/services/redis';
+import {
+  createSandboxStorageClient,
+  type SandboxStorageClient,
+} from '@/server/services/sandbox/storageFiles';
+import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
+
+import {
+  listSkillToolsWithLiveFallback,
+  type SkillToolsClient,
+} from './listSkillToolsWithLiveFallback';
+
+const log = debug('lobe-server:market-service');
+
+const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.com';
+/** Applies to `listConnections` and to each provider's tool-list request. */
+export const LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS = 3_000;
+/** Max providers whose tool lists are fetched at once during discovery. */
+export const LOBEHUB_SKILL_DISCOVERY_CONCURRENCY = 5;
+export const LOBEHUB_SKILL_EXECUTION_TIMEOUT_MS = 120_000;
+
+/**
+ * Provider display names for skill manifests. `connection.providerName` is the
+ * *user's* display name on that provider (e.g. "LiJian" instead of "Linear"),
+ * not the provider's own name. Static map — importing LOBEHUB_SKILL_PROVIDERS
+ * pulls in react-icons (client-side only). Keep in sync with lobehubSkill.ts.
+ */
+const LOBEHUB_SKILL_PROVIDER_LABELS: Record<string, string> = {
+  github: 'GitHub',
+  linear: 'Linear',
+  microsoft: 'Outlook Calendar',
+  notion: 'Notion',
+  posthog: 'PostHog',
+  twitter: 'X',
+  vercel: 'Vercel',
+};
+
+// ============================== Helper Functions ==============================
+
+/**
+ * Extract access token from Authorization header
+ */
+export function extractAccessToken(req: NextRequest): string | undefined {
+  const authHeader = req.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.slice(7);
+  }
+  return undefined;
+}
+
+export interface LobehubSkillExecuteParams {
+  args: Record<string, any>;
+  context?: {
+    topicId?: string;
+  };
+  provider: string;
+  timeoutMs?: number;
+  toolName: string;
+}
+
+export interface LobehubSkillExecuteResult {
+  content: string;
+  error?: { code: string; message?: string };
+  success: boolean;
+}
+
+/** A query or header parameter forwarded through the Market OAuth proxy. */
+export interface MarketOAuthProxyParameter {
+  /** Where the provider request should receive the parameter. */
+  in: 'header' | 'query';
+  /** Provider request parameter name. */
+  name: string;
+  /** Provider request parameter value. */
+  value: number | string;
+}
+
+/** Input for one authenticated provider request through Market. */
+export interface MarketOAuthProxyRequest {
+  /** Optional JSON body forwarded to the provider. */
+  body?: unknown;
+  /** Relative provider API path. */
+  endpoint: string;
+  /** HTTP method used for the provider request. */
+  method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
+  /** Optional query and header parameters forwarded to the provider. */
+  parameters?: MarketOAuthProxyParameter[];
+  /** Market OAuth provider identifier. */
+  provider: string;
+}
+
+/** Provider response returned through the Market OAuth proxy. */
+export interface MarketOAuthProxyResponse {
+  /** Parsed provider response body. */
+  data: unknown;
+  /** Provider-compatible HTTP status returned by Market. */
+  status: number;
+}
+
+export interface MarketServiceOptions {
+  /** Access token from OIDC flow (user token) */
+  accessToken?: string;
+  /** Client credentials for M2M authentication */
+  clientCredentials?: {
+    clientId: string;
+    clientSecret: string;
+  };
+  /**
+   * Owner account id for organization-scoped operations.
+   *
+   * When set, Market attributes reads/writes (currently: creds and inject-creds)
+   * to the given organization account instead of the actor's personal account.
+   * Used by the workspace creds router after resolving a cloud workspace to
+   * its Market organization via {@link WorkspaceMarketIdentityService}.
+   */
+  ownerAccountId?: number;
+  /** Pre-generated trusted client token (alternative to userInfo) */
+  trustedClientToken?: string;
+  /** User info for generating trusted client token */
+  userInfo?: TrustedClientUserInfo;
+}
+
+/**
+ * Market Service
+ *
+ * Provides a unified interface to MarketSDK with business logic encapsulation.
+ * This service wraps MarketSDK methods to avoid repetition across the codebase.
+ *
+ * Usage:
+ * ```typescript
+ * // From Next.js request (API Routes) - recommended
+ * const marketService = await MarketService.createFromRequest(req);
+ * await marketService.submitFeedback({ ... });
+ *
+ * // With user authentication
+ * const service = new MarketService({ accessToken, userInfo });
+ *
+ * // With trusted client only
+ * const service = new MarketService({ userInfo });
+ *
+ * // M2M authentication
+ * const service = new MarketService({ clientCredentials: { clientId, clientSecret } });
+ *
+ * // Public endpoints (no auth)
+ * const service = new MarketService();
+ * ```
+ */
+export class MarketService {
+  market: MarketSDK;
+
+  private readonly oauthProxyHeaders: Record<string, string>;
+
+  /**
+   * Who the cached skill tool lists belong to. A service built without a user
+   * (M2M credentials, a bare trusted token) has no scope and skips the cache.
+   */
+  private readonly skillCacheScope?: string;
+
+  constructor(options: MarketServiceOptions = {}) {
+    const { accessToken, userInfo, clientCredentials, trustedClientToken, ownerAccountId } =
+      options;
+    this.skillCacheScope = userInfo?.userId;
+
+    // Use provided trustedClientToken or generate from userInfo
+    const resolvedTrustedClientToken =
+      trustedClientToken || (userInfo ? generateTrustedClientToken(userInfo) : undefined);
+
+    this.oauthProxyHeaders = {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(ownerAccountId === undefined
+        ? {}
+        : { 'x-lobe-owner-account-id': String(ownerAccountId) }),
+      ...(resolvedTrustedClientToken ? { 'x-lobe-trust-token': resolvedTrustedClientToken } : {}),
+    };
+
+    this.market = new MarketSDK({
+      accessToken,
+      baseURL: MARKET_BASE_URL,
+      clientId: clientCredentials?.clientId,
+      clientSecret: clientCredentials?.clientSecret,
+      ownerAccountId,
+      trustedClientToken: resolvedTrustedClientToken,
+    });
+
+    log(
+      'MarketService initialized: baseURL=%s, hasAccessToken=%s, hasTrustedToken=%s, hasClientCredentials=%s, ownerAccountId=%s',
+      MARKET_BASE_URL,
+      !!accessToken,
+      !!resolvedTrustedClientToken,
+      !!clientCredentials,
+      ownerAccountId ?? 'none',
+    );
+  }
+
+  // ============================== Factory Methods ==============================
+
+  /**
+   * Create MarketService from Next.js request (server-side only)
+   * Extracts accessToken from Authorization header and trustedClientToken from session
+   */
+  static async createFromRequest(req: NextRequest): Promise<MarketService> {
+    const accessToken = extractAccessToken(req);
+    const trustedClientToken = await getTrustedClientTokenForSession();
+
+    return new MarketService({
+      accessToken,
+      trustedClientToken,
+    });
+  }
+
+  /**
+   * Proxies an authenticated HTTP request through a Market-owned OAuth connection.
+   *
+   * Use when:
+   * - A server feature needs a provider API endpoint not exposed as a Market skill tool
+   * - OAuth credentials must remain inside Market
+   *
+   * Expects:
+   * - The service was created with user or trusted-client authentication
+   * - `endpoint` is relative to the registered provider API base URL
+   *
+   * Returns:
+   * - The parsed provider body and provider-compatible HTTP status
+   */
+  proxyOAuthRequest = async ({
+    body,
+    endpoint,
+    method,
+    parameters,
+    provider,
+  }: MarketOAuthProxyRequest): Promise<MarketOAuthProxyResponse> => {
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = new URL(
+      `/api/v1/proxy/${encodeURIComponent(provider)}${normalizedEndpoint}`,
+      MARKET_BASE_URL,
+    );
+    const forwardedHeaders: Record<string, string> = {};
+
+    for (const parameter of parameters ?? []) {
+      if (parameter.in === 'query') {
+        url.searchParams.set(parameter.name, String(parameter.value));
+      } else if (
+        !['authorization', 'x-lobe-owner-account-id', 'x-lobe-trust-token'].includes(
+          parameter.name.toLowerCase(),
+        )
+      ) {
+        forwardedHeaders[parameter.name] = String(parameter.value);
+      }
+    }
+
+    // Block identity headers case-insensitively above, then add only the
+    // server-resolved identity used to authenticate this request to Market.
+    Object.assign(forwardedHeaders, this.oauthProxyHeaders);
+
+    // NOTICE:
+    // Request an uncompressed Market response because the OAuth proxy currently preserves the
+    // provider's `content-encoding` header after its upstream body has already been decompressed.
+    // This makes Node surface `terminated` and Bun surface `ZlibError` while reading valid 200s.
+    // Source/context: local GitHub proxy verification on 2026-08-30 against
+    // `https://market.lobehub.com/api/v1/proxy/github/*`.
+    // Remove once Market strips stale upstream encoding headers or streams the encoded body intact.
+    forwardedHeaders['Accept-Encoding'] = 'identity';
+
+    // Market owns and injects the provider token. This request carries only the
+    // authenticated LobeHub caller identity plus the provider request payload.
+    if (
+      body !== undefined &&
+      !Object.keys(forwardedHeaders).some((key) => key.toLowerCase() === 'content-type')
+    ) {
+      forwardedHeaders['Content-Type'] = 'application/json';
+    }
+    const response = await fetch(url, {
+      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: forwardedHeaders,
+      method,
+    });
+
+    return { data: (await response.json()) as unknown, status: response.status };
+  };
+
+  // ============================== Feedback Methods ==============================
+
+  /**
+   * Submit feedback to LobeHub
+   */
+  async submitFeedback(params: {
+    clientInfo?: {
+      language?: string;
+      timezone?: string;
+      url?: string;
+      userAgent?: string;
+    };
+    email?: string;
+    message: string;
+    screenshotUrl?: string;
+    title: string;
+  }) {
+    const { title, message, email, screenshotUrl, clientInfo } = params;
+
+    // Build message with screenshot if available
+    let feedbackMessage = message;
+    if (screenshotUrl) {
+      feedbackMessage += `\n\n**Screenshot**: ${screenshotUrl}`;
+    }
+
+    return this.market.feedback.submitFeedback({
+      clientInfo,
+      email: email || '',
+      message: feedbackMessage,
+      title,
+    });
+  }
+
+  // ============================== Auth Methods ==============================
+
+  /**
+   * Exchange OAuth authorization code for tokens
+   */
+  async exchangeAuthorizationCode(params: {
+    clientId: string;
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }) {
+    return this.market.auth.exchangeOAuthToken({
+      clientId: params.clientId,
+      code: params.code,
+      codeVerifier: params.codeVerifier,
+      grantType: 'authorization_code',
+      redirectUri: params.redirectUri,
+    });
+  }
+
+  /**
+   * Get OAuth handoff information
+   */
+  async getOAuthHandoff(id: string) {
+    return this.market.auth.getOAuthHandoff(id);
+  }
+
+  /**
+   * Get user info from token
+   */
+  async getUserInfo(token: string) {
+    return this.market.auth.getUserInfo(token);
+  }
+
+  /**
+   * Get user info with trusted client token (server-side)
+   */
+  async getUserInfoWithTrustedClient() {
+    const userInfoUrl = `${MARKET_BASE_URL}/lobehub-oidc/userinfo`;
+    const response = await fetch(userInfoUrl, {
+      // @ts-ignore
+      headers: this.market.headers,
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get user info');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Refresh OAuth token
+   */
+  async refreshToken(params: { clientId: string; refreshToken: string }) {
+    return this.market.auth.exchangeOAuthToken({
+      clientId: params.clientId,
+      grantType: 'refresh_token',
+      refreshToken: params.refreshToken,
+    });
+  }
+
+  // ============================== Client Methods ==============================
+
+  /**
+   * Register client for M2M authentication
+   */
+  async registerClient(params: {
+    clientName: string;
+    clientType: string;
+    deviceId: string;
+    platform?: string;
+    version?: string;
+  }) {
+    // @ts-ignore
+    return this.market.registerClient(params);
+  }
+
+  /**
+   * Fetch M2M token with client credentials
+   */
+  async fetchM2MToken() {
+    return this.market.fetchM2MToken();
+  }
+
+  // ============================== Skills Methods ==============================
+
+  /**
+   * List available tools for a provider
+   */
+  async listSkillTools(providerId: string, options?: { timeoutMs?: number }) {
+    return listSkillToolsWithLiveFallback(
+      this.market.skills as SkillToolsClient,
+      providerId,
+      (error) => {
+        log(
+          'listSkillToolsWithLiveFallback: live discovery failed for %s, falling back to static tools: %O',
+          providerId,
+          error,
+        );
+      },
+      options?.timeoutMs,
+    );
+  }
+
+  /**
+   * The live tool list of one connected skill, remembered per connection for
+   * ten minutes.
+   *
+   * Discovery runs on every send and `tools/live` is a round trip to the
+   * provider's MCP server (150ms for GitHub, up to a second for Notion) for
+   * an answer that changes when the provider ships tools, not per turn. The
+   * key carries the connection's identity (`createdAt`, provider user), so a
+   * re-connected skill starts from a fresh read; an empty or failed list is
+   * never remembered. The connection list itself stays live so a newly
+   * connected skill shows up on the next send.
+   */
+  private async listSkillToolsForConnection(
+    connection: { createdAt?: string; providerUserId?: string },
+    providerId: string,
+  ) {
+    const read = () =>
+      this.listSkillTools(providerId, { timeoutMs: LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS });
+    if (!this.skillCacheScope) return read();
+
+    return redisService.skillTools.remember(
+      { connection, providerId, userId: this.skillCacheScope },
+      read,
+    );
+  }
+
+  /**
+   * Call a skill tool
+   */
+  async callSkillTool(provider: string, params: { args: Record<string, any>; tool: string }) {
+    return this.market.skills.callTool(provider, params);
+  }
+
+  /**
+   * List user's connected skills
+   */
+  async listSkillConnections() {
+    return this.market.connect.listConnections();
+  }
+
+  // ============================== Plugin Methods ==============================
+
+  /**
+   * Call cloud MCP endpoint
+   */
+  async callCloudMcpEndpoint(
+    params: {
+      apiParams: Record<string, any>;
+      identifier: string;
+      toolName: string;
+    },
+    options?: {
+      headers?: Record<string, string>;
+    },
+  ) {
+    return this.market.plugins.callCloudGateway(params, options);
+  }
+
+  /**
+   * Export file from sandbox to upload URL
+   */
+  async exportFile(params: { path: string; uploadUrl: string }, context: RunBuildInToolsContext) {
+    const { path, uploadUrl } = params;
+
+    return this.market.plugins.runBuildInTool('exportFile', { path, uploadUrl }, context);
+  }
+
+  /**
+   * Get plugin manifest
+   */
+  async getPluginManifest(params: {
+    identifier: string;
+    install?: boolean;
+    locale?: string;
+    version?: string;
+  }) {
+    return this.market.plugins.getPluginManifest(params);
+  }
+
+  /**
+   * Report plugin installation
+   */
+  async reportPluginInstallation(params: any) {
+    return this.market.plugins.reportInstallation(params);
+  }
+
+  /**
+   * Report plugin call
+   */
+  async reportPluginCall(params: any) {
+    return this.market.plugins.reportCall(params);
+  }
+
+  /**
+   * Create plugin event
+   */
+  async createPluginEvent(params: any) {
+    return this.market.plugins.createEvent(params);
+  }
+
+  // ============================== Agent Methods ==============================
+
+  /**
+   * Get agent detail
+   */
+  async getAgentDetail(identifier: string, options?: { locale?: string; version?: string }) {
+    return this.market.agents.getAgentDetail(identifier, options);
+  }
+
+  /**
+   * Get agent list
+   */
+  async getAgentList(params?: any) {
+    return this.market.agents.getAgentList(params);
+  }
+
+  /**
+   * Increase agent install count
+   */
+  async increaseAgentInstallCount(identifier: string) {
+    return this.market.agents.increaseInstallCount(identifier);
+  }
+
+  /**
+   * Create agent event
+   */
+  async createAgentEvent(params: any) {
+    return this.market.agents.createEvent(params);
+  }
+
+  // ============================== Agent Group Methods ==============================
+
+  /**
+   * Get agent group detail
+   */
+  async getAgentGroupDetail(identifier: string, options?: { locale?: string; version?: number }) {
+    return this.market.agentGroups.getAgentGroupDetail(identifier, options);
+  }
+
+  /**
+   * Get agent group list
+   */
+  async getAgentGroupList(params?: any) {
+    return this.market.agentGroups.getAgentGroupList(params);
+  }
+
+  // ============================== User Methods ==============================
+
+  /**
+   * Get user profile by username
+   */
+  async getUserProfile(username: string, options?: { locale?: string }) {
+    return this.market.user.getUserInfo(username, options);
+  }
+
+  /**
+   * Register user on market and optionally follow another user
+   */
+  async registerUser(params: { followUserId?: string; registerUserId: string }): Promise<void> {
+    await this.market.user.register(params);
+  }
+
+  // ============================== Skills Methods (using SDK) ==============================
+
+  /**
+   * Search for skills in the LobeHub Market
+   */
+  async searchSkill(params: {
+    category?: string;
+    locale?: string;
+    order?: 'asc' | 'desc';
+    page?: number;
+    pageSize?: number;
+    q?: string;
+    sort?:
+      | 'createdAt'
+      | 'forks'
+      | 'installCount'
+      | 'name'
+      | 'recommended'
+      | 'relevance'
+      | 'stars'
+      | 'updatedAt'
+      | 'watchers';
+  }) {
+    log('searchSkill: %O', params);
+
+    // Cache the catalogue the same way every other discover list is cached
+    // (see DiscoverService.getMcpList). Without this the skill store was the one
+    // browse surface that hit Market on every open and every page, which is why
+    // it — alone among the store's tabs — went down whenever the upstream was
+    // throttled or a credential went stale. The MCP tab looked healthy through
+    // the same incidents only because it was being served from this cache.
+    const result = await this.market.marketSkills.getSkillList(params, {
+      next: {
+        revalidate: CacheRevalidate.List,
+        tags: [CacheTag.Discover, CacheTag.Skills],
+      },
+    });
+
+    log('searchSkill response: %O', result);
+
+    return result;
+  }
+
+  /**
+   * Get skill detail from market
+   */
+  async getSkillDetail(identifier: string, options?: { locale?: string; version?: string }) {
+    log('getSkillDetail: %s, options: %O', identifier, options);
+
+    const result = await this.market.marketSkills.getSkillDetail(identifier, options);
+
+    log('getSkillDetail response: %O', result);
+
+    return result;
+  }
+
+  /**
+   * Get skill comments from market
+   */
+  async getSkillComments(
+    identifier: string,
+    params?: {
+      order?: 'asc' | 'desc';
+      page?: number;
+      pageSize?: number;
+      sort?: 'createdAt' | 'upvotes';
+    },
+  ) {
+    log('getSkillComments: %s, params: %O', identifier, params);
+
+    return this.market.marketSkills.getComments(identifier, params);
+  }
+
+  /**
+   * Get skill rating distribution from market
+   */
+  async getSkillRatingDistribution(identifier: string) {
+    log('getSkillRatingDistribution: %s', identifier);
+
+    return this.market.marketSkills.getRatingDistribution(identifier);
+  }
+
+  /**
+   * Get skill download URL from market
+   */
+  getSkillDownloadUrl(identifier: string, version?: string): string {
+    return this.market.marketSkills.getDownloadUrl(identifier, version);
+  }
+
+  /**
+   * Download skill ZIP directly
+   */
+  async downloadSkill(identifier: string, version?: string) {
+    log('downloadSkill: %s, version: %s', identifier, version);
+
+    return this.market.marketSkills.downloadSkill(identifier, version);
+  }
+
+  /**
+   * Get skill categories
+   */
+  async getSkillCategories(params?: { locale?: string; q?: string }) {
+    log('getSkillCategories: %O', params);
+
+    return this.market.marketSkills.getCategories(params);
+  }
+
+  /**
+   * Execute a LobeHub Skill tool
+   * @param params - The skill execution parameters (provider, toolName, args)
+   * @returns Execution result with content and success status
+   */
+  async executeLobehubSkill(params: LobehubSkillExecuteParams): Promise<LobehubSkillExecuteResult> {
+    const { provider, toolName, args, context } = params;
+    const timeoutMs = params.timeoutMs ?? LOBEHUB_SKILL_EXECUTION_TIMEOUT_MS;
+    const abortController = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    log('executeLobehubSkill: %s/%s with args: %O, context: %O', provider, toolName, args, context);
+
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          const error = new Error(`LobeHub Skill execution timed out after ${timeoutMs}ms`);
+          error.name = 'TimeoutError';
+          reject(error);
+          abortController.abort(error);
+        }, timeoutMs);
+      });
+      const response = await Promise.race([
+        this.market.skills.callTool(
+          provider,
+          {
+            args,
+            // @ts-ignore
+            topicId: context?.topicId,
+            tool: toolName,
+          },
+          { signal: abortController.signal },
+        ),
+        timeoutPromise,
+      ]);
+
+      log('executeLobehubSkill: response: %O', response);
+
+      if (!response.success) {
+        const responseError = (response as any).error;
+        let dataMessage: string | undefined;
+
+        if (typeof response.data === 'string') {
+          dataMessage = response.data;
+        } else if (response.data !== undefined && response.data !== null) {
+          dataMessage = JSON.stringify(response.data);
+        }
+
+        const message = responseError?.message || dataMessage || 'LobeHub Skill call failed';
+        const denial = getToolAccessDeniedError(responseError, message);
+        if (denial)
+          return { content: JSON.stringify({ error: denial }), error: denial, success: false };
+
+        return {
+          content: message,
+          error: {
+            code: responseError?.code || 'LOBEHUB_SKILL_ERROR',
+            message,
+          },
+          success: false,
+        };
+      }
+
+      return {
+        content: typeof response.data === 'string' ? response.data : JSON.stringify(response.data),
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      console.error('MarketService.executeLobehubSkill error %s/%s: %O', provider, toolName, err);
+
+      if (err.name === 'TimeoutError') {
+        return {
+          content: err.message,
+          error: { code: 'LOBEHUB_SKILL_TIMEOUT', message: err.message },
+          success: false,
+        };
+      }
+
+      // MarketAPIError carries the full error response body from the API,
+      // including structured details (command, exitCode, stdout, stderr).
+      // Extract it so the content is not empty on failure.
+      const errorBody = (err as any).errorBody;
+      const skillError = errorBody?.error;
+      const denial = getToolAccessDeniedError(error, err.message);
+      if (denial)
+        return { content: JSON.stringify({ error: denial }), error: denial, success: false };
+
+      // Market's auth middleware answers with a flat OAuth-style body, e.g.
+      // `{ error: 'invalid_trust_token', error_description: 'Token expired' }`.
+      // Keep the description so the model can tell an expired token from a
+      // revoked authorization, and the code so callers can react to it.
+      if (typeof skillError === 'string') {
+        const description =
+          typeof errorBody.error_description === 'string' ? errorBody.error_description : undefined;
+        return {
+          content: JSON.stringify({ error: skillError, error_description: description }),
+          error: {
+            code: skillError,
+            message: description ? `${skillError}: ${description}` : skillError,
+          },
+          success: false,
+        };
+      }
+
+      const content = skillError ? JSON.stringify(skillError) : err.message;
+
+      return {
+        content,
+        error: {
+          code: skillError?.code || 'LOBEHUB_SKILL_ERROR',
+          message: skillError?.message || err.message,
+        },
+        success: false,
+      };
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+
+  /**
+   * Fetch LobeHub Skills manifests from Market API
+   * Gets user's connected skills and builds tool manifests for agent execution
+   *
+   * @param options.onError - Called for each failure the method absorbs: a
+   * provider whose tools could not be listed (with its `providerId`), or the
+   * connection lookup itself (without one). Lets callers tell degraded
+   * discovery apart from a user with no connected skills.
+   * @param options.providerIds - Only build manifests for these providers. The
+   * tool list of any other connection is never requested.
+   * @returns Array of tool manifests for connected skills
+   */
+  async getLobehubSkillManifests(options?: {
+    onError?: (error: unknown, providerId?: string) => void;
+    providerIds?: string[];
+  }): Promise<LobeToolManifest[]> {
+    try {
+      // 1. Get user's connected skills
+      const { connections: allConnections } = await this.market.connect.listConnections({
+        signal: AbortSignal.timeout(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS),
+      });
+      const providerIds = options?.providerIds && new Set(options.providerIds);
+      const connections = providerIds
+        ? allConnections?.filter((connection) => providerIds.has((connection as any).providerId))
+        : allConnections;
+      if (!connections || connections.length === 0) {
+        log('getLobehubSkillManifests: no connected skills found');
+        return [];
+      }
+
+      log('getLobehubSkillManifests: found %d connected skills', connections.length);
+
+      // 2. Fetch tools for connections concurrently (bounded). This runs on the
+      // execAgent send path, so one slow provider must not serialize the rest;
+      // pMap keeps the manifests in connection order.
+      const manifests = await pMap(
+        connections,
+        async (connection): Promise<LobeToolManifest | undefined> => {
+          // Connection returns providerId (e.g., 'twitter', 'linear'), not numeric id
+          const providerId = (connection as any).providerId;
+          try {
+            if (!providerId) {
+              log('getLobehubSkillManifests: connection missing providerId: %O', connection);
+              return;
+            }
+            const icon = (connection as any).icon;
+            const providerLabel = LOBEHUB_SKILL_PROVIDER_LABELS[providerId] || providerId;
+
+            const { tools, instruction } = await this.listSkillToolsForConnection(
+              connection,
+              providerId,
+            );
+            if (!tools || tools.length === 0) return;
+
+            const manifest: LobeToolManifest = {
+              api: tools.map((tool: any) => ({
+                description: tool.description || '',
+                name: tool.name,
+                parameters: tool.inputSchema || { properties: {}, type: 'object' },
+              })),
+              identifier: providerId,
+              meta: {
+                avatar: icon || '🔗',
+                description: `LobeHub Skill: ${providerLabel}`,
+                tags: ['lobehub-skill', providerId],
+                title: providerLabel,
+              },
+              systemRole: instruction || undefined,
+              type: 'builtin',
+            };
+
+            log(
+              'getLobehubSkillManifests: built manifest for %s with %d tools',
+              providerId,
+              tools.length,
+            );
+            return manifest;
+          } catch (error) {
+            log('getLobehubSkillManifests: failed to fetch tools for connection: %O', error);
+            options?.onError?.(error, providerId);
+          }
+        },
+        { concurrency: LOBEHUB_SKILL_DISCOVERY_CONCURRENCY },
+      );
+
+      return manifests.filter((manifest): manifest is LobeToolManifest => !!manifest);
+    } catch (error) {
+      log('getLobehubSkillManifests: error fetching skills: %O', error);
+      options?.onError?.(error);
+      return [];
+    }
+  }
+
+  // ============================== Creds Methods ==============================
+
+  /**
+   * Upload a credential file to Market.
+   *
+   * The SDK doesn't expose multipart upload so this method calls the REST
+   * endpoint directly. Pass `orgId` to upload to an organization's cred
+   * bucket (`/api/v1/organizations/:orgId/creds/upload`); omit it for a
+   * personal upload (`/api/v1/user/creds/upload`).
+   *
+   * @param params.file - File content as base64 string
+   * @param params.fileName - Original file name
+   * @param params.fileType - MIME type of the file
+   * @param params.orgId - Optional organization account id. When set, the
+   *   upload is attributed to the org via the org-scoped URL; org membership
+   *   (admin) is enforced server-side by `requireOrgMembership`.
+   * @returns Upload result with fileHashId
+   */
+  async uploadCredFile(params: {
+    file: string; // base64 encoded file content
+    fileName: string;
+    fileType: string;
+    orgId?: OrgRef;
+  }): Promise<{ fileHashId: string; fileName: string; fileSize: number; fileType: string }> {
+    const { file, fileName, fileType, orgId } = params;
+    // Numeric account id or `workspace:<workspaceId>` path segment.
+    const orgSegment = orgId === undefined ? undefined : orgRefToPathSegment(orgId);
+
+    log(
+      'uploadCredFile: fileName=%s, fileType=%s, orgId=%s',
+      fileName,
+      fileType,
+      orgSegment ?? 'none',
+    );
+
+    // Convert base64 to Blob
+    const binaryString = atob(file);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: fileType });
+
+    // Create FormData
+    const formData = new FormData();
+    formData.append('file', blob, fileName);
+
+    // Extract only auth headers (not Content-Type, which would break multipart/form-data).
+    // We deliberately also strip `x-lobe-owner-account-id` for the org path —
+    // ownership is in the URL now, the header is ignored by the org route.
+    // @ts-ignore - market.headers contains auth headers
+    const sdkHeaders = this.market.headers as Record<string, string>;
+    const authHeaders: Record<string, string> = {};
+    for (const [key, value] of Object.entries(sdkHeaders)) {
+      const lower = key.toLowerCase();
+      if (lower === 'content-type') continue;
+      if (lower === 'x-lobe-owner-account-id' && orgSegment !== undefined) continue;
+      authHeaders[key] = value;
+    }
+
+    // Call Market API directly
+    const uploadPath =
+      orgSegment === undefined
+        ? '/api/v1/user/creds/upload'
+        : `/api/v1/organizations/${orgSegment}/creds/upload`;
+    const uploadUrl = `${MARKET_BASE_URL}${uploadPath}`;
+    const response = await fetch(uploadUrl, {
+      body: formData,
+      headers: authHeaders,
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      log('uploadCredFile error: %O', errorData);
+      throw new Error(errorData.message || `Upload failed with status ${response.status}`);
+    }
+
+    const result = await response.json();
+    log('uploadCredFile success: fileHashId=%s', result.fileHashId);
+    return result;
+  }
+
+  /**
+   * Client for the persistent sandbox workspace's file API.
+   *
+   * Not on the SDK yet, so it is hand-written against the same endpoints; it
+   * lives in its own module and only borrows this service's auth headers, so
+   * replacing it with the generated client later is a deletion. The workspace it
+   * addresses is always the one the caller's signed entitlement names.
+   */
+  getSandboxStorageClient(): SandboxStorageClient {
+    return createSandboxStorageClient({
+      baseURL: MARKET_BASE_URL,
+      headers: this.oauthProxyHeaders,
+    });
+  }
+
+  // ============================== Direct SDK Access ==============================
+
+  /**
+   * Get MarketSDK instance for advanced usage
+   * Use this when you need direct access to SDK methods not wrapped by this service
+   */
+  getSDK(): MarketSDK {
+    return this.market;
+  }
+}

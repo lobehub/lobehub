@@ -1,0 +1,151 @@
+import i18n from 'i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
+import resourcesToBackend from 'i18next-resources-to-backend';
+import { initReactI18next } from 'react-i18next';
+import { isRtlLang } from 'rtl-detect';
+
+import { DEFAULT_LANG } from '@/const/locale';
+import { getDebugConfig } from '@/envs/debug';
+// Sync load bundled fallback resources without Suspense on first render.
+import defaultChat from '@/locales/default/chat';
+import defaultCommon from '@/locales/default/common';
+import defaultError from '@/locales/default/error';
+import defaultHome from '@/locales/default/home';
+import { normalizeLocale } from '@/locales/resources';
+import { isOnServerSide } from '@/utils/env';
+import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
+import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
+
+import {
+  BRAND_POST_PROCESSOR,
+  brandPostProcessor,
+  isBrandPostProcessorEnabled,
+} from './brandPostProcessor';
+
+const createBundledResources = () => ({
+  chat: defaultChat,
+  common: defaultCommon,
+  error: defaultError,
+  home: defaultHome,
+});
+
+// locales/en-US/*.json mirrors src/default/*.ts, so production ships only the
+// source. In dev the JSON is overlaid asynchronously so a preview edit to the
+// English copy still shows up without a rebuild.
+const overlayDevEnglishCopy = async (instance: typeof i18n) => {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  const overlays = {
+    chat: import('@/../locales/en-US/chat.json'),
+    common: import('@/../locales/en-US/common.json'),
+    error: import('@/../locales/en-US/error.json'),
+    home: import('@/../locales/en-US/home.json'),
+  };
+
+  for (const [ns, loading] of Object.entries(overlays)) {
+    instance.addResourceBundle(DEFAULT_LANG, ns, unwrapESMModule(await loading), true, true);
+  }
+  // Consumers are not bound to the store (see react.bindI18nStore below), so
+  // one refresh after every overlay landed is what makes an edit visible.
+  instance.emit('languageChanged', instance.language);
+};
+
+const defaultResources = createBundledResources();
+const bundledNamespaces = Object.keys(defaultResources);
+
+const { I18N_DEBUG, I18N_DEBUG_BROWSER, I18N_DEBUG_SERVER } = getDebugConfig();
+const debugMode = (I18N_DEBUG ?? isOnServerSide) ? I18N_DEBUG_SERVER : I18N_DEBUG_BROWSER;
+
+export const createI18nNext = (lang?: string) => {
+  let instance = i18n;
+  if (isBrandPostProcessorEnabled) instance = instance.use(brandPostProcessor);
+
+  instance = instance
+    .use(initReactI18next)
+    .use(LanguageDetector)
+    .use(
+      resourcesToBackend(async (lng: string, ns: string) => {
+        return unwrapESMModule(
+          await loadI18nNamespaceModule({
+            defaultLang: DEFAULT_LANG,
+            lng,
+            normalizeLocale,
+            ns,
+          }),
+        );
+      }),
+    );
+  // Dynamically set HTML direction on language change
+  instance.on('languageChanged', (lng) => {
+    if (typeof window !== 'undefined') {
+      const direction = isRtlLang(lng) ? 'rtl' : 'ltr';
+      document.documentElement.dir = direction;
+    }
+  });
+  return {
+    init: (params: { initAsync?: boolean } = {}) => {
+      const { initAsync = true } = params;
+      const initialLang = normalizeLocale(lang);
+      const bundledLanguageResources =
+        initialLang === DEFAULT_LANG
+          ? {
+              [DEFAULT_LANG]: defaultResources,
+            }
+          : {
+              [DEFAULT_LANG]: defaultResources,
+              [initialLang]: createBundledResources(),
+            };
+
+      const initPromise = instance.init({
+        debug: debugMode,
+        defaultNS: ['error', 'common', 'chat'],
+        fallbackLng: DEFAULT_LANG,
+        initAsync,
+        // Keep init synchronous so components can render with bundled en-US resources
+        // before the user's actual language finishes loading in the background.
+        ns: [],
+
+        // Preload default language (en-US) synchronously to avoid Suspense on first render
+        resources: {
+          ...bundledLanguageResources,
+        },
+        // Keep backend loading enabled for namespaces that are not preloaded above.
+        partialBundledLanguages: true,
+
+        interpolation: {
+          escapeValue: false,
+        },
+        react: {
+          // NOT `bindI18nStore: 'added'`: that subscribes every `useTranslation` consumer
+          // to every lazily-loaded bundle, so each namespace arrival re-renders the whole
+          // app — ~30 full-tree passes during boot. Components waiting on their own
+          // namespace are already covered by react-i18next's `!ready` path; the only
+          // event that must reach everyone is the one-time en-US -> user-language swap,
+          // emitted once after `reloadResources` below.
+          useSuspense: false,
+        },
+        keySeparator: false,
+
+        lng: initialLang,
+        // Rewrite brand strings baked into the locale copy (white-label only).
+        ...(isBrandPostProcessorEnabled ? { postProcess: [BRAND_POST_PROCESSOR] } : {}),
+        // Silence the Locize promotional console.info printed on init (i18next >= 25)
+        showSupportNotice: false,
+      });
+
+      void initPromise.then(() => overlayDevEnglishCopy(instance));
+
+      if (initialLang !== DEFAULT_LANG) {
+        initPromise.then(async () => {
+          await instance.reloadResources([initialLang], bundledNamespaces);
+          // One refresh for the whole tree instead of one per bundle: `bindI18n`
+          // defaults to `languageChanged`, which every `useTranslation` already binds.
+          instance.emit('languageChanged', instance.language);
+        });
+      }
+
+      return initPromise;
+    },
+    instance,
+  };
+};

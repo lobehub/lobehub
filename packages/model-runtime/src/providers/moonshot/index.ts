@@ -1,0 +1,574 @@
+import type Anthropic from '@anthropic-ai/sdk';
+import type { ChatModelCard } from '@lobechat/types';
+import type { Pricing } from 'model-bank';
+import { ModelProvider } from 'model-bank';
+import type OpenAI from 'openai';
+
+import {
+  buildDefaultAnthropicPayload,
+  createAnthropicCompatibleParams,
+  createAnthropicCompatibleRuntime,
+} from '../../core/anthropicCompatibleFactory';
+import type { AnthropicGenerateObjectConfig } from '../../core/anthropicCompatibleFactory/generateObject';
+import { createAnthropicGenerateObject } from '../../core/anthropicCompatibleFactory/generateObject';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
+import { createRouterRuntime } from '../../core/RouterRuntime';
+import type { ChatStreamPayload, GenerateObjectOptions, GenerateObjectPayload } from '../../types';
+import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
+import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
+import { parseDataUri } from '../../utils/uriParser';
+import {
+  isKimiNativeThinkingModel,
+  isKimiPreserveThinkingModel,
+  isKimiReasoningEffortModel,
+  isKimiThinkingToggleModel,
+  resolveKimiReasoningEffort,
+} from './modelId';
+
+export interface MoonshotModelCard {
+  context_length?: number;
+  id: string;
+  supports_image_in?: boolean;
+}
+
+const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.cn/v1';
+const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.cn/anthropic';
+const MOONSHOT_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
+const MOONSHOT_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
+const MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
+
+type MoonshotSDKType = 'anthropic' | 'openai';
+
+// Shared constants and helpers
+const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;
+
+const isEmptyContent = (content: any) =>
+  content === '' || content === null || content === undefined;
+const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.signature;
+
+const normalizeMoonshotAnthropicBaseURL = (baseURL?: string | null) =>
+  baseURL?.replace(MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
+
+const normalizeMoonshotOpenAIModelBaseURL = (baseURL?: string | null) => {
+  if (!baseURL) return DEFAULT_MOONSHOT_BASE_URL;
+
+  return baseURL
+    .replace(MOONSHOT_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+    .replace(MOONSHOT_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1');
+};
+
+/**
+ * `sdkType` explicitly selects the Moonshot SDK wrapper for router-runtime channels.
+ * Legacy baseURL suffix matching is only kept for existing configs that have not set it.
+ */
+const resolveMoonshotSDKType = (sdkType: unknown): MoonshotSDKType | undefined => {
+  if (sdkType === undefined || sdkType === null || sdkType === '') return undefined;
+  if (sdkType === 'anthropic' || sdkType === 'openai') return sdkType;
+
+  throw new Error(`Unsupported Moonshot sdkType: ${String(sdkType)}`);
+};
+
+const getKimiThinkingToggleParams = (isThinkingEnabled: boolean) => ({
+  temperature: isThinkingEnabled ? 1 : 0.6,
+  top_p: 0.95,
+});
+
+const appendSearchTool = <T>(tools: T[] | undefined, enabledSearch?: boolean): T[] | undefined => {
+  if (!enabledSearch) return tools;
+  return tools?.length ? [...tools, MOONSHOT_SEARCH_TOOL] : [MOONSHOT_SEARCH_TOOL];
+};
+
+// Anthropic format helpers
+const buildThinkingBlock = (reasoning: any) =>
+  hasValidReasoning(reasoning) ? { thinking: reasoning.content, type: 'thinking' as const } : null;
+
+const toContentArray = (content: any) =>
+  Array.isArray(content) ? content : [{ text: content, type: 'text' as const }];
+
+/**
+ * Normalize assistant messages for Anthropic format.
+ * When forceThinking is true (kimi thinking family with thinking enabled), every assistant
+ * message must carry a thinking block, otherwise Moonshot rejects with:
+ * "thinking is enabled but reasoning_content is missing in assistant tool call message"
+ */
+const normalizeMessagesForAnthropic = (
+  messages: ChatStreamPayload['messages'],
+  forceThinking = false,
+) =>
+  messages.map((message: any) => {
+    if (message.role !== 'assistant') return message;
+
+    const { reasoning, ...rest } = message;
+    // Array content may already carry thinking parts built by the context
+    // engine (possibly Claude-signed or signature-only) — sanitize them for
+    // Moonshot's thinking contract instead of stacking another block on top.
+    const existingParts = Array.isArray(message.content)
+      ? sanitizeAnthropicThinkingParts(message.content)
+      : undefined;
+    const hasThinkingPart = existingParts?.some((part: any) => part.type === 'thinking');
+
+    const thinkingBlock = hasThinkingPart ? null : buildThinkingBlock(reasoning);
+    const effectiveBlock =
+      thinkingBlock ||
+      (!hasThinkingPart && forceThinking ? { thinking: ' ', type: 'thinking' as const } : null);
+
+    if (existingParts) {
+      const contentParts = effectiveBlock ? [effectiveBlock, ...existingParts] : existingParts;
+
+      return {
+        ...rest,
+        content: contentParts.length > 0 ? contentParts : [{ text: ' ', type: 'text' as const }],
+      };
+    }
+
+    if (isEmptyContent(message.content)) {
+      const placeholder = { text: ' ', type: 'text' as const };
+      return { ...rest, content: effectiveBlock ? [effectiveBlock, placeholder] : [placeholder] };
+    }
+
+    if (!effectiveBlock) return rest;
+    return { ...rest, content: [effectiveBlock, ...toContentArray(message.content)] };
+  });
+
+/**
+ * Normalize assistant messages for OpenAI format.
+ * When forceReasoning is true (kimi thinking family with thinking enabled), every assistant
+ * message must carry reasoning_content (even as empty string), similar to DeepSeek.
+ */
+const normalizeMessagesForOpenAI = (
+  messages: ChatStreamPayload['messages'],
+  forceReasoning = false,
+) =>
+  messages.map((message: any) => {
+    if (message.role !== 'assistant') return message;
+
+    const { reasoning, ...rest } = message;
+    const normalized = isEmptyContent(message.content) ? { ...rest, content: ' ' } : rest;
+    const reasoningContent = hasValidReasoning(reasoning) ? reasoning.content : undefined;
+
+    if (forceReasoning) {
+      return { ...normalized, reasoning_content: reasoningContent ?? '' };
+    }
+    if (reasoningContent !== undefined) {
+      return { ...normalized, reasoning_content: reasoningContent };
+    }
+    return normalized;
+  });
+
+/** Raw video bytes one request may inline, so long video threads cannot exhaust memory. */
+const KIMI_VIDEO_INPUT_MAX_BYTES = 100 * 1024 * 1024;
+const KIMI_VIDEO_DOWNLOAD_TIMEOUT_MS = 30_000;
+
+/**
+ * Kimi rejects remote video URLs with "unsupported video url" but accepts base64 video
+ * blocks, so fetch remote videos and inline them before building the payload. Videos are
+ * downloaded one at a time against a shared byte budget; exceeding it fails the request
+ * instead of sending a truncated video.
+ */
+const inlineRemoteVideos = async (messages: ChatStreamPayload['messages']) => {
+  let remainingBytes = KIMI_VIDEO_INPUT_MAX_BYTES;
+  const result: ChatStreamPayload['messages'] = [];
+
+  for (const message of messages) {
+    if (!Array.isArray(message.content) || !message.content.some((p) => p.type === 'video_url')) {
+      result.push(message);
+      continue;
+    }
+
+    const content: typeof message.content = [];
+
+    for (const part of message.content) {
+      if (part.type !== 'video_url' || parseDataUri(part.video_url.url).type !== 'url') {
+        content.push(part);
+        continue;
+      }
+
+      if (remainingBytes <= 0) {
+        throw new RangeError(
+          `Videos in this conversation exceed the ${KIMI_VIDEO_INPUT_MAX_BYTES}-byte limit`,
+        );
+      }
+
+      // imageUrlToBase64 is the generic SSRF-safe binary downloader with a byte cap.
+      const { base64, mimeType } = await imageUrlToBase64(part.video_url.url, {
+        maxBytes: remainingBytes,
+        signal: AbortSignal.timeout(KIMI_VIDEO_DOWNLOAD_TIMEOUT_MS),
+      });
+      remainingBytes -= Math.floor((base64.length * 3) / 4);
+
+      content.push({ ...part, video_url: { url: `data:${mimeType};base64,${base64}` } });
+    }
+
+    result.push({ ...message, content });
+  }
+
+  return result;
+};
+
+/**
+ * Build Moonshot Anthropic format payload with special handling for the kimi thinking toggle
+ */
+const buildMoonshotAnthropicPayload = async (
+  payload: ChatStreamPayload,
+): Promise<Anthropic.MessageCreateParams> => {
+  const resolvedMaxTokens =
+    payload.max_tokens ??
+    (await getModelPropertyWithFallback<number | undefined>(
+      payload.model,
+      'maxOutput',
+      ModelProvider.Moonshot,
+    )) ??
+    8192;
+
+  const isThinkingToggle = isKimiThinkingToggleModel(payload.model);
+  const isNativeThinking = isKimiNativeThinkingModel(payload.model);
+  const isThinkingEnabled =
+    isNativeThinking || (isThinkingToggle && payload.thinking?.type !== 'disabled');
+
+  const basePayload = await buildDefaultAnthropicPayload({
+    ...payload,
+    enabledSearch: false,
+    max_tokens: resolvedMaxTokens,
+    messages: normalizeMessagesForAnthropic(
+      await inlineRemoteVideos(payload.messages),
+      isThinkingEnabled,
+    ),
+  });
+
+  const tools = appendSearchTool(basePayload.tools, payload.enabledSearch);
+  const basePayloadWithSearch = { ...basePayload, tools };
+
+  // K3+ has no `thinking` param (reasoning is always on, strength is the top-level
+  // OpenAI-style `reasoning_effort`) and temperature/top_p are server-fixed — the docs
+  // advise not to send them. Reasoning replay is already enforced via
+  // normalizeMessagesForAnthropic above (isNativeThinking covers k3+).
+  // https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
+  if (isKimiReasoningEffortModel(payload.model)) {
+    const { temperature: _temperature, top_p: _topP, ...effortBase } = basePayloadWithSearch;
+    // The Messages API ignores top-level `reasoning_effort`; it reads the strength from
+    // `output_config.effort` instead. https://platform.kimi.ai/docs/api/messages
+    const effort = resolveKimiReasoningEffort(payload.reasoning_effort);
+
+    return effort
+      ? ({ ...effortBase, output_config: { effort } } as Anthropic.MessageCreateParams)
+      : effortBase;
+  }
+
+  if (!isThinkingToggle && !isNativeThinking) return basePayloadWithSearch;
+
+  const resolvedThinkingBudget = payload.thinking?.budget_tokens
+    ? Math.min(payload.thinking.budget_tokens, resolvedMaxTokens - 1)
+    : 1024;
+  const thinkingParam =
+    isNativeThinking || payload.thinking?.type !== 'disabled'
+      ? {
+          budget_tokens: resolvedThinkingBudget,
+          type: 'enabled' as const,
+          // Inject keep:'all' only for models that accept the param (kimi-k2.6 and assumed
+          // k3+); kimi-k2.5 rejects it and kimi-k2.7-code always has Preserved Thinking active
+          ...(payload.preserveThinking && isKimiPreserveThinkingModel(payload.model)
+            ? { keep: 'all' as const }
+            : {}),
+        }
+      : ({ type: 'disabled' } as const);
+
+  return {
+    ...basePayloadWithSearch,
+    ...getKimiThinkingToggleParams(thinkingParam.type === 'enabled'),
+    thinking: thinkingParam,
+  };
+};
+
+/**
+ * Build Moonshot OpenAI format payload with temperature normalization
+ */
+const buildMoonshotOpenAIPayload = (
+  payload: ChatStreamPayload,
+): OpenAI.ChatCompletionCreateParamsStreaming => {
+  const { enabledSearch, messages, model, temperature, thinking, tools, ...rest } = payload;
+
+  const isThinkingToggle = isKimiThinkingToggleModel(model);
+  const isNativeThinking = isKimiNativeThinkingModel(model);
+  const isThinkingEnabled = isNativeThinking || (isThinkingToggle && thinking?.type !== 'disabled');
+  const normalizedMessages = normalizeMessagesForOpenAI(messages, isThinkingEnabled);
+  const moonshotTools = appendSearchTool(tools, enabledSearch);
+
+  // K3+ replaced the `thinking` param with the top-level OpenAI-style `reasoning_effort`
+  // and fixes temperature/top_p/n/penalties server-side; the docs advise not to send
+  // them. `max_tokens` is documented as `max_completion_tokens` (default 131072, up to
+  // 1048576). https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
+  if (isKimiReasoningEffortModel(model)) {
+    const {
+      frequency_penalty: _frequencyPenalty,
+      max_tokens,
+      presence_penalty: _presencePenalty,
+      reasoning_effort,
+      top_p: _topP,
+      ...effortRest
+    } = rest;
+
+    const effort = resolveKimiReasoningEffort(reasoning_effort);
+
+    return {
+      ...effortRest,
+      ...(effort ? { reasoning_effort: effort } : {}),
+      ...(max_tokens === undefined ? {} : { max_completion_tokens: max_tokens }),
+      messages: normalizedMessages,
+      model,
+      stream: payload.stream ?? true,
+      tools: moonshotTools?.length ? moonshotTools : undefined,
+    } as any;
+  }
+
+  if (isThinkingToggle || isNativeThinking) {
+    const thinkingParam =
+      isNativeThinking || thinking?.type !== 'disabled'
+        ? {
+            type: 'enabled',
+            // Inject keep:'all' only for models that accept the param (kimi-k2.6 and assumed
+            // k3+); kimi-k2.5 rejects it and kimi-k2.7-code always has Preserved Thinking active
+            ...(payload.preserveThinking && isKimiPreserveThinkingModel(model)
+              ? { keep: 'all' }
+              : {}),
+          }
+        : { type: 'disabled' };
+
+    return {
+      ...rest,
+      ...getKimiThinkingToggleParams(thinkingParam.type === 'enabled'),
+      frequency_penalty: 0,
+      messages: normalizedMessages,
+      model,
+      presence_penalty: 0,
+      stream: payload.stream ?? true,
+      thinking: thinkingParam,
+      tools: moonshotTools?.length ? moonshotTools : undefined,
+    } as any;
+  }
+
+  return {
+    ...rest,
+    messages: normalizedMessages,
+    model,
+    stream: payload.stream ?? true,
+    // Moonshot temperature is normalized by dividing by 2
+    temperature: temperature !== undefined ? temperature / 2 : undefined,
+    tools: moonshotTools?.length ? moonshotTools : undefined,
+  } as OpenAI.ChatCompletionCreateParamsStreaming;
+};
+
+/**
+ * Kimi rejects every forced tool choice (`tool` and `any`) while thinking is enabled
+ * (`tool_choice 'required' is incompatible with thinking enabled`), and native thinking
+ * models cannot turn thinking off, so thinking-enabled requests use `tool_choice: auto`
+ * with a prompt instruction to call the schema tool.
+ * K2.x thinking models also require an explicit `thinking` parameter on this
+ * endpoint, while K3+ uses `reasoning_effort` and must omit it.
+ * Thinking-enabled assistant history must use the same placeholder-block
+ * normalization as chat requests before the generic Anthropic conversion.
+ * https://platform.kimi.com/docs/guide/kimi-k2-7-code-quickstart
+ * https://platform.kimi.com/docs/guide/claude-code-kimi
+ */
+const createMoonshotAnthropicGenerateObject = async (
+  client: Anthropic,
+  payload: GenerateObjectPayload,
+  options?: GenerateObjectOptions,
+  pricing?: Pricing,
+  config?: AnthropicGenerateObjectConfig,
+) => {
+  const { thinking } = payload;
+  const isThinkingToggle = isKimiThinkingToggleModel(payload.model);
+  const isNativeThinking = isKimiNativeThinkingModel(payload.model);
+  const isThinkingDisabled = isThinkingToggle && thinking?.type === 'disabled';
+  const isThinkingModel = isNativeThinking || isThinkingToggle;
+  const isThinkingEnabled = isThinkingModel && !isThinkingDisabled;
+  const thinkingParam = isThinkingDisabled
+    ? ({ type: 'disabled' } as const)
+    : isThinkingEnabled && !isKimiReasoningEffortModel(payload.model)
+      ? ({
+          budget_tokens: Math.min(
+            thinking?.budget_tokens || 1024,
+            (config?.maxTokens ?? 64_000) - 1,
+          ),
+          type: 'enabled',
+        } as const)
+      : undefined;
+  const normalizedPayload = isThinkingEnabled
+    ? {
+        ...payload,
+        messages: normalizeMessagesForAnthropic(
+          payload.messages as ChatStreamPayload['messages'],
+          true,
+        ) as GenerateObjectPayload['messages'],
+      }
+    : payload;
+
+  return createAnthropicGenerateObject(client, normalizedPayload, options, pricing, {
+    ...config,
+    ...(thinkingParam
+      ? {
+          requestParams: {
+            ...config?.requestParams,
+            thinking: thinkingParam,
+          },
+        }
+      : {}),
+    ...(isThinkingEnabled ? { autoToolChoice: true } : {}),
+  });
+};
+
+/**
+ * Fetch Moonshot models from the API using OpenAI client
+ */
+export const fetchMoonshotModels = async ({
+  client,
+}: {
+  client: OpenAI;
+}): Promise<ChatModelCard[]> => {
+  const modelsPage = (await client.models.list()) as any;
+  const modelList: MoonshotModelCard[] = modelsPage.data || [];
+
+  const processedList = modelList.map((model) => ({
+    contextWindowTokens: model.context_length,
+    id: model.id,
+    vision: model.supports_image_in,
+  }));
+
+  return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
+};
+
+/**
+ * Moonshot Anthropic format runtime
+ */
+export const anthropicParams = createAnthropicCompatibleParams({
+  baseURL: DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL,
+  chatCompletion: {
+    handlePayload: buildMoonshotAnthropicPayload,
+  },
+  customClient: {},
+  debug: {
+    chatCompletion: () => process.env.DEBUG_MOONSHOT_CHAT_COMPLETION === '1',
+  },
+  generateObject: createMoonshotAnthropicGenerateObject,
+  provider: ModelProvider.Moonshot,
+});
+
+export const LobeMoonshotAnthropicAI = createAnthropicCompatibleRuntime(anthropicParams);
+
+/**
+ * Kimi's OpenAI-compatible endpoint rejects `tool_choice: 'required'` (or a named tool) while
+ * thinking is enabled, so tool-based structured output falls back to `auto` plus a prompt
+ * instruction, as on the Anthropic-compatible endpoint.
+ */
+export const relaxMoonshotGenerateObjectToolChoice = (
+  payload: GenerateObjectPayload,
+  requestPayload: any,
+) => {
+  const { model, thinking } = payload;
+  const isThinkingEnabled =
+    isKimiNativeThinkingModel(model) ||
+    (isKimiThinkingToggleModel(model) && thinking?.type !== 'disabled');
+  if (!isThinkingEnabled || !requestPayload.tool_choice || requestPayload.tool_choice === 'auto')
+    return requestPayload;
+
+  return {
+    ...requestPayload,
+    messages: [
+      {
+        content:
+          'You must respond by calling one of the provided tools. Do not reply with plain text.',
+        role: 'system',
+      },
+      ...requestPayload.messages,
+    ],
+    tool_choice: 'auto',
+  };
+};
+
+/**
+ * Moonshot OpenAI format runtime
+ */
+export const LobeMoonshotOpenAI = createOpenAICompatibleRuntime({
+  baseURL: DEFAULT_MOONSHOT_BASE_URL,
+  chatCompletion: {
+    forceImageBase64: true,
+    handlePayload: buildMoonshotOpenAIPayload,
+  },
+  debug: {
+    chatCompletion: () => process.env.DEBUG_MOONSHOT_CHAT_COMPLETION === '1',
+  },
+  generateObject: { handlePayload: relaxMoonshotGenerateObjectToolChoice },
+  // Kimi models support prompt_cache_key for multi-turn session cache optimization.
+  // Docs: https://platform.kimi.com/docs/api/chat#body-one-of-0-prompt-cache-key
+  models: fetchMoonshotModels,
+  promptCacheKeyModels: [/^kimi-/],
+  provider: ModelProvider.Moonshot,
+});
+
+type MoonshotOpenAIRuntimeOptions = ConstructorParameters<typeof LobeMoonshotOpenAI>[0];
+
+const fetchMoonshotModelsWithOpenAI = ({ options }: { options?: MoonshotOpenAIRuntimeOptions }) => {
+  const runtime = new LobeMoonshotOpenAI({
+    ...options,
+    baseURL: normalizeMoonshotOpenAIModelBaseURL(options?.baseURL),
+  });
+
+  return runtime.models();
+};
+
+/**
+ * RouterRuntime configuration for Moonshot
+ * Routes to Anthropic format for /anthropic URLs, otherwise uses OpenAI format.
+ * `sdkType` can explicitly select the format when a gateway URL does not expose
+ * the legacy /anthropic suffix, such as an Anthropic-compatible /v1/messages URL.
+ */
+const createAnthropicRouter = ({
+  baseURL,
+  baseURLPattern,
+}: {
+  baseURL?: string;
+  baseURLPattern?: RegExp;
+} = {}) => ({
+  apiType: 'anthropic' as const,
+  ...(baseURLPattern ? { baseURLPattern } : {}),
+  options: {
+    ...(baseURL ? { baseURL } : {}),
+  },
+  runtime: LobeMoonshotAnthropicAI,
+});
+
+const createOpenAIRouter = () => ({
+  apiType: 'openai' as const,
+  options: {},
+  runtime: LobeMoonshotOpenAI,
+});
+
+export const params: CreateRouterRuntimeOptions = {
+  id: ModelProvider.Moonshot,
+  models: fetchMoonshotModelsWithOpenAI,
+  routers: (options) => {
+    const sdkType = resolveMoonshotSDKType(options.sdkType);
+
+    if (sdkType === 'anthropic') {
+      return [
+        createAnthropicRouter({
+          baseURL: normalizeMoonshotAnthropicBaseURL(options.baseURL),
+        }),
+      ];
+    }
+
+    if (sdkType === 'openai') {
+      return [createOpenAIRouter()];
+    }
+
+    return [
+      createAnthropicRouter({ baseURLPattern: MOONSHOT_ANTHROPIC_BASE_URL_PATTERN }),
+      createOpenAIRouter(),
+    ];
+  },
+};
+
+export const LobeMoonshotAI = createRouterRuntime(params);

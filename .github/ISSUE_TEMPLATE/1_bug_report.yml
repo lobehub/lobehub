@@ -1,0 +1,113 @@
+name: '🐛 Bug Report'
+description: 'Report an bug'
+labels: ['unconfirm']
+type: Bug
+body:
+  - type: dropdown
+    attributes:
+      label: '📱 Client Type'
+      description: 'Select how you are accessing LobeChat'
+      multiple: true
+      options:
+        - 'Web (Desktop Browser)'
+        - 'Web (Mobile Browser)'
+        - 'Desktop App (Electron)'
+        - 'Mobile App (React Native)'
+        - 'Other'
+    validations:
+      required: true
+
+  - type: dropdown
+    attributes:
+      label: '💻 Operating System'
+      multiple: true
+      options:
+        - 'Windows'
+        - 'macOS'
+        - 'Ubuntu'
+        - 'Other Linux'
+        - 'iOS'
+        - 'Android'
+        - 'Other'
+    validations:
+      required: true
+
+  - type: dropdown
+    attributes:
+      label: '📦 Deployment Platform'
+      multiple: true
+      options:
+        - 'Official Cloud'
+        - 'Vercel'
+        - 'Zeabur'
+        - 'Sealos'
+        - 'Netlify'
+        - 'Self hosting Docker'
+        - 'Other'
+    validations:
+      required: false
+
+  - type: input
+    attributes:
+      label: '📌 Version'
+    validations:
+      required: true
+
+  - type: dropdown
+    attributes:
+      label: '🌐 Browser'
+      multiple: true
+      options:
+        - 'Chrome'
+        - 'Edge'
+        - 'Safari'
+        - 'Firefox'
+        - 'Other'
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: '🐛 What happened?'
+      description: A clear and concise description of the bug, if the above option is `Other`, please also explain in detail.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: '📷 How to reproduce it?'
+      description: A clear and concise description of how to reproduce.
+
+  - type: textarea
+    attributes:
+      label: '🚦 What it should be?'
+      description: A clear and concise description of what you expected to happen.
+
+  - type: textarea
+    attributes:
+      label: '📝 Additional Information'
+      description: If your problem needs further explanation, or if the issue you're seeing cannot be reproduced in a gist, please add more information here.
+
+  - type: dropdown
+    attributes:
+      label: '🛠️ Willing to Submit a PR?'
+      description: Would you be willing to submit a pull request to fix this bug?
+      options:
+        - 'Yes, I am willing to submit a PR'
+        - 'No, but I am happy to help test the fix'
+    validations:
+      required: false
+
+  - type: checkboxes
+    attributes:
+      label: '✅ Validations'
+      description: Before submitting the issue, please make sure you do the following
+      options:
+        - label: Read the [docs](https://lobehub.com/zh/docs).
+          required: true
+        - label: Check that there isn't [already an issue](https://github.com/lobehub/lobehub/issues) that reports the same bug to avoid creating a duplicate.
+          required: true
+        - label: Make sure this is a LobeChat issue and not a third-party library or provider issue.
+          required: true
+        - label: Check that this is a concrete bug. For Q&A, please use [GitHub Discussions](https://github.com/lobehub/lobehub/discussions) or join our [Discord Server](https://discord.gg/rGHwKq4R).
+          required: true

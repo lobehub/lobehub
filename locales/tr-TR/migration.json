@@ -1,0 +1,23 @@
+{
+  "dbV1.action.clearDB": "Yerel Verileri Temizle",
+  "dbV1.action.downloadBackup": "Veri Yedeğini İndir",
+  "dbV1.action.reUpgrade": "Yeniden Yükselt",
+  "dbV1.action.start": "Başla",
+  "dbV1.action.upgrade": "Yükselt",
+  "dbV1.clear.confirm": "Yerel verileri temizlemek üzeresiniz (genel ayarlar etkilenmeyecektir). Lütfen veri yedeğini indirdiğinizden emin olun.",
+  "dbV1.description": "Yeni sürümde, {{appName}} veri depolama konusunda önemli gelişmeler kaydetti. Bu nedenle, size daha iyi bir kullanıcı deneyimi sunabilmek için eski verilerinizi yükseltmemiz gerekiyor.",
+  "dbV1.features.capability.desc": "IndexedDB teknolojisine dayanarak, ömür boyu sohbet mesajlarını saklayabilecek kapasiteye sahiptir.",
+  "dbV1.features.capability.title": "Geniş Kapasite",
+  "dbV1.features.performance.desc": "Milyonlarca mesajı otomatik olarak indeksler, sorgular milisaniyeler içinde yanıt verir.",
+  "dbV1.features.performance.title": "Yüksek Performans",
+  "dbV1.features.use.desc": "Başlık, açıklama, etiketler, mesaj içeriği ve hatta çevrilmiş metin üzerinden arama yapmayı destekler, günlük arama verimliliğini büyük ölçüde artırır.",
+  "dbV1.features.use.title": "Daha Kullanıcı Dostu",
+  "dbV1.title": "{{appName}} Veri Evrimi",
+  "dbV1.upgrade.error.subTitle": "Üzgünüz, veritabanı yükseltme işlemi sırasında bir hata oluştu. Lütfen aşağıdaki çözümleri deneyin: A. Yerel verileri temizleyin ve yedek verileri yeniden içe aktarın; B. 'Yükseltmeyi Yeniden Dene' butonuna tıklayın.<br><br> Sorun devam ederse, lütfen <1>bir sorun bildirimi gönderin</1>, size en kısa sürede yardımcı olacağız.",
+  "dbV1.upgrade.error.title": "Veritabanı Yükseltme Başarısız",
+  "dbV1.upgrade.success.subTitle": "Veritabanı en son sürüme başarıyla yükseltildi. Devam edebilirsiniz.",
+  "dbV1.upgrade.success.title": "Veritabanı Yükseltme Başarılı",
+  "dbV1.upgradeTip": "Yükseltme yaklaşık 10 ila 20 saniye sürecektir. Lütfen {{appName}} uygulamasını bu süreçte kapatmayın.",
+  "migrateError.missVersion": "İçe aktarılan veride sürüm numarası eksik. Lütfen dosyayı kontrol edip tekrar deneyin.",
+  "migrateError.noMigration": "Mevcut sürüm için bir geçiş çözümü bulunamadı. Lütfen sürüm numarasını kontrol edip tekrar deneyin. Sorun devam ederse, lütfen geri bildirim gönderin."
+}

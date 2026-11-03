@@ -1,0 +1,783 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
+import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
+import { getMimeType, resolveMimeType } from '@lobechat/utils/mimeType';
+import type { Command } from 'commander';
+import pc from 'picocolors';
+
+import { getTrpcClient } from '../api/client';
+import { confirm, outputJson, printTable, truncate } from '../utils/format';
+import { log } from '../utils/logger';
+
+type AttachmentInput = {
+  data?: string;
+  fetchUrl?: string;
+  mimeType?: string;
+  name?: string;
+  type: 'image' | 'file' | 'video' | 'audio';
+};
+
+const inferMimeFromUrl = (path: string): string | undefined => {
+  const detected = getMimeType(path);
+  return detected === 'application/octet-stream' ? undefined : detected;
+};
+
+const inferAttachmentType = (mimeType?: string): AttachmentInput['type'] => {
+  if (!mimeType) return 'file';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return 'file';
+};
+
+/**
+ * Resolve a list of `--attachment` flag values into `AttachmentInput[]`. Each
+ * entry is either a URL or a local file path. Returns `undefined` when no
+ * flags were passed so callers can omit the field on the wire entirely (the
+ * TRPC schema treats absent vs empty differently). Bails the process on
+ * load failures — a silently-dropped attachment would be worse than a
+ * loud error here.
+ */
+const resolveAttachmentFlags = async (flags: string[]): Promise<AttachmentInput[] | undefined> => {
+  if (flags.length === 0) return undefined;
+  const out: AttachmentInput[] = [];
+  for (const raw of flags) {
+    try {
+      out.push(await parseAttachmentArg(raw));
+    } catch (error) {
+      log.error(`Failed to load attachment "${raw}": ${(error as Error).message}`);
+      process.exit(1);
+    }
+  }
+  return out;
+};
+
+/**
+ * Parse a single `--attachment <value>` argument. Accepted forms:
+ *   - `https://…` / `http://…`           → fetchUrl, type inferred from extension
+ *   - any other string                    → treated as a local file path;
+ *                                           bytes are read + base64-encoded
+ */
+const parseAttachmentArg = async (raw: string): Promise<AttachmentInput> => {
+  if (/^https?:\/\//.test(raw)) {
+    const pathname = new URL(raw).pathname;
+    const mimeType = inferMimeFromUrl(pathname);
+    return {
+      fetchUrl: raw,
+      mimeType,
+      name: path.basename(pathname) || undefined,
+      type: inferAttachmentType(mimeType),
+    };
+  }
+  const bytes = await readFile(raw);
+  const mimeType = await resolveMimeType(raw, bytes);
+  return {
+    data: bytes.toString('base64'),
+    mimeType,
+    name: path.basename(raw),
+    type: inferAttachmentType(mimeType),
+  };
+};
+
+/**
+ * Resolve the `<botIdOrAtKey>` positional argument into a `{ botId? |
+ * messengerInstallationId? }` shape that matches the TRPC send procedures'
+ * `exactly-one-of` constraint.
+ *
+ * Convention: a value prefixed with `@` is treated as a System Bot
+ * messenger installation id (e.g. `@inst_abc123`); anything else is a
+ * per-agent bot id. The `@` was chosen because `agent_bot_providers`.id is
+ * always a UUID — no UUID starts with `@`, so the prefix unambiguously
+ * disambiguates without breaking the existing UUID-only call sites.
+ */
+const resolveSendTargetArg = (
+  value: string,
+): { botId?: string; messengerInstallationId?: string } => {
+  if (value.startsWith('@')) {
+    return { messengerInstallationId: value.slice(1) };
+  }
+  return { botId: value };
+};
+
+export function registerBotMessageCommands(bot: Command) {
+  const message = bot
+    .command('message')
+    .description('Send and manage messages on connected platforms');
+
+  // ── send ────────────────────────────────────────────────
+
+  message
+    .command('send <botIdOrAtKey>')
+    .description(
+      'Send a message to a channel. Pass a per-agent bot id, or "@<messenger-install-id>" ' +
+        'to send through a System Bot messenger installation (see `lh bot messengers list`).',
+    )
+    .requiredOption('--target <channelId>', 'Target channel / conversation ID')
+    .requiredOption('--message <text>', 'Message content')
+    .option(
+      '--attachment <pathOrUrl>',
+      'Attach a file by local path or remote URL (repeatable). ' +
+        'Local paths are base64-encoded; http(s) URLs are passed as fetchUrl.',
+      collectOptions,
+      [],
+    )
+    .option('--reply-to <messageId>', 'Reply to a specific message')
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        botIdOrAtKey: string,
+        options: {
+          attachment: string[];
+          json?: boolean;
+          message: string;
+          replyTo?: string;
+          target: string;
+        },
+      ) => {
+        const attachments = await resolveAttachmentFlags(options.attachment);
+        const target = resolveSendTargetArg(botIdOrAtKey);
+
+        const client = await getTrpcClient();
+        const result = await client.botMessage.sendMessage.mutate({
+          ...target,
+          attachments,
+          channelId: options.target,
+          content: options.message,
+          replyTo: options.replyTo,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const r = result as any;
+        const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
+        console.log(
+          `${pc.green('✓')} Message sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
+        );
+      },
+    );
+
+  // ── dm (direct message) ─────────────────────────────────
+
+  message
+    .command('dm <botIdOrAtKey>')
+    .description(
+      'Send a direct message to a platform user. Pass a per-agent bot id, or ' +
+        '"@<messenger-install-id>" for a System Bot install.',
+    )
+    .requiredOption('--user-id <id>', 'Target user ID on the platform')
+    .requiredOption('--message <text>', 'Message content')
+    .option(
+      '--attachment <pathOrUrl>',
+      'Attach a file by local path or remote URL (repeatable). ' +
+        'Local paths are base64-encoded; http(s) URLs are passed as fetchUrl.',
+      collectOptions,
+      [],
+    )
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        botIdOrAtKey: string,
+        options: { attachment: string[]; json?: boolean; message: string; userId: string },
+      ) => {
+        const attachments = await resolveAttachmentFlags(options.attachment);
+        const target = resolveSendTargetArg(botIdOrAtKey);
+
+        const client = await getTrpcClient();
+        const result = await client.botMessage.sendDirectMessage.mutate({
+          ...target,
+          attachments,
+          content: options.message,
+          userId: options.userId,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const r = result as any;
+        const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
+        console.log(
+          `${pc.green('✓')} DM sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
+        );
+      },
+    );
+
+  // ── read ────────────────────────────────────────────────
+
+  message
+    .command('read <botId>')
+    .description('Read messages from a channel')
+    .requiredOption('--target <channelId>', 'Target channel / conversation ID')
+    .option('--limit <n>', 'Max messages to fetch', String(DEFAULT_BOT_HISTORY_LIMIT))
+    .option('--before <messageId>', 'Read messages before this ID')
+    .option('--after <messageId>', 'Read messages after this ID')
+    .option('--start-time <timestamp>', 'Start time as Unix seconds (Feishu/Lark)')
+    .option('--end-time <timestamp>', 'End time as Unix seconds (Feishu/Lark)')
+    .option('--cursor <token>', 'Pagination cursor from a previous response (Feishu/Lark)')
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        botId: string,
+        options: {
+          after?: string;
+          before?: string;
+          cursor?: string;
+          endTime?: string;
+          json?: boolean;
+          limit?: string;
+          startTime?: string;
+          target: string;
+        },
+      ) => {
+        const client = await getTrpcClient();
+        const result = await client.botMessage.readMessages.query({
+          after: options.after,
+          before: options.before,
+          botId,
+          channelId: options.target,
+          cursor: options.cursor,
+          endTime: options.endTime,
+          limit: options.limit ? Number.parseInt(options.limit, 10) : undefined,
+          startTime: options.startTime,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const messages = (result as any).messages ?? [];
+        if (messages.length === 0) {
+          console.log('No messages found.');
+          return;
+        }
+
+        const rows = messages.map((m: any) => [
+          m.id || '',
+          m.author?.name || '',
+          truncate(m.content || '', 60),
+          m.timestamp || '',
+        ]);
+
+        printTable(rows, ['ID', 'AUTHOR', 'CONTENT', 'TIME']);
+
+        const r = result as any;
+        if (r.hasMore && r.nextCursor) {
+          console.log(
+            `\nMore messages available. Use ${pc.dim(`--cursor ${r.nextCursor}`)} to fetch next page.`,
+          );
+        }
+      },
+    );
+
+  // ── doc ─────────────────────────────────────────────────
+
+  message
+    .command('doc <botId>')
+    .description('Read a cloud document linked in the chat (Feishu/Lark docx / wiki)')
+    .option('--url <url>', 'Document URL as it appears in the chat')
+    .option('--document-id <id>', 'Document token, when you have no URL')
+    .option('--json', 'Output JSON')
+    .action(
+      async (botId: string, options: { documentId?: string; json?: boolean; url?: string }) => {
+        if (!options.url && !options.documentId) {
+          log.error('Pass --url <url> or --document-id <id>');
+          process.exit(1);
+        }
+        const client = await getTrpcClient();
+        const result = await client.botMessage.readDocument.query({
+          botId,
+          documentId: options.documentId,
+          url: options.url,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const r = result as any;
+        if (r.title) console.log(pc.bold(r.title));
+        if (r.url) console.log(pc.dim(r.url));
+        console.log();
+        console.log(r.content || '(empty document)');
+        if (r.truncated) console.log(pc.dim('\n[content truncated]'));
+      },
+    );
+
+  // ── edit ────────────────────────────────────────────────
+
+  message
+    .command('edit <botId>')
+    .description('Edit a message')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .requiredOption('--message-id <id>', 'Message ID to edit')
+    .requiredOption('--message <text>', 'New message content')
+    .action(
+      async (botId: string, options: { message: string; messageId: string; target: string }) => {
+        const client = await getTrpcClient();
+        await client.botMessage.editMessage.mutate({
+          botId,
+          channelId: options.target,
+          content: options.message,
+          messageId: options.messageId,
+        });
+
+        console.log(`${pc.green('✓')} Message ${pc.bold(options.messageId)} edited`);
+      },
+    );
+
+  // ── delete ──────────────────────────────────────────────
+
+  message
+    .command('delete <botId>')
+    .description('Delete a message')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .requiredOption('--message-id <id>', 'Message ID to delete')
+    .option('--yes', 'Skip confirmation prompt')
+    .action(
+      async (botId: string, options: { messageId: string; target: string; yes?: boolean }) => {
+        if (!options.yes) {
+          const confirmed = await confirm('Are you sure you want to delete this message?');
+          if (!confirmed) {
+            console.log('Cancelled.');
+            return;
+          }
+        }
+
+        const client = await getTrpcClient();
+        await client.botMessage.deleteMessage.mutate({
+          botId,
+          channelId: options.target,
+          messageId: options.messageId,
+        });
+
+        console.log(`${pc.green('✓')} Message ${pc.bold(options.messageId)} deleted`);
+      },
+    );
+
+  // ── search ──────────────────────────────────────────────
+
+  message
+    .command('search <botId>')
+    .description('Search messages in a channel')
+    .requiredOption('--target <channelId>', 'Channel ID to search in')
+    .requiredOption('--query <text>', 'Search query')
+    .option('--author-id <id>', 'Filter by author ID')
+    .option('--limit <n>', 'Max results')
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        botId: string,
+        options: {
+          authorId?: string;
+          json?: boolean;
+          limit?: string;
+          query: string;
+          target: string;
+        },
+      ) => {
+        const client = await getTrpcClient();
+        const result = await client.botMessage.searchMessages.query({
+          authorId: options.authorId,
+          botId,
+          channelId: options.target,
+          limit: options.limit ? Number.parseInt(options.limit, 10) : undefined,
+          query: options.query,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const messages = (result as any).messages ?? [];
+        if (messages.length === 0) {
+          console.log('No messages found.');
+          return;
+        }
+
+        const rows = messages.map((m: any) => [
+          m.id || '',
+          m.author?.name || '',
+          truncate(m.content || '', 60),
+        ]);
+
+        printTable(rows, ['ID', 'AUTHOR', 'CONTENT']);
+      },
+    );
+
+  // ── react ───────────────────────────────────────────────
+
+  message
+    .command('react <botId>')
+    .description('Add an emoji reaction to a message')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .requiredOption('--message-id <id>', 'Message ID to react to')
+    .requiredOption('--emoji <emoji>', 'Emoji to react with')
+    .action(
+      async (botId: string, options: { emoji: string; messageId: string; target: string }) => {
+        const client = await getTrpcClient();
+        await client.botMessage.reactToMessage.mutate({
+          botId,
+          channelId: options.target,
+          emoji: options.emoji,
+          messageId: options.messageId,
+        });
+
+        console.log(
+          `${pc.green('✓')} Reacted with ${options.emoji} to message ${pc.bold(options.messageId)}`,
+        );
+      },
+    );
+
+  // ── reactions ───────────────────────────────────────────
+
+  message
+    .command('reactions <botId>')
+    .description('List reactions on a message')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .requiredOption('--message-id <id>', 'Message ID')
+    .option('--json', 'Output JSON')
+    .action(
+      async (botId: string, options: { json?: boolean; messageId: string; target: string }) => {
+        const client = await getTrpcClient();
+        const result = await client.botMessage.getReactions.query({
+          botId,
+          channelId: options.target,
+          messageId: options.messageId,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const reactions = (result as any).reactions ?? [];
+        if (reactions.length === 0) {
+          console.log('No reactions found.');
+          return;
+        }
+
+        const rows = reactions.map((r: any) => [r.emoji || '', String(r.count || 0)]);
+        printTable(rows, ['EMOJI', 'COUNT']);
+      },
+    );
+
+  // ── pin ─────────────────────────────────────────────────
+
+  message
+    .command('pin <botId>')
+    .description('Pin a message')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .requiredOption('--message-id <id>', 'Message ID to pin')
+    .action(async (botId: string, options: { messageId: string; target: string }) => {
+      const client = await getTrpcClient();
+      await client.botMessage.pinMessage.mutate({
+        botId,
+        channelId: options.target,
+        messageId: options.messageId,
+      });
+
+      console.log(`${pc.green('✓')} Pinned message ${pc.bold(options.messageId)}`);
+    });
+
+  // ── unpin ───────────────────────────────────────────────
+
+  message
+    .command('unpin <botId>')
+    .description('Unpin a message')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .requiredOption('--message-id <id>', 'Message ID to unpin')
+    .action(async (botId: string, options: { messageId: string; target: string }) => {
+      const client = await getTrpcClient();
+      await client.botMessage.unpinMessage.mutate({
+        botId,
+        channelId: options.target,
+        messageId: options.messageId,
+      });
+
+      console.log(`${pc.green('✓')} Unpinned message ${pc.bold(options.messageId)}`);
+    });
+
+  // ── pins ────────────────────────────────────────────────
+
+  message
+    .command('pins <botId>')
+    .description('List pinned messages')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .option('--json', 'Output JSON')
+    .action(async (botId: string, options: { json?: boolean; target: string }) => {
+      const client = await getTrpcClient();
+      const result = await client.botMessage.listPins.query({
+        botId,
+        channelId: options.target,
+      });
+
+      if (options.json) {
+        outputJson(result);
+        return;
+      }
+
+      const messages = (result as any).messages ?? [];
+      if (messages.length === 0) {
+        console.log('No pinned messages.');
+        return;
+      }
+
+      const rows = messages.map((m: any) => [
+        m.id || '',
+        m.author?.name || '',
+        truncate(m.content || '', 60),
+      ]);
+
+      printTable(rows, ['ID', 'AUTHOR', 'CONTENT']);
+    });
+
+  // ── poll ────────────────────────────────────────────────
+
+  message
+    .command('poll <botId>')
+    .description('Create a poll')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .requiredOption('--poll-question <text>', 'Poll question')
+    .requiredOption('--poll-option <option>', 'Poll option (repeatable)', collectOptions, [])
+    .option('--poll-multi', 'Allow multiple answers')
+    .option('--poll-duration-hours <n>', 'Poll duration in hours')
+    .action(
+      async (
+        botId: string,
+        options: {
+          pollDurationHours?: string;
+          pollMulti?: boolean;
+          pollOption: string[];
+          pollQuestion: string;
+          target: string;
+        },
+      ) => {
+        if (options.pollOption.length < 2) {
+          log.error('At least 2 poll options are required.');
+          process.exit(1);
+        }
+
+        const client = await getTrpcClient();
+        const result = await client.botMessage.createPoll.mutate({
+          botId,
+          channelId: options.target,
+          duration: options.pollDurationHours
+            ? Number.parseInt(options.pollDurationHours, 10)
+            : undefined,
+          multipleAnswers: options.pollMulti,
+          options: options.pollOption,
+          question: options.pollQuestion,
+        });
+
+        const r = result as any;
+        console.log(`${pc.green('✓')} Poll created${r.pollId ? ` (${pc.dim(r.pollId)})` : ''}`);
+      },
+    );
+
+  // ── thread (subcommand group) ───────────────────────────
+
+  const thread = message.command('thread').description('Manage threads');
+
+  thread
+    .command('create <botId>')
+    .description('Create a new thread')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .requiredOption('--thread-name <name>', 'Thread name')
+    .option('--message <text>', 'Initial message content')
+    .option('--message-id <id>', 'Create thread from a message')
+    .action(
+      async (
+        botId: string,
+        options: { message?: string; messageId?: string; target: string; threadName: string },
+      ) => {
+        const client = await getTrpcClient();
+        const result = await client.botMessage.createThread.mutate({
+          botId,
+          channelId: options.target,
+          content: options.message,
+          messageId: options.messageId,
+          name: options.threadName,
+        });
+
+        const r = result as any;
+        console.log(
+          `${pc.green('✓')} Thread created${r.threadId ? ` (${pc.dim(r.threadId)})` : ''}`,
+        );
+      },
+    );
+
+  thread
+    .command('list <botId>')
+    .description('List threads in a channel')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .option('--json', 'Output JSON')
+    .action(async (botId: string, options: { json?: boolean; target: string }) => {
+      const client = await getTrpcClient();
+      const result = await client.botMessage.listThreads.query({
+        botId,
+        channelId: options.target,
+      });
+
+      if (options.json) {
+        outputJson(result);
+        return;
+      }
+
+      const threads = (result as any).threads ?? [];
+      if (threads.length === 0) {
+        console.log('No threads found.');
+        return;
+      }
+
+      const rows = threads.map((t: any) => [
+        t.id || '',
+        t.name || '',
+        String(t.messageCount ?? ''),
+      ]);
+
+      printTable(rows, ['ID', 'NAME', 'MESSAGES']);
+    });
+
+  thread
+    .command('reply <botIdOrAtKey>')
+    .description(
+      'Reply to a thread. Pass a per-agent bot id, or "@<messenger-install-id>" ' +
+        'for a System Bot install.',
+    )
+    .requiredOption('--thread-id <id>', 'Thread ID')
+    .requiredOption('--message <text>', 'Reply content')
+    .option(
+      '--attachment <pathOrUrl>',
+      'Attach a file by local path or remote URL (repeatable). ' +
+        'Local paths are base64-encoded; http(s) URLs are passed as fetchUrl.',
+      collectOptions,
+      [],
+    )
+    .action(
+      async (
+        botIdOrAtKey: string,
+        options: { attachment: string[]; message: string; threadId: string },
+      ) => {
+        const attachments = await resolveAttachmentFlags(options.attachment);
+        const target = resolveSendTargetArg(botIdOrAtKey);
+
+        const client = await getTrpcClient();
+        const result = await client.botMessage.replyToThread.mutate({
+          ...target,
+          attachments,
+          content: options.message,
+          threadId: options.threadId,
+        });
+
+        const r = result as any;
+        const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
+        console.log(
+          `${pc.green('✓')} Reply sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,
+        );
+      },
+    );
+
+  // ── channel (subcommand group) ──────────────────────────
+
+  const channel = message.command('channel').description('Manage channels');
+
+  channel
+    .command('list <botId>')
+    .description('List channels')
+    .option('--server-id <id>', 'Server / workspace ID')
+    .option('--filter <type>', 'Filter by type')
+    .option('--json', 'Output JSON')
+    .action(
+      async (botId: string, options: { filter?: string; json?: boolean; serverId?: string }) => {
+        const client = await getTrpcClient();
+        const result = await client.botMessage.listChannels.query({
+          botId,
+          filter: options.filter,
+          serverId: options.serverId,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const channels = (result as any).channels ?? [];
+        if (channels.length === 0) {
+          console.log('No channels found.');
+          return;
+        }
+
+        const rows = channels.map((c: any) => [c.id || '', c.name || '', c.type || '']);
+        printTable(rows, ['ID', 'NAME', 'TYPE']);
+      },
+    );
+
+  channel
+    .command('info <botId>')
+    .description('Get channel details')
+    .requiredOption('--target <channelId>', 'Channel ID')
+    .option('--json', 'Output JSON')
+    .action(async (botId: string, options: { json?: boolean; target: string }) => {
+      const client = await getTrpcClient();
+      const result = await client.botMessage.getChannelInfo.query({
+        botId,
+        channelId: options.target,
+      });
+
+      if (options.json) {
+        outputJson(result);
+        return;
+      }
+
+      const r = result as any;
+      console.log(`Channel: ${pc.bold(r.name || options.target)}`);
+      if (r.type) console.log(`  Type: ${r.type}`);
+      if (r.memberCount != null) console.log(`  Members: ${r.memberCount}`);
+      if (r.description) console.log(`  Description: ${r.description}`);
+    });
+
+  // ── member ──────────────────────────────────────────────
+
+  const member = message.command('member').description('Member information');
+
+  member
+    .command('info <botId>')
+    .description('Get member details')
+    .requiredOption('--member-id <id>', 'Member / user ID')
+    .option('--server-id <id>', 'Server / workspace ID')
+    .option('--json', 'Output JSON')
+    .action(
+      async (botId: string, options: { json?: boolean; memberId: string; serverId?: string }) => {
+        const client = await getTrpcClient();
+        const result = await client.botMessage.getMemberInfo.query({
+          botId,
+          memberId: options.memberId,
+          serverId: options.serverId,
+        });
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const r = result as any;
+        console.log(`Member: ${pc.bold(r.displayName || r.username || options.memberId)}`);
+        if (r.status) console.log(`  Status: ${r.status}`);
+        if (r.roles?.length) console.log(`  Roles: ${r.roles.join(', ')}`);
+      },
+    );
+}
+
+// ── Helpers ──────────────────────────────────────────────
+
+function collectOptions(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}

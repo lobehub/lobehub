@@ -1,0 +1,24 @@
+LobeHub Community License
+
+Copyright (c) 2024/06/17 - current LobeHub LLC. All rights reserved.
+
+----------
+
+From 1.0, LobeChat is licensed under the LobeHub Community License, based on Apache License 2.0 with the following additional conditions:
+
+1. The commercial usage of LobeChat:
+
+  a. LobeChat may be utilized commercially, including as a frontend and backend service without modifying the source code.
+
+  b. a commercial license must be obtained from the producer if you want to develop and distribute a derivative work based on LobeChat.
+
+Please contact hello@lobehub.com by email to inquire about licensing matters.
+
+
+2. As a contributor, you should agree that:
+
+  a. The producer can adjust the open-source agreement to be more strict or relaxed as deemed necessary.
+
+  b. Your contributed code may be used for commercial purposes, including but not limited to its cloud edition.
+
+Apart from the specific conditions mentioned above, all other rights and restrictions follow the Apache License 2.0. Detailed information about the Apache License 2.0 can be found at http://www.apache.org/licenses/LICENSE-2.0.

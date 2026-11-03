@@ -1,0 +1,542 @@
+import type { DeviceMetricSample } from '@lobechat/types';
+
+// ─── Device Info ───
+
+/** A single live gateway WebSocket connection belonging to a device. */
+export interface DeviceConnection {
+  /** Freeform routing label, e.g. `desktop` / `desktop-dev` / `cli` / `cli-dev`. */
+  channel?: string;
+  connectedAt: number;
+  /** Per-install random UUID — the gateway's stale-connection dedupe key. */
+  connectionId: string;
+}
+
+/**
+ * A device as surfaced by the gateway `/api/device/devices` endpoint. Keyed by
+ * the stable `deviceId` (one entry per physical machine); the live WS sessions
+ * are nested under `channels` so a single device can hold several at once
+ * (e.g. desktop app + `lh connect` both connected).
+ */
+export interface GatewayDevice {
+  channels: DeviceConnection[];
+  /** Most recent channel's connect time. */
+  connectedAt: number;
+  deviceId: string;
+  hostname: string;
+  platform: string;
+}
+
+export interface DeviceSystemInfo {
+  arch: string;
+  /**
+   * Human-readable name of the shell that runCommand uses on this device
+   * (e.g. "PowerShell 7+ (pwsh)"). Optional for protocol compatibility with
+   * older devices that do not report it.
+   */
+  defaultShell?: string;
+  desktopPath: string;
+  documentsPath: string;
+  downloadsPath?: string;
+  homePath: string;
+  musicPath?: string;
+  picturesPath?: string;
+  /** Native agent protocol versions supported by this live connection; absent on older clients.
+   * `codex-app-server-v1` runs `lh hetero exec --codex-app-server` with native turn provenance.
+   */
+  supportedAgentRuntimes?: string[];
+  /** Opt-in tool identifiers supported by this client; absent on older clients. */
+  supportedTools?: string[];
+  userDataPath: string;
+  videosPath?: string;
+  workingDirectory: string;
+}
+
+// ─── WebSocket Protocol Messages (mirrors the device-gateway service's types) ───
+
+// Client → Server
+export interface AuthMessage {
+  serverUrl?: string;
+  token: string;
+  tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
+  type: 'auth';
+}
+
+export interface HeartbeatMessage {
+  type: 'heartbeat';
+}
+
+export interface ToolCallResponseMessage {
+  requestId: string;
+  result: {
+    content: string;
+    error?: string;
+    /**
+     * Wall time the tool actually took ON THE DEVICE, by the device's own
+     * clock. The server can only observe the whole dispatch round trip
+     * (publish → gateway → device → callback → redis), so without this number
+     * there is no way to tell a slow tool from slow transport — which is the
+     * entire question when deciding whether to move the agent loop local.
+     *
+     * Optional: an older device, or a gateway that does not forward the field,
+     * simply leaves it absent.
+     */
+    executionTimeMs?: number;
+    state?: unknown;
+    success: boolean;
+  };
+  type: 'tool_call_response';
+}
+
+export interface MessageApiResponseMessage {
+  requestId: string;
+  result: {
+    content: string;
+    error?: string;
+    success: boolean;
+  };
+  type: 'message_api_response';
+}
+
+/** A batch of machine health samples; the gateway stores them for two days. */
+export interface DeviceMetricsMessage {
+  batchId: string;
+  samples: DeviceMetricSample[];
+  type: 'device_metrics';
+}
+
+// Server → Client
+export interface DeviceMetricsAckMessage {
+  accepted: number;
+  batchId: string;
+  type: 'device_metrics_ack';
+}
+
+export interface HeartbeatAckMessage {
+  type: 'heartbeat_ack';
+}
+
+export interface AuthSuccessMessage {
+  type: 'auth_success';
+}
+
+export interface AuthFailedMessage {
+  reason: string;
+  type: 'auth_failed';
+}
+
+export interface AuthExpiredMessage {
+  type: 'auth_expired';
+}
+
+/**
+ * Stdio MCP connection params forwarded to the device for a tunneled MCP tool
+ * call. The cloud server can't spawn the user's local MCP binary, so the
+ * command/args/env travel to the device, which spawns and calls it locally.
+ */
+export interface GatewayMcpStdioParams {
+  args: string[];
+  command: string;
+  env?: Record<string, string>;
+  name: string;
+  type: 'stdio';
+}
+
+/**
+ * HTTP MCP connection params forwarded to the device for a tunneled MCP tool
+ * call. Used for endpoints only the device's network can reach (localhost /
+ * LAN MCP servers) — the cloud server's fetch would fail. Credentials are
+ * decrypted server-side and forwarded verbatim; the device stores nothing.
+ */
+export interface GatewayMcpHttpParams {
+  auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+  headers?: Record<string, string>;
+  name: string;
+  type: 'http';
+  url: string;
+}
+
+/** MCP connection params for a tunneled call — discriminated on `type`. */
+export type GatewayMcpParams = GatewayMcpStdioParams | GatewayMcpHttpParams;
+
+/**
+ * How the device should execute a tunneled tool call. Explicit so routing never
+ * depends on structural sniffing (e.g. "does `params` exist?") — the gateway
+ * relays every call over one `tool-call` channel, so the discriminator must be
+ * a dedicated field, not the shape of the payload.
+ *
+ * `'tool'` is the generic builtin/local-system call; `'mcp'` is a tunneled
+ * stdio MCP call. Open to future kinds (e.g. `'skill'`).
+ */
+export type GatewayToolCallType = 'tool' | 'mcp';
+
+export interface ToolCallRequestMessage {
+  /** Operation that triggered the call, propagated by the gateway for tracing. */
+  operationId?: string;
+  requestId: string;
+  /** Per-call timeout (ms) the gateway forwards; clients pass it through. */
+  timeout?: number;
+  toolCall: {
+    apiName: string;
+    arguments: string;
+    identifier: string;
+    /** MCP connection params (stdio or http) — present only when `type === 'mcp'`. */
+    params?: GatewayMcpParams;
+    /**
+     * Routing discriminator. `'mcp'` → the device's local MCP client (spawns
+     * the stdio server); `'tool'` (or omitted, for back-compat with older
+     * servers) → the builtin local-system tool switch.
+     */
+    type?: GatewayToolCallType;
+  };
+  type: 'tool_call_request';
+}
+
+export interface MessageApiRequestMessage {
+  api: {
+    apiName: string;
+    payload: Record<string, unknown>;
+    platform: string;
+  };
+  requestId: string;
+  type: 'message_api_request';
+}
+
+// Server → Client
+export interface SystemInfoRequestMessage {
+  requestId: string;
+  type: 'system_info_request';
+}
+
+// Client → Server
+export interface SystemInfoResponseMessage {
+  requestId: string;
+  result: {
+    success: boolean;
+    systemInfo?: DeviceSystemInfo;
+  };
+  type: 'system_info_response';
+}
+
+// ─── Generic device RPC (server-internal method forwarding) ───
+// Unlike tool calls, RPCs are server-initiated operations the LLM never sees
+// (e.g. workspace-init scans). The gateway relays them opaquely, correlating by
+// `requestId`, so new device methods need no per-method gateway route — only a
+// new entry in the device-side RPC dispatcher.
+
+// Server → Client
+export interface RpcRequestMessage {
+  /** Name of the device-side method to invoke (e.g. `initWorkspace`). */
+  method: string;
+  /** JSON-serializable arguments for the method. */
+  params?: unknown;
+  requestId: string;
+  /** Per-call timeout (ms) the gateway forwards; clients pass it through. */
+  timeout?: number;
+  type: 'rpc_request';
+}
+
+// Client → Server
+export interface RpcResponseMessage {
+  requestId: string;
+  result: {
+    /** Method return value, present when `success`. */
+    data?: unknown;
+    error?: string;
+    success: boolean;
+  };
+  type: 'rpc_response';
+}
+
+/** Server → Client: request the desktop to spawn `lh hetero exec`. */
+export interface AgentRunRequestMessage {
+  agentId?: string;
+  agentType: string;
+  /**
+   * Resolved `lh hetero exec` wrapper args, e.g. `--model` / `--effort`.
+   * Optional for protocol
+   * compatibility with older servers.
+   */
+  args?: string[];
+  /** Seed assistant message that receives terminal state from the CLI run. */
+  assistantMessageId?: string;
+  /**
+   * Claude Code subscription account the agent is routed to (its pin, or its
+   * auto-balanced pool best-first). The device maps it to a local login and
+   * spawns with that login's `CLAUDE_CONFIG_DIR`; a pinned account it holds no
+   * login for rejects the run. Optional — omitted for unbound agents, other
+   * agent types and older servers; an older device ignores it.
+   */
+  claudeAccountRouting?: {
+    candidates: Array<{ externalAccountId: string; name?: string }>;
+    mode: 'balanced' | 'pinned';
+  };
+  cwd?: string;
+  /**
+   * Image attachments from the user message, as URLs the device can fetch
+   * (signed S3 URLs). Appended as image content blocks after the prompt so
+   * the CLI gets vision input — mirrors the desktop local-mode
+   * `sendPrompt(imageList)` path. Optional — omitted for older servers.
+   */
+  imageList?: Array<{ id?: string; url: string }>;
+  /**
+   * Same meaning as {@link workspaceId}. The HTTP dispatch payload uses this
+   * name so it is not confused with the device-pool routing `workspaceId`.
+   * Naive gateways forward the POST body as-is; devices accept either field.
+   */
+  ingestWorkspaceId?: string;
+  jwt: string;
+  operationId: string;
+  prompt: string;
+  /**
+   * Full system context used only when native resume fails and the device CLI
+   * retries with a fresh session. Optional for compatibility with older
+   * servers and devices. The gateway relay must preserve this optional field;
+   * older deployments safely degrade to a fresh retry without recovery history.
+   */
+  resumeFallbackSystemContext?: string;
+  resumeSessionId?: string;
+  /**
+   * Static context injected before the user prompt (workspace conventions,
+   * selected context). The desktop sends it to `lh hetero exec` as the first
+   * text block of a content-block array. Optional — omitted for older servers
+   * that don't build a device-specific context.
+   */
+  systemContext?: string;
+  topicId: string;
+  type: 'agent_run_request';
+  /**
+   * Workspace that owns the topic. `lh hetero exec` must send this as
+   * `X-Workspace-Id` on heteroIngest/heteroFinish; without it the write lands
+   * in personal scope and the workspace topic stays `running` with an empty
+   * assistant. Optional for older gateways — a workspace-enrolled connection
+   * falls back to its own enrollment id.
+   */
+  workspaceId?: string;
+}
+
+// ─── Tunnel registry ───
+//
+// A registration maps an opaque slug to one device + port, and gives the tunnel
+// its public hostname `<port>--<slug>.lobe.sh`. The registry lives in the
+// gateway; the server creates, lists and revokes entries through the admin API.
+
+export interface GatewayTunnelRegistration {
+  createdAt: number;
+  /** userId of whoever opened the tunnel. */
+  createdBy: string;
+  deviceId: string;
+  expiresAt?: number;
+  /** Public hostname, e.g. `3000--x7k2p9q8.lobe.sh`. */
+  hostname?: string;
+  port: number;
+  /** Owning principal — the gateway routing key (`user:<id>` / `workspace:<id>`). */
+  principal: string;
+  slug: string;
+}
+
+/**
+ * Gateway routing key for a caller. A workspace tunnel is reachable by every
+ * member of that workspace; a personal one only by its owner.
+ */
+export const devicePrincipal = (params: { userId: string; workspaceId?: string }): string =>
+  params.workspaceId ? `workspace:${params.workspaceId}` : `user:${params.userId}`;
+
+// ─── HTTP Tunnel Frames ───
+//
+// A tunnel relays one browser HTTP request to a TCP port on this device as a
+// sequence of JSON frames over the device WebSocket, multiplexed by `connId`.
+// The browser-facing HTTP semantics live on the gateway; the device only sees
+// a target (`127.0.0.1:<port>`) plus a request head and a byte stream.
+//
+// Flow control is credit-based per direction: each side sends at most
+// `TUNNEL_FLOW_WINDOW` unacked bytes and the receiver refills that window with
+// `tunnel_ack`. Exceeding the gateway's hard cap tears the tunnel down, so the
+// device must pace its response body rather than firing it all at once.
+//
+// Frame shapes mirror `device-gateway/src/types.ts`; keep both in step.
+
+/** Bytes per `tunnel_data` frame. */
+export const TUNNEL_CHUNK_SIZE = 64 * 1024;
+/** Unacked bytes one side may have in flight before it must wait. */
+export const TUNNEL_FLOW_WINDOW = 512 * 1024;
+
+export interface TunnelRequestHead {
+  headers: [string, string][];
+  method: string;
+  /** Path + query of the target request, e.g. `/api/items?a=1`. */
+  path: string;
+}
+
+export interface TunnelResponseHead {
+  headers: [string, string][];
+  status: number;
+}
+
+/** Server → Client: open a tunnel to `127.0.0.1:<port>` for one HTTP request. */
+export interface TunnelOpenMessage {
+  connId: string;
+  head: TunnelRequestHead;
+  target: {
+    host: string;
+    port: number;
+  };
+  type: 'tunnel_open';
+}
+
+/** Client → Server: result of a tunnel_open. On success `head` is the response head. */
+export interface TunnelOpenAckMessage {
+  connId: string;
+  error?: string;
+  head?: TunnelResponseHead;
+  ok: boolean;
+  type: 'tunnel_open_ack';
+}
+
+/** Both directions: a body chunk. `fin` marks the last chunk of that direction. */
+export interface TunnelDataMessage {
+  connId: string;
+  /** base64-encoded bytes. */
+  data: string;
+  fin?: boolean;
+  seq: number;
+  type: 'tunnel_data';
+}
+
+/** Both directions: acknowledge `bytes` consumed, refilling the sender's window. */
+export interface TunnelAckMessage {
+  bytes: number;
+  connId: string;
+  type: 'tunnel_ack';
+}
+
+/** Both directions: tear the tunnel down (abort, error, or peer gone). */
+export interface TunnelCloseMessage {
+  connId: string;
+  reason?: string;
+  type: 'tunnel_close';
+}
+
+/**
+ * Query parameter that carries the entry-ticket JWT on a tunnel link. Not
+ * `token`: apps behind a tunnel use `?token=` themselves (Vite's HMR socket).
+ * Mirrors `device-gateway/src/types.ts`.
+ */
+export const TUNNEL_TOKEN_PARAM = '__lobe_tunnel_token';
+
+/** Largest WebSocket message relayed either way; bigger closes with 1009. */
+export const TUNNEL_WS_MAX_MESSAGE = 1024 * 1024;
+
+/** Server → Client: open a WebSocket to `127.0.0.1:<port>` (e.g. dev-server HMR). */
+export interface TunnelWsOpenMessage {
+  connId: string;
+  head: {
+    /** Offered subprotocols, in the browser's order. */
+    protocols: string[];
+    /** Path + query, e.g. `/?token=abc`. */
+    path: string;
+  };
+  target: { host: string; port: number };
+  type: 'tunnel_ws_open';
+}
+
+/** Client → Server: the upstream socket opened (with its subprotocol) or failed. */
+export interface TunnelWsOpenAckMessage {
+  connId: string;
+  error?: string;
+  ok: boolean;
+  protocol?: string;
+  type: 'tunnel_ws_open_ack';
+}
+
+/** Both directions: one WebSocket message. `data` is base64 when `binary`. */
+export interface TunnelWsDataMessage {
+  binary?: boolean;
+  connId: string;
+  data: string;
+  type: 'tunnel_ws_message';
+}
+
+/** Both directions: one side closed. */
+export interface TunnelWsCloseMessage {
+  code?: number;
+  connId: string;
+  reason?: string;
+  type: 'tunnel_ws_close';
+}
+
+/** Tunnel frames the gateway sends down to this device. */
+export type TunnelServerFrame =
+  | TunnelAckMessage
+  | TunnelCloseMessage
+  | TunnelDataMessage
+  | TunnelOpenMessage
+  | TunnelWsCloseMessage
+  | TunnelWsDataMessage
+  | TunnelWsOpenMessage;
+
+/** Tunnel frames this device sends up to the gateway. */
+export type TunnelClientFrame =
+  | TunnelAckMessage
+  | TunnelCloseMessage
+  | TunnelDataMessage
+  | TunnelOpenAckMessage
+  | TunnelWsCloseMessage
+  | TunnelWsDataMessage
+  | TunnelWsOpenAckMessage;
+
+/** Client → Server: acknowledgement for an agent_run_request. */
+export interface AgentRunAckMessage {
+  operationId: string;
+  reason?: string;
+  status: 'accepted' | 'rejected';
+  type: 'agent_run_ack';
+}
+
+export type ClientMessage =
+  | AgentRunAckMessage
+  | AuthMessage
+  | DeviceMetricsMessage
+  | HeartbeatMessage
+  | MessageApiResponseMessage
+  | RpcResponseMessage
+  | SystemInfoResponseMessage
+  | ToolCallResponseMessage
+  | TunnelClientFrame;
+export type ServerMessage =
+  | AgentRunRequestMessage
+  | AuthExpiredMessage
+  | AuthFailedMessage
+  | AuthSuccessMessage
+  | DeviceMetricsAckMessage
+  | HeartbeatAckMessage
+  | MessageApiRequestMessage
+  | RpcRequestMessage
+  | SystemInfoRequestMessage
+  | ToolCallRequestMessage
+  | TunnelServerFrame;
+
+// ─── Client Types ───
+
+export type ConnectionStatus =
+  'authenticating' | 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
+
+export interface GatewayClientEvents {
+  agent_run_request: (request: AgentRunRequestMessage) => void;
+  auth_expired: () => void;
+  auth_failed: (reason: string) => void;
+  connected: () => void;
+  disconnected: () => void;
+  error: (error: Error) => void;
+  heartbeat_ack: () => void;
+  message_api_request: (request: MessageApiRequestMessage) => void;
+  reconnecting: (delay: number) => void;
+  /**
+   * The gateway closed this connection because another client with the same
+   * `connectionId` connected. The client does not reconnect after this.
+   */
+  replaced: () => void;
+  rpc_request: (request: RpcRequestMessage) => void;
+  status_changed: (status: ConnectionStatus) => void;
+  system_info_request: (request: SystemInfoRequestMessage) => void;
+  tool_call_request: (request: ToolCallRequestMessage) => void;
+}

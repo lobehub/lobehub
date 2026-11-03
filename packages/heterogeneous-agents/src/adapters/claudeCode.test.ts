@@ -1,0 +1,3335 @@
+import { describe, expect, it } from 'vitest';
+
+import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from '.';
+
+describe('ClaudeCodeAdapter', () => {
+  describe('run cost', () => {
+    // CC restores the session's cost tally on `--resume`, so `total_cost_usd`
+    // covers every earlier run of the session, not just this one.
+    const resultCost = (adapter: ClaudeCodeAdapter, totalCostUsd: number) =>
+      adapter
+        .adapt({
+          is_error: false,
+          result: 'done',
+          total_cost_usd: totalCostUsd,
+          type: 'result',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        })
+        .find((e) => e.type === 'step_complete' && e.data?.phase === 'result_usage')?.data.costUsd;
+
+    it('emits only what a resumed run added to the session total', () => {
+      const adapter = new ClaudeCodeAdapter();
+      expect(adapter.adapt({ initialSessionCostUsd: 69.67, type: 'session_configured' })).toEqual(
+        [],
+      );
+
+      expect(resultCost(adapter, 76.43)).toBeCloseTo(6.76);
+    });
+
+    it('keeps the reported total without a usable baseline', () => {
+      expect(resultCost(new ClaudeCodeAdapter(), 4)).toBeCloseTo(4);
+
+      // a total below the baseline means CC did not restore that tally
+      const reset = new ClaudeCodeAdapter();
+      reset.adapt({ initialSessionCostUsd: 9, type: 'session_configured' });
+      expect(resultCost(reset, 2)).toBeCloseTo(2);
+    });
+  });
+
+  describe('lifecycle', () => {
+    it('emits stream_start on init system event', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-sonnet-4-6',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('stream_start');
+      expect(events[0].data.model).toBe('claude-sonnet-4-6');
+      expect(adapter.sessionId).toBe('sess_123');
+    });
+
+    // `system init` beta-tags the id; every later event reports it clean. The
+    // renderer stamps the assistant from this event, so the tag must not leak.
+    it('strips the beta marker from the init model id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus-4-8[1m]',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus-4-8');
+    });
+
+    // Only a TRAILING marker is a beta tag — a bracket anywhere else is part of
+    // the id and must survive.
+    it('leaves an id without a trailing marker untouched', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus[4]-8',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus[4]-8');
+    });
+
+    it('emits visible_output_end before agent_runtime_end on success result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: false, result: 'done', type: 'result' });
+      expect(events.map((e) => e.type)).toEqual([
+        'stream_end',
+        'visible_output_end',
+        'agent_runtime_end',
+      ]);
+    });
+
+    // Resuming a session with orphaned background tasks: CC reports them, then
+    // closes that pass with an empty zero-turn result before the user's turn.
+    // Ending the run there left the reply as an empty `...` shell.
+    it('does not end the run on the empty task-notification result a resume opens with', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = [
+        { status: 'stopped', subtype: 'task_notification', task_id: 'bg_1', type: 'system' },
+        { session_id: 'sess_1', subtype: 'init', type: 'system' },
+        {
+          is_error: false,
+          num_turns: 0,
+          origin: { kind: 'task-notification' },
+          result: '',
+          subtype: 'success',
+          type: 'result',
+          usage: { input_tokens: 0, output_tokens: 0 },
+        },
+        { session_id: 'sess_1', subtype: 'init', type: 'system' },
+        {
+          message: { content: [{ text: 'PR opened', type: 'text' }], id: 'msg_1' },
+          type: 'assistant',
+        },
+      ].flatMap((raw) => adapter.adapt(raw));
+
+      const types = events.map((e) => e.type);
+      expect(types).not.toContain('stream_end');
+      expect(types).not.toContain('visible_output_end');
+      expect(types).not.toContain('agent_runtime_end');
+      expect(events.find((e) => e.type === 'stream_chunk')?.data.content).toBe('PR opened');
+
+      const final = adapter.adapt({
+        is_error: false,
+        num_turns: 1,
+        result: 'PR opened',
+        type: 'result',
+      });
+      expect(final.map((e) => e.type)).toContain('agent_runtime_end');
+    });
+
+    it('keeps a task-notification result that ran a turn terminal', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: false,
+        num_turns: 1,
+        origin: { kind: 'task-notification' },
+        result: 'background check finished',
+        type: 'result',
+      });
+      expect(events.map((e) => e.type)).toContain('agent_runtime_end');
+    });
+
+    it('emits error on failed result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: true, result: 'boom', type: 'result' });
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data.message).toBe('boom');
+      // agentType marks the payload so the executor persists the WHOLE object
+      // as the error body instead of flattening it to a generic message.
+      expect(events[2].data.agentType).toBe('claude-code');
+    });
+
+    it('surfaces the streamed API error text when an error result carries no message', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const apiError =
+        'API Error: Connection closed mid-response. The response above may be incomplete.';
+
+      adapter.adapt({ session_id: 'sess_net', subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: { content: [{ text: apiError, type: 'text' }], id: 'msg_1' },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        duration_ms: 157_000,
+        is_error: true,
+        num_turns: 2,
+        session_id: 'sess_net',
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      // The streamed line is the only reason available, so it must become the
+      // message — and a dropped connection is transient, so it earns the
+      // retryable `overloaded` code rather than the opaque generic card.
+      expect(errorEvent.data).toMatchObject({
+        agentType: 'claude-code',
+        code: 'overloaded',
+        error: apiError,
+        message: apiError,
+      });
+    });
+
+    it('keeps the diagnostic details pane for failures with no recognizable reason', () => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ session_id: 'sess_x', subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        duration_ms: 157_000,
+        is_error: true,
+        num_turns: 2,
+        session_id: 'sess_x',
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: 'error_during_execution',
+        details: {
+          durationMs: 157_000,
+          numTurns: 2,
+          sessionId: 'sess_x',
+          subtype: 'error_during_execution',
+        },
+      });
+    });
+
+    it('describes error_max_turns results that carry no message', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: true,
+        num_turns: 50,
+        subtype: 'error_max_turns',
+        type: 'result',
+      });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data).toMatchObject({
+        code: 'error_max_turns',
+        details: { numTurns: 50, subtype: 'error_max_turns' },
+        message: 'Claude Code stopped after reaching its maximum number of turns for this run.',
+      });
+    });
+
+    it('classifies auth failures from streamed API error text when the result is empty', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const apiError =
+        'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: { content: [{ text: apiError, type: 'text' }], id: 'msg_1' },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        is_error: true,
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data).toMatchObject({ code: 'auth_required', stderr: apiError });
+    });
+
+    it('surfaces the reason CC reports in the result `errors` array', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const reason = 'No conversation found with session ID: 4f3a6a4a-2ac2-4a8e-b513-5cff081f3ae6';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        duration_ms: 0,
+        errors: [reason],
+        is_error: true,
+        num_turns: 0,
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data.message).toBe(reason);
+    });
+
+    it('does NOT let a stale streamed API error leak into the next run', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [{ text: 'API Error: Connection closed mid-response.', type: 'text' }],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt({ is_error: true, subtype: 'error_during_execution', type: 'result' });
+
+      // Next turn on the same adapter fails without any streamed API error.
+      const events = adapter.adapt({
+        is_error: true,
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.data.message).toBe(
+        'Claude Code hit an error mid-run and exited without reporting a reason.',
+      );
+      expect(errorEvent.data.details?.lastApiError).toBeUndefined();
+    });
+
+    it('keeps runtime open until transport close in SDK mode', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: false, result: 'done', type: 'result' });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end']);
+    });
+
+    it('emits stream_retry for Claude Code canary system api_retry 529 events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ model: 'claude-sonnet-4-6', subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        api_error_status: 529,
+        attempt: 6,
+        delay_ms: 1000,
+        error: {
+          error: { message: 'Overloaded', type: 'overloaded_error' },
+          type: 'error',
+        },
+        max_attempts: 10,
+        subtype: 'api_retry',
+        type: 'system',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_retry']);
+      expect(events[0].data).toMatchObject({
+        agentType: 'claude-code',
+        attempt: 6,
+        delayMs: 1000,
+        error: 'overloaded',
+        errorStatus: 529,
+        maxAttempts: 10,
+        provider: 'claude-code',
+      });
+    });
+
+    it('classifies auth failures from failed result events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError =
+        'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: true, result: rawError, type: 'result' });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'auth_required',
+        docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
+        stderr: rawError,
+      });
+      expect(events[2].data.message).toBe(
+        'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+      );
+    });
+
+    it('classifies a profile with no login at all ("Not logged in · Please run /login") as auth_required', () => {
+      // CC emits this phrasing when the resolved profile (e.g. an isolated
+      // CLAUDE_CONFIG_DIR injected by account routing) has no credentials —
+      // it must render the auth guide card, not the generic error card.
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = 'Not logged in · Please run /login';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: true, result: rawError, type: 'result' });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data).toMatchObject({
+        agentType: 'claude-code',
+        code: 'auth_required',
+        stderr: rawError,
+      });
+    });
+
+    it('classifies overloaded failures from api_error_status 529 result events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError =
+        'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 529,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'overloaded',
+        message: rawError,
+        stderr: rawError,
+      });
+    });
+
+    it('classifies overloaded failures from result text alone', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = 'Overloaded';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
+        agentType: 'claude-code',
+        code: 'overloaded',
+        message: rawError,
+      });
+    });
+
+    it('classifies a 429 "not your usage limit" server throttle as overloaded, not rate_limit', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError =
+        'API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      // CC still emits a generic rate_limit_event (rejected, no resetsAt) for
+      // this transient throttle — it must NOT tip the classifier toward the
+      // user-facing usage-limit guide.
+      adapter.adapt({
+        rate_limit_info: { isUsingOverage: false, status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'overloaded',
+        message: rawError,
+        stderr: rawError,
+      });
+    });
+
+    it('treats a 429 with no reset window in rate_limit_event as overloaded, not rate_limit', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // Generic "Rate limited" wording + a rate_limit_event that carries no
+      // resetsAt / rateLimitType. The structured signal — not the 429 status
+      // or the "rate limit" substring — decides: no reset window → transient
+      // server throttle → overloaded.
+      const rawError = 'API Error: 429 · Rate limited';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        rate_limit_info: { status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({ code: 'overloaded', message: rawError });
+    });
+
+    it('classifies a user quota limit from rateLimitType alone (no resetsAt)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = 'API Error: 429 · Rate limited';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      // rateLimitType is itself a user-quota signal even without resetsAt.
+      adapter.adapt({
+        rate_limit_info: { rateLimitType: 'seven_day', status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events[2].data).toMatchObject({
+        code: 'rate_limit',
+        rateLimitInfo: { rateLimitType: 'seven_day' },
+      });
+    });
+
+    it('does not treat an allowed rate_limit_event window as a quota limit on a later network error', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // CC stamps a rate_limit_info onto an *allowed* request — it carries the
+      // rolling-window metadata (resetsAt / rateLimitType) even though nothing
+      // was rejected. A later ECONNRESET must be classified on its own merits
+      // (a transient transport failure) and must NOT inherit this window and
+      // render a bogus "usage limit reached, resets at X" guide.
+      const rawError = 'API Error: Unable to connect to API (ECONNRESET)';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        rate_limit_info: {
+          isUsingOverage: false,
+          rateLimitType: 'five_hour',
+          resetsAt: 1_781_853_000,
+          status: 'allowed',
+        },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: null,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
+        code: 'overloaded',
+        error: rawError,
+        message: rawError,
+      });
+      expect(events[2].data).not.toHaveProperty('code', 'rate_limit');
+      expect(events[2].data).not.toHaveProperty('rateLimitInfo');
+    });
+
+    // Every case below is taken from a real recorded trace under
+    // `<appStorage>/heteroAgent/tracing/claude-code`, where 53% of all
+    // `is_error` results were landing in the generic fallback card.
+    it.each([
+      ['API Error: Unable to connect to API (ECONNRESET)', null],
+      ['API Error: Unable to connect to API (ConnectionRefused)', null],
+      ['API Error: Connection closed mid-response. The response above may be incomplete.', null],
+      ['API Error: The socket connection was closed unexpectedly.', null],
+      ['API Error: Stream idle timeout - partial response received', null],
+      ['API Error: Response stalled mid-stream. The response above may be incomplete.', null],
+      ['Request timed out', null],
+      ['API Error: 500 Internal server error. This is a server-side issue.', 500],
+    ])('classifies transport/5xx failure %j as overloaded (retryable)', (rawError, status) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: status,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ code: 'overloaded', message: rawError });
+    });
+
+    it.each([
+      "You've hit your session limit · resets 6:30pm (Asia/Shanghai)",
+      "You've hit your weekly limit · resets Jul 3 at 1pm (Asia/Shanghai)",
+      "You've reached your Fable 5 limit. Run /usage-credits to continue or switch models.",
+      'API Error: Request rejected (429) · [1234][已达到 5 小时使用上限，2026-06-19 22:00:00 后可继续使用。]',
+    ])('classifies user-quota wording %j as rate_limit without a structured event', (rawError) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      // No rate_limit_event at all: the 429 alone previously routed these real
+      // quota exhaustions to the "server is busy, retry" guide.
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ code: 'rate_limit', message: rawError });
+    });
+
+    it('keeps an auth failure that mentions a transport symptom as auth_required', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // Real trace: the transport wording would otherwise win and render a
+      // useless retry card for a credential problem.
+      const rawError =
+        'Failed to authenticate. API Error: 401 The socket connection was closed unexpectedly.';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 401,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ code: 'auth_required' });
+    });
+
+    it.each(['aborted_streaming', 'aborted_tools'])(
+      'terminates a stopped run (%s) as interrupted, NOT as an error',
+      (terminalReason) => {
+        const adapter = new ClaudeCodeAdapter();
+
+        adapter.adapt({ subtype: 'init', type: 'system' });
+        // Real shape of a user-initiated stop: is_error, no result text, only
+        // CC's internal diagnostic in `errors`, and the process exits 0.
+        const events = adapter.adapt({
+          errors: ['[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use'],
+          is_error: true,
+          num_turns: 4,
+          subtype: 'error_during_execution',
+          terminal_reason: terminalReason,
+          type: 'result',
+        });
+
+        const terminal = events.at(-1)!;
+        // A stop is an outcome, not a fault: no error terminal means no red
+        // card, no `failed` topic status.
+        expect(events.some((e) => e.type === 'error')).toBe(false);
+        expect(terminal.type).toBe('agent_runtime_end');
+        expect(terminal.data).toMatchObject({
+          kind: 'aborted',
+          reason: 'interrupted',
+          terminalReason,
+        });
+        expect(JSON.stringify(terminal.data)).not.toContain('ede_diagnostic');
+      },
+    );
+
+    it('does not fabricate a terminal for a stop under the on-transport-close strategy', () => {
+      // The SDK transport supplies its own terminal when the transport closes;
+      // emitting one here too would double-terminate the run.
+      const adapter = new ClaudeCodeSdkAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        errors: ['[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use'],
+        is_error: true,
+        subtype: 'error_during_execution',
+        terminal_reason: 'aborted_streaming',
+        type: 'result',
+      });
+
+      expect(events.some((e) => e.type === 'error' || e.type === 'agent_runtime_end')).toBe(false);
+    });
+
+    it('keeps a real reason reported during an aborted wind-down', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = "You've hit your session limit · resets 6:30pm (Asia/Shanghai)";
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        terminal_reason: 'aborted_tools',
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ code: 'rate_limit', message: rawError });
+    });
+
+    it('still surfaces a non-diagnostic errors[] entry (stale --resume id)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const resumeError = 'No conversation found with session ID: 0a8e28f6-5ba2-4828-900b-069d77';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        errors: [resumeError],
+        is_error: true,
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: 'resume_thread_not_found',
+        message: resumeError,
+      });
+    });
+
+    // The long tail has no dedicated guide card, so the value is the taxonomy
+    // kind: it keeps these out of the `agent_failed` catch-all.
+    it.each([
+      ['Claude Fable 5 is currently unavailable. Learn more: …', 'model_unavailable'],
+      ["There's an issue with the selected model (claude-fable-5).", 'model_unavailable'],
+      ['Failed to decode image: The image format Gif is not supported', 'unsupported_attachment'],
+      [
+        'API Error: 400 messages.6.content.2.server_tool_use.id: String should match pattern',
+        'invalid_request',
+      ],
+    ])('classifies tail failure %j as %s', (rawError, kind) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: true, result: rawError, type: 'result' });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: kind,
+        details: { kind },
+        message: rawError,
+      });
+    });
+
+    it.each([
+      ['API Error: Unable to connect to API (ECONNRESET)', null, 'network_drop'],
+      [
+        'API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited',
+        429,
+        'server_throttle',
+      ],
+      ['API Error: 529 Overloaded.', 529, 'server_overloaded'],
+    ])('tags %j with taxonomy kind %s under one overloaded guide code', (msg, status, kind) => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: status,
+        is_error: true,
+        result: msg,
+        type: 'result',
+      });
+
+      // One guide code (so auto-retry behavior is unchanged), three kinds.
+      expect(events.at(-1)!.data).toMatchObject({ code: 'overloaded', details: { kind } });
+    });
+
+    it('separates a credit limit from a plan window under the rate_limit guide', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = "You've reached your Fable 5 limit. Run /usage-credits to continue.";
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({
+        code: 'rate_limit',
+        details: { kind: 'credit_limit' },
+      });
+    });
+
+    it('names error_max_turns as a lifecycle outcome, not the catch-all', () => {
+      const adapter = new ClaudeCodeAdapter();
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: true,
+        subtype: 'error_max_turns',
+        type: 'result',
+      });
+
+      expect(events.at(-1)!.data).toMatchObject({ details: { kind: 'max_turns' } });
+    });
+
+    it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = "You've hit your limit · resets 9am (Asia/Shanghai)";
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      expect(
+        adapter.adapt({
+          rate_limit_info: {
+            isUsingOverage: false,
+            overageDisabledReason: 'org_level_disabled',
+            overageStatus: 'rejected',
+            rateLimitType: 'seven_day',
+            resetsAt: 1_776_992_400,
+            status: 'rejected',
+          },
+          type: 'rate_limit_event',
+        }),
+      ).toEqual([]);
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
+      expect(events[2].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'rate_limit',
+        message: rawError,
+        rateLimitInfo: {
+          isUsingOverage: false,
+          overageDisabledReason: 'org_level_disabled',
+          overageStatus: 'rejected',
+          rateLimitType: 'seven_day',
+          resetsAt: 1_776_992_400,
+          status: 'rejected',
+        },
+        stderr: rawError,
+      });
+    });
+  });
+
+  describe('content mapping', () => {
+    it('maps text to stream_chunk text', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'hello', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const chunk = events.find((e) => e.type === 'stream_chunk' && e.data.chunkType === 'text');
+      expect(chunk).toBeDefined();
+      expect(chunk!.data.content).toBe('hello');
+    });
+
+    it('maps thinking to stream_chunk reasoning', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ thinking: 'considering', type: 'thinking' }] },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning',
+      );
+      expect(chunk).toBeDefined();
+      expect(chunk!.data.reasoning).toBe('considering');
+    });
+
+    it('maps tool_use to tools_calling chunk + tool_start', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk!.data.toolsCalling).toEqual([
+        {
+          apiName: 'Read',
+          arguments: JSON.stringify({ path: '/a' }),
+          id: 't1',
+          identifier: 'claude-code',
+          type: 'default',
+        },
+      ]);
+
+      const toolStart = events.find((e) => e.type === 'tool_start');
+      expect(toolStart).toBeDefined();
+    });
+
+    it('rewrites mcp__lobe_cc__ask_user_question to apiName=askUserQuestion', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const askInput = {
+        questions: [
+          {
+            header: 'Color',
+            options: [
+              { description: 'Red', label: 'Red' },
+              { description: 'Blue', label: 'Blue' },
+            ],
+            question: 'Pick a color?',
+          },
+        ],
+      };
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            {
+              id: 'tu_aq_1',
+              input: askInput,
+              name: 'mcp__lobe_cc__ask_user_question',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk!.data.toolsCalling).toEqual([
+        {
+          // Wire-prefixed name is rewritten to the stable domain key.
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify(askInput),
+          id: 'tu_aq_1',
+          identifier: 'claude-code',
+          type: 'default',
+        },
+      ]);
+    });
+  });
+
+  describe('tool_result in user events', () => {
+    it('emits tool_result event with content for user tool_result block', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'file contents here', tool_use_id: 't1', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result).toBeDefined();
+      expect(result!.data.toolCallId).toBe('t1');
+      expect(result!.data.content).toBe('file contents here');
+      expect(result!.data.isError).toBe(false);
+
+      // Should also emit tool_end
+      const end = events.find((e) => e.type === 'tool_end');
+      expect(end).toBeDefined();
+      expect(end!.data.toolCallId).toBe('t1');
+    });
+
+    it('aligns tool_end with the server shape — carries payload + result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            {
+              id: 't1',
+              input: { command: 'git worktree add ../wt' },
+              name: 'Bash',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'Preparing worktree', tool_use_id: 't1', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const end = events.find((e) => e.type === 'tool_end');
+      // Payload mirrors tool_start's `{ toolCalling }` so `onAfterCall` can resolve
+      // the executor by identifier and read the command args; result gives success.
+      expect(end!.data.payload).toEqual({
+        toolCalling: {
+          apiName: 'Bash',
+          arguments: JSON.stringify({ command: 'git worktree add ../wt' }),
+          id: 't1',
+          identifier: 'claude-code',
+          type: 'default',
+        },
+      });
+      expect(end!.data.result).toMatchObject({ content: 'Preparing worktree', success: true });
+    });
+
+    it('handles array-shaped tool_result content', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Bash', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { text: 'line1', type: 'text' },
+                { text: 'line2', type: 'text' },
+              ],
+              tool_use_id: 't1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('line1\nline2');
+    });
+
+    it('marks isError when tool_result is_error is true', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'ENOENT', is_error: true, tool_use_id: 't1', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.isError).toBe(true);
+    });
+
+    it('preserves structured WebSearch sources alongside the text fallback', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const content = 'Web search results for query: "TradingView copper futures symbol ticker"';
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'ws1',
+              input: { query: 'TradingView copper futures symbol ticker' },
+              name: 'WebSearch',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content, tool_use_id: 'ws1', type: 'tool_result' }],
+          role: 'user',
+        },
+        tool_use_result: {
+          durationSeconds: 2.938580792,
+          query: 'TradingView copper futures symbol ticker',
+          results: [
+            {
+              hostLogo: 'data:image/png;base64,not-persisted',
+              hostname: 'www.tradingview.com',
+              link: 'https://www.tradingview.com/symbols/COMEX-HG1!/',
+              snippet: 'The current price of Copper Futures is 6.7190 USD',
+              title: 'HG1! Charts and Quotes - Futures',
+            },
+          ],
+        },
+        type: 'user',
+      });
+
+      const result = events.find((event) => event.type === 'tool_result');
+      const end = events.find((event) => event.type === 'tool_end');
+      const pluginState = {
+        durationSeconds: 2.938580792,
+        query: 'TradingView copper futures symbol ticker',
+        results: [
+          {
+            hostname: 'www.tradingview.com',
+            link: 'https://www.tradingview.com/symbols/COMEX-HG1!/',
+            snippet: 'The current price of Copper Futures is 6.7190 USD',
+            title: 'HG1! Charts and Quotes - Futures',
+          },
+        ],
+      };
+
+      expect(result?.data).toMatchObject({
+        content,
+        isError: false,
+        pluginState,
+        toolCallId: 'ws1',
+      });
+      expect(end?.data.result).toEqual({ content, state: pluginState, success: true });
+    });
+
+    it('bounds and filters structured WebSearch metadata before persistence', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [
+            { id: 'ws1', input: { query: 'bounded search' }, name: 'WebSearch', type: 'tool_use' },
+          ],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+
+      const validResults = Array.from({ length: 10 }, (_, index) => ({
+        hostname: index === 0 ? 'trusted.example' : `example-${index}.com`,
+        link: index === 0 ? 'https://evil.example/0' : `https://example.com/${index}`,
+        snippet: index === 0 ? 's'.repeat(3000) : `Snippet ${index}`,
+        title: index === 0 ? '😀'.repeat(400) : `Result ${index}`,
+      }));
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'bounded output', tool_use_id: 'ws1', type: 'tool_result' }],
+          role: 'user',
+        },
+        tool_use_result: {
+          durationSeconds: -1,
+          query: ` ${'q'.repeat(600)} `,
+          results: [
+            { link: 'javascript:alert(1)', title: 'Unsafe result' },
+            { link: `https://example.com/${'x'.repeat(2048)}`, title: 'Oversized URL' },
+            ...validResults,
+          ],
+        },
+        type: 'user',
+      });
+
+      const pluginState = events.find((event) => event.type === 'tool_result')?.data.pluginState;
+      expect(pluginState.query).toHaveLength(512);
+      expect(pluginState).not.toHaveProperty('durationSeconds');
+      expect(pluginState.results).toHaveLength(8);
+      expect(pluginState.results[0]).toMatchObject({
+        hostname: 'evil.example',
+        link: 'https://evil.example/0',
+        snippet: 's'.repeat(2048),
+      });
+      expect(pluginState.results[0].title).toHaveLength(512);
+      expect(pluginState.results).not.toContainEqual(
+        expect.objectContaining({ title: 'Unsafe result' }),
+      );
+    });
+
+    it('does not synthesize successful WebSearch state for an error result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [
+            { id: 'ws1', input: { query: 'failing search' }, name: 'WebSearch', type: 'tool_use' },
+          ],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: 'Unable to connect to search provider',
+              is_error: true,
+              tool_use_id: 'ws1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        tool_use_result: {
+          isHardFailure: true,
+          query: 'failing search',
+          results: [
+            {
+              link: 'https://example.com/should-not-persist',
+              title: 'Stale result',
+            },
+          ],
+        },
+        type: 'user',
+      });
+
+      const result = events.find((event) => event.type === 'tool_result');
+      const end = events.find((event) => event.type === 'tool_end');
+      expect(result?.data).toMatchObject({
+        content: 'Unable to connect to search provider',
+        isError: true,
+      });
+      expect(result?.data.pluginState).toBeUndefined();
+      expect(end?.data.result).not.toHaveProperty('state');
+    });
+
+    it('ignores structured search-shaped metadata for non-WebSearch tools', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          content: [{ id: 'read1', input: {}, name: 'Read', type: 'tool_use' }],
+          id: 'msg_1',
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'file contents', tool_use_id: 'read1', type: 'tool_result' }],
+          role: 'user',
+        },
+        tool_use_result: {
+          query: 'spoofed search',
+          results: [{ link: 'https://example.com', title: 'Should not persist' }],
+        },
+        type: 'user',
+      });
+
+      expect(
+        events.find((event) => event.type === 'tool_result')?.data.pluginState,
+      ).toBeUndefined();
+    });
+  });
+
+  describe('ToolSearch tool_reference content ()', () => {
+    // CC CLI serializes ToolSearch results as `tool_reference` blocks — no
+    // `text` or `content` field — which the generic array mapper dropped to
+    // empty content, leaving the tool message in DB with `content: ''` and
+    // the UI's StatusIndicator stuck on the spinner.
+    it('joins tool_reference blocks into newline-separated tool names', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'ts1', input: { query: 'linear' }, name: 'ToolSearch', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { tool_name: 'mcp__claude_ai_Linear__create_attachment', type: 'tool_reference' },
+                { tool_name: 'mcp__claude_ai_Linear__create_document', type: 'tool_reference' },
+                { tool_name: 'mcp__claude_ai_Linear__create_issue_label', type: 'tool_reference' },
+              ],
+              tool_use_id: 'ts1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result).toBeDefined();
+      expect(result!.data.toolCallId).toBe('ts1');
+      expect(result!.data.content).toBe(
+        [
+          'mcp__claude_ai_Linear__create_attachment',
+          'mcp__claude_ai_Linear__create_document',
+          'mcp__claude_ai_Linear__create_issue_label',
+        ].join('\n'),
+      );
+      expect(result!.data.isError).toBe(false);
+
+      const end = events.find((e) => e.type === 'tool_end');
+      expect(end).toBeDefined();
+      expect(end!.data.toolCallId).toBe('ts1');
+    });
+
+    it('mixes tool_reference with text blocks in a single tool_result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'ts1', input: { query: 'search' }, name: 'ToolSearch', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { text: 'Loaded:', type: 'text' },
+                { tool_name: 'WebSearch', type: 'tool_reference' },
+              ],
+              tool_use_id: 'ts1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('Loaded:\nWebSearch');
+    });
+
+    it('skips tool_reference entries with no tool_name', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 'ts1', input: { query: 'x' }, name: 'ToolSearch', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { tool_name: 'A', type: 'tool_reference' },
+                { type: 'tool_reference' },
+                { tool_name: 'B', type: 'tool_reference' },
+              ],
+              tool_use_id: 'ts1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('A\nB');
+    });
+  });
+
+  describe('Read tool image content ()', () => {
+    // CC's `Read` on images returns a `tool_result` whose `content` is an
+    // `image` block (base64). The generic mapper had no branch for it so
+    // resultContent collapsed to '' and the UI's StatusIndicator stuck on the
+    // spinner ( minimal fix: emit an `[Image: …]` content placeholder).
+    //  keeps that placeholder as the human-readable fallback AND
+    // preserves the base64 body on `pluginState.images` so the runtime
+    // pipeline can upload it and the UI can echo a thumbnail.
+    it('renders image blocks as a non-empty placeholder and preserves base64 on pluginState.images', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 'r1', input: { file_path: 'x.png' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                {
+                  source: { data: 'AAAA', media_type: 'image/png', type: 'base64' },
+                  type: 'image',
+                },
+              ],
+              tool_use_id: 'r1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result).toBeDefined();
+      expect(result!.data.toolCallId).toBe('r1');
+      expect(result!.data.content).toBe('[Image: image/png]');
+      expect(result!.data.isError).toBe(false);
+      expect(result!.data.pluginState.images).toEqual([{ data: 'AAAA', mediaType: 'image/png' }]);
+
+      const end = events.find((e) => e.type === 'tool_end');
+      expect(end).toBeDefined();
+      expect(end!.data.toolCallId).toBe('r1');
+    });
+
+    it('falls back to generic label when media_type is missing', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 'r1', input: { file_path: 'x' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [{ source: { data: 'AAAA', type: 'base64' }, type: 'image' }],
+              tool_use_id: 'r1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('[Image: image]');
+      expect(result!.data.pluginState.images).toEqual([{ data: 'AAAA', mediaType: 'image' }]);
+    });
+  });
+
+  describe('TodoWrite pluginState synthesis', () => {
+    const driveTodoWrite = (adapter: ClaudeCodeAdapter, input: unknown, toolId = 't1') => {
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: toolId, input, name: 'TodoWrite', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: 'Todos have been modified successfully',
+              tool_use_id: toolId,
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const result = events.find((e) => e.type === 'tool_result');
+      return result!.data.pluginState as
+        | {
+            todos: {
+              items: Array<{ id?: string; status: string; text: string }>;
+              updatedAt: string;
+            };
+          }
+        | undefined;
+    };
+
+    it('maps pending/in_progress/completed to todo/processing/completed', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const pluginState = driveTodoWrite(adapter, {
+        todos: [
+          { activeForm: 'Doing A', content: 'Do A', status: 'in_progress' },
+          { activeForm: 'Doing B', content: 'Do B', status: 'pending' },
+          { activeForm: 'Doing C', content: 'Do C', status: 'completed' },
+        ],
+      });
+
+      expect(pluginState).toBeDefined();
+      expect(pluginState!.todos.items).toEqual([
+        { status: 'processing', text: 'Doing A' },
+        { status: 'todo', text: 'Do B' },
+        { status: 'completed', text: 'Do C' },
+      ]);
+      expect(new Date(pluginState!.todos.updatedAt).toISOString()).toBe(
+        pluginState!.todos.updatedAt,
+      );
+    });
+
+    it('falls back to content when activeForm is missing on in_progress item', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const pluginState = driveTodoWrite(adapter, {
+        todos: [{ activeForm: '', content: 'Do the thing', status: 'in_progress' }],
+      });
+      expect(pluginState!.todos.items[0]).toEqual({
+        status: 'processing',
+        text: 'Do the thing',
+      });
+    });
+
+    it('does not set pluginState for non-TodoWrite tools', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 't1', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.pluginState).toBeUndefined();
+    });
+
+    it('does NOT synthesize pluginState when tool_result is marked is_error', () => {
+      // Guard: a failed TodoWrite was never applied on CC's side; persisting
+      // a derived snapshot would let `selectTodosFromMessages` overwrite the
+      // live todo UI with changes that never actually happened.
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            {
+              id: 't1',
+              input: { todos: [{ activeForm: 'A', content: 'a', status: 'pending' }] },
+              name: 'TodoWrite',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: 'Invalid todos payload',
+              is_error: true,
+              tool_use_id: 't1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.isError).toBe(true);
+      expect(result!.data.pluginState).toBeUndefined();
+
+      // Cache must still be drained — a later TodoWrite on a new id should
+      // synthesize only from its own args, not inherit the failed one.
+      adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [
+            {
+              id: 't2',
+              input: { todos: [{ activeForm: 'B', content: 'b', status: 'completed' }] },
+              name: 'TodoWrite',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+      const next = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 't2', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const nextState = next.find((e) => e.type === 'tool_result')!.data.pluginState;
+      expect(nextState.todos.items).toEqual([{ status: 'completed', text: 'b' }]);
+    });
+
+    it('drains the cached input so a repeat tool_use id gets a fresh synthesis', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const first = driveTodoWrite(adapter, {
+        todos: [{ activeForm: 'A', content: 'a', status: 'pending' }],
+      });
+      expect(first!.todos.items).toHaveLength(1);
+
+      // Second TodoWrite on a new tool_use id — should resynthesize from its
+      // own args, not leak from the prior cache.
+      adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [
+            {
+              id: 't2',
+              input: { todos: [{ activeForm: 'B', content: 'b', status: 'completed' }] },
+              name: 'TodoWrite',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 't2', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const second = events.find((e) => e.type === 'tool_result')!.data.pluginState;
+      expect(second.todos.items).toEqual([{ status: 'completed', text: 'b' }]);
+    });
+  });
+
+  describe('Task tools pluginState synthesis (CC 2.1.143+)', () => {
+    // Helper: drive a TaskCreate (assistant tool_use → user tool_result).
+    // Returns the synthesized pluginState (or undefined) from the tool_result event.
+    const driveTaskCreate = (
+      adapter: ClaudeCodeAdapter,
+      input: { activeForm?: string; description?: string; subject: string },
+      toolId: string,
+      resultContent: string,
+      msgId: string,
+      opts?: { isError?: boolean },
+    ) => {
+      adapter.adapt({
+        message: {
+          id: msgId,
+          content: [{ id: toolId, input, name: 'TaskCreate', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: resultContent,
+              is_error: opts?.isError,
+              tool_use_id: toolId,
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      return events.find((e) => e.type === 'tool_result')!.data.pluginState as
+        | {
+            todos: {
+              items: Array<{ id?: string; status: string; text: string }>;
+              updatedAt: string;
+            };
+          }
+        | undefined;
+    };
+
+    const driveTaskUpdate = (
+      adapter: ClaudeCodeAdapter,
+      input: {
+        activeForm?: string;
+        description?: string;
+        status?: 'pending' | 'in_progress' | 'completed' | 'deleted';
+        subject?: string;
+        taskId: string;
+      },
+      toolId: string,
+      resultContent: string,
+      msgId: string,
+      opts?: { isError?: boolean },
+    ) => {
+      adapter.adapt({
+        message: {
+          id: msgId,
+          content: [{ id: toolId, input, name: 'TaskUpdate', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: resultContent,
+              is_error: opts?.isError,
+              tool_use_id: toolId,
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      return events.find((e) => e.type === 'tool_result')!.data.pluginState as
+        | {
+            todos: {
+              items: Array<{ id?: string; status: string; text: string }>;
+              updatedAt: string;
+            };
+          }
+        | undefined;
+    };
+
+    const driveTaskList = (
+      adapter: ClaudeCodeAdapter,
+      toolId: string,
+      resultContent: string,
+      msgId: string,
+    ) => {
+      adapter.adapt({
+        message: {
+          id: msgId,
+          content: [{ id: toolId, input: {}, name: 'TaskList', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: resultContent, tool_use_id: toolId, type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      return events.find((e) => e.type === 'tool_result')!.data.pluginState as
+        | {
+            todos: {
+              items: Array<{ id?: string; status: string; text: string }>;
+              updatedAt: string;
+            };
+          }
+        | undefined;
+    };
+
+    it('accumulates TaskCreate calls into pluginState ordered by CC-assigned id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const after1 = driveTaskCreate(
+        adapter,
+        { activeForm: 'Reading hosts', description: 'Read /etc/hosts', subject: 'Read hosts' },
+        'tu_create_1',
+        'Task #1 created successfully: Read hosts',
+        'msg_1',
+      );
+      expect(after1!.todos.items).toEqual([{ id: '1', status: 'todo', text: 'Read hosts' }]);
+
+      const after2 = driveTaskCreate(
+        adapter,
+        { activeForm: 'Counting lines', description: 'Count lines', subject: 'Count lines' },
+        'tu_create_2',
+        'Task #2 created successfully: Count lines',
+        'msg_2',
+      );
+      expect(after2!.todos.items).toEqual([
+        { id: '1', status: 'todo', text: 'Read hosts' },
+        { id: '2', status: 'todo', text: 'Count lines' },
+      ]);
+    });
+
+    it('uses activeForm for in_progress items and subject for the rest', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { activeForm: 'Reading hosts', description: 'Read /etc/hosts', subject: 'Read hosts' },
+        'tu_create_1',
+        'Task #1 created successfully: Read hosts',
+        'msg_1',
+      );
+
+      const afterUpdate = driveTaskUpdate(
+        adapter,
+        { status: 'in_progress', taskId: '1' },
+        'tu_update_1',
+        'Updated task #1 status',
+        'msg_2',
+      );
+      expect(afterUpdate!.todos.items).toEqual([
+        { id: '1', status: 'processing', text: 'Reading hosts' },
+      ]);
+
+      const afterDone = driveTaskUpdate(
+        adapter,
+        { status: 'completed', taskId: '1' },
+        'tu_update_2',
+        'Updated task #1 status',
+        'msg_3',
+      );
+      expect(afterDone!.todos.items).toEqual([
+        { id: '1', status: 'completed', text: 'Read hosts' },
+      ]);
+    });
+
+    it('falls back to subject for in_progress when activeForm was never set', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { description: 'Read /etc/hosts', subject: 'Read hosts' },
+        'tu_create_1',
+        'Task #1 created successfully: Read hosts',
+        'msg_1',
+      );
+
+      const state = driveTaskUpdate(
+        adapter,
+        { status: 'in_progress', taskId: '1' },
+        'tu_update_1',
+        'Updated task #1 status',
+        'msg_2',
+      );
+      expect(state!.todos.items).toEqual([{ id: '1', status: 'processing', text: 'Read hosts' }]);
+    });
+
+    it('TaskUpdate with status: deleted removes the entry', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { description: 'A', subject: 'A' },
+        'tu_create_1',
+        'Task #1 created successfully: A',
+        'msg_1',
+      );
+      driveTaskCreate(
+        adapter,
+        { description: 'B', subject: 'B' },
+        'tu_create_2',
+        'Task #2 created successfully: B',
+        'msg_2',
+      );
+
+      const state = driveTaskUpdate(
+        adapter,
+        { status: 'deleted', taskId: '1' },
+        'tu_update_del',
+        'Updated task #1',
+        'msg_3',
+      );
+      expect(state!.todos.items).toEqual([{ id: '2', status: 'todo', text: 'B' }]);
+    });
+
+    it('does NOT mutate accumulator when TaskCreate tool_result is is_error', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { description: 'A', subject: 'A' },
+        'tu_create_1',
+        'Task #1 created successfully: A',
+        'msg_1',
+      );
+
+      const errorState = driveTaskCreate(
+        adapter,
+        { description: 'B', subject: 'B' },
+        'tu_create_2',
+        'Invalid subject',
+        'msg_2',
+        { isError: true },
+      );
+      // Error path returns no pluginState — UI keeps the prior snapshot.
+      expect(errorState).toBeUndefined();
+
+      // A later successful create must not inherit the failed create's
+      // cached input — the cache should have been drained.
+      const next = driveTaskCreate(
+        adapter,
+        { description: 'C', subject: 'C' },
+        'tu_create_3',
+        'Task #3 created successfully: C',
+        'msg_3',
+      );
+      // Only entries: #1 (A, todo) and #3 (C, todo). #2 must NOT appear.
+      expect(next!.todos.items).toEqual([
+        { id: '1', status: 'todo', text: 'A' },
+        { id: '3', status: 'todo', text: 'C' },
+      ]);
+    });
+
+    it('TaskUpdate to a never-seen id seeds a placeholder so resume sessions still render', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // Resume gap: no prior TaskCreate observed. The update should still
+      // produce an entry, falling back to a synthetic subject until a
+      // TaskList reconcile fills it in.
+      const state = driveTaskUpdate(
+        adapter,
+        { status: 'in_progress', subject: 'Recovered subject', taskId: '7' },
+        'tu_update_orphan',
+        'Updated task #7 status',
+        'msg_1',
+      );
+      expect(state!.todos.items).toEqual([
+        { id: '7', status: 'processing', text: 'Recovered subject' },
+      ]);
+    });
+
+    it('TaskList rebuilds entries from plain-text output when the accumulator is empty', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const state = driveTaskList(
+        adapter,
+        'tu_list_1',
+        '#1 [in_progress] Read hosts\n#2 [pending] Count lines\n#3 [completed] Report',
+        'msg_1',
+      );
+      expect(state!.todos.items).toEqual([
+        { id: '1', status: 'processing', text: 'Read hosts' },
+        { id: '2', status: 'todo', text: 'Count lines' },
+        { id: '3', status: 'completed', text: 'Report' },
+      ]);
+    });
+
+    it('TaskList preserves activeForm from earlier TaskCreate when reconciling', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      driveTaskCreate(
+        adapter,
+        { activeForm: 'Reading hosts', description: 'Read', subject: 'Read hosts' },
+        'tu_create_1',
+        'Task #1 created successfully: Read hosts',
+        'msg_1',
+      );
+      // TaskList output flips status to in_progress; activeForm should
+      // survive the reconcile (TaskList itself doesn't carry it).
+      const state = driveTaskList(adapter, 'tu_list_1', '#1 [in_progress] Read hosts', 'msg_2');
+      expect(state!.todos.items).toEqual([
+        { id: '1', status: 'processing', text: 'Reading hosts' },
+      ]);
+    });
+
+    it('does not synthesize Task pluginState for subagent tool_results', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // Subagent assistant carrying a TaskCreate (parent_tool_use_id set).
+      adapter.adapt({
+        message: {
+          id: 'msg_sub_1',
+          content: [
+            {
+              id: 'tu_sub_create',
+              input: { description: 'Sub task', subject: 'Sub task' },
+              name: 'TaskCreate',
+              type: 'tool_use',
+            },
+          ],
+        },
+        parent_tool_use_id: 'tu_main_agent',
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: 'Task #99 created successfully: Sub task',
+              tool_use_id: 'tu_sub_create',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        parent_tool_use_id: 'tu_main_agent',
+        type: 'user',
+      });
+      const result = events.find((e) => e.type === 'tool_result');
+      // Subagent task tools are out-of-scope for the main todo plan UI.
+      expect(result!.data.pluginState).toBeUndefined();
+    });
+  });
+
+  describe('multi-step execution (message.id boundary)', () => {
+    it('does NOT emit step boundary for the first assistant after init', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', session_id: 'sess-A', type: 'system' });
+
+      // First assistant message after init — should NOT open a new step
+      // (no stream_end, no newStep), but it DOES emit a non-newStep stream_start
+      // carrying the turn's message.id so the reducer can stamp it as
+      // `currentMainMessageId` (→ heteroMessageId on the seeded assistant).
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'step 1', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const types = events.map((e) => e.type);
+      expect(types).not.toContain('stream_end');
+      const streamStart = events.find((e) => e.type === 'stream_start');
+      expect(streamStart).toBeDefined();
+      expect(streamStart!.data.newStep).toBeUndefined();
+      expect(streamStart!.data.messageId).toBe('msg_1');
+      expect(streamStart!.data.sessionId).toBe('sess-A');
+      // Should still emit content
+      const chunk = events.find((e) => e.type === 'stream_chunk');
+      expect(chunk).toBeDefined();
+    });
+
+    it('emits stream_end + stream_start(newStep) when message.id changes after first', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // First assistant message (no step boundary)
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'step 1', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Second assistant message with new id → new step
+      const events = adapter.adapt({
+        message: { id: 'msg_2', content: [{ text: 'step 2', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const types = events.map((e) => e.type);
+      expect(types).toContain('stream_end');
+      expect(types).toContain('stream_start');
+
+      const streamStart = events.find((e) => e.type === 'stream_start');
+      expect(streamStart!.data.newStep).toBe(true);
+    });
+
+    it('increments stepIndex on each new message.id (after first)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const e1 = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'a', type: 'text' }] },
+        type: 'assistant',
+      });
+      // First assistant after init stays at step 0 (no step boundary)
+      expect(e1[0].stepIndex).toBe(0);
+
+      const e2 = adapter.adapt({
+        message: { id: 'msg_2', content: [{ text: 'b', type: 'text' }] },
+        type: 'assistant',
+      });
+      // Second message.id → stepIndex should be 1
+      const newStepEvent = e2.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(newStepEvent).toBeDefined();
+      expect(newStepEvent!.stepIndex).toBe(1);
+    });
+
+    it('does NOT emit new step when message.id is the same', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'a', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Same id → same step, no stream_end/stream_start
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'b', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const types = events.map((e) => e.type);
+      expect(types).not.toContain('stream_end');
+      expect(types).not.toContain('stream_start');
+    });
+
+    // ── Regression: post-tool text must not coalesce onto the tool-issuing turn ──
+    // Observed on a DEVICE (batch / `lh hetero exec`) Claude Code run — topic
+    // tpc_58GZ5d8NGPLx, assistant msg_orSJYzAH9HEL9Gb4k3. That run persisted the
+    // final answer text AND the 2 Bash `tool_use` blocks onto a SINGLE assistant
+    // message (the tool-issuing seed, no `metadata.mainMessageId`), while a
+    // trailing EMPTY assistant shell (msg_MUtsnMCWkbtBwcLlAH — content_len=0,
+    // `metadata.mainMessageId` set) was spawned. Downstream the renderer then
+    // drops the "Bash (2)" block BELOW the answer because text + tool_use share
+    // one message.
+    //
+    // Proximate cause: when CC reuses a `message.id` to stream the post-tool
+    // continuation (the model answering after a `tool_result`), the
+    // `messageId === this.currentMessageId` short-circuit in `openMainMessage`
+    // returns `[]` → no `newStep` → the text anchors to the same assistant that
+    // issued the tool calls. A turn that has ALREADY emitted `tool_use` must open
+    // a new step before absorbing post-tool text, so the answer lands on its own
+    // assistant (chained after the tool results).
+    //
+    // Fixed in `openMainMessage` / `handleAssistant`: a text-only event on the
+    // in-flight message.id that already emitted a tool_use now forces a step
+    // boundary so the answer anchors to its own assistant.
+    it('opens a new step for post-tool text that reuses the tool_use message.id (regression: tpc_58GZ5d8NGPLx)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // 1. Assistant issues a tool_use under msg_1.
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      // 2. Tool returns.
+      adapter.adapt({
+        message: {
+          content: [{ content: 'mock tool output', tool_use_id: 'tu_1', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // 3. Model continues with the final answer — CC REUSES msg_1 for this
+      //    post-tool text instead of minting a fresh message.id.
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'mock post-tool answer', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Desired: a step boundary precedes the post-tool text so it anchors to a
+      // NEW assistant, not the tool-issuing turn.
+      const newStep = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(newStep).toBeDefined();
+    });
+
+    // The forced split above must NOT reuse the tool turn's message.id as the
+    // newStep id: the main-agent reducer drops a `newStep` whose id equals the
+    // already-open turn's `currentMainMessageId` (replay idempotency). For any
+    // tool turn that was itself opened by a prior newStep, that id IS
+    // currentMainMessageId — reusing it would get the split dropped and the text
+    // would coalesce anyway. The first reused-id regression above only escaped
+    // this because the seed turn has no mainMessageId. Here the tool turn (msg_2)
+    // is opened by a real newStep, so the split must carry a DISTINCT key.
+    it('uses a key distinct from the tool turn id when forcing a post-tool split on a non-seed turn', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // First turn after init (records msg_1, no step boundary).
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'mock first turn', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Second turn (NEW id) — opened by a real newStep, so the reducer's
+      // currentMainMessageId becomes msg_2. This turn issues a tool_use.
+      adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [
+            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+      adapter.adapt({
+        message: {
+          content: [{ content: 'mock tool output', tool_use_id: 'tu_1', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // Post-tool answer reuses msg_2.
+      const events = adapter.adapt({
+        message: { id: 'msg_2', content: [{ text: 'mock post-tool answer', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const newStep = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(newStep).toBeDefined();
+      // Distinct from the reused id (else the reducer drops it as a replay)…
+      expect(newStep!.data.messageId).not.toBe('msg_2');
+      // …but derived from it, so the key stays traceable + replay-stable.
+      expect(newStep!.data.messageId).toMatch(/^msg_2:/);
+    });
+  });
+
+  describe('usage and model extraction', () => {
+    // Under `--include-partial-messages` (partial mode), CC emits a stale
+    // `message_start.usage` snapshot (e.g. `output_tokens: 8`) that it echoes
+    // verbatim on every content-block `assistant` event. The authoritative
+    // per-turn total only arrives later as `message_delta`. So in partial mode
+    // turn_metadata emission is wired to `message_delta`, not `assistant`.
+    // Seeing a `stream_event` is what tells the adapter it is in partial mode.
+    it('does NOT emit turn_metadata on assistant events in partial mode (usage there is stale)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      // A stream_event marks partial mode — message_delta will own usage.
+      adapter.adapt({
+        event: { message: { id: 'msg_1', model: 'claude-sonnet-4-6' }, type: 'message_start' },
+        type: 'stream_event',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ text: 'hello', type: 'text' }],
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 100, output_tokens: 1 }, // stale placeholder
+        },
+        type: 'assistant',
+      });
+
+      expect(
+        events.find((e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata'),
+      ).toBeUndefined();
+    });
+
+    // BATCH mode (no `--include-partial-messages`, e.g. the `lh hetero exec`
+    // CLI used by device + sandbox runs): no `message_delta` arrives, and the
+    // `assistant` event's usage is authoritative — not a stale echo. The
+    // adapter must emit turn_metadata here so token counts land, carrying the
+    // clean `assistant` model id (NOT the `[1m]` beta-tagged `system init` one).
+    it('emits turn_metadata on assistant events in batch mode (no stream_event)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // `system init` reports the beta-tagged id; the assistant event is clean.
+      adapter.adapt({ model: 'claude-opus-4-8[1m]', subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ text: 'hello', type: 'text' }],
+          model: 'claude-opus-4-8',
+          usage: { input_tokens: 100, output_tokens: 50 },
+        },
+        type: 'assistant',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta).toBeDefined();
+      expect(meta!.data.model).toBe('claude-opus-4-8');
+      expect(meta!.data.provider).toBe('claude-code');
+      expect(meta!.data.usage).toEqual({
+        inputCacheMissTokens: 100,
+        inputCachedTokens: undefined,
+        inputWriteCacheTokens: undefined,
+        totalInputTokens: 100,
+        totalOutputTokens: 50,
+        totalTokens: 150,
+      });
+    });
+
+    it('emits turn_metadata on message_delta with authoritative usage', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // stream_event:message_start primes the current message id + model
+      adapter.adapt({
+        event: {
+          message: { id: 'msg_1', model: 'claude-sonnet-4-6' },
+          type: 'message_start',
+        },
+        type: 'stream_event',
+      });
+
+      // message_delta carries the final per-turn usage
+      const events = adapter.adapt({
+        event: {
+          type: 'message_delta',
+          usage: { input_tokens: 100, output_tokens: 50 },
+        },
+        type: 'stream_event',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta).toBeDefined();
+      expect(meta!.data.model).toBe('claude-sonnet-4-6');
+      expect(meta!.data.provider).toBe('claude-code');
+      expect(meta!.data.usage).toEqual({
+        inputCacheMissTokens: 100,
+        inputCachedTokens: undefined,
+        inputWriteCacheTokens: undefined,
+        totalInputTokens: 100,
+        totalOutputTokens: 50,
+        totalTokens: 150,
+      });
+    });
+
+    it('normalizes cache creation and cache read from message_delta usage', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        event: {
+          message: { id: 'msg_1', model: 'claude-sonnet-4-6' },
+          type: 'message_start',
+        },
+        type: 'stream_event',
+      });
+
+      const events = adapter.adapt({
+        event: {
+          type: 'message_delta',
+          usage: {
+            cache_creation_input_tokens: 200,
+            cache_read_input_tokens: 300,
+            input_tokens: 100,
+            output_tokens: 50,
+          },
+        },
+        type: 'stream_event',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta!.data.usage).toEqual({
+        inputCacheMissTokens: 100,
+        inputCachedTokens: 300,
+        inputWriteCacheTokens: 200,
+        totalInputTokens: 600,
+        totalOutputTokens: 50,
+        totalTokens: 650,
+      });
+    });
+
+    it('uses model from the latest assistant event when message_start lacks one', () => {
+      // Non-partial edge case: no message_start carries model, but assistant
+      // events always do. The adapter should still attach the right model.
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        event: { message: { id: 'msg_1' }, type: 'message_start' },
+        type: 'stream_event',
+      });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ text: 'hi', type: 'text' }],
+          model: 'claude-opus-4-7',
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        event: {
+          type: 'message_delta',
+          usage: { input_tokens: 10, output_tokens: 100 },
+        },
+        type: 'stream_event',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta!.data.model).toBe('claude-opus-4-7');
+    });
+  });
+
+  describe('flush', () => {
+    it('emits tool_end for any pending tool calls', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // Start a tool call without providing result
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.flush();
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('tool_end');
+      expect(events[0].data.toolCallId).toBe('t1');
+      // A pending tool that never produced a result must NOT report success —
+      // otherwise side-effect hooks would treat an unfinished tool as completed.
+      expect(events[0].data.isSuccess).toBe(false);
+      expect(events[0].data.result).toMatchObject({ success: false });
+    });
+
+    it('clears pending tools after flush', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      adapter.flush();
+      // Second flush should be empty
+      expect(adapter.flush()).toHaveLength(0);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('returns empty array for null/undefined/non-object input', () => {
+      const adapter = new ClaudeCodeAdapter();
+      expect(adapter.adapt(null)).toEqual([]);
+      expect(adapter.adapt(undefined)).toEqual([]);
+      expect(adapter.adapt('string')).toEqual([]);
+    });
+
+    it('returns empty array for unknown event types', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({ type: 'something_unexpected', data: {} });
+      expect(events).toEqual([]);
+    });
+
+    it('handles assistant event without prior init (auto-starts)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // No system init — adapter should auto-start
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'hello', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const start = events.find((e) => e.type === 'stream_start');
+      expect(start).toBeDefined();
+
+      const chunk = events.find((e) => e.type === 'stream_chunk');
+      expect(chunk).toBeDefined();
+      expect(chunk!.data.content).toBe('hello');
+    });
+
+    it('handles assistant event with empty content array', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [] },
+        type: 'assistant',
+      });
+      // Should only have step_complete metadata if model/usage present, nothing else
+      const chunks = events.filter((e) => e.type === 'stream_chunk');
+      expect(chunks).toHaveLength(0);
+    });
+
+    it('handles multiple tool_use blocks in a single assistant event', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' },
+            { id: 't2', input: { cmd: 'ls' }, name: 'Bash', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk!.data.toolsCalling).toHaveLength(2);
+
+      const toolStarts = events.filter((e) => e.type === 'tool_start');
+      expect(toolStarts).toHaveLength(2);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Cumulative tools_calling (orphan tool regression)
+  //
+  // CC streams each tool_use content block in its OWN assistant event, even
+  // when multiple tools belong to the same LLM turn (same message.id). The
+  // in-memory handler dispatch updates assistant.tools via a REPLACING array
+  // merge — so if the adapter emitted only the newest tool on each chunk,
+  // earlier tools would vanish from the in-memory assistant.tools[] between
+  // tool_result refreshes and render as orphans. Adapter must emit the full
+  // cumulative list per message.id so the replacing merge preserves history.
+  // ──────────────────────────────────────────────────────────────
+
+  describe('cumulative tools_calling per message.id', () => {
+    it('includes prior tools in tools_calling when a new tool_use arrives on same message.id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // First tool_use block of msg_1
+      const e1 = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const chunk1 = e1.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk1!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1']);
+
+      // Second tool_use block on the SAME message.id — must carry both t1 + t2
+      const e2 = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't2', input: { cmd: 'ls' }, name: 'Bash', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const chunk2 = e2.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk2!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1', 't2']);
+    });
+
+    it('emits tool_start only for newly-seen tools, not for the cumulative prior ones', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const e2 = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const starts = e2.filter((e) => e.type === 'tool_start');
+      expect(starts).toHaveLength(1);
+      expect(starts[0].data.toolCalling.id).toBe('t2');
+    });
+
+    it('dedupes when CC echoes a tool_use block with the same id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      // Same tool_use id re-sent — cumulative list must not duplicate it,
+      // and tool_start must not fire again.
+      const e2 = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = e2.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1']);
+      expect(e2.filter((e) => e.type === 'tool_start')).toHaveLength(0);
+    });
+
+    it('starts a fresh accumulator when message.id advances (new LLM turn)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      // Different message.id — the new assistant's tools[] must NOT contain t1
+      expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t2']);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Partial-messages streaming (--include-partial-messages)
+  // stream_event wrapper carries Anthropic SSE deltas:
+  //   {type: 'message_start', message: {id, model}}
+  //   {type: 'content_block_delta', delta: {type: 'text_delta', text}}
+  //   {type: 'content_block_delta', delta: {type: 'thinking_delta', thinking}}
+  // ──────────────────────────────────────────────────────────────
+
+  describe('stream_event (partial messages)', () => {
+    const init = { subtype: 'init' as const, type: 'system' as const };
+    const delta = (type: string, field: string, value: string) => ({
+      event: { delta: { [field]: value, type }, index: 0, type: 'content_block_delta' },
+      type: 'stream_event',
+    });
+    const messageStart = (id: string, model?: string) => ({
+      event: { message: { id, model }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    it('emits stream_chunk text on text_delta', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const events = adapter.adapt(delta('text_delta', 'text', 'Hel'));
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('stream_chunk');
+      expect(events[0].data.chunkType).toBe('text');
+      expect(events[0].data.content).toBe('Hel');
+    });
+
+    it('emits stream_chunk reasoning on thinking_delta', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const events = adapter.adapt(delta('thinking_delta', 'thinking', 'pondering'));
+      expect(events).toHaveLength(1);
+      expect(events[0].data.chunkType).toBe('reasoning');
+      expect(events[0].data.reasoning).toBe('pondering');
+    });
+
+    it('streams multiple deltas as separate chunks (gateway handler concatenates)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const e1 = adapter.adapt(delta('text_delta', 'text', 'Hel'));
+      const e2 = adapter.adapt(delta('text_delta', 'text', 'lo '));
+      const e3 = adapter.adapt(delta('text_delta', 'text', 'world'));
+
+      expect(e1[0].data.content).toBe('Hel');
+      expect(e2[0].data.content).toBe('lo ');
+      expect(e3[0].data.content).toBe('world');
+    });
+
+    it('suppresses handleAssistant text emission when deltas already streamed', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'Hello world'));
+
+      // The trailing assistant event carries the full completed block.
+      // It must NOT re-emit a giant "Hello world" chunk or the UI duplicates text.
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'Hello world', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const textChunks = events.filter(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+      );
+      expect(textChunks).toHaveLength(0);
+    });
+
+    it('emits only the missing text suffix when the final assistant block is longer than streamed deltas', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', '修'));
+
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: '修复完成', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const textChunks = events.filter(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+      );
+      expect(textChunks).toHaveLength(1);
+      expect(textChunks[0].data.content).toBe('复完成');
+      expect((adapter as any).streamedTextByMessageId.has('msg_1')).toBe(false);
+    });
+
+    it('suppresses handleAssistant thinking emission when thinking_delta already streamed', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('thinking_delta', 'thinking', 'reasoning...'));
+
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ thinking: 'reasoning...', type: 'thinking' }] },
+        type: 'assistant',
+      });
+
+      const reasoningChunks = events.filter(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning',
+      );
+      expect(reasoningChunks).toHaveLength(0);
+    });
+
+    it('keeps the other modality dedupe state when assistant blocks reconcile separately', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'hello'));
+      adapter.adapt(delta('thinking_delta', 'thinking', 'pondering'));
+
+      const textEvents = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'hello', type: 'text' }] },
+        type: 'assistant',
+      });
+      const thinkingEvents = adapter.adapt({
+        message: { id: 'msg_1', content: [{ thinking: 'pondering', type: 'thinking' }] },
+        type: 'assistant',
+      });
+
+      expect(
+        textEvents.filter((e) => e.type === 'stream_chunk' && e.data.chunkType === 'text'),
+      ).toHaveLength(0);
+      expect(
+        thinkingEvents.filter((e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning'),
+      ).toHaveLength(0);
+      expect((adapter as any).streamedTextByMessageId.has('msg_1')).toBe(false);
+      expect((adapter as any).streamedThinkingByMessageId.has('msg_1')).toBe(false);
+    });
+
+    it('still emits tool_use from assistant event even when text was streamed via deltas', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', "I'll read that file."));
+
+      // Same message.id continues with a tool_use block — tool_use never streams
+      // as delta (input_json_delta would be partial JSON), so handleAssistant
+      // remains the source of truth for tool invocations.
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const toolsChunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(toolsChunk).toBeDefined();
+      expect(toolsChunk!.data.toolsCalling[0].id).toBe('t1');
+    });
+
+    it('still emits full text block if a later message.id has no deltas', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'streamed'));
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'streamed', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Second LLM turn arrives without any stream_event deltas — must fall
+      // back to the full-block emission so no content is dropped.
+      const events = adapter.adapt({
+        message: { id: 'msg_2', content: [{ text: 'no-delta reply', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const textChunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+      );
+      expect(textChunk).toBeDefined();
+      expect(textChunk!.data.content).toBe('no-delta reply');
+    });
+
+    it('fires newStep on message_start when message.id changes', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      // First turn
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'first'));
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'first', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Second turn — step boundary must fire at message_start, BEFORE the
+      // deltas, or those deltas would be emitted with the stale stepIndex.
+      const events = adapter.adapt(messageStart('msg_2', 'claude-sonnet-4-6'));
+
+      const types = events.map((e) => e.type);
+      expect(types).toContain('stream_end');
+      const start = events.find((e) => e.type === 'stream_start');
+      expect(start).toBeDefined();
+      expect(start!.data.newStep).toBe(true);
+    });
+
+    it('emits deltas with the new stepIndex after message_start advances it', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'first'));
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'first', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      adapter.adapt(messageStart('msg_2'));
+      const chunk = adapter.adapt(delta('text_delta', 'text', 'second'));
+
+      // After step boundary, stepIndex should be 1.
+      expect(chunk[0].stepIndex).toBe(1);
+    });
+
+    it('ignores input_json_delta and other non-text/thinking delta types', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const inputJson = adapter.adapt(delta('input_json_delta', 'partial_json', '{"path":'));
+      expect(inputJson).toEqual([]);
+    });
+
+    it('ignores unknown stream_event event.type (content_block_start, message_stop, …)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const blockStart = adapter.adapt({
+        event: { content_block: { text: '', type: 'text' }, index: 0, type: 'content_block_start' },
+        type: 'stream_event',
+      });
+      expect(blockStart).toEqual([]);
+
+      const msgStop = adapter.adapt({ event: { type: 'message_stop' }, type: 'stream_event' });
+      expect(msgStop).toEqual([]);
+    });
+
+    it('handles stream_event with no prior system init (auto-starts)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt(messageStart('msg_1', 'claude-sonnet-4-6'));
+
+      const start = events.find((e) => e.type === 'stream_start');
+      expect(start).toBeDefined();
+      expect(start!.data.model).toBe('claude-sonnet-4-6');
+    });
+
+    it('returns [] for malformed stream_event (missing event field)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      expect(adapter.adapt({ type: 'stream_event' })).toEqual([]);
+      expect(adapter.adapt({ event: null, type: 'stream_event' })).toEqual([]);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Subagent lineage (Claude Code Agent-tool spawned flows)
+  // Shape reference: .heerogeneous-tracing/cc-streaming.json
+  //   main agent emits tool_use {name:'Agent', id:'toolu_parent'}
+  //   subagent events carry raw.parent_tool_use_id = 'toolu_parent'
+  //   subagent message.id differs from main agent's per turn
+  // ──────────────────────────────────────────────────────────────
+
+  describe('subagent lineage', () => {
+    const init = { subtype: 'init' as const, type: 'system' as const };
+    const mainAssistant = (id: string, toolUse: any) => ({
+      message: { content: [toolUse], id },
+      type: 'assistant',
+    });
+    const subAgent = (id: string, parent: string, block: any) => ({
+      message: { content: [block], id },
+      parent_tool_use_id: parent,
+      type: 'assistant',
+    });
+
+    it('emits subagent context as peer field on the chunk (NOT on ToolCallPayload)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Task',
+          type: 'tool_use',
+        }),
+      );
+
+      const events = adapter.adapt(
+        subAgent('msg_sub_1', 'toolu_parent', {
+          id: 'toolu_child',
+          input: { command: 'ls' },
+          name: 'Bash',
+          type: 'tool_use',
+        }),
+      );
+
+      const toolsChunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(toolsChunk).toBeDefined();
+      // Peer field on chunk data — describes the whole chunk's origin
+      expect(toolsChunk!.data.subagent).toMatchObject({
+        parentToolCallId: 'toolu_parent',
+        subagentMessageId: 'msg_sub_1',
+      });
+      // Payload stays minimal — no lineage inside the tool call
+      const tool = toolsChunk!.data.toolsCalling[0];
+      expect(tool.id).toBe('toolu_child');
+      expect(tool).not.toHaveProperty('parentToolCallId');
+      expect(tool).not.toHaveProperty('subagentSpawn');
+    });
+
+    it('does NOT emit stream_end / newStep when subagent introduces new message.id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      const events = adapter.adapt(
+        subAgent('msg_sub_1', 'toolu_parent', {
+          id: 'toolu_child',
+          input: {},
+          name: 'Read',
+          type: 'tool_use',
+        }),
+      );
+
+      expect(events.some((e) => e.type === 'stream_end')).toBe(false);
+      const starts = events.filter((e) => e.type === 'stream_start');
+      // No newStep stream_start for subagent turn transitions
+      expect(starts.some((e) => e.data?.newStep)).toBe(false);
+    });
+
+    it('emits subagent-tagged turn_metadata step_complete carrying message.usage', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ id: 'toolu_child', input: {}, name: 'Bash', type: 'tool_use' }],
+          id: 'msg_sub',
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 5, output_tokens: 10 },
+        },
+        parent_tool_use_id: 'toolu_parent',
+        type: 'assistant',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta).toBeDefined();
+      // Subagent ctx tag is what stops the executor from writing this usage
+      // onto the main agent (which would double-count vs the result event).
+      expect(meta?.data?.subagent?.parentToolCallId).toBe('toolu_parent');
+      expect(meta?.data?.subagent?.subagentMessageId).toBe('msg_sub');
+      expect(meta?.data?.model).toBe('claude-sonnet-4-6');
+      expect(meta?.data?.usage?.totalInputTokens).toBe(5);
+      expect(meta?.data?.usage?.totalOutputTokens).toBe(10);
+    });
+
+    it('does NOT emit turn_metadata for subagent events without message.usage', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ id: 'toolu_child', input: {}, name: 'Bash', type: 'tool_use' }],
+          id: 'msg_sub',
+          model: 'claude-sonnet-4-6',
+        },
+        parent_tool_use_id: 'toolu_parent',
+        type: 'assistant',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta).toBeUndefined();
+    });
+
+    it('emits subagent text/reasoning as chunks with subagent peer (NOT into main bubble)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      const events = adapter.adapt(
+        subAgent('msg_sub', 'toolu_parent', { text: 'sub summary', type: 'text' }),
+      );
+
+      const textChunks = events.filter(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+      );
+      // Text is now emitted so the thread view can show the subagent's
+      // closing summary. Critically, each chunk carries the `subagent`
+      // peer field — the executor routes these to the in-thread
+      // assistant's content, NOT to the main assistant's accumulator.
+      expect(textChunks).toHaveLength(1);
+      expect(textChunks[0].data.content).toBe('sub summary');
+      expect(textChunks[0].data.subagent).toMatchObject({
+        parentToolCallId: 'toolu_parent',
+        subagentMessageId: 'msg_sub',
+      });
+    });
+
+    it('emits subagent reasoning (thinking) with subagent peer', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      const events = adapter.adapt(
+        subAgent('msg_sub', 'toolu_parent', {
+          thinking: 'weighing the options',
+          type: 'thinking',
+        }),
+      );
+
+      const reasoningChunks = events.filter(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning',
+      );
+      expect(reasoningChunks).toHaveLength(1);
+      expect(reasoningChunks[0].data.reasoning).toBe('weighing the options');
+      expect(reasoningChunks[0].data.subagent?.parentToolCallId).toBe('toolu_parent');
+    });
+
+    it('resumes main-agent step boundary AFTER subagent completes', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main_1', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+      // Subagent runs (no step boundaries)
+      adapter.adapt(
+        subAgent('msg_sub_1', 'toolu_parent', {
+          id: 'toolu_child_1',
+          input: {},
+          name: 'Bash',
+          type: 'tool_use',
+        }),
+      );
+      adapter.adapt(
+        subAgent('msg_sub_2', 'toolu_parent', {
+          id: 'toolu_child_2',
+          input: {},
+          name: 'Read',
+          type: 'tool_use',
+        }),
+      );
+
+      // Main agent resumes with a new message.id and no parent — SHOULD fire newStep
+      const events = adapter.adapt({
+        message: {
+          content: [{ text: 'follow-up', type: 'text' }],
+          id: 'msg_main_2',
+        },
+        type: 'assistant',
+      });
+
+      expect(events.some((e) => e.type === 'stream_end')).toBe(true);
+      expect(events.some((e) => e.type === 'stream_start' && e.data?.newStep)).toBe(true);
+    });
+
+    it('tool_result events for subagent tools still propagate to executor', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+      adapter.adapt(
+        subAgent('msg_sub', 'toolu_parent', {
+          id: 'toolu_child',
+          input: {},
+          name: 'Bash',
+          type: 'tool_use',
+        }),
+      );
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 'toolu_child', type: 'tool_result' }],
+        },
+        parent_tool_use_id: 'toolu_parent',
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result).toBeDefined();
+      expect(result!.data.toolCallId).toBe('toolu_child');
+    });
+
+    it('stamps spawnMetadata on the FIRST subagent event only (lazy Thread create)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      // Main agent emits the Task tool_use — adapter caches its args
+      // for the upcoming subagent announcement.
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_task',
+          input: {
+            description: 'Find failing tests',
+            prompt: 'run the suite and list failures',
+            subagent_type: 'Explore',
+          },
+          name: 'Task',
+          type: 'tool_use',
+        }),
+      );
+
+      // First subagent event — carries spawnMetadata
+      const first = adapter.adapt(
+        subAgent('msg_sub_1', 'toolu_task', {
+          id: 'toolu_child_1',
+          input: {},
+          name: 'Bash',
+          type: 'tool_use',
+        }),
+      );
+      const firstChunk = first.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(firstChunk!.data.subagent.spawnMetadata).toEqual({
+        description: 'Find failing tests',
+        prompt: 'run the suite and list failures',
+        subagentType: 'Explore',
+      });
+
+      // Second subagent event for same parent — lineage preserved, but
+      // spawnMetadata is absent (executor already created the Thread).
+      const second = adapter.adapt(
+        subAgent('msg_sub_2', 'toolu_task', {
+          id: 'toolu_child_2',
+          input: {},
+          name: 'Read',
+          type: 'tool_use',
+        }),
+      );
+      const secondChunk = second.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(secondChunk!.data.subagent.parentToolCallId).toBe('toolu_task');
+      expect(secondChunk!.data.subagent.spawnMetadata).toBeUndefined();
+    });
+
+    it('stamps spawnMetadata on a reasoning-FIRST subagent event (titles the Thread correctly)', () => {
+      // A thinking Explore agent reasons before its first tool call. The
+      // executor lazy-creates + titles the Thread off the FIRST subagent event
+      // it sees, so the metadata must ride the reasoning chunk too — otherwise
+      // the Thread is born with the generic "Subagent" title.
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_agent',
+          input: {
+            description: 'Find git remote url lobe-chat',
+            prompt: 'locate the remote',
+            subagent_type: 'Explore',
+          },
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      // First subagent event is a reasoning block — no tool call yet.
+      const first = adapter.adapt(
+        subAgent('msg_sub_1', 'toolu_agent', { thinking: 'Let me look…', type: 'thinking' }),
+      );
+      const reasoningChunk = first.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning',
+      );
+      expect(reasoningChunk!.data.subagent.spawnMetadata).toEqual({
+        description: 'Find git remote url lobe-chat',
+        prompt: 'locate the remote',
+        subagentType: 'Explore',
+      });
+
+      // The later tool event for the same parent must NOT re-announce.
+      const second = adapter.adapt(
+        subAgent('msg_sub_2', 'toolu_agent', {
+          id: 'toolu_child',
+          input: {},
+          name: 'Bash',
+          type: 'tool_use',
+        }),
+      );
+      const toolChunk = second.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(toolChunk!.data.subagent.spawnMetadata).toBeUndefined();
+    });
+
+    it('does NOT burn the one-shot on a first event that emits no chunk', () => {
+      // The very first subagent event can carry nothing the reducer consumes —
+      // an empty text/thinking block or a usage-only `content: []`. That event
+      // never reaches `ensureRun` (no chunk), so it must NOT mark the parent
+      // announced; the metadata has to survive for the next REAL chunk, which is
+      // the one that actually lazy-creates + titles the Thread.
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_agent',
+          input: {
+            description: 'Find git remote url lobe-chat',
+            prompt: 'locate the remote',
+            subagent_type: 'Explore',
+          },
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      // First subagent event: empty content + an empty text block — emits nothing.
+      const first = adapter.adapt({
+        message: { content: [{ text: '', type: 'text' }], id: 'msg_sub_0', usage: {} },
+        parent_tool_use_id: 'toolu_agent',
+        type: 'assistant',
+      });
+      expect(first.some((e) => e.type === 'stream_chunk')).toBe(false);
+
+      // Second event is the first REAL chunk — it must still carry spawnMetadata.
+      const second = adapter.adapt(
+        subAgent('msg_sub_1', 'toolu_agent', { thinking: 'Let me look…', type: 'thinking' }),
+      );
+      const reasoningChunk = second.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning',
+      );
+      expect(reasoningChunk!.data.subagent.spawnMetadata).toEqual({
+        description: 'Find git remote url lobe-chat',
+        prompt: 'locate the remote',
+        subagentType: 'Explore',
+      });
+    });
+
+    it('does NOT stamp subagent context on non-subagent (main-agent) tool_uses', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+
+      const events = adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_read',
+          input: { file_path: '/a.ts' },
+          name: 'Read',
+          type: 'tool_use',
+        }),
+      );
+
+      const toolsChunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(toolsChunk!.data.subagent).toBeUndefined();
+    });
+
+    it('stamps subagent context on tool_result for subagent inner tools', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_task',
+          input: { description: 'x' },
+          name: 'Task',
+          type: 'tool_use',
+        }),
+      );
+      adapter.adapt(
+        subAgent('msg_sub', 'toolu_task', {
+          id: 'toolu_child',
+          input: {},
+          name: 'Bash',
+          type: 'tool_use',
+        }),
+      );
+
+      // Subagent's tool_result arrives in a `user` event with parent_tool_use_id.
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 'toolu_child', type: 'tool_result' }],
+        },
+        parent_tool_use_id: 'toolu_task',
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.subagent).toEqual({ parentToolCallId: 'toolu_task' });
+      const end = events.find((e) => e.type === 'tool_end');
+      expect(end!.data.subagent).toEqual({ parentToolCallId: 'toolu_task' });
+    });
+  });
+});

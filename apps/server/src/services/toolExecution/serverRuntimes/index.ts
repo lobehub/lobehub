@@ -1,0 +1,153 @@
+/**
+ * Server Runtime Registry
+ *
+ * Central registry for all builtin tool server runtimes.
+ * Uses factory functions to support both:
+ * - Pre-instantiated runtimes (e.g., WebBrowsing - no per-request context needed)
+ * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
+ */
+
+import { LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
+import { LegacyGoalIdentifier } from '@lobechat/builtin-tool-goal';
+
+import type { ToolExecutionContext } from '../types';
+import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
+import { activatorRuntime } from './activator';
+import { agentBuilderRuntime } from './agentBuilder';
+import { agentDocumentsRuntime } from './agentDocuments';
+import { agentManagementRuntime } from './agentManagement';
+import { agentSignalFeedbackIntentRuntime } from './agentSignalFeedbackIntent';
+import { agentSignalReflectionRuntime } from './agentSignalReflection';
+import { agentSignalReviewRuntime } from './agentSignalReview';
+import { agentSignalSkillManagementRuntime } from './agentSignalSkillManagement';
+import { attachmentsRuntime } from './attachments';
+import { auvRuntime } from './auv';
+import { briefRuntime } from './brief';
+import { browserRuntime } from './browser';
+import { calculatorRuntime } from './calculator';
+import { canvasRuntime } from './canvas';
+import { channelRuntime } from './channel';
+import { cloudSandboxRuntime } from './cloudSandbox';
+import { credsRuntime } from './creds';
+import { dashboardRuntime } from './dashboard';
+import { goalRuntime } from './goal';
+import { goalReportRuntime } from './goalReport';
+import { goalSupervisorRuntime } from './goalSupervisor';
+import { groupAgentBuilderRuntime } from './groupAgentBuilder';
+import { groupManagementRuntime } from './groupManagement';
+import { imageGenerationRuntime } from './imageGeneration';
+import { knowledgeBaseRuntime } from './knowledgeBase';
+import { lobeAgentRuntime } from './lobeAgent';
+import { localSystemRuntime } from './localSystem';
+import { memoryRuntime } from './memory';
+import { messageRuntime } from './message';
+import { notebookRuntime } from './notebook';
+import { pageAgentRuntime } from './pageAgent';
+import { remoteDeviceRuntime } from './remoteDevice';
+import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
+import { skillManagementRuntime } from './skillManagement';
+import { skillsRuntime } from './skills';
+import { skillStoreRuntime } from './skillStore';
+import { taskRuntime } from './task';
+import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
+import { userInteractionRuntime } from './userInteraction';
+import { verifyResultRuntime } from './verifyResult';
+import { videoGenerationRuntime } from './videoGeneration';
+import { webBrowsingRuntime } from './webBrowsing';
+import { webOnboardingRuntime } from './webOnboarding';
+
+/**
+ * Registry of server runtime factories by identifier
+ */
+const serverRuntimeFactories = new Map<string, ServerRuntimeFactory>();
+
+/**
+ * Register server runtimes
+ */
+const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
+  for (const runtime of runtimes) {
+    serverRuntimeFactories.set(runtime.identifier, runtime.factory);
+  }
+};
+
+// Register all server runtimes
+registerRuntimes([
+  channelRuntime,
+  acceptanceEvidenceRuntime,
+  auvRuntime,
+  agentBuilderRuntime,
+  webBrowsingRuntime,
+  cloudSandboxRuntime,
+  calculatorRuntime,
+  agentDocumentsRuntime,
+  agentManagementRuntime,
+  skillManagementRuntime,
+  notebookRuntime,
+  skillStoreRuntime,
+  skillsRuntime,
+  memoryRuntime,
+  activatorRuntime,
+  messageRuntime,
+  localSystemRuntime,
+  browserRuntime,
+  remoteDeviceRuntime,
+  briefRuntime,
+  taskRuntime,
+  userInteractionRuntime,
+  credsRuntime,
+  canvasRuntime,
+  dashboardRuntime,
+  groupAgentBuilderRuntime,
+  groupManagementRuntime,
+  goalRuntime,
+  goalReportRuntime,
+  goalSupervisorRuntime,
+  imageGenerationRuntime,
+  videoGenerationRuntime,
+  knowledgeBaseRuntime,
+  attachmentsRuntime,
+  webOnboardingRuntime,
+  lobeAgentRuntime,
+  selfFeedbackIntentRuntime,
+  agentSignalSkillManagementRuntime,
+  agentSignalReviewRuntime,
+  agentSignalReflectionRuntime,
+  agentSignalFeedbackIntentRuntime,
+  pageAgentRuntime,
+  verifyResultRuntime,
+]);
+
+// Goal calls approved after the rename still name the tool `lobe-goal`.
+serverRuntimeFactories.set(LegacyGoalIdentifier, goalRuntime.factory);
+// Same for dashboard calls approved after the rename from `lobe-dashboard`.
+serverRuntimeFactories.set(LegacyDashboardIdentifier, dashboardRuntime.factory);
+
+// ==================== Registry API ====================
+
+/**
+ * Get a server runtime by identifier
+ * @param identifier - The tool identifier
+ * @param context - Execution context (required for per-request runtimes)
+ * @returns Runtime instance (may be a Promise for async factories)
+ */
+export const getServerRuntime = (
+  identifier: string,
+  context: ToolExecutionContext,
+): any | Promise<any> => {
+  const factory = serverRuntimeFactories.get(identifier);
+  return factory?.(context);
+};
+
+/**
+ * Check if a server runtime exists for the given identifier
+ */
+export const hasServerRuntime = (identifier: string): boolean => {
+  return serverRuntimeFactories.has(identifier);
+};
+
+/**
+ * Get all registered server runtime identifiers
+ */
+export const getServerRuntimeIdentifiers = (): string[] => {
+  return Array.from(serverRuntimeFactories.keys());
+};

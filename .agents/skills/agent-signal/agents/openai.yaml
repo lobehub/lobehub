@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Agent Signal'
+  short_description: 'Build AgentSignal sources, policies, completion receipts, and observability.'
+  default_prompt: 'Use $agent-signal to add or debug an Agent Signal source, policy, handler, completion receipt, or observability flow.'

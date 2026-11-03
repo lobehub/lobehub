@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "Otwórz katalog roboczy w",
+  "errors.appNotInstalled": "{{appName}} nie jest zainstalowany",
+  "errors.launchFailed": "Nie udało się otworzyć w {{appName}}: {{error}}",
+  "errors.pathNotFound": "Nie znaleziono ścieżki: {{path}}",
+  "errors.unknown": "nieznany błąd",
+  "tooltip": "Otwórz w {{appName}}"
+}

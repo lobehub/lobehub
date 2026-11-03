@@ -1,0 +1,1170 @@
+import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
+import type { TaskAssignableMember } from '@lobechat/prompts';
+import {
+  formatDependencyAdded,
+  formatDependencyRemoved,
+  formatTaskCreated,
+  formatTaskDeleted,
+  formatTaskDetail,
+  formatTaskEdited,
+  formatTaskList,
+  formatTasksCreated,
+  formatWorkspaceMembers,
+  priorityLabel,
+} from '@lobechat/prompts';
+import type {
+  BuiltinToolContext,
+  BuiltinToolResult,
+  TaskAutomationMode,
+  TaskStatus,
+  ToolAfterCallContext,
+} from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
+import { formatInvalidScheduleMessage, validateScheduleUpdate } from '@lobechat/utils/cronEval';
+import debug from 'debug';
+
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { getWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
+import { taskService } from '@/services/task';
+import { getChatStoreState } from '@/store/chat';
+import { getTaskStoreState } from '@/store/task';
+import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+import { isTrpcErrorCode } from '@/utils/trpcError';
+
+import { MISSING_TASK_NAME_ERROR } from '../../constants';
+import { normalizeListTasksParams } from '../../listTasks';
+import { selectAssignableMembers } from '../../listWorkspaceMembers';
+import { TaskIdentifier } from '../../manifest';
+import { normalizeSetTaskVerifyParams } from '../../setTaskVerify';
+import {
+  describeTaskModelChange,
+  toCreateTaskModelConfig,
+  toTaskModelConfigPatch,
+} from '../../taskModel';
+import { resolveTaskOpenTarget } from '../../taskRef';
+import type {
+  AddTaskCommentParams,
+  CreateTaskParams,
+  CreateTasksItemResult,
+  DeleteTaskCommentParams,
+  ListWorkspaceMembersParams,
+  RunTasksItemResult,
+  UpdateTaskCommentParams,
+} from '../../types';
+import { TaskApiName } from '../../types';
+
+const log = debug('lobe-task:executor');
+
+// In-app (SPA) deep-link base for tasks: a relative path so it resolves against
+// the current origin and stays durable. Workspace-scoped tasks live under
+// `/{slug}/task/...`, so prefix the active workspace slug when there is one.
+const taskLinkBaseUrl = (): string | undefined => {
+  const slug = getActiveWorkspaceSlug();
+  return slug ? `/${slug}` : undefined;
+};
+
+// APIs whose execution mutates state that's surfaced in the renderer's task
+// list or detail caches. Used by `onAfterCall` to decide what to revalidate.
+const LIST_MUTATING_APIS = new Set<string>([
+  TaskApiName.createTask,
+  TaskApiName.createTasks,
+  TaskApiName.deleteTask,
+  TaskApiName.editTask,
+  TaskApiName.runTask,
+  TaskApiName.runTasks,
+  TaskApiName.setTaskSchedule,
+  TaskApiName.updateTaskStatus,
+]);
+
+const DETAIL_MUTATING_APIS = new Set<string>([
+  TaskApiName.addTaskComment,
+  TaskApiName.deleteTaskComment,
+  TaskApiName.editTask,
+  TaskApiName.runTask,
+  TaskApiName.setTaskSchedule,
+  TaskApiName.setTaskVerify,
+  TaskApiName.updateTaskComment,
+  TaskApiName.updateTaskStatus,
+  TaskApiName.viewTask,
+]);
+
+// "Alice (usr_1)" for tool output; falls back to the bare id when the member
+// directory has no profile for it (personal mode, or a stale store).
+const memberLabel = (userId: string): string => {
+  const member = getWorkspaceMembers().find((m) => m.userId === userId);
+  const name = member?.user?.fullName?.trim() || member?.user?.username?.trim();
+  return name ? `${name} (${userId})` : userId;
+};
+
+class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
+  readonly identifier = TaskIdentifier;
+  protected readonly apiEnum = TaskApiName;
+
+  onAfterCall = async ({ apiName, params, result }: ToolAfterCallContext): Promise<void> => {
+    if (!result.success) return;
+
+    const store = getTaskStoreState();
+    const identifier = resolveTaskOpenTarget(
+      result.state as { taskId?: string; identifier?: string },
+      params as { identifier?: string },
+    );
+
+    // Auto-expand the freshly created task's detail in the right-side portal so
+    // the user can review it without leaving the conversation. This fires once
+    // per `createTask` tool call (on the gateway `tool_end` event), which is why
+    // it lives here rather than in the renderer: the gateway re-fetches and
+    // remounts the message after `tool_end`, so a render-mount effect never sees
+    // the undefined → defined identifier transition and would never open.
+    if (apiName === TaskApiName.createTask && identifier) {
+      getChatStoreState().openTaskDetail(identifier);
+    }
+
+    // Build the set of task-detail keys to revalidate. Mirrors the pattern
+    // used by `updateTask` in the detail slice so subtask deletions / edits
+    // bubble up: when we mutate a subtask we must also refresh the parent
+    // whose `subtasks[]` array embeds it, otherwise the parent's view keeps
+    // showing the stale child until a manual reload.
+    const detailTargets = new Set<string>();
+    const touchesDetail = DETAIL_MUTATING_APIS.has(apiName) || LIST_MUTATING_APIS.has(apiName);
+    if (touchesDetail) {
+      if (identifier) {
+        // `deleteTask` is not in DETAIL_MUTATING_APIS (the row is gone), but
+        // edit/status/etc. need their own detail key revalidated.
+        if (DETAIL_MUTATING_APIS.has(apiName)) detailTargets.add(identifier);
+
+        const parentId = findSubtaskParentId(store.taskDetailMap, identifier);
+        if (parentId) detailTargets.add(parentId);
+      }
+
+      // Defensive: refresh whatever detail page the user is currently
+      // viewing — covers e.g. a `createTask` whose new identifier we don't
+      // yet know in the local map but whose parent the user is staring at.
+      const { activeTaskId } = store;
+      if (activeTaskId) detailTargets.add(activeTaskId);
+    }
+
+    const refreshes: Promise<unknown>[] = [];
+    if (LIST_MUTATING_APIS.has(apiName)) {
+      refreshes.push(store.refreshTaskList());
+    }
+    for (const id of detailTargets) {
+      refreshes.push(store.internal_refreshTaskDetail(id));
+    }
+
+    if (refreshes.length === 0) return;
+    await Promise.all(refreshes).catch((error) => {
+      log('[TaskExecutor] onAfterCall - refresh failed:', error);
+    });
+  };
+
+  addTaskComment = async (
+    params: AddTaskCommentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const identifier = params.identifier?.trim() || ctx?.taskId || undefined;
+    if (!identifier) {
+      return {
+        content: 'No task identifier provided.',
+        error: { message: 'identifier is required', type: 'MissingIdentifier' },
+        success: false,
+      };
+    }
+
+    try {
+      log('[TaskExecutor] addTaskComment - identifier:', identifier);
+      const target = (await taskService.find(identifier)).data;
+      const result = await getTaskStoreState().addComment(target.id, params.content, {
+        authorAgentId: ctx?.agentId,
+      });
+      const commentId = (result as { data?: { id?: string } } | undefined)?.data?.id;
+
+      return {
+        content: `Comment added to task ${target.identifier} (id: ${target.id}).`,
+        state: { commentId, identifier: target.identifier, taskId: target.id, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] addTaskComment - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to add task comment';
+      return {
+        content: `Failed to add task comment: ${message}`,
+        error: { message, type: 'AddTaskCommentFailed' },
+        success: false,
+      };
+    }
+  };
+
+  /**
+   * Shared single-task create used by both `createTask` and the `createTasks`
+   * batch loop. Returns the raw {@link BuiltinToolResult}; Work registration is
+   * driven by the manifest `work` config at the tool-execution dispatch layer
+   * (`invokeExecutor`), not here.
+   */
+  #createTask = async (
+    params: {
+      instruction: string;
+      assigneeAgentId?: string;
+      assigneeUserId?: string;
+      model?: string;
+      name: string;
+      parentIdentifier?: string;
+      priority?: number;
+      provider?: string;
+      sortOrder?: number;
+    },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] createTask - params:', params);
+      // Models fill optional ids with "" — treat blanks as omitted so they fall
+      // back to the defaults instead of hitting the foreign keys as ''.
+      const parentIdentifier = params.parentIdentifier?.trim() || undefined;
+      const assigneeAgentId = params.assigneeAgentId?.trim() || undefined;
+      const assigneeUserId = params.assigneeUserId?.trim() || undefined;
+      if (!params.name?.trim()) {
+        return {
+          content: MISSING_TASK_NAME_ERROR,
+          error: { message: MISSING_TASK_NAME_ERROR, type: 'InvalidParams' },
+          success: false,
+        };
+      }
+
+      // Executing agent and human owner are independent, coexisting sides (the
+      // member owns the outcome, the agent executes) — a member owner does not
+      // suppress the usual current-agent default.
+      const parent = parentIdentifier ? (await taskService.find(parentIdentifier)).data : undefined;
+      const task = await getTaskStoreState().createTask({
+        assigneeAgentId: assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
+        assigneeUserId,
+        config: toCreateTaskModelConfig(params),
+        createdByAgentId: ctx?.agentId,
+        instruction: params.instruction,
+        name: params.name,
+        parentTaskId: parent?.id,
+        priority: params.priority,
+      });
+
+      if (!task) {
+        return {
+          content: 'Failed to create task',
+          error: { message: 'No data returned', type: 'CreateFailed' },
+          success: false,
+        };
+      }
+
+      return {
+        content: formatTaskCreated({
+          assigneeLabel: task.assigneeUserId ? memberLabel(task.assigneeUserId) : undefined,
+          baseUrl: taskLinkBaseUrl(),
+          id: task.id,
+          identifier: task.identifier,
+          instruction: params.instruction,
+          name: task.name,
+          parentLabel: parent?.identifier,
+          parentTaskId: parent?.id,
+          priority: task.priority,
+          status: task.status,
+        }),
+        // Structure the freshly-created task into `state` so the renderer and
+        // the Debug "skill state" panel have real data without re-deriving from
+        // `args` (the only other source after a conversation reopen).
+        state: {
+          description: task.description,
+          identifier: task.identifier,
+          name: task.name,
+          parentIdentifier,
+          priority: task.priority,
+          status: task.status as TaskStatus,
+          success: true,
+          taskId: task.id,
+        },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] createTask - error:', error);
+      const message = error instanceof Error ? error.message : String(error) || 'Unknown error';
+      const content = message.startsWith('Failed to create task')
+        ? message
+        : `Failed to create task: ${message}`;
+      return {
+        content,
+        error: { message, type: 'CreateTaskFailed' },
+        success: false,
+      };
+    }
+  };
+
+  createTask = async (
+    params: {
+      instruction: string;
+      assigneeAgentId?: string;
+      assigneeUserId?: string;
+      model?: string;
+      name: string;
+      parentIdentifier?: string;
+      priority?: number;
+      provider?: string;
+      sortOrder?: number;
+    },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => this.#createTask(params, ctx);
+
+  createTasks = async (
+    params: { tasks: CreateTaskParams[] },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    log('[TaskExecutor] createTasks - count:', params.tasks?.length);
+    const items = Array.isArray(params.tasks) ? params.tasks : [];
+
+    if (items.length === 0) {
+      return {
+        content: 'No tasks provided.',
+        error: { message: 'tasks array is empty', type: 'EmptyBatch' },
+        success: false,
+      };
+    }
+
+    const results: CreateTasksItemResult[] = [];
+
+    for (const item of items) {
+      const result = await this.#createTask(item, ctx);
+      const success = result.success === true;
+      const error = success
+        ? undefined
+        : result.error?.message ||
+          (typeof result.content === 'string' ? result.content : 'Unknown error');
+      const identifier = (result.state as { identifier?: string } | undefined)?.identifier;
+
+      results.push({
+        error,
+        identifier,
+        taskId: (result.state as { taskId?: string })?.taskId,
+        name: item.name,
+        success,
+      });
+    }
+
+    const succeeded = results.filter((r) => r.success).length;
+    const failed = results.length - succeeded;
+
+    // Relative, workspace-aware links: this content is rendered in-app (SPA),
+    // where a relative path resolves against the current origin and is more
+    // durable than baking in one. The server runtime passes an absolute baseUrl
+    // for IM / mobile.
+    return {
+      content: formatTasksCreated(results, taskLinkBaseUrl()),
+      state: { failed, results, succeeded },
+      success: failed === 0,
+    };
+  };
+
+  deleteTask = async (
+    params: { identifier: string },
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] deleteTask - params:', params);
+
+      const deleted = await getTaskStoreState().deleteTask(params.identifier);
+      const label = deleted?.identifier ?? params.identifier;
+
+      return {
+        content: formatTaskDeleted(`${label} (id: ${deleted?.id})`, deleted?.name),
+        // Surface the deleted task's internal id so the manifest-driven dispatch
+        // layer (`work: { action: 'delete' }`) can delete its Work + refresh the
+        // conversation caches — the task row is gone, so the Work can only be
+        // located by `works.resourceId = taskId`.
+        state: { identifier: label, success: true, taskId: deleted?.id },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] deleteTask - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to delete task';
+      return {
+        content: `Failed to delete task: ${message}`,
+        error: { message, type: 'DeleteTaskFailed' },
+        success: false,
+      };
+    }
+  };
+
+  deleteTaskComment = async (
+    params: DeleteTaskCommentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] deleteTaskComment - commentId:', params.commentId);
+      await getTaskStoreState().deleteComment(params.commentId, ctx?.taskId ?? undefined);
+
+      return {
+        content: `Comment ${params.commentId} deleted.`,
+        state: { commentId: params.commentId, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] deleteTaskComment - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to delete task comment';
+      return {
+        content: `Failed to delete task comment: ${message}`,
+        error: { message, type: 'DeleteTaskCommentFailed' },
+        success: false,
+      };
+    }
+  };
+
+  editTask = async (
+    params: {
+      addDependencies?: string[];
+      assigneeAgentId?: string | null;
+      assigneeUserId?: string | null;
+      description?: string;
+      identifier: string;
+      instruction?: string;
+      model?: string | null;
+      name?: string;
+      parentIdentifier?: string | null;
+      priority?: number;
+      provider?: string | null;
+      removeDependencies?: string[];
+    },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] editTask - params:', params);
+
+      const { addDependencies, removeDependencies } = params;
+      const target = (await taskService.find(params.identifier)).data;
+      const identifier = target.id;
+      const store = getTaskStoreState();
+      const changes: string[] = [];
+      const ops: Promise<unknown>[] = [];
+
+      const updateData: {
+        description?: string;
+        assigneeAgentId?: string | null;
+        assigneeUserId?: string | null;
+        instruction?: string;
+        name?: string;
+        parentTaskId?: string | null;
+        priority?: number;
+      } = {};
+      if (params.name !== undefined) {
+        updateData.name = params.name;
+        changes.push(`name → "${params.name}"`);
+      }
+      if (params.assigneeAgentId !== undefined) {
+        updateData.assigneeAgentId = params.assigneeAgentId;
+        changes.push(
+          params.assigneeAgentId
+            ? `assignee agent → ${params.assigneeAgentId}`
+            : 'assignee cleared',
+        );
+      }
+      // Independent of the agent side: the member is the human owner and the
+      // two assignees coexist, so touching one never clears the other.
+      if (params.assigneeUserId !== undefined) {
+        updateData.assigneeUserId = params.assigneeUserId;
+        changes.push(
+          params.assigneeUserId
+            ? `assignee member → ${memberLabel(params.assigneeUserId)}`
+            : 'assignee member cleared',
+        );
+      }
+      if (params.instruction !== undefined) {
+        updateData.instruction = params.instruction;
+        changes.push('instruction updated');
+      }
+      if (params.description !== undefined) {
+        updateData.description = params.description;
+        changes.push('description updated');
+      }
+      if (params.parentIdentifier !== undefined) {
+        const parentIdentifier = params.parentIdentifier?.trim() || null;
+        updateData.parentTaskId = parentIdentifier
+          ? (await taskService.find(parentIdentifier)).data.id
+          : null;
+        changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
+      }
+      if (params.priority !== undefined) {
+        updateData.priority = params.priority;
+        changes.push(`priority → ${priorityLabel(params.priority)}`);
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        // `external` is the default, but keep it explicit because editTask must
+        // bump the mounted editor's content revision rather than look like an
+        // autosave echo.
+        ops.push(
+          store.updateTask(identifier, updateData, {
+            // Client-first runtime: name the agent so the feed does not credit
+            // the user for what the agent did (the gateway path carries it
+            // server-side instead).
+            ...(ctx?.agentId ? { actorAgentId: ctx.agentId } : {}),
+            source: 'external',
+          }),
+        );
+      }
+
+      // Merged into `config` so checkpoint / review / execution keys survive.
+      const modelPatch = toTaskModelConfigPatch(params);
+      if (modelPatch) {
+        ops.push(store.updateTaskModelConfig(identifier, modelPatch, { rethrow: true }));
+        changes.push(describeTaskModelChange(modelPatch));
+      }
+
+      const applyDependencies = async (refs: string[], remove: boolean) => {
+        const tasks = await Promise.all(
+          refs.map(async (ref) => (await taskService.find(ref)).data),
+        );
+        for (const dep of new Map(tasks.map((task) => [task.id, task])).values()) {
+          ops.push(
+            remove
+              ? store.removeDependency(identifier, dep.id)
+              : store.addDependency(identifier, dep.id),
+          );
+          const label = `${dep.identifier} (id: ${dep.id})`;
+          changes.push(
+            remove
+              ? formatDependencyRemoved(target.identifier, label)
+              : formatDependencyAdded(target.identifier, label),
+          );
+        }
+      };
+      if (addDependencies?.length) await applyDependencies(addDependencies, false);
+      if (removeDependencies?.length) await applyDependencies(removeDependencies, true);
+
+      await Promise.all(ops);
+
+      return {
+        content: formatTaskEdited(`${target.identifier} (id: ${target.id})`, changes),
+        state: { identifier: target.identifier, taskId: target.id, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] editTask - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to edit task';
+      return {
+        content: `Failed to edit task: ${message}`,
+        error: { message, type: 'EditTaskFailed' },
+        success: false,
+      };
+    }
+  };
+
+  /**
+   * Validate the schedule the task will end up with, like the server runtime.
+   * A field the call leaves out keeps its stored value, so the stored schedule
+   * is fetched to check the resulting pattern/timezone pair (and to preview
+   * its next runs) before anything is written.
+   */
+  private checkResultingSchedule = async (params: {
+    automationMode?: TaskAutomationMode | null;
+    identifier: string;
+    schedulePattern?: string | null;
+    scheduleTimezone?: string | null;
+  }) => {
+    const needsStored =
+      (params.schedulePattern !== undefined ||
+        params.scheduleTimezone !== undefined ||
+        params.automationMode === 'schedule') &&
+      (params.schedulePattern === undefined || params.scheduleTimezone === undefined);
+    const stored = needsStored
+      ? (await taskService.getDetail(params.identifier))?.data?.schedule
+      : undefined;
+    return validateScheduleUpdate(stored, params);
+  };
+
+  setTaskSchedule = async (
+    params: {
+      automationMode?: TaskAutomationMode | null;
+      heartbeatInterval?: number;
+      identifier: string;
+      maxExecutions?: number | null;
+      schedulePattern?: string | null;
+      scheduleTimezone?: string | null;
+    },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] setTaskSchedule - params:', params);
+
+      const target = (await taskService.find(params.identifier)).data;
+      const identifier = target.id;
+      const store = getTaskStoreState();
+      const changes: string[] = [];
+      const ops: Promise<unknown>[] = [];
+
+      // Refuse an unusable schedule before writing anything, like the server
+      // runtime does, so a half-applied update never leaves a bad cron behind.
+      const schedule = await this.checkResultingSchedule(params);
+      if (schedule && !schedule.valid) {
+        return {
+          content: formatInvalidScheduleMessage(target.identifier, schedule.error),
+          error: { message: schedule.error, type: 'InvalidSchedule' },
+          success: false,
+        };
+      }
+
+      // Top-level schedule columns — direct service.update bypasses the
+      // store.updateTask optimistic path, which would otherwise need to map
+      // flat columns onto the detail's nested `schedule.*` shape.
+      const scheduleUpdate: {
+        automationMode?: TaskAutomationMode | null;
+        heartbeatInterval?: number;
+        schedulePattern?: string | null;
+        scheduleTimezone?: string | null;
+      } = {};
+      if (params.automationMode !== undefined) {
+        scheduleUpdate.automationMode = params.automationMode;
+        changes.push(
+          params.automationMode
+            ? `automation mode → ${params.automationMode}`
+            : 'automation disabled',
+        );
+      }
+      if (params.heartbeatInterval !== undefined) {
+        scheduleUpdate.heartbeatInterval = params.heartbeatInterval;
+        changes.push(
+          params.heartbeatInterval > 0
+            ? `heartbeat interval → ${params.heartbeatInterval}s`
+            : 'heartbeat interval cleared',
+        );
+      }
+      if (params.schedulePattern !== undefined) {
+        scheduleUpdate.schedulePattern = params.schedulePattern;
+        changes.push(
+          params.schedulePattern
+            ? `schedule pattern → "${params.schedulePattern}"`
+            : 'schedule pattern cleared',
+        );
+      }
+      if (params.scheduleTimezone !== undefined) {
+        scheduleUpdate.scheduleTimezone = params.scheduleTimezone;
+        changes.push(
+          params.scheduleTimezone
+            ? `schedule timezone → ${params.scheduleTimezone}`
+            : 'schedule timezone cleared',
+        );
+      }
+      if (Object.keys(scheduleUpdate).length > 0) {
+        ops.push(
+          taskService.update(identifier, {
+            ...scheduleUpdate,
+            ...(ctx?.agentId ? { actorAgentId: ctx.agentId } : {}),
+          }),
+        );
+      }
+
+      // maxExecutions lives in `tasks.config.schedule.maxExecutions` (JSONB);
+      // route through updateConfig so the server-side merge preserves siblings
+      // (checkpoint, review, model snapshot, etc).
+      if (params.maxExecutions !== undefined) {
+        ops.push(
+          taskService.updateConfig(identifier, {
+            schedule: { maxExecutions: params.maxExecutions },
+          }),
+        );
+        changes.push(
+          params.maxExecutions === null
+            ? 'max executions cleared (unlimited)'
+            : `max executions → ${params.maxExecutions}`,
+        );
+      }
+
+      if (ops.length === 0) {
+        return {
+          content: 'No schedule fields provided; nothing to update.',
+          error: { message: 'No schedule fields provided.', type: 'NoFields' },
+          success: false,
+        };
+      }
+
+      await Promise.all(ops);
+      await store.internal_refreshTaskDetail(identifier);
+
+      if (schedule?.valid) changes.push(schedule.preview);
+
+      return {
+        content: formatTaskEdited(`${target.identifier} (id: ${target.id})`, changes),
+        state: {
+          automationMode: params.automationMode,
+          identifier: target.identifier,
+          taskId: target.id,
+          success: true,
+        },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] setTaskSchedule - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to set task schedule';
+      return {
+        content: `Failed to set task schedule: ${message}`,
+        error: { message, type: 'SetTaskScheduleFailed' },
+        success: false,
+      };
+    }
+  };
+
+  setTaskVerify = async (
+    params: {
+      enabled?: boolean | null;
+      identifier: string;
+      maxIterations?: number | null;
+      requirement?: string | null;
+      verifierAgentId?: string | null;
+      verifyCriteriaIds?: string[] | null;
+      verifyRubricId?: string | null;
+    },
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] setTaskVerify - params:', params);
+      params = normalizeSetTaskVerifyParams(params);
+
+      const target = (await taskService.find(params.identifier)).data;
+      const identifier = target.id;
+
+      // Only forward keys the caller actually provided. The TRPC contract
+      // (task.updateVerifyConfig) treats `null` as "clear" and omission as
+      // "leave untouched", so an undefined field must NOT reach the payload.
+      const verify: {
+        enabled?: boolean | null;
+        maxIterations?: number | null;
+        requirement?: string | null;
+        verifierAgentId?: string | null;
+        verifyCriteriaIds?: string[] | null;
+        verifyRubricId?: string | null;
+      } = {};
+      const changes: string[] = [];
+
+      if (params.enabled !== undefined) {
+        verify.enabled = params.enabled;
+        changes.push(
+          params.enabled === null
+            ? 'verify enabled cleared'
+            : `verify ${params.enabled ? 'enabled' : 'disabled'}`,
+        );
+      }
+      if (params.requirement !== undefined) {
+        verify.requirement = params.requirement;
+        changes.push(
+          params.requirement ? 'acceptance requirement set' : 'acceptance requirement cleared',
+        );
+      }
+      if (params.maxIterations !== undefined) {
+        verify.maxIterations = params.maxIterations;
+        changes.push(
+          params.maxIterations === null
+            ? 'max iterations cleared'
+            : `max iterations → ${params.maxIterations}`,
+        );
+      }
+      if (params.verifierAgentId !== undefined) {
+        verify.verifierAgentId = params.verifierAgentId;
+        changes.push(
+          params.verifierAgentId
+            ? `verifier agent → ${params.verifierAgentId}`
+            : 'verifier agent cleared',
+        );
+      }
+      if (params.verifyRubricId !== undefined) {
+        verify.verifyRubricId = params.verifyRubricId;
+        changes.push(
+          params.verifyRubricId
+            ? `verify rubric → ${params.verifyRubricId}`
+            : 'verify rubric cleared',
+        );
+      }
+      if (params.verifyCriteriaIds !== undefined) {
+        verify.verifyCriteriaIds = params.verifyCriteriaIds;
+        changes.push(
+          params.verifyCriteriaIds?.length
+            ? `verify criteria → ${params.verifyCriteriaIds.length} item(s)`
+            : 'verify criteria cleared',
+        );
+      }
+
+      if (Object.keys(verify).length === 0) {
+        return {
+          content: 'No verify fields provided; nothing to update.',
+          error: { message: 'No verify fields provided.', type: 'NoFields' },
+          success: false,
+        };
+      }
+
+      await taskService.updateVerifyConfig({ id: identifier, verify });
+      await getTaskStoreState().internal_refreshTaskDetail(identifier);
+
+      return {
+        content: formatTaskEdited(`${target.identifier} (id: ${target.id})`, changes),
+        state: {
+          enabled: params.enabled,
+          identifier: target.identifier,
+          taskId: target.id,
+          success: true,
+        },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] setTaskVerify - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to set task verify config';
+      return {
+        content: `Failed to set task verify config: ${message}`,
+        error: { message, type: 'SetTaskVerifyFailed' },
+        success: false,
+      };
+    }
+  };
+
+  listWorkspaceMembers = async (
+    params: ListWorkspaceMembersParams = {},
+  ): Promise<BuiltinToolResult> => {
+    try {
+      const selfId = userProfileSelectors.userId(useUserStore.getState());
+      const inWorkspace = !!getActiveWorkspaceSlug();
+
+      // Personal mode: the caller is the only human a task can be assigned to
+      // (the server enforces the same rule). The client directory carries
+      // profile fields only — linked IM identities are a server-runtime extra.
+      const directory: TaskAssignableMember[] = inWorkspace
+        ? getWorkspaceMembers()
+            .filter((m) => canWorkspaceRoleBeTaskAssignee(m.role))
+            .map((m) => ({
+              email: m.user?.email,
+              id: m.userId,
+              isSelf: m.userId === selfId,
+              name: m.user?.fullName,
+              role: m.role,
+              username: m.user?.username,
+            }))
+        : selfId
+          ? [
+              {
+                id: selfId,
+                isSelf: true,
+                name: userProfileSelectors.displayUserName(useUserStore.getState()),
+              },
+            ]
+          : [];
+      // Same bounded `query` / `limit` contract as the server runtime.
+      const { members, query, total } = selectAssignableMembers(directory, params);
+
+      return {
+        content: formatWorkspaceMembers(members, { inWorkspace, query, total }),
+        state: { count: members.length, query, success: true, total },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] listWorkspaceMembers - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to list members';
+      return {
+        content: `Failed to list workspace members: ${message}`,
+        error: { message, type: 'ListWorkspaceMembersFailed' },
+        success: false,
+      };
+    }
+  };
+
+  listTasks = async (
+    params: {
+      assigneeAgentId?: string;
+      limit?: number;
+      offset?: number;
+      parentIdentifier?: string;
+      priorities?: number[];
+      statuses?: TaskStatus[];
+    },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] listTasks - params:', params);
+
+      const normalized = normalizeListTasksParams(params, {
+        currentAgentId: ctx?.agentId,
+        defaultScope: ctx?.scope === 'task' ? 'allAgents' : 'currentAgent',
+      });
+
+      const result = await getTaskStoreState().fetchTaskList(normalized.query);
+
+      const tasks = result.data ?? [];
+
+      return {
+        content: formatTaskList(tasks, normalized.displayFilters),
+        state: {
+          count: tasks.length,
+          success: true,
+          total: result.total,
+          results: tasks.map((task) => ({
+            identifier: task.identifier,
+            taskId: task.id,
+            success: true,
+          })),
+        },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] listTasks - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to list tasks';
+      return {
+        content: `Failed to list tasks: ${message}`,
+        error: { message, type: 'ListTasksFailed' },
+        success: false,
+      };
+    }
+  };
+
+  runTask = async (
+    params: {
+      continueTopicId?: string;
+      identifier?: string;
+      model?: string;
+      prompt?: string;
+      provider?: string;
+    },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const identifier = params.identifier?.trim() || ctx?.taskId || undefined;
+    if (!identifier) {
+      return {
+        content: 'No task identifier provided.',
+        error: { message: 'identifier is required', type: 'MissingIdentifier' },
+        success: false,
+      };
+    }
+
+    try {
+      log('[TaskExecutor] runTask - identifier:', identifier);
+      const target = (await taskService.find(identifier)).data;
+      const result = await taskService.run(target.id, {
+        continueTopicId: params.continueTopicId,
+        model: params.model,
+        prompt: params.prompt,
+        provider: params.provider,
+      });
+
+      const topicId = (result as { topicId?: string } | undefined)?.topicId;
+      const operationId = (result as { operationId?: string } | undefined)?.operationId;
+
+      const store = getTaskStoreState();
+      await Promise.all([store.internal_refreshTaskDetail(identifier), store.refreshTaskList()]);
+
+      const lines = [`Task ${target.identifier} (id: ${target.id}) started.`];
+      if (topicId) lines.push(`  Topic: ${topicId}`);
+      if (operationId) lines.push(`  Operation: ${operationId}`);
+
+      return {
+        content: lines.join('\n'),
+        state: {
+          identifier: target.identifier,
+          taskId: target.id,
+          operationId,
+          success: true,
+          topicId,
+        },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] runTask - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to run task';
+      return {
+        content: `Failed to run task ${identifier}: ${message}`,
+        error: { message, type: 'RunTaskFailed' },
+        success: false,
+      };
+    }
+  };
+
+  runTasks = async (
+    params: { identifiers: string[]; model?: string; provider?: string },
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const identifiers = Array.isArray(params.identifiers)
+      ? params.identifiers.filter((id): id is string => typeof id === 'string' && !!id.trim())
+      : [];
+
+    if (identifiers.length === 0) {
+      return {
+        content: 'No task identifiers provided.',
+        error: { message: 'identifiers array is empty', type: 'EmptyBatch' },
+        success: false,
+      };
+    }
+
+    log('[TaskExecutor] runTasks - count:', identifiers.length);
+
+    const results: RunTasksItemResult[] = [];
+
+    const byId = new Map<string, { id: string; identifier: string; refs: string[] }>();
+    for (const ref of identifiers) {
+      try {
+        const { data: task } = await taskService.find(ref);
+        const group = byId.get(task.id) ?? { id: task.id, identifier: task.identifier, refs: [] };
+        group.refs.push(ref);
+        byId.set(task.id, group);
+      } catch (error) {
+        if (isTrpcErrorCode(error, 'BAD_REQUEST')) {
+          const message = error instanceof Error ? error.message : 'Invalid task reference';
+          return {
+            content: message,
+            error: { message, type: 'InvalidTaskReference' },
+            success: false,
+          };
+        }
+        results.push({
+          identifier: ref,
+          refs: [ref],
+          error: error instanceof Error ? error.message : 'Task not found',
+          success: false,
+        });
+      }
+    }
+    for (const task of byId.values()) {
+      try {
+        const result = await (params.model || params.provider
+          ? taskService.run(task.id, { model: params.model, provider: params.provider })
+          : taskService.run(task.id));
+        results.push({
+          identifier: task.identifier,
+          taskId: task.id,
+          refs: task.refs,
+          operationId: result.operationId,
+          topicId: result.topicId,
+          success: true,
+        });
+      } catch (error) {
+        results.push({
+          identifier: task.identifier,
+          taskId: task.id,
+          refs: task.refs,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          success: false,
+        });
+      }
+    }
+
+    try {
+      await getTaskStoreState().refreshTaskList();
+    } catch {
+      // ignore refresh errors — they don't change the executor result
+    }
+
+    const succeeded = results.filter((r) => r.success).length;
+    const failed = results.length - succeeded;
+    const header =
+      failed === 0
+        ? `Started ${succeeded} task${succeeded === 1 ? '' : 's'}:`
+        : `Started ${succeeded}/${results.length} tasks (${failed} failed):`;
+
+    return {
+      content: [
+        header,
+        ...results.map((result) => {
+          const label = result.taskId
+            ? `${result.identifier} (id: ${result.taskId})`
+            : result.identifier;
+          return `${label} — ${result.success ? 'started' : `failed: ${result.error}`}`;
+        }),
+      ].join('\n'),
+      state: { failed, results, succeeded },
+      success: failed === 0,
+    };
+  };
+
+  updateTaskComment = async (
+    params: UpdateTaskCommentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] updateTaskComment - commentId:', params.commentId);
+      await getTaskStoreState().updateComment(params.commentId, params.content, {
+        taskId: ctx?.taskId ?? undefined,
+      });
+
+      return {
+        content: `Comment ${params.commentId} updated.`,
+        state: { commentId: params.commentId, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] updateTaskComment - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to update task comment';
+      return {
+        content: `Failed to update task comment: ${message}`,
+        error: { message, type: 'UpdateTaskCommentFailed' },
+        success: false,
+      };
+    }
+  };
+
+  updateTaskStatus = async (
+    params: { error?: string; identifier?: string; status: TaskStatus },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] updateTaskStatus - params:', params);
+
+      const identifier = params.identifier ?? ctx?.taskId ?? undefined;
+      const target = (await taskService.find(identifier ?? getTaskStoreState().activeTaskId!)).data;
+      await getTaskStoreState().updateTaskStatus(target.id, params.status, {
+        ...(ctx?.agentId ? { actorAgentId: ctx.agentId } : {}),
+        error: params.error,
+      });
+      // Work chips read live task status via the message-list summary join;
+      // settle-time refresh (WorksSection / gateway tool_end) picks it up —
+      // avoid a full `message:list` revalidate on every status tool call.
+
+      return {
+        content:
+          params.status === 'failed' && params.error
+            ? `Task ${target.identifier} (id: ${target.id}) status updated to failed. Error: ${params.error}`
+            : `Task ${target.identifier} (id: ${target.id}) status updated to ${params.status}.`,
+        state: {
+          identifier: target.identifier,
+          taskId: target.id,
+          status: params.status,
+          success: true,
+        },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] updateTaskStatus - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to update task status';
+      return {
+        content: `Failed to update task status: ${message}`,
+        error: { message, type: 'UpdateStatusFailed' },
+        success: false,
+      };
+    }
+  };
+
+  viewTask = async (
+    params: { identifier?: string },
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] viewTask - params:', params);
+
+      const detail = await getTaskStoreState().fetchTaskDetail(
+        params.identifier ?? ctx?.taskId ?? undefined,
+      );
+
+      return {
+        content: formatTaskDetail(detail),
+        state: { identifier: detail.identifier, taskId: detail.id, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] viewTask - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to view task';
+      return {
+        content: `Failed to view task: ${message}`,
+        error: { message, type: 'ViewTaskFailed' },
+        success: false,
+      };
+    }
+  };
+}
+
+export const taskExecutor = new TaskExecutor();

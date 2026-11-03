@@ -1,0 +1,54 @@
+import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
+import dayjs from 'dayjs';
+import { useMemo } from 'react';
+
+import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
+
+interface UseFileListItemMetaOptions {
+  createdAt: Date;
+  fileType: string;
+  metadata?: {
+    emoji?: string | null;
+  } | null;
+  name?: string | null;
+  sourceType?: string | null;
+}
+
+export const useFileListItemMeta = ({
+  createdAt,
+  fileType,
+  metadata,
+  name,
+  sourceType,
+}: UseFileListItemMetaOptions) =>
+  useMemo(() => {
+    const lowerFileType = fileType?.toLowerCase();
+    const lowerName = name?.toLowerCase();
+    const isPDF = lowerFileType === 'pdf' || lowerName?.endsWith('.pdf');
+    const isOfficeFile =
+      lowerName?.endsWith('.xls') ||
+      lowerName?.endsWith('.xlsx') ||
+      lowerName?.endsWith('.doc') ||
+      lowerName?.endsWith('.docx') ||
+      lowerName?.endsWith('.ppt') ||
+      lowerName?.endsWith('.pptx') ||
+      lowerName?.endsWith('.odt');
+
+    return {
+      displayTime:
+        dayjs().diff(dayjs(createdAt), 'd') < 7
+          ? dayjs(createdAt).fromNow()
+          : dayjs(createdAt).format('YYYY-MM-DD'),
+      emoji:
+        sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE
+          ? metadata?.emoji
+          : null,
+      isFolder: fileType === CUSTOM_FOLDER_FILE_TYPE,
+      isPage:
+        !isPDF &&
+        !isOfficeFile &&
+        (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE),
+      isSupportedForChunking: isChunkingSupported({ fileType, name }),
+    };
+  }, [createdAt, fileType, metadata?.emoji, name, sourceType]);

@@ -1,0 +1,334 @@
+'use client';
+
+import { Button, createModal, createStaticStyles, cx, Flexbox, Input, Spin } from '@lobehub/ui';
+import { ChevronLeft, ChevronRight, Expand } from 'lucide-react';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { Document, Page } from '@/libs/pdfjs';
+
+import { containerStyles } from '../style';
+
+const styles = createStaticStyles(({ css }) => ({
+  containerWrapper: css`
+    position: relative;
+    width: 100%;
+    height: 100%;
+  `,
+  documentLoading: css`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    height: 100%;
+    padding: 20px;
+  `,
+  expandButton: css`
+    position: absolute;
+    z-index: 1000;
+    inset-block-start: 20px;
+    inset-inline-end: 20px;
+  `,
+  footerNavigation: css`
+    position: absolute;
+    z-index: 10;
+    inset-block-end: 0;
+    inset-inline: 0;
+
+    padding: 12px;
+    border-block-start: 1px solid color-mix(in srgb, black 10%, transparent);
+
+    background: color-mix(in srgb, white 90%, transparent);
+    backdrop-filter: blur(8px);
+  `,
+  fullscreenButton: css`
+    border-color: white;
+    color: white;
+  `,
+  fullscreenContent: css`
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+
+    min-height: 100%;
+    padding: 20px;
+  `,
+  fullscreenModal: css`
+    position: relative;
+    overflow: auto;
+    height: 90vh;
+  `,
+  fullscreenNavigation: css`
+    position: fixed;
+    z-index: 1001;
+    inset-block-end: 20px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+
+    padding-block: 12px;
+    padding-inline: 20px;
+    border-radius: 8px;
+
+    background: color-mix(in srgb, black 70%, transparent);
+    backdrop-filter: blur(8px);
+  `,
+  fullscreenPageInput: css`
+    width: 60px;
+  `,
+  fullscreenPageText: css`
+    min-width: 20px;
+    font-size: 14px;
+    color: white;
+  `,
+  loadingState: css`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    height: 100%;
+    min-height: 320px;
+  `,
+  loadingText: css`
+    margin-block-start: 8px;
+    color: #666;
+  `,
+  pageInput: css`
+    width: 50px;
+  `,
+  pageNumberText: css`
+    font-size: 12px;
+    color: #666;
+  `,
+  previewContainer: css`
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12px;
+  `,
+}));
+
+interface FullscreenContentProps {
+  initialPage: number;
+  pdfDataUri: string;
+}
+
+const FullscreenContent = memo<FullscreenContentProps>(({ pdfDataUri, initialPage }) => {
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(initialPage);
+
+  const goToPrev = () => {
+    if (pageNumber > 1) setPageNumber(pageNumber - 1);
+  };
+
+  const goToNext = () => {
+    if (pageNumber < numPages) setPageNumber(pageNumber + 1);
+  };
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= numPages) setPageNumber(page);
+  };
+
+  return (
+    <div className={styles.fullscreenModal}>
+      <div className={styles.fullscreenContent}>
+        <Document
+          file={pdfDataUri}
+          onLoadSuccess={({ numPages: total }: { numPages: number }) => setNumPages(total)}
+        >
+          <Page
+            pageNumber={pageNumber}
+            renderAnnotationLayer={false}
+            renderTextLayer={false}
+            width={Math.min(window.innerWidth * 0.8, 1000)}
+          />
+        </Document>
+      </div>
+
+      {numPages > 1 && (
+        <div className={styles.fullscreenNavigation}>
+          <Flexbox horizontal align="center" gap={12}>
+            <Button
+              className={styles.fullscreenButton}
+              disabled={pageNumber <= 1}
+              icon={<ChevronLeft size={16} />}
+              size="small"
+              type="text"
+              onClick={goToPrev}
+            />
+            <Flexbox horizontal align="center" gap={8}>
+              <Input
+                className={styles.fullscreenPageInput}
+                max={numPages}
+                min={1}
+                size="small"
+                styles={{ input: { textAlign: 'center' } }}
+                type="number"
+                value={pageNumber}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value);
+                  if (!isNaN(value)) goToPage(value);
+                }}
+              />
+              <span className={styles.fullscreenPageText}>/ {numPages}</span>
+            </Flexbox>
+            <Button
+              className={styles.fullscreenButton}
+              disabled={pageNumber >= numPages}
+              icon={<ChevronRight size={16} />}
+              size="small"
+              type="text"
+              onClick={goToNext}
+            />
+          </Flexbox>
+        </div>
+      )}
+    </div>
+  );
+});
+
+FullscreenContent.displayName = 'PdfFullscreenContent';
+
+const openPdfFullscreenModal = (pdfDataUri: string, initialPage: number) =>
+  createModal({
+    content: <FullscreenContent initialPage={initialPage} pdfDataUri={pdfDataUri} />,
+    footer: null,
+    maskClosable: true,
+    styles: {
+      content: { padding: 0 },
+      header: { display: 'none' },
+    },
+    width: '95vw',
+  });
+
+interface PdfPreviewProps {
+  pdfData: string | null;
+}
+
+const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
+  const localStyles = styles;
+  const { t } = useTranslation('chat');
+  const isMobile = useIsMobile();
+
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
+
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+    setPageNumber(1);
+  };
+
+  const goToPrevPage = () => {
+    if (pageNumber > 1) {
+      setPageNumber(pageNumber - 1);
+    }
+  };
+
+  const goToNextPage = () => {
+    if (pageNumber < numPages) {
+      setPageNumber(pageNumber + 1);
+    }
+  };
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= numPages) {
+      setPageNumber(page);
+    }
+  };
+
+  if (!pdfData) {
+    return (
+      <div className={cx(containerStyles.preview, containerStyles.previewText)}>
+        <div className={localStyles.loadingState}>
+          <Spin size={24} />
+          <div className={localStyles.loadingText}>{t('shareModal.generatingPdf')}</div>
+        </div>
+      </div>
+    );
+  }
+
+  const pdfDataUri = `data:application/pdf;base64,${pdfData}`;
+
+  const handleFullscreen = () => {
+    if (pdfData) openPdfFullscreenModal(pdfDataUri, pageNumber);
+  };
+
+  return (
+    <div className={localStyles.containerWrapper}>
+      <Button
+        className={localStyles.expandButton}
+        icon={<Expand size={16} />}
+        size="small"
+        type="text"
+        onClick={handleFullscreen}
+      />
+
+      <div
+        className={cx(
+          containerStyles.preview,
+          containerStyles.previewText,
+          localStyles.previewContainer,
+        )}
+      >
+        <Document
+          file={pdfDataUri}
+          loading={
+            <div className={localStyles.documentLoading}>
+              <Spin />
+              <div className={localStyles.loadingText}>{t('shareModal.loadingPdf')}</div>
+            </div>
+          }
+          onLoadSuccess={onDocumentLoadSuccess}
+        >
+          <Page
+            pageNumber={pageNumber}
+            renderAnnotationLayer={false}
+            renderTextLayer={false}
+            width={isMobile ? 300 : 400}
+          />
+        </Document>
+      </div>
+
+      {numPages > 1 && (
+        <div className={localStyles.footerNavigation}>
+          <Flexbox horizontal align="center" gap={8} justify="center">
+            <Button
+              disabled={pageNumber <= 1}
+              icon={<ChevronLeft size={16} />}
+              size="small"
+              type="text"
+              onClick={goToPrevPage}
+            />
+            <Flexbox horizontal align="center" gap={4}>
+              <Input
+                className={localStyles.pageInput}
+                max={numPages}
+                min={1}
+                size="small"
+                styles={{ input: { textAlign: 'center' } }}
+                type="number"
+                value={pageNumber}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value);
+                  if (!isNaN(value)) goToPage(value);
+                }}
+              />
+              <span className={localStyles.pageNumberText}>/ {numPages}</span>
+            </Flexbox>
+            <Button
+              disabled={pageNumber >= numPages}
+              icon={<ChevronRight size={16} />}
+              size="small"
+              type="text"
+              onClick={goToNextPage}
+            />
+          </Flexbox>
+        </div>
+      )}
+    </div>
+  );
+});
+
+export default PdfPreview;

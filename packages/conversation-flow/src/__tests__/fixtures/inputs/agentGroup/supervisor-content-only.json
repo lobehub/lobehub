@@ -1,0 +1,74 @@
+[
+  {
+    "id": "msg-user-1",
+    "role": "user",
+    "content": "帮我调研下 clawdbot",
+    "parentId": null,
+    "createdAt": 1704067200000,
+    "updatedAt": 1704067200000
+  },
+  {
+    "id": "msg-supervisor-1",
+    "role": "assistant",
+    "agentId": "supervisor",
+    "content": "我会安排团队成员进行调研。",
+    "parentId": "msg-user-1",
+    "tools": [
+      {
+        "id": "call_tasks_1",
+        "type": "builtin",
+        "apiName": "executeAgentTasks",
+        "arguments": "{\"tasks\":[{\"agentId\":\"agent-1\",\"title\":\"调研任务\"}]}",
+        "identifier": "lobe-group-management"
+      }
+    ],
+    "createdAt": 1704067201000,
+    "updatedAt": 1704067201000,
+    "metadata": {
+      "isSupervisor": true
+    }
+  },
+  {
+    "id": "msg-tool-1",
+    "role": "tool",
+    "content": "Triggered 1 task.",
+    "parentId": "msg-supervisor-1",
+    "tool_call_id": "call_tasks_1",
+    "createdAt": 1704067202000,
+    "updatedAt": 1704067202000
+  },
+  {
+    "id": "msg-task-1",
+    "role": "task",
+    "content": "调研结果内容...",
+    "parentId": "msg-tool-1",
+    "agentId": "agent-1",
+    "createdAt": 1704067203000,
+    "updatedAt": 1704067203000,
+    "metadata": {
+      "taskTitle": "调研任务"
+    },
+    "taskDetail": {
+      "status": "completed",
+      "threadId": "thd_xxx",
+      "title": "调研任务"
+    }
+  },
+  {
+    "id": "msg-supervisor-summary",
+    "role": "assistant",
+    "agentId": "supervisor",
+    "content": "调研完成！这是综合汇总报告...",
+    "parentId": "msg-task-1",
+    "tools": null,
+    "createdAt": 1704067210000,
+    "updatedAt": 1704067210000,
+    "metadata": {
+      "isSupervisor": true,
+      "tps": 78.99,
+      "cost": 0.208
+    },
+    "model": "claude-sonnet-4",
+    "provider": "anthropic"
+  }
+]

@@ -1,0 +1,45 @@
+{
+  "name": "@lobechat/context-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Context Pipeline Engine for LobeChat - A flexible and configurable context processing system",
+  "keywords": [
+    "context",
+    "pipeline",
+    "processor",
+    "chat",
+    "ai",
+    "lobe"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./agent-document": "./src/providers/AgentDocumentInjector/shared.ts"
+  },
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'",
+    "test:update": "vitest -u"
+  },
+  "dependencies": {
+    "@lobechat/agent-templates": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
+    "@lobechat/types": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "debug": "^4.4.3",
+    "es-toolkit": "^1.49.0",
+    "immer": "^10.2.0",
+    "mime": "^4.1.0",
+    "partial-json": "^0.1.7",
+    "tokenx": "^1.3.0",
+    "ts-md5": "^2.0.1",
+    "unist-builder": "^4.0.0",
+    "xast-util-to-xml": "^4.0.0",
+    "xastscript": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/debug": "^4.1.13"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/context-engine"
+}

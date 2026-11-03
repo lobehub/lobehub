@@ -1,0 +1,12 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+standalone
+release
+
+bin
+
+build/entitlements.mac.comm.generated.plist

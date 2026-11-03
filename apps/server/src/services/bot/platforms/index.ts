@@ -1,0 +1,137 @@
+// --------------- Core types & utilities ---------------
+// --------------- Registry singleton ---------------
+import { discord } from './discord/definition';
+import { feishu } from './feishu/definitions/feishu';
+import { lark } from './feishu/definitions/lark';
+import { imessage } from './imessage/definition';
+import { line } from './line/definition';
+import { qq } from './qq/definition';
+import { PlatformRegistry } from './registry';
+import { slack } from './slack/definition';
+import { telegram } from './telegram/definition';
+import { wechat } from './wechat/definition';
+
+export {
+  allowFromField,
+  BOT_REACTION_MODES,
+  BOT_REPLY_PLACEMENT_MODES,
+  type BotReactionMode,
+  type BotReactionPhase,
+  type BotReplyLocale,
+  type BotReplyPlacementMode,
+  DEFAULT_BOT_REACTION_MODE,
+  displayToolCallsField,
+  type DmDecision,
+  type DmPolicy,
+  type DmSettings,
+  extractDmSettings,
+  extractGroupSettings,
+  extractGuestSettings,
+  extractUserAllowlist,
+  extractWatchKeywordEntries,
+  extractWatchKeywords,
+  findMatchingWatchKeywordEntries,
+  getBotReplyLocale,
+  getStepReactionEmoji,
+  type GroupPolicy,
+  type GroupSettings,
+  type GuestDecision,
+  type GuestPolicy,
+  type GuestSettings,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
+  makeGuestPolicyField,
+  makeServerIdField,
+  makeUserIdField,
+  messageMatchesWatchKeyword,
+  normalizeAllowFromEntries,
+  normalizeBotReactionMode,
+  normalizeBotReplyLocale,
+  normalizeBotReplyPlacementMode,
+  reactionModeField,
+  RECEIVED_REACTION_EMOJI,
+  replyPlacementField,
+  shouldAllowSender,
+  shouldApplyReaction,
+  shouldHandleDm,
+  shouldHandleGroup,
+  shouldHandleGuest,
+  THINKING_REACTION_EMOJI,
+  type UserAllowlist,
+  validateAccessSettings,
+  type WatchKeywordEntry,
+  watchKeywordsField,
+  WORKING_REACTION_EMOJI,
+} from './const';
+export { PlatformRegistry } from './registry';
+export {
+  extractReplyEmojis,
+  type ReplyEmojiEntry,
+  replyStyleFields,
+  resolveReplyStyle,
+} from './replyStyle';
+export type {
+  BotMessageAttachment,
+  BotPlatformRedisClient,
+  BotPlatformRuntimeContext,
+  BotProviderConfig,
+  ConnectionMode,
+  ExtractFilesResult,
+  FieldSchema,
+  MessengerContent,
+  PlatformClient,
+  PlatformDefinition,
+  PlatformDocumentation,
+  PlatformMessenger,
+  ReplyTargets,
+  SerializedPlatformDefinition,
+  UsageStats,
+  ValidationResult,
+} from './types';
+export { ClientFactory, messengerContentText } from './types';
+export type {
+  BotConcurrencyStrategy,
+  ProviderConfigInput,
+  ResolvedBotConcurrency,
+  ResolvedBotProviderConfig,
+} from './utils';
+export {
+  buildRuntimeKey,
+  extractDefaults,
+  formatDuration,
+  formatTokens,
+  formatUsageStats,
+  getEffectiveConnectionMode,
+  mergeWithDefaults,
+  parseRuntimeKey,
+  platformFromThreadId,
+  resolveBotConcurrency,
+  resolveBotProviderConfig,
+  resolveConnectionMode,
+  withResolvedConcurrencySettings,
+} from './utils';
+export type { BotProviderFieldValues, FieldFormatViolation } from './validateFieldFormats';
+export { collectFieldFormatViolations, formatFieldFormatViolations } from './validateFieldFormats';
+
+// --------------- Platform definitions ---------------
+export { discord } from './discord/definition';
+export { feishu } from './feishu/definitions/feishu';
+export { lark } from './feishu/definitions/lark';
+export { imessage } from './imessage/definition';
+export { line } from './line/definition';
+export { qq } from './qq/definition';
+export { slack } from './slack/definition';
+export { telegram } from './telegram/definition';
+export { wechat } from './wechat/definition';
+
+export const platformRegistry = new PlatformRegistry();
+
+platformRegistry.register(discord);
+platformRegistry.register(telegram);
+platformRegistry.register(slack);
+platformRegistry.register(feishu);
+platformRegistry.register(imessage);
+platformRegistry.register(lark);
+platformRegistry.register(qq);
+platformRegistry.register(wechat);
+platformRegistry.register(line);

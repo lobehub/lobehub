@@ -1,0 +1,18 @@
+{
+  "data": {
+    "userSettings": [
+      {
+        "id": "DEFAULT_LOBE_CHAT_USER",
+        "tts": {},
+        "keyVaults": null,
+        "general": { "fontSize": 12 },
+        "languageModel": {},
+        "systemAgent": {},
+        "defaultAgent": {},
+        "tool": {}
+      }
+    ]
+  },
+  "mode": "pglite",
+  "schemaHash": "89e91285be422d5f44511c7405f57b57f8dfda4f0304126ae9b0f266e5fd60f1"
+}

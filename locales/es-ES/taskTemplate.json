@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "Conectar {{provider}}",
+  "action.connect.error": "Conexión fallida, por favor intenta de nuevo.",
+  "action.connect.popupBlocked": "Ventana emergente de conexión bloqueada. Permite ventanas emergentes en tu navegador para continuar.",
+  "action.connect.short": "Conectar",
+  "action.connecting": "Esperando autorización…",
+  "action.create.error": "No se pudo crear la tarea. Por favor, inténtalo de nuevo.",
+  "action.create.success": "Tarea programada añadida. Encuéntrala en Lobe AI.",
+  "action.createButton": "Agregar tarea",
+  "action.creating": "Creando...",
+  "action.dismiss.error": "No se pudo descartar. Por favor, inténtalo de nuevo.",
+  "action.dismiss.tooltip": "No me interesa",
+  "action.refresh.button": "Actualizar",
+  "card.templateTag": "Plantilla",
+  "schedule.daily": "Cada día a las {{time}}",
+  "schedule.editableAfterCreateTooltip": "Puedes ajustar el horario después de crear la tarea.",
+  "schedule.weekly": "Cada {{weekday}} a las {{time}}",
+  "section.title": "Prueba estas tareas programadas"
+}

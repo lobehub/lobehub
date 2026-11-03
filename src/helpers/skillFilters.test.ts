@@ -1,0 +1,69 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { filterBuiltinSkills, shouldEnableBuiltinSkill } from './skillFilters';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});
+
+describe('skillFilters', () => {
+  it('should disable agent-browser when the run cannot execute on a device', () => {
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { canExecuteOnDevice: false })).toBe(
+      false,
+    );
+  });
+
+  it('should disable task builtin skill globally', () => {
+    expect(shouldEnableBuiltinSkill('task', { canExecuteOnDevice: false })).toBe(false);
+    expect(shouldEnableBuiltinSkill('task', { canExecuteOnDevice: true })).toBe(false);
+  });
+
+  it('should enable agent-browser when the run can execute on a device', () => {
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { canExecuteOnDevice: true })).toBe(true);
+  });
+
+  it('should not be affected by Windows platform detection when device execution is enabled', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' });
+    vi.resetModules();
+
+    const { shouldEnableBuiltinSkill } = await import('./skillFilters');
+
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { canExecuteOnDevice: true })).toBe(true);
+  });
+
+  it('should keep non-device-only skills enabled', () => {
+    expect(shouldEnableBuiltinSkill('lobe-artifacts', { canExecuteOnDevice: false })).toBe(true);
+  });
+
+  it('should filter builtin skills by device execution context', () => {
+    const skills = [
+      {
+        content: 'agent-browser',
+        description: 'agent-browser',
+        identifier: 'lobe-agent-browser',
+        name: 'Agent Browser',
+        source: 'builtin' as const,
+      },
+      {
+        content: 'artifacts',
+        description: 'artifacts',
+        identifier: 'lobe-artifacts',
+        name: 'Artifacts',
+        source: 'builtin' as const,
+      },
+      {
+        content: 'task',
+        description: 'task',
+        identifier: 'task',
+        name: 'Task',
+        source: 'builtin' as const,
+      },
+    ];
+
+    const filtered = filterBuiltinSkills(skills, { canExecuteOnDevice: false });
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].identifier).toBe('lobe-artifacts');
+  });
+});

@@ -1,0 +1,731 @@
+import type {
+  GenerateContentConfig,
+  HttpOptions,
+  ThinkingConfig,
+  Tool as GoogleFunctionCallTool,
+} from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
+import debug from 'debug';
+
+import type { LobeRuntimeAI } from '../../core/BaseAI';
+import { buildGoogleMessages, buildGoogleTools } from '../../core/contextBuilders/google';
+import {
+  finalizeProviderResponse,
+  initializeProviderDiagnostics,
+  observeProviderAsyncIterable,
+  recordProviderError,
+} from '../../core/providerDiagnostics';
+import { GoogleGenerativeAIStream } from '../../core/streams';
+import { LOBE_ERROR_KEY } from '../../core/streams/google';
+import { convertGoogleAIUsage } from '../../core/usageConverters/google-ai';
+import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
+  ChatCompletionTool,
+  ChatMethodOptions,
+  ChatStreamPayload,
+  CreateImageMethodOptions,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
+} from '../../types';
+import { AgentRuntimeErrorType } from '../../types/error';
+import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { ProviderResponseDiagnostics } from '../../types/providerDiagnostics';
+import type {
+  CreateVideoPayload,
+  CreateVideoResult,
+  VideoGenerationCapabilities,
+} from '../../types/video';
+import { AgentRuntimeError } from '../../utils/createError';
+import { debugStream } from '../../utils/debugStream';
+import { getModelPricing } from '../../utils/getModelPricing';
+import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
+import { resolveMappedModelId, withMappedModelId } from '../../utils/modelIdMapping';
+import { StreamingResponse } from '../../utils/response';
+import {
+  createSignatureChannelId,
+  createSignatureScope,
+  getRuntimeSignatureScopeSource,
+} from '../../utils/signatureScope';
+import { createGoogleImage } from './createImage';
+import { createGoogleVideo, isGeminiOmniVideoModel, pollGoogleVideoOperation } from './createVideo';
+import { createGoogleGenerateObject, createGoogleGenerateObjectWithTools } from './generateObject';
+import { handleGoogleVideoWebhook } from './handleCreateVideoWebhook';
+import {
+  isGemini3OrAbove,
+  isGoogleImageResponseModel,
+  isGoogleSafetyOffModel,
+  shouldDisableGoogleSystemInstruction,
+  shouldDisableGoogleThinkingConfig,
+  shouldOmitDeprecatedGoogleGenerationParams,
+  shouldOmitGoogleSamplingParams,
+  shouldUseGoogleImageSearchTypes,
+  supportsGoogleSearchOnImageResponseModel,
+} from './modelId';
+import { recordGoogleGenerateContentResponse } from './providerDiagnostics';
+import { resolveGoogleThinkingConfig } from './thinkingResolver';
+import { createGoogleTranscription } from './transcribe';
+
+const log = debug('model-runtime:google');
+
+const normalizeThinkingConfig = (config?: ThinkingConfig): ThinkingConfig | undefined => {
+  if (!config) return undefined;
+
+  const { includeThoughts, thinkingBudget, thinkingLevel } = config;
+
+  // Avoid sending `thinkingConfig: {}` (all fields undefined) which can lead upstream
+  // to treat thinking as disabled and produce no thought parts.
+  if (includeThoughts === undefined && thinkingBudget === undefined && thinkingLevel === undefined)
+    return undefined;
+
+  return config;
+};
+
+export interface GoogleModelCard {
+  displayName: string;
+  inputTokenLimit: number;
+  name: string;
+  outputTokenLimit: number;
+}
+
+enum HarmCategory {
+  HARM_CATEGORY_DANGEROUS_CONTENT = 'HARM_CATEGORY_DANGEROUS_CONTENT',
+  HARM_CATEGORY_HARASSMENT = 'HARM_CATEGORY_HARASSMENT',
+  HARM_CATEGORY_HATE_SPEECH = 'HARM_CATEGORY_HATE_SPEECH',
+  HARM_CATEGORY_SEXUALLY_EXPLICIT = 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+}
+
+enum HarmBlockThreshold {
+  BLOCK_NONE = 'BLOCK_NONE',
+}
+
+function getThreshold(model: string): HarmBlockThreshold {
+  if (isGoogleSafetyOffModel(model)) {
+    return 'OFF' as HarmBlockThreshold; // https://discuss.ai.google.dev/t/59352
+  }
+  return HarmBlockThreshold.BLOCK_NONE;
+}
+
+const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
+
+interface LobeGoogleAIParams extends ModelIdMappingOptions {
+  apiKey?: string;
+  baseURL?: string;
+  client?: GoogleGenAI;
+  defaultHeaders?: Record<string, any>;
+  id?: string;
+  isVertexAi?: boolean;
+}
+
+const isAbortError = (error: Error): boolean => {
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('aborted') ||
+    message.includes('cancelled') ||
+    message.includes('error reading from the stream') ||
+    message.includes('abort') ||
+    error.name === 'AbortError'
+  );
+};
+
+export class LobeGoogleAI implements LobeRuntimeAI {
+  private client: GoogleGenAI;
+  private isVertexAi: boolean;
+  baseURL?: string;
+  apiKey?: string;
+  provider: string;
+  private readonly modelIdMappingOptions: ModelIdMappingOptions;
+
+  constructor({
+    apiKey,
+    baseURL,
+    client,
+    isVertexAi,
+    id,
+    defaultHeaders,
+    modelIdMapping,
+  }: LobeGoogleAIParams = {}) {
+    if (!apiKey) throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
+
+    const httpOptions = baseURL
+      ? ({ baseUrl: baseURL, headers: defaultHeaders } as HttpOptions)
+      : undefined;
+
+    this.apiKey = apiKey;
+    this.client = client ?? new GoogleGenAI({ apiKey, httpOptions });
+    this.baseURL = client ? undefined : baseURL || DEFAULT_BASE_URL;
+    this.isVertexAi = isVertexAi || false;
+    this.modelIdMappingOptions = { modelIdMapping };
+
+    this.provider = id || (isVertexAi ? 'vertexai' : 'google');
+  }
+
+  async chat(rawPayload: ChatStreamPayload, options?: ChatMethodOptions) {
+    let providerResponseDiagnostics: ProviderResponseDiagnostics | undefined;
+
+    try {
+      const payload = this.buildPayload(rawPayload);
+      const { model, thinkingBudget, thinkingLevel, imageAspectRatio, imageResolution } = payload;
+      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+      const requestModel = requestPayload.model;
+      const thoughtSignatureScope = await this.getThoughtSignatureScope(requestModel);
+      const shouldOmitDeprecatedGenerationParams =
+        shouldOmitDeprecatedGoogleGenerationParams(requestModel);
+
+      // https://ai.google.dev/gemini-api/docs/thinking#set-budget
+      // GoogleThinkingLevel uses the REST-style lowercase literals while the SDK
+      // enum is uppercase; the API accepts both, so bridge the nominal gap
+      const thinkingConfig = resolveGoogleThinkingConfig(requestModel, {
+        thinkingBudget: shouldOmitDeprecatedGenerationParams ? undefined : thinkingBudget,
+        thinkingLevel,
+      }) as unknown as ThinkingConfig;
+
+      const contents = await buildGoogleMessages(payload.messages, {
+        model: requestModel,
+        thoughtSignatureScope,
+      });
+      if (shouldOmitDeprecatedGenerationParams) {
+        // Gemini 3.6 Flash, 3.5 Flash-Lite, and later models reject assistant prefills.
+        while (contents.at(-1)?.role === 'model') contents.pop();
+      }
+      const isImageResponseModel = isGoogleImageResponseModel(model);
+
+      const controller = new AbortController();
+      const originalSignal = options?.signal;
+
+      if (originalSignal) {
+        if (originalSignal.aborted) {
+          controller.abort();
+        } else {
+          originalSignal.addEventListener('abort', () => {
+            controller.abort();
+          });
+        }
+      }
+
+      const tools = this.buildGoogleToolsWithSearch(payload.tools, payload);
+      const imageConfig: NonNullable<GenerateContentConfig['imageConfig']> = {};
+      if (isImageResponseModel) {
+        if (imageAspectRatio && imageAspectRatio !== 'auto') {
+          imageConfig.aspectRatio = imageAspectRatio;
+        }
+        if (imageResolution) {
+          imageConfig.imageSize = imageResolution;
+        }
+      }
+
+      const config: GenerateContentConfig = {
+        abortSignal: originalSignal,
+        imageConfig: Object.keys(imageConfig).length > 0 ? imageConfig : undefined,
+        maxOutputTokens: payload.max_tokens,
+        responseModalities: isImageResponseModel ? ['Text', 'Image'] : undefined,
+        // avoid wide sensitive words
+        // refs: https://github.com/lobehub/lobe-chat/pull/1418
+        safetySettings: [
+          {
+            category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+            threshold: getThreshold(model),
+          },
+          {
+            category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+            threshold: getThreshold(model),
+          },
+          {
+            category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+            threshold: getThreshold(model),
+          },
+          {
+            category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+            threshold: getThreshold(model),
+          },
+        ],
+        systemInstruction: shouldDisableGoogleSystemInstruction(model)
+          ? undefined
+          : (payload.system as string),
+        ...(shouldOmitDeprecatedGenerationParams || shouldOmitGoogleSamplingParams(requestModel)
+          ? {}
+          : {
+              temperature: isImageResponseModel
+                ? Math.min(payload.temperature ?? 1, 1)
+                : payload.temperature,
+              topP: payload.top_p,
+            }),
+        thinkingConfig: shouldDisableGoogleThinkingConfig(model)
+          ? undefined
+          : normalizeThinkingConfig(thinkingConfig),
+        // https://ai.google.dev/gemini-api/docs/tool-combination
+        // Vertex AI does not support includeServerSideToolInvocations
+        toolConfig:
+          !this.isVertexAi && this.needsServerSideToolInvocations(model, tools)
+            ? { includeServerSideToolInvocations: true }
+            : undefined,
+        tools,
+      };
+
+      const inputStartAt = Date.now();
+
+      const finalPayload = { config, contents, model: requestModel };
+      const key = this.isVertexAi
+        ? 'DEBUG_VERTEX_AI_CHAT_COMPLETION'
+        : 'DEBUG_GOOGLE_CHAT_COMPLETION';
+      providerResponseDiagnostics = initializeProviderDiagnostics({
+        apiMode: this.isVertexAi ? 'vertex_generate_content' : 'google_generate_content',
+        diagnostics: options?.diagnostics,
+        endpoint: this.baseURL,
+        payload: finalPayload,
+        sentAt: Date.now(),
+      });
+
+      if (process.env[key] === '1') {
+        log('[requestPayload]');
+        log(JSON.stringify(finalPayload), '\n');
+      }
+
+      const geminiStreamResponse = await this.client.models.generateContentStream(finalPayload);
+      const observedGeminiStream = observeProviderAsyncIterable(
+        geminiStreamResponse,
+        providerResponseDiagnostics,
+        recordGoogleGenerateContentResponse,
+        controller.signal,
+      );
+
+      const googleStream = this.createEnhancedStream(observedGeminiStream, controller.signal);
+      let prod = googleStream;
+
+      if (process.env[key] === '1') {
+        const [productionStream, useForDebug] = googleStream.tee();
+        prod = productionStream;
+        debugStream(useForDebug).catch();
+      }
+
+      // Convert the response into a friendly text-stream
+      const pricing = await getModelPricing(model, this.provider, options?.pricingContext);
+
+      const stream = GoogleGenerativeAIStream(prod, {
+        callbacks: options?.callback,
+        inputStartAt,
+        payload: { model, pricing, provider: this.provider, thoughtSignatureScope },
+      });
+
+      // Respond with the stream
+      return StreamingResponse(stream, { headers: options?.headers });
+    } catch (e) {
+      const err = e as Error;
+      recordProviderError(providerResponseDiagnostics, err);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
+
+      // Remove previous silent handling, throw error uniformly
+      if (isAbortError(err)) {
+        log('Request was cancelled');
+        throw AgentRuntimeError.chat({
+          error: { message: 'Request was cancelled' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          provider: this.provider,
+        });
+      }
+
+      log('Error: %O', err);
+      const { errorType, error } = parseGoogleErrorMessage(err.message);
+
+      throw AgentRuntimeError.chat({ error, errorType, provider: this.provider });
+    }
+  }
+
+  /**
+   * Generate images using Google AI Imagen API or Gemini Chat Models
+   * @see https://ai.google.dev/gemini-api/docs/image-generation#imagen
+   */
+  async createImage(
+    payload: CreateImagePayload,
+    options?: CreateImageMethodOptions,
+  ): Promise<CreateImageResponse> {
+    const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+
+    return createGoogleImage(this.client, this.provider, requestPayload, {
+      pricingContext: options?.pricingContext,
+      pricingModel: payload.model,
+      routingModel: payload.model,
+    });
+  }
+
+  async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResult> {
+    const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+
+    if (this.isVertexAi && isGeminiOmniVideoModel(requestPayload.model)) {
+      throw AgentRuntimeError.createVideo({
+        error: {
+          message: 'Gemini Omni Flash is only supported by the Gemini Developer API',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: this.provider,
+      });
+    }
+
+    return createGoogleVideo(this.client, this.provider, requestPayload);
+  }
+
+  getVideoGenerationCapabilities(model: string): VideoGenerationCapabilities {
+    const requestModel = resolveMappedModelId(model, this.modelIdMappingOptions);
+
+    if (isGeminiOmniVideoModel(requestModel)) {
+      return { completionModes: ['polling', 'webhook'] };
+    }
+
+    return {
+      completionModes: ['polling'],
+    };
+  }
+
+  /**
+   * Transcribe audio (ASR) with Gemini's native multimodal API.
+   * @see https://ai.google.dev/gemini-api/docs/audio
+   */
+  async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
+    try {
+      const { text, usageMetadata } = await createGoogleTranscription(
+        this.client,
+        withMappedModelId(payload, this.modelIdMappingOptions),
+        options,
+      );
+
+      if (options?.onUsage && usageMetadata) {
+        const pricing = await getModelPricing(payload.model, this.provider, options.pricingContext);
+        await options.onUsage(convertGoogleAIUsage(usageMetadata, pricing));
+      }
+
+      return { text };
+    } catch (e) {
+      const err = e as Error;
+
+      if (isAbortError(err)) {
+        log('Request was cancelled');
+        throw AgentRuntimeError.chat({
+          error: { message: 'Request was cancelled' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          provider: this.provider,
+        });
+      }
+
+      log('Error: %O', err);
+      const { errorType, error } = parseGoogleErrorMessage(err.message);
+
+      throw AgentRuntimeError.chat({ error, errorType, provider: this.provider });
+    }
+  }
+
+  async handlePollVideoStatus(inferenceId: string) {
+    return pollGoogleVideoOperation(this.client, inferenceId, this.provider, this.apiKey!);
+  }
+
+  async handleCreateVideoWebhook(payload: Parameters<typeof handleGoogleVideoWebhook>[0]) {
+    return handleGoogleVideoWebhook(payload);
+  }
+
+  /**
+   * Generate structured output using Google Gemini API
+   * @see https://ai.google.dev/gemini-api/docs/structured-output
+   * @see https://ai.google.dev/gemini-api/docs/function-calling
+   */
+  async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
+
+    // Convert OpenAI messages to Google format
+    const contents = await buildGoogleMessages(payload.messages, {
+      model: requestPayload.model,
+      thoughtSignatureScope: await this.getThoughtSignatureScope(requestPayload.model),
+    });
+    const pricing = await getModelPricing(payload.model, this.provider, options?.pricingContext);
+
+    // Handle tools-based structured output
+    if (payload.tools && payload.tools.length > 0) {
+      return createGoogleGenerateObjectWithTools(
+        this.client,
+        { contents, model: requestPayload.model, tools: payload.tools },
+        options,
+        pricing,
+      );
+    }
+
+    // Handle schema-based structured output
+    if (payload.schema) {
+      return createGoogleGenerateObject(
+        this.client,
+        { contents, model: requestPayload.model, schema: payload.schema },
+        options,
+        pricing,
+      );
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Direct Gemini endpoints use an irreversible endpoint/credential fingerprint.
+   * Injected Vertex clients have no stable identity and therefore fail closed unless
+   * RouterRuntime supplied a channel.
+   */
+  private async getThoughtSignatureScope(model: string) {
+    const runtimeSource = getRuntimeSignatureScopeSource(this);
+    const directChannelId =
+      runtimeSource || !this.baseURL || !this.apiKey
+        ? undefined
+        : await createSignatureChannelId(this.baseURL, this.apiKey);
+
+    return createSignatureScope({
+      kind: 'thought_signature',
+      model,
+      protocol: 'google_generate_content',
+      source:
+        runtimeSource ??
+        (directChannelId
+          ? {
+              apiType: this.isVertexAi ? 'vertexai' : 'google',
+              channelId: directChannelId,
+              provider: this.provider,
+            }
+          : undefined),
+    });
+  }
+
+  private createEnhancedStream(originalStream: any, signal: AbortSignal): ReadableStream {
+    // capture provider for error payloads inside the stream closure
+    const provider = this.provider;
+    return new ReadableStream({
+      async start(controller) {
+        let hasData = false;
+
+        try {
+          for await (const chunk of originalStream) {
+            if (signal.aborted) {
+              // If data has already been output, close the stream gracefully instead of throwing an error
+              if (hasData) {
+                log('Stream cancelled gracefully, preserving existing output');
+                // Explicitly inject cancellation error to avoid SSE fallback unexpected_end
+                controller.enqueue({
+                  [LOBE_ERROR_KEY]: {
+                    body: { name: 'Stream cancelled', provider, reason: 'aborted' },
+                    message: 'Stream cancelled',
+                    name: 'Stream cancelled',
+                    type: AgentRuntimeErrorType.StreamChunkError,
+                  },
+                });
+                controller.close();
+                return;
+              } else {
+                // If no data has been output yet, close the stream directly and let downstream SSE emit error event during flush phase
+                log('Stream cancelled before any output');
+                controller.close();
+                return;
+              }
+            }
+
+            hasData = true;
+            controller.enqueue(chunk);
+          }
+        } catch (error) {
+          const err = error as Error;
+
+          // Handle all errors uniformly, including abort errors
+          if (isAbortError(err) || signal.aborted) {
+            // If data has already been output, close the stream gracefully
+            if (hasData) {
+              log('Stream reading cancelled gracefully, preserving existing output');
+              // Explicitly inject cancellation error to avoid SSE fallback unexpected_end
+              controller.enqueue({
+                [LOBE_ERROR_KEY]: {
+                  body: { name: 'Stream cancelled', provider, reason: 'aborted' },
+                  message: 'Stream cancelled',
+                  name: 'Stream cancelled',
+                  type: AgentRuntimeErrorType.StreamChunkError,
+                },
+              });
+              controller.close();
+              return;
+            } else {
+              log('Stream reading cancelled before any output');
+              // Inject an error marker with detailed error information to be handled by downstream google-ai transformer to output error event
+              controller.enqueue({
+                [LOBE_ERROR_KEY]: {
+                  body: {
+                    message: err.message,
+                    name: 'AbortError',
+                    provider,
+                    stack: err.stack,
+                  },
+                  message: err.message || 'Request was cancelled',
+                  name: 'AbortError',
+                  type: AgentRuntimeErrorType.StreamChunkError,
+                },
+              });
+              controller.close();
+              return;
+            }
+          } else {
+            // Handle other stream parsing errors
+            log('Stream parsing error: %O', err);
+            // Try to parse Google error and extract code/message/status
+            const { error: parsedError, errorType } = parseGoogleErrorMessage(
+              err?.message || String(err),
+            );
+
+            // Inject an error marker with detailed error information to be handled by downstream google-ai transformer to output error event
+            controller.enqueue({
+              [LOBE_ERROR_KEY]: {
+                body: { ...parsedError, provider },
+                message: parsedError?.message || err.message || 'Stream parsing error',
+                name: 'Stream parsing error',
+                type: errorType ?? AgentRuntimeErrorType.StreamChunkError,
+              },
+            });
+            controller.close();
+            return;
+          }
+        }
+
+        controller.close();
+      },
+    });
+  }
+
+  async models(options?: { signal?: AbortSignal }) {
+    try {
+      const url = `${this.baseURL}/v1beta/models`;
+      const response = await fetch(url, {
+        headers: {
+          'x-goog-api-key': this.apiKey!,
+        },
+        method: 'GET',
+        signal: options?.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const json = await response.json();
+
+      const modelList: GoogleModelCard[] = json.models;
+
+      const processedModels = modelList.map((model) => {
+        const id = model.name.replace(/^models\//, '');
+
+        return {
+          contextWindowTokens: (model.inputTokenLimit || 0) + (model.outputTokenLimit || 0),
+          displayName: model.displayName || id,
+          id,
+          maxOutput: model.outputTokenLimit || undefined,
+        };
+      });
+
+      const { MODEL_LIST_CONFIGS, processModelList } = await import('../../utils/modelParse');
+
+      return processModelList(processedModels, MODEL_LIST_CONFIGS.google, 'google');
+    } catch (error) {
+      log('Failed to fetch Google models: %O', error);
+      throw error;
+    }
+  }
+
+  private buildPayload(payload: ChatStreamPayload) {
+    const system_message = payload.messages.find((m) => m.role === 'system');
+    const user_messages = payload.messages.filter((m) => m.role !== 'system');
+
+    return {
+      ...payload,
+      messages: user_messages,
+      system: system_message?.content,
+    };
+  }
+
+  /**
+   * Returns true when Gemini 3+ tools array combines built-in tools (googleSearch / urlContext)
+   * with functionDeclarations — the API requires `toolConfig.includeServerSideToolInvocations`
+   * in that case.
+   * @see https://ai.google.dev/gemini-api/docs/tool-combination
+   */
+  private needsServerSideToolInvocations(
+    model: string | undefined,
+    tools: GoogleFunctionCallTool[] | undefined,
+  ): boolean {
+    if (!isGemini3OrAbove(model)) return false;
+
+    const hasBuiltIn = tools?.some((tool) => 'googleSearch' in tool || 'urlContext' in tool);
+    const hasFunctions = tools?.some((tool) => Boolean(tool.functionDeclarations?.length));
+
+    return !!(hasBuiltIn && hasFunctions);
+  }
+
+  private buildGoogleToolsWithSearch(
+    tools: ChatCompletionTool[] | undefined,
+    payload?: ChatStreamPayload,
+  ): GoogleFunctionCallTool[] | undefined {
+    const hasSearch = payload?.enabledSearch;
+    const hasUrlContext = payload?.urlContext;
+    const model = payload?.model ?? '';
+    const isImageResponseModel = isGoogleImageResponseModel(model);
+    const supportsImageResponseGoogleSearch = supportsGoogleSearchOnImageResponseModel(model);
+
+    // Build GoogleSearch tool config with the model-specific search payload shape.
+    const googleSearchTool =
+      hasSearch && (!isImageResponseModel || supportsImageResponseGoogleSearch)
+        ? {
+            googleSearch: shouldUseGoogleImageSearchTypes(model)
+              ? { searchTypes: { imageSearch: {}, webSearch: {} } }
+              : {},
+          }
+        : undefined;
+
+    if (isImageResponseModel) {
+      // Keep only the prebuilt googleSearch tool for image-response models that support it.
+      // In `responseModalities: ['Text', 'Image']` requests, Vertex AI rejects
+      // function declarations and urlContext with INVALID_ARGUMENT:
+      // "Only google search tool and maps imagery grounding tool is supported for image response."
+      return googleSearchTool ? [googleSearchTool] : undefined;
+    }
+
+    // Gemini 3+ models support combined tools (search + urlContext + functionDeclarations)
+    if (isGemini3OrAbove(payload?.model)) {
+      const result: GoogleFunctionCallTool[] = [];
+
+      if (hasUrlContext) {
+        result.push({ urlContext: {} });
+      }
+      if (googleSearchTool) {
+        result.push(googleSearchTool);
+      }
+
+      const functionTools = buildGoogleTools(tools);
+      if (functionTools) {
+        result.push(...functionTools);
+      }
+
+      return result.length > 0 ? result : undefined;
+    }
+
+    // For older models, search tools cannot be used with FunctionCall simultaneously.
+    // If tool_calls already exist in conversation, prioritize function declarations
+    // to maintain multi-turn tool-calling sessions.
+    const hasToolCalls = payload?.messages?.some((m) => m.tool_calls?.length);
+    const hasFunctionTools = tools && tools.length > 0;
+
+    if (hasToolCalls && hasFunctionTools) {
+      return buildGoogleTools(tools);
+    }
+
+    if (hasUrlContext && hasSearch) {
+      return [{ urlContext: {} }, googleSearchTool!];
+    }
+    if (hasUrlContext) {
+      return [{ urlContext: {} }];
+    }
+    if (hasSearch) {
+      return [googleSearchTool!];
+    }
+
+    return buildGoogleTools(tools);
+  }
+}
+
+export default LobeGoogleAI;

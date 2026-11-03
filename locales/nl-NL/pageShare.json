@@ -1,0 +1,22 @@
+{
+  "error.invalidFormat.desc": "Je kunt het nog steeds lezen. De lay-out kan afwijken van het origineel.",
+  "error.invalidFormat.ownerHint": "Sla het opnieuw op in de editor om de originele lay-out te herstellen.",
+  "error.invalidFormat.title": "Deze pagina kon niet in het originele formaat worden weergegeven",
+  "popover.copyLink": "Kopieer link",
+  "popover.copyLinkSuccess": "Link gekopieerd",
+  "popover.linkHint": "Iedereen met de link kan deze pagina bekijken",
+  "popover.permissionLink": "Iedereen met de link",
+  "popover.permissionPrivate": "Privé",
+  "popover.permissionWorkspace": "Iedereen in de werkruimte",
+  "popover.privateHint": "Alleen jij hebt toegang tot deze pagina",
+  "popover.sectionViews_one": "{{count}} weergave",
+  "popover.sectionViews_other": "{{count}} weergaven",
+  "popover.title": "Pagina delen",
+  "popover.updateError": "Het bijwerken van de deelinstellingen is mislukt",
+  "popover.visibility": "Zichtbaarheid",
+  "popover.visibilityUpdated": "Zichtbaarheid bijgewerkt",
+  "popover.workspaceHint": "Iedereen in deze werkruimte kan deze pagina bekijken",
+  "shareButton.label": "Delen",
+  "shell.sharedBy": "Gedeeld door {{name}}",
+  "shell.updatedAt": "Bijgewerkt {{relative}}"
+}

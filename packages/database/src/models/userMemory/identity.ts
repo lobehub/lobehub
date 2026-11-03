@@ -1,0 +1,230 @@
+import type {
+  IdentityListParams,
+  IdentityListResult,
+  UserMemoryIdentity,
+  UserMemoryIdentityInsert,
+} from '@lobechat/types';
+import { RelationshipEnum } from '@lobechat/types';
+import type { SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+
+import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
+import { userMemories, userMemoriesIdentities } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { buildUserMemoryWhere } from './where';
+
+export class UserMemoryIdentityModel {
+  private userId: string;
+  private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
+
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
+    this.userId = userId;
+    this.db = db;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
+  }
+
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
+  }
+
+  create = async (params: Omit<UserMemoryIdentityInsert, 'userId'>) => {
+    const [result] = await this.db
+      .insert(userMemoriesIdentities)
+      .values({ ...params, userId: this.userId })
+      .returning();
+
+    return result;
+  };
+
+  delete = async (id: string) => {
+    return this.db.transaction(async (tx) => {
+      const identity = await tx.query.userMemoriesIdentities.findFirst({
+        where: and(eq(userMemoriesIdentities.id, id), this.memoryWhere(userMemoriesIdentities)),
+      });
+
+      if (!identity || !identity.userMemoryId) {
+        return { success: false };
+      }
+
+      // Delete the base user memory (cascade will handle the identity)
+      await tx
+        .delete(userMemories)
+        .where(and(eq(userMemories.id, identity.userMemoryId), this.memoryWhere(userMemories)));
+
+      return { success: true };
+    });
+  };
+
+  deleteAll = async () => {
+    return this.db.delete(userMemoriesIdentities).where(this.memoryWhere(userMemoriesIdentities));
+  };
+
+  query = async (limit = 50) => {
+    return this.db.query.userMemoriesIdentities.findMany({
+      limit,
+      orderBy: [desc(userMemoriesIdentities.capturedAt)],
+      where: this.memoryWhere(userMemoriesIdentities),
+    });
+  };
+
+  /**
+   * Query identity list with pagination, search, and sorting
+   * Returns a flat structure optimized for frontend display
+   */
+  queryList = async (params: IdentityListParams = {}): Promise<IdentityListResult> => {
+    const { order = 'desc', page = 1, pageSize = 20, q, relationships, sort, tags, types } = params;
+
+    const normalizedPage = Math.max(1, page);
+    const normalizedPageSize = Math.min(Math.max(pageSize, 1), 100);
+    const offset = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedQuery = typeof q === 'string' ? q.trim() : '';
+    const bm25MatchQuery = normalizedQuery
+      ? normalizeBm25MatchQuery(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
+      : '';
+    const resolvedRelationships =
+      relationships && relationships.length > 0 ? relationships : [RelationshipEnum.Self];
+    const candidateResult =
+      normalizedQuery && this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+        ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'memoryIdentities',
+            filters: {
+              memoryRelationships: resolvedRelationships,
+              ...(tags?.length ? { memoryTagMatch: 'any' as const, memoryTags: tags } : {}),
+              ...(types?.length ? { memoryTypes: types } : {}),
+            },
+            pagination: {},
+            query: {
+              fields: ['parent_title', 'description', 'role'],
+              text: normalizedQuery,
+            },
+          })
+        : undefined;
+    const candidateIds = candidateResult?.candidates.map(({ id }) => id);
+
+    // Build WHERE conditions
+    const conditions: Array<SQL | undefined> = [
+      this.memoryWhere(userMemoriesIdentities),
+      candidateIds ? inJsonStringArray(userMemoriesIdentities.id, candidateIds) : undefined,
+      // Full-text search across title, description, role
+      normalizedQuery && !candidateIds
+        ? sql`(${userMemories.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('title', ${bm25MatchQuery}, conjunction_mode => true)]) OR ${userMemoriesIdentities.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('description', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('role', ${bm25MatchQuery}, conjunction_mode => true)]))`
+        : undefined,
+      types && types.length > 0 ? inArray(userMemoriesIdentities.type, types) : undefined,
+      // Default to 'self' relationship if not specified
+      inArray(userMemoriesIdentities.relationship, resolvedRelationships),
+      tags && tags.length > 0
+        ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesIdentities.tags})`))
+        : undefined,
+    ];
+
+    const filters = conditions.filter((condition): condition is SQL => condition !== undefined);
+    const whereClause =
+      filters.length > 0
+        ? and(...filters)
+        : /* v8 ignore next -- unreachable: eq()/inArray() always yield SQL, so filters is never empty */ undefined;
+
+    // Build ORDER BY
+    const applyOrder = order === 'asc' ? asc : desc;
+    const sortColumn =
+      sort === 'type' ? userMemoriesIdentities.type : userMemoriesIdentities.capturedAt;
+
+    const orderByClauses = [
+      applyOrder(sortColumn),
+      applyOrder(userMemoriesIdentities.updatedAt),
+      applyOrder(userMemoriesIdentities.createdAt),
+    ];
+
+    // JOIN condition
+    const joinCondition = and(
+      eq(userMemories.id, userMemoriesIdentities.userMemoryId),
+      this.memoryWhere(userMemories),
+    );
+
+    // Execute queries in parallel
+    const [rows, totalResult] = await Promise.all([
+      this.db
+        .select({
+          capturedAt: userMemoriesIdentities.capturedAt,
+          createdAt: userMemoriesIdentities.createdAt,
+          description: userMemoriesIdentities.description,
+          episodicDate: userMemoriesIdentities.episodicDate,
+          id: userMemoriesIdentities.id,
+          relationship: userMemoriesIdentities.relationship,
+          role: userMemoriesIdentities.role,
+          tags: userMemoriesIdentities.tags,
+          title: userMemories.title,
+          type: userMemoriesIdentities.type,
+          updatedAt: userMemoriesIdentities.updatedAt,
+        })
+        .from(userMemoriesIdentities)
+        .innerJoin(userMemories, joinCondition)
+        .where(whereClause)
+        .orderBy(...orderByClauses)
+        .limit(normalizedPageSize)
+        .offset(offset),
+      this.db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(userMemoriesIdentities)
+        .innerJoin(userMemories, joinCondition)
+        .where(whereClause),
+    ]);
+
+    return {
+      items: rows,
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total: Number(totalResult[0]?.count ?? 0),
+    };
+  };
+
+  findById = async (id: string) => {
+    return this.db.query.userMemoriesIdentities.findFirst({
+      where: and(eq(userMemoriesIdentities.id, id), this.memoryWhere(userMemoriesIdentities)),
+    });
+  };
+
+  update = async (id: string, value: Partial<UserMemoryIdentity>) => {
+    return this.db
+      .update(userMemoriesIdentities)
+      .set({ ...value, updatedAt: new Date() })
+      .where(and(eq(userMemoriesIdentities.id, id), this.memoryWhere(userMemoriesIdentities)));
+  };
+
+  /**
+   * Query identities for chat context injection
+   * Only returns user's own identities (relationship === 'self' or null/undefined)
+   * Limited to most recent entries for performance
+   */
+  queryForInjection = async (limit = 50) => {
+    return this.db
+      .select({
+        capturedAt: userMemoriesIdentities.capturedAt,
+        createdAt: userMemoriesIdentities.createdAt,
+        description: userMemoriesIdentities.description,
+        id: userMemoriesIdentities.id,
+        role: userMemoriesIdentities.role,
+        type: userMemoriesIdentities.type,
+        updatedAt: userMemoriesIdentities.updatedAt,
+      })
+      .from(userMemoriesIdentities)
+      .where(
+        and(
+          this.memoryWhere(userMemoriesIdentities),
+          // Only include self identities (relationship is 'self' or null/not set)
+          or(
+            eq(userMemoriesIdentities.relationship, RelationshipEnum.Self),
+            isNull(userMemoriesIdentities.relationship),
+          ),
+        ),
+      )
+      .orderBy(desc(userMemoriesIdentities.capturedAt))
+      .limit(limit);
+  };
+}

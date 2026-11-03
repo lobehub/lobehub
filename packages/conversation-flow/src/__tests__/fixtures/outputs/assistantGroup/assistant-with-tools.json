@@ -1,0 +1,330 @@
+{
+  "contextTree": [
+    {
+      "id": "msg-101",
+      "type": "message"
+    },
+    {
+      "children": [
+        {
+          "id": "msg-102",
+          "type": "message",
+          "tools": ["msg-103", "msg-104"]
+        },
+        {
+          "id": "msg-105",
+          "type": "message",
+          "tools": ["msg-106", "msg-107"]
+        },
+        {
+          "id": "msg-108",
+          "type": "message"
+        }
+      ],
+      "id": "msg-102",
+      "type": "assistantGroup"
+    }
+  ],
+  "flatList": [
+    {
+      "id": "msg-101",
+      "role": "user",
+      "content": "What's the weather like in San Francisco and Beijing today?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000
+    },
+    {
+      "id": "msg-102",
+      "role": "assistantGroup",
+      "content": "",
+      "parentId": "msg-101",
+      "createdAt": 1704067202000,
+      "updatedAt": 1704067202000,
+      "children": [
+        {
+          "content": "Let me check the current weather conditions in both cities for you.",
+          "id": "msg-102",
+          "performance": {
+            "duration": 928,
+            "latency": 1173,
+            "tps": 48.5,
+            "ttft": 245
+          },
+          "tools": [
+            {
+              "id": "tool-sf",
+              "identifier": "weather",
+              "apiName": "getWeather",
+              "arguments": "{\"city\":\"San Francisco\"}",
+              "type": "default",
+              "result": {
+                "content": "{\"location\": \"San Francisco, CA\", \"temperature\": 18, \"conditions\": \"Partly Cloudy\", \"humidity\": 72, \"wind_speed\": 15}",
+                "id": "msg-103",
+                "state": {
+                  "cached": false,
+                  "executionTime": 234
+                }
+              },
+              "result_msg_id": "msg-103"
+            },
+            {
+              "id": "tool-bj",
+              "identifier": "weather",
+              "apiName": "getWeather",
+              "arguments": "{\"city\":\"Beijing\"}",
+              "type": "default",
+              "result": {
+                "content": "{\"location\": \"Beijing, China\", \"temperature\": 12, \"conditions\": \"Clear\", \"humidity\": 45, \"wind_speed\": 8}",
+                "id": "msg-104",
+                "state": {
+                  "cached": false,
+                  "executionTime": 189
+                }
+              },
+              "result_msg_id": "msg-104"
+            }
+          ],
+          "usage": {
+            "cost": 0.000219,
+            "totalInputTokens": 28,
+            "totalOutputTokens": 45,
+            "totalTokens": 73
+          },
+          "metadata": {
+            "collapsed": true
+          }
+        },
+        {
+          "content": "Let me also check the forecast for tomorrow to give you a better comparison.",
+          "id": "msg-105",
+          "performance": {
+            "duration": 875,
+            "latency": 1053,
+            "tps": 48,
+            "ttft": 178
+          },
+          "tools": [
+            {
+              "id": "tool-sf-forecast",
+              "identifier": "weather",
+              "apiName": "getForecast",
+              "arguments": "{\"city\":\"San Francisco\",\"days\":1}",
+              "type": "default",
+              "result": {
+                "content": "{\"location\": \"San Francisco, CA\", \"date\": \"2024-01-02\", \"high\": 20, \"low\": 14, \"conditions\": \"Sunny\"}",
+                "id": "msg-106",
+                "state": {
+                  "cached": false,
+                  "executionTime": 198
+                }
+              },
+              "result_msg_id": "msg-106"
+            },
+            {
+              "id": "tool-bj-forecast",
+              "identifier": "weather",
+              "apiName": "getForecast",
+              "arguments": "{\"city\":\"Beijing\",\"days\":1}",
+              "type": "default",
+              "result": {
+                "content": "{\"location\": \"Beijing, China\", \"date\": \"2024-01-02\", \"high\": 15, \"low\": 8, \"conditions\": \"Partly Cloudy\"}",
+                "id": "msg-107",
+                "state": {
+                  "cached": false,
+                  "executionTime": 176
+                }
+              },
+              "result_msg_id": "msg-107"
+            }
+          ],
+          "usage": {
+            "cost": 0.000594,
+            "totalInputTokens": 156,
+            "totalOutputTokens": 42,
+            "totalTokens": 198
+          }
+        },
+        {
+          "content": "Based on both current weather and tomorrow's forecast:\n\n**Today:**\n- San Francisco: 18°C, partly cloudy\n- Beijing: 12°C, clear\n\n**Tomorrow:**\n- San Francisco: High 20°C / Low 14°C, sunny\n- Beijing: High 15°C / Low 8°C, partly cloudy\n\nSan Francisco will have pleasant sunny weather tomorrow with a slight temperature increase. Beijing will see some clouds moving in but will still be cooler overall.",
+          "id": "msg-108",
+          "performance": {
+            "duration": 2074,
+            "latency": 2239,
+            "tps": 54,
+            "ttft": 165
+          },
+          "usage": {
+            "cost": 0.001071,
+            "totalInputTokens": 245,
+            "totalOutputTokens": 112,
+            "totalTokens": 357
+          }
+        }
+      ],
+      "performance": {
+        "ttft": 245,
+        "duration": 3877,
+        "latency": 4465,
+        "tps": 51.3283466597885
+      },
+      "usage": {
+        "totalInputTokens": 429,
+        "totalOutputTokens": 199,
+        "totalTokens": 628,
+        "cost": 0.0018839999999999998
+      },
+      "metadata": {
+        "collapsed": true
+      }
+    }
+  ],
+  "messageMap": {
+    "msg-101": {
+      "id": "msg-101",
+      "role": "user",
+      "content": "What's the weather like in San Francisco and Beijing today?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000
+    },
+    "msg-102": {
+      "id": "msg-102",
+      "role": "assistant",
+      "content": "Let me check the current weather conditions in both cities for you.",
+      "parentId": "msg-101",
+      "tools": [
+        {
+          "id": "tool-sf",
+          "identifier": "weather",
+          "apiName": "getWeather",
+          "arguments": "{\"city\":\"San Francisco\"}",
+          "type": "default"
+        },
+        {
+          "id": "tool-bj",
+          "identifier": "weather",
+          "apiName": "getWeather",
+          "arguments": "{\"city\":\"Beijing\"}",
+          "type": "default"
+        }
+      ],
+      "createdAt": 1704067202000,
+      "updatedAt": 1704067202000,
+      "metadata": {
+        "totalInputTokens": 28,
+        "totalOutputTokens": 45,
+        "totalTokens": 73,
+        "cost": 0.000219,
+        "tps": 48.5,
+        "ttft": 245,
+        "duration": 928,
+        "latency": 1173
+      }
+    },
+    "msg-103": {
+      "id": "msg-103",
+      "role": "tool",
+      "tool_call_id": "tool-sf",
+      "content": "{\"location\": \"San Francisco, CA\", \"temperature\": 18, \"conditions\": \"Partly Cloudy\", \"humidity\": 72, \"wind_speed\": 15}",
+      "pluginState": {
+        "cached": false,
+        "executionTime": 234
+      },
+      "parentId": "msg-102",
+      "createdAt": 1704067203000,
+      "updatedAt": 1704067203000
+    },
+    "msg-104": {
+      "id": "msg-104",
+      "role": "tool",
+      "tool_call_id": "tool-bj",
+      "content": "{\"location\": \"Beijing, China\", \"temperature\": 12, \"conditions\": \"Clear\", \"humidity\": 45, \"wind_speed\": 8}",
+      "pluginState": {
+        "cached": false,
+        "executionTime": 189
+      },
+      "parentId": "msg-102",
+      "createdAt": 1704067203100,
+      "updatedAt": 1704067203100
+    },
+    "msg-105": {
+      "id": "msg-105",
+      "role": "assistant",
+      "content": "Let me also check the forecast for tomorrow to give you a better comparison.",
+      "parentId": "msg-103",
+      "tools": [
+        {
+          "id": "tool-sf-forecast",
+          "identifier": "weather",
+          "apiName": "getForecast",
+          "arguments": "{\"city\":\"San Francisco\",\"days\":1}",
+          "type": "default"
+        },
+        {
+          "id": "tool-bj-forecast",
+          "identifier": "weather",
+          "apiName": "getForecast",
+          "arguments": "{\"city\":\"Beijing\",\"days\":1}",
+          "type": "default"
+        }
+      ],
+      "createdAt": 1704067205000,
+      "updatedAt": 1704067205000,
+      "metadata": {
+        "totalInputTokens": 156,
+        "totalOutputTokens": 42,
+        "totalTokens": 198,
+        "cost": 0.000594,
+        "tps": 48,
+        "ttft": 178,
+        "duration": 875,
+        "latency": 1053
+      }
+    },
+    "msg-106": {
+      "id": "msg-106",
+      "role": "tool",
+      "tool_call_id": "tool-sf-forecast",
+      "content": "{\"location\": \"San Francisco, CA\", \"date\": \"2024-01-02\", \"high\": 20, \"low\": 14, \"conditions\": \"Sunny\"}",
+      "pluginState": {
+        "cached": false,
+        "executionTime": 198
+      },
+      "parentId": "msg-105",
+      "createdAt": 1704067206000,
+      "updatedAt": 1704067206000
+    },
+    "msg-107": {
+      "id": "msg-107",
+      "role": "tool",
+      "tool_call_id": "tool-bj-forecast",
+      "content": "{\"location\": \"Beijing, China\", \"date\": \"2024-01-02\", \"high\": 15, \"low\": 8, \"conditions\": \"Partly Cloudy\"}",
+      "pluginState": {
+        "cached": false,
+        "executionTime": 176
+      },
+      "parentId": "msg-105",
+      "createdAt": 1704067206100,
+      "updatedAt": 1704067206100
+    },
+    "msg-108": {
+      "id": "msg-108",
+      "role": "assistant",
+      "content": "Based on both current weather and tomorrow's forecast:\n\n**Today:**\n- San Francisco: 18°C, partly cloudy\n- Beijing: 12°C, clear\n\n**Tomorrow:**\n- San Francisco: High 20°C / Low 14°C, sunny\n- Beijing: High 15°C / Low 8°C, partly cloudy\n\nSan Francisco will have pleasant sunny weather tomorrow with a slight temperature increase. Beijing will see some clouds moving in but will still be cooler overall.",
+      "parentId": "msg-106",
+      "createdAt": 1704067208000,
+      "updatedAt": 1704067208000,
+      "metadata": {
+        "totalInputTokens": 245,
+        "totalOutputTokens": 112,
+        "totalTokens": 357,
+        "cost": 0.001071,
+        "tps": 54,
+        "ttft": 165,
+        "duration": 2074,
+        "latency": 2239
+      }
+    }
+  }
+}

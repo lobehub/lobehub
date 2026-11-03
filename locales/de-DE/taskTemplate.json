@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "Verbinden mit {{provider}}",
+  "action.connect.error": "Verbindung fehlgeschlagen, bitte versuchen Sie es erneut.",
+  "action.connect.popupBlocked": "Verbindungspopup blockiert. Erlauben Sie Popups in Ihrem Browser, um fortzufahren.",
+  "action.connect.short": "Verbinden",
+  "action.connecting": "Warten auf Autorisierung…",
+  "action.create.error": "Aufgabe konnte nicht erstellt werden. Bitte versuchen Sie es erneut.",
+  "action.create.success": "Geplante Aufgabe hinzugefügt. Finden Sie sie in Lobe AI.",
+  "action.createButton": "Aufgabe hinzufügen",
+  "action.creating": "Erstellen...",
+  "action.dismiss.error": "Konnte nicht verworfen werden. Bitte versuchen Sie es erneut.",
+  "action.dismiss.tooltip": "Nicht interessiert",
+  "action.refresh.button": "Aktualisieren",
+  "card.templateTag": "Vorlage",
+  "schedule.daily": "Jeden Tag um {{time}}",
+  "schedule.editableAfterCreateTooltip": "Sie können den Zeitplan nach der Erstellung der Aufgabe anpassen.",
+  "schedule.weekly": "Jeden {{weekday}} um {{time}}",
+  "section.title": "Probieren Sie diese geplanten Aufgaben aus"
+}

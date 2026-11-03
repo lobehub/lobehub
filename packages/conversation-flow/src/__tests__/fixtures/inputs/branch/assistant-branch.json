@@ -1,0 +1,89 @@
+[
+  {
+    "id": "msg-401",
+    "role": "user",
+    "content": "Can you help me write a function to calculate fibonacci?",
+    "parentId": null,
+    "createdAt": 1704067200000,
+    "updatedAt": 1704067200000
+  },
+  {
+    "id": "msg-402",
+    "role": "assistant",
+    "content": "I'll help you write a fibonacci function.",
+    "parentId": "msg-401",
+    "createdAt": 1704067202000,
+    "updatedAt": 1704067202000,
+    "metadata": {
+      "totalInputTokens": 15,
+      "totalOutputTokens": 12,
+      "totalTokens": 27,
+      "cost": 0.00008,
+      "activeBranchIndex": 1
+    }
+  },
+  {
+    "id": "msg-403",
+    "role": "assistant",
+    "content": "Here's a recursive implementation:\n\n```python\ndef fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)\n```",
+    "parentId": "msg-402",
+    "createdAt": 1704067205000,
+    "updatedAt": 1704067205000,
+    "metadata": {
+      "totalInputTokens": 30,
+      "totalOutputTokens": 45,
+      "totalTokens": 75,
+      "cost": 0.00022
+    }
+  },
+  {
+    "id": "msg-404",
+    "role": "assistant",
+    "content": "Here's an iterative approach which is more efficient:\n\n```python\ndef fibonacci(n):\n    if n <= 1:\n        return n\n    a, b = 0, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b\n```",
+    "parentId": "msg-402",
+    "createdAt": 1704067205100,
+    "updatedAt": 1704067205100,
+    "metadata": {
+      "totalInputTokens": 30,
+      "totalOutputTokens": 52,
+      "totalTokens": 82,
+      "cost": 0.00025
+    }
+  },
+  {
+    "id": "msg-405",
+    "role": "assistant",
+    "content": "Let me show you a dynamic programming solution:\n\n```python\ndef fibonacci(n):\n    if n <= 1:\n        return n\n    dp = [0, 1]\n    for i in range(2, n + 1):\n        dp.append(dp[i-1] + dp[i-2])\n    return dp[n]\n```",
+    "parentId": "msg-402",
+    "createdAt": 1704067205200,
+    "updatedAt": 1704067205200,
+    "metadata": {
+      "totalInputTokens": 30,
+      "totalOutputTokens": 58,
+      "totalTokens": 88,
+      "cost": 0.00026
+    }
+  },
+  {
+    "id": "msg-406",
+    "role": "user",
+    "content": "The iterative approach looks good! Can you add some comments?",
+    "parentId": "msg-404",
+    "createdAt": 1704067215000,
+    "updatedAt": 1704067215000
+  },
+  {
+    "id": "msg-407",
+    "role": "assistant",
+    "content": "Sure! Here's the commented version:\n\n```python\ndef fibonacci(n):\n    # Base cases\n    if n <= 1:\n        return n\n    \n    # Initialize first two fibonacci numbers\n    a, b = 0, 1\n    \n    # Iterate from 2 to n\n    for _ in range(2, n + 1):\n        # Calculate next fibonacci number\n        a, b = b, a + b\n    \n    return b\n```",
+    "parentId": "msg-406",
+    "createdAt": 1704067217000,
+    "updatedAt": 1704067217000,
+    "metadata": {
+      "totalInputTokens": 95,
+      "totalOutputTokens": 78,
+      "totalTokens": 173,
+      "cost": 0.00052
+    }
+  }
+]

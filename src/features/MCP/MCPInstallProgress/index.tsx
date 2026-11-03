@@ -1,0 +1,118 @@
+import { cssVar, Flexbox, Progress, Text } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
+import * as m from 'motion/react-m';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useToolStore } from '@/store/tool';
+import { mcpStoreSelectors } from '@/store/tool/selectors';
+import { MCPInstallStep } from '@/types/plugins';
+
+import InstallError from './InstallError';
+import MCPConfigForm from './MCPConfigForm';
+import MCPDependenciesGuide from './MCPDependenciesGuide';
+import { MCPOAuthAuthorization } from './MCPOAuthAuthorization';
+
+const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
+  const { t } = useTranslation('plugin');
+  const installProgress = useToolStore(
+    mcpStoreSelectors.getMCPInstallProgress(identifier),
+    isEqual,
+  );
+
+  const stepText = installProgress ? t(`mcpInstall.${installProgress.step}` as any) : undefined;
+  const needsConfig = installProgress?.needsConfig;
+  const needsDependencies = installProgress?.step === MCPInstallStep.DEPENDENCIES_REQUIRED;
+  const hasError = installProgress?.step === MCPInstallStep.ERROR;
+  const errorInfo = installProgress?.errorInfo;
+  const needsAuthorization = installProgress?.step === MCPInstallStep.AUTHORIZATION_REQUIRED;
+
+  return (
+    <>
+      {needsAuthorization && (
+        <MCPOAuthAuthorization error={errorInfo?.message} identifier={identifier} />
+      )}
+      {installProgress && !hasError && !needsDependencies && !needsAuthorization && (
+        <m.div
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          initial={{ height: 0, opacity: 0 }}
+          transition={{
+            duration: 0.3,
+            ease: [0.4, 0, 0.2, 1],
+            height: { duration: 0.2 },
+          }}
+        >
+          <Flexbox paddingBlock={4}>
+            <Progress
+              percent={installProgress.progress}
+              showInfo={false}
+              size="small"
+              status="active"
+              strokeColor={cssVar.geekblue}
+            />
+            {stepText && (
+              <Text fontSize={11} style={{ marginTop: 4 }} type={'secondary'}>
+                ({installProgress.progress}%) {stepText}
+              </Text>
+            )}
+          </Flexbox>
+        </m.div>
+      )}
+
+      {hasError && errorInfo && (
+        <m.div
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          initial={{ height: 0, opacity: 0 }}
+          transition={{
+            duration: 0.3,
+            ease: [0.4, 0, 0.2, 1],
+            height: { duration: 0.2 },
+          }}
+        >
+          <Flexbox paddingBlock={8}>
+            <InstallError errorInfo={errorInfo} identifier={identifier} />
+          </Flexbox>
+        </m.div>
+      )}
+
+      {needsDependencies && installProgress?.systemDependencies && (
+        <m.div
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          initial={{ height: 0, opacity: 0 }}
+          transition={{
+            duration: 0.3,
+            ease: [0.4, 0, 0.2, 1],
+            height: { duration: 0.2 },
+          }}
+        >
+          <Flexbox paddingInline={12}>
+            <MCPDependenciesGuide
+              identifier={identifier}
+              systemDependencies={installProgress.systemDependencies}
+            />
+          </Flexbox>
+        </m.div>
+      )}
+
+      {needsConfig && installProgress && (
+        <m.div
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          initial={{ height: 0, opacity: 0 }}
+          transition={{
+            duration: 0.3,
+            ease: [0.4, 0, 0.2, 1],
+            height: { duration: 0.2 },
+          }}
+        >
+          <MCPConfigForm configSchema={installProgress.configSchema} identifier={identifier} />
+        </m.div>
+      )}
+    </>
+  );
+});
+
+export default MCPInstallProgress;

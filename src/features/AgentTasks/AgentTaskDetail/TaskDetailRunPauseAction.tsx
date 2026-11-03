@@ -1,0 +1,258 @@
+import { Button, Flexbox, SplitButton, Text, toast } from '@lobehub/ui';
+import { CalendarOffIcon, PlayIcon, RotateCcwIcon } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import StopLoadingIcon from '@/components/StopLoading';
+import { usePermission } from '@/hooks/usePermission';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useTaskStore } from '@/store/task';
+import { taskDetailSelectors } from '@/store/task/selectors';
+
+import { nextHeartbeatFiring, nextScheduleFiring } from './scheduler/helpers';
+
+const padTime = (n: number) => String(n).padStart(2, '0');
+
+export type CountdownDisplay =
+  { countdown: string; type: 'time' } | { days: number; hours: number; type: 'days' };
+
+export const formatCountdown = (msRemaining: number): CountdownDisplay => {
+  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
+  const days = Math.floor(totalSeconds / 86_400);
+  if (days > 0) {
+    return { days, hours: Math.floor((totalSeconds % 86_400) / 3600), type: 'days' };
+  }
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const countdown =
+    hours > 0
+      ? `${padTime(hours)}:${padTime(minutes)}:${padTime(seconds)}`
+      : `${padTime(minutes)}:${padTime(seconds)}`;
+
+  return { countdown, type: 'time' };
+};
+
+export const shouldPersistFallbackAssignee = (
+  assigneeAgentId?: string | null,
+  assigneeUserId?: string | null,
+  inboxAgentId?: string | null,
+) => !assigneeAgentId && !assigneeUserId && !!inboxAgentId;
+
+const TaskDetailRunPauseAction = memo(() => {
+  const { t } = useTranslation('chat');
+  const { allowed: canEditTask, reason } = usePermission('create_content');
+  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const canRun = useTaskStore(taskDetailSelectors.canRunActiveTask);
+  const canPause = useTaskStore(taskDetailSelectors.canPauseActiveTask);
+  const status = useTaskStore(taskDetailSelectors.activeTaskStatus);
+  const detail = useTaskStore(taskDetailSelectors.activeTaskDetail);
+  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
+  const interval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
+  const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
+  const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
+  const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isRerun = status === 'completed';
+  const isArchived = !!useTaskStore(taskDetailSelectors.activeTaskArchivedAt);
+  const runTask = useTaskStore((s) => s.runTask);
+  const updateTask = useTaskStore((s) => s.updateTask);
+  const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
+  const setAutomationMode = useTaskStore((s) => s.setAutomationMode);
+
+  const [isStarting, setIsStarting] = useState(false);
+  const [isCancellingSchedule, setIsCancellingSchedule] = useState(false);
+  const [isRunningNow, setIsRunningNow] = useState(false);
+
+  const handleRunOrPause = useCallback(async () => {
+    if (!canEditTask) return;
+    if (!taskId) return;
+    if (canPause) {
+      await updateTaskStatus(taskId, 'paused');
+      return;
+    }
+    if (!canRun) return;
+    // Archived tasks are hidden from lists; the server refuses to run them.
+    if (isArchived) {
+      toast.info(t('taskList.contextMenu.runArchivedBlocked'));
+      return;
+    }
+    setIsStarting(true);
+    try {
+      if (shouldPersistFallbackAssignee(assigneeAgentId, assigneeUserId, inboxAgentId)) {
+        await updateTask(taskId, { assigneeAgentId: inboxAgentId });
+      }
+      await runTask(taskId);
+    } finally {
+      setIsStarting(false);
+    }
+  }, [
+    taskId,
+    canRun,
+    canPause,
+    isArchived,
+    t,
+    assigneeAgentId,
+    assigneeUserId,
+    inboxAgentId,
+    runTask,
+    updateTask,
+    updateTaskStatus,
+    canEditTask,
+  ]);
+
+  const handleRunNow = useCallback(async () => {
+    if (!canEditTask) return;
+    if (!taskId) return;
+    if (isArchived) {
+      toast.info(t('taskList.contextMenu.runArchivedBlocked'));
+      return;
+    }
+    setIsRunningNow(true);
+    try {
+      if (shouldPersistFallbackAssignee(assigneeAgentId, assigneeUserId, inboxAgentId)) {
+        await updateTask(taskId, { assigneeAgentId: inboxAgentId });
+      }
+      await runTask(taskId);
+    } finally {
+      setIsRunningNow(false);
+    }
+  }, [
+    canEditTask,
+    taskId,
+    isArchived,
+    t,
+    assigneeAgentId,
+    assigneeUserId,
+    inboxAgentId,
+    runTask,
+    updateTask,
+  ]);
+
+  const handleCancelSchedule = useCallback(async () => {
+    if (!canEditTask) return;
+    if (!taskId) return;
+    setIsCancellingSchedule(true);
+    try {
+      await setAutomationMode(taskId, null);
+      if (status === 'scheduled') {
+        await updateTaskStatus(taskId, 'backlog');
+      }
+    } finally {
+      setIsCancellingSchedule(false);
+    }
+  }, [canEditTask, taskId, setAutomationMode, updateTaskStatus, status]);
+
+  const isScheduled = status === 'scheduled';
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isScheduled) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isScheduled]);
+
+  const countdownText = useMemo(() => {
+    if (!isScheduled) return null;
+    let next = null;
+    if (automationMode === 'heartbeat') {
+      next = nextHeartbeatFiring(
+        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
+        interval,
+      );
+    } else if (automationMode === 'schedule' && schedulePattern) {
+      next = nextScheduleFiring(schedulePattern, scheduleTimezone);
+    }
+    if (!next) return null;
+    return formatCountdown(next.toDate().getTime() - nowMs);
+  }, [
+    isScheduled,
+    automationMode,
+    detail?.heartbeat?.lastAt,
+    detail?.heartbeat?.scheduledAt,
+    interval,
+    schedulePattern,
+    scheduleTimezone,
+    nowMs,
+  ]);
+
+  if (isScheduled) {
+    return (
+      <Flexbox horizontal align={'center'} gap={12}>
+        <SplitButton disabled={!canEditTask || isCancellingSchedule} loading={isRunningNow}>
+          <SplitButton.Main
+            disabled={!canEditTask || isRunningNow}
+            icon={CalendarOffIcon}
+            loading={isCancellingSchedule}
+            title={canEditTask ? undefined : reason}
+            onClick={handleCancelSchedule}
+          >
+            {t('taskDetail.cancelSchedule')}
+          </SplitButton.Main>
+          <SplitButton.Menu
+            items={[
+              {
+                disabled: !canEditTask || isRunningNow || isCancellingSchedule,
+                icon: PlayIcon,
+                key: 'runNow',
+                label: t('taskDetail.runNow'),
+                onClick: handleRunNow,
+              },
+            ]}
+          />
+        </SplitButton>
+        {countdownText && (
+          <Text fontSize={12} type={'secondary'}>
+            {countdownText.type === 'days'
+              ? t('taskDetail.nextRunCountdownDays', countdownText)
+              : t('taskDetail.nextRunCountdown', countdownText)}
+          </Text>
+        )}
+      </Flexbox>
+    );
+  }
+
+  if (!canRun && !canPause && !isStarting) return null;
+
+  if (isStarting) {
+    const pendingLabel = isRerun ? t('taskDetail.rerunTask') : t('taskDetail.runTask');
+    return (
+      <Button disabled loading type={'primary'}>
+        {pendingLabel}
+      </Button>
+    );
+  }
+
+  if (canPause) {
+    return (
+      <Button
+        disabled={!canEditTask}
+        icon={StopLoadingIcon}
+        title={reason}
+        onClick={handleRunOrPause}
+      >
+        {t('taskDetail.stopTask')}
+      </Button>
+    );
+  }
+
+  const runLabel = isRerun ? t('taskDetail.rerunTask') : t('taskDetail.runTask');
+  const runIcon = isRerun ? RotateCcwIcon : PlayIcon;
+
+  return (
+    <Button
+      disabled={!canEditTask}
+      icon={runIcon}
+      title={canEditTask ? undefined : reason}
+      type={'primary'}
+      onClick={handleRunOrPause}
+    >
+      {runLabel}
+    </Button>
+  );
+});
+
+export default TaskDetailRunPauseAction;

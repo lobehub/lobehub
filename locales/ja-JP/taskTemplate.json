@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "{{provider}}に接続",
+  "action.connect.error": "接続に失敗しました。もう一度お試しください。",
+  "action.connect.popupBlocked": "接続ポップアップがブロックされました。続行するには、ブラウザでポップアップを許可してください。",
+  "action.connect.short": "接続",
+  "action.connecting": "認証を待っています…",
+  "action.create.error": "タスクの作成に失敗しました。もう一度お試しください。",
+  "action.create.success": "スケジュールされたタスクが追加されました。Lobe AIで確認してください。",
+  "action.createButton": "タスクを追加",
+  "action.creating": "作成中...",
+  "action.dismiss.error": "却下に失敗しました。もう一度お試しください。",
+  "action.dismiss.tooltip": "興味がありません",
+  "action.refresh.button": "更新",
+  "card.templateTag": "テンプレート",
+  "schedule.daily": "毎日{{time}}",
+  "schedule.editableAfterCreateTooltip": "タスク作成後にスケジュールを調整できます。",
+  "schedule.weekly": "毎週{{weekday}} {{time}}",
+  "section.title": "これらのスケジュールされたタスクを試してください"
+}

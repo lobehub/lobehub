@@ -1,0 +1,20 @@
+{
+  "name": "@lobechat/editor-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/prompts": "workspace:*"
+  },
+  "devDependencies": {
+    "lexical": "0.42.0"
+  },
+  "peerDependencies": {
+    "@lobehub/editor": "^7.0.0",
+    "debug": "*",
+    "lexical": "*"
+  }
+}

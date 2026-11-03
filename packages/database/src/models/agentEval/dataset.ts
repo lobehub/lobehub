@@ -1,0 +1,181 @@
+import { and, asc, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+
+import { agentEvalDatasets, agentEvalTestCases, type NewAgentEvalDataset } from '../../schemas';
+import { type LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
+
+interface QueryDatasetsFilters {
+  benchmarkId?: string;
+  benchmarkIds?: string[];
+  sourceExperimentId?: string;
+}
+
+export class AgentEvalDatasetModel {
+  private userId: string;
+  private db: LobeChatDatabase;
+  private workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+  }
+
+  /** Includes system datasets (`userId IS NULL`) on read. */
+  private ownership = () =>
+    or(
+      buildWorkspaceWhere(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        agentEvalDatasets,
+      ),
+      isNull(agentEvalDatasets.userId),
+    );
+
+  /** Mutate-only predicate excluding system rows. */
+  private mutableOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentEvalDatasets);
+
+  /**
+   * Create a new dataset
+   */
+  create = async (params: NewAgentEvalDataset) => {
+    const [result] = await this.db
+      .insert(agentEvalDatasets)
+      .values({ ...params, userId: this.userId, workspaceId: this.workspaceId ?? null })
+      .returning();
+    return result;
+  };
+
+  /**
+   * Delete a dataset by id
+   */
+  delete = async (id: string) => {
+    return this.db
+      .delete(agentEvalDatasets)
+      .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()));
+  };
+
+  /**
+   * Query datasets (system + user/workspace-owned) with test case counts
+   * @param filters - Optional benchmark / experiment filters
+   */
+  query = async (filters?: QueryDatasetsFilters) => {
+    const { benchmarkId, benchmarkIds, sourceExperimentId } = filters || {};
+    const conditions = [this.ownership()];
+
+    if (benchmarkId) {
+      conditions.push(eq(agentEvalDatasets.benchmarkId, benchmarkId));
+    }
+
+    if (benchmarkIds && benchmarkIds.length > 0) {
+      conditions.push(inArray(agentEvalDatasets.benchmarkId, benchmarkIds));
+    }
+
+    if (sourceExperimentId) {
+      conditions.push(eq(agentEvalDatasets.sourceExperimentId, sourceExperimentId));
+      // Scoped subsets are experiment-owned; exclude system rows from this scope.
+      conditions.push(this.mutableOwnership());
+    }
+
+    return this.db
+      .select({
+        benchmarkId: agentEvalDatasets.benchmarkId,
+        createdAt: agentEvalDatasets.createdAt,
+        description: agentEvalDatasets.description,
+        evalConfig: agentEvalDatasets.evalConfig,
+        evalMode: agentEvalDatasets.evalMode,
+        id: agentEvalDatasets.id,
+        identifier: agentEvalDatasets.identifier,
+        metadata: agentEvalDatasets.metadata,
+        name: agentEvalDatasets.name,
+        sourceExperimentId: agentEvalDatasets.sourceExperimentId,
+        testCaseCount: count(agentEvalTestCases.id).as('testCaseCount'),
+        updatedAt: agentEvalDatasets.updatedAt,
+        userId: agentEvalDatasets.userId,
+      })
+      .from(agentEvalDatasets)
+      .leftJoin(agentEvalTestCases, eq(agentEvalDatasets.id, agentEvalTestCases.datasetId))
+      .where(and(...conditions))
+      .groupBy(agentEvalDatasets.id)
+      .orderBy(desc(agentEvalDatasets.createdAt));
+  };
+
+  /**
+   * Read-only paginated list (system + user/workspace-owned), without the
+   * test-case join used by `query`
+   */
+  queryList = async (filter?: { benchmarkId?: string; limit?: number; offset?: number }) => {
+    const conditions = [this.ownership()];
+
+    if (filter?.benchmarkId) {
+      conditions.push(eq(agentEvalDatasets.benchmarkId, filter.benchmarkId));
+    }
+
+    const query = this.db
+      .select()
+      .from(agentEvalDatasets)
+      .where(and(...conditions))
+      .orderBy(desc(agentEvalDatasets.createdAt))
+      .$dynamic();
+
+    if (filter?.limit !== undefined) {
+      query.limit(filter.limit);
+    }
+
+    if (filter?.offset !== undefined) {
+      query.offset(filter.offset);
+    }
+
+    return query;
+  };
+
+  /**
+   * Count datasets (system + user/workspace-owned) with the same predicates as `queryList`
+   */
+  count = async (filter?: { benchmarkId?: string }) => {
+    const conditions = [this.ownership()];
+
+    if (filter?.benchmarkId) {
+      conditions.push(eq(agentEvalDatasets.benchmarkId, filter.benchmarkId));
+    }
+
+    const result = await this.db
+      .select({ value: count() })
+      .from(agentEvalDatasets)
+      .where(and(...conditions));
+    return Number(result[0]?.value) || 0;
+  };
+
+  /**
+   * Find dataset by id (with test cases)
+   */
+  findById = async (id: string) => {
+    const [dataset] = await this.db
+      .select()
+      .from(agentEvalDatasets)
+      .where(and(eq(agentEvalDatasets.id, id), this.ownership()))
+      .limit(1);
+
+    if (!dataset) return undefined;
+
+    const testCases = await this.db
+      .select()
+      .from(agentEvalTestCases)
+      .where(eq(agentEvalTestCases.datasetId, id))
+      .orderBy(asc(agentEvalTestCases.sortOrder));
+
+    return { ...dataset, testCases };
+  };
+
+  /**
+   * Update dataset
+   */
+  update = async (id: string, value: Partial<NewAgentEvalDataset>) => {
+    const [result] = await this.db
+      .update(agentEvalDatasets)
+      .set({ ...value, updatedAt: new Date() })
+      .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()))
+      .returning();
+    return result;
+  };
+}

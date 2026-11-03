@@ -1,0 +1,50 @@
+import type { ConnectorToolPermission } from '@/database/schemas';
+
+export interface ConnectorTool {
+  crudType: string;
+  description: string | null;
+  displayName: string | null;
+  id: string;
+  inputSchema: Record<string, unknown> | null;
+  permission: ConnectorToolPermission;
+  toolName: string;
+  userConnectorId: string;
+}
+
+export interface ConnectorWithTools {
+  /** Set when this connector is fully owned by an agent (Copy / Connect-new). */
+  agentId?: string | null;
+  /**
+   * Attribution — avatar of the member who authorized this connector (the
+   * Composio account linker when present, else the row creator). Server-resolved
+   * so the profile can show "authorized by X" without a client member lookup.
+   */
+  authorizedByAvatar?: string | null;
+  /** Attribution — display name of the authorizing member. `null` if unknown. */
+  authorizedByName?: string | null;
+  credentials: unknown;
+  id: string;
+  identifier: string;
+  isEnabled: boolean;
+  mcpConnectionType: string | null;
+  mcpServerUrl: string | null;
+  metadata: Record<string, unknown> | null;
+  name: string;
+  sourceType: string;
+  status: string;
+  tools: ConnectorTool[];
+  /** Creator attribution — drives the workspace row-level manage gate. */
+  userId?: string | null;
+}
+
+/**
+ * An agent-owned connector as returned by `connector.listAgentBound`, enriched
+ * with the owning agent's display info for the unified settings attribution
+ * badge. Server-resolved so the page needs no per-agent loading.
+ */
+export interface AgentBoundConnector extends ConnectorWithTools {
+  agentAvatar: string | null;
+  /** Personal name; resolve the label with `agentDisplayName({ name, title })`. */
+  agentName: string | null;
+  agentTitle: string | null;
+}

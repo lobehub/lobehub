@@ -1,0 +1,603 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { srtSandboxRuntime } from '@lobechat/device-sandbox';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { ShellProcessManager } from '../process-manager';
+import { runCommand } from '../runner';
+
+describe('runCommand', () => {
+  let processManager: ShellProcessManager;
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lobehub-shell-runner-'));
+    processManager = new ShellProcessManager(tmpDir);
+  });
+
+  afterEach(async () => {
+    processManager.cleanupAll();
+    await srtSandboxRuntime.shutdown();
+    fs.rmSync(tmpDir, { force: true, recursive: true });
+  });
+
+  const waitFor = async (predicate: () => boolean, timeoutMs = 5_000): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (predicate()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return predicate();
+  };
+
+  const fallbackDirsIn = (root: string): string[] =>
+    fs.readdirSync(root).filter((name) => name.startsWith('lobehub-cwd-fallback-'));
+
+  describe('foreground observation mode', () => {
+    it('should execute a simple command and finish immediately', async () => {
+      const result = await runCommand({ command: 'echo hello' }, { processManager });
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('hello');
+      expect(result.exit_code).toBe(0);
+      expect(result.shell_id).toBeDefined();
+    });
+
+    it('should assign readable incremental shell IDs within a manager', async () => {
+      const localManager = new ShellProcessManager(tmpDir);
+
+      const first = await runCommand({ command: 'echo first' }, { processManager: localManager });
+      const second = await runCommand({ command: 'echo second' }, { processManager: localManager });
+
+      expect(first.shell_id).toMatch(/^sh-[\da-f]{6}-1$/);
+      expect(second.shell_id).toBe(first.shell_id!.replace(/-1$/, '-2'));
+      localManager.cleanupAll();
+    });
+
+    // Regression: shell ids were a bare per-process counter (`sh-1`, `sh-2`…),
+    // so when getCommandOutput reached a different device process than the one
+    // that ran the command (app restart, two device processes on one machine),
+    // the same id named an unrelated command there and its output came back.
+    it('should not resolve a shell ID issued by another process to its own command', async () => {
+      const processA = new ShellProcessManager(tmpDir);
+      const processB = new ShellProcessManager(tmpDir);
+
+      try {
+        const fromA = await runCommand({ command: 'echo from-A' }, { processManager: processA });
+        const fromB = await runCommand({ command: 'echo from-B' }, { processManager: processB });
+
+        expect(fromA.shell_id).not.toBe(fromB.shell_id);
+
+        const crossed = await processB.getOutput({ shell_id: fromA.shell_id!, timeout: 0 });
+
+        expect(crossed.stdout).not.toContain('from-B');
+        expect(crossed.success).toBe(false);
+        expect(crossed.error).toContain(`Shell ID ${fromA.shell_id} not found`);
+      } finally {
+        processA.cleanupAll();
+        processB.cleanupAll();
+      }
+    });
+
+    it('should capture stderr output separately', async () => {
+      const result = await runCommand({ command: 'echo error >&2' }, { processManager });
+
+      expect(result.stderr).toContain('error');
+    });
+
+    it('should handle command failure', async () => {
+      const result = await runCommand({ command: 'exit 1' }, { processManager });
+
+      expect(result.success).toBe(true);
+      expect(result.exit_code).toBe(1);
+    });
+
+    it('should handle command not found', async () => {
+      const result = await runCommand(
+        { command: 'nonexistent_command_xyz_123' },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.exit_code).not.toBe(0);
+    });
+
+    it('should return partial observation instead of killing long-running commands', async () => {
+      const result = await runCommand(
+        { command: 'sleep 1 && echo done', timeout: 100 },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.exit_code).toBeUndefined();
+      expect(result.shell_id).toBeDefined();
+    }, 10_000);
+
+    it('should strip ANSI codes from output', async () => {
+      const result = await runCommand(
+        { command: 'printf "\\033[31mred\\033[0m"' },
+        { processManager },
+      );
+
+      expect(result.stdout).not.toContain('\u001B');
+    });
+
+    it('should truncate very long output', async () => {
+      const result = await runCommand(
+        {
+          command: `python3 -c "print('x' * 100000)" 2>/dev/null || printf '%0.sx' $(seq 1 100000)`,
+        },
+        { processManager },
+      );
+
+      expect(result.stdout!.length).toBeLessThanOrEqual(85_000);
+    }, 15_000);
+
+    it('should pass cwd to command', async () => {
+      const result = await runCommand({ command: 'pwd', cwd: '/tmp' }, { processManager });
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('/tmp');
+    });
+
+    it('[R4] falls back and runs when the requested cwd is missing, naming the fallback', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo reachable && pwd', cwd: missingCwd },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.exit_code).toBe(0);
+      // Node blames the executable (`spawn /bin/sh ENOENT`) when cwd is missing,
+      // which sends the model off debugging a healthy shell.
+      expect(result.error ?? '').not.toMatch(/spawn \S+ ENOENT/);
+      // The fallback is reported, never silent: the model must be able to tell
+      // the command ran somewhere else than the cwd it asked for.
+      expect(result.stdout).toContain('Working directory does not exist');
+      expect(result.stdout).toContain(missingCwd);
+      expect(result.stdout).toContain('Falling back to');
+      // The fallback is an isolated directory under the temp root — never the
+      // user's home — so project-relative commands cannot damage real files.
+      expect(result.stdout).toContain('lobehub-cwd-fallback-');
+      // The command actually ran from the fallback directory.
+      expect(result.stdout).toContain('reachable');
+    });
+
+    it('falls back to a fresh empty directory under the temp root when the cwd is missing', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo temp-fallback && pwd', cwd: missingCwd },
+        {
+          processManager,
+          tmpdirOverride: tmpDir,
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('Falling back to');
+      expect(result.stdout).toContain('temp-fallback');
+      // Exactly one isolated fallback directory was created under the temp
+      // root, it is empty, and the run reported it by path.
+      const created = fs
+        .readdirSync(tmpDir)
+        .filter((name) => name.startsWith('lobehub-cwd-fallback-'));
+      expect(created).toHaveLength(1);
+      const fallbackDir = path.join(tmpDir, created[0]);
+      expect(fs.readdirSync(fallbackDir)).toEqual([]);
+      expect(result.stdout).toContain(`Falling back to ${fallbackDir}`);
+    });
+
+    it('keeps the structured error when the fallback directory cannot be created', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo unreachable', cwd: missingCwd },
+        {
+          processManager,
+          tmpdirOverride: path.join(tmpDir, 'missing-tmp-root'),
+        },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.exit_code).toBeUndefined();
+      expect(result.error).not.toMatch(/spawn \S+ ENOENT/);
+      expect(result.error).toContain(`Working directory does not exist on ${os.hostname()}`);
+      expect(result.error).toContain(missingCwd);
+      expect(result.error).toContain('The shell is fine');
+    });
+
+    it('does not fall back for a sandboxed run: the fence is built on the requested cwd', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo unreachable', cwd: missingCwd },
+        {
+          processManager,
+          sandboxPolicy: {
+            allowNetwork: false,
+            onUnavailable: 'deny',
+            writableRoots: [tmpDir],
+          },
+        },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.exit_code).toBeUndefined();
+      expect(result.error).toContain(`Working directory does not exist on ${os.hostname()}`);
+      expect(result.error).toContain(missingCwd);
+      expect(result.error).toContain('sandboxed run must start in its requested directory');
+    });
+
+    it('falls back when the requested cwd is a file, naming the real problem', async () => {
+      const fileCwd = path.join(tmpDir, 'a-file');
+      fs.writeFileSync(fileCwd, '');
+      const result = await runCommand(
+        { command: 'echo via-file-cwd', cwd: fileCwd },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('Working directory is not a directory');
+      expect(result.stdout).toContain('Falling back to');
+      expect(result.stdout).toContain('via-file-cwd');
+    });
+
+    it('removes the fallback directory once the foreground command closes', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo cleanup-foreground && pwd', cwd: missingCwd },
+        { processManager, tmpdirOverride: tmpDir },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('cleanup-foreground');
+      expect(fallbackDirsIn(tmpDir)).toHaveLength(1);
+      const removed = await waitFor(() => fallbackDirsIn(tmpDir).length === 0);
+      expect(removed).toBe(true);
+    });
+
+    it('removes the fallback directory once a background command closes', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const bg = await runCommand(
+        { command: 'echo cleanup-background && pwd', cwd: missingCwd, run_in_background: true },
+        { processManager, tmpdirOverride: tmpDir },
+      );
+
+      expect(bg.success).toBe(true);
+      expect(bg.shell_id).toBeDefined();
+      // While the command runs, the fallback directory exists.
+      expect(fallbackDirsIn(tmpDir)).toHaveLength(1);
+      const observed = await processManager.getOutput({ shell_id: bg.shell_id! });
+      expect(observed.stdout).toContain('cleanup-background');
+      const removed = await waitFor(() => fallbackDirsIn(tmpDir).length === 0);
+      expect(removed).toBe(true);
+    });
+
+    it('never creates a fallback directory when the requested cwd is usable', async () => {
+      const usableCwd = path.join(tmpDir, 'usable-cwd');
+      fs.mkdirSync(usableCwd);
+      const result = await runCommand(
+        { command: 'echo usable && pwd', cwd: usableCwd },
+        {
+          processManager,
+          tmpdirOverride: tmpDir,
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).not.toContain('Falling back to');
+      const removed = await waitFor(() => fallbackDirsIn(tmpDir).length === 0);
+      expect(removed).toBe(true);
+    });
+
+    it('should merge env into child process environment', async () => {
+      const result = await runCommand(
+        {
+          command: 'node -e "console.log(process.env.LOB_TEST_ENV_MERGE)"',
+          env: { LOB_TEST_ENV_MERGE: 'from-runner' },
+        },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('from-runner');
+    });
+
+    it('should keep the existing unsandboxed behavior when no sandbox policy is provided', async () => {
+      const target = path.join(tmpDir, 'default-path.txt');
+      const result = await runCommand(
+        {
+          command: `printf "%s" "$LOB_TEST_DEFAULT_PATH" > ${JSON.stringify(target)}`,
+          env: { LOB_TEST_DEFAULT_PATH: 'sandbox-disabled' },
+        },
+        { processManager },
+      );
+
+      expect(result).toMatchObject({ exit_code: 0, success: true });
+      expect(fs.readFileSync(target, 'utf8')).toBe('sandbox-disabled');
+      // An unsandboxed run must not look sandboxed to anything reading the
+      // result — that field is the only observable difference between "fenced"
+      // and "the request said fenced".
+      expect(result.sandboxed).toBeUndefined();
+    });
+
+    it.skipIf(process.platform !== 'darwin')(
+      'should execute through the device sandbox and reject writes outside its policy',
+      async () => {
+        const allowedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'local-shell-sandbox-allowed-'));
+        const deniedTarget = path.join(tmpDir, 'denied.txt');
+
+        try {
+          const result = await runCommand(
+            { command: `printf denied > ${JSON.stringify(deniedTarget)}` },
+            {
+              processManager,
+              sandboxPolicy: {
+                allowNetwork: false,
+                onUnavailable: 'deny',
+                writableRoots: [allowedRoot],
+              },
+            },
+          );
+
+          expect(result.success).toBe(true);
+          expect(result.exit_code).not.toBe(0);
+          expect(fs.existsSync(deniedTarget)).toBe(false);
+        } finally {
+          fs.rmSync(allowedRoot, { force: true, recursive: true });
+        }
+      },
+    );
+
+    it.skipIf(process.platform !== 'darwin')(
+      'should preserve output and hide non-allowlisted environment variables in the sandbox',
+      async () => {
+        const result = await runCommand(
+          {
+            command: 'printf "output:%s" "${LOB_TEST_SANDBOX_SECRET-unset}"',
+            env: { LOB_TEST_SANDBOX_SECRET: 'must-not-leak' },
+          },
+          {
+            processManager,
+            sandboxPolicy: {
+              allowNetwork: false,
+              onUnavailable: 'deny',
+              writableRoots: [tmpDir],
+            },
+          },
+        );
+
+        expect(result).toMatchObject({ exit_code: 0, success: true });
+        expect(result.stdout).toContain('output:unset');
+      },
+    );
+
+    it('should fail before spawn when a required sandbox backend is unavailable', async () => {
+      const result = await runCommand(
+        { command: 'echo should-not-run' },
+        {
+          processManager,
+          sandboxPolicy: {
+            allowNetwork: false,
+            onUnavailable: 'deny',
+            writableRoots: ['relative-root'],
+          },
+        },
+      );
+
+      expect(result).toMatchObject({ success: false });
+      expect(result.error).toContain('must be absolute');
+    });
+  });
+
+  describe('background mode', () => {
+    it('should run command in background and return a shell_id', async () => {
+      const result = await runCommand(
+        { command: 'echo background', run_in_background: true },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.shell_id).toBeDefined();
+      expect(result.exit_code).toBeUndefined();
+      expect(result.output_files?.stdout.path).toMatch(/sh-[\da-f]{6}-\d+\/stdout\.log$/);
+      expect(result.stdout).toBeUndefined();
+    });
+
+    it('should capture background process output', async () => {
+      const bgResult = await runCommand(
+        { command: 'echo hello && sleep 0.1', run_in_background: true },
+        { processManager },
+      );
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const output = await processManager.getOutput({ shell_id: bgResult.shell_id! });
+
+      expect(output.success).toBe(true);
+      expect(output.stdout).toContain('hello');
+    });
+
+    it('should return the latest tail snapshot on subsequent reads', async () => {
+      const bgResult = await runCommand(
+        { command: 'echo first && sleep 0.2 && echo second', run_in_background: true },
+        { processManager },
+      );
+
+      await new Promise((r) => setTimeout(r, 100));
+      const first = await processManager.getOutput({ shell_id: bgResult.shell_id!, timeout: 0 });
+      expect(first.stdout).toContain('first');
+
+      await new Promise((r) => setTimeout(r, 300));
+      const second = await processManager.getOutput({ shell_id: bgResult.shell_id!, timeout: 0 });
+      expect(second.stdout).toContain('second');
+    });
+
+    it.skipIf(process.platform !== 'darwin')(
+      'should preserve background execution through the device sandbox',
+      async () => {
+        const result = await runCommand(
+          { command: 'sleep 0.05 && echo sandbox-background', run_in_background: true },
+          {
+            processManager,
+            sandboxPolicy: {
+              allowNetwork: false,
+              onUnavailable: 'deny',
+              writableRoots: [tmpDir],
+            },
+          },
+        );
+
+        const output = await processManager.getOutput({ shell_id: result.shell_id! });
+        expect(output).toMatchObject({ exit_code: 0, success: true });
+        expect(output.stdout).toContain('sandbox-background');
+      },
+    );
+
+    it.skipIf(process.platform !== 'darwin')(
+      'should release the sandbox runtime after a background command is killed',
+      async () => {
+        const result = await runCommand(
+          { command: 'sleep 60', run_in_background: true },
+          {
+            processManager,
+            sandboxPolicy: {
+              allowNetwork: false,
+              onUnavailable: 'deny',
+              writableRoots: [tmpDir],
+            },
+          },
+        );
+
+        expect(processManager.kill(result.shell_id!).success).toBe(true);
+
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < 2000) {
+          const output = await processManager.getOutput({ shell_id: result.shell_id!, timeout: 0 });
+          if (output.exit_code !== undefined) break;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+
+        await expect(srtSandboxRuntime.shutdown()).resolves.toBeUndefined();
+      },
+      10_000,
+    );
+  });
+
+  describe('process management', () => {
+    it('should kill a background process', async () => {
+      const bgResult = await runCommand(
+        { command: 'sleep 60', run_in_background: true },
+        { processManager },
+      );
+
+      const result = processManager.kill(bgResult.shell_id!);
+      expect(result.success).toBe(true);
+    });
+
+    it.skipIf(process.platform === 'win32')(
+      'should kill nested background process tree',
+      async () => {
+        // Reproduce the orphaned-child case: the shell command keeps a nested
+        // writer alive that appends to a marker file. After kill(), the marker
+        // size must stop changing, proving the whole process tree was killed.
+        const markerPath = path.join(tmpDir, 'nested-process-marker.log');
+        const bgResult = await runCommand(
+          {
+            command: `sh -c 'while :; do printf "tick\\n" >> "$LOB_TEST_MARKER"; sleep 0.05; done'`,
+            env: { LOB_TEST_MARKER: markerPath },
+            run_in_background: true,
+          },
+          { processManager },
+        );
+
+        const startedAt = Date.now();
+        while (
+          Date.now() - startedAt < 2000 &&
+          (!fs.existsSync(markerPath) || fs.statSync(markerPath).size === 0)
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        expect(fs.existsSync(markerPath) && fs.statSync(markerPath).size > 0).toBe(true);
+
+        const result = processManager.kill(bgResult.shell_id!);
+        expect(result.success).toBe(true);
+
+        await new Promise((r) => setTimeout(r, 100));
+        const sizeAfterKill = fs.statSync(markerPath).size;
+
+        await new Promise((r) => setTimeout(r, 300));
+        expect(fs.statSync(markerPath).size).toBe(sizeAfterKill);
+      },
+      10_000,
+    );
+
+    it('should return error for unknown shell_id', async () => {
+      const result = await processManager.getOutput({ shell_id: 'unknown-id' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not found');
+    });
+
+    it('should return error when killing unknown shell_id', async () => {
+      const result = processManager.kill('unknown-id');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not found');
+    });
+
+    it('should support filter parameter', async () => {
+      const bgResult = await runCommand(
+        { command: 'echo "line1\nline2\nline3"', run_in_background: true },
+        { processManager },
+      );
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const output = await processManager.getOutput({
+        filter: 'line2',
+        shell_id: bgResult.shell_id!,
+      });
+
+      expect(output.success).toBe(true);
+      expect(output.stdout).toContain('line2');
+    });
+
+    it('should handle invalid filter regex', async () => {
+      const bgResult = await runCommand(
+        { command: 'echo test', run_in_background: true },
+        { processManager },
+      );
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const output = await processManager.getOutput({
+        filter: '[invalid',
+        shell_id: bgResult.shell_id!,
+      });
+
+      expect(output.success).toBe(true);
+    });
+
+    it('should track running state after completion', async () => {
+      const bgResult = await runCommand(
+        { command: 'sleep 0.05', run_in_background: true },
+        { processManager },
+      );
+
+      await new Promise((r) => setTimeout(r, 100));
+      const output = await processManager.getOutput({ shell_id: bgResult.shell_id! });
+      expect(output.exit_code).toBe(0);
+    });
+  });
+
+  it('should work with logger', async () => {
+    const mockLogger = { debug: () => {}, error: () => {}, info: () => {} };
+
+    const result = await runCommand(
+      { command: 'echo test', description: 'test' },
+      { logger: mockLogger, processManager },
+    );
+
+    expect(result.success).toBe(true);
+  });
+});

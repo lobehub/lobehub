@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`TextLoader > should load pages correctly 1`] = `
+{
+  "charCount": 25,
+  "lineCount": 3,
+  "metadata": {
+    "lineNumberEnd": 3,
+    "lineNumberStart": 1,
+  },
+  "pageContent": "Hello Text.
+Second Line.
+",
+}
+`;

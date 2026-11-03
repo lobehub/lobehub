@@ -1,0 +1,180 @@
+import { CredsApiName, CredsIdentifier } from '@lobechat/builtin-tool-creds';
+import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import {
+  UserInteractionApiName,
+  UserInteractionIdentifier,
+} from '@lobechat/builtin-tool-user-interaction';
+import {
+  WebOnboardingApiName,
+  WebOnboardingIdentifier,
+} from '@lobechat/builtin-tool-web-onboarding';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
+
+import {
+  isApprovalBackedInteraction,
+  isCustomInteractionIdentifier,
+  prepareCustomInteractionSubmit,
+  recordCustomInteractionResolution,
+  toApprovalDecision,
+} from './customInteractionHandlers';
+
+vi.mock('@/services/installMarketplaceAgents', () => ({
+  installMarketplaceAgents: vi.fn(),
+}));
+
+describe('customInteractionHandlers', () => {
+  const updateTopicMetadata = vi.fn();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-29T10:00:00.000Z'));
+    vi.mocked(installMarketplaceAgents).mockReset();
+    updateTopicMetadata.mockReset();
+    updateTopicMetadata.mockResolvedValue(undefined);
+  });
+
+  it('persists submitted marketplace picks to onboardingSession metadata', async () => {
+    vi.mocked(installMarketplaceAgents).mockResolvedValue({
+      installedAgentIds: ['agent-1'],
+      skippedAgentIds: ['template-existing'],
+      summaries: [
+        {
+          category: 'engineering',
+          description: 'A pair programmer',
+          installedAgentId: 'agent-1',
+          skipped: false,
+          templateId: 'template-1',
+          title: 'Pair Programmer',
+        },
+        { skipped: true, templateId: 'template-existing' },
+      ],
+    });
+
+    const result = await prepareCustomInteractionSubmit(
+      WebOnboardingIdentifier,
+      {
+        categoryHints: ['engineering'],
+        requestId: 'req-1',
+        selectedTemplateIds: ['template-1', 'template-existing'],
+      },
+      {
+        apiName: WebOnboardingApiName.showAgentMarketplace,
+        topicId: 'topic-1',
+        updateTopicMetadata,
+      },
+    );
+
+    expect(updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      onboardingSession: {
+        agentMarketplacePick: {
+          categoryHints: ['engineering'],
+          installedAgentIds: ['agent-1'],
+          requestId: 'req-1',
+          resolvedAt: '2026-04-29T10:00:00.000Z',
+          selectedTemplateIds: ['template-1', 'template-existing'],
+          skippedAgentIds: ['template-existing'],
+          status: 'submitted',
+        },
+        lastActiveAt: '2026-04-29T10:00:00.000Z',
+      },
+    });
+    expect(result.payload).toMatchObject({
+      installedAgentIds: ['agent-1'],
+      skippedAgentIds: ['template-existing'],
+    });
+    expect(result.options?.createUserMessage).toBe(false);
+  });
+
+  it.each([
+    [LobeAgentIdentifier, LobeAgentApiName.askUserQuestion],
+    [UserInteractionIdentifier, UserInteractionApiName.askUserQuestion],
+  ])('persists structured ask-user answers for %s', async (identifier, apiName) => {
+    const payload = {
+      'How broad should this pass be?': 'Focused',
+      'Which surfaces?': ['Chat', 'Settings'],
+      '__supplement__': 'Keep the existing behavior.',
+    };
+
+    const result = await prepareCustomInteractionSubmit(identifier, payload, { apiName });
+
+    expect(result).toEqual({
+      // createUserMessage must stay false: the completed tool card already
+      // renders the answers, so a synthetic user message would duplicate them
+      // in the client runtime.
+      options: { createUserMessage: false, pluginState: { askUserAnswers: payload } },
+      payload,
+    });
+  });
+
+  it.each(['devin', 'droid', 'opencode', 'qoder'])(
+    'routes %s tools through the heterogeneous custom flow',
+    (type) => {
+      expect(isCustomInteractionIdentifier(type, 'askUserQuestion')).toBe(true);
+    },
+  );
+
+  it('persists skipped marketplace picks from the original tool arguments', async () => {
+    await recordCustomInteractionResolution(
+      WebOnboardingIdentifier,
+      'skipped',
+      undefined,
+      {
+        apiName: WebOnboardingApiName.showAgentMarketplace,
+        requestArgs: {
+          categoryHints: ['design-creative'],
+          requestId: 'req-2',
+        },
+        topicId: 'topic-1',
+        updateTopicMetadata,
+      },
+      'not now',
+    );
+
+    expect(updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      onboardingSession: {
+        agentMarketplacePick: {
+          categoryHints: ['design-creative'],
+          requestId: 'req-2',
+          resolvedAt: '2026-04-29T10:00:00.000Z',
+          skipReason: 'not now',
+          status: 'skipped',
+        },
+        lastActiveAt: '2026-04-29T10:00:00.000Z',
+      },
+    });
+  });
+
+  describe('approval-backed forms (lobe-creds requestCredsInput)', () => {
+    it('renders as a custom form', () => {
+      expect(isApprovalBackedInteraction(CredsIdentifier, CredsApiName.requestCredsInput)).toBe(
+        true,
+      );
+      expect(isCustomInteractionIdentifier(CredsIdentifier, CredsApiName.requestCredsInput)).toBe(
+        true,
+      );
+      expect(isApprovalBackedInteraction(CredsIdentifier, CredsApiName.injectCredsToSandbox)).toBe(
+        false,
+      );
+    });
+
+    it('turns submit into a plain approval that drops the payload', () => {
+      const decision = toApprovalDecision({
+        payload: { OPENAI_API_KEY: 'sk-test-secret-value' },
+        type: 'submit',
+      });
+
+      expect(decision).toEqual({ type: 'approve' });
+      expect(JSON.stringify(decision)).not.toContain('sk-test-secret-value');
+    });
+
+    it('turns skip and cancel into reject-and-continue', () => {
+      expect(toApprovalDecision({ reason: 'not now', type: 'skip' })).toEqual({
+        reason: 'not now',
+        type: 'reject',
+      });
+      expect(toApprovalDecision({ type: 'cancel' })).toEqual({ reason: undefined, type: 'reject' });
+    });
+  });
+});

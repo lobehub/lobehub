@@ -1,0 +1,301 @@
+// @vitest-environment node
+import { ModelProvider } from 'model-bank';
+import OpenAI from 'openai';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { testProvider } from '../../providerTestUtils';
+import { AgentRuntimeErrorType } from '../../types/error';
+import type { SiliconCloudModelCard } from './index';
+import { LobeSiliconCloudAI } from './index';
+
+testProvider({
+  Runtime: LobeSiliconCloudAI,
+  provider: ModelProvider.SiliconCloud,
+  defaultBaseURL: 'https://api.siliconflow.cn/v1',
+  chatDebugEnv: 'DEBUG_SILICONCLOUD_CHAT_COMPLETION',
+  chatModel: 'Qwen/Qwen2.5-7B-Instruct',
+  invalidErrorType: 'InvalidProviderAPIKey',
+  bizErrorType: 'ProviderBizError',
+  test: {
+    skipAPICall: true,
+    skipErrorHandle: true,
+  },
+});
+
+describe('LobeSiliconCloudAI - custom features', () => {
+  let instance: InstanceType<typeof LobeSiliconCloudAI>;
+
+  beforeEach(() => {
+    instance = new LobeSiliconCloudAI({ apiKey: 'test_api_key' });
+    vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
+      new ReadableStream() as any,
+    );
+  });
+
+  describe('handlePayload', () => {
+    it('should limit max_tokens to 16384', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'Qwen/Qwen2.5-7B-Instruct',
+        max_tokens: 20000,
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.max_tokens).toBe(16384);
+    });
+
+    it('should ensure max_tokens is at least 1', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'Qwen/Qwen2.5-7B-Instruct',
+        max_tokens: 0,
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.max_tokens).toBe(1);
+    });
+
+    it('should handle thinking with enable_thinking for GLM-4.5 models', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'THUDM/GLM-4.5',
+        thinking: {
+          type: 'enabled',
+          budget_tokens: 1000,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.thinking_budget).toBe(1000);
+    });
+
+    it('should handle thinking with thinking_budget for Qwen3 models', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'Qwen/Qwen3-8B',
+        thinking: {
+          type: 'enabled',
+          budget_tokens: 2000,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.thinking_budget).toBe(2000);
+    });
+
+    it('should handle thinking with thinking_budget for DeepSeek-V3.1', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-ai/DeepSeek-V3.1',
+        thinking: {
+          type: 'enabled',
+          budget_tokens: 3000,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.thinking_budget).toBe(3000);
+    });
+
+    it('should limit thinking_budget to 32768', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'THUDM/GLM-4.5',
+        thinking: {
+          type: 'enabled',
+          budget_tokens: 50000,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.thinking_budget).toBe(32768);
+    });
+
+    it('should set thinking_budget to 128 (minimum) when budget_tokens is 0', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'THUDM/GLM-4.5',
+        thinking: {
+          type: 'enabled',
+          budget_tokens: 0,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.thinking_budget).toBe(128);
+    });
+
+    it('should set enable_thinking when type is provided', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'Qwen/Qwen2.5-7B-Instruct',
+        thinking: {
+          type: 'enabled',
+          budget_tokens: 1000,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.enable_thinking).toBe(true);
+      expect(calledPayload.thinking_budget).toBe(1000);
+    });
+
+    it('should only set thinking_budget for budget-only models when type is not provided', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'Pro/MiniMaxAI/MiniMax-M2.5',
+        thinking: {
+          budget_tokens: 1500,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.enable_thinking).toBeUndefined();
+      expect(calledPayload.thinking_budget).toBe(1500);
+    });
+
+    it('should not send enable_thinking for DeepSeek R1 budget-only models without type', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-ai/DeepSeek-R1',
+        thinking: {
+          budget_tokens: 2048,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.enable_thinking).toBeUndefined();
+      expect(calledPayload.thinking_budget).toBe(2048);
+    });
+
+    it('should forward reasoning_effort when thinking is not explicitly disabled', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-ai/DeepSeek-V4-Flash',
+        reasoning_effort: 'medium',
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.reasoning_effort).toBe('medium');
+    });
+
+    it('should not send reasoning_effort when thinking is explicitly disabled', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-ai/DeepSeek-V4-Flash',
+        thinking: {
+          type: 'disabled',
+        },
+        reasoning_effort: 'high',
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.reasoning_effort).toBeUndefined();
+      expect(calledPayload.enable_thinking).toBe(false);
+    });
+  });
+
+  describe('handleError', () => {
+    it('should handle 401 error as InvalidProviderAPIKey', async () => {
+      const error = new Response('Unauthorized', { status: 401 });
+
+      vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(error);
+
+      try {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'Qwen/Qwen2.5-7B-Instruct',
+        });
+      } catch (e: any) {
+        expect(e.errorType).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
+      }
+    });
+
+    it('should handle 403 error as ProviderBizError with custom message', async () => {
+      const error = new Response('Forbidden', { status: 403 });
+
+      vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(error);
+
+      try {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'Qwen/Qwen2.5-7B-Instruct',
+        });
+      } catch (e: any) {
+        expect(e.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+        expect(e.message).toBeTruthy();
+      }
+    });
+
+    it('should extract error code and message from SiliconCloud API error response', async () => {
+      const error = {
+        error: {
+          code: 20015,
+          message: 'Value error, current model does not support parameter `enable_thinking`.',
+          data: null,
+        },
+        status: 400,
+      } as any;
+
+      vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(error);
+
+      try {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'Qwen/Qwen2.5-7B-Instruct',
+        });
+      } catch (e: any) {
+        expect(e.error?.code).toBe(20015);
+        expect(e.error?.message).toContain('does not support parameter `enable_thinking`');
+      }
+    });
+
+    it('should handle APIError with error body containing code and message', async () => {
+      // Create an APIError with the error structure that OpenAI library creates
+      const errorInfo = {
+        error: {
+          code: 20015,
+          message: 'Value error, current model does not support parameter `enable_thinking`.',
+        },
+      };
+      const apiError = new OpenAI.APIError(400, errorInfo, 'Request failed', undefined);
+
+      vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+      try {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'Qwen/Qwen2.5-7B-Instruct',
+        });
+      } catch (e: any) {
+        // The error should have the code and message extracted
+        expect(e.error?.code || e.error?.error?.code).toBe(20015);
+        expect(e.message || e.error?.message).toContain(
+          'does not support parameter `enable_thinking`',
+        );
+      }
+    });
+  });
+
+  describe('models', () => {
+    it('should fetch and process model list correctly', async () => {
+      const mockModelList: SiliconCloudModelCard[] = [
+        { id: 'Qwen/Qwen2.5-7B-Instruct' },
+        { id: 'deepseek-ai/DeepSeek-V3' },
+        { id: 'Pro/THUDM/glm-4.5' },
+      ];
+
+      vi.spyOn(instance['client'].models, 'list').mockResolvedValue({
+        data: mockModelList,
+      } as any);
+
+      const models = await instance.models();
+
+      expect(instance['client'].models.list).toHaveBeenCalled();
+      expect(models.length).toBeGreaterThan(0);
+    });
+  });
+});

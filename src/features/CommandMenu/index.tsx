@@ -1,0 +1,334 @@
+'use client';
+
+import { stopPropagation } from '@lobehub/ui';
+import { Command, defaultFilter } from 'cmdk';
+import { CornerDownLeft } from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { useGlobalStore } from '@/store/global';
+
+import { useCommandMenuAnalytics } from './analytics';
+import AskAgentCommands from './AskAgentCommands';
+import AskAIMenu from './AskAIMenu';
+import { CommandMenuProvider, useCommandMenuContext } from './CommandMenuContext';
+import CommandFooter from './components/CommandFooter';
+import CommandInput from './components/CommandInput';
+import MainMenu from './MainMenu';
+import SearchResults from './SearchResults';
+import { styles } from './styles';
+import ThemeMenu from './ThemeMenu';
+import { useCommandMenu } from './useCommandMenu';
+
+const CLOSE_ANIMATION_DURATION = 150;
+
+interface CommandMenuContentProps {
+  isClosing: boolean;
+  onClose: () => void;
+}
+
+interface VisibleSearchResults {
+  count: number;
+  key: string;
+}
+
+/**
+ * Inner component that uses the context
+ */
+const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }) => {
+  const { t } = useTranslation('common');
+  const {
+    handleBack,
+    handleSendToSelectedAgent,
+    hasSearch,
+    hasSearchResponse,
+    isSearching,
+    isSearchValidating,
+    searchQuery,
+    searchError,
+    searchResults,
+    selectedAgent,
+  } = useCommandMenu();
+
+  const {
+    menuContext,
+    page,
+    pages,
+    search,
+    setPages,
+    setSearch,
+    setSelectedAgent,
+    setTypeFilter,
+    typeFilter,
+  } = useCommandMenuContext();
+  const analyticsResultKey = searchQuery ? `${searchQuery}\u0000${typeFilter ?? 'all'}` : '';
+  const [visibleSearchResults, setVisibleSearchResults] = useState<VisibleSearchResults>();
+  const handleVisibleResultCountChange = useCallback(
+    (count: number) => {
+      setVisibleSearchResults((current) => {
+        if (current?.key === analyticsResultKey && current.count === count) return current;
+        return { count, key: analyticsResultKey };
+      });
+    },
+    [analyticsResultKey],
+  );
+  const hasVisibleResultCount = visibleSearchResults?.key === analyticsResultKey;
+  const searchAnalytics = useCommandMenuAnalytics({
+    enabled: !page && !selectedAgent && !search.trimStart().startsWith('@'),
+    hasError: Boolean(searchError),
+    hasResponse: hasSearchResponse && hasVisibleResultCount,
+    isValidating: isSearchValidating,
+    menuContext,
+    resultCount: hasVisibleResultCount ? (visibleSearchResults?.count ?? 0) : 0,
+    searchQuery,
+    typeFilter,
+  });
+
+  // Ref for Command.List to control scroll position
+  const listRef = useRef<HTMLDivElement>(null);
+  // State for controlled selection value (undefined lets cmdk auto-select first item)
+  const [value, setValue] = useState<string | undefined>();
+
+  // Reset scroll position and selection when search, page, or selectedAgent changes
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = 0;
+    }
+    setValue(undefined);
+  }, [search, page, selectedAgent]);
+
+  // Clear search input when entering certain submenu pages (but not ask-ai)
+  useEffect(() => {
+    if (page && page !== 'ask-ai') {
+      setSearch('');
+    }
+  }, [page, setSearch]);
+
+  // Search result items (value prefixed with "search-result ") are already ranked
+  // and ordered server-side — topics/messages by recency. cmdk would otherwise
+  // re-rank them by fuzzy match against the query; returning a constant keeps their
+  // server order (cmdk's sort is stable). They are force-mounted, so visibility is
+  // unaffected. The constant is below a strong command match (1 = exact, ~0.9 =
+  // prefix) so a well-matching built-in command still ranks above search results,
+  // but above incidental fuzzy matches — preserving the prior "rank after built-in
+  // commands" intent while fixing the within-group ordering.
+  const commandFilter = useCallback(
+    (itemValue: string, searchValue: string, keywords?: string[]) => {
+      if (itemValue.startsWith('search-result ')) return 0.5;
+      return defaultFilter?.(itemValue, searchValue, keywords) ?? 0;
+    },
+    [],
+  );
+
+  return (
+    <div className={styles.overlay} data-closing={isClosing} onClick={onClose}>
+      <div onClick={stopPropagation}>
+        <Command
+          className={styles.commandRoot}
+          data-closing={isClosing}
+          filter={commandFilter}
+          shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}
+          value={value}
+          onValueChange={setValue}
+          onKeyDown={(e) => {
+            // Enter key to send message to selected agent
+            if (e.key === 'Enter' && selectedAgent && search.trim()) {
+              e.preventDefault();
+              handleSendToSelectedAgent();
+              return;
+            }
+            // Tab key to ask AI
+            if (e.key === 'Tab' && page !== 'ask-ai' && !selectedAgent) {
+              e.preventDefault();
+              setPages([...pages, 'ask-ai']);
+              return;
+            }
+            // Escape goes to previous page, clears selected agent, or closes
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              if (selectedAgent) {
+                setSelectedAgent(undefined);
+              } else if (pages.length > 0) {
+                handleBack();
+              } else {
+                onClose();
+              }
+            }
+            // Backspace clears selected agent when search is empty, or goes to previous page
+            if (e.key === 'Backspace' && !search) {
+              if (selectedAgent) {
+                e.preventDefault();
+                setSelectedAgent(undefined);
+              } else if (pages.length > 0) {
+                e.preventDefault();
+                setPages((prev) => prev.slice(0, -1));
+              }
+            }
+          }}
+        >
+          <CommandInput
+            onInputChange={searchAnalytics.trackInputChange}
+            onTypeFilterChange={searchAnalytics.trackFilterChange}
+          />
+
+          <Command.List ref={listRef}>
+            {/* Hide cmdk's Empty when we have search results or are loading them,
+               since force-mounted items aren't counted by cmdk's internal filter.
+               The unfiltered search view also renders the marketplace fallback
+               entries whenever the search settles with no results, so it is
+               never truly empty. */}
+            {!(
+              hasSearch &&
+              (searchResults.length > 0 ||
+                isSearching ||
+                (!page && !selectedAgent && !typeFilter && !search.trimStart().startsWith('@')))
+            ) && <Command.Empty>{t('cmdk.noResults')}</Command.Empty>}
+
+            {/* Show send command when agent is selected */}
+            {selectedAgent && (
+              <Command.Group>
+                <Command.Item
+                  disabled={!search.trim()}
+                  value="send-to-agent"
+                  onSelect={handleSendToSelectedAgent}
+                >
+                  <AgentAvatar
+                    agentId={selectedAgent.id}
+                    avatar={selectedAgent.avatar}
+                    name={selectedAgent.title}
+                    shape="square"
+                    size={20}
+                  />
+                  <div className={styles.itemContent}>
+                    <div className={styles.itemLabel}>
+                      {t('cmdk.sendToAgent', { agent: selectedAgent.title } as any)}
+                    </div>
+                  </div>
+                  <CornerDownLeft className={styles.icon} />
+                </Command.Item>
+              </Command.Group>
+            )}
+
+            {/* @ mention agent commands */}
+            {!page && !selectedAgent && <AskAgentCommands />}
+
+            {/* Hide MainMenu and SearchResults when in @ mention mode */}
+            {!page && !selectedAgent && !search.trimStart().startsWith('@') && <MainMenu />}
+
+            {page === 'theme' && <ThemeMenu />}
+            {page === 'ask-ai' && <AskAIMenu />}
+
+            {!page && !selectedAgent && hasSearch && !search.trimStart().startsWith('@') && (
+              <SearchResults
+                isLoading={isSearching}
+                results={searchResults}
+                searchQuery={searchQuery}
+                typeFilter={typeFilter}
+                onClose={onClose}
+                onResultClick={searchAnalytics.trackResultClick}
+                onSetTypeFilter={setTypeFilter}
+                onTypeFilterChange={searchAnalytics.trackFilterChange}
+                onVisibleResultCountChange={handleVisibleResultCountChange}
+              />
+            )}
+          </Command.List>
+
+          <CommandFooter />
+        </Command>
+      </div>
+    </div>
+  );
+});
+
+CommandMenuContent.displayName = 'CommandMenuContent';
+
+/**
+ * CMDK Menu.
+ *
+ * Search everything in LobeHub.
+ */
+const CommandMenu = memo(() => {
+  const [open, setOpen] = useGlobalStore((s) => [s.status.showCommandMenu, s.updateSystemStatus]);
+  const [mounted, setMounted] = useState(false);
+  const [appRoot, setAppRoot] = useState<HTMLElement | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+  const location = useActiveLocation();
+  const pathname = location.pathname;
+
+  // Ensure we're mounted on the client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Sync visibility with open state
+  useEffect(() => {
+    if (open) {
+      setIsVisible(true);
+      setIsClosing(false);
+    }
+  }, [open]);
+
+  // Find App root node (.ant-app)
+  useEffect(() => {
+    if (!mounted) return;
+
+    const appElement = document.querySelector('.ant-app') as HTMLElement;
+    if (appElement) {
+      setAppRoot(appElement);
+      return;
+    }
+
+    // Fallback: use MutationObserver only if .ant-app not found yet
+    // Observe only direct children of body for better performance
+    const observer = new MutationObserver((_, obs) => {
+      const el = document.querySelector('.ant-app') as HTMLElement;
+      if (el) {
+        setAppRoot(el);
+        obs.disconnect(); // Stop observing once found
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: false, // Only watch direct children, not entire DOM tree
+    });
+
+    // Fallback timeout: if .ant-app not found after 2s, use body
+    const timeoutId = setTimeout(() => {
+      observer.disconnect();
+      setAppRoot((prev) => prev || document.body);
+    }, 2000);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(timeoutId);
+    };
+  }, [mounted]);
+
+  const handleClose = useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    setTimeout(() => {
+      setOpen({ showCommandMenu: false });
+      setIsVisible(false);
+      setIsClosing(false);
+    }, CLOSE_ANIMATION_DURATION);
+  }, [isClosing, setOpen]);
+
+  if (!mounted || !isVisible || !appRoot) return null;
+
+  return createPortal(
+    <CommandMenuProvider pathname={pathname} onClose={handleClose}>
+      <CommandMenuContent isClosing={isClosing} onClose={handleClose} />
+    </CommandMenuProvider>,
+    appRoot,
+  );
+});
+
+CommandMenu.displayName = 'CommandMenu';
+
+export default CommandMenu;

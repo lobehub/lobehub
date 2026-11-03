@@ -1,0 +1,135 @@
+import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type {
+  CodexQuotaSnapshot,
+  CodexRateLimitResetOutcome,
+} from '@lobechat/heterogeneous-agents/quota';
+
+export {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
+  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
+  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+  CODEBUDDY_CLI_INSTALL_COMMANDS,
+  CODEBUDDY_CLI_INSTALL_DOCS_URL,
+  CODEX_CLI_INSTALL_COMMANDS,
+  CODEX_CLI_INSTALL_DOCS_URL,
+  CURSOR_CLI_INSTALL_COMMANDS,
+  CURSOR_CLI_INSTALL_DOCS_URL,
+  DROID_CLI_INSTALL_COMMANDS,
+  DROID_CLI_INSTALL_DOCS_URL,
+  GROK_BUILD_CLI_INSTALL_COMMANDS,
+  GROK_BUILD_CLI_INSTALL_DOCS_URL,
+  OPENCODE_CLI_INSTALL_COMMANDS,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_COMMANDS,
+  PI_CLI_INSTALL_DOCS_URL,
+  QODER_CLI_AUTH_DOCS_URL,
+  QODER_CLI_INSTALL_COMMANDS,
+  QODER_CLI_INSTALL_DOCS_URL,
+} from '@lobechat/heterogeneous-agents';
+
+export const HeterogeneousAgentSessionErrorCode = {
+  AuthRequired: 'auth_required',
+  /**
+   * The shell probe that resolves PATH ran out of time. Distinct from
+   * `CliNotFound` because it says nothing about whether the CLI is installed —
+   * conflating them told users to reinstall a working binary.
+   */
+  CliDetectionTimeout: 'cli_detection_timeout',
+  CliNotFound: 'cli_not_found',
+  Overloaded: 'overloaded',
+  RateLimit: 'rate_limit',
+  ResumeCwdMismatch: 'resume_cwd_mismatch',
+  ResumeThreadNotFound: 'resume_thread_not_found',
+  WorkingDirectoryNotFound: 'working_directory_not_found',
+} as const;
+
+export type HeterogeneousAgentSessionErrorCode =
+  (typeof HeterogeneousAgentSessionErrorCode)[keyof typeof HeterogeneousAgentSessionErrorCode];
+
+export interface HeterogeneousAgentRateLimitInfo {
+  isUsingOverage?: boolean;
+  overageDisabledReason?: string;
+  overageStatus?: string;
+  rateLimitType?: string;
+  resetsAt?: number;
+  status?: string;
+}
+
+// The Claude quota snapshot shapes are shared with the device RPC path
+// (`lh connect` samples the same snapshot), so they live in the
+// heterogeneous-agents quota entry; re-export them for existing IPC callers.
+export type {
+  ClaudeCodeAccountIdentity,
+  ClaudeCodeAccountResolution,
+  ClaudeCodeLocalAccount,
+  ClaudeCodeQuotaReading,
+  ClaudeCodeQuotaSnapshot,
+  ClaudeCodeQuotaUnavailableReason,
+  ClaudeCodeScopedWeekly,
+  HeteroQuotaWindow,
+} from '@lobechat/heterogeneous-agents/quota';
+export type {
+  CodexQuotaSnapshot,
+  CodexQuotaWindow,
+  CodexRateLimitResetCredit,
+  CodexRateLimitResetCredits,
+  CodexRateLimitResetOutcome,
+  CodexRateLimitSnapshot,
+} from '@lobechat/heterogeneous-agents/quota';
+export type {
+  KimiCodeExtraUsage,
+  KimiCodeQuotaSnapshot,
+  KimiCodeQuotaUnavailableReason,
+} from '@lobechat/heterogeneous-agents/quota';
+
+export interface CodexRateLimitResetResult {
+  outcome: CodexRateLimitResetOutcome;
+  quota: CodexQuotaSnapshot;
+}
+
+export interface HeterogeneousAgentSessionError {
+  agentType?: HeterogeneousAgentType;
+  code?: HeterogeneousAgentSessionErrorCode | string;
+  command?: string;
+  /** Diagnostic context from the CLI's terminal event (subtype, HTTP status, turn count, …). */
+  details?: Record<string, unknown>;
+  docsUrl?: string;
+  installCommands?: readonly string[];
+  message: string;
+  rateLimitInfo?: HeterogeneousAgentRateLimitInfo;
+  resumeSessionId?: string;
+  stderr?: string;
+  workingDirectory?: string;
+}
+
+export type HeterogeneousAgentRuntimeState =
+  'starting' | 'running' | 'monitoring' | 'idle' | 'stale' | 'closing' | 'closed' | 'error';
+
+export interface HeterogeneousAgentRuntimeTask {
+  description?: string;
+  lastEventAt: number;
+  startedAt: number;
+  taskId: string;
+  toolUseId?: string;
+  type?: string;
+}
+
+export interface HeterogeneousAgentRuntimeStatus {
+  activeTasks: HeterogeneousAgentRuntimeTask[];
+  idleDeadlineAt?: number;
+  lastEventAt: number;
+  operationId?: string;
+  sessionId: string;
+  staleDeadlineAt?: number;
+  state: HeterogeneousAgentRuntimeState;
+  transport:
+    | 'acp-stdio'
+    | 'claude-sdk'
+    | 'cli-spawn'
+    | 'codex-app-server'
+    | 'cursor-acp'
+    | 'droid-acp'
+    | 'dsh-jsonrpc'
+    | 'trae-acp';
+}

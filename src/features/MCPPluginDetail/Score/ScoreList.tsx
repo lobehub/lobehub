@@ -1,0 +1,24 @@
+import { Divider, Flexbox } from '@lobehub/ui';
+import { Fragment, memo } from 'react';
+
+import ScoreItem from './ScoreItem';
+import { type ScoreItemProps } from './ScoreItem';
+
+interface ScoreListProps {
+  items: ScoreItemProps[];
+}
+
+const ScoreList = memo<ScoreListProps>(({ items }) => {
+  return (
+    <Flexbox gap={16} paddingBlock={16}>
+      {items.map((item, index) => (
+        <Fragment key={item.key}>
+          <ScoreItem {...item} key={item.key} />
+          {index < items.length - 1 && <Divider />}
+        </Fragment>
+      ))}
+    </Flexbox>
+  );
+});
+
+export default ScoreList;

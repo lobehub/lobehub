@@ -1,0 +1,247 @@
+[
+  {
+    "id": "msg-user-1",
+    "role": "user",
+    "content": "杭州和北京天气如何",
+    "parentId": null,
+    "createdAt": 1704067200000,
+    "updatedAt": 1704067200000,
+    "metadata": {
+      "activeBranchIndex": 2
+    }
+  },
+  {
+    "id": "msg-assistant-1",
+    "role": "assistant",
+    "content": "",
+    "parentId": "msg-user-1",
+    "createdAt": 1704067202000,
+    "updatedAt": 1704067202000,
+    "metadata": {
+      "totalTokens": 3751,
+      "totalInputTokens": 3441,
+      "totalOutputTokens": 310
+    },
+    "tools": [
+      {
+        "id": "call-1",
+        "type": "builtin",
+        "apiName": "search",
+        "arguments": "{\"query\":\"杭州 北京 天气 现在\"}",
+        "identifier": "lobe-web-browsing"
+      }
+    ]
+  },
+  {
+    "id": "msg-tool-1",
+    "role": "tool",
+    "content": "<searchResults>\n  <item title=\"Weather Site\" url=\"https://weather.example.com/\">Weather information...</item>\n</searchResults>",
+    "parentId": "msg-assistant-1",
+    "createdAt": 1704067205000,
+    "updatedAt": 1704067205000,
+    "tool_call_id": "call-1",
+    "plugin": {
+      "apiName": "search",
+      "identifier": "lobe-web-browsing",
+      "type": "builtin"
+    },
+    "pluginState": {
+      "query": "杭州 北京 天气 现在",
+      "results": [
+        {
+          "url": "https://weather.example.com/",
+          "title": "Weather Site",
+          "content": "Weather information..."
+        }
+      ]
+    }
+  },
+  {
+    "id": "msg-assistant-2",
+    "role": "assistant",
+    "content": "",
+    "parentId": "msg-tool-1",
+    "createdAt": 1704067208000,
+    "updatedAt": 1704067208000,
+    "metadata": {
+      "totalTokens": 4311,
+      "totalInputTokens": 4128,
+      "totalOutputTokens": 183
+    },
+    "tools": [
+      {
+        "id": "call-2",
+        "type": "builtin",
+        "apiName": "search",
+        "arguments": "{\"query\":\"杭州 天气 北京 天气\"}",
+        "identifier": "lobe-web-browsing"
+      }
+    ]
+  },
+  {
+    "id": "msg-tool-2",
+    "role": "tool",
+    "content": "<searchResults>\n  <item title=\"Weather Info\" url=\"https://weather2.example.com/\">More weather...</item>\n</searchResults>",
+    "parentId": "msg-assistant-2",
+    "createdAt": 1704067211000,
+    "updatedAt": 1704067211000,
+    "tool_call_id": "call-2",
+    "plugin": {
+      "apiName": "search",
+      "identifier": "lobe-web-browsing",
+      "type": "builtin"
+    }
+  },
+  {
+    "id": "msg-assistant-3",
+    "role": "assistant",
+    "content": "你是想看现在的实时天气，还是未来几天的天气预报？",
+    "parentId": "msg-tool-2",
+    "createdAt": 1704067214000,
+    "updatedAt": 1704067214000,
+    "metadata": {
+      "totalTokens": 6643,
+      "totalInputTokens": 6135,
+      "totalOutputTokens": 508
+    },
+    "reasoning": {
+      "content": "用户询问天气，我需要确认他们想要的是实时天气还是预报。"
+    }
+  },
+  {
+    "id": "msg-assistant-4",
+    "role": "assistant",
+    "content": "",
+    "parentId": "msg-user-1",
+    "createdAt": 1704067220000,
+    "updatedAt": 1704067220000,
+    "metadata": {
+      "totalTokens": 3809,
+      "totalInputTokens": 3440,
+      "totalOutputTokens": 369
+    },
+    "tools": [
+      {
+        "id": "call-3",
+        "type": "builtin",
+        "apiName": "search",
+        "arguments": "{\"query\":\"!google 杭州 天气\"}",
+        "identifier": "lobe-web-browsing"
+      },
+      {
+        "id": "call-4",
+        "type": "builtin",
+        "apiName": "search",
+        "arguments": "{\"query\":\"!google 北京 天气\"}",
+        "identifier": "lobe-web-browsing"
+      }
+    ]
+  },
+  {
+    "id": "msg-tool-3",
+    "role": "tool",
+    "content": "<searchResults />",
+    "parentId": "msg-assistant-4",
+    "createdAt": 1704067223000,
+    "updatedAt": 1704067223000,
+    "tool_call_id": "call-3",
+    "plugin": {
+      "apiName": "search",
+      "identifier": "lobe-web-browsing",
+      "type": "builtin"
+    },
+    "pluginState": {
+      "query": "!google 杭州 天气",
+      "results": []
+    }
+  },
+  {
+    "id": "msg-tool-4",
+    "role": "tool",
+    "content": "<searchResults />",
+    "parentId": "msg-assistant-4",
+    "createdAt": 1704067226000,
+    "updatedAt": 1704067226000,
+    "tool_call_id": "call-4",
+    "plugin": {
+      "apiName": "search",
+      "identifier": "lobe-web-browsing",
+      "type": "builtin"
+    },
+    "pluginState": {
+      "query": "!google 北京 天气",
+      "results": []
+    }
+  },
+  {
+    "id": "msg-assistant-5",
+    "role": "assistant",
+    "content": "我可以帮你查天气 —— 想确认一下你的偏好再去查实时数据。",
+    "parentId": "msg-tool-4",
+    "createdAt": 1704067229000,
+    "updatedAt": 1704067229000,
+    "metadata": {
+      "totalTokens": 7100,
+      "totalInputTokens": 6425,
+      "totalOutputTokens": 675
+    }
+  },
+  {
+    "id": "msg-assistant-6",
+    "role": "assistant",
+    "content": "",
+    "parentId": "msg-user-1",
+    "createdAt": 1704067240000,
+    "updatedAt": 1704067240000,
+    "metadata": {
+      "totalTokens": 3627,
+      "totalInputTokens": 3441,
+      "totalOutputTokens": 186
+    },
+    "tools": [
+      {
+        "id": "call-5",
+        "type": "builtin",
+        "apiName": "search",
+        "arguments": "{\"query\":\"杭州 天气 现在 北京 天气 现在\"}",
+        "identifier": "lobe-web-browsing"
+      }
+    ]
+  },
+  {
+    "id": "msg-tool-5",
+    "role": "tool",
+    "content": "<searchResults>\n  <item title=\"Weather Portal\" url=\"https://weather3.example.com/\">Weather data...</item>\n</searchResults>",
+    "parentId": "msg-assistant-6",
+    "createdAt": 1704067243000,
+    "updatedAt": 1704067243000,
+    "tool_call_id": "call-5",
+    "plugin": {
+      "apiName": "search",
+      "identifier": "lobe-web-browsing",
+      "type": "builtin"
+    },
+    "pluginState": {
+      "query": "杭州 天气 现在 北京 天气 现在",
+      "results": [
+        {
+          "url": "https://weather3.example.com/",
+          "title": "Weather Portal"
+        }
+      ]
+    }
+  },
+  {
+    "id": "msg-assistant-7",
+    "role": "assistant",
+    "content": "好的——我可以立刻去查并把结果发给你。",
+    "parentId": "msg-tool-5",
+    "createdAt": 1704067246000,
+    "updatedAt": 1704067246000,
+    "metadata": {
+      "totalTokens": 8188,
+      "totalInputTokens": 7604,
+      "totalOutputTokens": 584
+    }
+  }
+]

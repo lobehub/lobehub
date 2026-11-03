@@ -1,0 +1,273 @@
+import type { IThreadType } from './topic/thread';
+
+/**
+ * Scope types for message map key generation
+ * - main: Agent main conversation (default)
+ * - thread: Agent thread conversation
+ * - group: Group main conversation
+ * - group_agent: Agent conversation within a group
+ * - task: Task manager side panel conversation
+ * - sub_agent: Agent-to-agent communication (non-group, uses subAgentId for config/display only)
+ */
+export type MessageMapScope =
+  | 'main'
+  | 'thread'
+  | 'group'
+  | 'group_agent'
+  | 'group_agent_builder'
+  | 'page'
+  | 'task'
+  | 'agent_builder'
+  | 'sub_agent';
+
+/**
+ * Context for generating message map key with scope-driven architecture
+ *
+ * Key format: `{scope}_{scopeId}[_{topicId}][_{subTopicId}][_new]`
+ *
+ * @example
+ * ```ts
+ * // Main mode - new topic (default scope)
+ * { scopeId: 'agt_xxx' } // => 'main_agt_xxx_new'
+ *
+ * // Main mode - existing topic
+ * { scopeId: 'agt_xxx', topicId: 'tpc_yyy' } // => 'main_agt_xxx_tpc_yyy'
+ *
+ * // Thread mode - new thread
+ * { scope: 'thread', scopeId: 'agt_xxx', topicId: 'tpc_yyy', isNew: true }
+ * // => 'thread_agt_xxx_tpc_yyy_new'
+ *
+ * // Thread mode - existing thread
+ * { scope: 'thread', scopeId: 'agt_xxx', topicId: 'tpc_yyy', subTopicId: 'thd_zzz' }
+ * // => 'thread_agt_xxx_tpc_yyy_thd_zzz'
+ *
+ * // Group mode - new topic
+ * { scope: 'group', scopeId: 'grp_xxx' } // => 'group_grp_xxx_new'
+ *
+ * // Group mode - existing topic
+ * { scope: 'group', scopeId: 'grp_xxx', topicId: 'tpc_yyy' }
+ * // => 'group_grp_xxx_tpc_yyy'
+ *
+ * // Group agent mode - existing agent topic
+ * { scope: 'group_agent', scopeId: 'grp_xxx', topicId: 'tpc_yyy', subTopicId: 'tpc_zzz' }
+ * // => 'group_agent_grp_xxx_tpc_yyy_tpc_zzz'
+ * ```
+ */
+export interface MessageMapContext {
+  /**
+   * Whether this is a new/creating state (for optimistic updates)
+   */
+  isNew?: boolean;
+  /**
+   * Scope type for the message map
+   * @default 'main'
+   */
+  scope?: MessageMapScope;
+  /**
+   * Scope identifier (agentId for main/thread, groupId for group/group_agent)
+   */
+  scopeId: string;
+  /**
+   * Sub topic identifier (threadId in agent mode, agent's topicId in group mode)
+   */
+  subTopicId?: string | null;
+  /**
+   * Topic identifier
+   */
+  topicId?: string | null;
+}
+
+/**
+ * Context for identifying a conversation or message list
+ * This is the standard type for all conversation-related context passing
+ *
+ * @example
+ * ```ts
+ * // Basic usage - main conversation
+ * const context: ConversationContext = { agentId: 'agent-1' };
+ *
+ * // With topic
+ * const topicContext: ConversationContext = {
+ *   agentId: 'agent-1',
+ *   topicId: 'topic-1'
+ * };
+ *
+ * // With existing thread
+ * const threadContext: ConversationContext = {
+ *   agentId: 'agent-1',
+ *   topicId: 'topic-1',
+ *   threadId: 'thread-1'
+ * };
+ *
+ * // Creating a new thread (isNew + scope: 'thread')
+ * const newThreadContext: ConversationContext = {
+ *   agentId: 'agent-1',
+ *   topicId: 'topic-1',
+ *   scope: 'thread',
+ *   isNew: true,
+ *   sourceMessageId: 'msg-1',
+ *   threadType: ThreadType.Standalone,
+ * };
+ *
+ * // Group conversation
+ * const groupContext: ConversationContext = {
+ *   agentId: 'agent-1',
+ *   groupId: 'group-1',
+ *   topicId: 'topic-1',
+ *   scope: 'group',
+ * };
+ * ```
+ */
+export interface ConversationContext {
+  /**
+   * Agent document row id (`agent_documents.id`) that the user is currently
+   * viewing. When set, callers can skip the `listDocumentsForTopic` reverse
+   * lookup in `ActiveTopicDocumentContextInjector` and the `<document>` block
+   * is guaranteed to carry `agent_document_id` for downstream tool calls
+   * (`readDocument`, `modifyNodes`).
+   */
+  agentDocumentId?: string;
+  agentId: string;
+  /**
+   * Agent share id for the visitor view of a shared agent
+   * (`/agent/:slugOrId`). When present the conversation is mounted for a
+   * non-owner visitor: every owner-scoped read/write (agent-config fetch,
+   * message persistence, topic settle, agent-signal emission) must be skipped
+   * or routed through the share-authorized `shareChat` procedures instead.
+   */
+  agentShareId?: string;
+  /**
+   * Optional default assignee candidate for task manager conversations.
+   * This is a prompt hint only; task tools still require an explicit assigneeAgentId.
+   */
+  defaultTaskAssigneeAgentId?: string;
+  /**
+   * Current document ID for page-scoped conversations.
+   * Used by page editor integrations to distinguish the active document from
+   * other agent resources tied to the same topic.
+   */
+  documentId?: string;
+  /**
+   * Group being configured by the Group Agent Builder panel (`group_agent_builder`
+   * scope).
+   *
+   * Deliberately separate from {@link groupId}: that field marks the run as a
+   * group *chat* turn and gets stamped onto the created topic and messages,
+   * which would drag the builder's side-conversation into the group's own
+   * message read path. This one only scopes the builder's own buckets and topic
+   * list, and travels to the server as `ExecAgentAppContext.editingGroupId`.
+   */
+  editingGroupId?: string;
+  /**
+   * Group ID for group conversations
+   * Used when scope is 'group' or 'group_agent'
+   */
+  groupId?: string;
+  /**
+   * Whether this is creating a new conversation (new topic or new thread)
+   * Used for optimistic updates
+   */
+  isNew?: boolean;
+  /**
+   * When true, sendMessage will NOT update the global `useChatStore.activeTopicId`
+   * after creating a new topic — the caller is responsible for tracking the new
+   * topic id (e.g. via `ConversationHooks.onTopicCreated`). Used by isolated
+   * panels (Task Manager) that maintain their own topic pointer.
+   */
+  isolatedTopic?: boolean;
+  /**
+   * Whether this conversation is an isolated sub-agent execution spawned by
+   * another agent. Used to disable recursive sub-agent dispatch.
+   */
+  isSubAgent?: boolean;
+  /**
+   * Whether the current agent is the Supervisor in group orchestration
+   * - Used to mark assistant messages with metadata.isSupervisor
+   * - conversation-flow will transform role to 'supervisor' for UI rendering
+   * - context-engine will restore role back to 'assistant' for model
+   */
+  isSupervisor?: boolean;
+  /**
+   * `forward` reads the transcript from its first round and appends later
+   * rounds (shared topics read from the start). Omitted means the default
+   * newest-first window with older history paged in above.
+   */
+  messageReadMode?: 'forward';
+  /**
+   * Orchestration role of the current agent within a group conversation.
+   * Canonical replacement for {@link isSupervisor} — stamped onto the assistant
+   * message's `metadata.orchestrationRole` so the role snapshot persists.
+   */
+  orchestrationRole?: 'supervisor' | 'member';
+  /**
+   * Scope type for the conversation
+   * - 'main': Agent main conversation (default)
+   * - 'thread': Agent thread conversation
+   * - 'group': Group main conversation
+   * - 'group_agent': Agent conversation within a group
+   * - 'task': Task manager side panel conversation
+   * @default 'main' (auto-detected based on threadId)
+   */
+  scope?: MessageMapScope;
+  /**
+   * @deprecated Use agentId for agent sessions. This field is kept for backward compatibility.
+   */
+  sessionId?: string;
+  /**
+   * Source message ID that the thread is branched from
+   * Only used when creating a new thread (isNew=true, scope='thread')
+   */
+  sourceMessageId?: string;
+  /**
+   * Sub Agent ID for group orchestration scenarios
+   * - Used to get Agent config (model, provider, plugins) instead of agentId
+   * - Used to set message.agentId (mark message source)
+   * - Falls back to agentId if not set
+   *
+   * @example
+   * ```ts
+   * // Supervisor executes: no subAgentId needed
+   * { agentId: 'supervisor', groupId: 'group-1', scope: 'group' }
+   *
+   * // Agent speaks in group: use subAgentId for agent config
+   * { agentId: 'supervisor', subAgentId: 'agent-1', groupId: 'group-1', scope: 'group' }
+   * ```
+   */
+  subAgentId?: string;
+  /**
+   * Thread ID (takes highest priority if present)
+   * When present, scope is auto-detected as 'thread'
+   */
+  threadId?: string | null;
+  /**
+   * Thread type when creating a new thread
+   * Only used when creating a new thread (isNew=true, scope='thread')
+   */
+  threadType?: IThreadType;
+  /**
+   * Topic ID
+   */
+  topicId?: string | null;
+  /**
+   * Topic share ID for public access (used by shared topic pages)
+   * When present, allows unauthenticated access to topic messages
+   */
+  topicShareId?: string;
+  /**
+   * Goal detail page the user is currently viewing. When set, streamingExecutor
+   * builds `RuntimeInitialContext.goalOverview` from the goal store snapshot.
+   */
+  viewedGoal?: { goalId: string };
+  /**
+   * Task Manager page the user is currently viewing. When set, streamingExecutor
+   * builds `RuntimeInitialContext.taskManager` from the task store.
+   */
+  viewedTask?: { type: 'list' } | { taskId: string; type: 'detail' };
+  /**
+   * Workspace slug captured at the conversation entry point. Desktop
+   * notifications and other out-of-band navigations use this to return to the
+   * same workspace instead of reinterpreting the target under the currently
+   * active tab.
+   */
+  workspaceSlug?: string;
+}

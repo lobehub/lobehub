@@ -1,0 +1,76 @@
+import type { DropdownItem } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { LucideCheck } from 'lucide-react';
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useOnlyMineFilterItem } from '@/features/AgentSidebar/Topic/useOnlyMineFilterItem';
+import { useUserStore } from '@/store/user';
+import { preferenceSelectors } from '@/store/user/selectors';
+import type { TopicGroupMode, TopicSortBy } from '@/types/topic';
+
+export const useTopicFilterDropdownMenu = (): DropdownItem[] => {
+  const { t } = useTranslation('topic');
+  const onlyMineItem = useOnlyMineFilterItem();
+
+  const [topicGroupMode, topicSortBy, topicIncludeCompleted, updatePreference] = useUserStore(
+    (s) => [
+      preferenceSelectors.topicGroupMode(s),
+      preferenceSelectors.topicSortBy(s),
+      preferenceSelectors.topicIncludeCompleted(s),
+      s.updatePreference,
+    ],
+  );
+
+  return useMemo(() => {
+    const groupModes: TopicGroupMode[] = ['byTime', 'byProject', 'flat'];
+    const sortByOptions: TopicSortBy[] = ['createdAt', 'updatedAt'];
+
+    return [
+      {
+        children: groupModes.map((mode) => ({
+          icon: topicGroupMode === mode ? <Icon icon={LucideCheck} /> : <div />,
+          key: `group-${mode}`,
+          label: t(`filter.groupMode.${mode}`),
+          onClick: () => {
+            updatePreference({ topicGroupMode: mode });
+          },
+        })),
+        key: 'organize',
+        label: t('filter.organize'),
+        type: 'group' as const,
+      },
+      { type: 'divider' as const },
+      {
+        children: sortByOptions.map((option) => ({
+          icon: topicSortBy === option ? <Icon icon={LucideCheck} /> : <div />,
+          key: `sort-${option}`,
+          label: t(`filter.sortBy.${option}`),
+          onClick: () => {
+            updatePreference({ topicSortBy: option });
+          },
+        })),
+        key: 'sort',
+        label: t('filter.sort'),
+        type: 'group' as const,
+      },
+      { type: 'divider' as const },
+      {
+        children: [
+          {
+            icon: topicIncludeCompleted ? <Icon icon={LucideCheck} /> : <div />,
+            key: 'showCompleted',
+            label: t('filter.showCompleted'),
+            onClick: () => {
+              updatePreference({ topicIncludeCompleted: !topicIncludeCompleted });
+            },
+          },
+          ...(onlyMineItem ? [onlyMineItem] : []),
+        ],
+        key: 'filter',
+        label: t('filter.filter'),
+        type: 'group' as const,
+      },
+    ];
+  }, [topicGroupMode, topicSortBy, topicIncludeCompleted, onlyMineItem, updatePreference, t]);
+};

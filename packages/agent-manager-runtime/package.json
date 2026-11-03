@@ -1,0 +1,19 @@
+{
+  "name": "@lobechat/agent-manager-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'",
+    "test:update": "vitest -u"
+  },
+  "dependencies": {
+    "@lobechat/const": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
+    "@lobechat/types": "workspace:*"
+  }
+}

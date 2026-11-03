@@ -1,0 +1,361 @@
+import { z } from 'zod';
+
+import { type ClientAllocatableEntity, entityIdPattern } from './entityId';
+import type { UIChatMessage } from './message';
+import type { MessageMetadata } from './message/common';
+import {
+  ChatToolPayloadSchema,
+  ClientMessageMetadataSchema,
+  omitServerOwnedMessageMetadata,
+} from './message/common';
+import type { ContextSelection, CreateMessageParams, PageSelection } from './message/ui/params';
+import { ContextSelectionSchema, PageSelectionSchema } from './message/ui/params';
+import type { OpenAIChatMessage } from './openai/chat';
+import type { LobeUniformTool } from './tool';
+import { LobeUniformToolSchema } from './tool';
+import type { ChatTopic, ChatTopicMetadata } from './topic';
+import type { ChatThreadType } from './topic/thread';
+import { ThreadType } from './topic/thread';
+
+export interface SendNewMessage {
+  content: string;
+  /** Generic context selections attached to this message */
+  contextSelections?: ContextSelection[];
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any>;
+  // if message has attached with files, then add files to message and the agent
+  files?: string[];
+  /**
+   * Id the client already rendered this message under. Honoured verbatim by the
+   * server, so the optimistic row never has to be re-keyed. Omit to let the
+   * server mint one (the pre-client-id behaviour).
+   */
+  id?: string;
+  metadata?: MessageMetadata;
+  /** Page selections attached to this message (for Ask AI functionality) */
+  pageSelections?: PageSelection[];
+  parentId?: string;
+}
+
+export interface SendPreloadMessage extends Omit<
+  Pick<CreateMessageParams, 'content' | 'metadata' | 'plugin' | 'tool_call_id' | 'tools'>,
+  'metadata'
+> {
+  metadata?: MessageMetadata;
+  role: 'assistant' | 'tool';
+}
+
+/**
+ * Parameters for creating a new thread along with message
+ */
+export interface CreateThreadWithMessageParams {
+  /** Parent thread ID (for nested threads) */
+  parentThreadId?: string;
+  /** Source message ID that the thread is branched from (optional for standalone threads) */
+  sourceMessageId?: string;
+  /** Optional thread title */
+  title?: string;
+  /** Thread type */
+  type: ChatThreadType;
+}
+
+export interface SendMessageServerParams {
+  agentId?: string;
+  /**
+   * Group ID for group chat scenarios
+   * Used to associate the topic with a specific group
+   */
+  groupId?: string;
+  newAssistantMessage: {
+    /** Agent that authored the assistant turn when it differs from the conversation owner. */
+    agentId?: string;
+    /**
+     * Id the client already rendered this message under. Honoured verbatim by
+     * the server, so the optimistic row never has to be re-keyed. Omit to let
+     * the server mint one (the pre-client-id behaviour).
+     */
+    id?: string;
+    /**
+     * Message metadata (e.g., isSupervisor for group orchestration)
+     */
+    metadata?: Record<string, unknown>;
+    model?: string;
+    provider: string;
+  };
+  /**
+   * Optional: Create a new thread along with the message
+   * If provided, the message will be created in the newly created thread
+   */
+  newThread?: CreateThreadWithMessageParams;
+  newTopic?: {
+    /**
+     * Id the client already rendered this topic under (sidebar row, message
+     * bucket, active-topic pointer). Honoured verbatim by the server so the
+     * topic never changes id mid-flight. Omit to let the server mint one.
+     */
+    id?: string;
+    /**
+     * Topic metadata persisted at creation time. For CC/heterogeneous
+     * agents this carries `workingDirectory` so the topic is bound to a
+     * project from the moment it's created (used by By-Project grouping
+     * and CC `--resume` cwd verification), instead of waiting for the
+     * post-execution metadata write which can be skipped on cancel/error.
+     */
+    metadata?: ChatTopicMetadata;
+    /** Pinned model snapshot for the new topic (top-level `topics.model` column). */
+    model?: string;
+    /** Project the topic is born in, conversation-only (a project "+" with no directory). */
+    projectId?: string;
+    provider?: string;
+    title?: string;
+    topicMessageIds?: string[];
+    trigger?: string;
+  };
+  newUserMessage: SendNewMessage;
+  preloadMessages?: SendPreloadMessage[];
+  sessionId?: string;
+  threadId?: string;
+  /**
+   * Filters applied to the topic list returned alongside the message.
+   * Callers pass whatever filter the active sidebar is using so the server
+   * doesn't echo back topics the UI was already excluding (e.g. completed
+   * status), which would overwrite the filtered list in `topicDataMap`.
+   */
+  topicFilter?: {
+    excludeStatuses?: string[];
+    excludeTriggers?: string[];
+    includeTriggers?: string[];
+    onlyMine?: boolean;
+  };
+  // if there is activeTopicId, then add topicId to message
+  topicId?: string;
+  /**
+   * Page size for the topic list returned after creating a new topic.
+   */
+  topicPageSize?: number;
+}
+
+export const CreateThreadWithMessageSchema = z.object({
+  parentThreadId: z.string().optional(),
+  sourceMessageId: z.string().optional(),
+  title: z.string().optional(),
+  type: z.enum([ThreadType.Continuation, ThreadType.Standalone, ThreadType.Isolation]),
+});
+
+const SendPreloadMessageSchema = z.object({
+  content: z.string(),
+  metadata: ClientMessageMetadataSchema.optional(),
+  plugin: z
+    .object({
+      apiName: z.string(),
+      arguments: z.string(),
+      identifier: z.string(),
+      type: z.string(),
+    })
+    .optional(),
+  role: z.enum(['assistant', 'tool']),
+  tool_call_id: z.string().optional(),
+  tools: z.array(ChatToolPayloadSchema).optional(),
+});
+
+/**
+ * A client-minted primary key for a row this request creates.
+ *
+ * Optional on purpose: an older client that sends nothing keeps the previous
+ * behaviour (the server mints the id), so the two can be deployed independently.
+ * When present it is honoured verbatim, which is what removes the
+ * placeholder-id → real-id swap from the whole send flow.
+ *
+ * The pattern is the gate: an unvalidated client primary key would let a caller
+ * submit arbitrary strings — look-alike ids, oversized values, or content that
+ * leaks into logs and URLs.
+ */
+const clientEntityId = (entity: ClientAllocatableEntity) =>
+  z.string().regex(entityIdPattern(entity)).optional();
+
+export const AiSendMessageServerSchema = z.object({
+  agentId: z.string().optional(),
+  groupId: z.string().optional(),
+  newAssistantMessage: z.object({
+    agentId: z.string().optional(),
+    id: clientEntityId('messages'),
+    metadata: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .transform(omitServerOwnedMessageMetadata),
+    model: z.string().optional(),
+    provider: z.string().optional(),
+  }),
+  newThread: CreateThreadWithMessageSchema.optional(),
+  newTopic: z
+    .object({
+      id: clientEntityId('topics'),
+      metadata: z.custom<ChatTopicMetadata>().optional(),
+      model: z.string().optional(),
+      projectId: z.string().optional(),
+      provider: z.string().optional(),
+      title: z.string().optional(),
+      topicMessageIds: z.array(z.string()).optional(),
+      trigger: z.string().optional(),
+    })
+    .optional(),
+  preloadMessages: z.array(SendPreloadMessageSchema).optional(),
+  newUserMessage: z.object({
+    content: z.string(),
+    contextSelections: z.array(ContextSelectionSchema).optional(),
+    editorData: z.record(z.string(), z.unknown()).optional(),
+    files: z.array(z.string()).optional(),
+    id: clientEntityId('messages'),
+    metadata: ClientMessageMetadataSchema.optional(),
+    pageSelections: z.array(PageSelectionSchema).optional(),
+    parentId: z.string().optional(),
+  }),
+  sessionId: z.string().optional(),
+  threadId: z.string().optional(),
+  topicFilter: z
+    .object({
+      excludeStatuses: z.array(z.string()).optional(),
+      excludeTriggers: z.array(z.string()).optional(),
+      includeTriggers: z.array(z.string()).optional(),
+      onlyMine: z.boolean().optional(),
+    })
+    .optional(),
+  topicPageSize: z.number().int().min(1).max(100).optional(),
+  topicId: z.string().optional(),
+});
+
+export interface SendMessageServerResponse {
+  assistantMessageId: string;
+  /**
+   * If a new thread was created, this will be the thread ID
+   */
+  createdThreadId?: string;
+  isCreateNewTopic: boolean;
+  messages: UIChatMessage[];
+  topicId: string;
+  topics?: {
+    items: ChatTopic[];
+    total: number;
+  };
+  userMessageId: string;
+}
+
+export const StructureSchema = z.object({
+  description: z.string().optional(),
+  name: z.string(),
+  schema: z.object({
+    $defs: z.any().optional(),
+    additionalProperties: z.boolean().optional(),
+    properties: z.record(z.string(), z.any()),
+    required: z.array(z.string()).optional(),
+    type: z.literal('object'),
+  }),
+  strict: z.boolean().optional(),
+});
+
+export const StructureOutputSchema = z.object({
+  /**
+   * Free-form context forwarded to non-tracing hooks (e.g. billing). Use
+   * `tracing` for `llm_generation_tracing` config.
+   */
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  messages: z.array(z.any()),
+  model: z.string(),
+  provider: z.string(),
+  schema: StructureSchema.optional(),
+  tools: z
+    .array(z.object({ function: LobeUniformToolSchema, type: z.literal('function') }))
+    .optional(),
+  /**
+   * Structured tracing config (scenario / promptVersion / schemaName /
+   * agentId / topicId / inputHint / ...). See `TracingOptions` from
+   * `@lobechat/llm-generation-tracing` for the typed shape.
+   *
+   * `tracingId` is validated as UUID here because the value is reused as the
+   * `llm_generation_tracing.id` primary key (uuid column) and is also accepted
+   * back through `llmGenerationTracing.recordFeedback` (`z.string().uuid()`).
+   * Letting a malformed value through would echo a tracingId the client can't
+   * use for the feedback flow. Other fields stay free-form via `catchall`.
+   */
+  tracing: z.object({ tracingId: z.string().uuid().optional() }).catchall(z.unknown()).optional(),
+});
+
+/** Plain text or structured JSON, as a decision model accepts for `state`, `instructions` and criteria. */
+const DecisionContentSchema = z.union([
+  z.string(),
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
+]);
+
+/** One typed question for a decision model; mirrors `DecisionQuestion` in `@lobechat/model-runtime`. */
+export const DecisionQuestionSchema = z.discriminatedUnion('type', [
+  z.object({
+    criteria: z.object({ false: DecisionContentSchema, true: DecisionContentSchema }).optional(),
+    instructions: DecisionContentSchema,
+    type: z.literal('boolean'),
+  }),
+  z.object({
+    criteria: z.record(z.string(), DecisionContentSchema.nullable()),
+    instructions: DecisionContentSchema,
+    type: z.literal('choice'),
+  }),
+  z.object({
+    criteria: z.array(DecisionContentSchema).min(1),
+    instructions: DecisionContentSchema,
+    type: z.literal('score'),
+  }),
+]);
+
+export const DecisionOutputSchema = z.object({
+  /** Free-form context forwarded to non-tracing hooks (e.g. billing), as on `outputJSON`. */
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  model: z.string(),
+  provider: z.string(),
+  /** Question name → question. The names come back as the keys of `answers`. */
+  questions: z
+    .record(z.string(), DecisionQuestionSchema)
+    .refine((questions) => Object.keys(questions).length > 0, {
+      message: 'A decision request needs at least one question',
+    }),
+  /** The content every question is evaluated against. */
+  state: DecisionContentSchema,
+  /** Structured tracing config, validated like `StructureOutputSchema.tracing`. */
+  tracing: z.object({ tracingId: z.string().uuid().optional() }).catchall(z.unknown()).optional(),
+});
+
+export type DecisionOutputParams = z.infer<typeof DecisionOutputSchema>;
+
+interface IStructureSchema {
+  description?: string;
+  name: string;
+  schema: {
+    additionalProperties?: boolean;
+    properties: Record<string, any>;
+    required?: string[];
+    type: 'object';
+  };
+  strict?: boolean;
+}
+
+export interface StructureOutputParams {
+  messages: OpenAIChatMessage[];
+  /**
+   * Free-form context forwarded to non-tracing hooks (e.g. billing). Use
+   * `tracing` for `llm_generation_tracing` config.
+   */
+  metadata?: Record<string, unknown>;
+  model: string;
+  provider: string;
+  schema?: IStructureSchema;
+  systemRole?: string;
+  tools?: {
+    function: LobeUniformTool;
+    type: 'function';
+  }[];
+  /**
+   * Structured tracing config (scenario / promptVersion / schemaName /
+   * agentId / topicId / inputHint / ...). See `TracingOptions` from
+   * `@lobechat/llm-generation-tracing` for the typed shape.
+   */
+  tracing?: Record<string, unknown>;
+}

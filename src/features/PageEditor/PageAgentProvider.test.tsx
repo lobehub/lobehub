@@ -1,0 +1,250 @@
+/**
+ * @vitest-environment happy-dom
+ */
+import { render, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { PageAgentProvider } from './PageAgentProvider';
+
+interface AgentState {
+  activeAgentId?: string;
+  heterogeneousAgentIds?: string[];
+  pageAgentId: string;
+  setActiveAgentId: (agentId: string) => void;
+  useInitBuiltinAgent: (slug: string) => void;
+}
+
+interface ChatState {
+  activeAgentId?: string;
+  activeTopicId?: string | null;
+  dbMessagesMap: Record<string, unknown[]>;
+  replaceMessages: (messages: unknown[], options: unknown) => void;
+  switchTopic: (topicId: string | null, options: unknown) => Promise<void>;
+}
+
+const conversationProviderSpy = vi.fn();
+const operationState = { isInputLoading: false };
+
+let agentState: AgentState;
+let chatState: ChatState;
+
+vi.mock('@/components/Skeleton/Conversation/Segment', () => ({
+  default: () => <div data-testid="conversation-skeleton" />,
+}));
+
+vi.mock('@/components/Skeleton/Surface', () => ({
+  default: ({ variant }: { variant?: string }) => (
+    <div data-testid="surface-skeleton" data-variant={variant} />
+  ),
+}));
+
+vi.mock('@/features/Conversation', () => ({
+  ConversationProvider: (props: { children: ReactNode }) => {
+    conversationProviderSpy(props);
+    return <div data-testid="conversation-provider">{props.children}</div>;
+  },
+}));
+
+vi.mock('@/hooks/useOperationState', () => ({
+  useOperationState: () => operationState,
+}));
+
+vi.mock('@/store/agent', () => ({
+  useAgentStore: Object.assign((selector: (state: AgentState) => unknown) => selector(agentState), {
+    getState: () => agentState,
+  }),
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: {
+    isAgentHeterogeneousById: (agentId: string) => (state: AgentState) =>
+      !!state.heterogeneousAgentIds?.includes(agentId),
+  },
+  builtinAgentSelectors: {
+    pageAgentId: (state: AgentState) => state.pageAgentId,
+  },
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: Object.assign((selector: (state: ChatState) => unknown) => selector(chatState), {
+    getState: () => chatState,
+    setState: (partial: Partial<ChatState>) => {
+      chatState = { ...chatState, ...partial };
+    },
+  }),
+}));
+
+vi.mock('@/store/chat/utils/messageMapKey', () => ({
+  messageMapKey: (context: {
+    agentId?: string;
+    documentId?: string | null;
+    scope?: string;
+    topicId?: string | null;
+  }) => `${context.scope}_${context.agentId}_${context.topicId ?? context.documentId ?? 'new'}`,
+}));
+
+beforeEach(() => {
+  conversationProviderSpy.mockClear();
+
+  agentState = {
+    activeAgentId: 'page-agent',
+    pageAgentId: 'page-agent',
+    setActiveAgentId: vi.fn((agentId: string) => {
+      agentState.activeAgentId = agentId;
+    }),
+    useInitBuiltinAgent: vi.fn(),
+  };
+
+  chatState = {
+    activeAgentId: 'previous-agent',
+    activeTopicId: 'stale-topic',
+    dbMessagesMap: {},
+    replaceMessages: vi.fn(),
+    switchTopic: vi.fn(async () => {}),
+  };
+});
+
+describe('PageAgentProvider', () => {
+  it('keeps the editor skeleton while the page agent is initializing', () => {
+    agentState.activeAgentId = undefined;
+    agentState.pageAgentId = '';
+
+    const { queryByTestId, getByTestId } = render(
+      <PageAgentProvider pageId="doc-1">
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    expect(getByTestId('surface-skeleton').dataset.variant).toBe('editor');
+    expect(queryByTestId('conversation-skeleton')).toBeNull();
+  });
+
+  it('resets a stale page topic on initial scoped agent sync only', async () => {
+    const { rerender } = render(
+      <PageAgentProvider>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(chatState.switchTopic).toHaveBeenCalledWith(null, {
+        scope: 'page',
+        skipRefreshMessage: true,
+      });
+    });
+
+    chatState.activeTopicId = 'created-topic';
+
+    rerender(
+      <PageAgentProvider>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    expect(chatState.switchTopic).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets transient state on scoped agent sync even without an active topic', async () => {
+    chatState.activeTopicId = null;
+
+    render(
+      <PageAgentProvider>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(chatState.switchTopic).toHaveBeenCalledWith(null, {
+        scope: 'page',
+        skipRefreshMessage: true,
+      });
+    });
+  });
+
+  it('resets the page topic when the scoped agent changes', async () => {
+    const { rerender } = render(
+      <PageAgentProvider>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(chatState.switchTopic).toHaveBeenCalledTimes(1);
+    });
+
+    agentState.activeAgentId = 'next-agent';
+    chatState.activeTopicId = 'other-topic';
+
+    rerender(
+      <PageAgentProvider>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(chatState.switchTopic).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('falls back to the page agent when the active agent is heterogeneous', async () => {
+    agentState.activeAgentId = 'claude-code';
+    agentState.heterogeneousAgentIds = ['claude-code'];
+
+    render(
+      <PageAgentProvider>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(conversationProviderSpy).toHaveBeenCalled();
+    });
+
+    const { context } = conversationProviderSpy.mock.calls.at(-1)![0];
+    expect(context.agentId).toBe('page-agent');
+  });
+
+  it('can avoid syncing the page agent into global agent state', async () => {
+    agentState.activeAgentId = 'claude-code';
+    agentState.heterogeneousAgentIds = ['claude-code'];
+    chatState.activeAgentId = 'claude-code';
+    chatState.activeTopicId = 'topic-1';
+
+    render(
+      <PageAgentProvider pageId="doc-1" syncActiveAgent={false}>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(conversationProviderSpy).toHaveBeenCalled();
+    });
+
+    const { context } = conversationProviderSpy.mock.calls.at(-1)![0];
+    expect(context.agentId).toBe('page-agent');
+    expect(context.documentId).toBe('doc-1');
+    expect(context.topicId).toBeNull();
+    expect(agentState.activeAgentId).toBe('claude-code');
+    expect(agentState.setActiveAgentId).not.toHaveBeenCalled();
+    expect(chatState.activeAgentId).toBe('claude-code');
+    expect(chatState.activeTopicId).toBe('topic-1');
+    expect(chatState.switchTopic).not.toHaveBeenCalled();
+  });
+
+  it('injects the open document id into the conversation context', async () => {
+    render(
+      <PageAgentProvider pageId="doc-1">
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(conversationProviderSpy).toHaveBeenCalled();
+    });
+
+    const { context } = conversationProviderSpy.mock.calls.at(-1)![0];
+    expect(context.documentId).toBe('doc-1');
+    expect(context.scope).toBe('page');
+  });
+});

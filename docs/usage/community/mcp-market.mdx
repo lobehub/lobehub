@@ -1,0 +1,159 @@
+---
+title: MCP Marketplace
+description: Discover and install MCP servers that connect Agents to external tools, data, and services.
+tags:
+  - LobeHub
+  - MCP
+  - Model Context Protocol
+  - MCP Servers
+  - Connectors
+---
+
+# MCP Marketplace
+
+MCP (Model Context Protocol) connects Agents to databases, APIs, file systems, development tools, and business apps. The MCP Marketplace brings together community MCP servers that you can browse and install.
+
+## MCP Servers and Skills
+
+| Type | What it does | Example |
+| --- | --- | --- |
+| **MCP Server** | Connects external tools and data | Databases, GitHub, browsers, and business apps |
+| **Skill** | Tells an Agent how to complete a task | Writing guides, review checklists, and workflows |
+
+MCP connections and authorization are managed under **Settings → Connectors**. See [Skills Marketplace](/docs/usage/community/skills-market) to browse and install Skills.
+
+## Open the MCP Marketplace
+
+Open **Community** from the LobeHub sidebar, then select **MCP**.
+
+The marketplace includes:
+
+- **Search** by name, description, or keyword
+- **Categories** for development, productivity, search, media, business services, and more
+- **Sorting** by featured status, installs, update time, and other options
+- **MCP cards** with name, author, description, grade, installs, and GitHub Stars
+
+Marketplace counts and rankings change over time. The current values appear on the page.
+
+## Read an MCP Card
+
+An MCP card can show:
+
+| Information | Meaning |
+| --- | --- |
+| **Name, author, and description** | What the MCP server does |
+| **Grade** | A combined grade based on validation, installation method, features, and repository information |
+| **Featured, official, or validated** | Marketplace status labels |
+| **Tools, Prompts, and Resources** | Capabilities included with the server |
+| **Local, cloud, or hybrid** | How the server runs |
+| **Installs and GitHub Stars** | Marketplace installations and source repository activity |
+
+The information shown can vary by MCP server.
+
+## View MCP Details
+
+Select a card to open its detail page. You can view:
+
+- **Overview**: Summary, README, tags, and related MCP servers
+- **Installation**: Connection method, dependencies, commands, arguments, and environment variables
+- **Capabilities**: Tools, Prompts, and Resources
+- **Scores**: Overall grade and score details
+- **Version History**: Versions, release dates, and the latest version
+- **Source Information**: Website, license, and GitHub repository
+
+## Install from the Marketplace
+
+1. Open an MCP server from **Community → MCP**.
+2. You can browse its description, installation method, and capabilities.
+3. Select **Install MCP Server**.
+4. Follow the page prompts to enter a URL, API key, or environment variables.
+5. Enable the connector for the Agent that will use it.
+
+For services with account authorization, the page guides you through sign-in. STDIO servers that run local commands are available on desktop. HTTP servers can connect to remote services, and the desktop app can also connect to local or network endpoints.
+
+## Add an MCP Manually
+
+If an MCP server is not listed in the marketplace, open **Settings → Connectors** to add it manually.
+
+### HTTP Server
+
+Enter the MCP server URL and add authentication or headers when the service uses them. The desktop app can also connect to local or network addresses, such as:
+
+```text
+http://127.0.0.1:3000/mcp
+```
+
+### STDIO Server
+
+Enter the launch command, arguments, and environment variables. STDIO servers run as local processes and are currently available on desktop.
+
+You can also import a `mcpServers` JSON block:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/workspace"],
+      "type": "stdio"
+    }
+  }
+}
+```
+
+## Use MCP with an Agent
+
+After installation, enable the connection for the Agent that will use it:
+
+1. Open **Agent Settings**.
+2. Go to **Connectors**.
+3. Select the MCP server.
+4. Set tool permissions and save.
+
+Tool permissions have three modes:
+
+| Permission | Behavior |
+| --- | --- |
+| **Allow** | The tool can run directly |
+| **Ask** | LobeHub asks before each run |
+| **Deny** | The tool does not run |
+
+The Agent can now call MCP tools when they fit the task. Tool call records in the conversation show the process and results.
+
+## Helpful Tips
+
+- Start with read-only access when trying a new MCP server
+- Keep API keys and tokens in Connector authentication settings
+- Use the desktop app for local and network addresses
+- Open launch commands to see which dependencies they use
+- Try a new connection with test data first
+
+## Troubleshooting
+
+**The MCP server does not appear after installation**
+
+- View whether installation completed
+- For STDIO servers, view whether the launch command is available
+- View startup information in the server logs
+- Reopen LobeHub
+
+**Tools do not appear in the conversation**
+
+- View the connection status under **Settings → Connectors**
+- View whether the current Agent has the connector enabled
+- View whether tool permissions are set to **Allow** or **Ask**
+
+**Connection or authentication fails**
+
+- View whether the API key or token is still valid
+- View whether the authentication method matches the service
+- For HTTP servers, view whether the current device can reach the URL
+- Open the server logs for authentication and network details
+
+<Cards>
+  <Card href={'/docs/usage/community/overview'} title={'Marketplace Overview'} />
+
+  <Card href={'/docs/usage/community/skills-market'} title={'Skills Marketplace'} />
+
+  <Card href={'/docs/usage/agent/connectors'} title={'Connectors'} />
+</Cards>

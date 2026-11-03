@@ -1,0 +1,113 @@
+import type { NotificationMetadata } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
+import { boolean, index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+
+import { createdAt, timestamptz, updatedAt } from './_helpers';
+import { users } from './user';
+import { workspaces } from './workspace';
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /**
+     * Workspace this notification belongs to. NULL means the notification is
+     * personal — the inbox shows `workspace_id IS NULL` rows in personal mode
+     * and `workspace_id = <current>` rows in workspace mode, so the two
+     * contexts never leak into each other.
+     */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /** High-level grouping for preference toggles, e.g. `budget`, `subscription` */
+    category: text('category').notNull(),
+    /** Specific scenario type, e.g. `budget_exhausted`, `subscription_expiring` */
+    type: text('type').notNull(),
+
+    /** Notification title, used for email subject and inbox display */
+    title: text('title').notNull(),
+    /** Notification body text */
+    content: text('content').notNull(),
+    /** Optional secondary context shown in inbox surfaces */
+    context: text('context'),
+
+    /** Structured extras for inbox rendering, e.g. the triggering user (`actor`) */
+    metadata: jsonb('metadata').$type<NotificationMetadata>(),
+
+    /** Idempotency key — same (userId, dedupeKey) pair prevents duplicate notifications */
+    dedupeKey: text('dedupe_key'),
+    /** URL to navigate to when user clicks the notification */
+    actionUrl: text('action_url'),
+
+    isRead: boolean('is_read').default(false).notNull(),
+    /** Archived notifications are hidden from inbox but not deleted */
+    isArchived: boolean('is_archived').default(false).notNull(),
+
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    /** General-purpose FK index for cascade deletes and unfiltered queries */
+    index('idx_notifications_user').on(table.userId),
+    /** Inbox list: non-archived notifications ordered by time, with cursor pagination */
+    index('idx_notifications_user_active')
+      .on(table.userId, table.createdAt)
+      .where(sql`${table.isArchived} = false`),
+    /** Unread count and mark-all-as-read queries */
+    index('idx_notifications_user_unread')
+      .on(table.userId)
+      .where(sql`${table.isRead} = false AND ${table.isArchived} = false`),
+    /** Idempotent notification creation via ON CONFLICT */
+    uniqueIndex('idx_notifications_dedupe').on(table.userId, table.dedupeKey),
+    /** Context-scoped inbox queries: (user, workspace) lookups in workspace mode */
+    index('idx_notifications_user_workspace').on(table.userId, table.workspaceId),
+    /** Workspace-leading lookups, esp. the ON DELETE CASCADE path when a workspace is removed */
+    index('idx_notifications_workspace_id').on(table.workspaceId),
+    /** Cron cleanup: find archived notifications older than retention period */
+    index('idx_notifications_archived_cleanup')
+      .on(table.updatedAt, table.createdAt, table.id)
+      .where(sql`${table.isArchived} = true`),
+  ],
+);
+
+export type NewNotification = typeof notifications.$inferInsert;
+export type NotificationItem = typeof notifications.$inferSelect;
+
+export const notificationDeliveries = pgTable(
+  'notification_deliveries',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    notificationId: uuid('notification_id')
+      .references(() => notifications.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Delivery channel: `inbox` | `email` | `push` | `im` (messenger DM) */
+    channel: text('channel').$type<'email' | 'im' | 'inbox' | 'push'>().notNull(),
+    /** Lifecycle status: `pending` | `sent` | `delivered` | `failed` */
+    status: text('status').$type<'delivered' | 'failed' | 'pending' | 'sent'>().notNull(),
+
+    /** ID returned by the channel provider, e.g. Resend messageId */
+    providerMessageId: text('provider_message_id'),
+    /** Error description when status is `failed` */
+    failedReason: text('failed_reason'),
+    sentAt: timestamptz('sent_at'),
+
+    createdAt: createdAt(),
+  },
+  (table) => [
+    /** FK lookup for cascade deletes when parent notification is removed */
+    index('idx_deliveries_notification').on(table.notificationId),
+    /** Dashboard: filter deliveries by channel */
+    index('idx_deliveries_channel').on(table.channel),
+    /** Dashboard: filter deliveries by status */
+    index('idx_deliveries_status').on(table.status),
+  ],
+);
+
+export type NewNotificationDelivery = typeof notificationDeliveries.$inferInsert;
+export type NotificationDeliveryItem = typeof notificationDeliveries.$inferSelect;

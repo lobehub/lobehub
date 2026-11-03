@@ -1,0 +1,93 @@
+/**
+ * useClientDataSWR with automatic Zustand store sync
+ *
+ * Solves the problem of SWR cached data not being immediately synced to Zustand store.
+ * When SWR returns data from the persisted cache, it will automatically sync to store via onData callback.
+ *
+ * Persistence (localStorage vs IndexedDB) is handled transparently by the
+ * tier-aware SWR cache provider (see `localStorageProvider.ts`) based on the
+ * SWR key — consumers never need to opt in per call.
+ */
+
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { type SWRConfiguration, type SWRResponse } from 'swr';
+
+import { useClientDataSWR } from './index';
+
+type Key = string | readonly unknown[] | null | undefined;
+
+interface UseClientDataSWRWithSyncOptions<T> extends SWRConfiguration<T> {
+  /**
+   * Data sync callback, called when data is available (both cached and fresh data)
+   * Used to sync data to Zustand store
+   */
+  onData?: (data: T) => void;
+  /**
+   * Whether to skip sync (optional, for conditional skipping)
+   */
+  skipSync?: boolean;
+}
+
+/**
+ * Enhanced version of useClientDataSWR with automatic cache data sync to Zustand store
+ *
+ * Always build the key from its `*Keys` factory in `./keys`, never as a literal
+ * tuple — an imperative `mutate` that hand-writes the same shape drifts silently
+ * and warms an entry no subscriber ever reads.
+ *
+ * @example
+ * ```ts
+ * useClientDataSWRWithSync(
+ *   agentConfigKeys.search(keyword),
+ *   () => agentService.queryAgents({ keyword }),
+ *   {
+ *     onData: (data) => {
+ *       // Auto sync to store, whether cached or fresh data
+ *       set({ agents: data, isInit: true });
+ *     },
+ *     skipSync: state.isInit, // Optional: skip after initialized
+ *   }
+ * );
+ * ```
+ */
+export function useClientDataSWRWithSync<T>(
+  key: Key,
+  fetcher: (() => Promise<T>) | null,
+  options?: UseClientDataSWRWithSyncOptions<T>,
+): SWRResponse<T> {
+  const { onData, skipSync, onSuccess, ...swrOptions } = options || {};
+  const hasSyncedRef = useRef(false);
+
+  const response = useClientDataSWR<T>(key, fetcher, {
+    ...swrOptions,
+    onSuccess: (data, key, config) => {
+      // Call original onSuccess
+      onSuccess?.(data, key, config);
+      // Also sync via onData
+      if (onData && !skipSync) {
+        onData(data);
+        hasSyncedRef.current = true;
+      }
+    },
+  });
+
+  const { data } = response;
+
+  // When cached data is available, sync to store immediately
+  useEffect(() => {
+    if (data && onData && !skipSync && !hasSyncedRef.current) {
+      onData(data);
+      hasSyncedRef.current = true;
+    }
+  }, [data, onData, skipSync]);
+
+  // Reset sync state when the key changes. useLayoutEffect on purpose: this
+  // must run before the data-effect above, or a data arrival for the new key
+  // in the same commit is swallowed by the stale `hasSyncedRef` — e.g.
+  // switching agents would keep rendering the previous agent's data.
+  useLayoutEffect(() => {
+    hasSyncedRef.current = false;
+  }, [key?.toString()]);
+
+  return response;
+}

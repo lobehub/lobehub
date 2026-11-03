@@ -1,0 +1,51 @@
+[
+  {
+    "id": "msg-1",
+    "role": "user",
+    "content": "What's the weather?",
+    "createdAt": 1000,
+    "updatedAt": 1000
+  },
+  {
+    "id": "msg-2",
+    "role": "assistant",
+    "content": "Let me check the weather for you.",
+    "createdAt": 2000,
+    "updatedAt": 2000,
+    "parentId": "msg-1",
+    "tools": [
+      {
+        "id": "tool-1",
+        "type": "default",
+        "apiName": "getWeather",
+        "identifier": "weather",
+        "arguments": "{\"location\":\"New York\"}"
+      }
+    ]
+  },
+  {
+    "id": "tool-1",
+    "role": "tool",
+    "content": "{\"temperature\":\"72F\",\"condition\":\"sunny\"}",
+    "createdAt": 3000,
+    "updatedAt": 3000,
+    "parentId": "msg-2",
+    "tool_call_id": "tool-1"
+  },
+  {
+    "id": "msg-3",
+    "role": "assistant",
+    "content": "The weather in New York is 72F and sunny.",
+    "createdAt": 4000,
+    "updatedAt": 4000,
+    "parentId": "tool-1"
+  },
+  {
+    "id": "msg-4",
+    "role": "user",
+    "content": "Thanks! How about tomorrow?",
+    "createdAt": 5000,
+    "updatedAt": 5000,
+    "parentId": "msg-3"
+  }
+]

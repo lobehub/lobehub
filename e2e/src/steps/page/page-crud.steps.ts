@@ -1,0 +1,522 @@
+/**
+ * Page CRUD Steps
+ *
+ * Step definitions for Page (文稿) CRUD E2E tests
+ * - Create
+ * - Rename
+ * - Duplicate
+ * - Delete
+ */
+import { Given, Then, When } from '@cucumber/cucumber';
+import { expect } from '@playwright/test';
+
+import type { CustomWorld } from '../../support/world';
+import { WAIT_TIMEOUT } from '../../support/world';
+import { dismissDocsMergeNotice, openDocsHome } from './docs-home';
+
+// ============================================
+// Helper Functions
+// ============================================
+
+async function inputPageName(
+  this: CustomWorld,
+  newName: string,
+  pressEnter: boolean,
+): Promise<void> {
+  await this.page.waitForTimeout(300);
+
+  // Try to find the popover input or inline editing input
+  const inputSelectors = [
+    '.ant-popover-inner input',
+    '.ant-popover-content input',
+    '.ant-popover input',
+    'input[type="text"]:visible',
+  ];
+
+  let renameInput = null;
+
+  for (const selector of inputSelectors) {
+    try {
+      const locator = this.page.locator(selector).first();
+      await locator.waitFor({ state: 'visible', timeout: 2000 });
+      renameInput = locator;
+      break;
+    } catch {
+      // Try next selector
+    }
+  }
+
+  if (!renameInput) {
+    // Fallback: find any visible input
+    const allInputs = this.page.locator('input:visible');
+    const count = await allInputs.count();
+
+    for (let i = 0; i < count; i++) {
+      const input = allInputs.nth(i);
+      const placeholder = (await input.getAttribute('placeholder').catch(() => '')) || '';
+      if (placeholder.includes('Search') || placeholder.includes('搜索')) continue;
+
+      const isInPopover = await input.evaluate((el) => {
+        return el.closest('.ant-popover') !== null || el.closest('[class*="popover"]') !== null;
+      });
+
+      if (isInPopover || count <= 2) {
+        renameInput = input;
+        break;
+      }
+    }
+  }
+
+  if (renameInput) {
+    await renameInput.click();
+    await renameInput.clear();
+    await renameInput.fill(newName);
+
+    if (pressEnter) {
+      await renameInput.press('Enter');
+    } else {
+      await this.page.click('body', { position: { x: 10, y: 10 } });
+    }
+  } else {
+    // Keyboard fallback (use modKey for cross-platform support)
+    await this.page.keyboard.press(`${this.modKey}+A`);
+    await this.page.waitForTimeout(50);
+    await this.page.keyboard.type(newName, { delay: 20 });
+
+    if (pressEnter) {
+      await this.page.keyboard.press('Enter');
+    } else {
+      await this.page.click('body', { position: { x: 10, y: 10 } });
+    }
+  }
+
+  await this.page.waitForTimeout(1000);
+  console.log(`   ✅ 已输入新名称 "${newName}"`);
+}
+
+async function waitForPageWorkspaceReady(world: CustomWorld): Promise<void> {
+  const loadingSelectors = ['[aria-label="Loading"]', '.lobe-brand-loading'];
+  const timeout = WAIT_TIMEOUT;
+  const start = Date.now();
+
+  while (Date.now() - start < timeout) {
+    // Wait until global loading indicator is gone
+    let loadingVisible = false;
+    for (const selector of loadingSelectors) {
+      const loading = world.page.locator(selector).first();
+      if ((await loading.count()) > 0 && (await loading.isVisible())) {
+        loadingVisible = true;
+        break;
+      }
+    }
+
+    if (loadingVisible) {
+      await world.page.waitForTimeout(300);
+      continue;
+    }
+
+    // Any of these means the page workspace is ready for interactions.
+    // The new-page button is rendered by `@lobehub/ui` ActionIcon as a
+    // `<div role="button">` rather than a native `<button>`, so match either.
+    const readyCandidates = [
+      // Pages live inside Docs now: the Docs home quick action renders a FilePlus2
+      // icon, while the sidebar section keeps the SquarePen one.
+      world.page.locator(':is(button, [role="button"]):has(svg.lucide-file-plus-2)').first(),
+      world.page.locator(':is(button, [role="button"]):has(svg.lucide-square-pen)').first(),
+      world.page.locator('input[placeholder*="Search"], input[placeholder*="搜索"]').first(),
+      world.page.locator('a[href*="/resource/page/"]').first(),
+    ];
+
+    for (const candidate of readyCandidates) {
+      if ((await candidate.count()) > 0 && (await candidate.isVisible())) {
+        return;
+      }
+    }
+
+    await world.page.waitForTimeout(300);
+  }
+
+  throw new Error('Page workspace did not become ready in time');
+}
+
+/** Clicks on the new page button before giving up on a mask that keeps returning. */
+const NEW_PAGE_CLICK_ATTEMPTS = 3;
+
+async function clickNewPageButton(world: CustomWorld): Promise<void> {
+  // The one-time "Pages and Resources are now Docs" notice is a modal: while it
+  // is up, the click lands on the mask and no page is created.
+  await dismissDocsMergeNotice(world, 1500);
+  await waitForPageWorkspaceReady(world);
+
+  const candidates = [
+    // Pages live inside Docs now: the home quick action renders a FilePlus2 icon,
+    // while the sidebar section keeps the SquarePen one.
+    world.page.locator(':is(button, [role="button"]):has(svg.lucide-file-plus-2)').first(),
+    world.page.locator(':is(button, [role="button"]):has(svg.lucide-square-pen)').first(),
+    world.page
+      .locator('svg.lucide-square-pen')
+      .first()
+      .locator('xpath=ancestor::*[self::button or @role="button"][1]'),
+    world.page.getByRole('button', { name: /create page|new page|新建文稿|新建/i }).first(),
+    world.page
+      .locator(
+        'button[title*="Create"], button[title*="Page"], button[title*="new"], button[title*="新建"]',
+      )
+      .first(),
+  ];
+
+  for (const candidate of candidates) {
+    if ((await candidate.count()) === 0) continue;
+    if (!(await candidate.isVisible())) continue;
+
+    // The notice can mount after the dismissal above (it waits for the user
+    // preference and the Docs home list), and then its mask swallows the click
+    // until the step times out. Dismiss it again and retry instead.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await candidate.click({ timeout: 5000 });
+        break;
+      } catch (error) {
+        if (attempt >= NEW_PAGE_CLICK_ATTEMPTS) throw error;
+        await dismissDocsMergeNotice(world, 1500);
+      }
+    }
+    await world.page.waitForTimeout(500);
+    return;
+  }
+
+  throw new Error('Could not find new page button');
+}
+
+/**
+ * Wait for whatever rename UI the row opened and return its input.
+ *
+ * Docs renames a page inline — the field takes the place of the row title — and
+ * it is tagged so the step never has to guess between the other inputs on the
+ * screen (sidebar search, home chat box, editor title). The legacy popover shape
+ * is still accepted for surfaces that have not moved to Docs yet.
+ *
+ * Each shape gets a bounded wait: scanning every `input` on the page and
+ * filtering by placeholder used to burn the whole 30s step budget without ever
+ * reaching the rename field.
+ */
+async function findRenameInput(world: CustomWorld) {
+  const shapes = [
+    '[data-testid="page-rename-input"]',
+    '.ant-popover-inner input, .ant-popover-content input, .ant-popover input',
+  ];
+
+  for (const selector of shapes) {
+    const input = world.page.locator(selector).first();
+
+    try {
+      await input.waitFor({ state: 'visible', timeout: 5000 });
+
+      return input;
+    } catch {
+      // Try the next rename shape.
+    }
+  }
+
+  return null;
+}
+
+// ============================================
+// Given Steps
+// ============================================
+
+Given('用户在 Page 页面', { timeout: 30_000 }, async function (this: CustomWorld) {
+  console.log('   📍 Step: 导航到 Page 页面...');
+  await openDocsHome(this);
+  await waitForPageWorkspaceReady(this);
+
+  console.log('   ✅ 已进入 Page 页面');
+});
+
+Given('用户在 Page 页面有一个文稿', { timeout: 60_000 }, async function (this: CustomWorld) {
+  console.log('   📍 Step: 导航到 Page 页面...');
+  await openDocsHome(this);
+
+  console.log('   📍 Step: 通过 UI 创建新文稿...');
+  await clickNewPageButton(this);
+  await this.page.waitForTimeout(1500);
+
+  // Wait for the new page to be created and URL to change
+  await this.page.waitForURL(/\/resource\/page\/.+/, { timeout: WAIT_TIMEOUT });
+
+  // Create a unique title for this test page
+  const uniqueTitle = `E2E Page ${Date.now()}`;
+
+  console.log(`   📍 Step: 重命名为唯一标题 "${uniqueTitle}"...`);
+  // Find the new page in sidebar (use link selector to avoid matching editor title)
+  // Sidebar page items are rendered as <a href="/resource/page/xxx"> links
+
+  // Debug: check how many links exist
+  const allPageLinks = this.page.locator('a[href*="/resource/page/"]');
+  const linkCount = await allPageLinks.count();
+  console.log(`   📍 Debug: Found ${linkCount} page links in sidebar`);
+
+  // Find the Untitled page link
+  const pageItem = allPageLinks.filter({ hasText: /Untitled|无标题/ }).first();
+  const pageItemCount = await allPageLinks.filter({ hasText: /Untitled|无标题/ }).count();
+  console.log(`   📍 Debug: Found ${pageItemCount} Untitled page links`);
+
+  await expect(pageItem).toBeVisible({ timeout: 5000 });
+  console.log('   📍 Debug: Page item is visible');
+
+  // Right-click to open context menu and rename
+  await pageItem.click({ button: 'right' });
+  console.log('   📍 Debug: Right-clicked on page item');
+  await this.page.waitForTimeout(500);
+
+  // Debug: check menu items
+  const menuItemCount = await this.page.locator('[role="menuitem"]').count();
+  console.log(`   📍 Debug: Found ${menuItemCount} menu items after right-click`);
+
+  const renameOption = this.page.getByRole('menuitem', { name: /rename|重命名/i });
+  await expect(renameOption).toBeVisible({ timeout: 5000 });
+  console.log('   📍 Debug: Rename option is visible');
+  await renameOption.click();
+  console.log('   📍 Debug: Clicked rename option');
+  await this.page.waitForTimeout(800);
+
+  // Wait for the rename field to appear
+  const popoverInput = await findRenameInput(this);
+
+  if (!popoverInput) {
+    throw new Error(
+      'Could not find rename input: expected [data-testid="page-rename-input"] inline or a popover input',
+    );
+  }
+  await expect(popoverInput).toBeVisible({ timeout: 5000 });
+
+  // Clear and input the unique name
+  await popoverInput.click();
+  await popoverInput.clear();
+  await popoverInput.fill(uniqueTitle);
+  console.log(`   📍 Debug: Filled input with "${uniqueTitle}"`);
+
+  // Press Enter to confirm
+  await popoverInput.press('Enter');
+  await this.page.waitForTimeout(1000);
+
+  // Wait for the renamed page to be visible
+  const renamedItem = this.page.getByText(uniqueTitle, { exact: true }).first();
+  await expect(renamedItem).toBeVisible({ timeout: WAIT_TIMEOUT });
+
+  // Store page reference for later use
+  this.testContext.targetItemTitle = uniqueTitle;
+  this.testContext.targetType = 'page';
+
+  console.log(`   ✅ 找到文稿: ${uniqueTitle}`);
+});
+
+Given(
+  '用户在 Page 页面有一个文稿 {string}',
+  { timeout: 60_000 },
+  async function (this: CustomWorld, title: string) {
+    console.log('   📍 Step: 导航到 Page 页面...');
+    await openDocsHome(this);
+
+    console.log('   📍 Step: 通过 UI 创建新文稿...');
+    await clickNewPageButton(this);
+    await this.page.waitForTimeout(1500);
+
+    // Wait for the new page to be created
+    await this.page.waitForURL(/\/resource\/page\/.+/, { timeout: WAIT_TIMEOUT });
+
+    // Default title is "无标题" (Untitled) - support both languages
+    const defaultTitleRegex = /^(无标题|Untitled)$/;
+
+    console.log(`   📍 Step: 通过右键菜单重命名文稿为 "${title}"...`);
+    // Find the new page in sidebar (use link selector to avoid matching editor title)
+    // Sidebar page items are rendered as <a href="/resource/page/xxx"> links
+    const pageItem = this.page
+      .locator('a[href*="/resource/page/"]')
+      .filter({ hasText: defaultTitleRegex })
+      .first();
+    await expect(pageItem).toBeVisible({ timeout: 5000 });
+
+    // Right-click to open context menu
+    await pageItem.click({ button: 'right' });
+    await this.page.waitForTimeout(500);
+
+    // Select rename option
+    const renameOption = this.page.getByRole('menuitem', { name: /rename|重命名/i });
+    await expect(renameOption).toBeVisible({ timeout: 5000 });
+    await renameOption.click();
+    await this.page.waitForTimeout(800);
+
+    // Wait for the rename field to appear
+    const popoverInput = await findRenameInput(this);
+
+    if (!popoverInput) {
+      throw new Error(
+        'Could not find rename input: expected [data-testid="page-rename-input"] inline or a popover input',
+      );
+    }
+
+    await expect(popoverInput).toBeVisible({ timeout: 5000 });
+
+    // Clear and input the new name
+    await popoverInput.click();
+    await popoverInput.clear();
+    await popoverInput.fill(title);
+
+    // Press Enter to confirm
+    await popoverInput.press('Enter');
+    await this.page.waitForTimeout(1000);
+
+    console.log('   📍 Step: 查找文稿...');
+    const renamedItem = this.page.getByText(title, { exact: true }).first();
+    await expect(renamedItem).toBeVisible({ timeout: WAIT_TIMEOUT });
+
+    this.testContext.targetItemTitle = title;
+    this.testContext.targetType = 'page';
+
+    console.log(`   ✅ 找到文稿: ${title}`);
+  },
+);
+
+// ============================================
+// When Steps
+// ============================================
+
+When('用户点击新建文稿按钮', async function (this: CustomWorld) {
+  console.log('   📍 Step: 点击新建文稿按钮...');
+
+  await clickNewPageButton(this);
+
+  await this.page.waitForTimeout(1000);
+  console.log('   ✅ 已点击新建文稿按钮');
+});
+
+When('用户右键点击该文稿', async function (this: CustomWorld) {
+  console.log('   📍 Step: 右键点击文稿...');
+
+  const title = this.testContext.targetItemTitle || this.testContext.createdPageTitle;
+  // Find the page item by its title text, then find the parent clickable block
+  const titleElement = this.page.getByText(title, { exact: true }).first();
+  await expect(titleElement).toBeVisible({ timeout: 5000 });
+
+  // Right-click on the title element (the NavItem Block wraps the text)
+  await titleElement.click({ button: 'right' });
+
+  await this.page.waitForTimeout(800);
+
+  // Debug: check what menus are visible
+  const menuItems = await this.page.locator('[role="menuitem"]').count();
+  console.log(`   📍 Debug: Found ${menuItems} menu items after right-click`);
+
+  console.log('   ✅ 已右键点击文稿');
+});
+
+When('用户在菜单中选择复制', async function (this: CustomWorld) {
+  console.log('   📍 Step: 选择复制选项...');
+
+  // Look for duplicate option (复制 or Duplicate)
+  const duplicateOption = this.page.getByRole('menuitem', { name: /复制|duplicate/i });
+  await expect(duplicateOption).toBeVisible({ timeout: 5000 });
+  await duplicateOption.click();
+  await this.page.waitForTimeout(1000);
+
+  console.log('   ✅ 已选择复制选项');
+});
+
+When('用户输入新的文稿名称 {string}', async function (this: CustomWorld, newName: string) {
+  console.log(`   📍 Step: 输入新名称 "${newName}"...`);
+  await inputPageName.call(this, newName, false);
+});
+
+When(
+  '用户输入新的文稿名称 {string} 并按 Enter',
+  async function (this: CustomWorld, newName: string) {
+    console.log(`   📍 Step: 输入新名称 "${newName}" 并按 Enter...`);
+    await inputPageName.call(this, newName, true);
+  },
+);
+
+// ============================================
+// Then Steps
+// ============================================
+
+Then('应该创建一个新的文稿', async function (this: CustomWorld) {
+  console.log('   📍 Step: 验证新文稿已创建...');
+
+  await this.page.waitForTimeout(1000);
+
+  // Check if URL changed to a new page
+  const currentUrl = this.page.url();
+  expect(currentUrl).toMatch(/\/page\/.+/);
+
+  console.log('   ✅ 新文稿已创建');
+});
+
+Then('文稿列表中应该显示新文稿', async function (this: CustomWorld) {
+  console.log('   📍 Step: 验证文稿列表中显示新文稿...');
+
+  await this.page.waitForTimeout(500);
+
+  // Page list items are rendered with NavItem component (not <a> tags)
+  // Look for the untitled page in the sidebar list
+  const untitledText = this.page.getByText(/无标题|untitled/i).first();
+  await expect(untitledText).toBeVisible({ timeout: 5000 });
+
+  console.log('   ✅ 文稿列表中显示新文稿');
+});
+
+Then('该文稿名称应该更新为 {string}', async function (this: CustomWorld, expectedName: string) {
+  console.log(`   📍 Step: 验证名称为 "${expectedName}"...`);
+
+  await this.page.waitForTimeout(1000);
+
+  // Look for the renamed item in the list
+  const renamedItem = this.page.getByText(expectedName, { exact: true }).first();
+  await expect(renamedItem).toBeVisible({ timeout: 5000 });
+
+  console.log(`   ✅ 名称已更新为 "${expectedName}"`);
+});
+
+Then('文稿列表中应该出现 {string}', async function (this: CustomWorld, expectedName: string) {
+  console.log(`   📍 Step: 验证文稿列表中出现 "${expectedName}"...`);
+
+  await this.page.waitForTimeout(2000);
+
+  // The duplicated page might have "(Copy)" or " (Copy)" or "副本" suffix
+  // First try exact match, then try partial match
+  let duplicatedItem = this.page.getByText(expectedName, { exact: true }).first();
+
+  if ((await duplicatedItem.count()) === 0) {
+    // Try finding page with "Copy" in the name (could be "Original Page (Copy)" or similar)
+    const baseName = expectedName.replace(/\s*\(Copy\)$/, '');
+    duplicatedItem = this.page.getByText(new RegExp(`${baseName}.*Copy|${baseName}.*副本`)).first();
+  }
+
+  if ((await duplicatedItem.count()) === 0) {
+    // Fallback: check if there are at least 2 pages with similar name
+    const similarPages = this.page.getByText(expectedName.replace(/\s*\(Copy\)$/, '')).all();
+
+    const count = (await similarPages).length;
+    console.log(`   📍 Debug: Found ${count} pages with similar name`);
+    expect(count).toBeGreaterThanOrEqual(2);
+    console.log(`   ✅ 文稿列表中出现多个相似名称的文稿`);
+    return;
+  }
+
+  await expect(duplicatedItem).toBeVisible({ timeout: WAIT_TIMEOUT });
+  console.log(`   ✅ 文稿列表中出现 "${expectedName}"`);
+});
+
+Then('该文稿应该从列表中移除', async function (this: CustomWorld) {
+  console.log('   📍 Step: 验证文稿已移除...');
+
+  await this.page.waitForTimeout(1000);
+
+  const title = this.testContext.targetItemTitle || this.testContext.createdPageTitle;
+  if (title) {
+    const deletedItem = this.page.getByText(title, { exact: true });
+    await expect(deletedItem).not.toBeVisible({ timeout: 5000 });
+  }
+
+  console.log('   ✅ 文稿已从列表中移除');
+});

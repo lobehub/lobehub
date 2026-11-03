@@ -1,0 +1,22 @@
+{
+  "error.invalidFormat.desc": "شما هنوز می‌توانید آن را بخوانید. طرح‌بندی ممکن است با نسخه اصلی متفاوت باشد.",
+  "error.invalidFormat.ownerHint": "آن را در ویرایشگر دوباره ذخیره کنید تا طرح‌بندی اصلی بازیابی شود.",
+  "error.invalidFormat.title": "این صفحه نمی‌تواند در قالب اصلی خود نمایش داده شود",
+  "popover.copyLink": "کپی لینک",
+  "popover.copyLinkSuccess": "لینک کپی شد",
+  "popover.linkHint": "هر کسی که لینک را داشته باشد می‌تواند این صفحه را مشاهده کند",
+  "popover.permissionLink": "هر کسی با لینک",
+  "popover.permissionPrivate": "خصوصی",
+  "popover.permissionWorkspace": "هر کسی در فضای کاری",
+  "popover.privateHint": "فقط شما می‌توانید به این صفحه دسترسی داشته باشید",
+  "popover.sectionViews_one": "{{count}} بازدید",
+  "popover.sectionViews_other": "{{count}} بازدید",
+  "popover.title": "اشتراک‌گذاری صفحه",
+  "popover.updateError": "به‌روزرسانی تنظیمات اشتراک‌گذاری ناموفق بود",
+  "popover.visibility": "قابلیت مشاهده",
+  "popover.visibilityUpdated": "قابلیت مشاهده به‌روزرسانی شد",
+  "popover.workspaceHint": "هر کسی در این فضای کاری می‌تواند این صفحه را مشاهده کند",
+  "shareButton.label": "اشتراک‌گذاری",
+  "shell.sharedBy": "به اشتراک گذاشته شده توسط {{name}}",
+  "shell.updatedAt": "به‌روزرسانی شده {{relative}}"
+}

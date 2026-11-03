@@ -1,0 +1,414 @@
+import type { Command } from 'commander';
+import pc from 'picocolors';
+
+import { getTrpcClient } from '../../api/client';
+import { AGENT_RUN_EXIT_CODES } from '../../utils/agentRunOutcome';
+import { resolveLocalDeviceId } from '../../utils/device';
+import { outputJson } from '../../utils/format';
+import { log } from '../../utils/logger';
+import { followAgentRun } from '../agent/followRun';
+import { pollAgentRunStatus, RUN_POLL_INTERVAL_MS } from '../agent/runStatus';
+import { resolveUrlBuilder, resourcePath } from '../resourceUrl';
+
+type LifecycleClient = Awaited<ReturnType<typeof getTrpcClient>>;
+
+/**
+ * Follow a task run, degrading to status polling whenever the live stream cannot
+ * be used — a gateway that is unreachable, or a server predating the CLI's agent
+ * event journal (the CLI ships independently of the server). Without this the
+ * task would exit 3 having printed nothing.
+ */
+const followTaskRun = async (
+  client: LifecycleClient,
+  operationId: string,
+  options: { json?: boolean; verbose?: boolean },
+) => {
+  try {
+    return await followAgentRun(operationId, { json: options.json, verbose: options.verbose });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    log.warn(
+      `Live stream unavailable (${reason}). Polling run status every ${RUN_POLL_INTERVAL_MS / 1000}s…`,
+    );
+    return pollAgentRunStatus(client, operationId, { json: options.json });
+  }
+};
+
+export function registerLifecycleCommands(task: Command) {
+  // ── start ──────────────────────────────────────────────
+
+  task
+    .command('start <id>')
+    .description('Start a task (pending → running)')
+    .option('--no-run', 'Only update status, do not trigger agent execution')
+    .option('-p, --prompt <text>', 'Additional context for the agent')
+    .option('-f, --follow', 'Follow agent output in real-time (default: run in background)')
+    .option('--json', 'Output full JSON event stream')
+    .option('-v, --verbose', 'Show detailed tool call info')
+    .action(
+      async (
+        id: string,
+        options: {
+          follow?: boolean;
+          json?: boolean;
+          prompt?: string;
+          run?: boolean;
+          verbose?: boolean;
+        },
+      ) => {
+        const client = await getTrpcClient();
+
+        // Check if already running
+        const taskDetail = await client.task.find.query({ id });
+
+        if (taskDetail.data.status === 'running') {
+          log.info(`Task ${pc.bold(taskDetail.data.identifier)} is already running.`);
+          console.log(`ID: ${taskDetail.data.id}`);
+          return;
+        }
+
+        const statusResult = await client.task.updateStatus.mutate({ id, status: 'running' });
+        log.info(`Task ${pc.bold(statusResult.data.identifier)} started.`);
+        console.log(`ID: ${statusResult.data.id}`);
+
+        // Auto-run unless --no-run
+        if (options.run === false) return;
+
+        // Default agent to inbox if not assigned
+        if (!taskDetail.data.assigneeAgentId) {
+          await client.task.update.mutate({ assigneeAgentId: 'inbox', id });
+          log.info(`Assigned default agent: ${pc.dim('inbox')}`);
+        }
+
+        const result = (await client.task.run.mutate({
+          id,
+          ...(options.prompt && { prompt: options.prompt }),
+        })) as any;
+
+        if (!result.success) {
+          log.error(`Failed to run task: ${result.error || result.message || 'Unknown error'}`);
+          process.exit(1);
+        }
+
+        log.info(
+          `Operation: ${pc.dim(result.operationId)} · Topic: ${pc.dim(result.topicId || 'n/a')}`,
+        );
+
+        if (!options.follow) {
+          log.info(
+            `Agent running in background. Use ${pc.dim(`lh task view ${id}`)} to check status.`,
+          );
+          return;
+        }
+
+        const outcome = await followTaskRun(client, result.operationId, {
+          json: options.json,
+          verbose: options.verbose,
+        });
+        // The stream helper reports an `error` event as a failed outcome rather
+        // than exiting; keep this command's contract of failing on it.
+        if (outcome.kind !== 'completed') {
+          process.exitCode = AGENT_RUN_EXIT_CODES[outcome.kind];
+          return;
+        }
+
+        // Send heartbeat after completion
+        try {
+          await client.task.heartbeat.mutate({ id });
+        } catch {
+          // ignore heartbeat errors
+        }
+      },
+    );
+
+  // ── run ──────────────────────────────────────────────
+
+  task
+    .command('run <id>')
+    .description('Run a task — trigger agent execution')
+    .option('-p, --prompt <text>', 'Additional context for the agent')
+    .option('-c, --continue <topicId>', 'Continue running on an existing topic')
+    .option('--model <model>', "Replace the task's pinned model, for this run and later ones")
+    .option(
+      '--provider <provider>',
+      "Provider of --model (default: the agent's provider, not checked against the model)",
+    )
+    .option(
+      '--device <target>',
+      'Target device ID, or use "local" for the current connected device',
+    )
+    .option('-f, --follow', 'Follow agent output in real-time (default: run in background)')
+    .option('--topics <n>', 'Run N topics in sequence (default: 1, implies --follow)', '1')
+    .option('--delay <s>', 'Delay between topics in seconds', '0')
+    .option('--json', 'Output startup result as JSON, or full event stream with --follow')
+    .option('-v, --verbose', 'Show detailed tool call info')
+    .action(
+      async (
+        id: string,
+        options: {
+          continue?: string;
+          delay?: string;
+          device?: string;
+          follow?: boolean;
+          json?: boolean;
+          model?: string;
+          prompt?: string;
+          provider?: string;
+          topics?: string;
+          verbose?: boolean;
+        },
+      ) => {
+        const topicCount = Number.parseInt(options.topics || '1', 10);
+        const delaySec = Number.parseInt(options.delay || '0', 10);
+
+        let deviceId: string | undefined;
+        if (options.device === 'local') {
+          deviceId = resolveLocalDeviceId();
+          if (!deviceId) {
+            log.error(
+              "No local device found. Run 'lh connect' first, then retry with --device local.",
+            );
+            process.exitCode = 1;
+            return;
+          }
+        } else {
+          deviceId = options.device;
+        }
+
+        // --topics > 1 implies --follow
+        const shouldFollow = options.follow || topicCount > 1;
+
+        for (let i = 0; i < topicCount; i++) {
+          if (i > 0) {
+            log.info(`\n${'─'.repeat(60)}`);
+            log.info(`Topic ${i + 1}/${topicCount}`);
+            if (delaySec > 0) {
+              log.info(`Waiting ${delaySec}s before next topic...`);
+              await new Promise((r) => setTimeout(r, delaySec * 1000));
+            }
+          }
+
+          const client = await getTrpcClient();
+
+          // Auto-assign inbox agent on first topic if not assigned
+          if (i === 0) {
+            const taskDetail = await client.task.find.query({ id });
+            if (!taskDetail.data.assigneeAgentId) {
+              await client.task.update.mutate({ assigneeAgentId: 'inbox', id });
+              log.info(`Assigned default agent: ${pc.dim('inbox')}`);
+            }
+          }
+
+          // Only pass extra prompt and continue on first topic
+          const result = (await client.task.run.mutate({
+            id,
+            ...(deviceId && { deviceId }),
+            ...(i === 0 && options.prompt && { prompt: options.prompt }),
+            ...(i === 0 && options.continue && { continueTopicId: options.continue }),
+            // Persisted on the task, so later topics in this sequence inherit it.
+            ...(i === 0 && options.model && { model: options.model }),
+            ...(i === 0 && options.provider && { provider: options.provider }),
+          })) as any;
+
+          if (!result.success) {
+            log.error(`Failed to run task: ${result.error || result.message || 'Unknown error'}`);
+            process.exit(1);
+          }
+
+          const operationId = result.operationId;
+          if (!shouldFollow && options.json) {
+            const toUrl = await resolveUrlBuilder(client);
+            outputJson({
+              taskUrl: toUrl(resourcePath.task({ id: result.taskId })),
+              autoStarted: result.autoStarted,
+              operationId,
+              status: result.status,
+              taskId: result.taskId,
+              taskIdentifier: result.taskIdentifier,
+              topicId: result.topicId,
+            });
+            return;
+          }
+          if (i === 0) {
+            log.info(`Task ${pc.bold(result.taskIdentifier)} running`);
+            console.log(`ID: ${result.taskId}`);
+          }
+          log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(result.topicId || 'n/a')}`);
+
+          if (!shouldFollow) {
+            log.info(
+              `Agent running in background. Use ${pc.dim(`lh task view ${id}`)} to check status.`,
+            );
+            return;
+          }
+
+          // Connect to the gateway WebSocket and wait for completion
+          const outcome = await followTaskRun(client, operationId, {
+            json: options.json,
+            verbose: options.verbose,
+          });
+          // A failed run stops the sequence, as the stream helper used to exit on it.
+          if (outcome.kind !== 'completed') {
+            process.exitCode = AGENT_RUN_EXIT_CODES[outcome.kind];
+            return;
+          }
+
+          // Update heartbeat after each topic
+          try {
+            await client.task.heartbeat.mutate({ id });
+          } catch {
+            // ignore heartbeat errors
+          }
+        }
+      },
+    );
+
+  // ── comment ──────────────────────────────────────────────
+
+  task
+    .command('comment <id>')
+    .description('Add a comment to a task')
+    .requiredOption(
+      '-m, --message <text>',
+      'Comment content (markdown). Mention a member with <mention name="Name" id="user_xxx" /> to notify them (ids from `lh workspace members`); a plain "@Name" is only text',
+    )
+    .action(async (id: string, options: { message: string }) => {
+      const client = await getTrpcClient();
+      const topicId = process.env.LOBEHUB_TOPIC_ID?.trim() || undefined;
+      const authorAgentId = process.env.LOBEHUB_AGENT_ID?.trim() || undefined;
+
+      // The executing agent can differ from the topic owner or task assignee.
+      // Use only the identity injected by the run launcher, even after JWT fallback.
+      if (!authorAgentId && (topicId || process.env.LOBEHUB_OPERATION_ID)) {
+        throw new Error(
+          'Cannot determine the agent author for this run. Refusing to post a task comment as the user. Update and restart the connector or desktop app, then start a new run.',
+        );
+      }
+
+      await client.task.addComment.mutate({
+        authorAgentId,
+        content: options.message,
+        id,
+        topicId,
+      });
+      log.info('Comment added.');
+    });
+
+  // ── pause ──────────────────────────────────────────────
+
+  task
+    .command('pause <id>')
+    .description('Pause a running task')
+    .action(async (id: string) => {
+      const client = await getTrpcClient();
+      const result = await client.task.updateStatus.mutate({ id, status: 'paused' });
+      log.info(`Task ${pc.bold(result.data.identifier)} paused.`);
+    });
+
+  // ── resume ──────────────────────────────────────────────
+
+  task
+    .command('resume <id>')
+    .description('Resume a paused task')
+    .action(async (id: string) => {
+      const client = await getTrpcClient();
+      const result = await client.task.updateStatus.mutate({ id, status: 'running' });
+      log.info(`Task ${pc.bold(result.data.identifier)} resumed.`);
+    });
+
+  // ── complete ──────────────────────────────────────────────
+
+  task
+    .command('complete <id>')
+    .description('Mark a task as completed')
+    .action(async (id: string) => {
+      const client = await getTrpcClient();
+      // Inside an agent run, completing the task being executed is deferred to
+      // the end of the run instead of interrupting it.
+      const operationId = process.env.LOBEHUB_OPERATION_ID?.trim() || undefined;
+      const result = (await client.task.updateStatus.mutate({
+        id,
+        operationId,
+        status: 'completed',
+      })) as any;
+      if (result.completionDeferred) {
+        log.info(
+          `Task ${pc.bold(result.data.identifier)} completion requested. It will be finalized when the current run finishes.`,
+        );
+        return;
+      }
+      log.info(`Task ${pc.bold(result.data.identifier)} completed.`);
+      if (result.unlocked?.length > 0) {
+        log.info(`Unlocked: ${result.unlocked.map((id: string) => pc.bold(id)).join(', ')}`);
+      }
+      if (result.paused?.length > 0) {
+        log.info(
+          `Paused (checkpoint): ${result.paused.map((id: string) => pc.yellow(id)).join(', ')}`,
+        );
+      }
+      if (result.checkpointTriggered) {
+        log.info(`${pc.yellow('Checkpoint triggered')} — parent task paused for review.`);
+      }
+      if (result.allSubtasksDone) {
+        log.info(`All subtasks of parent task completed.`);
+      }
+    });
+
+  // ── cancel ──────────────────────────────────────────────
+
+  task
+    .command('cancel <id>')
+    .description('Cancel a task')
+    .action(async (id: string) => {
+      const client = await getTrpcClient();
+      const result = await client.task.updateStatus.mutate({ id, status: 'canceled' });
+      log.info(`Task ${pc.bold(result.data.identifier)} canceled.`);
+    });
+
+  // ── sort ──────────────────────────────────────────────
+
+  task
+    .command('sort <id> <identifiers...>')
+    .description('Reorder subtasks (e.g. lh task sort T-1 T-2 T-4 T-3)')
+    .action(async (id: string, identifiers: string[]) => {
+      const client = await getTrpcClient();
+      const result = (await client.task.reorderSubtasks.mutate({
+        id,
+        order: identifiers,
+      })) as any;
+
+      log.info('Subtasks reordered:');
+      for (const item of result.data) {
+        console.log(`  ${pc.dim(`#${item.sortOrder}`)} ${item.identifier}`);
+      }
+    });
+
+  // ── heartbeat ──────────────────────────────────────────────
+
+  task
+    .command('heartbeat <id>')
+    .description('Manually send heartbeat for a running task')
+    .action(async (id: string) => {
+      const client = await getTrpcClient();
+      const result = await client.task.heartbeat.mutate({ id });
+      log.info(`Heartbeat sent for ${pc.bold(result.data.identifier)} (id: ${result.data.id}).`);
+    });
+
+  // ── watchdog ──────────────────────────────────────────────
+
+  task
+    .command('watchdog')
+    .description('Run watchdog check — detect and fail stuck tasks')
+    .action(async () => {
+      const client = await getTrpcClient();
+      const result = (await client.task.watchdog.mutate()) as any;
+
+      if (result.failed?.length > 0) {
+        log.info(
+          `${pc.red('Stuck tasks failed:')} ${result.failed.map((id: string) => pc.bold(id)).join(', ')}`,
+        );
+      } else {
+        log.info('No stuck tasks found.');
+      }
+    });
+}

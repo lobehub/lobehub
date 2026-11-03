@@ -1,0 +1,304 @@
+import type { AgentInterventionSourceAction } from '@/services/aiAgent';
+import { useChatStore } from '@/store/chat';
+import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+
+import { type Store as ConversationStore } from '../../action';
+import { getInterventionBatch, type PendingIntervention } from '../data/pendingInterventions';
+import { dataSelectors } from '../data/selectors';
+
+/**
+ * Tool Interaction Actions
+ *
+ * Handles tool call approval, rejection, and intervention submit/skip/cancel.
+ */
+type Setter = StoreSetter<ConversationStore>;
+
+export const toolSlice = (set: Setter, get: () => ConversationStore, _api?: unknown) =>
+  new ToolActionImpl(set, get, _api);
+
+export class ToolActionImpl {
+  readonly #get: () => ConversationStore;
+
+  constructor(_set: Setter, get: () => ConversationStore, _api?: unknown) {
+    void _set;
+    void _api;
+    this.#get = get;
+  }
+
+  approveToolCall = async (
+    toolMessageId: string,
+    assistantGroupId: string,
+    options?: { editedArguments?: Record<string, unknown>; rememberToolKey?: string },
+  ): Promise<void> => {
+    const { hooks, context, waitForPendingArgsUpdate } = this.#get();
+
+    // Wait for any pending args update to complete before approval
+    await waitForPendingArgsUpdate(toolMessageId);
+
+    // ===== Hook: onToolApproved =====
+    if (hooks.onToolApproved) {
+      const shouldProceed = await hooks.onToolApproved(toolMessageId);
+      if (shouldProceed === false) return;
+    }
+
+    // Delegate to global ChatStore with context for correct conversation scope
+    const chatStore = useChatStore.getState();
+    const toolCallId = dataSelectors.getDbMessageById(toolMessageId)(this.#get())?.tool_call_id;
+    const editedArguments = options?.editedArguments;
+    const chatOptions =
+      editedArguments && toolCallId
+        ? {
+            ...options,
+            // The card already shows the approval; the server's rows would bring
+            // it back as `pending` until the resume claims it, and a second
+            // approval on that card fails the claim and ends the resumed run.
+            onLegacyEditFallback: () =>
+              this.#get().updatePluginArguments(toolCallId, editedArguments, true, {
+                refresh: false,
+              }),
+          }
+        : options;
+    if (chatOptions) {
+      await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context, chatOptions);
+    } else {
+      await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context);
+    }
+
+    // ===== Hook: onToolCallComplete =====
+    if (hooks.onToolCallComplete) {
+      hooks.onToolCallComplete(toolMessageId, undefined);
+    }
+  };
+
+  /**
+   * "Approve, and don't ask again for similar actions" from one card, once its
+   * remember step has taken effect.
+   *
+   * The other calls of the same tool in this card's parallel batch were
+   * audited when the model emitted them, before the remember existed, so they
+   * would still ask. Those `isCovered` now clears are approved together with
+   * this card in one batch approval: the run continues once, and the user is
+   * not asked again for what they just said not to ask about. A card with
+   * staged argument edits approves alone, as the batch approval carries none.
+   */
+  approveToolCallAndCovered = async (
+    toolMessageId: string,
+    assistantGroupId: string,
+    {
+      editedArguments,
+      isCovered,
+      rememberToolKey,
+    }: {
+      editedArguments?: Record<string, unknown>;
+      isCovered: (sibling: PendingIntervention) => Promise<boolean>;
+      rememberToolKey?: string;
+    },
+  ): Promise<void> => {
+    const pending = dataSelectors.pendingInterventions(this.#get());
+    const active = pending.find((item) => item.toolMessageId === toolMessageId);
+    const siblings = editedArguments
+      ? []
+      : getInterventionBatch(pending, active).filter(
+          (item) =>
+            item.toolMessageId !== toolMessageId &&
+            item.identifier === active?.identifier &&
+            item.apiName === active?.apiName,
+        );
+    const covered: string[] = [];
+    for (const sibling of siblings) {
+      if (await isCovered(sibling)) covered.push(sibling.toolMessageId);
+    }
+
+    if (covered.length === 0) {
+      await this.approveToolCall(toolMessageId, assistantGroupId, {
+        editedArguments,
+        ...(rememberToolKey ? { rememberToolKey } : {}),
+      });
+      return;
+    }
+
+    // The batch approval approves once; the allow-list entry is written here.
+    if (rememberToolKey) await useUserStore.getState().addToolToAllowList(rememberToolKey);
+    await this.approveAllToolCalls([toolMessageId, ...covered]);
+  };
+
+  /**
+   * Approve every pending tool of a parallel batch in one action.
+   *
+   * Args edits are flushed for all cards first: the intervention UI debounces
+   * `updatePluginArguments`, so approving without waiting would ship the
+   * pre-edit arguments for any card the user had just typed in.
+   */
+  /**
+   * Stop a run parked on tool approval — nothing in the batch executes and the
+   * model is not continued.
+   *
+   * No `waitForPendingArgsUpdate` here, unlike approval: the arguments are
+   * about to be discarded, so flushing a debounced edit into a call that will
+   * never run is pure latency.
+   */
+  stopPendingApproval = async (toolMessageIds: string[]): Promise<void> => {
+    const { context } = this.#get();
+    await useChatStore.getState().stopPendingApproval(toolMessageIds, context);
+  };
+
+  /**
+   * Stop from a single card: resolve that card's own parallel batch and stop
+   * the whole thing.
+   *
+   * Scoped the same way approve-all is — the pending list spans the entire
+   * conversation, so stopping the raw list would also discard an unrelated
+   * turn's approval.
+   */
+  stopPendingApprovalForCard = async (toolMessageId: string): Promise<void> => {
+    const state = this.#get();
+    const pending = dataSelectors.pendingInterventions(state);
+    const active = pending.find((item) => item.toolMessageId === toolMessageId);
+    const batch = getInterventionBatch(pending, active);
+    const ids = batch.length > 0 ? batch.map((item) => item.toolMessageId) : [toolMessageId];
+
+    await useChatStore.getState().stopPendingApproval(ids, state.context);
+  };
+
+  approveAllToolCalls = async (toolMessageIds: string[]): Promise<void> => {
+    const { hooks, context, waitForPendingArgsUpdate } = this.#get();
+
+    await Promise.all(toolMessageIds.map((id) => waitForPendingArgsUpdate(id)));
+
+    // ===== Hook: onToolApproved =====
+    // Per tool, so a host that vetoes one card drops only that card from the
+    // batch rather than cancelling the whole approval.
+    const approved: string[] = [];
+    for (const toolMessageId of toolMessageIds) {
+      if (hooks.onToolApproved) {
+        const shouldProceed = await hooks.onToolApproved(toolMessageId);
+        if (shouldProceed === false) continue;
+      }
+      approved.push(toolMessageId);
+    }
+
+    if (approved.length === 0) return;
+
+    const chatStore = useChatStore.getState();
+    await chatStore.approveAllToolCalls(approved, context);
+
+    // ===== Hook: onToolCallComplete =====
+    if (hooks.onToolCallComplete) {
+      for (const toolMessageId of approved) hooks.onToolCallComplete(toolMessageId, undefined);
+    }
+  };
+
+  cancelToolInteraction = async (
+    toolMessageId: string,
+    options?: { onLegacyFallback?: () => Promise<void> },
+  ): Promise<void> => {
+    const { context } = this.#get();
+    const chatStore = useChatStore.getState();
+    await chatStore.cancelToolInteraction(toolMessageId, context, options);
+  };
+
+  rejectAndContinueToolCall = async (toolMessageId: string, reason?: string): Promise<void> => {
+    const { context, hooks, waitForPendingArgsUpdate } = this.#get();
+
+    // Wait for any pending args update to complete before rejection
+    await waitForPendingArgsUpdate(toolMessageId);
+
+    // ===== Hook: onToolRejected =====
+    // Fire the hook here directly rather than going through `rejectToolCall`.
+    // `rejectToolCall` now delegates to `chatStore.rejectToolCalling`, so
+    // chaining it would (in Gateway mode) kick off a halting
+    // `decision='rejected'` resume op before our own
+    // `decision='rejected_continue'` call below, racing two resume ops on
+    // the same tool_call_id. In client mode it would also duplicate the
+    // reject bookkeeping since `chatStore.rejectAndContinueToolCalling`
+    // already calls `chatStore.rejectToolCalling` internally.
+    if (hooks.onToolRejected) {
+      const shouldProceed = await hooks.onToolRejected(toolMessageId, reason);
+      if (shouldProceed === false) return;
+    }
+
+    // Delegate to ChatStore for rejection + continuation. In Gateway mode
+    // this fires a single `decision='rejected_continue'` resume op; in
+    // client mode it persists the rejection via an internal
+    // `chatStore.rejectToolCalling` call before resuming the local runtime.
+    const chatStore = useChatStore.getState();
+    await chatStore.rejectAndContinueToolCalling(toolMessageId, reason, context);
+  };
+
+  rejectToolCall = async (toolMessageId: string, reason?: string): Promise<void> => {
+    const { context, hooks, waitForPendingArgsUpdate } = this.#get();
+
+    // Wait for any pending args update to complete before rejection
+    await waitForPendingArgsUpdate(toolMessageId);
+
+    // ===== Hook: onToolRejected =====
+    if (hooks.onToolRejected) {
+      const shouldProceed = await hooks.onToolRejected(toolMessageId, reason);
+      if (shouldProceed === false) return;
+    }
+
+    // Delegate to global ChatStore with context for correct conversation scope.
+    // In Gateway mode this also starts a new op carrying resumeApproval={decision:'rejected'}
+    // so the server releases the paused confirmation; without this the server op stays
+    // awaiting confirmation and the client loading state never clears.
+    // `chatStore.rejectToolCalling` does its own tool-message existence guard, so the
+    // lookup that used to live here is redundant.
+    const chatStore = useChatStore.getState();
+    await chatStore.rejectToolCalling(toolMessageId, reason, context);
+  };
+
+  skipToolInteraction = async (
+    toolMessageId: string,
+    reason?: string,
+    options?: { onLegacyFallback?: () => Promise<void> },
+  ): Promise<void> => {
+    const { context } = this.#get();
+    const chatStore = useChatStore.getState();
+    await chatStore.skipToolInteraction(toolMessageId, reason, context, options);
+  };
+
+  submitToolInteraction = async (
+    toolMessageId: string,
+    response: Record<string, unknown>,
+    options?: {
+      agentInterventionAction?: Extract<
+        AgentInterventionSourceAction,
+        { type: 'submit_answers' | 'submit_custom' }
+      >;
+      createUserMessage?: boolean;
+      prepareLegacyFallback?: () => Promise<{
+        createUserMessage?: boolean;
+        pluginState?: Record<string, unknown>;
+        response: Record<string, unknown>;
+        toolResultContent?: string;
+      }>;
+      pluginState?: Record<string, unknown>;
+      toolResultContent?: string;
+    },
+  ): Promise<void> => {
+    const { context } = this.#get();
+    const chatStore = useChatStore.getState();
+    await chatStore.submitToolInteraction(toolMessageId, response, context, options);
+  };
+
+  /**
+   * Hetero (CC / Codex) intervention submit/skip/cancel. Unlike the other tool
+   * interactions this ships the answer back to a running CLI subprocess over
+   * IPC, but it still needs this conversation's own `context` so the optimistic
+   * writes and topic-status flip land on the topic that owns the card — not
+   * whatever topic the user happens to be viewing (which is what the chatStore
+   * falls back to via global `activeTopicId`).
+   */
+  submitHeteroIntervention = async (
+    toolMessageId: string,
+    actionType: 'submit' | 'skip' | 'cancel',
+    payload?: Record<string, unknown>,
+  ): Promise<void> => {
+    const { context } = this.#get();
+    const chatStore = useChatStore.getState();
+    await chatStore.submitHeteroIntervention(toolMessageId, actionType, payload, context);
+  };
+}
+
+export type ToolAction = Pick<ToolActionImpl, keyof ToolActionImpl>;

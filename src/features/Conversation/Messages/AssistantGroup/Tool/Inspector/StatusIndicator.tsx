@@ -1,0 +1,102 @@
+import { type ToolIntervention } from '@lobechat/types';
+import { Block, cssVar, Icon, Spin, Tooltip } from '@lobehub/ui';
+import {
+  AlertTriangle,
+  Ban,
+  Check,
+  CornerUpRight,
+  HandIcon,
+  type LucideIcon,
+  PauseIcon,
+  X,
+} from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { hasToolResultBody } from '../toolResultBody';
+
+interface StatusIndicatorProps {
+  intervention?: ToolIntervention;
+  /**
+   * Whether the tool is currently executing (from operation state).
+   * When false and result exists, treat as completed even if content is empty.
+   */
+  isToolExecuting?: boolean;
+  result?: { content: string | null; error?: any; state?: any };
+  /**
+   * Glyph for the completed state (defaults to a checkmark). Lets tools whose
+   * point is not "an action succeeded" keep their own semantic — e.g.
+   * askUserQuestion completes as a question mark, not a task tick.
+   */
+  successIcon?: LucideIcon;
+  /** Successful tool payload that should surface as warning (e.g. activateTools with only notFound). */
+  successVariant?: 'default' | 'warning';
+}
+
+const StatusIndicator = memo<StatusIndicatorProps>(
+  ({ intervention, isToolExecuting, result, successIcon, successVariant }) => {
+    const { t } = useTranslation('chat');
+
+    const hasError = !!result?.error;
+    const hasSuccessResult = hasToolResultBody(result);
+    const hasResult = hasSuccessResult || hasError;
+    const isPending = intervention?.status === 'pending';
+    const isReject = intervention?.status === 'rejected';
+    const isAbort = intervention?.status === 'aborted';
+
+    // Tool is complete if operation is not running and we have a result object (even if content is empty)
+    const isToolComplete = isToolExecuting === false && !!result;
+
+    let icon;
+
+    if (isAbort) {
+      icon = (
+        <Tooltip title={t('tool.intervention.toolAbort')}>
+          <Icon color={cssVar.colorTextTertiary} icon={PauseIcon} />
+        </Tooltip>
+      );
+    } else if (isReject) {
+      // A user skip (e.g. AskUserQuestion) is a normal outcome, not a denial —
+      // keep the glyph and copy neutral instead of the rejection ban sign.
+      icon = intervention?.skipped ? (
+        <Tooltip title={t('tool.intervention.toolSkipped')}>
+          <Icon color={cssVar.colorTextTertiary} icon={CornerUpRight} />
+        </Tooltip>
+      ) : (
+        <Tooltip title={t('tool.intervention.toolRejected')}>
+          <Icon color={cssVar.colorTextTertiary} icon={Ban} />
+        </Tooltip>
+      );
+    } else if (hasError) {
+      icon = <Icon color={cssVar.colorError} icon={X} />;
+    } else if (isPending) {
+      icon = <Icon color={cssVar.colorInfo} icon={HandIcon} />;
+    } else if (hasSuccessResult && !hasError && successVariant === 'warning') {
+      icon = <Icon color={cssVar.colorWarning} icon={AlertTriangle} />;
+    } else if (hasResult || isToolComplete) {
+      icon = <Icon color={cssVar.colorSuccess} icon={successIcon ?? Check} />;
+    } else {
+      icon = <Spin size="small" variant="network" />;
+    }
+
+    return (
+      <Block
+        horizontal
+        align={'center'}
+        flex={'none'}
+        gap={4}
+        height={24}
+        justify={'center'}
+        variant={'outlined'}
+        width={24}
+        style={{
+          fontSize: 12,
+        }}
+      >
+        {icon}
+      </Block>
+    );
+  },
+);
+
+export default StatusIndicator;

@@ -1,0 +1,1199 @@
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { uuid } from '@/utils/uuid';
+
+import { getTestDB } from '../../../core/getTestDB';
+import {
+  agents,
+  agentsToSessions,
+  chatGroups,
+  messagePlugins,
+  messageQueries,
+  messages,
+  messageTranslates,
+  messageTTS,
+  sessions,
+  topics,
+  users,
+} from '../../../schemas';
+import type { LobeChatDatabase } from '../../../type';
+import { MessageModel } from '../../message';
+
+const serverDB: LobeChatDatabase = await getTestDB();
+
+const userId = 'message-delete-test';
+const otherUserId = 'message-delete-test-other';
+const messageModel = new MessageModel(serverDB, userId);
+
+beforeEach(async () => {
+  // Clear tables before each test case
+  await serverDB.transaction(async (trx) => {
+    await trx.delete(users).where(eq(users.id, userId));
+    await trx.delete(users).where(eq(users.id, otherUserId));
+    await trx.insert(users).values([{ id: userId }, { id: otherUserId }]);
+
+    await trx.insert(sessions).values([{ id: '1', userId }]);
+  });
+});
+
+afterEach(async () => {
+  // Clear tables after each test case
+  await serverDB.delete(users).where(eq(users.id, userId));
+  await serverDB.delete(users).where(eq(users.id, otherUserId));
+});
+
+describe('MessageModel Delete Tests', () => {
+  describe('deleteMessage', () => {
+    it('should delete a message', async () => {
+      // Create test data
+      await serverDB
+        .insert(messages)
+        .values([{ id: '1', userId, role: 'user', content: 'message 1' }]);
+
+      // Call deleteMessage method
+      await messageModel.deleteMessage('1');
+
+      // Assert result
+      const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
+      expect(result).toHaveLength(0);
+    });
+
+    it('should delete a message with tool calls', async () => {
+      // Create test data
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(messages).values([
+          { id: '1', userId, role: 'user', content: 'message 1', tools: [{ id: 'tool1' }] },
+          { id: '2', userId, role: 'tool', content: 'message 1' },
+        ]);
+        await trx
+          .insert(messagePlugins)
+          .values([{ id: '2', toolCallId: 'tool1', identifier: 'plugin-1', userId }]);
+      });
+
+      // Call deleteMessage method
+      await messageModel.deleteMessage('1');
+
+      // Assert result
+      const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
+      expect(result).toHaveLength(0);
+
+      const result2 = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, '2'));
+
+      expect(result2).toHaveLength(0);
+    });
+
+    it('should only delete messages belonging to the user', async () => {
+      // Create test data
+      await serverDB
+        .insert(messages)
+        .values([{ id: '1', userId: otherUserId, role: 'user', content: 'message 1' }]);
+
+      // Call deleteMessage method
+      await messageModel.deleteMessage('1');
+
+      // Assert result
+      const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
+      expect(result).toHaveLength(1);
+    });
+
+    it('should clear a stale active branch index when the selected branch is deleted', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 1, collapsed: true },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessage('branch-b');
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ collapsed: true });
+    });
+
+    it('should remap the selected branch by identity when an earlier branch is deleted', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 1 },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'tool result',
+          createdAt: new Date('2026-01-01T00:00:00.500Z'),
+          id: 'tool',
+          parentId: 'parent',
+          role: 'tool',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessage('branch-a');
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ activeBranchIndex: 0 });
+    });
+
+    it('should update child messages parentId to deleted message parentId', async () => {
+      // Create a tree structure: A -> B -> C
+      // When B is deleted, C should have parentId = A
+      await serverDB.insert(messages).values([
+        { id: 'A', userId, role: 'user', content: 'message A', parentId: null },
+        { id: 'B', userId, role: 'assistant', content: 'message B', parentId: 'A' },
+        { id: 'C', userId, role: 'user', content: 'message C', parentId: 'B' },
+      ]);
+
+      // Delete message B
+      await messageModel.deleteMessage('B');
+
+      // Assert B is deleted
+      const deletedMessage = await serverDB.select().from(messages).where(eq(messages.id, 'B'));
+      expect(deletedMessage).toHaveLength(0);
+
+      // Assert C's parentId is now A (inherited from B's parentId)
+      const messageC = await serverDB.select().from(messages).where(eq(messages.id, 'C'));
+      expect(messageC).toHaveLength(1);
+      expect(messageC[0].parentId).toBe('A');
+
+      // Assert A still exists and is unchanged
+      const messageA = await serverDB.select().from(messages).where(eq(messages.id, 'A'));
+      expect(messageA).toHaveLength(1);
+      expect(messageA[0].parentId).toBeNull();
+    });
+
+    it('should set child messages parentId to null when deleting root message', async () => {
+      // Create a tree structure: A (root) -> B, C
+      // When A is deleted, B and C should have parentId = null
+      await serverDB.insert(messages).values([
+        { id: 'A', userId, role: 'user', content: 'message A', parentId: null },
+        { id: 'B', userId, role: 'assistant', content: 'message B', parentId: 'A' },
+        { id: 'C', userId, role: 'user', content: 'message C', parentId: 'A' },
+      ]);
+
+      // Delete root message A
+      await messageModel.deleteMessage('A');
+
+      // Assert A is deleted
+      const deletedMessage = await serverDB.select().from(messages).where(eq(messages.id, 'A'));
+      expect(deletedMessage).toHaveLength(0);
+
+      // Assert B's parentId is now null
+      const messageB = await serverDB.select().from(messages).where(eq(messages.id, 'B'));
+      expect(messageB).toHaveLength(1);
+      expect(messageB[0].parentId).toBeNull();
+
+      // Assert C's parentId is now null
+      const messageC = await serverDB.select().from(messages).where(eq(messages.id, 'C'));
+      expect(messageC).toHaveLength(1);
+      expect(messageC[0].parentId).toBeNull();
+    });
+
+    it('should only update child messages belonging to the same user', async () => {
+      // Create messages where child belongs to different user
+      await serverDB.insert(messages).values([
+        { id: 'A', userId, role: 'user', content: 'message A', parentId: null },
+        { id: 'B', userId, role: 'assistant', content: 'message B', parentId: 'A' },
+        { id: 'C', userId: otherUserId, role: 'user', content: 'message C', parentId: 'B' },
+      ]);
+
+      // Delete message B
+      await messageModel.deleteMessage('B');
+
+      // Assert B is deleted
+      const deletedMessage = await serverDB.select().from(messages).where(eq(messages.id, 'B'));
+      expect(deletedMessage).toHaveLength(0);
+
+      // Assert C's parentId is NOT updated (belongs to other user)
+      // Due to foreign key constraint with onDelete: 'set null', it will be set to null by DB
+      const messageC = await serverDB.select().from(messages).where(eq(messages.id, 'C'));
+      expect(messageC).toHaveLength(1);
+      expect(messageC[0].parentId).toBeNull();
+    });
+  });
+
+  describe('deleteMessages', () => {
+    it('should delete 2 messages', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        { id: '1', userId, role: 'user', content: 'message 1' },
+        { id: '2', userId, role: 'user', content: 'message 2' },
+      ]);
+
+      // Call deleteMessage method
+      await messageModel.deleteMessages(['1', '2']);
+
+      // Assert result
+      const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
+      expect(result).toHaveLength(0);
+      const result2 = await serverDB.select().from(messages).where(eq(messages.id, '2'));
+      expect(result2).toHaveLength(0);
+    });
+
+    it('should only delete messages belonging to the user', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([
+        { id: '1', userId: otherUserId, role: 'user', content: 'message 1' },
+        { id: '2', userId: otherUserId, role: 'user', content: 'message 1' },
+      ]);
+
+      // Call deleteMessage method
+      await messageModel.deleteMessages(['1', '2']);
+
+      // Assert result
+      const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
+      expect(result).toHaveLength(1);
+    });
+
+    it('should remap the selected branch after deleting earlier branches in a batch', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 2 },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch C',
+          createdAt: new Date('2026-01-01T00:00:03.000Z'),
+          id: 'branch-c',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessages(['branch-a', 'branch-b']);
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ activeBranchIndex: 0 });
+    });
+
+    it('should preserve an optimistic branch marker when deleting a sibling', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 2 },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessages(['branch-a']);
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ activeBranchIndex: 1 });
+    });
+
+    it('should update child messages parentId when deleting parent chain', async () => {
+      // Create a tree: A -> B -> C -> D
+      // Delete [B, C], D should have parentId = A
+      await serverDB.insert(messages).values([
+        { id: 'A', userId, role: 'user', content: 'message A', parentId: null },
+        { id: 'B', userId, role: 'assistant', content: 'message B', parentId: 'A' },
+        { id: 'C', userId, role: 'tool', content: 'message C', parentId: 'B' },
+        { id: 'D', userId, role: 'user', content: 'message D', parentId: 'C' },
+      ]);
+
+      // Delete B and C
+      await messageModel.deleteMessages(['B', 'C']);
+
+      // Assert B and C are deleted
+      const deletedB = await serverDB.select().from(messages).where(eq(messages.id, 'B'));
+      expect(deletedB).toHaveLength(0);
+      const deletedC = await serverDB.select().from(messages).where(eq(messages.id, 'C'));
+      expect(deletedC).toHaveLength(0);
+
+      // Assert D's parentId is now A (skipping deleted B and C)
+      const messageD = await serverDB.select().from(messages).where(eq(messages.id, 'D'));
+      expect(messageD).toHaveLength(1);
+      expect(messageD[0].parentId).toBe('A');
+
+      // Assert A is unchanged
+      const messageA = await serverDB.select().from(messages).where(eq(messages.id, 'A'));
+      expect(messageA).toHaveLength(1);
+      expect(messageA[0].parentId).toBeNull();
+    });
+
+    it('should set child parentId to null when deleting entire parent chain from root', async () => {
+      // Create a tree: A -> B -> C -> D
+      // Delete [A, B, C], D should have parentId = null
+      await serverDB.insert(messages).values([
+        { id: 'A', userId, role: 'user', content: 'message A', parentId: null },
+        { id: 'B', userId, role: 'assistant', content: 'message B', parentId: 'A' },
+        { id: 'C', userId, role: 'tool', content: 'message C', parentId: 'B' },
+        { id: 'D', userId, role: 'user', content: 'message D', parentId: 'C' },
+      ]);
+
+      // Delete A, B, and C
+      await messageModel.deleteMessages(['A', 'B', 'C']);
+
+      // Assert A, B, C are deleted
+      const remaining = await serverDB.select().from(messages).where(eq(messages.userId, userId));
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('D');
+
+      // Assert D's parentId is null (all ancestors deleted)
+      expect(remaining[0].parentId).toBeNull();
+    });
+
+    it('should handle multiple independent trees when batch deleting', async () => {
+      // Create two independent trees:
+      // Tree 1: A -> B -> C
+      // Tree 2: X -> Y -> Z
+      // Delete [B, Y], C should have parentId = A, Z should have parentId = X
+      await serverDB.insert(messages).values([
+        { id: 'A', userId, role: 'user', content: 'message A', parentId: null },
+        { id: 'B', userId, role: 'assistant', content: 'message B', parentId: 'A' },
+        { id: 'C', userId, role: 'user', content: 'message C', parentId: 'B' },
+        { id: 'X', userId, role: 'user', content: 'message X', parentId: null },
+        { id: 'Y', userId, role: 'assistant', content: 'message Y', parentId: 'X' },
+        { id: 'Z', userId, role: 'user', content: 'message Z', parentId: 'Y' },
+      ]);
+
+      // Delete B and Y
+      await messageModel.deleteMessages(['B', 'Y']);
+
+      // Assert C's parentId is A
+      const messageC = await serverDB.select().from(messages).where(eq(messages.id, 'C'));
+      expect(messageC).toHaveLength(1);
+      expect(messageC[0].parentId).toBe('A');
+
+      // Assert Z's parentId is X
+      const messageZ = await serverDB.select().from(messages).where(eq(messages.id, 'Z'));
+      expect(messageZ).toHaveLength(1);
+      expect(messageZ[0].parentId).toBe('X');
+    });
+
+    it('should handle empty ids array', async () => {
+      await serverDB
+        .insert(messages)
+        .values([{ id: 'A', userId, role: 'user', content: 'message A' }]);
+
+      // Should not throw and not delete anything
+      await messageModel.deleteMessages([]);
+
+      const result = await serverDB.select().from(messages).where(eq(messages.id, 'A'));
+      expect(result).toHaveLength(1);
+    });
+  });
+  describe('deleteMessageTranslate', () => {
+    it('should delete the message translate record', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([{ id: '1', role: 'abc', userId }]);
+      await serverDB.insert(messageTranslates).values([{ id: '1', userId }]);
+
+      // Call deleteMessageTranslate method
+      await messageModel.deleteMessageTranslate('1');
+
+      // Assert result
+      const result = await serverDB
+        .select()
+        .from(messageTranslates)
+        .where(eq(messageTranslates.id, '1'));
+
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('deleteMessageTTS', () => {
+    it('should delete the message TTS record', async () => {
+      // Create test data
+      await serverDB.insert(messages).values([{ id: '1', role: 'abc', userId }]);
+      await serverDB.insert(messageTTS).values([{ userId, id: '1' }]);
+
+      // Call deleteMessageTTS method
+      await messageModel.deleteMessageTTS('1');
+
+      // Assert result
+      const result = await serverDB.select().from(messageTTS).where(eq(messageTTS.id, '1'));
+      expect(result).toHaveLength(0);
+    });
+  });
+  describe('deleteMessagesBySession', () => {
+    it('should delete messages by session ID', async () => {
+      await serverDB.insert(sessions).values([
+        { id: 'session1', userId },
+        { id: 'session2', userId },
+      ]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: '1',
+          userId,
+          sessionId: 'session1',
+          role: 'user',
+          content: 'message 1',
+        },
+        {
+          id: '2',
+          userId,
+          sessionId: 'session1',
+          role: 'assistant',
+          content: 'message 2',
+        },
+        {
+          id: '3',
+          userId,
+          sessionId: 'session2',
+          role: 'user',
+          content: 'message 3',
+        },
+      ]);
+
+      await messageModel.deleteMessagesBySession('session1');
+
+      const remainingMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.userId, userId));
+
+      expect(remainingMessages).toHaveLength(1);
+      expect(remainingMessages[0].id).toBe('3');
+    });
+
+    it('should delete messages by session ID and topic ID', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([
+        { id: 'topic1', sessionId: 'session1', userId },
+        { id: 'topic2', sessionId: 'session1', userId },
+      ]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: '1',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic1',
+          role: 'user',
+          content: 'message 1',
+        },
+        {
+          id: '2',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic2',
+          role: 'assistant',
+          content: 'message 2',
+        },
+      ]);
+
+      await messageModel.deleteMessagesBySession('session1', 'topic1');
+
+      const remainingMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.userId, userId));
+
+      expect(remainingMessages).toHaveLength(1);
+      expect(remainingMessages[0].id).toBe('2');
+    });
+
+    it('should delete only non-topic messages when topicId is null', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([
+        { id: 'topic1', sessionId: 'session1', userId },
+        { id: 'topic2', sessionId: 'session1', userId },
+      ]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: '1',
+          userId,
+          sessionId: 'session1',
+          topicId: null,
+          role: 'user',
+          content: 'message without topic 1',
+        },
+        {
+          id: '2',
+          userId,
+          sessionId: 'session1',
+          topicId: null,
+          role: 'assistant',
+          content: 'message without topic 2',
+        },
+        {
+          id: '3',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic1',
+          role: 'user',
+          content: 'message in topic1',
+        },
+        {
+          id: '4',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic2',
+          role: 'assistant',
+          content: 'message in topic2',
+        },
+      ]);
+
+      // Delete messages in session1 with null topicId
+      await messageModel.deleteMessagesBySession('session1', null);
+
+      const remainingMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.userId, userId))
+        .orderBy(messages.id);
+
+      // Should only keep messages with topics
+      expect(remainingMessages).toHaveLength(2);
+      expect(remainingMessages[0].id).toBe('3');
+      expect(remainingMessages[1].id).toBe('4');
+    });
+
+    it('should delete messages with specific groupId in session', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(chatGroups).values([
+        { id: 'group1', userId, title: 'Group 1' },
+        { id: 'group2', userId, title: 'Group 2' },
+      ]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'msg-group1',
+          userId,
+          sessionId: 'session1',
+          groupId: 'group1',
+          role: 'user',
+          content: 'message in group1',
+        },
+        {
+          id: 'msg-group2',
+          userId,
+          sessionId: 'session1',
+          groupId: 'group2',
+          role: 'assistant',
+          content: 'message in group2',
+        },
+        {
+          id: 'msg-no-group',
+          userId,
+          sessionId: 'session1',
+          groupId: null,
+          role: 'user',
+          content: 'message without group',
+        },
+      ]);
+
+      // Delete messages with specific groupId
+      await messageModel.deleteMessagesBySession('session1', null, 'group1');
+
+      const remainingMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.userId, userId))
+        .orderBy(messages.id);
+
+      expect(remainingMessages).toHaveLength(2);
+      expect(remainingMessages[0].id).toBe('msg-group2');
+      expect(remainingMessages[1].id).toBe('msg-no-group');
+    });
+
+    it('should delete messages with combined topicId and groupId filters', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(chatGroups).values([{ id: 'group1', userId, title: 'Group 1' }]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'msg-t1-g1',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic1',
+          groupId: 'group1',
+          role: 'user',
+          content: 'topic1 group1',
+        },
+        {
+          id: 'msg-t1-no-group',
+          userId,
+          sessionId: 'session1',
+          topicId: 'topic1',
+          groupId: null,
+          role: 'user',
+          content: 'topic1 no group',
+        },
+        {
+          id: 'msg-no-topic-g1',
+          userId,
+          sessionId: 'session1',
+          topicId: null,
+          groupId: 'group1',
+          role: 'user',
+          content: 'no topic group1',
+        },
+      ]);
+
+      // Delete messages with specific topic and group combination
+      await messageModel.deleteMessagesBySession('session1', 'topic1', 'group1');
+
+      const remainingMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.userId, userId))
+        .orderBy(messages.id);
+
+      expect(remainingMessages).toHaveLength(2);
+      expect(remainingMessages[0].id).toBe('msg-no-topic-g1');
+      expect(remainingMessages[1].id).toBe('msg-t1-no-group');
+    });
+  });
+  describe('deleteMessageQuery', () => {
+    it('should delete a message query by ID', async () => {
+      // Create test data
+      const queryId = uuid();
+      await serverDB.insert(messages).values({
+        id: 'msg4',
+        userId,
+        role: 'user',
+        content: 'test message',
+      });
+
+      await serverDB.insert(messageQueries).values({
+        id: queryId,
+        messageId: 'msg4',
+        userQuery: 'test query',
+        rewriteQuery: 'rewritten query',
+        userId,
+      });
+
+      // Verify query was created
+      const beforeDelete = await serverDB
+        .select()
+        .from(messageQueries)
+        .where(eq(messageQueries.id, queryId));
+
+      expect(beforeDelete).toHaveLength(1);
+
+      // Call deleteMessageQuery method
+      await messageModel.deleteMessageQuery(queryId);
+
+      // Verify query was deleted
+      const afterDelete = await serverDB
+        .select()
+        .from(messageQueries)
+        .where(eq(messageQueries.id, queryId));
+
+      expect(afterDelete).toHaveLength(0);
+    });
+
+    it('should only delete message queries belonging to the user', async () => {
+      // Create test data - queries from other users
+      const queryId = uuid();
+      await serverDB.insert(messages).values({
+        id: 'msg5',
+        userId: otherUserId,
+        role: 'user',
+        content: 'test message',
+      });
+
+      await serverDB.insert(messageQueries).values({
+        id: queryId,
+        messageId: 'msg5',
+        userQuery: 'test query',
+        rewriteQuery: 'rewritten query',
+        userId: otherUserId, // other user
+      });
+
+      // Call deleteMessageQuery method
+      await messageModel.deleteMessageQuery(queryId);
+
+      // Verify query was not deleted
+      const afterDelete = await serverDB
+        .select()
+        .from(messageQueries)
+        .where(eq(messageQueries.id, queryId));
+
+      expect(afterDelete).toHaveLength(1);
+    });
+
+    it('should throw error when deleting non-existent message query', async () => {
+      // Call deleteMessageQuery method to delete a non-existent query
+      try {
+        await messageModel.deleteMessageQuery('non-existent-id');
+      } catch (e) {
+        expect(e).toBeInstanceOf(Error);
+      }
+    });
+  });
+
+  describe('batchDeleteByAgentId', () => {
+    it('should delete messages with direct agentId match', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([{ id: 'agent-del-1', userId, title: 'Agent Delete 1' }]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg-del-1',
+            userId,
+            agentId: 'agent-del-1',
+            role: 'user',
+            content: 'to delete',
+          },
+          {
+            id: 'msg-keep-1',
+            userId,
+            agentId: null,
+            role: 'user',
+            content: 'to keep',
+          },
+        ]);
+      });
+
+      await messageModel.batchDeleteByAgentId('agent-del-1');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('msg-keep-1');
+    });
+
+    it('should delete legacy messages by agentId through agentsToSessions lookup', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session-del', userId }]);
+
+        await trx.insert(agents).values([{ id: 'agent-del-2', userId, title: 'Agent Delete 2' }]);
+
+        await trx
+          .insert(agentsToSessions)
+          .values([{ agentId: 'agent-del-2', sessionId: 'session-del', userId }]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg-del-legacy',
+            userId,
+            sessionId: 'session-del',
+            agentId: null,
+            role: 'user',
+            content: 'legacy to delete',
+          },
+          {
+            id: 'msg-keep-2',
+            userId,
+            sessionId: null,
+            agentId: null,
+            role: 'user',
+            content: 'to keep',
+          },
+        ]);
+      });
+
+      await messageModel.batchDeleteByAgentId('agent-del-2');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('msg-keep-2');
+    });
+
+    it('should delete both legacy and new messages using OR condition', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session-del-mixed', userId }]);
+
+        await trx
+          .insert(agents)
+          .values([{ id: 'agent-del-mixed', userId, title: 'Agent Delete Mixed' }]);
+
+        await trx
+          .insert(agentsToSessions)
+          .values([{ agentId: 'agent-del-mixed', sessionId: 'session-del-mixed', userId }]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg-del-legacy-mixed',
+            userId,
+            sessionId: 'session-del-mixed',
+            agentId: null,
+            role: 'user',
+            content: 'legacy to delete',
+          },
+          {
+            id: 'msg-del-new-mixed',
+            userId,
+            sessionId: null,
+            agentId: 'agent-del-mixed',
+            role: 'user',
+            content: 'new to delete',
+          },
+          {
+            id: 'msg-keep-mixed',
+            userId,
+            sessionId: null,
+            agentId: null,
+            role: 'user',
+            content: 'to keep',
+          },
+        ]);
+      });
+
+      await messageModel.batchDeleteByAgentId('agent-del-mixed');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('msg-keep-mixed');
+    });
+
+    it('should only delete messages belonging to the current user', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([
+          { id: 'agent-del-user', userId, title: 'Agent Delete User' },
+          { id: 'agent-del-other', userId: otherUserId, title: 'Agent Delete Other' },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg-del-user',
+            userId,
+            agentId: 'agent-del-user',
+            role: 'user',
+            content: 'user to delete',
+          },
+          {
+            id: 'msg-keep-other',
+            userId: otherUserId,
+            agentId: 'agent-del-other',
+            role: 'user',
+            content: 'other user keep',
+          },
+        ]);
+      });
+
+      await messageModel.batchDeleteByAgentId('agent-del-user');
+
+      // User's message should be deleted
+      const userMessages = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+      expect(userMessages).toHaveLength(0);
+
+      // Other user's message should remain
+      const otherMessages = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, otherUserId),
+      });
+      expect(otherMessages).toHaveLength(1);
+      expect(otherMessages[0].id).toBe('msg-keep-other');
+    });
+
+    it('should do nothing when agentId has no associated messages', async () => {
+      await serverDB
+        .insert(agents)
+        .values([{ id: 'agent-del-empty', userId, title: 'Agent Delete Empty' }]);
+
+      await serverDB.insert(messages).values([
+        {
+          id: 'msg-keep-empty',
+          userId,
+          agentId: null,
+          role: 'user',
+          content: 'keep this',
+        },
+      ]);
+
+      await messageModel.batchDeleteByAgentId('agent-del-empty');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('msg-keep-empty');
+    });
+  });
+
+  describe('agent-share visitor messages', () => {
+    // Visitor messages live under the creator's userId but are invisible to the
+    // creator, so id-less sweeps must leave them alone.
+    beforeEach(async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([{ id: 'share-agent', userId, title: 'Shared Agent' }]);
+
+        await trx.insert(topics).values([
+          { agentId: 'share-agent', id: 'creator-topic', userId },
+          { agentId: 'share-agent', id: 'visitor-topic', senderId: 'visitor-a', userId },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            agentId: 'share-agent',
+            content: 'creator message',
+            id: 'creator-msg',
+            role: 'user',
+            topicId: 'creator-topic',
+            userId,
+          },
+          {
+            agentId: 'share-agent',
+            content: 'visitor message',
+            id: 'visitor-msg',
+            role: 'user',
+            topicId: 'visitor-topic',
+            userId,
+          },
+        ]);
+      });
+    });
+
+    it('deleteAllMessages should keep visitor messages', async () => {
+      await messageModel.deleteAllMessages();
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('visitor-msg');
+    });
+
+    it('batchDeleteByAgentId should keep visitor messages', async () => {
+      await messageModel.batchDeleteByAgentId('share-agent');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('visitor-msg');
+    });
+
+    it('deleteMessage should keep a visitor message', async () => {
+      // The creator can obtain a raw visitor message id out of band (data
+      // export), so naming the id must not be enough to destroy it.
+      await messageModel.deleteMessage('visitor-msg');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id).sort()).toEqual(['creator-msg', 'visitor-msg']);
+    });
+
+    it('deleteMessage should still delete the creator own message', async () => {
+      await messageModel.deleteMessage('creator-msg');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['visitor-msg']);
+    });
+
+    it('deleteMessage should delete a visitor message when the runtime opts in', async () => {
+      await messageModel.deleteMessage('visitor-msg', { includeShareVisitor: true });
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
+    });
+
+    it('deleteMessages should drop only the non-visitor ids of a mixed batch', async () => {
+      await messageModel.deleteMessages(['creator-msg', 'visitor-msg']);
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['visitor-msg']);
+    });
+
+    it('deleteMessages should delete visitor messages when the runtime opts in', async () => {
+      await messageModel.deleteMessages(['visitor-msg'], { includeShareVisitor: true });
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
+    });
+
+    it('deleteMessagesBySession should keep a visitor topic message', async () => {
+      // `removeMessagesByAssistant`/`removeMessagesByGroup` route through this
+      // sweep, so the default must exclude visitor rows just like the id-less
+      // `deleteAllMessages` sweep above.
+      await messageModel.deleteMessagesBySession(undefined, 'visitor-topic');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id).sort()).toEqual(['creator-msg', 'visitor-msg']);
+    });
+
+    it('deleteMessagesBySession should delete a visitor topic message when the runtime opts in', async () => {
+      await messageModel.deleteMessagesBySession(undefined, 'visitor-topic', null, {
+        includeShareVisitor: true,
+      });
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
+    });
+
+    it('findShareVisitorMessageIds should report only the visitor ids of a mixed batch', async () => {
+      // Creator-facing update RPCs diff their targets against this finder, so
+      // it must name visitor rows and stay silent about the creator's own.
+      const visitorIds = await messageModel.findShareVisitorMessageIds([
+        'creator-msg',
+        'visitor-msg',
+      ]);
+
+      expect(visitorIds).toEqual(['visitor-msg']);
+    });
+
+    it('findShareVisitorMessageIds should ignore ids that match no row', async () => {
+      const visitorIds = await messageModel.findShareVisitorMessageIds(['missing-msg']);
+
+      expect(visitorIds).toEqual([]);
+    });
+
+    it('deleting the agent still cascades visitor messages away', async () => {
+      await serverDB.delete(agents).where(eq(agents.id, 'share-agent'));
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(0);
+    });
+  });
+
+  describe('topic usage rollup', () => {
+    const usageMsg = (id: string, totalTokens: number, cost: number) => ({
+      id,
+      metadata: { usage: { cost, totalInputTokens: totalTokens, totalTokens } },
+      model: 'gpt-4o',
+      provider: 'openai',
+      role: 'assistant',
+      topicId: 'usage-del-topic',
+      userId,
+    });
+
+    beforeEach(async () => {
+      await serverDB.insert(topics).values({ id: 'usage-del-topic', userId });
+    });
+
+    it('deleteMessage recomputes the topic rollup, dropping the removed message', async () => {
+      await serverDB
+        .insert(messages)
+        .values([usageMsg('keep-msg', 20, 0.01), usageMsg('drop-msg', 50, 0.02)]);
+
+      await messageModel.deleteMessage('drop-msg');
+
+      const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'usage-del-topic'));
+      expect(topic.totalTokens).toBe(20);
+      expect(topic.totalCost).toBeCloseTo(0.01, 6);
+    });
+
+    it('deleteMessages resets the rollup to NULL once all assistant usage is gone', async () => {
+      await serverDB.insert(messages).values([usageMsg('m1', 20, 0.01), usageMsg('m2', 50, 0.02)]);
+
+      await messageModel.deleteMessages(['m1', 'm2']);
+
+      const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'usage-del-topic'));
+      expect(topic.totalTokens).toBeNull();
+      expect(topic.totalCost).toBeNull();
+      expect(topic.usage).toBeNull();
+      expect(topic.cost).toBeNull();
+    });
+  });
+});

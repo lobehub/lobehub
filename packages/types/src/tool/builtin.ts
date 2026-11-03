@@ -1,0 +1,1188 @@
+import { type ReactNode } from 'react';
+import { z } from 'zod';
+
+import { type DeviceUnavailableErrorData } from '../device';
+import { type RuntimeStepContext } from '../stepContext';
+import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
+import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
+
+export * from './builtinIntervention';
+
+export interface Meta {
+  /**
+   * avatar
+   * @desc Avatar of the plugin
+   * @nameEN Avatar
+   * @descEN Plugin avatar
+   */
+  avatar?: string;
+  /**
+   * description
+   * @desc Description of the plugin
+   * @nameEN Description
+   * @descEN Plugin description
+   */
+  description?: string;
+  /**
+   * readme
+   * @desc Long-form readme content for the plugin
+   */
+  readme?: string;
+  /**
+   * tags
+   * @desc Tags of the plugin
+   * @nameEN Tags
+   * @descEN Plugin tags
+   */
+  tags?: string[];
+  title: string;
+}
+
+export const MetaSchema = z.object({
+  avatar: z.string().optional(),
+  description: z.string().optional(),
+  readme: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  title: z.string(),
+});
+
+/**
+ * Control the render display behavior for tool results
+ * - 'collapsed': Default collapsed, user can expand (default)
+ * - 'expand': Default expanded, user can collapse
+ * - 'alwaysExpand': Always expanded, user cannot collapse
+ */
+export type RenderDisplayControl = 'alwaysExpand' | 'collapsed' | 'expand';
+
+export const RenderDisplayControlSchema = z.enum(['collapsed', 'expand', 'alwaysExpand']);
+
+/**
+ * Dynamic intervention resolver function type
+ * Receives tool args and state metadata to determine if condition is met
+ * @returns true if intervention is required, false otherwise
+ */
+export type DynamicInterventionResolver = (
+  toolArgs: Record<string, any>,
+  metadata?: Record<string, any>,
+) => Promise<boolean>;
+
+/**
+ * Global intervention audit configuration
+ * Global audits run for EVERY tool call, not just tools with dynamic config.
+ * They are evaluated before per-tool dynamic audits in the intervention chain.
+ */
+export interface GlobalInterventionAuditConfig {
+  /**
+   * Policy to apply when audit condition is met (returns true)
+   * - 'always': cannot be bypassed by auto-run; in headless mode the tool is skipped entirely
+   * - 'required': requires intervention but can be bypassed by auto-run
+   * @default 'always'
+   */
+  policy?: HumanInterventionPolicy;
+
+  /**
+   * The audit function, reuses DynamicInterventionResolver signature
+   */
+  resolver: DynamicInterventionResolver;
+
+  /**
+   * Unique type identifier for this global audit
+   */
+  type: string;
+}
+
+/**
+ * Dynamic intervention configuration
+ * Used to dynamically determine intervention policy based on runtime context
+ *
+ * The resolver is referenced by type identifier and looked up from
+ * the dynamicInterventionAudits registry at runtime.
+ */
+export interface DynamicInterventionConfig {
+  /**
+   * Default policy when resolver returns false or no resolver is available
+   * @default 'never'
+   */
+  default?: HumanInterventionPolicy;
+
+  /**
+   * Policy to apply when resolver condition is met
+   * @default 'always'
+   */
+  policy?: HumanInterventionPolicy;
+
+  /**
+   * Resolver type identifier for external resolver lookup
+   * The resolver function is registered in dynamicInterventionAudits
+   */
+  type: string;
+}
+
+export const DynamicInterventionConfigSchema = z.object({
+  default: HumanInterventionPolicySchema.optional(),
+  policy: HumanInterventionPolicySchema.optional(),
+  type: z.string(),
+});
+
+/**
+ * Extended human intervention config that supports dynamic evaluation
+ */
+export type ExtendedHumanInterventionConfig =
+  HumanInterventionConfig | { dynamic: DynamicInterventionConfig };
+
+export const ExtendedHumanInterventionConfigSchema = z.union([
+  HumanInterventionConfigSchema,
+  z.object({ dynamic: DynamicInterventionConfigSchema }),
+]);
+
+/**
+ * Lifecycle action a tool API performs on its Work resource. Drives the Work
+ * version `role` (`create`/`update` → `created`/`updated`) and, for `delete`,
+ * routes to the resource's delete path instead of a version upsert.
+ */
+export type PluginApiWorkAction = 'create' | 'delete' | 'update';
+
+/**
+ * The Work resource kind an API produces. Selects the framework-side identity
+ * extractor and the `WorkModel` register method used by the dispatch layer.
+ */
+export type PluginApiWorkResourceType = 'document' | 'task';
+
+/**
+ * Declarative Work-registration config on a builtin tool API.
+ *
+ * Presence of this field is the single source of truth for "this API produces a
+ * Work". The tool-execution dispatch layers (server `BuiltinToolsExecutor` /
+ * client `invokeExecutor`) read it after a successful call, extract the resource
+ * identity from the result/args, and register the Work version — so tools need
+ * zero imperative registration code.
+ *
+ * Like `humanIntervention`, this is framework-only config: the model tools
+ * schema conversion only reads `name`/`description`/`parameters`, so `work`
+ * never leaks into the LLM-facing tool spec.
+ */
+export interface PluginApiWorkConfig {
+  action: PluginApiWorkAction;
+  resourceType: PluginApiWorkResourceType;
+}
+
+export const PluginApiWorkConfigSchema = z.object({
+  action: z.enum(['create', 'update', 'delete']),
+  resourceType: z.enum(['document', 'task']),
+});
+
+export interface LobeChatPluginApi {
+  /**
+   * Default execution timeout in milliseconds for this API.
+   *
+   * Used as the fallback when the LLM does not supply `arguments.timeout`.
+   * Falls back to the global default (120_000 ms) if not set.
+   *
+   * The resolved value (clamped to `[1_000, 800_000]` server-side) drives
+   * both `dispatchClientTool` BLPOP deadline and the renderer's race
+   * deadline, keeping server and client aligned on a single budget.
+   */
+  defaultTimeoutMs?: number;
+  description: string;
+  /**
+   * Human intervention configuration
+   * Controls when and how the tool requires human approval/selection
+   *
+   * Can be either:
+   * - Simple: A policy string ('never', 'always', 'required')
+   * - Complex: Array of rules for parameter-level control
+   * - Dynamic: { dynamic: DynamicInterventionConfig } for runtime evaluation
+   *
+   * Examples:
+   * - 'always' - always require intervention
+   * - [{ match: { command: "git add:*" }, policy: "never" }, { policy: "always" }]
+   * - { dynamic: { default: 'never', policy: 'required', type: 'exampleResolver' } } - exampleResolver should register in `GeneralChatAgent.dynamicInterventionAudits`
+   *
+   */
+  humanIntervention?: ExtendedHumanInterventionConfig;
+  name: string;
+  /**
+   * Run this API's calls one after another, in the order the model emitted
+   * them, when several land in the same tool batch. Set it on APIs whose side
+   * effects are order-sensitive — posting successive chat messages — where
+   * concurrent dispatch would let the platform keep whichever arrived first.
+   * Unmarked APIs in the same batch still run concurrently.
+   *
+   * Framework-only config like `humanIntervention`: it never reaches the
+   * LLM-facing tool spec.
+   */
+  ordered?: boolean;
+  parameters: Record<string, any>;
+  /**
+   * Control the render display behavior for tool results
+   * - 'collapsed': Default collapsed, user can expand (default)
+   * - 'expand': Default expanded, user can collapse
+   * - 'alwaysExpand': Always expanded, user cannot collapse
+   *
+   * @default 'collapsed'
+   */
+  renderDisplayControl?: RenderDisplayControl;
+  /**
+   * Name of the argument that identifies the resource this API mutates (e.g.
+   * a file path). Within one tool batch, calls to the same tool whose argument
+   * holds the same value run one after another in emission order — across
+   * APIs of that tool, so a `writeFile` and an `editFile` on one path queue
+   * together. Calls on different values stay concurrent.
+   *
+   * Framework-only config like `ordered`: it never reaches the LLM-facing
+   * tool spec.
+   */
+  serializeBy?: string;
+  url?: string;
+  /**
+   * Declarative Work-registration config. When present, the tool-execution
+   * dispatch layer registers a Work version after this API succeeds — the tool
+   * itself needs no imperative registration code. See {@link PluginApiWorkConfig}.
+   */
+  work?: PluginApiWorkConfig;
+}
+
+export const LobeChatPluginApiSchema = z.object({
+  defaultTimeoutMs: z.number().int().positive().optional(),
+  description: z.string(),
+  humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
+  name: z.string(),
+  ordered: z.boolean().optional(),
+  parameters: z.record(z.string(), z.any()),
+  renderDisplayControl: RenderDisplayControlSchema.optional(),
+  serializeBy: z.string().optional(),
+  url: z.string().optional(),
+  work: PluginApiWorkConfigSchema.optional(),
+});
+
+/**
+ * A program that holds a device-gateway connection for a device: the LobeHub
+ * desktop app, or the `lh connect` CLI. One device can hold both at once.
+ */
+export type DeviceClient = 'cli' | 'desktop';
+
+export interface BuiltinToolManifest {
+  api: LobeChatPluginApi[];
+
+  /**
+   * Device clients that can run this tool when it executes on a device. The
+   * gateway is told to skip connections of any other client — e.g. Computer
+   * Use and the browser panel live only in the desktop app, so a call must not
+   * land on `lh connect` running on the same machine.
+   *
+   * When omitted, any device client can run it.
+   */
+  deviceClients?: DeviceClient[];
+
+  /**
+   * Supported execution environments for this tool.
+   * - `'client'`: executed in-process by an embedded Electron runtime that
+   *   hosts both the server and the executor. Used only by standalone
+   *   builds without a device-gateway. Deployments with DEVICE_GATEWAY
+   *   route the same tools through the device-gateway proxy instead.
+   * - `'server'`: executed server-side by ToolExecutionService.
+   *
+   * When omitted, defaults to server-only execution.
+   */
+  executors?: ('client' | 'server')[];
+
+  /**
+   * Tool-level default human intervention policy
+   * This policy applies to all APIs that don't specify their own policy
+   *
+   * @default 'never'
+   */
+  humanIntervention?: HumanInterventionPolicy;
+
+  /**
+   * Plugin name
+   */
+  identifier: string;
+  /**
+   * metadata
+   * @desc Meta data of the plugin
+   */
+  meta: Meta;
+  systemRole: string;
+  /**
+   * plugin runtime type
+   * @default default
+   */
+  type?: 'builtin';
+}
+
+export const BuiltinToolManifestSchema = z.object({
+  api: z.array(LobeChatPluginApiSchema),
+  deviceClients: z.array(z.enum(['cli', 'desktop'])).optional(),
+  executors: z.array(z.enum(['client', 'server'])).optional(),
+  humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
+  identifier: z.string(),
+  meta: MetaSchema,
+  systemRole: z.string(),
+  type: z.literal('builtin').optional(),
+});
+
+/**
+ * Runtime context handed to a builtin tool's manifest resolver so the tool can
+ * self-trim per conversation context instead of relying on scattered, hard-coded
+ * filters in the consuming layers (agentConfigResolver / toolSetComposer).
+ *
+ * Mirror of the builtin-agent `runtime: (ctx) => config` pattern, but for tools.
+ * Extend this with new signals (e.g. isDesktop, isPageEditorReady, groupId) as
+ * more tools migrate their context-based trimming here.
+ */
+export interface BuiltinToolResolveContext {
+  /**
+   * IM platform the run originates from (bot conversations only). Lets platform-
+   * aware tools trim APIs the platform can't fulfil — e.g. the `lobe-message`
+   * tool drops `readMessages` on WeChat, which has no history-read API and would
+   * otherwise throw `PlatformUnsupportedError` after the model dutifully calls it.
+   */
+  botPlatform?: {
+    /** Platform id (e.g. `wechat`, `discord`). */
+    id: string;
+    /**
+     * `lobe-message` API names this platform does not support. Sourced from the
+     * platform definition (`PlatformDefinition.unsupportedMessageApis`) so the
+     * manifest trim stays in lock-step with the runtime that throws.
+     */
+    unsupportedMessageApis?: string[];
+  };
+  /**
+   * Where this run executes, derived from the resolved `ExecutionPlan`. The
+   * routed desktop-local target stays `local`; other plans mirror their `kind`
+   * (`device` / `device-unrouted` / `sandbox` / `none`). Lets exec-capable tools (e.g. lobe-skills)
+   * rewrite their API descriptions per environment — most notably
+   * `device-unrouted`, where the user picked their local device but it is
+   * offline and commands silently fall back to the cloud sandbox. Kept as a
+   * plain union to avoid coupling the tool layer to the execution-plan types.
+   */
+  executionEnv?: 'device' | 'device-unrouted' | 'local' | 'none' | 'sandbox';
+  /**
+   * Why a `device-unrouted` plan failed to route, mirroring
+   * `ExecutionPlanUnroutedReason` (`src/helpers/executionTarget.ts`). Only set
+   * when `executionEnv` is `device-unrouted`. Offline reasons and
+   * still-selectable reasons (unbound / several devices online, where the
+   * remote-device picker is active) need different prompt wording.
+   */
+  executionEnvUnroutedReason?:
+    'ambiguous-online-devices' | 'bound-device-offline' | 'no-bound-device' | 'no-online-device';
+  /**
+   * True when running inside a sub-agent execution. A nested sub-agent must not
+   * be able to dispatch further sub-agents.
+   */
+  isSubAgent?: boolean;
+  /**
+   * Conversation scope, e.g. 'main' | 'page' | 'task' | 'group' | 'group_agent'
+   * | 'thread' | 'sub_agent'. Kept as a string to avoid coupling the tool layer
+   * to the operation/message scope unions.
+   */
+  scope?: string;
+}
+
+/**
+ * Context-aware manifest factory for a builtin tool. Return a trimmed manifest
+ * (e.g. with certain APIs filtered out) for the given context, or `null` to make
+ * the tool unavailable entirely in that context.
+ */
+export type BuiltinManifestResolver = (
+  context: BuiltinToolResolveContext,
+) => BuiltinToolManifest | null;
+
+export interface BuiltinRestrictedManifestResolveContext {
+  /** API names left after the runtime has applied its access policy. */
+  allowedApiNames: readonly string[];
+  /** Policy boundary responsible for the reduced API surface. */
+  restriction: 'agentShare' | 'toolSelection';
+}
+
+/** Resolve a builtin-owned manifest for a known restricted API surface. */
+export type BuiltinRestrictedToolManifest = Omit<BuiltinToolManifest, 'systemRole'> & {
+  /** Omit the role when it describes APIs outside the restricted surface. */
+  systemRole?: string;
+};
+
+export type BuiltinRestrictedManifestResolver = (
+  context: BuiltinRestrictedManifestResolveContext,
+) => BuiltinRestrictedToolManifest | undefined;
+
+export interface LobeBuiltinTool {
+  /** Identity (hoisted from `manifest.meta`): icon shown in UI lists. */
+  avatar?: string;
+  /** Identity (hoisted from `manifest.meta`): short description shown in UI. */
+  description?: string;
+  discoverable?: boolean;
+  hidden?: boolean;
+  identifier: string;
+  manifest: BuiltinToolManifest;
+  /**
+   * Optional context-aware override for `manifest`. When present AND a resolve
+   * context is supplied (the agent runtime / tools-engine path), the resolver's
+   * result replaces the static `manifest` for that turn, letting the tool gate
+   * its own availability or hide specific APIs based on context.
+   *
+   * The static `manifest` stays the full-capability set used by context-free
+   * consumers (UI tool lists, discovery, settings, token estimation), so adding
+   * a resolver never breaks those synchronous reads.
+   */
+  resolveManifest?: BuiltinManifestResolver;
+  /**
+   * Optional manifest for a policy-restricted API subset.
+   *
+   * This callback stays on the in-process builtin registry rather than the
+   * serializable manifest contract. It lets the owning package narrow both
+   * instructions and schemas when policy changes their actual semantics.
+   * Unknown subsets must return `undefined` so callers fail closed instead of
+   * attaching stale capability metadata.
+   */
+  resolveRestrictedManifest?: BuiltinRestrictedManifestResolver;
+  /** Identity (hoisted from `manifest.meta`): tags shown in UI / discovery. */
+  tags?: string[];
+  /** Identity (hoisted from `manifest.meta`): display name. Falls back to `identifier`. */
+  title?: string;
+  type: 'builtin';
+}
+
+export const LobeBuiltinToolSchema = z.object({
+  discoverable: z.boolean().optional(),
+  hidden: z.boolean().optional(),
+  identifier: z.string(),
+  manifest: BuiltinToolManifestSchema,
+  type: z.literal('builtin'),
+});
+
+export interface BuiltinRenderProps<Arguments = any, State = any, Content = any> {
+  apiName?: string;
+  args: Arguments;
+  content: Content;
+  identifier?: string;
+  messageId: string;
+  pluginError?: any;
+  pluginState?: State;
+  /**
+   * The tool call ID from the assistant message
+   */
+  toolCallId?: string;
+}
+
+export type BuiltinRender = <A = any, S = any, C = any>(
+  props: BuiltinRenderProps<A, S, C>,
+) => ReactNode;
+
+export interface BuiltinPortalProps<Arguments = Record<string, any>, State = any> {
+  apiName?: string;
+  arguments: Arguments;
+  identifier: string;
+  messageId: string;
+  /**
+   * Extra params the opener passed to `openToolUI` — e.g. which list item the
+   * user clicked. Optional; portals that don't need a focused target ignore it.
+   */
+  params?: Record<string, any>;
+  state: State;
+}
+
+export type BuiltinPortal = <T = any>(props: BuiltinPortalProps<T>) => ReactNode;
+
+/**
+ * Props for a tool's optional portal header content. The framework owns the
+ * back/close chrome and renders this in the title slot, so a tool can name and
+ * decorate its own portal without the framework hard-coding tool knowledge.
+ */
+export interface BuiltinPortalTitleProps {
+  apiName?: string;
+  identifier: string;
+  messageId: string;
+  /** Extra params the opener passed to `openToolUI` (e.g. focused item index). */
+  params?: Record<string, any>;
+}
+
+export type BuiltinPortalTitle = (props: BuiltinPortalTitleProps) => ReactNode;
+
+export interface BuiltinPlaceholderProps<T extends Record<string, any> = any> {
+  apiName: string;
+  args?: T;
+  identifier: string;
+}
+
+export type BuiltinPlaceholder = (props: BuiltinPlaceholderProps) => ReactNode;
+
+// ==================== Inspector Renderer Types ====================
+
+export interface BuiltinInspectorProps<Arguments = any, State = any> {
+  apiName: string;
+  args: Arguments;
+  identifier: string;
+  /**
+   * Whether the tool arguments are currently streaming (not yet complete)
+   * Use this to distinguish between "arguments streaming" vs "tool executing" states
+   */
+  isArgumentsStreaming?: boolean;
+  isLoading?: boolean;
+  partialArgs?: Arguments;
+  pluginState?: State;
+  result?: { content: string | null; error?: any; state?: any };
+  /**
+   * Stable id of this tool call. Required for inspectors that need to correlate
+   * with side data — e.g. CC's `Agent` inspector joining to the subagent Thread
+   * via `metadata.sourceToolCallId`.
+   */
+  toolCallId?: string;
+}
+
+export type BuiltinInspector = <A = any, S = any>(props: BuiltinInspectorProps<A, S>) => ReactNode;
+
+// ==================== Streaming Renderer Types ====================
+
+/**
+ * Props for streaming render components
+ * Note: During streaming phase, only basic info is available.
+ * pluginState and streaming content should be fetched from store inside the component.
+ */
+export interface BuiltinStreamingProps<Arguments = any> {
+  apiName: string;
+  args: Arguments;
+  identifier: string;
+  messageId: string;
+  toolCallId: string;
+}
+
+export type BuiltinStreaming = <A = any>(props: BuiltinStreamingProps<A>) => ReactNode;
+
+export interface BuiltinServerRuntimeOutput {
+  content: string;
+  /**
+   * When true, the tool executed a side-effect but its result is delivered
+   * out-of-band later (e.g. an async sub-agent). The agent runtime parks the
+   * operation instead of writing a tool_result, mirroring the client-tool
+   * pause path. The deferred result is filled in by a completion bridge.
+   */
+  deferred?: boolean;
+  error?: any;
+  /** Structured unavailable-device context preserved through the runtime error envelope. */
+  errorData?: DeviceUnavailableErrorData;
+  state?: any;
+  success: boolean;
+  /**
+   * The tool message this call already created for itself (e.g. a background
+   * sub-agent's placeholder, which anchors its thread). The agent runtime
+   * writes the result into that row instead of creating a second one.
+   */
+  toolMessageId?: string;
+}
+
+// ==================== Executor Types ====================
+
+/**
+ * Result returned by builtin tool executors
+ */
+export interface BuiltinToolResult {
+  /**
+   * The content to display in the tool message
+   */
+  content?: string;
+
+  /**
+   * Error information if the tool execution failed
+   */
+  error?: {
+    body?: any;
+    message: string;
+    type: string;
+  };
+
+  /**
+   * Metadata to attach to the tool message
+   * Used to mark messages for special handling (e.g., agentCouncil for parallel display)
+   */
+  metadata?: Record<string, any>;
+
+  /**
+   * Plugin state for UI rendering
+   */
+  state?: any;
+
+  /**
+   * Whether to stop the current execution flow
+   * - true: Stop execution (e.g., speak/broadcast in group management)
+   * - false/undefined: Continue execution
+   */
+  stop?: boolean;
+
+  /**
+   * Whether the tool execution was successful
+   */
+  success: boolean;
+}
+
+/**
+ * Context passed to builtin tool executors
+ */
+export interface BuiltinToolContext {
+  /**
+   * The current agent ID executing this tool (supervisor agent in group context)
+   * Used to identify which agent called the tool for orchestration purposes
+   */
+  agentId?: string;
+
+  /** Assistant message that owns this tool call. */
+  anchorMessageId?: string;
+
+  /**
+   * The current page document ID when the conversation is scoped to an open editor
+   * Uses the underlying `documents.id`, not tool-specific association IDs
+   */
+  documentId?: string | null;
+
+  /**
+   * The current group ID (only available in group chat context)
+   * Used by group management tools to access group member information
+   */
+  groupId?: string;
+
+  /**
+   * Group orchestration callbacks (only available in group chat context)
+   * Used by group management tools to trigger the next orchestration phase
+   */
+  groupOrchestration?: GroupOrchestrationCallbacks;
+
+  /**
+   * Whether the current tool is executing inside a sub-agent. Sub-agents must
+   * not spawn additional sub-agents.
+   */
+  isSubAgent?: boolean;
+
+  /**
+   * The run executes on this machine AND its owner asked for the device sandbox
+   * (`agencyConfig.localSandbox` on a `local` target). The Local System executor
+   * forwards it to `runCommand` so the desktop confines the spawned command.
+   *
+   * Resolved by the caller that builds this context — the executor must not
+   * re-derive it, so the in-process path and the server device-proxy stay in
+   * agreement about which runs are fenced.
+   */
+  localSandbox?: boolean;
+
+  /**
+   * The fenced run may reach the package-registry allowlist
+   * (`agencyConfig.localSandboxNetwork`). Meaningless without
+   * {@link localSandbox}.
+   */
+  localSandboxNetwork?: boolean;
+
+  /**
+   * Tool execution context key. It is the tool message ID for locally persisted
+   * tool messages, but gateway execution can temporarily use the toolCallId
+   * before the server-side tool result message exists.
+   */
+  messageId: string;
+
+  /**
+   * Optional callback for streaming updates
+   * Only needed for tools that support streaming output
+   */
+  onStreamingUpdate?: (chunk: string) => Promise<void>;
+
+  /**
+   * The current operation ID (for abort signal)
+   */
+  operationId?: string;
+
+  /**
+   * Current plugin state for this tool message
+   * Use `stepContext` instead for cross-message state
+   */
+  pluginState?: Record<string, unknown>;
+
+  /**
+   * Register a callback to execute after AgentRuntime completes
+   * Used for actions that should happen after the current execution flow finishes
+   * to avoid race conditions with message updates
+   */
+  registerAfterCompletion?: (callback: AfterCompletionCallback) => void;
+
+  /**
+   * Root AI runtime operation ID for aggregating artifacts produced by one run.
+   */
+  rootOperationId?: string;
+
+  /**
+   * Conversation scope captured when the operation was created
+   */
+  scope?: string | null;
+
+  /**
+   * AbortSignal for cancellation detection
+   */
+  signal?: AbortSignal;
+
+  /**
+   * The source user message ID for tools that need to inspect the current turn.
+   */
+  sourceMessageId?: string;
+
+  /**
+   * Step context computed at the beginning of each step
+   * Contains dynamic state like lobe-agent todos that changes between steps
+   * Computed by AgentRuntime and passed to Tool Executors
+   */
+  stepContext?: RuntimeStepContext;
+
+  /**
+   * Sub-agent execution callback injected by the client runtime.
+   * Lets a tool (e.g. lobe-agent.callSubAgent) recursively run a sub-agent in
+   * an isolated thread using the *current* runtime, then resume as a normal
+   * tool result. Only present during client-mode tool execution.
+   */
+  subAgent?: SubAgentCallbacks;
+
+  /**
+   * Current task identifier or database id when the conversation is scoped to a task detail page.
+   */
+  taskId?: string | null;
+
+  /**
+   * The current thread ID when operating inside a thread-scoped conversation.
+   */
+  threadId?: string | null;
+
+  /**
+   * The tool call ID from the assistant message.
+   */
+  toolCallId?: string;
+
+  /**
+   * Explicit source tool message ID for provenance. Prefer this over `messageId`
+   * when persisting cross-domain records because gateway tool execution may use
+   * `messageId` as a client-side context key before the server creates the tool
+   * message row.
+   */
+  toolMessageId?: string;
+
+  /**
+   * The current topic ID (only available when operating within a topic)
+   * Used by tools that need to create messages or operations within a topic
+   */
+  topicId?: string | null;
+
+  /**
+   * The working directory configured for file operations
+   * When set, file operations should be restricted to this directory
+   */
+  workingDirectory?: string;
+}
+
+/**
+ * Callback type for after-completion actions
+ */
+export type AfterCompletionCallback = () => void | Promise<void>;
+
+/**
+ * Base params for group orchestration callbacks
+ */
+export interface GroupOrchestrationBaseParams {
+  /**
+   * The supervisor agent ID (the one who called this tool)
+   */
+  supervisorAgentId: string;
+}
+
+/**
+ * Params for triggerSpeak callback
+ */
+export interface TriggerSpeakParams extends GroupOrchestrationBaseParams {
+  /**
+   * The agent ID to speak
+   */
+  agentId: string;
+  /**
+   * Optional instruction for the agent
+   */
+  instruction?: string;
+  /**
+   * If true, the orchestration will end after this agent responds,
+   * without calling the supervisor again.
+   */
+  skipCallSupervisor?: boolean;
+}
+
+/**
+ * Params for triggerBroadcast callback
+ */
+export interface TriggerBroadcastParams extends GroupOrchestrationBaseParams {
+  /**
+   * Array of agent IDs to broadcast to
+   */
+  agentIds: string[];
+  /**
+   * Optional instruction for the agents
+   */
+  instruction?: string;
+  /**
+   * If true, the orchestration will end after all agents respond,
+   * without calling the supervisor again.
+   */
+  skipCallSupervisor?: boolean;
+  /**
+   * The tool message ID that triggered the broadcast
+   * Used as parentId for agent responses to build correct message tree
+   */
+  toolMessageId: string;
+}
+
+/**
+ * Params for triggerDelegate callback
+ */
+export interface TriggerDelegateParams extends GroupOrchestrationBaseParams {
+  /**
+   * The agent ID to delegate to
+   */
+  agentId: string;
+  /**
+   * Optional reason for delegation
+   */
+  reason?: string;
+}
+
+/**
+ * Params for triggerExecuteTask callback
+ */
+export interface TriggerExecuteTaskParams extends GroupOrchestrationBaseParams {
+  /**
+   * The agent ID to execute the task
+   */
+  agentId: string;
+  /**
+   * The instruction/task description for the agent
+   */
+  instruction: string;
+  /**
+   * Whether to run on the desktop client (for local file/shell access).
+   * MUST be true when task requires local-system tools. Default is false (server execution).
+   */
+  runInClient?: boolean;
+  /**
+   * If true, the orchestration will end after the task completes,
+   * without calling the supervisor again.
+   */
+  skipCallSupervisor?: boolean;
+  /**
+   * Optional timeout in milliseconds
+   */
+  timeout?: number;
+  /**
+   * The tool message ID that triggered the task
+   */
+  toolMessageId: string;
+}
+
+/**
+ * Task item for triggerExecuteTasks callback
+ */
+export interface TriggerExecuteTaskItem {
+  /**
+   * The agent ID to execute this task
+   */
+  agentId: string;
+  /**
+   * Detailed instruction for the agent to execute
+   */
+  instruction: string;
+  /**
+   * Optional timeout in milliseconds for this specific task
+   */
+  timeout?: number;
+  /**
+   * Brief title describing what this task does (shown in UI)
+   */
+  title: string;
+}
+
+/**
+ * Params for triggerExecuteTasks callback (multiple tasks)
+ */
+export interface TriggerExecuteTasksParams extends GroupOrchestrationBaseParams {
+  /**
+   * If true, the orchestration will end after all tasks complete,
+   * without calling the supervisor again.
+   */
+  skipCallSupervisor?: boolean;
+  /**
+   * Array of tasks to execute, each assigned to a specific agent
+   */
+  tasks: TriggerExecuteTaskItem[];
+  /**
+   * The tool message ID that triggered the tasks
+   */
+  toolMessageId: string;
+}
+
+/**
+ * Group Orchestration callbacks for group management tools
+ * These callbacks are used to trigger the next phase in multi-agent orchestration
+ */
+export interface GroupOrchestrationCallbacks {
+  /**
+   * Trigger broadcast to multiple agents
+   */
+  triggerBroadcast: (params: TriggerBroadcastParams) => Promise<void>;
+
+  /**
+   * Trigger delegate to a specific agent
+   */
+  triggerDelegate: (params: TriggerDelegateParams) => Promise<void>;
+
+  /**
+   * Trigger async task execution for an agent
+   */
+  triggerExecuteTask: (params: TriggerExecuteTaskParams) => Promise<void>;
+
+  /**
+   * Trigger async execution of multiple tasks in parallel
+   */
+  triggerExecuteTasks: (params: TriggerExecuteTasksParams) => Promise<void>;
+
+  /**
+   * Trigger speak to a specific agent
+   */
+  triggerSpeak: (params: TriggerSpeakParams) => Promise<void>;
+}
+
+/**
+ * Params for running a single sub-agent via the injected runtime callback.
+ */
+export interface RunSubAgentParams {
+  /** Brief description of what this sub-agent does (used as thread title / UI) */
+  description: string;
+  /** Whether to inherit context messages from the parent conversation */
+  inheritMessages?: boolean;
+  /** Detailed instruction/prompt for the sub-agent execution */
+  instruction: string;
+  /** Optional timeout in milliseconds */
+  timeout?: number;
+  /** The tool message ID that spawned this sub-agent (anchors the isolation thread) */
+  toolMessageId: string;
+}
+
+/**
+ * Result of a sub-agent run, fed back to the caller as a normal tool result.
+ */
+export interface RunSubAgentResult {
+  /** Error message when the sub-agent failed */
+  error?: string;
+  /** Model the sub-agent ran on (e.g. "deepseek-v4-pro") */
+  model?: string;
+  /** Final assistant output of the sub-agent run */
+  result: string;
+  /** Whether the run succeeded */
+  success: boolean;
+  /** The isolation thread holding the sub-agent's full message trace */
+  threadId: string;
+  /**
+   * Cost of the sub-agent run. Lands on the tool message's `pluginState`, which is
+   * how the parent's usage tray accounts for a sub-agent at all: the tray sums
+   * per-MESSAGE usage, and the child's own messages live in an isolation thread the
+   * parent never loads. Omit it and the tray reports the child as free.
+   */
+  totalCost?: number;
+  /** Input tokens consumed by the sub-agent run */
+  totalInputTokens?: number;
+  /** Output tokens produced by the sub-agent run */
+  totalOutputTokens?: number;
+  /** Total tokens consumed by the sub-agent run */
+  totalTokens?: number;
+  /** Number of tool calls the sub-agent made */
+  totalToolCalls?: number;
+}
+
+/**
+ * Sub-agent execution callback injected by the runtime into tool context.
+ * Runs the sub-agent in an isolated thread using the current runtime and
+ * resolves once it finishes, so the calling tool can return a normal result.
+ */
+export interface SubAgentCallbacks {
+  run: (params: RunSubAgentParams) => Promise<RunSubAgentResult>;
+}
+
+/**
+ * Builtin tool executor function type
+ */
+export type BuiltinToolExecutor<TParams = any> = (
+  params: TParams,
+  ctx: BuiltinToolContext,
+) => Promise<BuiltinToolResult>;
+
+/**
+ * Interface for builtin tool executor class
+ * Each executor class should implement this interface
+ */
+export interface IBuiltinToolExecutor {
+  /**
+   * Get all supported API names
+   *
+   * @returns Array of supported API names
+   */
+  getApiNames: () => string[];
+
+  /**
+   * Check if this executor supports the given API
+   *
+   * @param apiName - The API name to check
+   * @returns Whether the API is supported
+   */
+  hasApi: (apiName: string) => boolean;
+
+  /**
+   * The tool identifier (e.g., 'lobe-group-management')
+   */
+  readonly identifier: string;
+
+  /**
+   * Invoke a specific API of this tool
+   *
+   * @param apiName - The API name to invoke
+   * @param params - Parameters for the API
+   * @param ctx - Execution context
+   * @returns The execution result
+   */
+  invoke: (apiName: string, params: any, ctx: BuiltinToolContext) => Promise<BuiltinToolResult>;
+
+  /**
+   * Optional renderer-side hook fired AFTER a tool call completes — regardless
+   * of whether it actually executed in the client (this executor) or server-side
+   * (server runtime). Use to invalidate SWR caches, refresh stores, or trigger
+   * any other UI-side reaction to the mutation. Implementations should narrow
+   * `ctx.params` themselves based on `ctx.apiName`.
+   */
+  onAfterCall?: (ctx: ToolAfterCallContext) => void | Promise<void>;
+
+  /**
+   * Optional renderer-side hook fired BEFORE a tool call dispatches, regardless
+   * of whether the tool will execute client- or server-side. Use to optimistically
+   * update UI, set loading states, etc.
+   */
+  onBeforeCall?: (ctx: ToolBeforeCallContext) => void | Promise<void>;
+}
+
+/**
+ * Shared base for all renderer-side tool lifecycle hooks. New fields go here
+ * (or on the variants below) — keeping the call signature as a single object
+ * so additions stay non-breaking.
+ */
+export interface ToolHookContext {
+  /** API name being invoked (e.g. `'deleteTask'`). */
+  apiName: string;
+  /** Tool identifier (e.g. `'lobe-task'`). */
+  identifier: string;
+  /**
+   * Parsed tool arguments. Arrives JSON-decoded when the event comes off the
+   * agent stream; never the raw string. Hook implementations narrow per
+   * `apiName`.
+   */
+  params: unknown;
+  /**
+   * Stable id for this specific tool invocation (`ChatToolPayload.id`).
+   * Useful for correlating before/after hooks against the same call.
+   */
+  toolCallId?: string;
+  /**
+   * Topic id of the run this tool call belongs to (the bound operation's topic),
+   * threaded from the event handler's conversation context. Prefer this over the
+   * globally-active topic so a hook's side effects land on the run's own topic
+   * even if the user has navigated away mid-run. Undefined when the run has no
+   * topic yet.
+   */
+  topicId?: string;
+}
+
+export interface ToolBeforeCallContext extends ToolHookContext {}
+
+export interface ToolAfterCallContext extends ToolHookContext {
+  /** Execution result returned by either the client executor or server runtime. */
+  result: BuiltinToolResult;
+}
+
+/**
+ * Base Executor Class
+ *
+ * Provides automatic invoke/hasApi/getApiNames implementation.
+ * Subclasses only need to define business methods.
+ *
+ * Usage:
+ * ```typescript
+ * class MyExecutor extends BaseExecutor<typeof MyApiName> {
+ *   readonly identifier = 'my-tool';
+ *   protected readonly apiEnum = MyApiName;
+ *
+ *   myMethod = async (params: MyParams, ctx: BuiltinToolContext) => {
+ *     // business logic
+ *     return { success: true, content: 'result' };
+ *   };
+ * }
+ * ```
+ */
+export abstract class BaseExecutor<
+  TApiEnum extends Record<string, string>,
+> implements IBuiltinToolExecutor {
+  /**
+   * The tool identifier (e.g., 'lobe-group-management')
+   */
+  abstract readonly identifier: string;
+
+  /**
+   * The API name enum for this executor
+   * Used to validate API names and auto-discover methods
+   */
+  protected abstract readonly apiEnum: TApiEnum;
+
+  /**
+   * Invoke a specific API of this tool
+   * Automatically routes to the corresponding method
+   */
+  invoke = async (
+    apiName: string,
+    params: any,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    // Validate API name
+    if (!this.hasApi(apiName)) {
+      return {
+        error: {
+          message: `Unknown API: ${apiName}`,
+          type: 'ApiNotFound',
+        },
+        success: false,
+      };
+    }
+
+    // Get the method from this instance
+    const method = (this as any)[apiName];
+
+    if (typeof method !== 'function') {
+      return {
+        error: {
+          message: `Method not implemented: ${apiName}`,
+          type: 'MethodNotImplemented',
+        },
+        success: false,
+      };
+    }
+
+    // Invoke the method
+    return method(params, ctx);
+  };
+
+  /**
+   * Check if this executor supports the given API
+   */
+  hasApi(apiName: string): boolean {
+    return Object.values(this.apiEnum).includes(apiName);
+  }
+
+  /**
+   * Get all supported API names
+   */
+  getApiNames(): string[] {
+    return Object.values(this.apiEnum);
+  }
+}

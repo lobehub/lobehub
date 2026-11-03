@@ -1,0 +1,222 @@
+import { createStaticStyles, cssVar, cx, Flexbox, Popover } from '@lobehub/ui';
+import { ExternalLink, EyeIcon, FolderOpen, MessageSquarePlus } from 'lucide-react';
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+
+import FileIcon from '@/components/FileIcon';
+
+import { type StartTopicConversation } from './StartTopicConversation';
+import { useLocalFileActions } from './useLocalFileActions';
+import { useStartTopicInDirectory } from './useStartTopicInDirectory';
+
+const styles = createStaticStyles(({ css }) => ({
+  container: css`
+    padding-block: 2px;
+    padding-inline: 4px 8px;
+    border-radius: 4px;
+    color: ${cssVar.colorText};
+  `,
+  interactive: css`
+    cursor: pointer;
+
+    :hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
+    }
+  `,
+  segment: css`
+    cursor: pointer;
+
+    position: relative;
+
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 5px;
+    padding-inline: 11px;
+    border: none;
+
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 20px;
+    color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
+
+    background: transparent;
+
+    & + &::before {
+      content: '';
+
+      position: absolute;
+      inset-block: 5px;
+      inset-inline-start: 0;
+
+      width: 1px;
+
+      background: ${cssVar.colorBorderSecondary};
+    }
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &:hover::before,
+    &:hover + &::before {
+      background: transparent;
+    }
+
+    &:focus-visible {
+      border-radius: 6px;
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: -2px;
+    }
+  `,
+  segmented: css`
+    overflow: hidden;
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: ${cssVar.borderRadiusLG};
+  `,
+  title: css`
+    overflow: hidden;
+    display: block;
+
+    line-height: 20px;
+    color: inherit;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+}));
+
+interface LocalFileProps {
+  /**
+   * The conversation rendering this reference, enabling "start a topic in this
+   * folder" for it. Falls back to `StartTopicConversationContext`; absent
+   * outside an eligible conversation.
+   */
+  conversation?: StartTopicConversation;
+  isDirectory?: boolean;
+  name: string;
+  /**
+   * Web only: opens the file in the right-side portal through the agent's
+   * bound device. Without it the web chip is a static reference — the web app
+   * has no Open / Show in Folder.
+   */
+  openInPortal?: () => void;
+  path?: string;
+  /**
+   * When true, disable interactive actions (Open / Show in Folder).
+   * Used in share pages where local file operations are not available.
+   */
+  readonly?: boolean;
+}
+
+export const LocalFile = ({
+  conversation,
+  name,
+  path,
+  isDirectory = false,
+  openInPortal,
+  readonly = false,
+}: LocalFileProps) => {
+  const { t } = useTranslation('components');
+  const {
+    canOpenNatively,
+    canPreview,
+    handleClick,
+    handleOpenFile,
+    handleOpenFolder,
+    handlePreview,
+  } = useLocalFileActions({ isDirectory, openInPortal, path, readonly });
+  const { canStartTopic, startTopic } = useStartTopicInDirectory({
+    conversation,
+    isDirectory,
+    path,
+    readonly,
+  });
+
+  const fileContent = (
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={cx(styles.container, (handleClick || canOpenNatively) && styles.interactive)}
+      gap={4}
+      // Inline chip, not a <button> (block layout inside markdown prose) — so
+      // give the clickable state complete button semantics by hand.
+      role={handleClick ? 'button' : undefined}
+      style={{ display: 'inline-flex', verticalAlign: 'middle' }}
+      tabIndex={handleClick ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={
+        handleClick
+          ? (event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              handleClick();
+            }
+          : undefined
+      }
+    >
+      <FileIcon fileName={name} isDirectory={isDirectory} size={22} variant={'raw'} />
+      <Flexbox horizontal align={'baseline'} gap={4} style={{ overflow: 'hidden', width: '100%' }}>
+        <div className={styles.title}>{name}</div>
+      </Flexbox>
+    </Flexbox>
+  );
+
+  // Readonly mode (e.g. share page) and the web app have no system actions;
+  // there the chip only previews on click, so a hover menu would add nothing.
+  if (!canOpenNatively) {
+    return fileContent;
+  }
+
+  // Files and directories share the same hover action surface. Directory chips
+  // keep their direct click-to-open behavior while exposing the contextual
+  // "start topic here" action without adding persistent markdown clutter.
+  const popoverContent = (
+    <div className={styles.segmented}>
+      {canPreview && (
+        <button className={styles.segment} type={'button'} onClick={handlePreview}>
+          <EyeIcon size={15} />
+          {t('LocalFile.action.preview')}
+        </button>
+      )}
+      <button className={styles.segment} type={'button'} onClick={handleOpenFile}>
+        <ExternalLink size={15} />
+        {t('LocalFile.action.open')}
+      </button>
+      {isDirectory ? (
+        canStartTopic && (
+          <button className={styles.segment} type={'button'} onClick={() => void startTopic()}>
+            <MessageSquarePlus size={15} />
+            {t('LocalFile.action.startTopic')}
+          </button>
+        )
+      ) : (
+        <button className={styles.segment} type={'button'} onClick={handleOpenFolder}>
+          <FolderOpen size={15} />
+          {t('LocalFile.action.showInFolder')}
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <Popover
+      content={popoverContent}
+      trigger="hover"
+      styles={{
+        content: { padding: 0 },
+      }}
+    >
+      {fileContent}
+    </Popover>
+  );
+};

@@ -1,0 +1,66 @@
+component_management:
+  individual_components:
+    # Top-level packages
+    - component_id: server
+      name: 'Server'
+      paths:
+        - apps/server/**
+    - component_id: database
+      name: 'Database'
+      paths:
+        - packages/database/**
+    - component_id: builtin_tools
+      name: 'Builtin Tools'
+      paths:
+        - packages/builtin-tool-*/**
+        - packages/builtin-tools/**
+
+    # App architecture layers
+    - component_id: app_store
+      name: 'Store'
+      paths:
+        - src/store/**
+    - component_id: app_services
+      name: 'Services'
+      paths:
+        - src/services/**
+    - component_id: app_libs
+      name: 'Libs'
+      paths:
+        - src/libs/**
+    - component_id: app_utils
+      name: 'Utils'
+      paths:
+        - src/utils/**
+
+coverage:
+  status:
+    project:
+      default: off
+      server:
+        flags:
+          - server
+        threshold: '0.5%'
+      database:
+        flags:
+          - database
+        threshold: '0.5%'
+      builtin-tools:
+        flags:
+          - builtin-tools
+        threshold: '0.5%'
+      app:
+        flags:
+          - app
+        threshold: '0.5%'
+    patch: off
+
+ignore:
+  - src/app/**/*.tsx
+  - packages/python-interpreter/**
+  - packages/locales/**
+  - packages/env/**
+  - packages/device-gateway-client/**
+
+comment:
+  layout: 'header, diff, flags, components' # show component info in the PR comment

@@ -1,0 +1,941 @@
+import { createHash } from 'node:crypto';
+import { constants, createReadStream } from 'node:fs';
+import { access, readFile, realpath, stat } from 'node:fs/promises';
+import path from 'node:path';
+
+import type {
+  CopyAssetForPublishParams,
+  CopyAssetForPublishResult,
+  ExternalAssetForPublishParams,
+  ExternalAssetForPublishResult,
+  // The DEVICE's index shape, not the renderer's. The renderer union also
+  // covers the cloud sandbox as a source, which nothing on a machine produces,
+  // so declaring that wider type here would over-claim what this returns — and
+  // the gateway handler bag, typed by what a device sends, would reject it.
+  ProjectFileIndexResult as DeviceProjectFileIndexResult,
+  SkillDirectoryDeps,
+} from '@lobechat/device-control';
+import {
+  outsideWorkspacePreviewFailure,
+  toLocalFilePreviewFailure,
+} from '@lobechat/device-control/file-preview';
+import {
+  defaultGetProjectFileIndex,
+  defaultListProjectDirectory,
+  defaultSearchProjectFiles,
+} from '@lobechat/device-control/project-file-index';
+import {
+  type AuditSafePathsParams,
+  type AuditSafePathsResult,
+  type CopyLocalFilesParams,
+  type CreateLocalDirectoryParams,
+  type CreateLocalEntryResult,
+  type CreateLocalFileParams,
+  type EditLocalFileParams,
+  type EditLocalFileResult,
+  type GlobFilesParams,
+  type GlobFilesResult,
+  type GrepContentParams,
+  type GrepContentResult,
+  type HashLocalFileParams,
+  type ListLocalFileParams,
+  type LocalCopyFilesResultItem,
+  type LocalFilePreviewResult,
+  type LocalFilePreviewUrlParams,
+  type LocalFilePreviewUrlResult,
+  type LocalFileStats,
+  type LocalFileStatsParams,
+  type LocalMoveFilesResultItem,
+  type LocalReadFileParams,
+  type LocalReadFileResult,
+  type LocalReadFilesParams,
+  type LocalSearchFilesParams,
+  type MoveLocalFilesParams,
+  type OpenLocalFileParams,
+  type OpenLocalFolderParams,
+  type PickFileParams,
+  type PickFileResult,
+  type PrepareSkillDirectoryParams,
+  type PrepareSkillDirectoryResult,
+  type ProjectDirectoryListParams,
+  type ProjectDirectoryListResult,
+  type ProjectFileIndexParams,
+  type ProjectFileSearchParams,
+  type ProjectFileSearchResult,
+  type RenameLocalFileResult,
+  type ResolveSkillResourcePathParams,
+  type ResolveSkillResourcePathResult,
+  type ShowOpenDialogParams,
+  type ShowOpenDialogResult,
+  type ShowSaveDialogParams,
+  type ShowSaveDialogResult,
+  type TrashLocalFilesParams,
+  type TrashLocalFilesResult,
+  type TrashLocalFilesResultItem,
+  type WriteLocalFileParams,
+} from '@lobechat/electron-client-ipc';
+import {
+  copyLocalFiles,
+  createLocalDirectory,
+  createLocalFile,
+  editLocalFile,
+  expandTilde,
+  getLocalImageMimeType,
+  listLocalFiles,
+  moveLocalFiles,
+  readLocalFile,
+  readLocalImageFile,
+  renameLocalFile,
+  writeLocalFile,
+} from '@lobechat/local-file-shell/file';
+import type { FileResult, SearchOptions } from '@lobechat/local-file-shell/types';
+import { isUtf16Buffer, sniffBinaryBuffer } from '@lobechat/utils/isBinaryContent';
+import { resolveMimeType } from '@lobechat/utils/mimeType';
+import { dialog, shell } from 'electron';
+
+import ContentSearchService from '@/services/contentSearchSrv';
+import FileSearchService from '@/services/fileSearchSrv';
+import RemoteFileUploadService, {
+  describeUploadFailure,
+  type UploadFailure,
+} from '@/services/remoteFileUploadSrv';
+import { createLogger } from '@/utils/logger';
+import { netFetch } from '@/utils/net-fetch';
+import { shrinkImageForUpload } from '@/utils/shrinkImageForUpload';
+
+import { ControllerModule, IpcMethod } from './index';
+
+// Create logger
+const logger = createLogger('controllers:LocalFileCtr');
+
+const formatUploadFailure = ({ kind, reason }: UploadFailure): string => {
+  switch (kind) {
+    case 'storage_quota': {
+      return `the user's LobeHub file storage is full (${reason}), so the model cannot view this image. Retrying will not help; the user needs to free up space in their file library or upgrade their plan`;
+    }
+    case 'network': {
+      return `network error while uploading (${reason}), already retried, so the model cannot view this image. It may work if the file is read again later`;
+    }
+    case 'auth': {
+      return `the desktop app is not signed in to LobeHub (${reason}), so the model cannot view this image`;
+    }
+    default: {
+      return `${reason}; the model cannot view this image`;
+    }
+  }
+};
+
+const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
+
+const TEXT_PREVIEW_MIME_TYPES = new Set([
+  'application/graphql',
+  'application/javascript',
+  'application/json',
+  'application/markdown',
+  'application/toml',
+  'application/xml',
+  'application/yaml',
+  'text/markdown',
+  'text/mdx',
+  'text/x-markdown',
+]);
+
+const normalizeAbsolutePath = (inputPath: string): string =>
+  path.normalize(path.isAbsolute(inputPath) ? inputPath : `/${inputPath}`);
+
+const resolvePathWithScope = (inputPath: string, scope: string): string =>
+  path.isAbsolute(inputPath) ? inputPath : path.join(scope, inputPath);
+
+const isWithinSafePathPrefixes = (targetPath: string, prefixes: readonly string[]): boolean =>
+  prefixes.some((prefix) => targetPath === prefix || targetPath.startsWith(`${prefix}${path.sep}`));
+
+/** Bytes sampled to decide whether a file is text before counting its lines. */
+const LOCAL_FILE_SNIFF_BYTES = 8 * 1024;
+
+/** Files above this size skip line counting so inserting a reference stays fast. */
+const LOCAL_FILE_LINE_COUNT_MAX_BYTES = 256 * 1024 * 1024;
+
+const resolveNearestExistingRealPath = async (targetPath: string): Promise<string | undefined> => {
+  let currentPath = targetPath;
+
+  while (true) {
+    try {
+      await access(currentPath, constants.F_OK);
+      return normalizeAbsolutePath(await realpath(currentPath));
+    } catch {
+      const parentPath = path.dirname(currentPath);
+      if (parentPath === currentPath) return undefined;
+      currentPath = parentPath;
+    }
+  }
+};
+
+const normalizeContentType = (contentType: string): string =>
+  contentType.split(';')[0].trim().toLowerCase();
+
+const isTextPreviewMimeType = (mimeType: string): boolean =>
+  mimeType.startsWith('text/') || TEXT_PREVIEW_MIME_TYPES.has(mimeType);
+
+/** Binary documents the in-app portal can preview (or offer to download). */
+const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
+  'application/msword',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+/**
+ * Documents above this raw size fall back to the content-less `binary` / `pdf`
+ * variants: base64 inflates the payload ~4/3 and it must fit in a single
+ * IPC / Gateway RPC response.
+ */
+const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
+
+const serializePreviewFile = ({
+  buffer,
+  contentType,
+  oversized,
+}: {
+  buffer: Buffer;
+  contentType: string;
+  oversized?: boolean;
+}): NonNullable<LocalFilePreviewResult['preview']> => {
+  const normalizedContentType = normalizeContentType(contentType);
+
+  // The protocol manager short-circuited the read (oversized document):
+  // `buffer` is empty by construction, so go straight to the content-less
+  // fallback instead of serializing the empty buffer as a real document.
+  if (oversized) {
+    return normalizedContentType === 'application/pdf'
+      ? { contentType: normalizedContentType, type: 'pdf' }
+      : { contentType: normalizedContentType, type: 'binary' };
+  }
+
+  if (normalizedContentType.startsWith('image/')) {
+    return {
+      base64: buffer.toString('base64'),
+      contentType: normalizedContentType,
+      type: 'image',
+    };
+  }
+
+  if (isTextPreviewMimeType(normalizedContentType)) {
+    return {
+      content: buffer.toString('utf8'),
+      contentType: normalizedContentType,
+      type: 'text',
+    };
+  }
+
+  if (
+    DOCUMENT_PREVIEW_MIME_TYPES.has(normalizedContentType) &&
+    buffer.byteLength <= MAX_DOCUMENT_PREVIEW_BYTES
+  ) {
+    return {
+      base64: buffer.toString('base64'),
+      contentType: normalizedContentType,
+      type: 'document',
+    };
+  }
+
+  if (normalizedContentType === 'application/pdf') {
+    return { contentType: normalizedContentType, type: 'pdf' };
+  }
+
+  if (normalizedContentType.startsWith('video/')) {
+    return { contentType: normalizedContentType, type: 'video' };
+  }
+
+  return { contentType: normalizedContentType, type: 'binary' };
+};
+
+const resolveSafePathRealPrefixes = async (): Promise<string[]> => {
+  const prefixes = new Set<string>(SAFE_PATH_PREFIXES);
+
+  for (const safePrefix of SAFE_PATH_PREFIXES) {
+    try {
+      prefixes.add(normalizeAbsolutePath(await realpath(safePrefix)));
+    } catch {
+      // Keep the lexical prefix if the platform does not expose this directory.
+    }
+  }
+
+  return [...prefixes];
+};
+
+const areAllPathsSafeOnDisk = async (
+  paths: string[],
+  resolveAgainstScope: string,
+): Promise<boolean> => {
+  if (paths.length === 0) return false;
+
+  const safeRealPrefixes = await resolveSafePathRealPrefixes();
+
+  for (const currentPath of paths) {
+    const normalizedPath = normalizeAbsolutePath(
+      resolvePathWithScope(currentPath, resolveAgainstScope),
+    );
+
+    if (!isWithinSafePathPrefixes(normalizedPath, SAFE_PATH_PREFIXES)) {
+      return false;
+    }
+
+    const realPath = await resolveNearestExistingRealPath(normalizedPath);
+    if (!realPath || !isWithinSafePathPrefixes(realPath, safeRealPrefixes)) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+export default class LocalFileCtr extends ControllerModule {
+  static override readonly groupName = 'localSystem';
+  private get searchService() {
+    return this.app.getService(FileSearchService);
+  }
+
+  private get contentSearchService() {
+    return this.app.getService(ContentSearchService);
+  }
+
+  // ==================== File Operation ====================
+
+  @IpcMethod()
+  async handleOpenLocalFile({ path: filePath }: OpenLocalFileParams): Promise<{
+    error?: string;
+    success: boolean;
+  }> {
+    const resolvedPath = expandTilde(filePath) ?? filePath;
+    logger.debug('Attempting to open file:', { filePath: resolvedPath });
+
+    try {
+      await shell.openPath(resolvedPath);
+      logger.debug('File opened successfully:', { filePath: resolvedPath });
+      return { success: true };
+    } catch (error) {
+      logger.error(`Failed to open file ${resolvedPath}:`, error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  @IpcMethod()
+  async handleOpenLocalFolder({ path: targetPath, isDirectory }: OpenLocalFolderParams): Promise<{
+    error?: string;
+    success: boolean;
+  }> {
+    const resolvedTarget = expandTilde(targetPath) ?? targetPath;
+    logger.debug('Attempting to open folder:', { isDirectory, targetPath: resolvedTarget });
+
+    try {
+      if (isDirectory) {
+        await shell.openPath(resolvedTarget);
+      } else {
+        shell.showItemInFolder(resolvedTarget);
+      }
+      logger.debug('Folder opened successfully:', { targetPath: resolvedTarget });
+      return { success: true };
+    } catch (error) {
+      logger.error(`Failed to open folder for ${resolvedTarget}:`, error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  @IpcMethod()
+  async handleShowOpenDialog({
+    filters,
+    multiple,
+    title,
+  }: ShowOpenDialogParams): Promise<ShowOpenDialogResult> {
+    logger.debug('Showing open dialog:', { filters, multiple, title });
+
+    const result = await dialog.showOpenDialog({
+      filters,
+      properties: multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+      title,
+    });
+
+    logger.debug('Open dialog result:', { canceled: result.canceled, filePaths: result.filePaths });
+
+    return {
+      canceled: result.canceled,
+      filePaths: result.filePaths,
+    };
+  }
+
+  @IpcMethod()
+  async handlePickFile({ filters, title }: PickFileParams): Promise<PickFileResult> {
+    logger.debug('Picking file:', { filters, title });
+
+    const result = await dialog.showOpenDialog({
+      filters,
+      properties: ['openFile'],
+      title,
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true };
+    }
+
+    const filePath = result.filePaths[0];
+    const data = await readFile(filePath);
+    const name = path.basename(filePath);
+    const mimeType = await resolveMimeType(name, data);
+
+    return {
+      canceled: false,
+      file: {
+        data: new Uint8Array(data),
+        mimeType,
+        name,
+      },
+    };
+  }
+
+  @IpcMethod()
+  async handleShowSaveDialog({
+    defaultPath,
+    filters,
+    title,
+  }: ShowSaveDialogParams): Promise<ShowSaveDialogResult> {
+    logger.debug('Showing save dialog:', { defaultPath, filters, title });
+
+    const result = await dialog.showSaveDialog({
+      defaultPath,
+      filters,
+      title,
+    });
+
+    logger.debug('Save dialog result:', { canceled: result.canceled, filePath: result.filePath });
+
+    return {
+      canceled: result.canceled,
+      filePath: result.filePath,
+    };
+  }
+
+  @IpcMethod()
+  async readFiles({ paths, cwd }: LocalReadFilesParams): Promise<LocalReadFileResult[]> {
+    logger.debug('Starting batch file reading:', { count: paths.length });
+
+    const results: LocalReadFileResult[] = [];
+
+    for (const filePath of paths) {
+      logger.debug('Reading single file:', { filePath });
+      const result = await readLocalFile({ cwd, path: filePath });
+      results.push(result);
+    }
+
+    logger.debug('Batch file reading completed', { count: results.length });
+    return results;
+  }
+
+  @IpcMethod()
+  async hashLocalFile({ path: filePath }: HashLocalFileParams): Promise<string> {
+    const hash = createHash('sha256');
+    for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+    return hash.digest('hex');
+  }
+
+  /**
+   * Size, MIME type, and line count of a local file, attached to `<localFile>` references so the
+   * model knows whether to read the file whole or in windows. Lines are counted by streaming, so
+   * memory stays flat; binary files, UTF-16 files and files above
+   * {@link LOCAL_FILE_LINE_COUNT_MAX_BYTES} skip it. UTF-16 is skipped because counting `0x0a` bytes
+   * also counts code units such as U+0A00-U+0AFF, so the number would be wrong rather than missing.
+   */
+  @IpcMethod()
+  async getLocalFileStats({ path: filePath }: LocalFileStatsParams): Promise<LocalFileStats> {
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile()) return { size: fileStat.size };
+
+    let head: Buffer | undefined;
+    let lineCount: number | undefined;
+    let lastByte: number | undefined;
+
+    for await (const chunk of createReadStream(filePath)) {
+      const buffer = chunk as Buffer;
+      if (!head) {
+        head = buffer.subarray(0, LOCAL_FILE_SNIFF_BYTES);
+        if (
+          sniffBinaryBuffer(head).isBinary ||
+          isUtf16Buffer(head) ||
+          fileStat.size > LOCAL_FILE_LINE_COUNT_MAX_BYTES
+        ) {
+          break;
+        }
+        lineCount = 0;
+      }
+      for (
+        let index = buffer.indexOf(0x0a);
+        index !== -1;
+        index = buffer.indexOf(0x0a, index + 1)
+      ) {
+        lineCount! += 1;
+      }
+      lastByte = buffer.at(-1);
+    }
+
+    // A final line without a trailing newline still counts as a line.
+    if (lineCount !== undefined && lastByte !== undefined && lastByte !== 0x0a) lineCount += 1;
+
+    const mimeType = await resolveMimeType(filePath, head ?? new Uint8Array()).catch(
+      () => undefined,
+    );
+
+    return { lineCount, mimeType: mimeType || undefined, size: fileStat.size };
+  }
+
+  @IpcMethod()
+  async readFile(params: LocalReadFileParams): Promise<LocalReadFileResult> {
+    logger.debug('Starting to read file:', {
+      filePath: params.path,
+      fullContent: params.fullContent,
+      loc: params.loc,
+    });
+
+    // Image files: `local-file-shell` refuses binary, and the agent should be
+    // able to actually *see* the image (vision) rather than hit "Unsupported
+    // binary file type". Delegate the upload to the embedded CLI
+    // (`lh file upload`) and return a durable { fileId, url } — bytes never
+    // cross IPC and never reach the DB.
+    const imageMimeType = getLocalImageMimeType(params.path);
+    if (imageMimeType) {
+      return readLocalImageFile(params, imageMimeType, {
+        // Degrade with the real cause so the model can tell a full storage
+        // quota (retrying is pointless) apart from a transient network error.
+        describeUploadError: (error) => {
+          logger.warn('Image upload failed:', { error, filePath: params.path });
+          return formatUploadFailure(describeUploadFailure(error));
+        },
+        upload: async (filePath) => {
+          const prepared = await shrinkImageForUpload(filePath, imageMimeType);
+          try {
+            const record = await this.app
+              .getService(RemoteFileUploadService)
+              .uploadLocalFile(prepared.filePath);
+            if (!record?.url) logger.warn('Image upload returned no record:', { filePath });
+            return record;
+          } finally {
+            await prepared.cleanup();
+          }
+        },
+      });
+    }
+
+    return readLocalFile(params);
+  }
+
+  @IpcMethod()
+  async listLocalFiles(
+    params: ListLocalFileParams,
+  ): Promise<{ files: FileResult[]; totalCount: number }> {
+    logger.debug('Listing directory contents:', params);
+    return listLocalFiles(params) as any;
+  }
+
+  @IpcMethod()
+  async handleMoveFiles({ items, cwd }: MoveLocalFilesParams): Promise<LocalMoveFilesResultItem[]> {
+    logger.debug('Starting batch file move:', { itemsCount: items?.length });
+    return moveLocalFiles({ cwd, items });
+  }
+
+  @IpcMethod()
+  async handleRenameFile({
+    path: currentPath,
+    newName,
+  }: {
+    newName: string;
+    path: string;
+  }): Promise<RenameLocalFileResult> {
+    logger.debug(`Renaming ${currentPath} -> ${newName}`);
+    return renameLocalFile({ newName, path: currentPath });
+  }
+
+  @IpcMethod()
+  async handleWriteFile({ path: filePath, content, cwd }: WriteLocalFileParams) {
+    logger.debug(`Writing file ${filePath}`, { contentLength: content?.length });
+    return writeLocalFile({ content, cwd, path: filePath });
+  }
+
+  /** Create a new file. Fails instead of overwriting when the path is taken. */
+  @IpcMethod()
+  async handleCreateFile({
+    path: filePath,
+    content,
+    cwd,
+  }: CreateLocalFileParams): Promise<CreateLocalEntryResult> {
+    logger.debug(`Creating file ${filePath}`);
+    return createLocalFile({ content, cwd, path: filePath });
+  }
+
+  /** Create a new folder. Fails instead of reusing it when the path is taken. */
+  @IpcMethod()
+  async handleCreateDirectory({
+    path: dirPath,
+    cwd,
+  }: CreateLocalDirectoryParams): Promise<CreateLocalEntryResult> {
+    logger.debug(`Creating directory ${dirPath}`);
+    return createLocalDirectory({ cwd, path: dirPath });
+  }
+
+  /**
+   * Copy files/folders, or duplicate them in place when an item has no
+   * `targetPath`. Never overwrites; each item reports its own outcome.
+   */
+  @IpcMethod()
+  async handleCopyFiles({ items, cwd }: CopyLocalFilesParams): Promise<LocalCopyFilesResultItem[]> {
+    logger.debug('Starting batch file copy:', { itemsCount: items?.length });
+    return copyLocalFiles({ cwd, items });
+  }
+
+  @IpcMethod()
+  async auditSafePaths({
+    paths,
+    resolveAgainstScope,
+  }: AuditSafePathsParams): Promise<AuditSafePathsResult> {
+    logger.debug('Auditing safe paths', { count: paths.length, resolveAgainstScope });
+
+    return {
+      allSafe: await areAllPathsSafeOnDisk(paths, resolveAgainstScope),
+    };
+  }
+
+  @IpcMethod()
+  async getLocalFilePreviewUrl({
+    accept,
+    allowExternalFile,
+    path: filePath,
+    resourceScope,
+    workingDirectory,
+  }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewUrlResult> {
+    try {
+      const url = await this.app.localFileProtocolManager.createPreviewUrl({
+        accept,
+        allowExternalFile,
+        filePath,
+        ...(resourceScope && { resourceScope }),
+        workspaceRoot: workingDirectory,
+      });
+
+      if (!url) {
+        return outsideWorkspacePreviewFailure();
+      }
+
+      return { success: true, url };
+    } catch (error) {
+      logger.error('Failed to create local file preview URL:', error);
+      return toLocalFilePreviewFailure(error);
+    }
+  }
+
+  @IpcMethod()
+  async getExternalAssetForPublishUrl({
+    path: filePath,
+    workingDirectory,
+  }: ExternalAssetForPublishParams): Promise<LocalFilePreviewUrlResult> {
+    try {
+      const url = await this.app.localFileProtocolManager.createPreviewUrl({
+        allowExternalFile: true,
+        filePath,
+        persistExternalApproval: false,
+        workspaceRoot: workingDirectory,
+      });
+      return url
+        ? { success: true, url }
+        : { error: 'Failed to approve external publish asset', success: false };
+    } catch (error) {
+      logger.error('Failed to create external publish asset URL:', error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  async readExternalAssetForPublish({
+    path: filePath,
+    workingDirectory,
+  }: ExternalAssetForPublishParams): Promise<ExternalAssetForPublishResult> {
+    try {
+      const asset = await this.app.localFileProtocolManager.readExternalFileForPublish({
+        filePath,
+        workspaceRoot: workingDirectory,
+      });
+      if (!asset) return { error: 'Failed to approve external publish asset', success: false };
+
+      return {
+        base64: asset.buffer.toString('base64'),
+        contentType: asset.contentType,
+        success: true,
+      };
+    } catch (error) {
+      logger.error('Failed to read external publish asset:', error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  @IpcMethod()
+  async copyAssetForPublish({
+    from,
+    to,
+    workingDirectory,
+  }: CopyAssetForPublishParams): Promise<CopyAssetForPublishResult> {
+    try {
+      const copied = await this.app.localFileProtocolManager.copyExternalFileForPublish({
+        filePath: from,
+        targetPath: to,
+        workspaceRoot: workingDirectory,
+      });
+      return copied
+        ? { success: true }
+        : { error: 'Failed to copy publish asset into the workspace', success: false };
+    } catch (error) {
+      logger.error('Failed to copy publish asset:', error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  @IpcMethod()
+  async getLocalFilePreview({
+    accept,
+    allowExternalFile,
+    path: filePath,
+    workingDirectory,
+  }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewResult> {
+    try {
+      const preview = await this.app.localFileProtocolManager.readPreviewFile({
+        accept,
+        allowExternalFile,
+        filePath,
+        workspaceRoot: workingDirectory,
+      });
+
+      if (!preview) {
+        return outsideWorkspacePreviewFailure();
+      }
+
+      return {
+        preview: serializePreviewFile(preview),
+        success: true,
+      };
+    } catch (error) {
+      logger.error('Failed to read local file preview:', error);
+      return toLocalFilePreviewFailure(error);
+    }
+  }
+
+  /**
+   * Host deps for the shared skill-archive cache: this keeps the renderer-IPC
+   * path (here) and the gateway RPC path (`GatewayConnectionCtr` →
+   * `@lobechat/device-control`) on ONE cache directory and one proxy-aware
+   * fetch, so a skill prepared by either entry point is a cache hit for the
+   * other.
+   */
+  getSkillDirectoryDeps(): SkillDirectoryDeps {
+    return {
+      fetchSkillArchive: netFetch,
+      skillCacheRoot: path.join(this.app.appStoragePath, 'file-storage', 'skills'),
+    };
+  }
+
+  @IpcMethod()
+  async handlePrepareSkillDirectory(
+    params: PrepareSkillDirectoryParams,
+  ): Promise<PrepareSkillDirectoryResult> {
+    const { prepareSkillDirectory } = await import('@lobechat/device-control/skill-directory');
+    return prepareSkillDirectory(params, this.getSkillDirectoryDeps());
+  }
+
+  @IpcMethod()
+  async handleResolveSkillResourcePath({
+    path: resourcePath,
+    url,
+    zipHash,
+  }: ResolveSkillResourcePathParams): Promise<ResolveSkillResourcePathResult> {
+    const prepared = await this.handlePrepareSkillDirectory({ url, zipHash });
+
+    if (!prepared.success) {
+      return { error: prepared.error, success: false };
+    }
+
+    const normalizedRoot = path.resolve(prepared.extractedDir);
+    const fullPath = path.resolve(normalizedRoot, resourcePath);
+
+    if (fullPath !== normalizedRoot && !fullPath.startsWith(`${normalizedRoot}${path.sep}`)) {
+      return {
+        error: `Unsafe skill resource path: ${resourcePath}`,
+        success: false,
+      };
+    }
+
+    return {
+      fullPath,
+      success: true,
+    };
+  }
+
+  // ==================== Search & Find ====================
+
+  @IpcMethod()
+  async getProjectFileIndex(
+    params: ProjectFileIndexParams = {},
+  ): Promise<DeviceProjectFileIndexResult> {
+    const startedAt = Date.now();
+    const result = await defaultGetProjectFileIndex(params);
+
+    logger.debug('Project file index completed', {
+      duration: Date.now() - startedAt,
+      entries: result.entries.length,
+      requestedScope: params.scope,
+      root: result.root,
+      source: result.source,
+    });
+    await this.approveProjectRootForPreview(result.root);
+
+    return result;
+  }
+
+  @IpcMethod()
+  async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
+    const startedAt = Date.now();
+    const result = await defaultSearchProjectFiles(params);
+
+    logger.debug('Project file search completed', {
+      duration: Date.now() - startedAt,
+      entries: result.entries.length,
+      query: params.query,
+      requestedScope: params.scope,
+      root: result.root,
+      source: result.source,
+    });
+    await this.approveProjectRootForPreview(result.root);
+
+    return result;
+  }
+
+  /**
+   * Children of one directory inside an already-indexed project. The file tree
+   * calls this when the user expands a directory the index collapsed, so an
+   * ignored subtree costs a read only when someone opens it.
+   */
+  @IpcMethod()
+  async listProjectDirectory(
+    params: ProjectDirectoryListParams,
+  ): Promise<ProjectDirectoryListResult> {
+    logger.debug('Listing project directory', {
+      relativePath: params.relativePath,
+      root: params.root,
+    });
+
+    return defaultListProjectDirectory(params);
+  }
+
+  /**
+   * Move files/folders to the OS trash. Recoverable by design — the file tree
+   * never hard-deletes, so a misclick can be undone from Finder / Explorer.
+   */
+  @IpcMethod()
+  async trashLocalFiles({ paths }: TrashLocalFilesParams): Promise<TrashLocalFilesResult> {
+    if (paths.length === 0) return { items: [], success: false };
+
+    logger.debug('Trashing local files', { count: paths.length });
+
+    // Every path is attempted and reported. Stopping at the first failure would
+    // leave the caller unable to tell which earlier paths are already in the
+    // trash, so it could neither refresh its tree nor safely retry the batch.
+    const items: TrashLocalFilesResultItem[] = [];
+    for (const rawPath of paths) {
+      const targetPath = expandTilde(rawPath) ?? rawPath;
+      try {
+        await shell.trashItem(targetPath);
+        items.push({ path: rawPath, success: true });
+      } catch (error) {
+        logger.error('Failed to trash local file:', error);
+        items.push({ error: (error as Error).message, path: rawPath, success: false });
+      }
+    }
+
+    return { items, success: items.every((item) => item.success) };
+  }
+
+  /**
+   * Handle IPC event for local file search
+   */
+  @IpcMethod()
+  async handleLocalFilesSearch(params: LocalSearchFilesParams): Promise<FileResult[]> {
+    const effectiveDirectory = expandTilde(params.directory ?? params.scope);
+
+    logger.debug('Received file search request:', {
+      directory: params.directory,
+      effectiveDirectory,
+      limit: params.limit,
+      keywords: params.keywords,
+      scope: params.scope,
+    });
+
+    // Build search options from params, mapping directory to onlyIn
+    const options: SearchOptions = {
+      contentContains: params.contentContains,
+      createdAfter: params.createdAfter ? new Date(params.createdAfter) : undefined,
+      createdBefore: params.createdBefore ? new Date(params.createdBefore) : undefined,
+      detailed: params.detailed,
+      exclude: params.exclude,
+      fileTypes: params.fileTypes,
+      keywords: params.keywords,
+      limit: params.limit || 30,
+      liveUpdate: params.liveUpdate,
+      modifiedAfter: params.modifiedAfter ? new Date(params.modifiedAfter) : undefined,
+      modifiedBefore: params.modifiedBefore ? new Date(params.modifiedBefore) : undefined,
+      onlyIn: effectiveDirectory,
+      sortBy: params.sortBy,
+      sortDirection: params.sortDirection,
+    };
+
+    try {
+      const results = await this.searchService.search(options.keywords, options);
+      logger.debug('File search completed', {
+        count: results.length,
+        directory: params.directory,
+        effectiveDirectory,
+        results: results.slice(0, 5).map((result) => ({
+          engine: result.engine,
+          isDirectory: result.isDirectory,
+          name: result.name,
+          path: result.path,
+        })),
+        scope: params.scope,
+      });
+      return results;
+    } catch (error) {
+      logger.error('File search failed:', error);
+      return [];
+    }
+  }
+
+  @IpcMethod()
+  async handleGrepContent(params: GrepContentParams): Promise<GrepContentResult> {
+    return this.contentSearchService.grep(params);
+  }
+
+  @IpcMethod()
+  async handleGlobFiles(params: GlobFilesParams): Promise<GlobFilesResult> {
+    return this.searchService.glob(params);
+  }
+
+  // ==================== File Editing ====================
+
+  @IpcMethod()
+  async handleEditFile(params: EditLocalFileParams): Promise<EditLocalFileResult> {
+    logger.debug(`Editing file ${params.file_path}`, { replace_all: params.replace_all });
+    return editLocalFile(params);
+  }
+
+  private async approveProjectRootForPreview(root: string) {
+    try {
+      await this.app.localFileProtocolManager.approveIndexedProjectRoot(root);
+    } catch (error) {
+      logger.error(`Failed to approve project preview root ${root}:`, error);
+    }
+  }
+}

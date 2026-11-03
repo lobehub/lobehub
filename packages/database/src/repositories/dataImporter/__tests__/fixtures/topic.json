@@ -1,0 +1,269 @@
+{
+  "data": {
+    "agents": [
+      {
+        "id": "agt_CSLkGPIXIQms",
+        "slug": "room-possible-somewhere-numeral",
+        "title": null,
+        "description": null,
+        "tags": [],
+        "avatar": null,
+        "backgroundColor": null,
+        "plugins": [],
+        "chatConfig": {
+          "searchMode": "off"
+        },
+        "fewShots": null,
+        "model": "gemini-2.0-flash-exp",
+        "params": {
+          "top_p": 1,
+          "temperature": 1,
+          "presence_penalty": 0,
+          "frequency_penalty": 0
+        },
+        "provider": "google",
+        "systemRole": "",
+        "tts": {
+          "voice": {
+            "openai": "alloy"
+          },
+          "sttLocale": "auto",
+          "ttsService": "openai",
+          "showAllLocaleVoice": false
+        },
+        "accessedAt": "2025-03-05T05:25:44.521Z",
+        "createdAt": "2025-03-05T05:25:44.522Z",
+        "updatedAt": "2025-03-05T05:25:44.522Z"
+      }
+    ],
+    "agentsToSessions": [
+      {
+        "agentId": "agt_CSLkGPIXIQms",
+        "sessionId": "ssn_WdL6m1mReqyb"
+      }
+    ],
+    "messagePlugins": [
+      {
+        "id": "msg_xQNFoIFhaPkzK4",
+        "toolCallId": "toolu_01396zo96GpdEkRCvDhtfgYk",
+        "type": "builtin",
+        "apiName": "searchWithSearXNG",
+        "arguments": "{\"query\": \"ABC\"}",
+        "identifier": "lobe-web-browsing",
+        "state": {
+          "query": "ABC"
+        },
+        "error": null
+      }
+    ],
+    "messages": [
+      {
+        "id": "msg_NO2nnNsum6IPRk",
+        "role": "user",
+        "content": "搜下ABC的公司规模",
+        "reasoning": null,
+        "search": null,
+        "metadata": null,
+        "model": null,
+        "provider": null,
+        "favorite": false,
+        "error": null,
+        "tools": null,
+        "traceId": null,
+        "observationId": null,
+        "clientId": null,
+        "sessionId": null,
+        "topicId": "tpc_PJGbygbVl43e",
+        "threadId": null,
+        "parentId": null,
+        "quotaId": null,
+        "agentId": null,
+        "accessedAt": "2025-03-05T06:55:46.892Z",
+        "createdAt": "2025-03-05T06:55:46.892Z",
+        "updatedAt": "2025-03-05T06:55:46.892Z"
+      },
+      {
+        "id": "msg_HiDmdz7AgA2RYz",
+        "role": "tool",
+        "content": "[{\"content\":\"\"}]",
+        "reasoning": null,
+        "search": null,
+        "metadata": null,
+        "model": null,
+        "provider": null,
+        "favorite": false,
+        "error": null,
+        "tools": null,
+        "traceId": null,
+        "observationId": null,
+        "clientId": null,
+        "sessionId": null,
+        "topicId": "tpc_PJGbygbVl43e",
+        "threadId": null,
+        "parentId": "msg_8BTRw6xvNXnJep",
+        "quotaId": null,
+        "agentId": null,
+        "accessedAt": "2025-03-05T09:28:23.015Z",
+        "createdAt": "2025-03-05T09:28:23.015Z",
+        "updatedAt": "2025-03-05T09:28:23.015Z"
+      },
+      {
+        "id": "msg_9GzmTaUBTUJyDG",
+        "role": "assistant",
+        "content": "\n\n根据我收集到的最新信息，以下是关于ABC公司规模的详细情况",
+        "reasoning": null,
+        "search": null,
+        "metadata": {
+          "inputTokens": 13161,
+          "totalTokens": 14229,
+          "cachedTokens": 2076,
+          "outputTokens": 1068,
+          "inputCacheMissTokens": 6,
+          "inputWriteCacheTokens": 11079
+        },
+        "model": "claude-3-7-sonnet-20250219",
+        "provider": "anthropic",
+        "favorite": false,
+        "error": null,
+        "tools": null,
+        "traceId": null,
+        "observationId": null,
+        "clientId": null,
+        "sessionId": null,
+        "topicId": "tpc_PJGbygbVl43e",
+        "threadId": null,
+        "parentId": "msg_HiDmdz7AgA2RYz",
+        "quotaId": null,
+        "agentId": null,
+        "accessedAt": "2025-03-05T09:28:31.861Z",
+        "createdAt": "2025-03-05T09:28:31.861Z",
+        "updatedAt": "2025-03-05T09:28:31.861Z"
+      },
+      {
+        "id": "msg_VIS6XFukgdjLdL",
+        "role": "assistant",
+        "content": "我将为您搜索ABC的公司规模相关信息。",
+        "reasoning": null,
+        "search": null,
+        "metadata": {
+          "inputTokens": 2230,
+          "totalTokens": 2334,
+          "cachedTokens": 2226,
+          "outputTokens": 104,
+          "inputCacheMissTokens": 4
+        },
+        "model": "claude-3-7-sonnet-20250219",
+        "provider": "anthropic",
+        "favorite": false,
+        "error": null,
+        "tools": [
+          {
+            "id": "toolu_01396zo96GpdEkRCvDhtfgYk",
+            "type": "builtin",
+            "apiName": "searchWithSearXNG",
+            "arguments": "{\"query\": \"ABC 公司规模 管理规模\"}",
+            "identifier": "lobe-web-browsing"
+          }
+        ],
+        "traceId": null,
+        "observationId": null,
+        "clientId": null,
+        "sessionId": null,
+        "topicId": "tpc_PJGbygbVl43e",
+        "threadId": null,
+        "parentId": "msg_NO2nnNsum6IPRk",
+        "quotaId": null,
+        "agentId": null,
+        "accessedAt": "2025-03-05T09:27:43.071Z",
+        "createdAt": "2025-03-05T09:27:43.071Z",
+        "updatedAt": "2025-03-05T09:27:43.071Z"
+      },
+      {
+        "id": "msg_xQNFoIFhaPkzK4",
+        "role": "tool",
+        "content": "[{\"content\":\"\"}]",
+        "reasoning": null,
+        "search": null,
+        "metadata": null,
+        "model": null,
+        "provider": null,
+        "favorite": false,
+        "error": null,
+        "tools": null,
+        "traceId": null,
+        "observationId": null,
+        "clientId": null,
+        "sessionId": null,
+        "topicId": "tpc_PJGbygbVl43e",
+        "threadId": null,
+        "parentId": "msg_VIS6XFukgdjLdL",
+        "quotaId": null,
+        "agentId": null,
+        "accessedAt": "2025-03-05T09:27:49.981Z",
+        "createdAt": "2025-03-05T09:27:49.981Z",
+        "updatedAt": "2025-03-05T09:27:49.981Z"
+      },
+      {
+        "id": "msg_UXX3vNnUTXRmy4",
+        "role": "user",
+        "content": "现在它的发展如何",
+        "reasoning": null,
+        "search": null,
+        "metadata": null,
+        "model": null,
+        "provider": null,
+        "favorite": false,
+        "error": null,
+        "tools": null,
+        "traceId": null,
+        "observationId": null,
+        "clientId": null,
+        "sessionId": null,
+        "topicId": "tpc_PJGbygbVl43e",
+        "threadId": null,
+        "parentId": null,
+        "quotaId": null,
+        "agentId": null,
+        "accessedAt": "2025-03-05T09:29:41.284Z",
+        "createdAt": "2025-03-05T09:29:41.284Z",
+        "updatedAt": "2025-03-05T09:29:41.284Z"
+      }
+    ],
+    "sessions": [
+      {
+        "id": "ssn_WdL6m1mReqyb",
+        "slug": "inbox",
+        "title": null,
+        "description": null,
+        "avatar": null,
+        "backgroundColor": null,
+        "type": "agent",
+        "groupId": null,
+        "clientId": null,
+        "pinned": false,
+        "accessedAt": "2025-03-05T05:25:44.521Z",
+        "createdAt": "2025-03-05T05:25:44.528Z",
+        "updatedAt": "2025-03-05T05:25:44.528Z"
+      }
+    ],
+    "topics": [
+      {
+        "id": "tpc_PJGbygbVl43e",
+        "title": "ABC规模查询",
+        "favorite": false,
+        "sessionId": null,
+        "clientId": null,
+        "historySummary": "用户想要了解ABC的公司规模",
+        "metadata": {
+          "model": "gpt-4o-mini",
+          "provider": "openai"
+        },
+        "accessedAt": "2025-03-05T06:55:46.808Z",
+        "createdAt": "2025-03-05T06:55:46.808Z",
+        "updatedAt": "2025-03-05T09:32:14.622Z"
+      }
+    ]
+  },
+  "mode": "pglite",
+  "schemaHash": "89e91285be422d5f44511c7405f57b57f8dfda4f0304126ae9b0f266e5fd60f1"
+}

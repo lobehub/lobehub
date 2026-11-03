@@ -1,0 +1,141 @@
+import {
+  ActionIcon,
+  Block,
+  confirmModal,
+  cssVar,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
+import { Check, ChevronDownIcon, ChevronUpIcon, MoreHorizontal, Trash } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import BriefCardActions from '@/features/DailyBrief/BriefCardActions';
+import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
+import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
+import BriefIcon from '@/features/DailyBrief/BriefIcon';
+import { styles as briefStyles } from '@/features/DailyBrief/style';
+import type { BriefItem } from '@/features/DailyBrief/types';
+import Time from '@/features/Home/components/Time';
+import { useBriefStore } from '@/store/brief';
+
+interface TaskBriefCardProps {
+  brief: BriefItem;
+  onAfterAddComment?: () => void | Promise<void>;
+  onAfterDelete?: () => void | Promise<void>;
+  onAfterResolve?: () => void | Promise<void>;
+}
+
+const TaskBriefCard = memo<TaskBriefCardProps>(
+  ({ brief, onAfterResolve, onAfterAddComment, onAfterDelete }) => {
+    const { t } = useTranslation('home');
+    const deleteBrief = useBriefStore((s) => s.deleteBrief);
+    const isResolved = Boolean(brief.resolvedAction);
+    const [expanded, setExpanded] = useState(false);
+    const showFull = !isResolved || expanded;
+
+    const handleDelete = useCallback(() => {
+      confirmModal({
+        content: t('brief.deleteConfirm.content'),
+        okButtonProps: { danger: true },
+        okText: t('brief.deleteConfirm.ok'),
+        onOk: async () => {
+          try {
+            await deleteBrief(brief.id);
+          } catch (error) {
+            // Same class as every other brief mutation: the tRPC client only
+            // console.errors non-401 failures, so without this the modal just
+            // closes and the row stays put with no explanation.
+            toast.error((error as Error)?.message || t('brief.actionFailed'));
+            return;
+          }
+
+          // The refresh runs after the delete has already landed — a rejection
+          // here leaves the view stale, it does not mean the delete failed.
+          try {
+            await onAfterDelete?.();
+          } catch (error) {
+            console.error('[TaskBriefCard] post-delete refresh failed', error);
+          }
+        },
+        title: t('brief.deleteConfirm.title'),
+      });
+    }, [brief.id, deleteBrief, onAfterDelete, t]);
+
+    const menuItems = useMemo<DropdownItem[]>(
+      () => [
+        {
+          danger: true,
+          icon: <Icon icon={Trash} />,
+          key: 'delete',
+          label: t('brief.delete'),
+          onClick: handleDelete,
+        },
+      ],
+      [handleDelete, t],
+    );
+
+    return (
+      <Block
+        className={briefStyles.card}
+        gap={12}
+        paddingBlock={12}
+        paddingInline={8}
+        style={{ borderRadius: cssVar.borderRadiusLG }}
+        variant={'outlined'}
+      >
+        <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
+          <BriefIcon muted={isResolved} size={24} type={brief.type} />
+          <Text ellipsis style={{ flex: 1 }} weight={500}>
+            {brief.title}
+          </Text>
+          {isResolved && !expanded && (
+            <Flexbox horizontal align={'center'} gap={4}>
+              <Icon color={cssVar.colorTextQuaternary} icon={Check} size={14} />
+              <Text className={briefStyles.resolvedTag}>{t('brief.resolved')}</Text>
+            </Flexbox>
+          )}
+          <Time date={brief.createdAt} />
+          {isResolved && (
+            <ActionIcon
+              icon={expanded ? ChevronUpIcon : ChevronDownIcon}
+              size={'small'}
+              title={expanded ? t('brief.collapse') : t('brief.expandAll')}
+              onClick={() => setExpanded((v) => !v)}
+            />
+          )}
+          <DropdownMenu items={menuItems}>
+            <ActionIcon icon={MoreHorizontal} size={'small'} />
+          </DropdownMenu>
+        </Flexbox>
+        {showFull && (
+          <>
+            <BriefCardSummary summary={brief.summary} />
+            <BriefCardArtifacts
+              agentId={brief.agentId ?? brief.agent?.id}
+              artifacts={brief.artifacts}
+            />
+            <BriefCardActions
+              actions={brief.actions}
+              agentId={brief.agentId ?? brief.agent?.id}
+              briefId={brief.id}
+              briefType={brief.type}
+              resolvedAction={brief.resolvedAction}
+              taskId={brief.taskId}
+              taskStatus={brief.taskStatus}
+              topicId={brief.topicId}
+              onAfterAddComment={onAfterAddComment}
+              onAfterResolve={onAfterResolve}
+            />
+          </>
+        )}
+      </Block>
+    );
+  },
+);
+
+export default TaskBriefCard;

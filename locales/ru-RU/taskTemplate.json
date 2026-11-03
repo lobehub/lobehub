@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "Подключить {{provider}}",
+  "action.connect.error": "Не удалось подключиться, пожалуйста, попробуйте снова.",
+  "action.connect.popupBlocked": "Всплывающее окно подключения заблокировано. Разрешите всплывающие окна в вашем браузере, чтобы продолжить.",
+  "action.connect.short": "Подключить",
+  "action.connecting": "Ожидание авторизации…",
+  "action.create.error": "Не удалось создать задачу. Пожалуйста, попробуйте снова.",
+  "action.create.success": "Запланированная задача добавлена. Найдите её в Lobe AI.",
+  "action.createButton": "Добавить задачу",
+  "action.creating": "Создание...",
+  "action.dismiss.error": "Не удалось отклонить. Пожалуйста, попробуйте снова.",
+  "action.dismiss.tooltip": "Не интересно",
+  "action.refresh.button": "Обновить",
+  "card.templateTag": "Шаблон",
+  "schedule.daily": "Каждый день в {{time}}",
+  "schedule.editableAfterCreateTooltip": "Вы можете изменить расписание после создания задачи.",
+  "schedule.weekly": "Каждый {{weekday}} в {{time}}",
+  "section.title": "Попробуйте эти запланированные задачи"
+}

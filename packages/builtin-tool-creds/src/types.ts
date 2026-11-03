@@ -1,0 +1,160 @@
+import type { CredType } from '@lobechat/types';
+
+export const CredsApiName = {
+  /**
+   * Connect a Composio integration service via OAuth
+   * Initiates Composio OAuth flow for third-party services like Gmail, Google Calendar, etc.
+   */
+  connectComposioService: 'connectComposioService',
+
+  /**
+   * Initiate OAuth connection flow
+   * Returns authorization URL for user to click and authorize
+   */
+  initiateOAuthConnect: 'initiateOAuthConnect',
+
+  /**
+   * Inject credentials to sandbox environment
+   * Only available when sandbox mode is enabled
+   */
+  injectCredsToSandbox: 'injectCredsToSandbox',
+
+  /**
+   * Ask the user to enter a credential's values in a secure form.
+   * The values go straight to the credential store and never reach the model.
+   */
+  requestCredsInput: 'requestCredsInput',
+} as const;
+
+export type CredsApiNameType = (typeof CredsApiName)[keyof typeof CredsApiName];
+
+export const LOBEHUB_OAUTH_PROVIDER_IDS = [
+  'github',
+  'linear',
+  'microsoft',
+  'notion',
+  'twitter',
+] as const;
+
+export const LOBEHUB_OAUTH_PROVIDER_LIST = LOBEHUB_OAUTH_PROVIDER_IDS.join(', ');
+
+export type LobehubOAuthProviderId = (typeof LOBEHUB_OAUTH_PROVIDER_IDS)[number];
+
+// ==================== Tool Parameter Types ====================
+
+export interface InitiateOAuthConnectParams {
+  /**
+   * The OAuth provider ID (e.g., 'linear', 'microsoft', 'notion', 'twitter')
+   */
+  provider: LobehubOAuthProviderId;
+}
+
+export interface InitiateOAuthConnectState {
+  /**
+   * The OAuth authorization URL for the user to click
+   */
+  authorizeUrl: string;
+  /**
+   * Authorization code (for tracking)
+   */
+  code?: string;
+  /**
+   * Expiration time in seconds
+   */
+  expiresIn?: number;
+  /**
+   * Provider display name
+   */
+  providerName: string;
+}
+
+export interface InjectCredsToSandboxParams {
+  /**
+   * The credential keys to inject
+   */
+  keys: string[];
+}
+
+export interface InjectCredsToSandboxState {
+  /**
+   * Injected credential keys
+   */
+  injected: string[];
+  /**
+   * Keys that failed to inject (not found or not available)
+   */
+  missing: string[];
+  /**
+   * Whether injection was successful
+   */
+  success: boolean;
+}
+
+export interface RequestCredsInputParams {
+  /**
+   * Optional description for the credential
+   */
+  description?: string;
+  /**
+   * Names of the values the user fills in, e.g. environment variable names
+   * (`OPENAI_API_KEY`) for kv-env or header names for kv-header
+   */
+  fieldNames: string[];
+  /**
+   * Unique key for the credential (used for reference)
+   */
+  key: string;
+  /**
+   * Display name for the credential
+   */
+  name: string;
+  /**
+   * The type of credential
+   */
+  type: 'kv-env' | 'kv-header';
+}
+
+/**
+ * Plugin state of an approved `requestCredsInput` call. Carries the key only:
+ * the values went from the form to the credential store directly.
+ */
+export interface RequestCredsInputState {
+  key: string;
+}
+
+// ==================== Composio Service Types ====================
+
+export interface ConnectComposioServiceParams {
+  /**
+   * The Composio service identifier to connect (e.g., 'gmail', 'google-calendar')
+   */
+  service: string;
+}
+
+export interface ConnectComposioServiceState {
+  /**
+   * Whether the service is now connected
+   */
+  connected: boolean;
+  /**
+   * The service identifier
+   */
+  identifier: string;
+  /**
+   * OAuth redirect URL (only present when authorization is needed)
+   */
+  redirectUrl?: string;
+  /**
+   * The service display name
+   */
+  serviceName: string;
+}
+
+// ==================== Context Types ====================
+
+export interface CredSummaryForContext {
+  description?: string;
+  key: string;
+  name: string;
+  type: CredType;
+}

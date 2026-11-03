@@ -1,0 +1,186 @@
+'use client';
+
+import {
+  ActionIcon,
+  Block,
+  Button,
+  confirmModal,
+  createModal,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  stopPropagation,
+} from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
+import { t as translate } from 'i18next';
+import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
+import React, { memo, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import MCPTag from '@/components/Plugins/MCPTag';
+import PluginAvatar from '@/components/Plugins/PluginAvatar';
+import McpDetail from '@/features/MCP/MCPDetail';
+import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
+import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
+import { usePermission } from '@/hooks/usePermission';
+import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+import { useToolStore } from '@/store/tool';
+import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
+import { type DiscoverMcpItem } from '@/types/discover';
+
+import { itemStyles } from '../style';
+
+const openSkillDetailModal = (identifier: string) =>
+  createModal({
+    content: (
+      <Suspense fallback={<McpDetailLoading />}>
+        <McpDetail noSettings identifier={identifier} />
+      </Suspense>
+    ),
+    footer: null,
+    title: translate('dev.title.skillDetails', { ns: 'plugin' }),
+    width: 800,
+  });
+
+const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => {
+  const styles = itemStyles;
+  const { t } = useTranslation('plugin');
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
+
+  const [installed, installing, installMCPPlugin, cancelInstallMCPPlugin, unInstallPlugin, plugin] =
+    useToolStore((s) => [
+      pluginSelectors.isPluginInstalled(identifier)(s),
+      mcpStoreSelectors.isMCPInstalling(identifier)(s),
+      s.installMCPPlugin,
+      s.cancelInstallMCPPlugin,
+      s.uninstallMCPPlugin,
+      mcpStoreSelectors.getPluginById(identifier)(s),
+    ]);
+
+  const installProgress = useToolStore(
+    mcpStoreSelectors.getMCPInstallProgress(identifier),
+    isEqual,
+  );
+
+  const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
+    s.togglePlugin,
+    agentSelectors.currentAgentPlugins(s).includes(identifier),
+  ]);
+  const { isAuthenticated, signIn } = useMarketAuth();
+
+  const isCloudMcp = !!((plugin as any)?.cloudEndPoint || (plugin as any)?.haveCloudEndpoint);
+
+  const handleInstall = async () => {
+    if (!canCreate || !canEdit) return;
+    if (isCloudMcp && !isAuthenticated) {
+      try {
+        await signIn('mcp');
+      } catch {
+        return;
+      }
+    }
+
+    const isSuccess = await installMCPPlugin(identifier);
+
+    if (isSuccess) {
+      await togglePlugin(identifier);
+    }
+  };
+
+  const handleCancel = async () => {
+    await cancelInstallMCPPlugin(identifier);
+  };
+
+  const renderAction = () => {
+    if (installed) {
+      return (
+        <DropdownMenu
+          nativeButton={false}
+          placement="bottomRight"
+          items={[
+            {
+              danger: true,
+              disabled: !canEdit,
+              icon: <Icon icon={Trash2} />,
+              key: 'uninstall',
+              label: t('store.actions.uninstall'),
+              onClick: () => {
+                if (!canEdit) return;
+                confirmModal({
+                  okButtonProps: { danger: true },
+                  onOk: async () => {
+                    if (isPluginEnabledInAgent) {
+                      await togglePlugin(identifier, false);
+                    }
+                    await unInstallPlugin(identifier);
+                  },
+                  content: t('store.actions.confirmUninstall'),
+                  okText: t('store.actions.uninstall'),
+                  title: t('store.actions.uninstall'),
+                });
+              },
+            },
+          ]}
+        >
+          <ActionIcon icon={MoreVerticalIcon} />
+        </DropdownMenu>
+      );
+    }
+
+    if (installing) {
+      return (
+        <Button size="small" type="fill" onClick={handleCancel}>
+          {t('store.actions.cancel')}
+        </Button>
+      );
+    }
+
+    return (
+      <ActionIcon
+        disabled={!canCreate || !canEdit}
+        icon={Plus}
+        title={t('store.actions.install')}
+        onClick={handleInstall}
+      />
+    );
+  };
+
+  return (
+    <Flexbox className={styles.container} gap={0}>
+      <Block
+        clickable
+        horizontal
+        align={'center'}
+        gap={12}
+        paddingBlock={12}
+        paddingInline={12}
+        style={{ cursor: 'pointer' }}
+        variant={'outlined'}
+        onClick={() => openSkillDetailModal(identifier)}
+      >
+        <PluginAvatar avatar={icon} size={40} />
+        <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
+          <Flexbox horizontal align="center" gap={8}>
+            <span className={styles.title}>{name}</span>
+            <MCPTag showText={false} />
+          </Flexbox>
+          {description && <span className={styles.description}>{description}</span>}
+        </Flexbox>
+        <div onClick={stopPropagation}>{renderAction()}</div>
+      </Block>
+
+      {!!installProgress && (
+        <Flexbox paddingInline={12}>
+          <MCPInstallProgress identifier={identifier} />
+        </Flexbox>
+      )}
+    </Flexbox>
+  );
+});
+
+Item.displayName = 'CommunityListItem';
+
+export default Item;

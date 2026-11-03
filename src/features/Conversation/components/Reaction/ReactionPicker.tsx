@@ -1,0 +1,140 @@
+'use client';
+
+import data from '@emoji-mart/data';
+import Picker from '@emoji-mart/react';
+import { ActionIcon, createStaticStyles, Flexbox, Popover, Tooltip, useTheme } from '@lobehub/ui';
+import { PlusIcon, SmilePlus } from 'lucide-react';
+import { type FC, memo, type ReactNode, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { usePermission } from '@/hooks/usePermission';
+import { useGlobalStore } from '@/store/global';
+import { globalGeneralSelectors } from '@/store/global/selectors';
+
+import { useConversationResourceAccess } from '../../hooks/useConversationResourceAccess';
+import { useConversationStore } from '../../store';
+
+const QUICK_REACTIONS = ['👍', '👎', '❤️', '😄', '😂', '😅', '🎉', '😢', '🤔', '🚀'];
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  emojiButton: css`
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadius};
+
+    font-size: 18px;
+
+    transition: all 0.2s;
+
+    &:hover {
+      transform: scale(1.1);
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  moreButton: css`
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextTertiary};
+
+    transition: all 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  pickerContainer: css`
+    padding: 4px;
+  `,
+}));
+
+interface ReactionPickerProps {
+  messageId: string;
+  trigger?: ReactNode;
+}
+
+const ReactionPicker: FC<ReactionPickerProps> = memo(({ messageId, trigger }) => {
+  const { t } = useTranslation('chat');
+  const theme = useTheme();
+  const { allowed: canEdit } = usePermission('edit_own_content');
+  const { canUseResource } = useConversationResourceAccess();
+  const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
+  const addReaction = useConversationStore((s) => s.addReaction);
+  const [open, setOpen] = useState(false);
+  const [showFullPicker, setShowFullPicker] = useState(false);
+
+  // Reactions write to the shared conversation — view-only members don't get
+  // the affordance (same absent-when-not-applicable rule as message actions).
+  if (!canEdit || !canUseResource) return null;
+
+  const handleSelect = (emoji: string) => {
+    addReaction(messageId, emoji);
+    setOpen(false);
+    setShowFullPicker(false);
+  };
+
+  const handleOpenChange = (visible: boolean) => {
+    setOpen(visible);
+    if (!visible) setShowFullPicker(false);
+  };
+
+  const content = showFullPicker ? (
+    <Picker
+      data={data}
+      locale={locale?.split('-')[0] || 'en'}
+      previewPosition="none"
+      skinTonePosition="none"
+      theme={theme.appearance === 'dark' ? 'dark' : 'light'}
+      onEmojiSelect={(emoji: any) => handleSelect(emoji.native)}
+    />
+  ) : (
+    <Flexbox horizontal className={styles.pickerContainer} gap={4} wrap="wrap">
+      {QUICK_REACTIONS.map((emoji) => (
+        <div className={styles.emojiButton} key={emoji} onClick={() => handleSelect(emoji)}>
+          {emoji}
+        </div>
+      ))}
+      <div className={styles.moreButton} onClick={() => setShowFullPicker(true)}>
+        <PlusIcon size={16} />
+      </div>
+    </Flexbox>
+  );
+
+  return (
+    <Popover
+      arrow={false}
+      content={content}
+      open={open}
+      placement="top"
+      styles={{ content: { padding: 0 } }}
+      trigger="click"
+      onOpenChange={handleOpenChange}
+    >
+      {trigger || (
+        <span {...(open ? { 'data-popup-open': '' } : {})}>
+          <Tooltip title={t('messageAction.reaction')}>
+            <ActionIcon icon={SmilePlus} size="small" />
+          </Tooltip>
+        </span>
+      )}
+    </Popover>
+  );
+});
+
+ReactionPicker.displayName = 'ReactionPicker';
+
+export default ReactionPicker;

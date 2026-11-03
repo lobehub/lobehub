@@ -1,0 +1,47 @@
+---
+title: Authentication That Adapts to Your Stack
+description: >-
+  LobeHub now supports both Clerk and Next-Auth, giving teams flexibility to
+  choose the authentication approach that fits their deployment model and
+  security requirements.
+tags:
+  - User Management
+  - Next-Auth
+  - Clerk
+  - Authentication
+  - Multi-Factor Authentication
+---
+
+# Authentication That Adapts to Your Stack
+
+Every product needs reliable sign-in, but not every team has the same requirements. Some need to get up and running quickly with social logins. Others need enterprise-grade controls from day one. LobeHub now supports both paths by integrating with next-auth and Clerk.
+
+This gives teams the freedom to start simple and upgrade security when the time is right—without rethinking their entire auth architecture.
+
+## Next-Auth: Start Fast, Stay Flexible
+
+Next-Auth provides a straightforward authentication layer for teams that want to ship quickly. It handles the essentials: OAuth from major providers, email-based login, and credential-based flows, all without managing a separate user service.
+
+Use this when you need:
+
+- Quick setup with social providers like GitHub or Google
+- Session management that just works
+- Full control over the sign-in UI and flow
+- Privacy-friendly auth that keeps user data in your infrastructure
+
+## Clerk: Enterprise-Ready Identity
+
+When you need more than sign-in—multi-factor authentication, user profiles, and login activity monitoring—Clerk provides those capabilities out of the box. It's a managed identity platform that scales with your product.
+
+Switch to Clerk when you need:
+
+- MFA for sensitive accounts or compliance requirements
+- Built-in user profile and account management UI
+- Real-time login activity tracking
+- Scalable identity infrastructure without operational overhead
+
+## Improvements and fixes
+
+- Added support for next-auth v5 beta with improved session handling
+- Fixed redirect loop issues when using custom sign-in pages
+- Improved error messages for failed OAuth connections

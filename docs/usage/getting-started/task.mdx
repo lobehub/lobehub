@@ -1,0 +1,139 @@
+---
+title: Task
+description: >-
+  Learn how to use Tasks in LobeHub to delegate work to agents. Create tasks,
+  assign them to agents, track status, comment for follow-ups, and run tasks
+  one-off or on a recurring schedule.
+tags:
+  - Task
+  - Issue Tracker
+  - Agent Assignment
+  - Recurring Task
+  - Workflow
+---
+
+# Task
+
+![](https://hub-apac-1.lobeobjects.space/blog/assets4aa1732a45832afc780600e6e329860c.webp)
+
+**Task** turns a conversation with an agent into trackable work. Instead of chatting in real time and copying results around, you write down what you want, assign it to an agent, and let the agent run it in the background. The agent posts progress, updates the status when it's done, and replies when you leave a comment.
+
+If you've used Linear or GitHub Issues, the mental model is the same — only the assignee is an agent, and the agent actually does the work.
+
+## When to Use a Task
+
+Use a Task when you want an agent to:
+
+- Do work that takes more than a few minutes to finish.
+- Run on a schedule (for example, every morning or every Monday).
+- Report back asynchronously while you focus on something else.
+- Be re-assigned, commented on, or revisited later with full history preserved.
+
+For quick, one-shot questions, stay in the regular chat. For anything you'd otherwise track in a todo list or ticket, create a Task.
+
+## Task Lifecycle
+
+Task status shows progress, while automation settings control when work runs. The task list uses these statuses:
+
+| Status | Meaning |
+| --- | --- |
+| **Backlog** | Waiting to be worked on. |
+| **Running** | Execution is in progress. |
+| **Scheduled** | Waiting for an automation trigger. |
+| **Pending review** | Paused for review or further action. |
+| **Completed** | Marked complete. |
+| **Failed** | Execution failed; inspect the error and output. |
+| **Canceled** | Canceled. |
+
+After a run, review the result and any configured acceptance checks. See [Reviewing Results](#reviewing-results).
+
+## Creating a Task
+
+<Steps>
+  ### Open the Tasks Panel
+
+  Open **Tasks** in the main interface to see tasks for all Agents. On an Agent page, **Tasks** shows only tasks for the current Agent, not other Agents.
+
+  ### Create a New Task
+
+  Click **New Task** in the top right. Give it a clear title — the agent uses the title and description to understand what you want.
+
+  ### Write a Description
+
+  Describe the work the same way you'd describe it to a teammate. Include any links, files, or constraints the agent needs. You can paste images and attach Resources just like in a regular chat.
+
+  ### Assign an Agent
+
+  If you create the task from the main interface, select an Agent in **Assignee**. Tasks created on an Agent page belong to the current Agent. No separate Agent selection is necessary.
+
+  ### Choose a Schedule
+
+  Run ordinary tasks on demand. For recurring work, configure **Scheduled** or a fixed interval in the task detail’s **Automation** section. You do not need a separate scheduled-task system. See [Agent Tasks](/docs/usage/agent/scheduled-task).
+
+  ### Submit
+
+  Click **Create** to save the task. Then start execution or enable scheduling, and check the task status.
+</Steps>
+
+<Callout type="info">
+  With Task Tools enabled, you can also ask an agent to create a task in chat.
+  Open the created task and check that its instructions include the necessary background.
+</Callout>
+
+## Working With the Agent
+
+While the task is **Running**, open its detail to inspect progress, tool calls, and available results.
+
+### Reviewing Results
+
+Open the task detail and inspect the artifacts, run history, and Acceptance report. If work is missing, describe the gap and ask the agent to continue. Confirm completion through the available UI action once the result meets your requirements.
+
+When you configure Acceptance, the agent evaluates the criteria before delivery. A failed check can hold back the result and trigger repair. The report includes a verdict, score, and evidence for each check. Use it to support your own review.
+
+See [Acceptance](/docs/usage/agent/connectors#acceptance) for configuration guidance and examples.
+
+### Comments and Follow-ups
+
+Every task has a comment thread. Use comments to:
+
+- **Clarify** when the agent asks a question mid-run.
+- **Course-correct** if the agent is heading in the wrong direction.
+- **Iterate** at review time — describe the change, such as "Same thing but exclude weekends," then check whether execution has resumed.
+
+After submitting a comment, check the agent reply and task status to see whether work has resumed.
+
+### Artifacts
+
+Open the artifacts linked from task detail to review research notes, summaries, or drafts. If an expected deliverable is missing, ask the agent for its location.
+
+## One-off vs. Recurring
+
+Tasks support two schedule modes.
+
+### One-off Execution
+
+Start work on demand when it does not need to repeat. After execution, inspect the result and task status, then follow up or review as needed.
+
+### Recurring Execution
+
+Open the task from **Tasks** on the Agent page or in the main interface. Then open **task detail → Automation**. The same task holds its automation configuration and run records; scheduling is not a separate task system. After saving, use the available control to start scheduling and check the status and next run time.
+
+Choose **Daily, Weekly, or Hourly**, with hourly values from 1 to 24. For a duration-based schedule, choose **Fixed interval** instead. The Scheduled form does not offer Monthly or Custom cron. See [Agent Tasks](/docs/usage/agent/scheduled-task).
+
+![](/blog/assets17983f73d00c4d39dceb9dac0f6fa0ed.webp)
+
+<Callout type="warning">
+  Repeated runs incur model or tool usage costs. Check the frequency, execution limits, and account usage.
+</Callout>
+
+To stop future automated runs and keep the task settings, turn off automation. Before deleting a task, save needed results and check which records the deletion includes. See [Deleting a Task vs. Disabling Automation](/docs/usage/agent/scheduled-task#deleting-a-task-vs-disabling-automation).
+
+## Examples
+
+A few patterns that work well as Tasks:
+
+- **Daily market digest** — a Research Agent that summarizes overnight news every weekday at 8 AM.
+- **Weekly competitor scan** — an agent that visits five competitor sites and flags pricing changes.
+- **One-off deep research** — a long-running task ("compare these 12 vector databases") you check on later.
+- **Recurring data pull** — an agent that queries a database and posts the result on Mondays.
+- **Triage queue** — an inbox-like project where you drop ideas and an agent prepares first-draft answers overnight.

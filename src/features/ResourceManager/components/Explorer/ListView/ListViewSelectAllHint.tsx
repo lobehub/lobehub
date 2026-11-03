@@ -1,0 +1,69 @@
+import { Button, Flexbox } from '@lobehub/ui';
+import { useTranslation } from 'react-i18next';
+
+import type { SelectAllState } from '@/features/ResourceManager/store/initialState';
+
+import { getListViewMinWidth } from './ListItem/constants';
+import { styles } from './styles';
+
+interface ListViewSelectAllHintProps {
+  dataLength: number;
+  onSelectAllResources: () => Promise<void>;
+  selectAllState: SelectAllState;
+  selectedCount: number;
+  showSelectAllHint: boolean;
+  showUploader?: boolean;
+  total?: number;
+}
+
+const ListViewSelectAllHint = ({
+  dataLength,
+  onSelectAllResources,
+  selectedCount,
+  selectAllState,
+  showUploader = true,
+  showSelectAllHint,
+  total,
+}: ListViewSelectAllHintProps) => {
+  const { t } = useTranslation('components');
+  const isAllResultsSelected = selectAllState === 'all' && total === selectedCount;
+
+  if (!showSelectAllHint) return null;
+
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={styles.selectAllHint}
+      gap={6}
+      style={{ minWidth: getListViewMinWidth(showUploader) }}
+      wrap={'wrap'}
+    >
+      <span>
+        {t(
+          selectAllState === 'all'
+            ? total
+              ? isAllResultsSelected
+                ? 'FileManager.total.allSelectedCount'
+                : 'FileManager.total.selectedCount'
+              : 'FileManager.total.allSelectedFallback'
+            : 'FileManager.total.loadedSelectedCount',
+          {
+            count: selectedCount,
+          },
+        )}
+      </span>
+      {selectAllState !== 'all' && (
+        <Button size={'small'} type={'link'} onClick={onSelectAllResources}>
+          {total && total > dataLength
+            ? t('FileManager.total.selectAll', {
+                count: total,
+              })
+            : t('FileManager.total.selectAllFallback')}
+        </Button>
+      )}
+    </Flexbox>
+  );
+};
+
+export default ListViewSelectAllHint;

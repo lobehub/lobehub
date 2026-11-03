@@ -1,0 +1,52 @@
+'use client';
+
+import { type BuiltinInspectorProps } from '@lobechat/types';
+import { cx } from '@lobehub/ui';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
+
+import type { ReadReferenceParams, ReadReferenceState } from '../../../types';
+
+export const ReadReferenceInspector = memo<
+  BuiltinInspectorProps<ReadReferenceParams, ReadReferenceState>
+>(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+  const { t } = useTranslation('plugin');
+
+  const path = args?.path || partialArgs?.path || '';
+  const resolvedPath = path;
+
+  if (isArgumentsStreaming) {
+    if (!path)
+      return (
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-skills.apiName.readReference')}
+          </span>
+        </div>
+      );
+
+    return (
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-skills.apiName.readReference')}:
+        </span>
+        <span>{path}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={inspectorTextStyles.root}>
+      <span className={inspectorTextStyles.root}>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-skills.apiName.readReference')}:
+        </span>
+        <span className={highlightTextStyles.primary}>{resolvedPath}</span>
+      </span>
+    </div>
+  );
+});
+
+ReadReferenceInspector.displayName = 'ReadReferenceInspector';

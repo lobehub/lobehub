@@ -1,0 +1,573 @@
+import { type ChatToolPayloadWithResult } from '@lobechat/types';
+import { Accordion, ActionIcon, Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
+import * as motion from 'motion/react-m';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useAutoScroll } from '@/hooks/useAutoScroll';
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import { shinyTextStyles } from '@/styles';
+
+import { messageStateSelectors, useConversationStore } from '../../../store';
+import {
+  TIME_MS_PER_SECOND,
+  WORKFLOW_EXPANDED_SCROLL_THRESHOLD_PX,
+  WORKFLOW_HEADLINE_DEBOUNCE_MS,
+  WORKFLOW_PROSE_IDLE_COMMIT_MS,
+  WORKFLOW_PROSE_QUICK_COMMIT_MS,
+  WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX,
+  WORKFLOW_WORKING_ELAPSED_SHOW_AFTER_MS,
+} from '../constants';
+import {
+  areWorkflowToolsComplete,
+  formatReasoningDuration,
+  getWorkflowCompletionStatus,
+  getWorkflowStreamingHeadlineState,
+  getWorkflowSummaryText,
+  shapeProseForWorkflowHeadline,
+} from '../toolDisplayNames';
+import { getBlocksEndCreatedAt, getFirstBlockCreatedAt } from './groupChain';
+import type { RenderableAssistantContentBlock } from './types';
+import WorkflowExpandedList from './WorkflowExpandedList';
+
+const WORKFLOW_EXPAND_TOGGLE_ICON_SIZE = 12;
+const WORKFLOW_EXPAND_TOGGLE_TRANSITION = {
+  duration: 0.18,
+  ease: [0.4, 0, 0.2, 1],
+} as const;
+
+export type WorkflowExpandLevel = 'collapsed' | 'semi' | 'full';
+
+/** Per-phase initial level. Pass an object when streaming and completion
+ *  should differ — e.g. a surface that wants the list open mid-run but folded
+ *  once the turn ends. A plain string applies to both. */
+export type WorkflowExpandLevelDefault =
+  WorkflowExpandLevel | { completion?: WorkflowExpandLevel; streaming?: WorkflowExpandLevel };
+
+interface WorkflowCollapseProps {
+  /** Assistant group message id (for generation state) */
+  assistantMessageId: string;
+  blocks: RenderableAssistantContentBlock[];
+  /**
+   * Fixed default expand level. When set, overrides the built-in defaults
+   * (streaming `full`, completion `collapsed`) for the initial state and resets.
+   * Users can still toggle locally. Pass an object to override only one
+   * phase (e.g. `{ streaming: 'collapsed' }`). Undefined = built-in defaults.
+   * Pending intervention still forces open.
+   */
+  defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
+  disableEditing?: boolean;
+  /**
+   * Skip applying the completion level (an animated Accordion height
+   * transition) because the parent is about to fold the whole workflow
+   * into `ProcessFold` in a single commit. Collapsing twice — once as a
+   * multi-frame animation, once as the fold swap — is what makes the
+   * conversation visibly jitter when a turn with tool calls finishes.
+   */
+  suppressAutoCollapse?: boolean;
+  workflowChromeComplete?: boolean;
+}
+
+const resolveExpandDefaults = (
+  raw: WorkflowExpandLevelDefault | undefined,
+): { completion?: WorkflowExpandLevel; streaming?: WorkflowExpandLevel } => {
+  if (raw === undefined) return {};
+  if (typeof raw === 'string') return { completion: raw, streaming: raw };
+  return raw;
+};
+
+const collectTools = (blocks: RenderableAssistantContentBlock[]): ChatToolPayloadWithResult[] => {
+  return blocks.flatMap((b) => b.tools ?? []);
+};
+
+const hasPendingIntervention = (tools: ChatToolPayloadWithResult[]) => {
+  return tools.some((tool) => tool.intervention?.status === 'pending');
+};
+
+const useDebouncedHeadline = (raw: string, allComplete: boolean, immediate = false) => {
+  const [out, setOut] = useState(raw);
+  const prevCompleteRef = useRef(allComplete);
+
+  useEffect(() => {
+    const wasComplete = prevCompleteRef.current;
+    prevCompleteRef.current = allComplete;
+    const streaming = !allComplete;
+
+    if (immediate) {
+      setOut(raw);
+      return;
+    }
+    if (!streaming) {
+      setOut(raw);
+      return;
+    }
+    if (wasComplete) {
+      setOut(raw);
+      return;
+    }
+    const id = window.setTimeout(() => setOut(raw), WORKFLOW_HEADLINE_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [allComplete, immediate, raw]);
+
+  return !allComplete ? out : raw;
+};
+
+const useCommittedProseHeadline = (proseSource: string, streaming: boolean) => {
+  const [committed, setCommitted] = useState('');
+
+  useEffect(() => {
+    if (!streaming) {
+      setCommitted('');
+      return;
+    }
+    if (!proseSource.trim()) {
+      setCommitted('');
+      return;
+    }
+    const shaped = shapeProseForWorkflowHeadline(proseSource);
+    if (!shaped) {
+      setCommitted('');
+      return;
+    }
+    const quick = /[。！？.!?]\s*$/.test(shaped);
+    const delay = quick ? WORKFLOW_PROSE_QUICK_COMMIT_MS : WORKFLOW_PROSE_IDLE_COMMIT_MS;
+    const id = window.setTimeout(() => setCommitted(shaped), delay);
+    return () => window.clearTimeout(id);
+  }, [proseSource, streaming]);
+
+  return committed;
+};
+
+const WorkflowCollapse = memo<WorkflowCollapseProps>(
+  ({
+    assistantMessageId,
+    blocks,
+    defaultWorkflowExpandLevel,
+    disableEditing,
+    suppressAutoCollapse = false,
+    workflowChromeComplete = false,
+  }) => {
+    const { t } = useTranslation('chat');
+    const toolCallsUnit = t('task.metrics.toolCallsShort');
+    const allTools = useMemo(() => collectTools(blocks), [blocks]);
+    const toolsPhaseComplete = areWorkflowToolsComplete(allTools);
+    const pendingInterventionPresent = useMemo(() => hasPendingIntervention(allTools), [allTools]);
+    const isGenerating = useConversationStore(
+      messageStateSelectors.isAssistantGroupItemGenerating(assistantMessageId),
+    );
+    /** Earliest op startTime for this message — anchors the working timer so
+     *  it reflects wall-clock since the op began, not since the component mounted. */
+    const opStartTime = useChatStore((s) => {
+      const ops = operationSelectors.getOperationsByMessage(assistantMessageId)(s);
+      if (ops.length === 0) return undefined;
+      return ops.reduce((min, op) => Math.min(min, op.metadata.startTime), Infinity);
+    });
+    /** Wall-clock bounds of this collapse's own steps. A long turn folds into
+     *  several collapses, so anchoring to the op start makes every one of them
+     *  read the same run-long number; both the live timer and the finished
+     *  header should cover this fold only. Read as two primitives so the
+     *  selectors stay reference-stable across streaming re-renders. */
+    const segmentStartTime = useConversationStore((s) =>
+      getFirstBlockCreatedAt(s.dbMessages, blocks),
+    );
+    const segmentEndTime = useConversationStore((s) => getBlocksEndCreatedAt(s.dbMessages, blocks));
+    /** Falls back to the op start (then to mount time) when the blocks don't
+     *  resolve against the raw messages. */
+    const workingStartTime = segmentStartTime ?? opStartTime;
+
+    const allComplete = toolsPhaseComplete && (workflowChromeComplete || !isGenerating);
+    const summaryText = useMemo(() => getWorkflowSummaryText(blocks), [blocks]);
+    const completionStatus = useMemo(() => getWorkflowCompletionStatus(allTools), [allTools]);
+
+    /** How long this fold actually occupied: last step (or tool result) minus
+     *  first step. `performance.duration` only sums per-round model output, so
+     *  a fold that spent minutes inside tool calls or waiting between rounds
+     *  under-reported badly — it is kept solely as a fallback for hosts that
+     *  render blocks without the raw `dbMessages` (share pages, portals). */
+    const wallClockMs =
+      segmentStartTime !== undefined && segmentEndTime !== undefined
+        ? segmentEndTime - segmentStartTime
+        : 0;
+    const totalWorkflowMs = useMemo(
+      () => blocks.reduce((sum, b) => sum + (b.performance?.duration ?? 0), 0),
+      [blocks],
+    );
+    const durationMs = wallClockMs > 0 ? wallClockMs : totalWorkflowMs;
+    const durationText = durationMs > 0 ? formatReasoningDuration(durationMs) : undefined;
+    const { streaming: streamingDefault, completion: completionDefault } = useMemo(
+      () => resolveExpandDefaults(defaultWorkflowExpandLevel),
+      [defaultWorkflowExpandLevel],
+    );
+    // Open means open: every level that isn't an explicit summary row resolves
+    // to the full list. `semi`'s height cap only ever bought a second hop (⤢)
+    // on exactly the long tool lists people open the row to read.
+    const streamingInitialLevel: WorkflowExpandLevel = streamingDefault ?? 'full';
+    // A finished turn folds back down to its summary row: opening a topic
+    // should read as a conversation, not as a wall of every tool that ran.
+    // Inspecting the list stays one click away — and that click lands on the
+    // full list (see manualExpandLevel), so nothing is two hops deep.
+    const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'collapsed';
+
+    const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() =>
+      allComplete ? completionInitialLevel : streamingInitialLevel,
+    );
+    const userOpenedRef = useRef(false);
+    const prevCompleteRef = useRef(allComplete);
+    const prevSuppressRef = useRef(suppressAutoCollapse);
+
+    useEffect(() => {
+      const wasComplete = prevCompleteRef.current;
+      prevCompleteRef.current = allComplete;
+      const wasSuppressed = prevSuppressRef.current;
+      prevSuppressRef.current = suppressAutoCollapse;
+
+      if (!allComplete && wasComplete) {
+        userOpenedRef.current = false;
+        setExpandLevel(streamingInitialLevel);
+        return;
+      }
+
+      const autoCollapsable = !userOpenedRef.current && allTools.length > 0;
+
+      if (allComplete && !wasComplete) {
+        if (!suppressAutoCollapse && autoCollapsable) setExpandLevel(completionInitialLevel);
+        return;
+      }
+
+      // Late release: suppression is held while the turn's operation is still
+      // active, so it can lift *after* completion already happened. That is the
+      // path where the parent ends up NOT folding into ProcessFold (e.g. a
+      // tool-only turn with no final answer), so nothing else will collapse this
+      // workflow — apply the completion level now instead.
+      if (allComplete && wasSuppressed && !suppressAutoCollapse && autoCollapsable) {
+        setExpandLevel(completionInitialLevel);
+      }
+    }, [
+      allComplete,
+      allTools.length,
+      streamingInitialLevel,
+      completionInitialLevel,
+      suppressAutoCollapse,
+    ]);
+
+    const streaming = !allComplete;
+    /** Where a manual open from the summary row lands: the full list, in both
+     *  phases. Opening a workflow means "show me everything that ran"; the
+     *  height cap only hides part of the answer behind another click. `semi`
+     *  survives as the ⤢ toggle's other position and for a consumer that pins
+     *  that phase to it explicitly. */
+    const manualExpandLevel: WorkflowExpandLevel =
+      (streaming ? streamingDefault : completionDefault) === 'semi' ? 'semi' : 'full';
+    const forceExpanded = streaming && pendingInterventionPresent;
+    const isExpanded = forceExpanded || expandLevel !== 'collapsed';
+
+    useEffect(() => {
+      if (streaming && pendingInterventionPresent) {
+        setExpandLevel('full');
+      }
+    }, [pendingInterventionPresent, streaming]);
+
+    const headlineState = useMemo(() => getWorkflowStreamingHeadlineState(blocks), [blocks]);
+    const committedProse = useCommittedProseHeadline(
+      headlineState.kind === 'prose' ? headlineState.proseSource : '',
+      streaming,
+    );
+
+    const showExpandedWorkingLabel = streaming && isExpanded && !pendingInterventionPresent;
+    const pendingInterventionLabel = t('workflow.awaitingConfirmation', {
+      defaultValue: 'Awaiting your confirmation',
+    });
+    const workingLabel = t('workflow.working', { defaultValue: 'Working...' });
+    const expandedWorkingLabel =
+      allTools.length > 0 ? `${allTools.length} ${toolCallsUnit}` : workingLabel;
+    const streamingHeadlineRaw = useMemo(() => {
+      if (pendingInterventionPresent) return pendingInterventionLabel;
+      if (showExpandedWorkingLabel) return expandedWorkingLabel;
+      switch (headlineState.kind) {
+        case 'thinking': {
+          return headlineState.reasoningTitle;
+        }
+        case 'tool': {
+          return headlineState.explicitStep || headlineState.fallbackTool;
+        }
+        case 'prose': {
+          return committedProse;
+        }
+        default: {
+          return '';
+        }
+      }
+    }, [
+      committedProse,
+      expandedWorkingLabel,
+      headlineState,
+      pendingInterventionLabel,
+      pendingInterventionPresent,
+      showExpandedWorkingLabel,
+    ]);
+    const streamingHeadline = useDebouncedHeadline(
+      streamingHeadlineRaw,
+      allComplete,
+      showExpandedWorkingLabel || pendingInterventionPresent,
+    );
+
+    const [workingElapsedSeconds, setWorkingElapsedSeconds] = useState(0);
+    const accumulatedWorkingMsRef = useRef(0);
+    const activeWorkingStartedAtRef = useRef<number | null>(null);
+
+    useEffect(() => {
+      if (!streaming) {
+        accumulatedWorkingMsRef.current = 0;
+        activeWorkingStartedAtRef.current = null;
+        setWorkingElapsedSeconds(0);
+        return;
+      }
+
+      if (pendingInterventionPresent) {
+        if (activeWorkingStartedAtRef.current !== null) {
+          accumulatedWorkingMsRef.current += Date.now() - activeWorkingStartedAtRef.current;
+          activeWorkingStartedAtRef.current = null;
+        }
+        setWorkingElapsedSeconds(Math.floor(accumulatedWorkingMsRef.current / TIME_MS_PER_SECOND));
+        return;
+      }
+
+      if (activeWorkingStartedAtRef.current === null) {
+        // Initial/remount seeds from this collapse's first step so elapsed
+        // reflects wall-clock since the fold began. Intervention resume seeds
+        // from now so pause time stays excluded from the accumulator.
+        const isInitial = accumulatedWorkingMsRef.current === 0;
+        activeWorkingStartedAtRef.current =
+          isInitial && workingStartTime ? workingStartTime : Date.now();
+      }
+
+      const tick = () => {
+        const activeMs =
+          activeWorkingStartedAtRef.current === null
+            ? 0
+            : Date.now() - activeWorkingStartedAtRef.current;
+        const totalMs = accumulatedWorkingMsRef.current + activeMs;
+        setWorkingElapsedSeconds(Math.floor(totalMs / TIME_MS_PER_SECOND));
+      };
+
+      tick();
+      const interval = setInterval(tick, 1000);
+
+      return () => clearInterval(interval);
+    }, [workingStartTime, pendingInterventionPresent, streaming]);
+
+    const showWorkingElapsed =
+      !pendingInterventionPresent &&
+      workingElapsedSeconds >= WORKFLOW_WORKING_ELAPSED_SHOW_AFTER_MS / TIME_MS_PER_SECOND;
+
+    // Stable refs so the underlying Accordion's memoized contextValue can
+    // remain reference-stable across WorkflowCollapse re-renders — otherwise
+    // every nested AccordionItem (each GroupTool) re-renders due to "context
+    // changed" on every streaming chunk.
+    const handleExpandedChange = useCallback(
+      (keys: string[]) => {
+        const nowExpanded = keys.includes('workflow');
+        if (forceExpanded && !nowExpanded) return;
+
+        if (nowExpanded) {
+          setExpandLevel(manualExpandLevel);
+          userOpenedRef.current = true;
+        } else {
+          setExpandLevel('collapsed');
+        }
+      },
+      [forceExpanded, manualExpandLevel],
+    );
+    const expandedKeys = useMemo(() => (isExpanded ? ['workflow'] : []), [isExpanded]);
+    const constrained = expandLevel === 'semi';
+
+    const { ref: scrollRef, handleScroll: handleAutoScroll } = useAutoScroll<HTMLDivElement>({
+      deps: [allTools.length],
+      enabled: constrained,
+      threshold: WORKFLOW_EXPANDED_SCROLL_THRESHOLD_PX,
+    });
+
+    const renderStatusBlock = (): React.ReactNode => {
+      const wrapInBlock = (inner: React.ReactNode) => (
+        <Block
+          horizontal
+          align="center"
+          flex="none"
+          height={24}
+          justify="center"
+          style={{ fontSize: 12 }}
+          variant="outlined"
+          width={24}
+        >
+          {inner}
+        </Block>
+      );
+
+      if (streaming) {
+        return wrapInBlock(
+          pendingInterventionPresent ? (
+            <Icon color={cssVar.colorInfo} icon={HandIcon} />
+          ) : (
+            <Spin size="small" variant="network" />
+          ),
+        );
+      }
+
+      switch (completionStatus) {
+        case 'error': {
+          return wrapInBlock(<Icon color={cssVar.colorError} icon={X} />);
+        }
+        case 'partial': {
+          return wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />);
+        }
+        default: {
+          return wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />);
+        }
+      }
+    };
+
+    const showExpandToggle = expandLevel !== 'collapsed';
+    const expandToggleLabel =
+      expandLevel === 'semi' ? t('workflow.expandFull') : t('workflow.collapse');
+
+    const expandToggleIcon = expandLevel === 'semi' ? Maximize2 : Minimize2;
+
+    const handleToggleExpand = () => {
+      if (expandLevel === 'semi') {
+        setExpandLevel('full');
+        userOpenedRef.current = true;
+      } else {
+        setExpandLevel('semi');
+      }
+    };
+
+    const expandToggleNode = (
+      <AnimatePresence initial={false}>
+        {showExpandToggle && (
+          <motion.div
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            style={{ display: 'flex' }}
+            transition={WORKFLOW_EXPAND_TOGGLE_TRANSITION}
+          >
+            <ActionIcon
+              icon={expandToggleIcon}
+              size={{ blockSize: 24, size: WORKFLOW_EXPAND_TOGGLE_ICON_SIZE }}
+              title={expandToggleLabel}
+              onClick={handleToggleExpand}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+
+    const title = (
+      <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
+        {renderStatusBlock()}
+        {streaming ? (
+          <Flexbox
+            horizontal
+            align="center"
+            gap={6}
+            style={{
+              minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX,
+              minWidth: 0,
+            }}
+          >
+            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+              <AnimatePresence initial={false} mode="popLayout">
+                <motion.div
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  initial={{ opacity: 0, y: 8 }}
+                  key={streamingHeadline || 'working-fallback'}
+                  transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX,
+                  }}
+                >
+                  <span
+                    className={pendingInterventionPresent ? undefined : shinyTextStyles.shinyText}
+                    style={{
+                      color: pendingInterventionPresent ? cssVar.colorInfo : undefined,
+                      overflow: 'hidden',
+                      paddingBlock: 1,
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {streamingHeadline ||
+                      (pendingInterventionPresent ? pendingInterventionLabel : workingLabel)}
+                  </span>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+            {showWorkingElapsed && (
+              <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
+                ({formatReasoningDuration(workingElapsedSeconds * TIME_MS_PER_SECOND)})
+              </span>
+            )}
+          </Flexbox>
+        ) : (
+          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
+            <Text
+              type="secondary"
+              style={{
+                minWidth: 0,
+                overflow: 'hidden',
+                paddingBlock: 1,
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {summaryText}
+            </Text>
+            {durationText && (
+              <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
+                {durationText}
+              </span>
+            )}
+          </Flexbox>
+        )}
+      </Flexbox>
+    );
+
+    return (
+      <Accordion
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        value={expandedKeys}
+        variant="borderless"
+        items={[
+          {
+            action: expandToggleNode,
+            alwaysShowAction: true,
+            children: (
+              <WorkflowExpandedList
+                assistantId={assistantMessageId}
+                blocks={blocks}
+                constrained={constrained}
+                disableEditing={disableEditing}
+                scrollRef={scrollRef}
+                onScroll={handleAutoScroll}
+              />
+            ),
+            key: 'workflow',
+            title,
+          },
+        ]}
+        onValueChange={handleExpandedChange}
+      />
+    );
+  },
+);
+
+WorkflowCollapse.displayName = 'WorkflowCollapse';
+
+export default WorkflowCollapse;

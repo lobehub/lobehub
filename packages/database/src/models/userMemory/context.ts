@@ -1,0 +1,86 @@
+import type { UserMemoryContext, UserMemoryContextInsert } from '@lobechat/types';
+import { and, desc, eq } from 'drizzle-orm';
+
+import { userMemories, userMemoriesContexts } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { buildUserMemoryWhere } from './where';
+
+export class UserMemoryContextModel {
+  private userId: string;
+  private db: LobeChatDatabase;
+
+  constructor(db: LobeChatDatabase, userId: string) {
+    this.userId = userId;
+    this.db = db;
+  }
+
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
+  }
+
+  create = async (params: Omit<UserMemoryContextInsert, 'userId'>) => {
+    const [result] = await this.db
+      .insert(userMemoriesContexts)
+      .values({ ...params, userId: this.userId })
+      .returning();
+
+    return result;
+  };
+
+  delete = async (id: string) => {
+    return this.db.transaction(async (tx) => {
+      const context = await tx.query.userMemoriesContexts.findFirst({
+        where: and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)),
+      });
+
+      if (!context) {
+        return { success: false };
+      }
+
+      // Delete associated user memories if any
+      const memoryIds = Array.isArray(context.userMemoryIds)
+        ? (context.userMemoryIds as string[])
+        : [];
+
+      // Delete the authorized child while its live-parent guard still matches.
+      await tx
+        .delete(userMemoriesContexts)
+        .where(and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)));
+
+      if (memoryIds.length > 0) {
+        for (const memoryId of memoryIds) {
+          await tx
+            .delete(userMemories)
+            .where(and(eq(userMemories.id, memoryId), this.memoryWhere(userMemories)));
+        }
+      }
+
+      return { success: true };
+    });
+  };
+
+  deleteAll = async () => {
+    return this.db.delete(userMemoriesContexts).where(this.memoryWhere(userMemoriesContexts));
+  };
+
+  query = async (limit = 50) => {
+    return this.db.query.userMemoriesContexts.findMany({
+      limit,
+      orderBy: [desc(userMemoriesContexts.createdAt)],
+      where: this.memoryWhere(userMemoriesContexts),
+    });
+  };
+
+  findById = async (id: string) => {
+    return this.db.query.userMemoriesContexts.findFirst({
+      where: and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)),
+    });
+  };
+
+  update = async (id: string, value: Partial<UserMemoryContext>) => {
+    return this.db
+      .update(userMemoriesContexts)
+      .set({ ...value, updatedAt: new Date() })
+      .where(and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)));
+  };
+}

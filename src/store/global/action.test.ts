@@ -1,0 +1,711 @@
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { major, minor } from 'semver';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as activeWorkspaceModule from '@/business/client/hooks/useActiveWorkspaceId';
+import { CURRENT_VERSION } from '@/const/version';
+import { globalService } from '@/services/global';
+import { useGlobalStore } from '@/store/global/index';
+import { createInitialSystemStatus, initialState } from '@/store/global/initialState';
+import { withSWR } from '~test-utils';
+
+vi.mock('@/utils/client/switchLang', () => ({
+  switchLang: vi.fn(),
+}));
+
+vi.mock('swr', async (importOriginal) => {
+  const modules = await importOriginal();
+  return {
+    ...(modules as any),
+    mutate: vi.fn(),
+  };
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('createPreferenceSlice', () => {
+  describe('toggleHomeRail', () => {
+    it('should persist the Home rail visibility for the next page startup', async () => {
+      const previousStatus = localStorage.getItem('LOBE_SYSTEM_STATUS');
+      localStorage.removeItem('LOBE_SYSTEM_STATUS');
+      const { result } = renderHook(() => useGlobalStore());
+
+      try {
+        act(() => {
+          useGlobalStore.setState({
+            isStatusInit: true,
+            status: { ...initialState.status, showHomeRail: true },
+          });
+          result.current.toggleHomeRail();
+        });
+
+        expect(result.current.status.showHomeRail).toBe(false);
+        await waitFor(() => {
+          expect(createInitialSystemStatus().showHomeRail).toBe(false);
+        });
+
+        act(() => {
+          result.current.toggleHomeRail(true);
+        });
+
+        expect(result.current.status.showHomeRail).toBe(true);
+        await waitFor(() => {
+          expect(createInitialSystemStatus().showHomeRail).toBe(true);
+        });
+      } finally {
+        if (previousStatus === null) localStorage.removeItem('LOBE_SYSTEM_STATUS');
+        else localStorage.setItem('LOBE_SYSTEM_STATUS', previousStatus);
+      }
+    });
+  });
+
+  describe('toggleRightPanel', () => {
+    it('should toggle chat sidebar', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        useGlobalStore.getState().updateSystemStatus({ showRightPanel: false });
+        result.current.toggleRightPanel();
+      });
+
+      expect(result.current.status.showRightPanel).toBe(true);
+    });
+    it('should set chat sidebar to specified value', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleRightPanel(true);
+      });
+
+      expect(result.current.status.showRightPanel).toBe(true);
+
+      act(() => {
+        result.current.toggleRightPanel(false);
+      });
+
+      expect(result.current.status.showRightPanel).toBe(false);
+    });
+  });
+
+  describe('toggleWorkingOverview', () => {
+    it('toggles the overview independently from the workspace panel', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleWorkingOverview(false);
+      });
+
+      expect(result.current.status.showWorkingOverview).toBe(false);
+      expect(result.current.status.showRightPanel).toBe(false);
+    });
+
+    it('derives a missing legacy overview flag from the workspace panel state', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: {
+            ...initialState.status,
+            showRightPanel: true,
+            showWorkingOverview: undefined,
+          },
+        });
+        result.current.toggleWorkingOverview();
+      });
+
+      expect(result.current.status.showWorkingOverview).toBe(true);
+    });
+  });
+
+  describe('setWorkingSidebarTab', () => {
+    it('emits a new request when the already-selected tab is requested again', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: { ...initialState.status, workingSidebarTab: 'review' },
+        });
+        result.current.setWorkingSidebarTab('review');
+      });
+
+      const firstNonce = result.current.status.workingSidebarTabRequest?.nonce;
+
+      act(() => {
+        result.current.setWorkingSidebarTab('review');
+      });
+
+      expect(result.current.status.workingSidebarTab).toBe('review');
+      expect(result.current.status.workingSidebarTabRequest).toEqual({
+        nonce: (firstNonce ?? 0) + 1,
+        tab: 'review',
+      });
+    });
+  });
+
+  describe('openWorkingSidebar', () => {
+    it('opens a requested workspace tab and closes the independent overview atomically', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: {
+            ...initialState.status,
+            showRightPanel: false,
+            showWorkingOverview: true,
+          },
+        });
+        result.current.openWorkingSidebar('review');
+      });
+
+      expect(result.current.status.showRightPanel).toBe(true);
+      expect(result.current.status.showWorkingOverview).toBe(false);
+      expect(result.current.status.workingSidebarTab).toBe('review');
+      expect(result.current.status.workingSidebarTabRequest?.tab).toBe('review');
+    });
+  });
+
+  describe('openInBrowserTab / clearBrowserTabRequest', () => {
+    it('should raise a one-shot browser request and retire it once consumed', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.openInBrowserTab('https://example.com');
+      });
+
+      expect(result.current.status.workingSidebarBrowserRequest?.url).toBe('https://example.com');
+      expect(result.current.status.workingSidebarTab).toBe('browser');
+
+      act(() => {
+        result.current.clearBrowserTabRequest();
+      });
+
+      // Must be null, not undefined: `updateSystemStatus` merges with lodash,
+      // which skips undefined — an undefined patch would leave the request in
+      // place. A surviving request is re-consumed on the browser pane's next
+      // remount (i.e. every topic switch) and drags that topic's page to the
+      // stale URL.
+      expect(result.current.status.workingSidebarBrowserRequest).toBeNull();
+    });
+  });
+
+  describe('toggleAgentBuilderPanel', () => {
+    it('should toggle agent builder panel without changing chat right panel', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: {
+            ...initialState.status,
+            showAgentBuilderPanel: false,
+            showRightPanel: false,
+          },
+        });
+        result.current.toggleAgentBuilderPanel();
+      });
+
+      expect(result.current.status.showAgentBuilderPanel).toBe(true);
+      expect(result.current.status.showRightPanel).toBe(false);
+    });
+
+    it('should set agent builder panel to specified value', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleAgentBuilderPanel(true);
+      });
+
+      expect(result.current.status.showAgentBuilderPanel).toBe(true);
+
+      act(() => {
+        result.current.toggleAgentBuilderPanel(false);
+      });
+
+      expect(result.current.status.showAgentBuilderPanel).toBe(false);
+    });
+  });
+
+  describe('toggleExpandSessionGroup', () => {
+    it('should toggle expand session group', () => {
+      const { result } = renderHook(() => useGlobalStore());
+      const groupId = 'group-id';
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleExpandSessionGroup(groupId, true);
+      });
+
+      expect(result.current.status.expandSessionGroupKeys).toContain(groupId);
+    });
+
+    const groupId = 'group-id';
+    const anotherGroupId = 'another-group-id';
+
+    beforeEach(() => {
+      // 确保每个测试前状态都是已初始化的
+      useGlobalStore.setState({ isStatusInit: true });
+    });
+
+    it('should add group id when expanding and id not exists', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        result.current.toggleExpandSessionGroup(groupId, true);
+      });
+
+      expect(result.current.status.expandSessionGroupKeys).toEqual(['pinned', 'default', groupId]);
+    });
+
+    it('should not add duplicate group id when expanding', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        // 先添加一个组
+        result.current.toggleExpandSessionGroup(groupId, true);
+        // 再次尝试添加同一个组
+        result.current.toggleExpandSessionGroup(groupId, true);
+      });
+
+      // 确保数组中只有一个实例
+      expect(result.current.status.expandSessionGroupKeys).toEqual(['pinned', 'default', groupId]);
+    });
+
+    it('should remove group id when collapsing', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        // 先设置初始状态为展开
+        result.current.toggleExpandSessionGroup(groupId, true);
+        result.current.toggleExpandSessionGroup(anotherGroupId, true);
+
+        // 验证初始状态
+        // 收起第一个组
+        result.current.toggleExpandSessionGroup(groupId, false);
+      });
+
+      // 验证只移除了指定的组
+      expect(result.current.status.expandSessionGroupKeys).toEqual([
+        'pinned',
+        'default',
+        anotherGroupId,
+      ]);
+    });
+
+    it('should do nothing when collapsing non-existent group', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        // 先添加一个组
+        result.current.toggleExpandSessionGroup(groupId, true);
+
+        // 尝试收起一个不存在的组
+        result.current.toggleExpandSessionGroup('non-existent-id', false);
+      });
+
+      // 验证原有的组没有受影响
+      expect(result.current.status.expandSessionGroupKeys).toEqual(['pinned', 'default', groupId]);
+    });
+
+    it('should handle multiple groups correctly', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        // 添加多个组
+        result.current.toggleExpandSessionGroup(groupId, true);
+        result.current.toggleExpandSessionGroup(anotherGroupId, true);
+        result.current.toggleExpandSessionGroup('third-group', true);
+      });
+
+      expect(result.current.status.expandSessionGroupKeys).toEqual([
+        'pinned',
+        'default',
+        groupId,
+        anotherGroupId,
+        'third-group',
+      ]);
+
+      act(() => {
+        // 收起中间的组
+        result.current.toggleExpandSessionGroup(anotherGroupId, false);
+      });
+
+      expect(result.current.status.expandSessionGroupKeys).toEqual([
+        'pinned',
+        'default',
+        groupId,
+        'third-group',
+      ]);
+    });
+
+    it('should save to localStorage when groups are toggled', () => {
+      const { result } = renderHook(() => useGlobalStore());
+      const saveToLocalStorageSpy = vi.spyOn(result.current.statusStorage, 'saveToLocalStorage');
+
+      act(() => {
+        result.current.toggleExpandSessionGroup(groupId, true);
+      });
+
+      expect(saveToLocalStorageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expandSessionGroupKeys: ['pinned', 'default', groupId],
+        }),
+      );
+    });
+  });
+
+  describe('toggleMobileTopic', () => {
+    it('should toggle mobile topic', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleMobileTopic();
+      });
+
+      expect(result.current.status.mobileShowTopic).toBe(true);
+    });
+  });
+
+  describe('toggleMobilePortal', () => {
+    it('should toggle mobile topic', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleMobilePortal();
+      });
+
+      expect(result.current.status.mobileShowPortal).toBe(true);
+    });
+  });
+
+  describe('toggleSystemRole', () => {
+    it('should toggle system role', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleSystemRole(true);
+      });
+
+      expect(result.current.status.showSystemRole).toBe(true);
+    });
+  });
+
+  describe('updatePreference', () => {
+    it('should update status', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.updateSystemStatus({ noWideScreen: false });
+      });
+
+      expect(result.current.status.noWideScreen).toEqual(false);
+    });
+  });
+
+  describe('switchBackToChat', () => {
+    it('should switch back to chat', () => {
+      const { result } = renderHook(() => useGlobalStore());
+      const sessionId = 'session-id';
+      const navigate = vi.fn();
+
+      act(() => {
+        useGlobalStore.setState({ navigationRef: { current: navigate } });
+        result.current.switchBackToChat(sessionId);
+      });
+
+      expect(navigate).toHaveBeenCalledWith('/agent/session-id');
+    });
+  });
+
+  describe('useCheckLatestVersion', () => {
+    it('should set hasNewVersion to false if there is no new version', async () => {
+      const latestVersion = '0.0.1';
+
+      vi.spyOn(globalService, 'getLatestVersion').mockResolvedValueOnce(latestVersion);
+
+      const { result } = renderHook(() => useGlobalStore().useCheckLatestVersion(), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(result.current.data).toBe(latestVersion);
+      });
+
+      expect(useGlobalStore.getState().hasNewVersion).toBeUndefined();
+      expect(useGlobalStore.getState().latestVersion).toBeUndefined();
+    });
+
+    it('should set hasNewVersion to true if there is a new version', async () => {
+      const latestVersion = '10000000.0.0';
+
+      vi.spyOn(globalService, 'getLatestVersion').mockResolvedValueOnce(latestVersion);
+
+      const { result } = renderHook(() => useGlobalStore().useCheckLatestVersion(), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(result.current.data).toBe(latestVersion);
+      });
+
+      expect(useGlobalStore.getState().hasNewVersion).toBe(true);
+      expect(useGlobalStore.getState().latestVersion).toBe(latestVersion);
+    });
+
+    it('should set hasNewVersion to false if the version is same minor', async () => {
+      const latestVersion = `${major(CURRENT_VERSION)}.${minor(CURRENT_VERSION)}.9999999`;
+
+      vi.spyOn(globalService, 'getLatestVersion').mockResolvedValueOnce(latestVersion);
+
+      const { result } = renderHook(() => useGlobalStore().useCheckLatestVersion(), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(result.current.data).toBe(latestVersion);
+      });
+
+      expect(useGlobalStore.getState().hasNewVersion).toBeUndefined();
+      expect(useGlobalStore.getState().latestVersion).toBeUndefined();
+    });
+
+    it('should set hasNewVersion to true if there is a minor version', async () => {
+      const latestVersion = `${major(CURRENT_VERSION)}.${minor(CURRENT_VERSION) + 10}.0`;
+
+      vi.spyOn(globalService, 'getLatestVersion').mockResolvedValueOnce(latestVersion);
+
+      const { result } = renderHook(() => useGlobalStore().useCheckLatestVersion(), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(result.current.data).toBe(latestVersion);
+      });
+
+      expect(useGlobalStore.getState().hasNewVersion).toBe(true);
+      expect(useGlobalStore.getState().latestVersion).toBe(latestVersion);
+    });
+
+    it('should handle invalid latest version', async () => {
+      const latestVersion = 'invalid.version';
+
+      vi.spyOn(globalService, 'getLatestVersion').mockResolvedValueOnce(latestVersion);
+
+      const { result } = renderHook(() => useGlobalStore().useCheckLatestVersion(), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(result.current.data).toBe(latestVersion);
+      });
+
+      expect(useGlobalStore.getState().hasNewVersion).toBeUndefined();
+      expect(useGlobalStore.getState().latestVersion).toBeUndefined();
+    });
+
+    it('should not fetch version when check is disabled', () => {
+      const getLatestVersionSpy = vi.spyOn(globalService, 'getLatestVersion');
+
+      renderHook(() => useGlobalStore().useCheckLatestVersion(false), {
+        wrapper: withSWR,
+      });
+
+      expect(getLatestVersionSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('useInitGlobalPreference', () => {
+    it('should init global status if there is empty object', async () => {
+      vi.spyOn(useGlobalStore.getState().statusStorage, 'getFromLocalStorage').mockReturnValueOnce(
+        {} as any,
+      );
+
+      const { result } = renderHook(() => useGlobalStore().useInitSystemStatus(), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual({});
+      });
+
+      expect(useGlobalStore.getState().status).toEqual(initialState.status);
+    });
+
+    it('should update with data', async () => {
+      const { result } = renderHook(() => useGlobalStore());
+      vi.spyOn(useGlobalStore.getState().statusStorage, 'getFromLocalStorage').mockReturnValueOnce({
+        noWideScreen: false,
+      } as any);
+
+      const { result: hooks } = renderHook(() => result.current.useInitSystemStatus(), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(hooks.current.data).toEqual({ noWideScreen: false });
+      });
+
+      expect(result.current.status.noWideScreen).toEqual(false);
+    });
+  });
+
+  describe('revealInFilesTab', () => {
+    it('should set workingSidebarTab to files', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.updateSystemStatus({ workingSidebarTab: 'review' });
+        result.current.revealInFilesTab('src/foo/bar.ts');
+      });
+
+      expect(result.current.status.workingSidebarTab).toBe('files');
+    });
+
+    it('should set workingSidebarRevealRequest with the given path and a positive nonce', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.revealInFilesTab('src/foo/bar.ts');
+      });
+
+      expect(result.current.status.workingSidebarRevealRequest?.path).toBe('src/foo/bar.ts');
+      expect(result.current.status.workingSidebarRevealRequest?.nonce).toBeGreaterThan(0);
+    });
+
+    it('should produce a different nonce when called twice with the same path', async () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      let firstNonce: number | undefined;
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.revealInFilesTab('src/foo/bar.ts');
+        firstNonce = useGlobalStore.getState().status.workingSidebarRevealRequest?.nonce;
+      });
+
+      await new Promise((r) => setTimeout(r, 2));
+
+      act(() => {
+        result.current.revealInFilesTab('src/foo/bar.ts');
+      });
+
+      const secondNonce = result.current.status.workingSidebarRevealRequest?.nonce;
+      expect(secondNonce).not.toBe(firstNonce);
+    });
+
+    it('should reset workingSidebarRevealRequest to undefined on initSystemStatus', async () => {
+      vi.spyOn(useGlobalStore.getState().statusStorage, 'getFromLocalStorage').mockReturnValueOnce({
+        workingSidebarRevealRequest: { nonce: 12345, path: 'src/old.ts' },
+      } as any);
+
+      const { result } = renderHook(() => useGlobalStore().useInitSystemStatus(), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(useGlobalStore.getState().status.workingSidebarRevealRequest).toBeUndefined();
+    });
+  });
+
+  describe('workspace overlay routing', () => {
+    // The lobehub-side `useActiveWorkspaceId` returns null by default; the
+    // cloud build overrides it. Stub the sync getter so we can exercise
+    // workspace-mode routing without booting a workspace store.
+    const setActiveWorkspace = (id: string | null) => {
+      vi.spyOn(activeWorkspaceModule, 'getActiveWorkspaceId').mockReturnValue(id);
+    };
+
+    beforeEach(() => {
+      useGlobalStore.setState({ isStatusInit: true });
+    });
+
+    it('routes whitelisted writes into status.workspace when inside a workspace', () => {
+      setActiveWorkspace('ws-1');
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        result.current.updateSystemStatus({
+          hiddenSidebarSections: ['recents'],
+          sidebarItems: ['agent'],
+        });
+      });
+
+      expect(result.current.status.workspace?.hiddenSidebarSections).toEqual(['recents']);
+      expect(result.current.status.workspace?.sidebarItems).toEqual(['agent']);
+      // Top-level (personal mode) values stay untouched
+      expect(result.current.status.hiddenSidebarSections).toBeUndefined();
+      expect(result.current.status.sidebarItems).toBeUndefined();
+    });
+
+    it('keeps non-whitelisted writes at the top level when inside a workspace', () => {
+      setActiveWorkspace('ws-1');
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        result.current.updateSystemStatus({ leftPanelWidth: 360 });
+      });
+
+      expect(result.current.status.leftPanelWidth).toBe(360);
+      expect(result.current.status.workspace).toBeUndefined();
+    });
+
+    it('writes whitelisted fields to the top level when not in a workspace', () => {
+      setActiveWorkspace(null);
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        result.current.updateSystemStatus({ hiddenSidebarSections: ['memory'] });
+      });
+
+      expect(result.current.status.hiddenSidebarSections).toEqual(['memory']);
+      expect(result.current.status.workspace?.hiddenSidebarSections).toBeUndefined();
+    });
+
+    it('toggleExpandSessionGroup composes off the workspace overlay when inside a workspace', () => {
+      setActiveWorkspace('ws-1');
+      // Seed: personal has ['pinned','default'], workspace overlay has ['ws-only']
+      useGlobalStore.setState({
+        isStatusInit: true,
+        status: {
+          ...initialState.status,
+          expandSessionGroupKeys: ['pinned', 'default'],
+          workspace: { expandSessionGroupKeys: ['ws-only'] },
+        },
+      });
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        result.current.toggleExpandSessionGroup('new-group', true);
+      });
+
+      // New key was appended to the workspace overlay, not to the personal list.
+      expect(result.current.status.workspace?.expandSessionGroupKeys).toEqual([
+        'ws-only',
+        'new-group',
+      ]);
+      expect(result.current.status.expandSessionGroupKeys).toEqual(['pinned', 'default']);
+    });
+  });
+});

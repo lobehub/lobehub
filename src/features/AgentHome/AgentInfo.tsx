@@ -1,0 +1,78 @@
+'use client';
+
+import { agentDisplayName } from '@lobechat/types';
+import { Flexbox, Markdown, Skeleton, Text } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
+import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@/const/meta';
+import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors, agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
+
+const AgentInfo = memo(() => {
+  const { t } = useTranslation(['chat', 'welcome']);
+  // Scope the welcome to the conversation's agent, not the global
+  // `activeAgentId`. In the multi-tab desktop app `activeAgentId` is shared and
+  // can momentarily point at another tab's agent (or the inbox), which used to
+  // flash this card back to the inbox "Lobe AI" identity.
+  const agentId = useConversationStore(contextSelectors.agentId) || '';
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isInbox = !!inboxAgentId && agentId === inboxAgentId;
+  const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const openingMessage = useAgentStore(
+    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage || '',
+  );
+  const fontSize = useUserStore(userGeneralSettingsSelectors.fontSize);
+
+  const displayTitle = isInbox
+    ? agentDisplayName(meta, DEFAULT_INBOX_TITLE)
+    : agentDisplayName(meta, t('defaultSession', { ns: 'common' }));
+
+  const message = useMemo(() => {
+    if (openingMessage) return openingMessage;
+    return t('agentDefaultMessageWithSystemRole', {
+      name: displayTitle,
+    });
+  }, [openingMessage, displayTitle, t]);
+
+  if (isLoading) {
+    return (
+      <Flexbox gap={12}>
+        <Skeleton.Avatar shape={'square'} size={64} />
+        <Skeleton height={32} width={200} />
+        <Flexbox width={'min(100%, 640px)'}>
+          <Skeleton.Text rows={2} />
+        </Flexbox>
+      </Flexbox>
+    );
+  }
+
+  return (
+    <Flexbox gap={12}>
+      <AgentAvatar
+        agentId={agentId}
+        avatar={isInbox ? meta.avatar || DEFAULT_INBOX_AVATAR : meta.avatar}
+        background={meta.backgroundColor}
+        name={displayTitle}
+        shape={'square'}
+        size={64}
+      />
+      <Text fontSize={24} weight={'bold'}>
+        {displayTitle}
+      </Text>
+      <Flexbox width={'min(100%, 640px)'}>
+        <Markdown fontSize={fontSize} variant={'chat'}>
+          {message}
+        </Markdown>
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+export default AgentInfo;

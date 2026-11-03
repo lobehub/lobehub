@@ -1,0 +1,137 @@
+import {
+  type ChatToolPayload,
+  type DynamicInterventionResolver,
+  type GlobalInterventionAuditConfig,
+  type MessageToolCall,
+  type RuntimeAdditionalContextFragment,
+} from '@lobechat/types';
+
+import type { AgentState } from './state';
+
+export interface GeneralAgentCallLLMInstructionPayload {
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
+  allowedToolNames?: string[];
+  /**
+   * Reuse an existing assistant message instead of creating a new one. Set when
+   * resuming from a tool-first step (e.g. tools activator) whose seeded
+   * placeholder must be filled by this LLM turn rather than orphaned.
+   */
+  assistantMessageId?: string;
+  /**
+   * Attachments the context engine sends as a preview plus file id, planned by
+   * `shouldCompress` so attachment text fits under the compression threshold.
+   */
+  attachmentPreviewFileIds?: string[];
+  /** Force create a new assistant message (e.g., after compression) */
+  createAssistantMessage?: boolean;
+  isFirstMessage?: boolean;
+  messages: any[];
+  model: string;
+  parentMessageId?: string;
+  provider: string;
+  tools: any[];
+}
+
+export interface GeneralAgentCallLLMResultPayload {
+  hasToolsCalling: boolean;
+  parentMessageId: string;
+  result: { content: string; tool_calls: MessageToolCall[] };
+  toolsCalling: ChatToolPayload[];
+}
+
+export interface GeneralAgentCallingToolInstructionPayload {
+  parentMessageId: string;
+  skipCreateToolMessage?: boolean;
+  toolCalling: ChatToolPayload;
+}
+
+export interface GeneralAgentCallToolResultPayload {
+  data: any;
+  executionTime: number;
+  isSuccess: boolean;
+  parentMessageId: string;
+  /** Whether tool requested to stop execution (e.g., group management speak/delegate, lobe-agent async sub-agents) */
+  stop?: boolean;
+  toolCall: ChatToolPayload;
+  toolCallId: string;
+}
+
+export interface GeneralAgentCallToolsBatchInstructionPayload {
+  parentMessageId: string;
+  toolsCalling: ChatToolPayload[];
+}
+
+export interface GeneralAgentCallToolsBatchResultPayload {
+  parentMessageId: string;
+  toolCount: number;
+  toolResults: GeneralAgentCallToolResultPayload[];
+}
+
+export interface GeneralAgentHumanAbortPayload {
+  /** Whether there are pending tool calls */
+  hasToolsCalling?: boolean;
+  /** Parent message ID (assistant message) */
+  parentMessageId: string;
+  /** Reason for the abort */
+  reason: string;
+  /** LLM result including content and tool_calls */
+  result?: {
+    content: string;
+    tool_calls?: any[];
+  };
+  /** Pending tool calls that need to be cancelled */
+  toolsCalling?: ChatToolPayload[];
+}
+
+export interface GeneralAgentConfig {
+  agentConfig?: {
+    [key: string]: any;
+    maxSteps?: number;
+  };
+  /** Explicit tool-name allow-list for agents that intentionally restrict tools. */
+  allowedToolNames?: string[];
+  /**
+   * Context compression configuration
+   * When enabled and triggered, ALL messages are compressed into a single MessageGroup summary.
+   */
+  compressionConfig?: {
+    /** Whether context compression is enabled (default: true) */
+    enabled?: boolean;
+    /** Model's max context window token count (default: 128k) */
+    maxWindowToken?: number;
+    /** Explicit threshold after a compression summary exists; default 0.65 reserves prompt headroom. */
+    recompressionThresholdRatio?: number;
+    /** Threshold ratio for triggering compression (default: 0.5) */
+    thresholdRatio?: number;
+  };
+  /**
+   * Dynamic intervention audits registry (per-tool)
+   * Used to evaluate runtime intervention policies for tools with dynamic config
+   */
+  dynamicInterventionAudits?: Record<string, DynamicInterventionResolver>;
+  /**
+   * Global intervention resolvers that run for EVERY tool call
+   * Evaluated in array order, before per-tool dynamic resolvers.
+   * When not provided, defaults to [createSecurityBlacklistGlobalAudit()]
+   */
+  globalInterventionAudits?: GlobalInterventionAuditConfig[];
+  modelRuntimeConfig?: AgentState['modelRuntimeConfig'];
+  operationId: string;
+  /** Phase-level tools exposed to this agent run. Falls back to AgentState.tools. */
+  tools?: any[];
+  userId?: string;
+}
+
+/**
+ * Payload for compression_result phase
+ */
+export interface GeneralAgentCompressionResultPayload {
+  /** Compressed messages (summary + pinned + recent) */
+  compressedMessages?: any[];
+  /** Compression group ID in database */
+  groupId: string;
+  /** Parent message ID for subsequent LLM call (last assistant message before compression) */
+  parentMessageId?: string;
+  /** Whether compression was skipped (no messages to compress) */
+  skipped?: boolean;
+}

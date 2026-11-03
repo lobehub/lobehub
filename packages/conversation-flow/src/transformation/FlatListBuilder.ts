@@ -1,0 +1,1595 @@
+import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
+
+import { isInThreadScope } from '../indexing';
+import type { Message, MessageGroupMetadata, ThreadScope } from '../types';
+import { toTime } from '../utils/timestamp';
+import type { BranchResolver } from './BranchResolver';
+import type { MessageCollector } from './MessageCollector';
+import type { MessageTransformer } from './MessageTransformer';
+import { toTaskCompletionBlocks } from './taskCompletionBlocks';
+
+/**
+ * Whether a message was authored by the group's supervisor agent.
+ * Reads the canonical `metadata.orchestrationRole` snapshot, falling back to the
+ * deprecated boolean `metadata.isSupervisor` for messages written before the
+ * field existed.
+ */
+const isSupervisorMessage = (message: Message | undefined): boolean =>
+  message?.metadata?.orchestrationRole === 'supervisor' || !!message?.metadata?.isSupervisor;
+
+/**
+ * One step of the flat-list walk. The walk follows parent chains that are
+ * thousands of messages deep on long topics, so instead of recursing, each
+ * step yields the sub-walk it would have called and `runFlatListWork` resumes
+ * it on an explicit stack. Statement order is unchanged: a yielded sub-walk
+ * finishes before the step that yielded it continues.
+ */
+interface FlatListWork extends Generator<FlatListWork, void, undefined> {}
+
+const runFlatListWork = (root: FlatListWork): void => {
+  const stack: FlatListWork[] = [root];
+  let pendingError: { error: unknown } | undefined;
+
+  while (stack.length > 0) {
+    const current = stack.at(-1)!;
+    let step: IteratorResult<FlatListWork, void>;
+    try {
+      // Rethrow a finished sub-walk's error inside its caller so the caller's
+      // `finally` blocks run exactly as they would around a direct call.
+      step = pendingError ? current.throw(pendingError.error) : current.next();
+      pendingError = undefined;
+    } catch (error) {
+      stack.pop();
+      if (stack.length === 0) throw error;
+      pendingError = { error };
+      continue;
+    }
+
+    if (step.done) stack.pop();
+    else stack.push(step.value);
+  }
+};
+
+/**
+ * FlatListBuilder - Builds flat message list following the active path
+ *
+ * Handles:
+ * 1. Traversal following active branches (explicit stack, see runFlatListWork)
+ * 2. Creating virtual messages for Compare and AssistantGroup
+ * 3. Processing different message types with priority
+ */
+export class FlatListBuilder {
+  constructor(
+    private messageMap: Map<string, Message>,
+    private messageGroupMap: Map<string, MessageGroupMetadata>,
+    private childrenMap: Map<string | null, string[]>,
+    private branchResolver: BranchResolver,
+    private messageCollector: MessageCollector,
+    private messageTransformer: MessageTransformer,
+    /** See `ThreadScope`. Defaults to every message in scope. */
+    private threadScope: ThreadScope = undefined,
+  ) {}
+
+  /**
+   * Children of `parentId` that belong to the flat list's thread scope.
+   *
+   * Threaded messages live outside the main chain, and `buildIdTree` already drops them from
+   * the context tree. The flat list has to apply the same rule: a thread head is parented to
+   * nothing (`parentId: null`) or to the main-chain assistant/tool that spawned it, so an
+   * unfiltered walk reaches it and renders a background run — an isolated memory or sub-agent
+   * turn — as an ordinary bubble in the middle of the user's transcript. A thread view keeps
+   * its own thread in scope, since its input is the ancestors plus that thread's replies.
+   */
+  private childIdsInScope(parentId: string | null): string[] {
+    const childIds = this.childrenMap.get(parentId) ?? [];
+    if (this.threadScope === undefined) return childIds;
+
+    return childIds.filter((childId) =>
+      isInThreadScope(this.messageMap.get(childId), this.threadScope),
+    );
+  }
+
+  /**
+   * Generate flatList from messages array
+   * Only includes messages in the active path
+   */
+  flatten(messages: Message[]): Message[] {
+    const flatList: Message[] = [];
+    const processedIds = new Set<string>();
+
+    const scopedMessages =
+      this.threadScope === undefined
+        ? messages
+        : messages.filter((message) => isInThreadScope(message, this.threadScope));
+
+    // Determine the root parentId
+    // Normal case: start from null (messages with no parentId)
+    // Orphan case: if all messages have parentId (thread mode), use first message as root
+    let rootParentId: string | null = null;
+
+    const hasRootMessages = this.childIdsInScope(null).length > 0;
+    if (!hasRootMessages && scopedMessages.length > 0) {
+      // All messages have parentId - this is orphan/thread mode
+      // Use the first message's parentId as the virtual root
+      rootParentId = scopedMessages[0].parentId ?? null;
+    }
+
+    // Build the active path by traversing from root
+    runFlatListWork(
+      this.buildFlatListRecursive(rootParentId, flatList, processedIds, scopedMessages),
+    );
+
+    // Assistant groups must be assembled before ordering because their members
+    // are discovered through recursive tool-result chains. That traversal is
+    // depth-first: when parallel tool results continue under different agents,
+    // it can finish a newer user subtree and then append an older sibling subtree,
+    // leaving a stale assistant response at the request tail. A stable final sort
+    // restores the persisted chronology without changing group membership or the
+    // order of nodes with identical timestamps.
+    flatList.sort((first, second) => toTime(first.createdAt) - toTime(second.createdAt));
+
+    return flatList;
+  }
+
+  /**
+   * Recursively build flatList following the active path
+   */
+  private *buildFlatListRecursive(
+    parentId: string | null,
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): FlatListWork {
+    const children = this.childIdsInScope(parentId);
+
+    // Broadcast councils now render in-bubble (a `council` block inside the
+    // supervisor's assistant group), so there is no separate agentCouncil message
+    // to emit when recursing into a council tool — its members were already
+    // collected and marked processed by collectCouncilMembers.
+    if (parentId) {
+      const parentMessage = this.messageMap.get(parentId);
+
+      // Pre-loop check: Tasks aggregation (multiple task messages with same parentId)
+      // This handles the case when multiple async tasks are spawned from the same tool message
+      if (parentMessage && children.length > 0) {
+        const taskChildren = children.filter((childId) => {
+          const child = this.messageMap.get(childId);
+          return child?.role === 'task';
+        });
+
+        if (taskChildren.length > 1) {
+          // Get non-task children (e.g., summary assistant message)
+          const nonTaskChildren = children.filter((childId) => {
+            const child = this.messageMap.get(childId);
+            return child?.role !== 'task';
+          });
+
+          // Check if tasks have different agentIds (groupTasks) or same agentId (tasks)
+          const taskAgentIds = new Set(
+            taskChildren.map((childId) => this.messageMap.get(childId)?.agentId).filter(Boolean),
+          );
+          const isGroupTasks = taskAgentIds.size > 1;
+
+          // Create appropriate virtual message based on agent diversity
+          const tasksMessage = isGroupTasks
+            ? this.createGroupTasksMessage(parentMessage, taskChildren, processedIds)
+            : this.createTasksMessage(parentMessage, taskChildren, processedIds);
+          flatList.push(tasksMessage);
+
+          // Continue with non-task children (e.g., final summary from assistant)
+          for (const nonTaskChildId of nonTaskChildren) {
+            if (!processedIds.has(nonTaskChildId)) {
+              const nonTaskChild = this.messageMap.get(nonTaskChildId);
+              if (nonTaskChild) {
+                // Check if it's an AssistantGroup (assistant with tools)
+                if (
+                  nonTaskChild.role === 'assistant' &&
+                  nonTaskChild.tools &&
+                  nonTaskChild.tools.length > 0
+                ) {
+                  yield this.processAssistantGroup(
+                    nonTaskChild,
+                    flatList,
+                    processedIds,
+                    allMessages,
+                  );
+                } else {
+                  flatList.push(nonTaskChild);
+                  processedIds.add(nonTaskChildId);
+                  yield this.buildFlatListRecursive(
+                    nonTaskChildId,
+                    flatList,
+                    processedIds,
+                    allMessages,
+                  );
+                }
+              }
+            }
+          }
+
+          // Also check for children of task messages (e.g., summary as child of last task)
+          for (const taskChildId of taskChildren) {
+            const taskChildrenIds = this.childrenMap.get(taskChildId) ?? [];
+            for (const taskGrandchildId of taskChildrenIds) {
+              if (!processedIds.has(taskGrandchildId)) {
+                const taskGrandchild = this.messageMap.get(taskGrandchildId);
+                if (taskGrandchild && taskGrandchild.role !== 'task') {
+                  // Check if it's an AssistantGroup (assistant with tools)
+                  if (
+                    taskGrandchild.role === 'assistant' &&
+                    taskGrandchild.tools &&
+                    taskGrandchild.tools.length > 0
+                  ) {
+                    yield this.processAssistantGroup(
+                      taskGrandchild,
+                      flatList,
+                      processedIds,
+                      allMessages,
+                    );
+                  } else if (
+                    // Check if it's a supervisor message without tools (content-only)
+                    taskGrandchild.role === 'assistant' &&
+                    isSupervisorMessage(taskGrandchild) &&
+                    (!taskGrandchild.tools || taskGrandchild.tools.length === 0)
+                  ) {
+                    const supervisorMessage = this.createSupervisorContentMessage(taskGrandchild);
+                    flatList.push(supervisorMessage);
+                    processedIds.add(taskGrandchildId);
+                    yield this.buildFlatListRecursive(
+                      taskGrandchildId,
+                      flatList,
+                      processedIds,
+                      allMessages,
+                    );
+                  } else {
+                    flatList.push(taskGrandchild);
+                    processedIds.add(taskGrandchildId);
+                    yield this.buildFlatListRecursive(
+                      taskGrandchildId,
+                      flatList,
+                      processedIds,
+                      allMessages,
+                    );
+                  }
+                }
+              }
+            }
+          }
+          return;
+        }
+      }
+    }
+
+    for (const childId of children) {
+      if (processedIds.has(childId)) continue;
+
+      const message = this.messageMap.get(childId);
+      if (!message) continue;
+
+      // Internal dispatch envelopes remain in the context tree so the target
+      // assistant keeps its parent chain, but they are not user-authored turns
+      // and therefore do not render as standalone bubbles.
+      if (message.metadata?.agentDispatch?.visibility === 'internal') {
+        processedIds.add(message.id);
+        yield this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
+        continue;
+      }
+
+      // Priority 1: Compare message group
+      const messageGroup = message.groupId ? this.messageGroupMap.get(message.groupId) : undefined;
+
+      if (messageGroup && messageGroup.mode === 'compare' && !processedIds.has(messageGroup.id)) {
+        const groupMembers = this.messageCollector.collectGroupMembers(
+          message.groupId!,
+          allMessages,
+        );
+        const compareMessage = this.createCompareMessage(messageGroup, groupMembers);
+        flatList.push(compareMessage);
+        groupMembers.forEach((m) => processedIds.add(m.id));
+        processedIds.add(messageGroup.id);
+
+        // Continue with active column's children (if any)
+        if ((compareMessage as any).activeColumnId) {
+          yield this.buildFlatListRecursive(
+            (compareMessage as any).activeColumnId,
+            flatList,
+            processedIds,
+            allMessages,
+          );
+        }
+        continue;
+      }
+
+      // Priority 2: AssistantGroup (assistant + tools), or the toolless
+      // narration step that heads a tool-using chain — the latter must seed the
+      // group instead of splitting into its own standalone bubble. Supervisors
+      // are excluded from the toolless-head path so they still fall to 2b.
+      if (
+        message.role === 'assistant' &&
+        ((message.tools && message.tools.length > 0) ||
+          (!isSupervisorMessage(message) && this.messageCollector.isToolChainHead(message)))
+      ) {
+        // Collect the entire assistant group chain
+        const assistantChain: Message[] = [];
+        const allToolMessages: Message[] = [];
+        this.messageCollector.collectAssistantChain(
+          message,
+          allMessages,
+          assistantChain,
+          allToolMessages,
+          processedIds,
+        );
+
+        // Gather external-signal callback blocks () for any
+        // tool in the chain that fired toolless reactive replies
+        // (Monitor stdout pushes, etc.). Snapshot now so the UI doesn't
+        // need to query messageMap; mark callback messages as processed
+        // so they don't render as separate top-level bubbles.
+        const signalBlocks = this.messageCollector.collectFlatSignalCallbacks(
+          allToolMessages,
+          allMessages,
+        );
+
+        // Post-task-summary turns () — toolless siblings of
+        // the callbacks under the same tool_result, tagged with
+        // `signal.type === 'task-completion'`. Belong inside the same
+        // AssistantGroup, rendered AFTER the SignalCallbacks accordion.
+        const taskCompletionMessages = this.messageCollector.collectFlatTaskCompletions(
+          allToolMessages,
+          allMessages,
+        );
+
+        // A broadcast turn renders its members as one in-bubble council block.
+        // Gather them before building the group so they embed inside it.
+        const council = this.collectCouncilMembers(allToolMessages, allMessages, processedIds);
+
+        // Create assistantGroup virtual message
+        const groupMessage = this.createAssistantGroupMessage(
+          assistantChain[0],
+          assistantChain,
+          allToolMessages,
+          signalBlocks,
+          taskCompletionMessages,
+          council?.members,
+        );
+        flatList.push(groupMessage);
+
+        // Mark all as processed
+        assistantChain.forEach((m) => processedIds.add(m.id));
+        allToolMessages.forEach((m) => processedIds.add(m.id));
+        for (const block of signalBlocks) {
+          for (const cb of block.callbacks) processedIds.add(cb.id);
+        }
+        for (const completion of taskCompletionMessages) {
+          processedIds.add(completion.id);
+        }
+
+        // Surface the supervisor's post-council reply (attached to one member).
+        if (council) {
+          for (const memberId of council.memberIds) {
+            yield this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
+          }
+        }
+
+        yield this.continueAfterAssistantGroup(
+          assistantChain,
+          allToolMessages,
+          flatList,
+          processedIds,
+          allMessages,
+        );
+        continue;
+      }
+
+      // Priority 2b: Supervisor message without tools (content-only)
+      // Transform to supervisor role with content in children array
+      if (
+        message.role === 'assistant' &&
+        isSupervisorMessage(message) &&
+        (!message.tools || message.tools.length === 0)
+      ) {
+        const supervisorMessage = this.createSupervisorContentMessage(message);
+        flatList.push(supervisorMessage);
+        processedIds.add(message.id);
+
+        // Continue with children
+        yield this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
+        continue;
+      }
+
+      // Priority 3a: Compare mode from user message metadata
+      const childMessages = this.childIdsInScope(message.id);
+      // Non-tool children only are branch candidates (dual-form reader invariant: tool children are inline, not branches):
+      // a tool child is inline data of its assistant, never a sibling branch.
+      const nonToolChildMessages = this.branchResolver.getMetadataBranchIds(childMessages);
+      if (this.isCompareMode(message) && childMessages.length > 1) {
+        // Add user message
+        flatList.push(message);
+        processedIds.add(message.id);
+
+        // Create compare virtual message with proper handling of AssistantGroups
+        const compareMessage = this.createCompareMessageFromChildIds(
+          message,
+          childMessages,
+          allMessages,
+          processedIds,
+        );
+        flatList.push(compareMessage);
+
+        // Continue with active column's children (if any)
+        if ((compareMessage as any).activeColumnId) {
+          yield this.buildFlatListRecursive(
+            (compareMessage as any).activeColumnId,
+            flatList,
+            processedIds,
+            allMessages,
+          );
+        }
+        continue;
+      }
+
+      // Priority 3d: User message with branches (multiple assistant children)
+      // Branch indicator should be on the active assistant child message
+      if (message.role === 'user' && nonToolChildMessages.length > 1) {
+        const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
+          message,
+          nonToolChildMessages,
+          this.childrenMap,
+        );
+
+        // Optimistic update: activeBranchId is undefined when branch is being created
+        // In this case, just add user message without branch info and continue
+        if (!activeBranchId) {
+          flatList.push(message);
+          processedIds.add(message.id);
+          continue;
+        }
+
+        // Add user message without branch (branch goes on the child)
+        flatList.push(message);
+        processedIds.add(message.id);
+
+        const activeBranchIndex = nonToolChildMessages.indexOf(activeBranchId);
+
+        // Continue with active branch - check if it's an assistantGroup
+        const activeBranchMsg = this.messageMap.get(activeBranchId);
+        if (activeBranchMsg) {
+          // Check if active branch is assistant with tools (should be assistantGroup)
+          if (
+            activeBranchMsg.role === 'assistant' &&
+            activeBranchMsg.tools &&
+            activeBranchMsg.tools.length > 0
+          ) {
+            // Collect the entire assistant group chain
+            const assistantChain: Message[] = [];
+            const allToolMessages: Message[] = [];
+            this.messageCollector.collectAssistantChain(
+              activeBranchMsg,
+              allMessages,
+              assistantChain,
+              allToolMessages,
+              processedIds,
+            );
+
+            // Create assistantGroup virtual message with branch metadata
+            const groupMessage = this.createAssistantGroupMessage(
+              assistantChain[0],
+              assistantChain,
+              allToolMessages,
+            );
+            // Add branch info to the assistantGroup message
+            const groupMessageWithBranches = this.createMessageWithBranches(
+              groupMessage,
+              nonToolChildMessages.length,
+              activeBranchIndex,
+            );
+            flatList.push(groupMessageWithBranches);
+
+            // Mark all as processed
+            assistantChain.forEach((m) => processedIds.add(m.id));
+            allToolMessages.forEach((m) => processedIds.add(m.id));
+
+            yield this.continueAfterAssistantGroup(
+              assistantChain,
+              allToolMessages,
+              flatList,
+              processedIds,
+              allMessages,
+            );
+          } else {
+            // Regular assistant message (not assistantGroup) - add branch info
+            const activeBranchWithBranches = this.createMessageWithBranches(
+              activeBranchMsg,
+              nonToolChildMessages.length,
+              activeBranchIndex,
+            );
+            flatList.push(activeBranchWithBranches);
+            processedIds.add(activeBranchId);
+
+            // Continue with active branch's children
+            yield this.buildFlatListRecursive(activeBranchId, flatList, processedIds, allMessages);
+          }
+        }
+        continue;
+      }
+
+      // Priority 3e: Assistant message with branches (multiple user children)
+      // Branch indicator should be on the active user child message
+      if (message.role === 'assistant' && nonToolChildMessages.length > 1) {
+        const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
+          message,
+          nonToolChildMessages,
+          this.childrenMap,
+        );
+
+        // Optimistic update: activeBranchId is undefined when branch is being created
+        // In this case, just add assistant message without branch info and continue
+        if (!activeBranchId) {
+          flatList.push(message);
+          processedIds.add(message.id);
+          continue;
+        }
+
+        // Add the assistant message without branch (branch goes on the child)
+        flatList.push(message);
+        processedIds.add(message.id);
+
+        const activeBranchIndex = nonToolChildMessages.indexOf(activeBranchId);
+
+        // Continue with active branch and add branch info to the user child
+        const activeBranchMsg = this.messageMap.get(activeBranchId);
+        if (activeBranchMsg) {
+          // Add branch info to the active user child message
+          const activeBranchWithBranches = this.createMessageWithBranches(
+            activeBranchMsg,
+            nonToolChildMessages.length,
+            activeBranchIndex,
+          );
+          flatList.push(activeBranchWithBranches);
+          processedIds.add(activeBranchId);
+
+          // Continue with active branch's children
+          yield this.buildFlatListRecursive(activeBranchId, flatList, processedIds, allMessages);
+        }
+        continue;
+      }
+
+      // Priority 4: Regular message
+      flatList.push(message);
+      processedIds.add(message.id);
+
+      // Continue with children
+      yield this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
+    }
+  }
+
+  /**
+   * Process an assistant message with tools into an AssistantGroup
+   * Extracted to avoid code duplication in task children handling
+   */
+  private *processAssistantGroup(
+    message: Message,
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): FlatListWork {
+    // Collect the entire assistant group chain
+    const assistantChain: Message[] = [];
+    const allToolMessages: Message[] = [];
+    this.messageCollector.collectAssistantChain(
+      message,
+      allMessages,
+      assistantChain,
+      allToolMessages,
+      processedIds,
+    );
+
+    // A broadcast turn embeds its members as an in-bubble council block.
+    const council = this.collectCouncilMembers(allToolMessages, allMessages, processedIds);
+
+    // Create assistantGroup virtual message
+    const groupMessage = this.createAssistantGroupMessage(
+      assistantChain[0],
+      assistantChain,
+      allToolMessages,
+      undefined,
+      undefined,
+      council?.members,
+    );
+    flatList.push(groupMessage);
+
+    // Mark all as processed
+    assistantChain.forEach((m) => processedIds.add(m.id));
+    allToolMessages.forEach((m) => processedIds.add(m.id));
+
+    if (council) {
+      for (const memberId of council.memberIds) {
+        yield this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
+      }
+    }
+
+    yield this.continueAfterAssistantGroup(
+      assistantChain,
+      allToolMessages,
+      flatList,
+      processedIds,
+      allMessages,
+    );
+  }
+
+  private *continueAfterAssistantGroup(
+    assistantChain: Message[],
+    allToolMessages: Message[],
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): FlatListWork {
+    const lastAssistant = assistantChain.at(-1);
+    if (lastAssistant) {
+      this.suppressInactiveExplicitContinuations(lastAssistant, allToolMessages, processedIds);
+    }
+
+    yield this.continueGroupMemberReplies(assistantChain, flatList, processedIds, allMessages);
+
+    const parentIds = [
+      ...(lastAssistant ? [lastAssistant.id] : []),
+      ...allToolMessages.map((toolMessage) => toolMessage.id),
+    ];
+
+    while (true) {
+      const nextContinuation = this.findNextUnprocessedChild(parentIds, processedIds);
+      if (!nextContinuation) break;
+
+      if (this.shouldDrainParentContinuations(nextContinuation.parentId, processedIds)) {
+        yield this.buildFlatListRecursive(
+          nextContinuation.parentId,
+          flatList,
+          processedIds,
+          allMessages,
+        );
+        continue;
+      }
+
+      yield this.buildFlatListRecursiveForChild(
+        nextContinuation.parentId,
+        nextContinuation.child.id,
+        flatList,
+        processedIds,
+        allMessages,
+      );
+    }
+
+    yield this.continueInterruptedAssistantGroup(
+      assistantChain,
+      flatList,
+      processedIds,
+      allMessages,
+    );
+  }
+
+  /**
+   * Server-side `speak` parents the in-group member's reply to the supervisor
+   * assistant that issued the call — a sibling of the tool result — while the
+   * supervisor resumes through the tool result. Once it resumes, the collector
+   * folds the speak turn into the group as an intermediate step, so the member
+   * reply hangs off a consumed assistant that no continuation walk visits.
+   * Render it (and the member's own follow-up steps) right after the group.
+   * Only `orchestrationRole: 'member'` children qualify: regenerated supervisor
+   * branches under the same shell stay hidden. Isolated members live in their
+   * own thread and stay out of the main transcript.
+   */
+  private *continueGroupMemberReplies(
+    assistantChain: Message[],
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): FlatListWork {
+    for (const assistant of assistantChain.slice(0, -1)) {
+      const memberIds = this.childIdsInScope(assistant.id).filter((id) => {
+        const message = this.messageMap.get(id);
+        return (
+          message?.role === 'assistant' &&
+          message.metadata?.orchestrationRole === 'member' &&
+          (!message.threadId || message.threadId === this.threadScope) &&
+          !processedIds.has(id)
+        );
+      });
+
+      for (const memberId of memberIds) {
+        yield this.buildFlatListRecursiveForChild(
+          assistant.id,
+          memberId,
+          flatList,
+          processedIds,
+          allMessages,
+        );
+      }
+    }
+  }
+
+  /**
+   * A user can interrupt a tool run before its final assistant is persisted.
+   * The collector folds that run into one group, so the interruption is attached
+   * to an intermediate (now consumed) assistant rather than the group tail.
+   * Recover that user continuation without exposing regenerated assistant
+   * branches or overriding an explicit branch selection.
+   */
+  private *continueInterruptedAssistantGroup(
+    assistantChain: Message[],
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): FlatListWork {
+    const tail = assistantChain.at(-1);
+    if (!tail) return;
+
+    for (const [index, assistant] of assistantChain.slice(0, -1).entries()) {
+      const childIds = this.childrenMap.get(assistant.id) ?? [];
+      const interruptions = this.messageCollector.collectGroupInterruptions(
+        assistant,
+        assistantChain[index + 1],
+        tail,
+        processedIds,
+      );
+      if (interruptions.length === 0) continue;
+
+      const activeId = this.branchResolver.getActiveBranchIdFromMetadata(
+        assistant,
+        interruptions,
+        this.childrenMap,
+        this.branchResolver.getMetadataBranchIds(childIds),
+      );
+      // Explicit indices use all non-tool siblings, not only interruptions.
+      if (activeId && interruptions.includes(activeId)) {
+        yield this.buildFlatListRecursiveForChild(
+          assistant.id,
+          activeId,
+          flatList,
+          processedIds,
+          allMessages,
+        );
+      }
+    }
+  }
+
+  /**
+   * Keep AssistantGroup draining in the same canonical branch space as the UI.
+   * An explicit index selects a direct non-tool child; tool-hosted continuations
+   * belong to older/inactive branches and must not be appended to the model
+   * history. For an optimistic index at `branchCount`, every existing
+   * continuation stays hidden until the newly created branch is persisted.
+   */
+  private suppressInactiveExplicitContinuations(
+    lastAssistant: Message,
+    allToolMessages: Message[],
+    processedIds: Set<string>,
+  ): void {
+    const directChildIds = this.childrenMap.get(lastAssistant.id) ?? [];
+    const metadataBranchIds = this.branchResolver.getMetadataBranchIds(directChildIds);
+    const activeBranchIndex = (lastAssistant.metadata as any)?.activeBranchIndex;
+    if (
+      typeof activeBranchIndex !== 'number' ||
+      activeBranchIndex < 0 ||
+      activeBranchIndex > metadataBranchIds.length
+    ) {
+      return;
+    }
+
+    const activeBranchId = metadataBranchIds[activeBranchIndex];
+    const tailToolIds = allToolMessages
+      .filter((toolMessage) => toolMessage.parentId === lastAssistant.id)
+      .map((toolMessage) => toolMessage.id);
+    const continuationParentIds = [lastAssistant.id, ...tailToolIds];
+
+    for (const parentId of continuationParentIds) {
+      for (const childId of this.childrenMap.get(parentId) ?? []) {
+        if (!processedIds.has(childId) && childId !== activeBranchId) {
+          processedIds.add(childId);
+        }
+      }
+    }
+  }
+
+  /**
+   * New-shape AgentCouncil: a supervisor turn whose tool call carries
+   * `agentCouncil` metadata renders its broadcast members — the ASSISTANT
+   * children of the supervisor message, siblings of the council tool — as one
+   * council group. The council tool's OWN children are server-runtime barrier
+   * anchors (`role: 'tool'`), never council members; they are marked processed
+   * so they don't surface as standalone tool bubbles.
+   *
+   * Returns true when a council was emitted. The legacy shape (members parented
+   * directly under the tool message) carries no member siblings on the
+   * supervisor message, so this returns false and the `buildFlatListRecursive`
+   * council pre-loop handles it instead.
+   */
+  /**
+   * Gather a broadcast turn's council members so they render as one in-bubble
+   * `council` block inside the supervisor's assistant group (instead of a
+   * separate top-level `agentCouncil` message). Members are the assistant
+   * siblings of the `agentCouncil` tool (new server shape) or — for the legacy
+   * client shape — the tool's own assistant children. The per-member barrier
+   * anchors under the tool are bookkeeping and are marked processed.
+   *
+   * Returns the built member messages + their ids (already marked processed), or
+   * undefined when this turn has no multi-member council.
+   */
+  private collectCouncilMembers(
+    allToolMessages: Message[],
+    allMessages: Message[],
+    processedIds: Set<string>,
+  ): { memberIds: string[]; members: Message[] } | undefined {
+    const councilTool = allToolMessages.find((tool) => this.isAgentCouncilMode(tool));
+    if (!councilTool) return undefined;
+
+    const supervisorId = councilTool.parentId;
+    let memberIds = supervisorId
+      ? this.councilMemberChildIds(this.childrenMap.get(supervisorId) ?? []).filter(
+          (id) => !processedIds.has(id),
+        )
+      : [];
+    if (memberIds.length <= 1) {
+      memberIds = this.councilMemberChildIds(this.childrenMap.get(councilTool.id) ?? []).filter(
+        (id) => !processedIds.has(id),
+      );
+    }
+    if (memberIds.length <= 1) return undefined;
+
+    // Reuse the member-building (handles AssistantGroup members) and mark them
+    // processed; we only keep the resulting members for the in-bubble block.
+    const councilVirtual = this.createAgentCouncilMessageFromChildIds(
+      councilTool,
+      memberIds,
+      allMessages,
+      processedIds,
+    );
+    for (const anchorId of this.childrenMap.get(councilTool.id) ?? []) processedIds.add(anchorId);
+
+    return { memberIds, members: (councilVirtual as { members?: Message[] }).members ?? [] };
+  }
+
+  private *buildFlatListRecursiveForChild(
+    parentId: string,
+    childId: string,
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): FlatListWork {
+    const childIds = this.childrenMap.get(parentId) ?? [];
+    this.childrenMap.set(parentId, [childId]);
+
+    try {
+      yield this.buildFlatListRecursive(parentId, flatList, processedIds, allMessages);
+    } finally {
+      this.childrenMap.set(parentId, childIds);
+    }
+  }
+
+  private findNextUnprocessedChild(
+    parentIds: string[],
+    processedIds: Set<string>,
+  ): { child: Message; parentId: string } | undefined {
+    return parentIds
+      .flatMap((parentId) =>
+        this.childIdsInScope(parentId)
+          .map((childId) => this.messageMap.get(childId))
+          .filter((child): child is Message => !!child && !processedIds.has(child.id))
+          .map((child) => ({ child, parentId })),
+      )
+      .sort((a, b) => toTime(a.child.createdAt) - toTime(b.child.createdAt))[0];
+  }
+
+  private shouldDrainParentContinuations(parentId: string, processedIds: Set<string>): boolean {
+    const parentMessage = this.messageMap.get(parentId);
+    const children = this.childIdsInScope(parentId).filter((childId) => !processedIds.has(childId));
+    if (!parentMessage || children.length <= 1) return false;
+
+    if (this.isAgentCouncilMode(parentMessage)) return true;
+
+    const taskChildren = children.filter(
+      (childId) => this.messageMap.get(childId)?.role === 'task',
+    );
+    return taskChildren.length > 1;
+  }
+
+  /**
+   * Check if message has compare mode in metadata
+   */
+  private isCompareMode(message: Message): boolean {
+    return (message.metadata as any)?.compare === true;
+  }
+
+  /**
+   * Check if message has agentCouncil mode in metadata
+   * Used for multi-agent parallel responses (broadcast scenario)
+   */
+  private isAgentCouncilMode(message: Message): boolean {
+    return (message.metadata as any)?.agentCouncil === true;
+  }
+
+  /**
+   * The council members under a broadcast tool message are its non-tool children
+   * (the member assistant responses). The server runtime also parents per-member
+   * barrier anchors (`role: 'tool'`) under the same tool message; those are
+   * completion bookkeeping, not council members, so they are excluded here. On
+   * the client the tool message has only assistant children, so this is a no-op.
+   */
+  private councilMemberChildIds(childIds: string[]): string[] {
+    return childIds.filter((id) => this.messageMap.get(id)?.role !== 'tool');
+  }
+
+  /**
+   * Create compare virtual message from child IDs with AssistantGroup support
+   */
+  private createCompareMessageFromChildIds(
+    parentMessage: Message,
+    childIds: string[],
+    allMessages: Message[],
+    processedIds: Set<string>,
+  ): Message {
+    const columns: Message[][] = [];
+    const columnFirstIds: string[] = [];
+    let activeColumnId: string | undefined;
+
+    // Process each child (column)
+    for (const childId of childIds) {
+      const childMessage = this.messageMap.get(childId);
+      if (!childMessage) continue;
+
+      columnFirstIds.push(childId);
+
+      // Check if this message is marked as active column
+      if ((childMessage.metadata as any)?.activeColumn === true) {
+        activeColumnId = childId;
+      }
+
+      // Check if this child is an AssistantGroup
+      if (
+        childMessage.role === 'assistant' &&
+        childMessage.tools &&
+        childMessage.tools.length > 0
+      ) {
+        // Collect the entire assistant group chain for this column
+        const assistantChain: Message[] = [];
+        const allToolMessages: Message[] = [];
+        const columnProcessedIds = new Set<string>();
+
+        this.messageCollector.collectAssistantChain(
+          childMessage,
+          allMessages,
+          assistantChain,
+          allToolMessages,
+          columnProcessedIds,
+        );
+
+        // Create assistantGroup virtual message for this column
+        const groupMessage = this.createAssistantGroupMessage(
+          assistantChain[0],
+          assistantChain,
+          allToolMessages,
+        );
+
+        columns.push([groupMessage]);
+
+        // Mark all as processed
+        assistantChain.forEach((m) => processedIds.add(m.id));
+        allToolMessages.forEach((m) => processedIds.add(m.id));
+      } else {
+        // Regular message (not an AssistantGroup)
+        columns.push([childMessage]);
+        processedIds.add(childId);
+      }
+    }
+
+    // Generate ID with all column first message IDs
+    const columnIdsStr = columnFirstIds.join('-');
+    const compareId = `compare-${parentMessage.id}-${columnIdsStr}`;
+
+    // Calculate timestamps from first column's messages
+    const firstColumnMessages = childIds.map((id) => this.messageMap.get(id)).filter(Boolean);
+    const createdAt =
+      firstColumnMessages.length > 0
+        ? Math.min(...firstColumnMessages.map((m) => toTime(m!.createdAt)))
+        : parentMessage.createdAt;
+    const updatedAt =
+      firstColumnMessages.length > 0
+        ? Math.max(...firstColumnMessages.map((m) => m!.updatedAt))
+        : parentMessage.updatedAt;
+
+    return {
+      activeColumnId,
+      columns: columns as any,
+      content: '',
+      createdAt,
+      extra: {
+        parentMessageId: parentMessage.id,
+      },
+      id: compareId,
+      role: 'compare' as any,
+      updatedAt,
+    } as Message;
+  }
+
+  /**
+   * Create agentCouncil virtual message from child IDs with AssistantGroup support
+   * Each member is a single message (not an array)
+   */
+  private createAgentCouncilMessageFromChildIds(
+    parentMessage: Message,
+    childIds: string[],
+    allMessages: Message[],
+    processedIds: Set<string>,
+  ): Message {
+    const members: Message[] = [];
+    const memberIds: string[] = [];
+
+    // Council members are the non-tool children; the server runtime's per-member
+    // barrier anchors (role: 'tool') are excluded. Mark those anchors processed
+    // so they don't surface later as orphan tool messages.
+    const memberChildIds = this.councilMemberChildIds(childIds);
+    for (const childId of childIds) {
+      if (!memberChildIds.includes(childId)) processedIds.add(childId);
+    }
+
+    // Process each child (member)
+    for (const childId of memberChildIds) {
+      const childMessage = this.messageMap.get(childId);
+      if (!childMessage) continue;
+
+      memberIds.push(childId);
+
+      // Check if this child is an AssistantGroup (agent with tool calls)
+      if (
+        childMessage.role === 'assistant' &&
+        childMessage.tools &&
+        childMessage.tools.length > 0
+      ) {
+        // Collect the entire assistant group chain for this member
+        const assistantChain: Message[] = [];
+        const allToolMessages: Message[] = [];
+        const memberProcessedIds = new Set<string>();
+
+        this.messageCollector.collectAssistantChain(
+          childMessage,
+          allMessages,
+          assistantChain,
+          allToolMessages,
+          memberProcessedIds,
+        );
+
+        // Create assistantGroup virtual message for this member
+        const groupMessage = this.createAssistantGroupMessage(
+          assistantChain[0],
+          assistantChain,
+          allToolMessages,
+        );
+
+        members.push(groupMessage);
+
+        // Mark all as processed
+        assistantChain.forEach((m) => processedIds.add(m.id));
+        allToolMessages.forEach((m) => processedIds.add(m.id));
+      } else {
+        // Regular message (not an AssistantGroup)
+        members.push(childMessage);
+        processedIds.add(childId);
+      }
+    }
+
+    // Generate ID with all member message IDs
+    const memberIdsStr = memberIds.join('-');
+    const agentCouncilId = `agentCouncil-${parentMessage.id}-${memberIdsStr}`;
+
+    // Calculate timestamps from all member messages
+    const allMemberMessages = memberChildIds.map((id) => this.messageMap.get(id)).filter(Boolean);
+    const createdAt =
+      allMemberMessages.length > 0
+        ? Math.min(...allMemberMessages.map((m) => toTime(m!.createdAt)))
+        : parentMessage.createdAt;
+    const updatedAt =
+      allMemberMessages.length > 0
+        ? Math.max(...allMemberMessages.map((m) => m!.updatedAt))
+        : parentMessage.updatedAt;
+
+    return {
+      content: '',
+      createdAt,
+      extra: {
+        parentMessageId: parentMessage.id,
+      },
+      id: agentCouncilId,
+      // members is a flat array of messages (not nested arrays)
+      members: members as any,
+      role: 'agentCouncil' as any,
+      updatedAt,
+    } as Message;
+  }
+
+  /**
+   * Create compare virtual message (for group-based compare)
+   */
+  private createCompareMessage(group: MessageGroupMetadata, members: Message[]): Message {
+    // Find active column ID from members metadata
+    const activeColumnId = members.find((msg) => (msg.metadata as any)?.activeColumn === true)?.id;
+
+    // columns contain full Message objects
+    const columns: Message[][] = members.map((msg) => [msg]);
+
+    return {
+      activeColumnId,
+      columns: columns as any,
+      content: '',
+      createdAt: Math.min(...members.map((m) => toTime(m.createdAt))),
+      extra: {
+        groupMode: group.mode,
+        parentMessageId: group.parentMessageId,
+      },
+      id: group.id,
+      role: 'compare' as any,
+      updatedAt: Math.max(...members.map((m) => m.updatedAt)),
+    } as Message;
+  }
+
+  /**
+   * Create assistant group virtual message from entire chain
+   */
+  private createAssistantGroupMessage(
+    firstAssistant: Message,
+    assistantChain: Message[],
+    allToolMessages: Message[],
+    signalCallbackBlocks?: {
+      callbacks: Message[];
+      sourceToolCallId: string;
+      sourceToolMessageId: string;
+      sourceToolName: string;
+    }[],
+    taskCompletionMessages?: Message[],
+    councilMembers?: Message[],
+  ): Message {
+    const children: AssistantContentBlock[] = [];
+
+    // Create tool map for lookup
+    const toolMap = new Map<string, Message>();
+    const toolMessagesById = new Map<string, Message>();
+    // `${parentId}:${tool_call_id}` → first result that assistant received
+    const toolMapByCaller = new Map<string, Message>();
+    allToolMessages.forEach((tm) => {
+      toolMessagesById.set(tm.id, tm);
+      if (tm.tool_call_id) {
+        toolMap.set(tm.tool_call_id, tm);
+
+        const callerKey = `${tm.parentId}:${tm.tool_call_id}`;
+        if (tm.parentId && !toolMapByCaller.has(callerKey)) toolMapByCaller.set(callerKey, tm);
+      }
+    });
+    const chainAssistantIds = new Set(assistantChain.map((assistant) => assistant.id));
+
+    // `tool_call_id` is provider-supplied and not unique across a chain: Kimi
+    // (via zeabur / nvidia / moonshot) stores `<tool>:0` on every step. Pair a
+    // call with the result its own assistant produced first; the id-only map
+    // is a fallback that must never hand one step another step's result.
+    const findToolResult = (assistant: Message, toolCallId: string, resultMsgId?: string) => {
+      const explicit = resultMsgId ? toolMessagesById.get(resultMsgId) : undefined;
+      if (explicit) return explicit;
+
+      const own = toolMapByCaller.get(`${assistant.id}:${toolCallId}`);
+      if (own) return own;
+
+      const fallback = toolMap.get(toolCallId);
+      if (fallback?.parentId && chainAssistantIds.has(fallback.parentId)) return undefined;
+
+      return fallback;
+    };
+
+    // Process each assistant in the chain
+    for (const assistant of assistantChain) {
+      // Build toolsWithResults for this assistant
+      const toolsWithResults: ChatToolPayloadWithResult[] =
+        assistant.tools?.map((tool) => {
+          const toolMsg = findToolResult(assistant, tool.id, tool.result_msg_id);
+          if (toolMsg) {
+            const result: any = {
+              content: toolMsg.content || '',
+              id: toolMsg.id,
+            };
+            // A projected tool has an empty body and its real length here; the
+            // completion checks read this instead of the body.
+            if (typeof toolMsg.contentLength === 'number') {
+              result.contentLength = toolMsg.contentLength;
+            }
+            if (toolMsg.error) result.error = toolMsg.error;
+            if (toolMsg.pluginError) result.error = toolMsg.pluginError;
+            if (toolMsg.pluginState) result.state = toolMsg.pluginState;
+
+            const toolWithResult: ChatToolPayloadWithResult = {
+              ...tool,
+              intervention: toolMsg.pluginIntervention,
+              result,
+              result_msg_id: toolMsg.id,
+            };
+
+            return toolWithResult;
+          }
+          return tool;
+        }) || [];
+
+      // Prefer top-level usage/performance fields, fall back to metadata
+      const { usage: metaUsage, performance: metaPerformance } =
+        this.messageTransformer.splitMetadata(assistant.metadata);
+      const msgUsage = assistant.usage || metaUsage;
+      const msgPerformance = assistant.performance || metaPerformance;
+
+      // Extract non-usage/performance metadata fields
+      const otherMetadata: Record<string, any> = {};
+      if (assistant.metadata) {
+        const usagePerformanceFields = new Set([
+          'acceptedPredictionTokens',
+          'cost',
+          'duration',
+          'inputAudioTokens',
+          'inputCacheMissTokens',
+          'inputCachedTokens',
+          'inputCitationTokens',
+          'inputImageTokens',
+          'inputTextTokens',
+          'inputVideoTokens',
+          'inputToolTokens',
+          'inputWriteCacheTokens',
+          'latency',
+          'outputAudioTokens',
+          'outputImageTokens',
+          'outputReasoningTokens',
+          'outputTextTokens',
+          // Nested canonical shape — see splitMetadata
+          'performance',
+          'rejectedPredictionTokens',
+          'totalInputTokens',
+          'totalOutputTokens',
+          'totalTokens',
+          'tps',
+          'ttft',
+          'usage',
+        ]);
+
+        Object.entries(assistant.metadata).forEach(([key, value]) => {
+          if (!usagePerformanceFields.has(key)) {
+            otherMetadata[key] = value;
+          }
+        });
+      }
+
+      const childBlock: AssistantContentBlock = {
+        content: assistant.content || '',
+        id: assistant.id,
+      } as AssistantContentBlock;
+
+      if (assistant.error) childBlock.error = assistant.error;
+      if (assistant.fileList && assistant.fileList.length > 0)
+        childBlock.fileList = assistant.fileList;
+      if (assistant.imageList && assistant.imageList.length > 0)
+        childBlock.imageList = assistant.imageList;
+      if (msgPerformance) childBlock.performance = msgPerformance;
+      if (assistant.reasoning) childBlock.reasoning = assistant.reasoning;
+      if (toolsWithResults.length > 0) childBlock.tools = toolsWithResults;
+      if (msgUsage) childBlock.usage = msgUsage;
+      if (Object.keys(otherMetadata).length > 0) {
+        childBlock.metadata = otherMetadata;
+      }
+
+      children.push(childBlock);
+    }
+
+    // Broadcast members render as one in-bubble AgentCouncil block (parallel
+    // columns), placed after the supervisor's tool-use block.
+    if (councilMembers && councilMembers.length > 1) {
+      children.push({
+        content: '',
+        council: councilMembers as unknown as AssistantContentBlock['council'],
+        id: `council-${firstAssistant.id}`,
+      } as AssistantContentBlock);
+    }
+
+    const aggregated = this.messageTransformer.aggregateMetadata(children);
+
+    // Finish reasons belong to their own response block; moving one to the first block can
+    // display a terminal notice beside an earlier tool step.
+    const groupMetadata: Record<string, any> = {};
+    children.forEach((child) => {
+      if ((child as any).metadata) {
+        Object.entries((child as any).metadata).forEach(([key, value]) => {
+          if (key !== 'finishType') groupMetadata[key] = value;
+        });
+      }
+    });
+
+    // If there's group-level metadata, apply it to first child and remove from others
+    if (Object.keys(groupMetadata).length > 0 && children.length > 0) {
+      // Ensure first child has the group metadata
+      if (!(children[0] as any).metadata) {
+        (children[0] as any).metadata = {};
+      }
+      Object.assign((children[0] as any).metadata, groupMetadata);
+
+      // Keep each child's finish reason while collecting shared metadata on the first child.
+      for (let i = 1; i < children.length; i++) {
+        const finishType = (children[i] as any).metadata?.finishType;
+        if (finishType === undefined) delete (children[i] as any).metadata;
+        else (children[i] as any).metadata = { finishType };
+      }
+    }
+
+    // Determine role: use 'supervisor' for supervisor messages, otherwise 'assistantGroup'
+    const isSupervisor = isSupervisorMessage(firstAssistant);
+    const role = isSupervisor ? 'supervisor' : 'assistantGroup';
+
+    const result: Message = {
+      ...firstAssistant,
+      children,
+      content: '',
+      role: role as any,
+    };
+
+    // Heterogeneous agents (e.g. kimi-code) may only learn model/provider at
+    // run end, stamped on the LAST step's assistant row — the group spreads
+    // the FIRST row, so backfill from the last chain assistant carrying one.
+    if (!result.model) {
+      const withModel = assistantChain.findLast((assistant) => !!assistant.model);
+      if (withModel) result.model = withModel.model;
+    }
+    if (!result.provider) {
+      const withProvider = assistantChain.findLast((assistant) => !!assistant.provider);
+      if (withProvider) result.provider = withProvider.provider;
+    }
+
+    // Remove fields that should not be in assistantGroup/supervisor
+    delete result.imageList;
+    delete result.metadata;
+    delete result.reasoning;
+    delete result.tools;
+
+    // Add aggregated fields if they exist
+    if (aggregated.performance) result.performance = aggregated.performance;
+    if (aggregated.usage) result.usage = aggregated.usage;
+
+    // Add group-level metadata if it exists
+    if (Object.keys(groupMetadata).length > 0) {
+      result.metadata = groupMetadata;
+    }
+
+    // Preserve supervisor identity in metadata for supervisor messages so the
+    // virtual message keeps driving supervisor-flavored rendering downstream.
+    if (isSupervisor) {
+      result.metadata = { ...result.metadata, isSupervisor: true, orchestrationRole: 'supervisor' };
+    }
+
+    // Snapshot signal-callback blocks onto the virtual group message
+    // () so AssistantGroupMessage can render `<SignalCallbacks>`
+    // without re-querying the store. Each callback Message becomes a
+    // compact UISignalCallback with content + model/provider/sequence.
+    if (signalCallbackBlocks && signalCallbackBlocks.length > 0) {
+      result.signalCallbacks = signalCallbackBlocks.map((block) => ({
+        callbacks: block.callbacks.map((m) => ({
+          content: m.content ?? '',
+          id: m.id,
+          model: m.model ?? undefined,
+          provider: m.provider ?? undefined,
+          sequence: (m.metadata as { signal?: { sequence?: number } } | null | undefined)?.signal
+            ?.sequence,
+        })),
+        sourceToolCallId: block.sourceToolCallId,
+        sourceToolMessageId: block.sourceToolMessageId,
+        sourceToolName: block.sourceToolName,
+      }));
+    }
+
+    if (taskCompletionMessages && taskCompletionMessages.length > 0) {
+      result.taskCompletions = toTaskCompletionBlocks(taskCompletionMessages);
+    }
+
+    return result;
+  }
+
+  /**
+   * Create message with branch metadata
+   * Used for both user and assistant messages that have multiple branches
+   */
+  private createMessageWithBranches(
+    message: Message,
+    count: number,
+    activeBranchIndex: number,
+  ): Message {
+    return {
+      ...message,
+      branch: {
+        activeBranchIndex,
+        count,
+      },
+    } as Message;
+  }
+
+  /**
+   * Create supervisor virtual message for content-only supervisor messages
+   * Moves content to children array similar to assistantGroup
+   */
+  private createSupervisorContentMessage(message: Message): Message {
+    // Prefer top-level usage/performance fields, fall back to metadata
+    const { usage: metaUsage, performance: metaPerformance } =
+      this.messageTransformer.splitMetadata(message.metadata);
+    const msgUsage = message.usage || metaUsage;
+    const msgPerformance = message.performance || metaPerformance;
+
+    // Extract non-usage/performance metadata fields
+    const otherMetadata: Record<string, any> = {};
+    if (message.metadata) {
+      const usagePerformanceFields = new Set([
+        'acceptedPredictionTokens',
+        'cost',
+        'duration',
+        'inputAudioTokens',
+        'inputCacheMissTokens',
+        'inputCachedTokens',
+        'inputCitationTokens',
+        'inputImageTokens',
+        'inputTextTokens',
+        'inputVideoTokens',
+        'inputToolTokens',
+        'inputWriteCacheTokens',
+        'latency',
+        'outputAudioTokens',
+        'outputImageTokens',
+        'outputReasoningTokens',
+        'outputTextTokens',
+        // Nested canonical shape — see splitMetadata
+        'performance',
+        'rejectedPredictionTokens',
+        'totalInputTokens',
+        'totalOutputTokens',
+        'totalTokens',
+        'tps',
+        'ttft',
+        'usage',
+      ]);
+
+      Object.entries(message.metadata).forEach(([key, value]) => {
+        if (!usagePerformanceFields.has(key)) {
+          otherMetadata[key] = value;
+        }
+      });
+    }
+
+    // Create the child content block
+    const childBlock: any = {
+      content: message.content || '',
+      id: message.id,
+    };
+
+    if (message.error) childBlock.error = message.error;
+    if (message.fileList && message.fileList.length > 0) childBlock.fileList = message.fileList;
+    if (message.imageList && message.imageList.length > 0) childBlock.imageList = message.imageList;
+    if (msgPerformance) childBlock.performance = msgPerformance;
+    if (message.reasoning) childBlock.reasoning = message.reasoning;
+    if (msgUsage) childBlock.usage = msgUsage;
+    if (Object.keys(otherMetadata).length > 0) {
+      childBlock.metadata = otherMetadata;
+    }
+
+    const result: Message = {
+      ...message,
+      children: [childBlock],
+      content: '',
+      role: 'supervisor' as any,
+    };
+
+    // Remove fields that should not be in supervisor message
+    delete result.imageList;
+    delete result.metadata;
+    delete result.reasoning;
+    delete result.tools;
+
+    // Add aggregated fields if they exist
+    if (msgPerformance) result.performance = msgPerformance;
+    if (msgUsage) result.usage = msgUsage;
+
+    // Preserve supervisor identity in metadata
+    result.metadata = { isSupervisor: true, orchestrationRole: 'supervisor', ...otherMetadata };
+
+    return result;
+  }
+
+  /**
+   * Create tasks virtual message from multiple task children
+   * Aggregates task messages with the same parentId into a single tasks message
+   */
+  private createTasksMessage(
+    parentMessage: Message,
+    taskChildIds: string[],
+    processedIds: Set<string>,
+  ): Message {
+    const taskMessages: Message[] = [];
+
+    for (const taskId of taskChildIds) {
+      const taskMessage = this.messageMap.get(taskId);
+      if (taskMessage) {
+        taskMessages.push(taskMessage);
+        processedIds.add(taskId);
+      }
+    }
+
+    // Sort by createdAt to maintain order
+    taskMessages.sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
+
+    // Generate ID with parent message id and all task message ids
+    const taskIdsStr = taskMessages.map((t) => t.id).join('-');
+    const tasksId = `tasks-${parentMessage.id}-${taskIdsStr}`;
+
+    // Calculate timestamps from task messages
+    const createdAt =
+      taskMessages.length > 0
+        ? Math.min(...taskMessages.map((m) => toTime(m.createdAt)))
+        : parentMessage.createdAt;
+    const updatedAt =
+      taskMessages.length > 0
+        ? Math.max(...taskMessages.map((m) => m.updatedAt))
+        : parentMessage.updatedAt;
+
+    return {
+      content: '',
+      createdAt,
+      extra: {
+        parentMessageId: parentMessage.id,
+      },
+      id: tasksId,
+      role: 'tasks' as any,
+      tasks: taskMessages as any,
+      updatedAt,
+    } as Message;
+  }
+
+  /**
+   * Create a virtual groupTasks message for multiple tasks with different agentIds
+   */
+  private createGroupTasksMessage(
+    parentMessage: Message,
+    taskChildIds: string[],
+    processedIds: Set<string>,
+  ): Message {
+    const taskMessages: Message[] = [];
+
+    for (const taskId of taskChildIds) {
+      const taskMessage = this.messageMap.get(taskId);
+      if (taskMessage) {
+        taskMessages.push(taskMessage);
+        processedIds.add(taskId);
+      }
+    }
+
+    // Sort by createdAt to maintain order
+    taskMessages.sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
+
+    // Generate ID with parent message id and all task message ids
+    const taskIdsStr = taskMessages.map((t) => t.id).join('-');
+    const groupTasksId = `groupTasks-${parentMessage.id}-${taskIdsStr}`;
+
+    // Calculate timestamps from task messages
+    const createdAt =
+      taskMessages.length > 0
+        ? Math.min(...taskMessages.map((m) => toTime(m.createdAt)))
+        : parentMessage.createdAt;
+    const updatedAt =
+      taskMessages.length > 0
+        ? Math.max(...taskMessages.map((m) => m.updatedAt))
+        : parentMessage.updatedAt;
+
+    return {
+      content: '',
+      createdAt,
+      extra: {
+        parentMessageId: parentMessage.id,
+      },
+      id: groupTasksId,
+      role: 'groupTasks' as any,
+      tasks: taskMessages as any,
+      updatedAt,
+    } as Message;
+  }
+}

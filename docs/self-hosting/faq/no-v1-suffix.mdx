@@ -1,0 +1,28 @@
+---
+title: Troubleshooting `OPENAI_PROXY_URL` in LobeHub Configuration for Empty Response
+description: >-
+  Learn how to troubleshoot and resolve the issue of receiving an empty response
+  after configuring the LobeHub `OPENAI_PROXY_URL` environment variable.
+tags:
+  - OPENAI_PROXY_URL
+  - environment variable
+  - configuration troubleshooting
+---
+
+# Configuring `OPENAI_PROXY_URL` Environment Variable but Getting Empty Response
+
+### Problem Description
+
+After configuring the `OPENAI_PROXY_URL` environment variable, you may encounter a situation where the AI returns an empty message. This may be due to an incorrect configuration of `OPENAI_PROXY_URL`.
+
+### Solution
+
+Recheck and confirm whether `OPENAI_PROXY_URL` is set correctly, including whether the `/v1` suffix is added correctly (if required).
+
+### Related Discussion Links
+
+- [Why is the return value blank after configuring environment variables in Docker?](https://github.com/lobehub/lobehub/discussions/623)
+- [Reasons for errors when using third-party interfaces](https://github.com/lobehub/lobehub/discussions/734)
+- [No response when the proxy server address is filled in for chat](https://github.com/lobehub/lobehub/discussions/1065)
+
+If the problem still cannot be resolved, it is recommended to raise the issue in the community, providing relevant logs and configuration information for other developers or maintainers to offer assistance.

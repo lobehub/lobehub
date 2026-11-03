@@ -1,0 +1,181 @@
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { chatGroupService } from '@/services/chatGroup';
+import { sessionService } from '@/services/session';
+import { useSessionStore } from '@/store/session';
+import { LobeSessionType } from '@/types/session';
+
+import { sessionSelectors } from './selectors';
+
+// Mock sessionService 和其他依赖项
+vi.mock('@/services/session', () => ({
+  sessionService: {
+    createSession: vi.fn(),
+    updateSessionGroup: vi.fn(),
+    updateSession: vi.fn(),
+    updateSessionGroupId: vi.fn(),
+    updateSessionPinned: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/chatGroup', () => ({
+  chatGroupService: {
+    updateGroup: vi.fn(),
+  },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('SessionAction', () => {
+  describe('createSession', () => {
+    it('should create a new session and switch to it', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const newSessionId = 'new-session-id';
+      vi.mocked(sessionService.createSession).mockResolvedValue(newSessionId);
+
+      let createdSessionId;
+
+      await act(async () => {
+        createdSessionId = await result.current.createSession({
+          config: { chatConfig: { enableHistoryCount: true } },
+        });
+      });
+
+      const call = vi.mocked(sessionService.createSession).mock.calls[0];
+      expect(call[0]).toEqual(LobeSessionType.Agent);
+      expect(call[1]).toMatchObject({ config: { chatConfig: { enableHistoryCount: true } } });
+
+      expect(createdSessionId).toBe(newSessionId);
+    });
+
+    it('should create a new session but not switch to it if isSwitchSession is false', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const newSessionId = 'new-session-id';
+      vi.mocked(sessionService.createSession).mockResolvedValue(newSessionId);
+
+      let createdSessionId;
+
+      await act(async () => {
+        createdSessionId = await result.current.createSession(
+          { config: { chatConfig: { enableHistoryCount: true } } },
+          false,
+        );
+      });
+
+      const call = vi.mocked(sessionService.createSession).mock.calls[0];
+      expect(call[0]).toEqual(LobeSessionType.Agent);
+      expect(call[1]).toMatchObject({ config: { chatConfig: { enableHistoryCount: true } } });
+
+      expect(createdSessionId).toBe(newSessionId);
+    });
+  });
+
+  describe('activeSession', () => {
+    it('should set the provided session id as active', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const sessionId = 'active-session-id';
+
+      act(() => {
+        result.current.switchSession(sessionId);
+      });
+
+      expect(result.current.activeAgentId).toBe(sessionId);
+    });
+  });
+
+  describe('pinSession', () => {
+    it('should pin a session when pinned is true', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const sessionId = 'session-id-to-pin';
+
+      await act(async () => {
+        await result.current.pinSession(sessionId, true);
+      });
+
+      expect(sessionService.updateSession).toHaveBeenCalledWith(sessionId, { pinned: true });
+    });
+
+    it('should unpin a session when pinned is false', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const sessionId = 'session-id-to-unpin';
+
+      await act(async () => {
+        await result.current.pinSession(sessionId, false);
+      });
+
+      expect(sessionService.updateSession).toHaveBeenCalledWith(sessionId, { pinned: false });
+    });
+  });
+
+  describe('updateSessionGroupId', () => {
+    it('should update regular session group', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const sessionId = 'session-id';
+      const groupId = 'new-group-id';
+
+      // Mock session selector to return a regular agent session
+      vi.spyOn(sessionSelectors, 'getSessionById').mockReturnValue(
+        () =>
+          ({
+            id: sessionId,
+            type: 'agent',
+          }) as any,
+      );
+
+      await act(async () => {
+        await result.current.updateSessionGroupId(sessionId, groupId);
+      });
+
+      expect(sessionService.updateSession).toHaveBeenCalledWith(sessionId, { group: groupId });
+    });
+
+    it('should update chat group session', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const sessionId = 'group-session-id';
+      const groupId = 'new-group-id';
+
+      // Mock session selector to return a group session
+      vi.spyOn(sessionSelectors, 'getSessionById').mockReturnValue(
+        () =>
+          ({
+            id: sessionId,
+            type: 'group',
+          }) as any,
+      );
+
+      await act(async () => {
+        await result.current.updateSessionGroupId(sessionId, groupId);
+      });
+
+      expect(chatGroupService.updateGroup).toHaveBeenCalledWith(sessionId, { groupId });
+    });
+
+    it('should handle default group for chat group sessions', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const sessionId = 'group-session-id';
+      const groupId = 'default';
+
+      // Mock session selector to return a group session
+      vi.spyOn(sessionSelectors, 'getSessionById').mockReturnValue(
+        () =>
+          ({
+            id: sessionId,
+            type: 'group',
+          }) as any,
+      );
+
+      await act(async () => {
+        await result.current.updateSessionGroupId(sessionId, groupId);
+      });
+
+      expect(chatGroupService.updateGroup).toHaveBeenCalledWith(sessionId, { groupId: null });
+    });
+  });
+});

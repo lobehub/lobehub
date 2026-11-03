@@ -1,0 +1,19 @@
+{
+  "action.connect.button": "اتصل بـ {{provider}}",
+  "action.connect.error": "فشل الاتصال، يرجى المحاولة مرة أخرى.",
+  "action.connect.popupBlocked": "تم حظر نافذة الاتصال المنبثقة. اسمح بالنوافذ المنبثقة في متصفحك للمتابعة.",
+  "action.connect.short": "اتصل",
+  "action.connecting": "في انتظار التفويض...",
+  "action.create.error": "فشل في إنشاء المهمة. يرجى المحاولة مرة أخرى.",
+  "action.create.success": "تمت إضافة المهمة المجدولة. يمكنك العثور عليها في Lobe AI.",
+  "action.createButton": "إضافة مهمة",
+  "action.creating": "جاري الإنشاء...",
+  "action.dismiss.error": "فشل في الإلغاء. يرجى المحاولة مرة أخرى.",
+  "action.dismiss.tooltip": "غير مهتم",
+  "action.refresh.button": "تحديث",
+  "card.templateTag": "نموذج",
+  "schedule.daily": "كل يوم في {{time}}",
+  "schedule.editableAfterCreateTooltip": "يمكنك تعديل الجدول الزمني بعد إنشاء المهمة.",
+  "schedule.weekly": "كل {{weekday}} في {{time}}",
+  "section.title": "جرب هذه المهام المجدولة"
+}

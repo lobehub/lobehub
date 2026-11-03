@@ -1,0 +1,22 @@
+{
+  "name": "@lobechat/device-gateway-client",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./endpoint": "./src/endpoint.ts"
+  },
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "bunx vitest run --silent='passed-only'",
+    "test:coverage": "bunx vitest run --coverage"
+  },
+  "dependencies": {
+    "@lobechat/types": "workspace:*",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "vitest": "5.0.0"
+  }
+}

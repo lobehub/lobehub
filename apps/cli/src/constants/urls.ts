@@ -1,0 +1,6 @@
+import { OFFICIAL_DEVICE_GATEWAY_URL, OFFICIAL_URL } from '@lobechat/const';
+
+export { OFFICIAL_AGENT_GATEWAY_URL } from '@lobechat/const';
+
+export const OFFICIAL_SERVER_URL = OFFICIAL_URL;
+export const OFFICIAL_GATEWAY_URL = OFFICIAL_DEVICE_GATEWAY_URL;

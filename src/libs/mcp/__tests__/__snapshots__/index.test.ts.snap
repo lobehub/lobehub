@@ -1,0 +1,65 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`MCPClient > Stdio Transport > should list tools via stdio 1`] = `
+[
+  {
+    "description": "Echoes back a message with 'Hello' prefix",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "The message to echo",
+          "type": "string",
+        },
+      },
+      "required": [
+        "message",
+      ],
+      "type": "object",
+    },
+    "name": "echo",
+  },
+  {
+    "description": "Lists all available tools and methods",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {},
+      "type": "object",
+    },
+    "name": "debug",
+  },
+  {
+    "description": "Adds two numbers",
+    "execution": {
+      "taskSupport": "forbidden",
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "a": {
+          "description": "The first number",
+          "type": "number",
+        },
+        "b": {
+          "description": "The second number",
+          "type": "number",
+        },
+      },
+      "required": [
+        "a",
+        "b",
+      ],
+      "type": "object",
+    },
+    "name": "add",
+  },
+]
+`;

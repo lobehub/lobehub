@@ -1,0 +1,625 @@
+name: Release Desktop Stable
+
+# ============================================
+# Stable 频道发版工作流
+# ============================================
+# 触发条件: 发布不含 pre-release 后缀的 release (如 v2.0.0)
+#
+# 与 Beta 的区别:
+#   1. 仅响应 stable 版本 tag (不含任何 '-' 后缀)
+#   2. 使用 STABLE 专用的 Umami 配置
+#   3. 额外上传到 S3 更新服务器
+#   4. 构建时注入 UPDATE_SERVER_URL 让客户端从 S3 检查更新
+#
+# 需要配置的 Secrets (S3 相关, 统一 UPDATE_ 前缀):
+#   - UPDATE_AWS_ACCESS_KEY_ID
+#   - UPDATE_AWS_SECRET_ACCESS_KEY
+#   - UPDATE_S3_BUCKET (S3 存储桶名称)
+#   - UPDATE_S3_REGION (可选, 默认 us-east-1)
+#   - UPDATE_S3_ENDPOINT (可选, 用于 R2/MinIO 等 S3 兼容服务)
+#   - UPDATE_SERVER_URL (客户端检查更新的 URL)
+# ============================================
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 2.0.0)'
+        required: true
+        type: string
+      cloud_ref:
+        description: 'Cloud SHA for import, or verify the SHA already bound in the hotfix/recovery Release'
+        required: false
+        type: string
+        default: ''
+      release_mode:
+        description: 'Rebuild pinned sources, resume a PR-bound hotfix/recovery, or import historical sources only'
+        required: true
+        type: choice
+        options: [rebuild, hotfix, recovery, import]
+        default: rebuild
+      source_ref:
+        description: 'Product source ref; defaults to the target version tag and must resolve to its SHA'
+        type: string
+        default: ''
+      base_version:
+        description: 'Optional verification of the delivered baseline already bound in the hotfix Release'
+        type: string
+        default: ''
+      cloud_override_reason:
+        description: 'Optional verification of the Cloud repair reason already bound in the hotfix/recovery Release'
+        type: string
+        default: ''
+      evidence_run_id:
+        description: 'Original build run ID for historical import'
+        type: string
+        default: ''
+      evidence_run_attempt:
+        description: 'Original build attempt for historical import'
+        type: string
+        default: ''
+      build_mac:
+        description: 'Build macOS (ARM64)'
+        required: false
+        type: boolean
+        default: true
+      build_mac_intel:
+        description: 'Build macOS (Intel x64)'
+        required: false
+        type: boolean
+        default: true
+      build_windows:
+        description: 'Build Windows'
+        required: false
+        type: boolean
+        default: true
+      build_linux:
+        description: 'Build Linux'
+        required: false
+        type: boolean
+        default: true
+      skip_s3_upload:
+        description: 'Skip S3 upload (for testing)'
+        required: false
+        type: boolean
+        default: true
+      skip_github_release:
+        description: 'Skip GitHub release upload (for testing)'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  NODE_VERSION: '24.11.1'
+
+jobs:
+  # ============================================
+  # 检查版本信息
+  # ============================================
+  check-stable:
+    name: Check Release Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: read
+    outputs:
+      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_sha }}
+      oss_sha: ${{ steps.cloud-ref.outputs.oss_sha }}
+      sources_hash: ${{ steps.cloud-ref.outputs.sources_hash }}
+      build_required: ${{ steps.cloud-ref.outputs.build_required }}
+      is_stable: ${{ steps.check.outputs.is_stable }}
+      version: ${{ steps.check.outputs.version }}
+      is_manual: ${{ steps.check.outputs.is_manual }}
+      release_notes: ${{ steps.check.outputs.release_notes }}
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Check release info
+        id: check
+        env:
+          RELEASE_BODY: ${{ github.event.release.body || '' }}
+        run: |
+          # 判断触发方式
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # 手动触发: 使用输入的版本号
+            version="${{ inputs.version }}"
+            version="${version#v}"
+            {
+              echo "is_manual=true"
+              echo "version=${version}"
+              echo "release_notes="
+            } >> "$GITHUB_OUTPUT"
+            echo "🔧 Manual trigger: version=${version}"
+          else
+            # Release 触发: 从 tag 提取版本号
+            version="${{ github.event.release.tag_name }}"
+            version="${version#v}"
+            {
+              echo "is_manual=false"
+              echo "version=${version}"
+            } >> "$GITHUB_OUTPUT"
+            release_body="${RELEASE_BODY:-}"
+            {
+              echo "release_notes<<EOF"
+              printf '%s\n' "$release_body"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+          # 检查是否为 stable 版本 (不含任何 '-' 后缀)
+          if [[ "$version" == *"-"* ]]; then
+            echo "is_stable=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ Skipping: $version is not a stable release"
+          else
+            echo "is_stable=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Stable release detected: $version"
+          fi
+
+      # Restrict the Cloud token to the configured overlay repository.
+      - name: Resolve overlay repository
+        id: overlay-repo
+        if: steps.check.outputs.is_stable == 'true'
+        env:
+          OVERLAY_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
+        run: |
+          echo "owner=${OVERLAY_REPOSITORY%%/*}" >> "$GITHUB_OUTPUT"
+          echo "name=${OVERLAY_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Create overlay token
+        id: overlay-token
+        if: steps.check.outputs.is_stable == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          owner: ${{ steps.overlay-repo.outputs.owner }}
+          repositories: ${{ steps.overlay-repo.outputs.name }}
+
+      - name: Resolve Cloud revision
+        id: cloud-ref
+        if: steps.check.outputs.is_stable == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.check.outputs.version }}
+          RELEASE_MODE: ${{ github.event_name == 'release' && 'auto' || inputs.release_mode }}
+          SOURCE_REF: ${{ inputs.source_ref || '' }}
+          CLOUD_REF: ${{ inputs.cloud_ref || '' }}
+          BASE_VERSION: ${{ inputs.base_version || '' }}
+          CLOUD_OVERRIDE_REASON: ${{ inputs.cloud_override_reason || '' }}
+          EVIDENCE_RUN_ID: ${{ inputs.evidence_run_id || '' }}
+          EVIDENCE_RUN_ATTEMPT: ${{ inputs.evidence_run_attempt || '' }}
+          WRITE_SOURCES: ${{ github.event_name == 'release' || inputs.release_mode == 'import' || !inputs.skip_github_release || !inputs.skip_s3_upload }}
+          CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
+          CLOUD_TOKEN: ${{ steps.overlay-token.outputs.token }}
+        run: |
+          node .github/scripts/desktopReleaseCli.mjs resolve
+
+      - name: Preserve source selection diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: desktop-sources-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-release-sources.json
+          if-no-files-found: ignore
+
+  # ============================================
+  # 配置构建矩阵 (检查自托管 Runner)
+  # ============================================
+  configure-build:
+    needs: [check-stable]
+    if: needs.check-stable.outputs.build_required == 'true'
+    name: Configure Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      complete_matrix: ${{ steps.set-matrix.outputs.complete_matrix }}
+    steps:
+      - name: Generate Matrix
+        id: set-matrix
+        run: |
+          # 基础矩阵
+          static_matrix='[]'
+
+          # Windows
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_windows }}" == "true" ]]; then
+            static_matrix=$(echo "$static_matrix" | jq -c '. + [{"os": "windows-2025", "name": "windows-2025"}]')
+          fi
+
+          # Linux
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_linux }}" == "true" ]]; then
+            static_matrix=$(echo "$static_matrix" | jq -c '. + [{"os": "ubuntu-latest", "name": "ubuntu-latest"}]')
+          fi
+
+          # macOS (ARM64)
+          # 使用 GitHub Hosted Runner (macos-15 修复 hdiutil 问题)
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_mac }}" == "true" ]]; then
+            echo "Using GitHub-Hosted Runner for macOS ARM64"
+            arm_entry='{"os": "macos-15", "name": "macos-arm64"}'
+            static_matrix=$(echo "$static_matrix" | jq -c --argjson entry "$arm_entry" '. + [$entry]')
+          fi
+
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_mac_intel }}" == "true" ]]; then
+            echo "Using GitHub-Hosted Runner for macOS Intel x64"
+            intel_entry='{"os": "macos-15-intel", "name": "macos-intel"}'
+            static_matrix=$(echo "$static_matrix" | jq -c --argjson entry "$intel_entry" '. + [$entry]')
+          fi
+
+          # 输出
+          count=$(jq 'length' <<< "$static_matrix")
+          [ "$count" -gt 0 ] || { echo '::error::Select at least one build platform'; exit 1; }
+          {
+            echo "matrix={\"include\":$static_matrix}"
+            echo "complete_matrix=$([ "$count" -eq 4 ] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
+
+  # ============================================
+  # 多平台构建
+  # ============================================
+  build:
+    needs: [check-stable, configure-build]
+    if: needs.check-stable.outputs.build_required == 'true'
+    name: Build Desktop App
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.configure-build.outputs.matrix) }}
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+
+      - name: Preserve release tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/desktop-release-tooling"
+          cp -R .github "$RUNNER_TEMP/desktop-release-tooling/"
+          tooling_sha="$(git rev-parse HEAD)"
+          echo "DESKTOP_TOOLING_SHA=$tooling_sha" >> "$GITHUB_ENV"
+
+      - name: Checkout product sources
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.check-stable.outputs.oss_sha }}
+
+      - name: Verify product sources and restore tooling
+        shell: bash
+        env:
+          RELEASE_OSS_SHA: ${{ needs.check-stable.outputs.oss_sha }}
+          CLOUD_REF: ${{ needs.check-stable.outputs.cloud_ref }}
+          SOURCES_HASH: ${{ needs.check-stable.outputs.sources_hash }}
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$RELEASE_OSS_SHA" ] || { echo '::error::Product source SHA mismatch'; exit 1; }
+          mkdir -p .github
+          cp -R "$RUNNER_TEMP/desktop-release-tooling/.github/." .github/
+          node .github/scripts/desktopReleaseCli.mjs verify-checkout
+
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
+      - name: Setup build environment
+        id: setup
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          cloud-ref: ${{ needs.check-stable.outputs.cloud_ref }}
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          cloud-token: ${{ steps.overlay-token.outputs.token }}
+          node-version: ${{ env.NODE_VERSION }}
+          require-pinned-cloud: 'true'
+
+      - name: Resolve core seq
+        id: core_seq
+        uses: ./.github/actions/desktop-core-seq
+        with:
+          app-version: ${{ needs.check-stable.outputs.version }}
+          channel: stable
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+
+      - name: Set package version
+        id: app_version
+        run: npm run workflow:set-desktop-version ${{ needs.check-stable.outputs.version }} stable
+
+      # macOS 构建前清理 (修复 hdiutil 问题 https://github.com/electron-userland/electron-builder/issues/8415)
+      - name: Clean previous build artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          sudo rm -rf apps/desktop/release || true
+          sudo rm -rf apps/desktop/dist || true
+          sudo rm -rf /tmp/electron-builder* || true
+
+      - name: Prepare macOS provisioning profile
+        if: runner.os == 'macOS'
+        env:
+          MAC_PROVISIONING_PROFILE_BASE64: ${{ secrets.MAC_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [ -n "$MAC_PROVISIONING_PROFILE_BASE64" ]; then
+            printf '%s' "$MAC_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/lobehub.provisionprofile"
+            echo "MAC_PROVISIONING_PROFILE=$RUNNER_TEMP/lobehub.provisionprofile" >> "$GITHUB_ENV"
+          fi
+
+      # macOS 构建
+      - name: Build artifact on macOS
+        id: build_macos
+        if: runner.os == 'macOS'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: stable
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          SPARKLE_ED_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
+          RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          CSC_FOR_PULL_REQUEST: true
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_STABLE_DESKTOP_BASE_URL }}
+          # Debug hdiutil issues (https://github.com/electron-userland/electron-builder/issues/8415)
+          DEBUG_DMG: true
+
+      # Windows 构建
+      - name: Build artifact on Windows
+        id: build_windows
+        if: runner.os == 'Windows'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: stable
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
+          RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_STABLE_DESKTOP_BASE_URL }}
+          TEMP: C:\temp
+          TMP: C:\temp
+
+      # Linux 构建
+      - name: Build artifact on Linux
+        id: build_linux
+        if: runner.os == 'Linux'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: stable
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
+          RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_STABLE_DESKTOP_BASE_URL }}
+
+      - name: Upload artifacts
+        id: upload
+        uses: ./.github/actions/desktop-upload-artifacts
+        with:
+          artifact-name: release-${{ matrix.name }}
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          core-signing-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+
+      - name: Preserve desktop build diagnostics
+        if: always()
+        uses: ./.github/actions/desktop-ota-diagnostics
+        with:
+          kind: build
+          channel: stable
+          steps-json: ${{ toJSON(steps) }}
+          job-status: ${{ job.status }}
+
+  # ============================================
+  # 合并 macOS 多架构文件
+  # ============================================
+  merge-mac-files:
+    needs: [build, check-stable, configure-build]
+    name: Merge macOS Release Files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: release
+          pattern: release-*
+          merge-multiple: true
+
+      - name: List downloaded artifacts
+        run: ls -R release
+
+      - name: Install yaml only for merge step
+        run: |
+          cd scripts/electronWorkflow
+          if [ ! -f package.json ]; then
+            echo '{"name":"merge-mac-release","private":true}' > package.json
+          fi
+          bun add --no-save yaml@2.8.1
+
+      - name: Merge mac YAML files
+        run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
+
+      - name: Upload artifacts with merged macOS files
+        uses: actions/upload-artifact@v6
+        with:
+          name: merged-release
+          path: release/
+          retention-days: 1
+
+  # ============================================
+  # 发布到 GitHub Releases
+  # ============================================
+  publish-github:
+    needs: [merge-mac-files, check-stable]
+    name: Publish to GitHub Release
+    runs-on: ubuntu-latest
+    # 手动触发时可选择跳过
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_github_release) }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
+      - name: Download merged artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: merged-release
+          path: release
+
+      - name: List final artifacts
+        run: ls -R release
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v3
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          # 手动触发时使用输入的版本号创建 tag
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', needs.check-stable.outputs.version) || github.event.release.tag_name }}
+          # Source resolution already requires an existing release; do not unpublish it on a rebuild.
+          draft: false
+          files: |
+            release/stable*
+            release/latest*
+            release/*.dmg*
+            release/*.zip*
+            release/*.exe*
+            release/*.AppImage
+            release/*.deb*
+            release/*.snap*
+            release/*.rpm*
+            release/*.tar.gz*
+
+  # ============================================
+  # 发布到 S3 更新服务器
+  # ============================================
+  publish-s3:
+    needs: [merge-mac-files, check-stable]
+    name: Publish to S3
+    runs-on: ubuntu-latest
+    outputs:
+      core_published: ${{ steps.publish.outputs.core-published }}
+      installers_published: ${{ steps.publish.outputs.installers-published }}
+    # 手动触发时可选择跳过
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_s3_upload) }}
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.workflow_sha }}
+      - uses: ./.github/actions/desktop-publish-s3
+        id: publish
+        with:
+          channel: stable
+          cloud-ref: ${{ needs.check-stable.outputs.cloud_ref }}
+          version: ${{ needs.check-stable.outputs.version }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  publish-sparkle:
+    needs: [publish-s3, check-stable]
+    name: Publish Sparkle Appcast
+    runs-on: macos-15
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - uses: ./.github/actions/desktop-publish-sparkle
+        id: publish
+        with:
+          channel: stable
+          version: ${{ needs.check-stable.outputs.version }}
+          server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          ed-private-key: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          release-notes: ${{ needs.check-stable.outputs.release_notes }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  record-delivery:
+    name: Record successful desktop delivery
+    needs: [check-stable, configure-build, build, publish-github, publish-s3, publish-sparkle]
+    if: always() && needs.check-stable.outputs.build_required == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Record publication proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.check-stable.outputs.version }}
+          SOURCES_HASH: ${{ needs.check-stable.outputs.sources_hash }}
+          CORE_PUBLISHED: ${{ needs.publish-s3.outputs.core_published }}
+          INSTALLERS_PUBLISHED: ${{ needs.publish-s3.outputs.installers_published }}
+          SPARKLE_PUBLISHED: ${{ needs.publish-sparkle.outputs.published }}
+          RELEASE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.skip_github_release || inputs.skip_s3_upload) }}
+          BUILT_PLATFORMS: ${{ needs.configure-build.outputs.complete_matrix == 'true' && '["darwin-arm64","darwin-x64","linux-x64","win32-x64"]' || '[]' }}
+          PUBLICATION_OUTCOMES: '{"build":"${{ needs.build.result }}","github":"${{ needs.publish-github.result }}","s3":"${{ needs.publish-s3.result }}","sparkle":"${{ needs.publish-sparkle.result }}"}'
+        run: node .github/scripts/desktopReleaseCli.mjs publish

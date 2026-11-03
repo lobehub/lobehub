@@ -1,0 +1,38 @@
+import { cssVar, Icon, Tooltip } from '@lobehub/ui';
+import { startCase } from 'es-toolkit/compat';
+import { type LucideIcon } from 'lucide-react';
+import {
+  AudioLines,
+  BoltIcon,
+  ImageIcon,
+  MessageSquareTextIcon,
+  MicIcon,
+  MusicIcon,
+  PhoneIcon,
+  SplitIcon,
+  VideoIcon,
+} from 'lucide-react';
+import { type AiModelType } from 'model-bank';
+import { memo } from 'react';
+
+const icons: Record<AiModelType, LucideIcon> = {
+  asr: MicIcon,
+  chat: MessageSquareTextIcon,
+  decision: SplitIcon,
+  embedding: BoltIcon,
+  image: ImageIcon,
+  realtime: PhoneIcon,
+  text2music: MusicIcon,
+  tts: AudioLines,
+  video: VideoIcon,
+};
+
+const ModelTypeIcon = memo<{ size?: number; type: AiModelType }>(({ type, size = 20 }) => {
+  return (
+    <Tooltip title={`${startCase(type)} Model`}>
+      <Icon color={cssVar.colorTextDescription} icon={icons?.[type]} size={size} />
+    </Tooltip>
+  );
+});
+
+export default ModelTypeIcon;

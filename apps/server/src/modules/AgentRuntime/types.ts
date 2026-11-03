@@ -1,0 +1,320 @@
+import type {
+  LlmCancelData,
+  LlmExecuteData,
+  ToolExecuteData,
+} from '@lobechat/agent-gateway-client';
+import { type AgentState } from '@lobechat/agent-runtime';
+import { type UIChatMessage } from '@lobechat/types';
+
+import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
+import {
+  type StreamChunkData,
+  type StreamEvent,
+  type StreamHistoryPage,
+} from './StreamEventManager';
+
+export interface PublishAgentRuntimeEndParams {
+  finalState: any;
+  /** Protocol-v2 native run: terminal reconciliation arrived as message_patch. */
+  messagePatchMode?: boolean;
+  /** Last message patch revision the client must have applied before settling. */
+  messageRevision?: number;
+  operationId: string;
+  reason?: string;
+  reasonDetail?: string;
+  stepIndex: number;
+  /**
+   * Canonical UIChatMessage[] snapshot of the topic at terminal-state time.
+   * When present, the client uses this directly as Source of Truth instead
+   * of refetching from DB.
+   */
+  uiMessages?: UIChatMessage[];
+}
+
+/**
+ * Agent State Manager Interface
+ * Abstract interface for state persistence, supports Redis and in-memory implementations
+ */
+export interface IAgentStateManager {
+  /**
+   * Clean up expired operation data
+   */
+  cleanupExpiredOperations: () => Promise<number>;
+
+  /** Drop the inline step loop's parked envelope, if this owner still holds the lock. */
+  clearInlineResume: (operationId: string, ownerId: string) => Promise<void>;
+
+  /**
+   * Create new operation metadata
+   */
+  createOperationMetadata: (
+    operationId: string,
+    data: {
+      /** See {@link AgentOperationMetadata.acceptsMemberRuntimeEnd}. */
+      acceptsMemberRuntimeEnd?: boolean;
+      agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
+      mirrorToOperationId?: string;
+      modelRuntimeConfig?: any;
+      /**
+       * Agent Share visitor runs only: the visitor's id, under which the
+       * gateway WS channel is registered (the op itself executes as the
+       * creator, `userId`). Its presence also marks the op as a share run for
+       * a queue worker that never saw `publishAgentRuntimeInit`.
+       */
+      streamOwnerUserId?: string;
+      userId?: string;
+      workspaceId?: string;
+    },
+  ) => Promise<void>;
+
+  /**
+   * Delete all data for Agent operation
+   */
+  deleteAgentOperation: (operationId: string) => Promise<void>;
+
+  /**
+   * Close connections
+   */
+  disconnect: () => Promise<void>;
+
+  /**
+   * Get all active operations
+   */
+  getActiveOperations: () => Promise<string[]>;
+
+  /**
+   * Get execution history
+   */
+  getExecutionHistory: (operationId: string, limit?: number) => Promise<any[]>;
+
+  /**
+   * Get operation metadata
+   */
+  getOperationMetadata: (operationId: string) => Promise<AgentOperationMetadata | null>;
+
+  /**
+   * Get statistics
+   */
+  getStats: () => Promise<{
+    activeOperations: number;
+    completedOperations: number;
+    errorOperations: number;
+    totalOperations: number;
+  }>;
+
+  /**
+   * Whether the client flagged user messages queued behind this operation
+   * (see `setQueuedMessages`). Cheap to read at every step boundary.
+   */
+  hasQueuedMessages: (operationId: string) => Promise<boolean>;
+
+  /**
+   * Check the interrupt sentinel written by `markInterrupted`. Cheap enough
+   * to poll, unlike `loadAgentState` which pulls the whole state blob.
+   */
+  isInterrupted: (operationId: string) => Promise<boolean>;
+
+  /**
+   * Load Agent state
+   */
+  loadAgentState: (operationId: string) => Promise<AgentState | null>;
+
+  /** Read the inline step loop's parked envelope, if any. */
+  loadInlineResume: (operationId: string) => Promise<null | string>;
+
+  /**
+   * Set the interrupt sentinel for the operation, alongside the
+   * authoritative `status: 'interrupted'` in the persisted state.
+   */
+  markInterrupted: (operationId: string) => Promise<void>;
+
+  /**
+   * Extend the step execution lock if it is still owned by the caller.
+   */
+  refreshStepLock: (
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ) => Promise<boolean>;
+
+  /**
+   * Release the step execution lock.
+   */
+  releaseStepLock: (operationId: string, stepIndex: number, ownerId?: string) => Promise<void>;
+
+  /**
+   * Save Agent state
+   */
+  saveAgentState: (operationId: string, state: AgentState) => Promise<void>;
+
+  /**
+   * Park the envelope for the step an inline loop is about to run, so a
+   * redelivery can resume from it if the loop dies mid-run.
+   */
+  saveInlineResume: (operationId: string, serialized: string) => Promise<boolean>;
+
+  /**
+   * Save step execution result
+   */
+  saveStepResult: (operationId: string, stepResult: StepResult) => Promise<void>;
+
+  /**
+   * Record whether the client still holds user messages queued behind this
+   * operation. The agent reads it at the next step boundary and hands the turn
+   * back early, so the follow-up runs as the next turn instead of waiting for
+   * the whole run to finish.
+   */
+  setQueuedMessages: (operationId: string, pending: boolean) => Promise<void>;
+
+  /**
+   * Atomically try to claim a step for execution (distributed lock).
+   * Returns true if the lock was acquired, false if another execution already holds it.
+   */
+  tryClaimStep: (
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds?: number,
+    ownerId?: string,
+  ) => Promise<boolean>;
+}
+
+/**
+ * Stream Event Manager Interface
+ * Abstract interface for stream event publishing, supports Redis and in-memory implementations
+ */
+export interface LlmExecuteDispatchResult {
+  /** Clients the gateway reached right away; a late subscriber still gets it from replay. */
+  delivered?: number;
+  /** False when the gateway lacks the relay routes and the event was broadcast instead. */
+  routed: boolean;
+}
+
+export interface IStreamEventManager {
+  /**
+   * Clean up stream data for operation
+   */
+  cleanupOperation: (operationId: string) => Promise<void>;
+
+  /** Optional: the relayed attempt is over; the gateway stops replaying it. */
+  closeLlmCall?: (operationId: string, callId: string) => Promise<void>;
+
+  /** Optional: end a one-shot relay channel's gateway session. */
+  closeLlmRelayChannel?: (channel: string) => Promise<void>;
+
+  /**
+   * Close connections
+   */
+  disconnect: () => Promise<void>;
+
+  /**
+   * Wait for the gateway pushes this process issued for an operation to land.
+   * Only the gateway-backed manager has anything to drain; the invocation that
+   * produced the pushes calls it before it can be frozen or handed over.
+   */
+  drainPushes?: (operationId: string) => Promise<void>;
+
+  /**
+   * Get count of active operations
+   */
+  getActiveOperationsCount: () => Promise<number>;
+
+  /**
+   * Get stream event history
+   */
+  getStreamHistory: (operationId: string, count?: number) => Promise<StreamEvent[]>;
+
+  getStreamHistoryPage: (
+    operationId: string,
+    cursor?: string,
+    limit?: number,
+  ) => Promise<StreamHistoryPage>;
+
+  /**
+   * Optional: open a one-shot relay channel on the gateway, owned by `userId`.
+   * Present only with a gateway, like {@link sendLlmExecute}.
+   */
+  openLlmRelayChannel?: (channel: string, userId: string) => Promise<void>;
+
+  /**
+   * Publish Agent runtime end event.
+   *
+   * `uiMessages` is the canonical UIChatMessage[] snapshot of the topic at
+   * terminal-state time so the client can use the pushed payload as Source
+   * of Truth instead of refetching from DB. Optional: callers without DB
+   * access may omit it and the client falls back to its existing behaviour.
+   */
+  publishAgentRuntimeEnd: (params: PublishAgentRuntimeEndParams) => Promise<string>;
+
+  /**
+   * Publish Agent runtime initialization event
+   */
+  publishAgentRuntimeInit: (operationId: string, initialState: any) => Promise<string>;
+
+  /**
+   * Publish stream content chunk
+   */
+  publishStreamChunk: (
+    operationId: string,
+    stepIndex: number,
+    chunkData: StreamChunkData,
+  ) => Promise<string>;
+
+  /**
+   * Publish stream event
+   */
+  publishStreamEvent: (
+    operationId: string,
+    event: Omit<StreamEvent, 'operationId' | 'timestamp'>,
+  ) => Promise<string>;
+
+  /**
+   * Single bounded read of a stream — the long-poll primitive. Returns every
+   * event after `lastEventId`, blocking up to `blockMs` for the first one; on
+   * timeout returns an empty list. The returned `lastEventId` is always a
+   * CONCRETE stream id (never the `'$'` sentinel), so the caller can immediately
+   * re-poll from it without a gap. Unlike `subscribeStreamEvents` this does NOT
+   * loop — one request, one bounded wait.
+   *
+   * Used by the heterogeneous `lh hetero exec` producer (which holds only an
+   * op-scoped JWT + tRPC, never Redis) to pull `agent_intervention_response`
+   * back into its in-process `AskUserBridge`. See `aiAgent.waitInterventionResponse`.
+   */
+  readEventsOnce: (
+    operationId: string,
+    lastEventId?: string,
+    blockMs?: number,
+  ) => Promise<{ events: StreamEvent[]; lastEventId: string }>;
+
+  /** Optional: stop a relayed LLM attempt on every client (`llm_cancel`). */
+  sendLlmCancel?: (
+    operationId: string,
+    data: LlmCancelData & { stepIndex: number },
+  ) => Promise<void>;
+
+  /**
+   * Optional: hand a relayed LLM attempt (`llm_execute`) to the user's device
+   * through the Agent Gateway, routed to the client that started the run.
+   * Absent on managers without a gateway; callers publish a stream event then.
+   */
+  sendLlmExecute?: (operationId: string, data: LlmExecuteData) => Promise<LlmExecuteDispatchResult>;
+
+  /**
+   * Optional: dispatch a tool execution request to the client via Agent Gateway.
+   * Rejects if the gateway is unavailable — callers decide their fallback path.
+   * Only present on implementations that speak to a live gateway (not on the
+   * in-memory / Redis-only managers).
+   */
+  sendToolExecute?: (operationId: string, data: ToolExecuteData) => Promise<void>;
+
+  /**
+   * Subscribe to stream events (for SSE endpoint)
+   */
+  subscribeStreamEvents: (
+    operationId: string,
+    lastEventId: string,
+    onEvents: (events: StreamEvent[]) => void,
+    signal?: AbortSignal,
+  ) => Promise<void>;
+}

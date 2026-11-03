@@ -1,0 +1,413 @@
+/**
+ * @vitest-environment happy-dom
+ */
+import { render, screen } from '@testing-library/react';
+import type { ModelRating } from 'model-bank';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { EnabledProviderWithModels } from '@/types/aiProvider';
+
+import ModelDetailPanel from './ModelDetailPanel';
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  createStaticStyles: () => ({
+    actionText: 'actionText',
+    container: 'container',
+    description: 'description',
+    originalPriceText: 'originalPriceText',
+    priceValue: 'priceValue',
+    radarClickable: 'radarClickable',
+    row: 'row',
+    titleText: 'titleText',
+  }),
+  cssVar: new Proxy({}, { get: (_, token) => `var(--${String(token)})` }),
+}));
+
+// recharts needs a measured container — stub the chart with its data flattened to text nodes
+vi.mock('@lobehub/charts', () => ({
+  RadarChart: ({ data }: { data: Record<string, unknown>[] }) => (
+    <svg data-testid={'radar-chart'}>
+      {data.map((row, i) => (
+        <g key={i}>
+          {Object.values(row).map((value, j) => (
+            <text key={j}>{String(value)}</text>
+          ))}
+        </g>
+      ))}
+    </svg>
+  ),
+}));
+
+// keep the panel test free of the modal's own dependency chain (@lobehub/ui/base-ui, i18next)
+vi.mock('./BenchmarkModal', () => ({
+  openBenchmarkModal: vi.fn(),
+}));
+
+vi.mock('@/hooks/useEnabledChatModels', () => ({
+  useEnabledChatModels: () => [],
+}));
+
+let mockRating: ModelRating | undefined;
+
+vi.mock('@/business/client/hooks/useBusinessModelRating', () => ({
+  useBusinessModelRating: () => () => mockRating,
+}));
+
+const globalState = {
+  status: {
+    modelDetailPanelExpandedKeys: ['pricing', 'rating'],
+  },
+  updateModelDetailPanelExpandedKeys: vi.fn(),
+};
+
+vi.mock('@/store/global', () => ({
+  useGlobalStore: (selector: (state: typeof globalState) => unknown) => selector(globalState),
+}));
+
+vi.mock('@/store/global/selectors', () => ({
+  systemStatusSelectors: {
+    modelDetailPanelExpandedKeys: (state: typeof globalState) =>
+      state.status.modelDetailPanelExpandedKeys,
+  },
+}));
+
+const translations: Record<string, string> = {
+  'ModelSwitchPanel.detail.context': 'Context Length',
+  'ModelSwitchPanel.detail.pricing': 'Pricing',
+  'ModelSwitchPanel.detail.pricing.credits.input': 'Input {{amount}} credits/M tokens',
+  'ModelSwitchPanel.detail.pricing.credits.output': 'Output {{amount}} credits/M tokens',
+  'ModelSwitchPanel.detail.pricing.credits.perImage': '~ {{amount}} credits / image',
+  'ModelSwitchPanel.detail.pricing.credits.perVideo': '~ {{amount}} credits / video',
+  'ModelSwitchPanel.detail.pricing.credits.image': 'credits/img',
+  'ModelSwitchPanel.detail.pricing.credits.millionTokens': 'credits/M tokens',
+  'ModelSwitchPanel.detail.pricing.group.image': 'Image',
+  'ModelSwitchPanel.detail.pricing.group.text': 'Text',
+  'ModelSwitchPanel.detail.pricing.input': 'Input ${{amount}}/M',
+  'ModelSwitchPanel.detail.pricing.output': 'Output ${{amount}}/M',
+  'ModelSwitchPanel.detail.pricing.perImage': '~ ${{amount}} / image',
+  'ModelSwitchPanel.detail.pricing.perVideo': '~ ${{amount}} / video',
+  'ModelSwitchPanel.detail.pricing.unit.imageGeneration': 'Image Generation',
+  'ModelSwitchPanel.detail.pricing.unit.textInput': 'Input',
+  'ModelSwitchPanel.detail.pricing.unit.textOutput': 'Output',
+  'ModelSwitchPanel.detail.rating': 'Benchmarks',
+  'ModelSwitchPanel.detail.rating.dimension.agentic': 'Agentic',
+  'ModelSwitchPanel.detail.rating.dimension.design': 'Design',
+  'ModelSwitchPanel.detail.rating.dimension.intelligence': 'Intelligence',
+  'ModelSwitchPanel.detail.rating.dimension.price': 'Price',
+  'ModelSwitchPanel.detail.rating.dimension.speed': 'Speed',
+  'ModelSwitchPanel.detail.rating.dimension.writing': 'Writing',
+  'lobehub.gemini-3-pro-image-preview:image.description':
+    'Localized LobeHub colon-id model description.',
+  'lobehub.test-model.description': 'Localized LobeHub model description.',
+  'test-model.description': 'Localized model description.',
+};
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (
+      key: string,
+      options?: Record<string, string | boolean> & {
+        defaultValue?: string;
+        keySeparator?: boolean | string;
+        nsSeparator?: boolean | string;
+      },
+    ) => {
+      // Mirror the real call-site: colon model ids require nsSeparator disabled.
+      if (key.includes(':') && options?.nsSeparator !== false) {
+        return options?.defaultValue ?? key;
+      }
+
+      const template = translations[key] ?? options?.defaultValue ?? key;
+
+      return String(template).replaceAll(/\{\{(\w+)\}\}/g, (_, name) =>
+        String(options?.[name] ?? ''),
+      );
+    },
+  }),
+}));
+
+const textPricing = {
+  currency: 'USD',
+  units: [
+    { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+    { name: 'textOutput', rate: 25, strategy: 'fixed', unit: 'millionTokens' },
+  ],
+};
+
+const imagePricing = {
+  approximatePricePerImage: 0.04,
+  approximatePricePerVideo: 0.8,
+  currency: 'USD',
+  units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
+};
+
+const emptyLookupPricing = {
+  currency: 'USD',
+  units: [
+    {
+      lookup: { prices: {} },
+      name: 'imageGeneration',
+      strategy: 'lookup',
+      unit: 'image',
+    },
+  ],
+};
+
+const discountedTextPricing = {
+  currency: 'USD',
+  units: [
+    { name: 'textInput', originalRate: 5, rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+  ],
+};
+
+const createEnabledList = (
+  provider: string,
+  pricing: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+): EnabledProviderWithModels[] => [
+  {
+    children: [
+      {
+        abilities: {},
+        contextWindowTokens: 1_000_000,
+        displayName: 'Test Model',
+        id: 'test-model',
+        pricing,
+        type: 'chat',
+        ...overrides,
+      } as any,
+    ],
+    id: provider,
+    name: provider,
+    source: 'builtin',
+  },
+];
+
+describe('ModelDetailPanel pricing', () => {
+  it('renders the LobeHub-scoped localized description for the LobeHub provider', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        model="test-model"
+        provider="lobehub"
+        enabledList={createEnabledList('lobehub', textPricing, {
+          description: 'Fallback model description.',
+        })}
+      />,
+    );
+
+    expect(container.querySelector('.description')).toHaveTextContent(
+      'Localized LobeHub model description.',
+    );
+  });
+
+  it('renders the bare model-id description key for non-LobeHub providers', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        model="test-model"
+        provider="openai"
+        enabledList={createEnabledList('openai', textPricing, {
+          description: 'Fallback model description.',
+        })}
+      />,
+    );
+
+    expect(container.querySelector('.description')).toHaveTextContent(
+      'Localized model description.',
+    );
+  });
+
+  it('falls back to the model card description when no locale key exists', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        model="missing-locale-model"
+        provider="lobehub"
+        enabledList={createEnabledList('lobehub', textPricing, {
+          description: 'Fallback model description.',
+          id: 'missing-locale-model',
+        })}
+      />,
+    );
+
+    expect(container.querySelector('.description')).toHaveTextContent(
+      'Fallback model description.',
+    );
+  });
+
+  it('resolves LobeHub descriptions when the model id contains a colon', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        model="gemini-3-pro-image-preview:image"
+        provider="lobehub"
+        enabledList={createEnabledList('lobehub', textPricing, {
+          description: 'Fallback image model description.',
+          id: 'gemini-3-pro-image-preview:image',
+        })}
+      />,
+    );
+
+    expect(container.querySelector('.description')).toHaveTextContent(
+      'Localized LobeHub colon-id model description.',
+    );
+  });
+
+  it('renders branding provider token pricing in credits', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', textPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(screen.getByText('5M credits/M tokens')).toBeInTheDocument();
+    expect(screen.getByText('25M credits/M tokens')).toBeInTheDocument();
+    expect(container).not.toHaveTextContent('$5.00');
+  });
+
+  it('renders the original branding price without repeating the unit suffix', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', discountedTextPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    const originalPrice = container.querySelector('.originalPriceText');
+
+    expect(originalPrice).toHaveTextContent('5M');
+    expect(originalPrice).not.toHaveTextContent('credits/M tokens');
+    expect(container).toHaveTextContent('2.5M credits/M tokens');
+  });
+
+  it('keeps dollar pricing for non-branding providers', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('openai', textPricing)}
+        model="test-model"
+        provider="openai"
+      />,
+    );
+
+    expect(container).toHaveTextContent('$5.00/M tokens');
+    expect(container).toHaveTextContent('$25.00/M tokens');
+    expect(container).not.toHaveTextContent('credits/M tokens');
+  });
+
+  it('renders branding provider image and video pricing in credits', () => {
+    const imageResult = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', imagePricing)}
+        model="test-model"
+        pricingMode="image"
+        provider="lobehub"
+      />,
+    );
+
+    expect(imageResult.container).toHaveTextContent('~ 40.0K credits / image');
+    expect(imageResult.container).toHaveTextContent('40.0K credits/img');
+    expect(imageResult.container).not.toHaveTextContent('$0.04');
+
+    imageResult.unmount();
+
+    const videoResult = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', imagePricing)}
+        model="test-model"
+        pricingMode="video"
+        provider="lobehub"
+      />,
+    );
+
+    expect(videoResult.container).toHaveTextContent('~ 800.0K credits / video');
+    expect(videoResult.container).not.toHaveTextContent('$0.80');
+  });
+
+  it('renders a placeholder for empty lookup pricing tables', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', emptyLookupPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(container).toHaveTextContent('Image Generation');
+    expect(container).toHaveTextContent('- credits/img');
+  });
+});
+
+describe('ModelDetailPanel rating', () => {
+  beforeEach(() => {
+    mockRating = undefined;
+  });
+
+  const score = (value: number): NonNullable<ModelRating['intelligence']> => ({
+    raw: value * 10,
+    score: value,
+    source: 'artificial-analysis',
+    sourceUrl: 'https://artificialanalysis.ai/models/test-model',
+    updatedAt: '2026-07-10',
+  });
+
+  it('hides the benchmarks section when the model has no rating', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', textPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(container).not.toHaveTextContent('Benchmarks');
+  });
+
+  it('renders the radar chart when five or more dimensions are rated', () => {
+    mockRating = {
+      design: score(78),
+      intelligence: score(100),
+      price: score(35),
+      speed: score(60),
+      writing: score(88),
+    };
+
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', textPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(container).toHaveTextContent('Benchmarks');
+    expect(container.querySelector('[data-testid="radar-chart"]')).toBeInTheDocument();
+    expect(container).toHaveTextContent('Intelligence');
+    expect(container).toHaveTextContent('100');
+    // agentic has no data: the dimension is omitted from the radar entirely
+    expect(container).not.toHaveTextContent('Agentic');
+  });
+
+  it('renders a dimension list instead of the radar below five dimensions', () => {
+    mockRating = {
+      intelligence: score(91),
+      price: score(42),
+      speed: score(66),
+    };
+
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', textPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    expect(container).toHaveTextContent('Benchmarks');
+    expect(container.querySelector('[data-testid="radar-chart"]')).not.toBeInTheDocument();
+    expect(container).toHaveTextContent('Intelligence');
+    expect(container).toHaveTextContent('91');
+    // unrated dimensions are not listed in the fallback view
+    expect(container).not.toHaveTextContent('Writing');
+  });
+});

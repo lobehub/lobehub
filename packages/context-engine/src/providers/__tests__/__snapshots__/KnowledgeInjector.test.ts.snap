@@ -1,0 +1,74 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`KnowledgeInjector > basic injection > should inject knowledge before the first user message 1`] = `
+"<agent_knowledge>
+<instruction>The following files are available. Refer to their content directly to answer questions. No knowledge bases are associated.</instruction>
+<files totalCount="1">
+<file id="file-1" name="test.md">
+File content here
+</file>
+</files>
+</agent_knowledge>"
+`;
+
+exports[`KnowledgeInjector > file contents > should inject multiple file contents 1`] = `
+"<agent_knowledge>
+<instruction>The following files are available. Refer to their content directly to answer questions. No knowledge bases are associated.</instruction>
+<files totalCount="2">
+<file id="file-1" name="file1.md">
+Content of file 1
+</file>
+<file id="file-2" name="file2.ts">
+Content of file 2
+</file>
+</files>
+</agent_knowledge>"
+`;
+
+exports[`KnowledgeInjector > integration with BaseFirstUserContentProvider > should append to existing system injection message 1`] = `
+"Existing injection content
+
+<agent_knowledge>
+<instruction>The following files are available. Refer to their content directly to answer questions. No knowledge bases are associated.</instruction>
+<files totalCount="1">
+<file id="file-1" name="test.md">
+File content
+</file>
+</files>
+</agent_knowledge>"
+`;
+
+exports[`KnowledgeInjector > integration with BaseFirstUserContentProvider > should work when user message is first 1`] = `
+"<agent_knowledge>
+<instruction>The following files are available. Refer to their content directly to answer questions. No knowledge bases are associated.</instruction>
+<files totalCount="1">
+<file id="file-1" name="file.md">
+Content
+</file>
+</files>
+</agent_knowledge>"
+`;
+
+exports[`KnowledgeInjector > knowledge bases > should inject knowledge bases 1`] = `
+"<agent_knowledge>
+<instruction>The following knowledge bases are available for semantic search. Use the searchKnowledgeBase tool to find relevant information.</instruction>
+<knowledge_bases totalCount="2">
+<knowledge_base id="kb-1" name="KB 1" description="Description 1" />
+<knowledge_base id="kb-2" name="KB 2" description="Description 2" />
+</knowledge_bases>
+</agent_knowledge>"
+`;
+
+exports[`KnowledgeInjector > mixed content > should inject both files and knowledge bases 1`] = `
+"<agent_knowledge>
+<instruction>The following files and knowledge bases are available. For files, refer to their content directly. For knowledge bases, use the searchKnowledgeBase tool to find relevant information.</instruction>
+<files totalCount="1">
+<file id="file-1" name="readme.md">
+File content
+</file>
+</files>
+<knowledge_bases totalCount="1">
+<knowledge_base id="kb-1" name="API Reference" description="API docs" />
+</knowledge_bases>
+</agent_knowledge>"
+`;

@@ -1,0 +1,111 @@
+import { confirmModal, toast } from '@lobehub/ui';
+import { type TFunction } from 'i18next';
+import { type ChangeEvent } from 'react';
+import { useCallback } from 'react';
+
+import { type FileManageAction } from '@/store/file/slices/fileManager/action';
+import {
+  filterFilesByBuiltInBlockList,
+  filterFilesByGitignore,
+  findGitignoreFile,
+  readGitignoreContent,
+} from '@/utils/gitignore';
+
+interface UseUploadFolderOptions {
+  currentFolderId?: string | null;
+  libraryId?: string | null;
+  /**
+   * Runs once the folder and its files have actually been created. The
+   * `.gitignore` confirm path defers the upload past the returned promise, so
+   * callers that need to refresh a view must hook in here instead of awaiting
+   * `handleFolderUpload`.
+   */
+  onUploaded?: () => void;
+  t: TFunction<'file'>;
+  uploadFolderWithStructure: FileManageAction['uploadFolderWithStructure'];
+}
+
+const useUploadFolder = ({
+  currentFolderId,
+  libraryId,
+  onUploaded,
+  t,
+  uploadFolderWithStructure,
+}: UseUploadFolderOptions) => {
+  const handleFolderUpload = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      let files = Array.from(event.target.files || []);
+      if (files.length === 0) return;
+
+      const targetFolderId = currentFolderId ?? undefined;
+      const targetLibraryId = libraryId ?? undefined;
+      const upload = async (fileList: File[]) => {
+        await uploadFolderWithStructure(fileList, targetLibraryId, targetFolderId);
+        onUploaded?.();
+      };
+
+      // Apply built-in block list first
+      const originalCount = files.length;
+      files = filterFilesByBuiltInBlockList(files);
+      const builtInBlockedCount = originalCount - files.length;
+
+      if (builtInBlockedCount > 0) {
+        toast.info(
+          t('header.actions.builtInBlockList.filtered', {
+            ignored: builtInBlockedCount,
+            total: originalCount,
+          }),
+        );
+      }
+
+      const gitignoreFile = findGitignoreFile(files);
+
+      if (gitignoreFile) {
+        try {
+          const gitignoreContent = await readGitignoreContent(gitignoreFile);
+          const gitignoreOriginalCount = files.length;
+
+          confirmModal({
+            cancelText: t('header.actions.gitignore.cancel'),
+            content: t('header.actions.gitignore.content', {
+              count: gitignoreOriginalCount,
+            }),
+            okText: t('header.actions.gitignore.apply'),
+            onCancel: () => {
+              upload(files);
+            },
+            onOk: async () => {
+              const filteredFiles = filterFilesByGitignore(files, gitignoreContent);
+              const ignoredCount = gitignoreOriginalCount - filteredFiles.length;
+
+              if (ignoredCount > 0) {
+                toast.info(
+                  t('header.actions.gitignore.filtered', {
+                    ignored: ignoredCount,
+                    total: gitignoreOriginalCount,
+                  }),
+                );
+              }
+
+              // Upload without awaiting - let it run in background
+              upload(filteredFiles);
+            },
+            title: t('header.actions.gitignore.title'),
+          });
+        } catch (error) {
+          console.error('Failed to read .gitignore:', error);
+          await upload(files);
+        }
+      } else {
+        await upload(files);
+      }
+
+      event.target.value = '';
+    },
+    [currentFolderId, libraryId, onUploaded, t, uploadFolderWithStructure],
+  );
+
+  return { handleFolderUpload };
+};
+
+export default useUploadFolder;

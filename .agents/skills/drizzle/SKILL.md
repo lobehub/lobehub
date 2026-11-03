@@ -1,0 +1,453 @@
+---
+name: drizzle
+description: 'Use for Drizzle schemas and queries: tables, indexes, relations, joins and inferred types. Rollout belongs to db-migrations.'
+user-invocable: false
+---
+
+# Drizzle ORM Schema Style Guide
+
+> **Adding a Model or Repository?** Ship a sibling test in the same PR — every new
+> file under `packages/database/src/models/**` or `src/repositories/**` needs a
+> matching `__tests__/<name>.test.ts`. See the **testing** skill
+> (`.agents/skills/testing/references/db-model-test.md`) for the `getTestDB()`
+> integration pattern, user-isolation tests, the BM25 `describe.skipIf(!isServerDB)`
+> guard, and schema gotchas. CI's coverage patch gate won't reliably catch a brand-new
+> untested file, so this is on you.
+
+## Configuration
+
+- Config: `drizzle.config.ts`
+- Schemas: `packages/database/src/schemas/`
+- Migrations: `packages/database/migrations/`
+- Dialect: `postgresql` with `strict: true`
+
+## Helper Functions
+
+Location: `packages/database/src/schemas/_helpers.ts`
+
+- `timestamptz(name)`: Timestamp with timezone
+- `createdAt()`, `updatedAt()`, `accessedAt()`: Standard timestamp columns
+- `timestamps`: Object with all three for easy spread
+
+## Naming Conventions
+
+- **Tables**: Plural snake\_case (`users`, `session_groups`)
+- **Columns**: snake\_case (`user_id`, `created_at`)
+- **New tables**: Check nearby existing tables before naming a new one. Preserve
+  the established noun family and suffix. For example, if the user-scoped table
+  is `user_xxx_logs`, the workspace-scoped counterpart should be
+  `workspace_xxx_logs`, not `workspace_xxx_records` or another new synonym.
+
+```typescript
+// ✅ Good: follows the existing user/workspace table family (names are
+// illustrative — swap `widget` for the real noun).
+export const userWidgetLogs = pgTable('user_widget_logs', { ... });
+export const workspaceWidgetLogs = pgTable('workspace_widget_logs', { ... });
+
+// ❌ Bad: introduces a new suffix for the same concept.
+export const workspaceWidgetRecords = pgTable('workspace_widget_records', { ... });
+```
+
+## Column Definitions
+
+### Primary Keys
+
+Do not use auto-incrementing primary keys (`serial`, `bigserial`, generated
+identity columns). They create sequence-state problems during cross-database
+migrations, restores, and data copy jobs. Prefer text IDs from application
+generators (`idGenerator`, `createNanoId`) or `uuid` for internal tables.
+
+Keep `$defaultFn(...)` when a table normally owns ID generation. Callers can
+still pass an explicit `id`; the default only runs when the insert omits it. Do
+not remove the default just because one flow needs to supply a request-scoped ID.
+
+```typescript
+// ✅ Good: app-generated text ID; explicit inserts can still override it.
+id: text('id')
+  .primaryKey()
+  .$defaultFn(() => idGenerator('agents'))
+  .notNull(),
+
+// ❌ Bad: sequence state is fragile across DB migrations and restores.
+id: serial('id').primaryKey(),
+```
+
+ID prefixes make entity types distinguishable. For internal tables, use `uuid`.
+
+Do not use composite primary keys on new tables. Give every table a single-column
+surrogate PK and carry business uniqueness in a `uniqueIndex` instead. PK columns
+cannot be nullable, so when the uniqueness scope later grows by a nullable
+dimension the composite PK must be torn down and rebuilt — exactly what happened
+when `ai_providers` / `ai_models` were workspace-scoped (migrations 0110–0111 replaced
+their composite PKs with a surrogate `_id` plus partial unique indexes). A unique
+index still works as the arbiter for `onConflictDoUpdate` upserts.
+
+```typescript
+// ✅ Good: surrogate PK; uniqueness scope can evolve without a PK rebuild.
+export const workspaceUserSettings = pgTable(
+  'workspace_user_settings',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }).notNull(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('workspace_user_settings_workspace_id_user_id_unique').on(t.workspaceId, t.userId)],
+);
+
+// ❌ Bad: locked to exactly these columns; adding a nullable scope column
+// (workspaceId, deviceId, …) later forces a full PK rebuild migration.
+(t) => [primaryKey({ columns: [t.workspaceId, t.userId] })],
+```
+
+Existing composite PKs are legacy — leave them alone unless they block a scope
+change, then migrate them the 0110–0111 way.
+
+### Foreign Keys
+
+```typescript
+userId: text('user_id')
+  .references(() => users.id, { onDelete: 'cascade' })
+  .notNull(),
+```
+
+### Timestamps
+
+```typescript
+...timestamps,  // Spread from _helpers.ts
+```
+
+### Optional and Undefined Values
+
+Do not introduce artificial sentinel strings for missing values, such as
+`unknown`, unless the domain already has that explicit state and existing code
+uses it consistently. Prefer nullable columns, optional TypeScript fields, or a
+separate concrete status enum when the value is genuinely absent.
+
+```typescript
+// ✅ Good: absent until a custom-execution attempt actually runs
+// (packages/database/src/schemas/agentIntervention.ts).
+export const AGENT_INTERVENTION_CUSTOM_EXECUTION_STATES = ['pending', 'executing', 'completed'] as const;
+export type AgentInterventionCustomExecutionState =
+  (typeof AGENT_INTERVENTION_CUSTOM_EXECUTION_STATES)[number];
+
+customExecutionState: text('custom_execution_state').$type<AgentInterventionCustomExecutionState>(),
+
+// ❌ Bad: invents a new state that callers now need to handle everywhere.
+export type AgentInterventionCustomExecutionState = 'pending' | 'executing' | 'completed' | 'unknown';
+
+customExecutionState: text('custom_execution_state')
+  .$type<AgentInterventionCustomExecutionState>()
+  .notNull()
+  .default('unknown');
+```
+
+### Database Enums
+
+Default to **not** using PostgreSQL/Drizzle `pgEnum`. Database enums are
+expensive to evolve safely: adding members needs migrations, removing or
+renaming members is awkward, and deployment order becomes more fragile.
+
+For product/business states, use `text()` or `varchar()` with a TypeScript value
+type via `$type<...>()`. Keep those TS-only value types in the domain/shared type
+module, then import them into the schema. For cloud DB schemas, that usually
+means `cloudDB/types.ts`.
+
+Do not copy existing DB enums as a pattern. Treat them as legacy or explicitly
+reviewed exceptions. If a new `pgEnum` seems necessary, stop and justify why the
+value set is effectively immutable and why the migration cost is acceptable.
+
+### Field Descriptions
+
+For columns whose meaning is not obvious from the name alone, add JSDoc on the
+schema field. Include a concrete example when it clarifies the stored value or
+the lifecycle moment that writes it. This is especially important for external
+IDs, lifecycle statuses, denormalized snapshots, JSONB signals, and fields whose
+name could mean either a request ID or a persisted row ID.
+
+```typescript
+// ✅ Good: explain the table's business object first, then only document
+// non-obvious lifecycle fields
+// (packages/database/src/schemas/agentIntervention.ts).
+/**
+ * Private resolution/outbox records. Unlike `agent_interventions`, this table
+ * may retain user-edited arguments so a claimed decision can be delivered
+ * reliably after the app disconnects. It is never a notification payload.
+ */
+export const agentInterventionResolutions = pgTable('agent_intervention_resolutions', {
+  /** Owner of the durable operation, distinct from the resolving actor. */
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+
+  /** Private executor result; never selected into Review or notification DTOs. */
+  customExecutionResult: jsonb('custom_execution_result').$type<AgentInterventionCustomExecutionResult>(),
+
+  /** Monotonic lease attempt, starting at zero while pending. */
+  customExecutionAttempt: integer('custom_execution_attempt'),
+});
+
+// ❌ Bad: comments restate obvious column names without adding domain meaning.
+/** User email */
+email: text('email'),
+```
+
+### JSONB Types
+
+Avoid `Record<string, unknown>` or similarly loose JSONB types for schema
+columns. Define a concrete interface that describes the expected JSON shape, even
+when most properties are optional. This keeps callers, migrations, and review
+queries aligned on the same data contract.
+
+```typescript
+// packages/types/src/agent/agentIntervention.ts +
+// packages/database/src/schemas/agentIntervention.ts
+interface AgentInterventionCustomExecutionResult {
+  content: string;
+  pluginState: Record<string, unknown>;
+}
+
+customExecutionResult: jsonb('custom_execution_result').$type<AgentInterventionCustomExecutionResult>(),
+```
+
+```typescript
+// ❌ Bad: hides the contract and makes downstream access untyped.
+customExecutionResult: jsonb('custom_execution_result').$type<Record<string, unknown>>(),
+```
+
+A loosely-typed JSONB column is often a symptom of a deeper problem: the column
+was reserved speculatively ("for future extension") and nothing actually writes
+it. Don't add `metadata` / `extra` JSONB columns for hypothetical future needs —
+a column earns its place only when a concrete writer ships alongside it. When
+review finds such a column, the fix is to **delete the column**, not to invent
+an interface for data that doesn't exist; add a properly-typed column once the
+real requirement arrives.
+
+### Indexes
+
+```typescript
+// Return array (object style deprecated)
+(t) => [uniqueIndex('client_id_user_id_unique').on(t.clientId, t.userId)],
+```
+
+## Type Inference
+
+```typescript
+export const insertAgentSchema = createInsertSchema(agents);
+export type NewAgent = typeof agents.$inferInsert;
+export type AgentItem = typeof agents.$inferSelect;
+```
+
+## Example Pattern
+
+```typescript
+export const agents = pgTable(
+  'agents',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => idGenerator('agents'))
+      .notNull(),
+    slug: varchar('slug', { length: 100 })
+      .$defaultFn(() => randomSlug(4))
+      .unique(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    clientId: text('client_id'),
+    chatConfig: jsonb('chat_config').$type<LobeAgentChatConfig>(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('client_id_user_id_unique').on(t.clientId, t.userId)],
+);
+```
+
+## Common Patterns
+
+### Junction Tables (Many-to-Many)
+
+The surrogate-PK rule above applies to junction tables too — pair uniqueness
+goes in a `uniqueIndex`, not a composite PK (many existing junction tables
+still use composite PKs; that is legacy, not the template):
+
+```typescript
+export const agentsKnowledgeBases = pgTable(
+  'agents_knowledge_bases',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    agentId: text('agent_id')
+      .references(() => agents.id, { onDelete: 'cascade' })
+      .notNull(),
+    knowledgeBaseId: text('knowledge_base_id')
+      .references(() => knowledgeBases.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    enabled: boolean('enabled').default(true),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('agents_knowledge_bases_agent_id_knowledge_base_id_unique').on(
+      t.agentId,
+      t.knowledgeBaseId,
+    ),
+  ],
+);
+```
+
+## Query Style
+
+**Always use `db.select()` builder API. Never use `db.query.*` relational API** (`findMany`, `findFirst`, `with:`).
+
+The relational API generates complex lateral joins with `json_build_array` that are fragile and hard to debug.
+
+### Select Single Row
+
+```typescript
+// ✅ Good
+const [result] = await this.db.select().from(agents).where(eq(agents.id, id)).limit(1);
+return result;
+
+// ❌ Bad: relational API
+return this.db.query.agents.findFirst({
+  where: eq(agents.id, id),
+});
+```
+
+### Select with JOIN
+
+```typescript
+// ✅ Good: explicit select + leftJoin
+const rows = await this.db
+  .select({
+    runId: agentEvalRunTopics.runId,
+    score: agentEvalRunTopics.score,
+    testCase: agentEvalTestCases,
+    topic: topics,
+  })
+  .from(agentEvalRunTopics)
+  .leftJoin(agentEvalTestCases, eq(agentEvalRunTopics.testCaseId, agentEvalTestCases.id))
+  .leftJoin(topics, eq(agentEvalRunTopics.topicId, topics.id))
+  .where(eq(agentEvalRunTopics.runId, runId))
+  .orderBy(asc(agentEvalRunTopics.createdAt));
+
+// ❌ Bad: relational API with `with:`
+return this.db.query.agentEvalRunTopics.findMany({
+  where: eq(agentEvalRunTopics.runId, runId),
+  with: { testCase: true, topic: true },
+});
+```
+
+### Select with Aggregation
+
+```typescript
+// ✅ Good: select + leftJoin + groupBy
+const rows = await this.db
+  .select({
+    id: agentEvalDatasets.id,
+    name: agentEvalDatasets.name,
+    testCaseCount: count(agentEvalTestCases.id).as('testCaseCount'),
+  })
+  .from(agentEvalDatasets)
+  .leftJoin(agentEvalTestCases, eq(agentEvalDatasets.id, agentEvalTestCases.datasetId))
+  .groupBy(agentEvalDatasets.id);
+```
+
+### Raw SQL and Advanced Queries
+
+Prefer Drizzle builders whenever the query reads clearly with `select`,
+`insert().select()`, `update().from()`, joins, CTEs, and `groupBy` — this keeps
+table/column references tied to schema, so changes surface as TypeScript errors.
+Within a builder, expression-level `sql<T>` is fine for features lacking a helper
+(JSON path, casts, aggregates, `CASE`, `NOW()`). Row locks are clauses, not
+expressions — use `.for('update')`, never raw `FOR UPDATE`.
+
+Use `COALESCE` only when null-handling is part of required DB semantics (nullable
+JSONB append/merge, "keep first non-null"). Don't scatter
+`COALESCE(excluded.col, current.col)` across ordinary upsert scalars just to avoid
+an update object — build `set` from defined values only, and hide any remaining
+SQL behind named helpers (`appendJsonbArray`, `mergeJsonbObject`, `keepFirstValue`)
+so the method reads as business intent, not SQL plumbing.
+
+```typescript
+// ✅ Scalars included only when present; SQL hidden behind a named helper.
+// (`userWidgetLogs` is illustrative — swap for the real table.)
+const updateValues = compactUndefined({
+  email: record.email ?? undefined,
+  ip: record.ip ?? undefined,
+});
+await db.insert(userWidgetLogs).values(values).onConflictDoUpdate({
+  set: { ...updateValues, events: appendJsonbArray(userWidgetLogs.events, event), updatedAt: now },
+  target: userWidgetLogs.id,
+});
+
+// ❌ Every scalar becomes SQL plumbing.
+set: {
+  email: sql`COALESCE(excluded.email, ${userWidgetLogs.email})`,
+  ip: sql`COALESCE(excluded.ip, ${userWidgetLogs.ip})`,
+}
+```
+
+When refactoring raw SQL:
+
+- Preserve query shape on latency-sensitive paths. If raw SQL is one roundtrip,
+  don't split it into multiple depth-based queries just to drop `execute`.
+- Use `$with(...)` + `insert().select()` / `update().from()` for multi-step
+  single-roundtrip writes Drizzle can express.
+- Don't rely on `execute<MyRow>(sql...)` for safety — it types rows but doesn't keep
+  selected columns in sync with schema changes.
+- If only a PostgreSQL feature Drizzle can't express works, keep the raw SQL and
+  tighten it: schema refs in interpolations, explicit user scope, a narrow row
+  interface, and regression tests.
+
+Recursive CTEs are the canonical "keep raw" case — there's no clean `WITH RECURSIVE`
+builder, and a rewrite would add depth-based roundtrips:
+
+```typescript
+interface TaskTreeRow {
+  id: string;
+  parent_task_id: string | null;
+}
+
+// execute<T> acceptable: no clean WITH RECURSIVE builder. Keep schema refs in the
+// interpolations and scope every leg to the user.
+const { rows } = await db.execute<TaskTreeRow>(sql`
+  WITH RECURSIVE task_tree AS (
+    SELECT ${tasks.id}, ${tasks.parentTaskId}
+    FROM ${tasks}
+    WHERE ${tasks.id} = ${rootTaskId} AND ${tasks.createdByUserId} = ${userId}
+    UNION ALL
+    SELECT ${tasks.id}, ${tasks.parentTaskId}
+    FROM ${tasks}
+    JOIN task_tree ON ${tasks.parentTaskId} = task_tree.id
+    WHERE ${tasks.createdByUserId} = ${userId}
+  )
+  SELECT * FROM task_tree
+`);
+```
+
+### One-to-Many (Separate Queries)
+
+When you need a parent record with its children, use two queries instead of relational `with:`:
+
+```typescript
+// ✅ Good: two simple queries
+const [dataset] = await this.db
+  .select()
+  .from(agentEvalDatasets)
+  .where(eq(agentEvalDatasets.id, id))
+  .limit(1);
+
+if (!dataset) return undefined;
+
+const testCases = await this.db
+  .select()
+  .from(agentEvalTestCases)
+  .where(eq(agentEvalTestCases.datasetId, id))
+  .orderBy(asc(agentEvalTestCases.sortOrder));
+
+return { ...dataset, testCases };
+```
+
+## Database Migrations
+
+See the `db-migrations` skill for the detailed migration guide.

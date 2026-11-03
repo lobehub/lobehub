@@ -1,0 +1,135 @@
+# Patch Release Scenarios
+
+All Patch Release scenarios automatically bump the patch version (e.g. 2.1.31 → 2.1.32). PR titles do not need to include a version number.
+
+For Desktop Stable releases, read [Desktop Stable Sources](./desktop-stable-sources.md) for Cloud selection, delivered baselines, PR metadata, rebuilds and historical imports.
+
+---
+
+## 1. Weekly Release (canary → main)
+
+The most common release type. Collects a week's worth of changes from canary and ships them to main.
+
+### Steps
+
+1. **Create release branch from canary**
+
+```bash
+git checkout canary
+git pull origin canary
+git checkout -b release/weekly-{YYYYMMDD}
+git push -u origin release/weekly-{YYYYMMDD}
+```
+
+2. **Scan changes and write changelog**
+
+Compute the previous tag from main first — never reuse the last weekly's tag, since hotfixes published in between will be missed:
+
+```bash
+git fetch origin main canary --tags
+PREV_TAG=$(git describe --tags --abbrev=0 origin/main --match 'v*.*.*' --exclude '*-canary*' --exclude '*-nightly*')
+git log "$PREV_TAG..origin/release/weekly-{YYYYMMDD}" --oneline --no-merges
+git diff "$PREV_TAG...origin/release/weekly-{YYYYMMDD}" --stat
+```
+
+Then follow `./release-notes-style.md` § **Computing Inputs (Hard Rules)** to derive PR refs, metrics, and contributors. Every `(#XXXX)` in the body must come from actual commit subjects in this range — never inferred from descriptions.
+
+3. **Create PR to main** with the changelog as the PR body
+
+```bash
+gh pr create \
+  --title "🚀 release: {YYYYMMDD}" \
+  --base main \
+  --head release/weekly-{YYYYMMDD} \
+  --body-file changelog.md
+```
+
+4. **While the PR is open**: `release-pr-version.yml` commits `package.json` to latest stable tag + patch.
+5. **After merge**: auto-tag-release detects `release/*` branch → tags latest stable tag +1.
+
+---
+
+## 2. Bug Hotfix
+
+Emergency bug fix shipped directly from main.
+
+### Steps
+
+1. **Create hotfix branch from main**
+
+```bash
+git checkout main
+git pull --rebase origin main
+git checkout -b hotfix/v{version}-{short-hash}
+git push -u origin hotfix/v{version}-{short-hash}
+```
+
+2. **Select a delivered desktop baseline and create PR to main** with a gitmoji prefix title (e.g. `🐛 fix: description`). Prefer `hotfix:branch --base` or add the generated metadata from [Desktop Stable Sources](./desktop-stable-sources.md); branch name alone does not pin Cloud.
+
+3. **Write a short hotfix changelog** — See `changelog-example/hotfix.md`. Keep it minimal: scope line, 1-3 fix bullets (symptom + fix in one sentence), upgrade note, owner. No long root-cause section — that lives in the commit message.
+   - **Hotfix owner**: Use the actual PR author (retrieve via `gh pr view <number> --json author --jq '.author.login'`), never hardcode a username.
+
+4. **While the PR is open**: `release-pr-version.yml` commits `package.json` to latest stable tag + patch.
+
+5. **After merge**: auto-tag-release detects `hotfix/*` branch → tags latest stable tag +1.
+
+### Script
+
+```bash
+bun run hotfix:branch --base v2.2.21
+```
+
+---
+
+## 3. New Model Launch
+
+New AI model or provider support, typically contributed via community PRs.
+
+### How it works
+
+- Community contributors submit PRs with titles like `✨ feat: add xxx model` or `💄 style: support xxx models`
+- These PR title prefixes (`feat` / `style`) are in the auto-tag trigger list
+- No special branch naming is required. A main-targeted model patch carries the delivered desktop baseline metadata from [Desktop Stable Sources](./desktop-stable-sources.md); merging still triggers auto patch +1.
+
+### When an agent is involved
+
+If asked to add model support, just create a normal feature PR. The title prefix will trigger the release automatically.
+
+---
+
+## 4. DB Schema Migration
+
+Database schema changes that need to be released independently. These require a dedicated changelog explaining the migration for self-hosted users.
+
+### Steps
+
+1. **Create release branch from main and cherry-pick migration commits**
+
+```bash
+git checkout main
+git pull --rebase origin main
+git checkout -b release/db-migration-{name}
+git cherry-pick <migration-commit-hash>
+git push -u origin release/db-migration-{name}
+```
+
+2. **Write a migration-specific changelog** — See `changelog-example/db-migration.md` for the format. This should explain:
+   - What tables/columns are added, modified, or removed
+   - Whether the migration is backwards-compatible
+   - Any action required by self-hosted users
+   - **Migration owner**: Use the actual PR author (retrieve via `gh pr view <number> --json author --jq '.author.login'` or `git log` commit author), never hardcode a username
+
+3. **Create PR to main** with the migration changelog as the PR body
+
+   Add the generated desktop baseline metadata from [Desktop Stable Sources](./desktop-stable-sources.md). A `release/db-migration-*` branch is a targeted patch, not a weekly release selecting latest Cloud.
+
+```bash
+gh pr create \
+  --title "👷 build: {migration description}" \
+  --base main \
+  --head release/db-migration-{name} \
+  --body-file changelog.md
+```
+
+4. **While the PR is open**: `release-pr-version.yml` commits `package.json` to latest stable tag + patch.
+5. **After merge**: auto-tag-release detects `release/*` branch → tags latest stable tag +1.

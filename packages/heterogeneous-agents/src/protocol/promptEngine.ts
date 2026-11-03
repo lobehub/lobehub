@@ -1,0 +1,106 @@
+import { LOBEHUB_CLI_GUIDE_CONTEXT, lobeHubCliGuide } from './lobeHubCliGuide';
+import type { AgentContentBlock, AgentImageBlock } from './types';
+
+export interface HeterogeneousPromptEngineInput {
+  imageList?: HeterogeneousPromptImage[];
+  /**
+   * Whether this prompt opens a fresh agent session rather than continuing one
+   * the CLI resumes natively. Dispatch sites derive it from their own resume
+   * state (`!resumeSessionId`) — the engine cannot see it.
+   *
+   * Session-scoped context (the `lh` guide) is attached only when true: these
+   * blocks are prepended to a USER message, so on a resumed session every
+   * earlier turn's copy is still in the CLI's transcript. Re-sending it each
+   * turn would stack duplicates for the whole life of the conversation. An
+   * executor that loads the guide as a native skill instead (Claude Code, see
+   * `spawn/lobeHubCliPlugin`) drops this copy and delivers it every turn, so
+   * the gaps below do not apply there.
+   *
+   * Rollout consequence, accepted deliberately: a conversation that already had
+   * a CLI session before this shipped resumes into a transcript that never saw
+   * the guide, and keeps resuming without it. Delivering it there needs
+   * per-session "has this been delivered" state rather than this flag. The gap
+   * self-heals whenever the native session does not survive — transcript GC
+   * (30 days), a changed cwd, a recycled sandbox — because every one of those
+   * falls back to a fresh session, and the resume-fallback prompt always
+   * carries the guide.
+   */
+  isNewSession?: boolean;
+  prompt: string;
+  systemContext?: string;
+}
+
+export interface HeterogeneousPromptImage {
+  id?: string;
+  url: string;
+}
+
+export interface HeterogeneousPromptContextProvider {
+  /** Stamped onto the provider's block as `AgentTextBlock.context`. */
+  context?: string;
+  getContext: (input: HeterogeneousPromptEngineInput) => string | undefined;
+  name: string;
+}
+
+const topicReferenceGuidanceProvider: HeterogeneousPromptContextProvider = {
+  getContext: ({ prompt }) => {
+    if (!prompt.includes('<refer_topic') && !prompt.includes('\\<refer\\_topic')) return;
+
+    return [
+      '## Referenced topics',
+      'The user message contains one or more `<refer_topic>` tags. When you need the conversation from a referenced topic, retrieve it with `lh topic view <topic-id>` using the `id` from the tag.',
+    ].join('\n');
+  },
+  name: 'TopicReferenceGuidanceProvider',
+};
+
+/**
+ * Teach the agent that the LobeHub platform is reachable from its own shell.
+ * Session-scoped: see `isNewSession`.
+ */
+const lobeHubCliProvider: HeterogeneousPromptContextProvider = {
+  context: LOBEHUB_CLI_GUIDE_CONTEXT,
+  getContext: ({ isNewSession }) => (isNewSession ? lobeHubCliGuide : undefined),
+  name: 'LobeHubCliProvider',
+};
+
+const defaultContextProviders = [lobeHubCliProvider, topicReferenceGuidanceProvider];
+
+/**
+ * Builds the semantic prompt shared by every heterogeneous-agent transport.
+ * Providers add LobeHub context before the user message; CLI-specific wire
+ * serialization remains the responsibility of `buildAgentInput`.
+ */
+export class HeterogeneousPromptEngine {
+  constructor(
+    private input: HeterogeneousPromptEngineInput,
+    private contextProviders: HeterogeneousPromptContextProvider[] = defaultContextProviders,
+  ) {}
+
+  process(): AgentContentBlock[] {
+    const blocks: AgentContentBlock[] = [];
+    const { imageList = [], prompt, systemContext } = this.input;
+
+    if (systemContext?.trim()) blocks.push({ text: systemContext.trim(), type: 'text' });
+
+    for (const provider of this.contextProviders) {
+      const text = provider.getContext(this.input)?.trim();
+      if (!text) continue;
+      blocks.push({ ...(provider.context && { context: provider.context }), text, type: 'text' });
+    }
+
+    if (prompt) blocks.push({ text: prompt, type: 'text' });
+    blocks.push(
+      ...imageList.map(({ id, url }): AgentImageBlock => ({
+        source: { id, type: 'url', url },
+        type: 'image',
+      })),
+    );
+
+    return blocks;
+  }
+}
+
+export const buildHeterogeneousPrompt = (
+  input: HeterogeneousPromptEngineInput,
+): AgentContentBlock[] => new HeterogeneousPromptEngine(input).process();

@@ -1,0 +1,235 @@
+---
+title: Best Practices for State Management
+description: >-
+  Explore effective state management practices for LobeHub's complex data flow
+  architecture.
+tags:
+  - State Management
+  - LobeHub
+  - Data Flow
+  - Best Practices
+---
+
+# Best Practices for State Management
+
+LobeHub differs from traditional CRUD web applications in that it involves a large amount of rich interactive capabilities. Therefore, it is crucial to design a data flow architecture that is easy to develop and maintain. This document will introduce the best practices for data flow management in LobeHub.
+
+## Key Concepts
+
+| Concept  | Explanation                                                                                                                                                                                                                                                                                                                                                                      |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| store    | The store contains the application's state and actions. It allows access to and modification of the state during application rendering.                                                                                                                                                                                                                                          |
+| state    | State refers to the data of the application, storing the current state of the application. Any change in the state will **trigger a re-rendering** to reflect the new state.                                                                                                                                                                                                     |
+| action   | An action is an operation function that describes the interactive events occurring in the application. Actions are typically triggered by user interactions, network requests, or timers. Actions can be **synchronous** or **asynchronous**.                                                                                                                                    |
+| reducer  | A reducer is a pure function that takes the current state and action as parameters and returns a new state. It is used to update the application's state based on the action type. A reducer is a pure function with no side effects, therefore it is always a **synchronous** function.                                                                                         |
+| selector | A selector is a function used to retrieve specific data from the application's state. It takes the application's state as a parameter and returns computed or transformed data. Selectors can combine parts of the state or multiple states to generate derived data. Selectors are commonly used to map the application's state to a component's props for the component's use. |
+| slice    | A slice is a concept used to express a part of the data model state. It specifies a state slice and its related state, action, reducer, and selector. Using slices, a large store can be divided into smaller, maintainable subtypes.                                                                                                                                            |
+
+## Hierarchical Structure
+
+The structure of the Store can vary greatly depending on the complexity:
+
+- **Low Complexity**: Generally includes 2 to 5 states and 3 to 4 actions. In this case, the structure usually consists of a `store.ts` and an `initialState.ts`.
+
+```bash
+DataFill/store
+├── index.ts
+└── initialState.ts
+```
+
+- **Moderate Complexity**: Typically involves 5 to 15 states and 5 to 10 actions, with the possibility of selectors for derived states and reducers to simplify data changes. The structure usually includes a `store.ts`, an `initialState.ts`, and a `selectors.ts`/`reducer.ts`.
+
+```bash
+IconPicker/store
+├── index.ts
+├── initialState.ts
+├── selectors.ts
+└── store.ts
+```
+
+```bash
+SortableList/store
+├── index.ts
+├── initialState.ts
+├── listDataReducer.ts
+└── store.ts
+```
+
+- **Medium Complexity**: Involves 15 to 30 states and 10 to 20 actions, often requiring the use of multiple slices to manage different actions. The following code represents the internal data flow of the `SortableTree` component:
+
+```bash
+SortableTree/store
+├── index.ts
+├── initialState.ts
+├── selectors.ts
+├── slices
+│ ├── crudSlice.ts
+│ ├── dndSlice.ts
+│ └── selectionSlice.ts
+├── store.ts
+└── treeDataReducer.ts
+```
+
+- **High Complexity**: Involves over 30 states and 20 actions, requiring modular cohesion using slices. Each slice declares its own initState, actions, reducers, and selectors.
+
+The directory structure of the previous version of SessionStore for LobeHub, with high complexity, implements a large amount of business logic. However, with the modularization of slices and the fractal architecture, it is easy to find the corresponding modules, making it easy to maintain and iterate on new features.
+
+```bash
+LobeHub SessionStore
+├── index.ts
+├── initialState.ts
+├── selectors.ts
+├── slices
+│ ├── agentConfig
+│ │ ├── action.ts
+│ │ ├── index.ts
+│ │ ├── initialState.ts
+│ │ └── selectors.ts
+│ ├── chat
+│ │ ├── actions
+│ │ │ ├── index.ts
+│ │ │ ├── message.ts
+│ │ │ └── topic.ts
+│ │ ├── index.ts
+│ │ ├── initialState.ts
+│ │ ├── reducers
+│ │ │ ├── message.ts
+│ │ │ └── topic.ts
+│ │ ├── selectors
+│ │ │ ├── chat.ts
+│ │ │ ├── index.ts
+│ │ │ ├── token.ts
+│ │ │ ├── topic.ts
+│ │ │ └── utils.ts
+│ │ └── utils.ts
+│ └── session
+│ ├── action.ts
+│ ├── index.ts
+│ ├── initialState.ts
+│ ├── reducers
+│ │ └── session.ts
+│ └── selectors
+│ ├── export.ts
+│ ├── index.ts
+│ └── list.ts
+└── store.ts
+```
+
+Based on the provided directory structure of LobeHub SessionStore, we can update the previous document and convert the examples to the implementation of LobeHub's SessionStore. The following is a portion of the updated document:
+
+### Best Practices for LobeHub SessionStore Directory Structure
+
+In the LobeHub application, session management is a complex functional module, so we use the Slice pattern to organize the data flow. Below is the directory structure of LobeHub SessionStore, where each directory and file has its specific purpose:
+
+{/* eslint-disable no-irregular-whitespace */}
+
+```bash
+src/store/session
+├── helpers.ts                         # Helper functions
+├── index.ts                           # Aggregated export file for SessionStore
+├── initialState.ts                    # Aggregated initialState for all slices
+├── selectors.ts                       # Selectors exported from various slices
+├── slices                             # Separated functional modules
+│   ├── session                        # State and operations related to sessions
+│   │   ├── action.test.ts             # Tests for session-related actions
+│   │   ├── action.ts                  # Action definitions related to sessions
+│   │   ├── helpers.ts                 # Helper functions related to sessions
+│   │   ├── initialState.ts            # Initial state for session slice
+│   │   ├── reducers.test.ts           # Tests for session reducers
+│   │   ├── reducers.ts                # Reducer definitions for session state
+│   │   └── selectors                  # Session-related selectors and their tests
+│   │       ├── index.ts               # Entry file for session selectors
+│   │       ├── list.test.ts           # Tests for list selectors
+│   │       ├── list.ts                # Definitions for list-related selectors
+│   │       ├── meta.test.ts           # Tests for meta selectors
+│   │       └── meta.ts                # Definitions for meta-related selectors
+│   └── sessionGroup                   # State and operations related to session groups
+│       ├── action.test.ts             # Tests for session group actions
+│       ├── action.ts                  # Action definitions related to session groups
+│       ├── initialState.ts            # Initial state for session group slice
+│       ├── reducer.test.ts            # Tests for the session group reducer
+│       ├── reducer.ts                 # Reducer definitions for session group state
+│       └── selectors.ts               # Selector definitions related to session groups
+└── store.ts                           # Creation and usage of SessionStore
+```
+
+## Implementation of SessionStore
+
+The legacy SessionStore retains selection/UI state and compatibility actions. Its slices group related behavior. The following simplified example shows how action classes are composed into the store:
+
+### store.ts
+
+```ts
+import { subscribeWithSelector } from 'zustand/middleware';
+import { shallow } from 'zustand/shallow';
+import { createWithEqualityFn } from 'zustand/traditional';
+import { type StateCreator } from 'zustand/vanilla';
+
+import { isDev } from '@/utils/env';
+
+import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
+import { type SessionStoreState, initialState } from './initialState';
+import { type SessionAction, createSessionSlice } from './slices/session/action';
+import { type SessionGroupAction, createSessionGroupSlice } from './slices/sessionGroup/action';
+
+//  ===============  Aggregate createStoreFn ============ //
+
+export interface SessionStore extends SessionAction, SessionGroupAction, SessionStoreState {}
+
+const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (...parameters) => ({
+  ...initialState,
+  ...flattenActions([createSessionSlice(...parameters), createSessionGroupSlice(...parameters)]),
+});
+
+//  ===============  Implement useStore ============ //
+const devtools = createDevtools('session');
+
+export const useSessionStore = createWithEqualityFn<SessionStore>()(
+  subscribeWithSelector(
+    devtools(createStore, {
+      name: 'LobeChat_Session' + (isDev ? '_DEV' : ''),
+    }),
+  ),
+  shallow,
+);
+```
+
+In this `store.ts` file, we create a `useSessionStore` hook that uses the `zustand` library to create a global state manager. We merge the initialState with the actions from each Slice — via the shared `flattenActions` helper — to create a complete SessionStore. The legacy SessionStore manages session selection and UI state. Agent/sidebar lists are loaded and cached by [HomeStore’s replica-backed Agent list](https://github.com/lobehub/lobehub/blob/canary/src/store/home/slices/agentList/action.ts).
+
+### slices/session/action.ts
+
+The action slice below shows the existing `switchSession` action. It checks the active Agent ID and updates `activeAgentId` through a labeled state write.
+
+```ts
+import { type SessionStore } from '@/store/session';
+import { type StoreSetter } from '@/store/types';
+import { setNamespace } from '@/utils/storeDebug';
+
+const n = setNamespace('session');
+
+type Setter = StoreSetter<SessionStore>;
+export const createSessionSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
+  new SessionActionImpl(set, get, _api);
+
+export class SessionActionImpl {
+  readonly #get: () => SessionStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => SessionStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  switchSession = (sessionId: string): void => {
+    if (this.#get().activeAgentId === sessionId) return;
+
+    this.#set({ activeAgentId: sessionId }, false, n(`activeSession/${sessionId}`));
+  };
+}
+
+export type SessionAction = Pick<SessionActionImpl, keyof SessionActionImpl>;
+```
+
+`createSessionSlice` returns an action-class instance. `flattenActions` exposes its public methods on the legacy store, and `SessionAction` is inferred from those methods. List loading and persistence belong to the owning list resource; this selection action only changes UI state.

@@ -1,0 +1,658 @@
+import { isDesktop, TRACING_SCENARIOS } from '@lobechat/const';
+import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
+import {
+  chainInputCompletion,
+  INPUT_COMPLETION_PROMPT_VERSION,
+  INPUT_COMPLETION_SCHEMA_NAME,
+} from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
+import { isCommandPressed } from '@lobechat/utils';
+import type { IEditor, ISlashMenuOption, ISlashSectionOption } from '@lobehub/editor';
+import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin } from '@lobehub/editor';
+import { Editor, useEditorState } from '@lobehub/editor/react';
+import { combineKeys, css, cx } from '@lobehub/ui';
+import Fuse from 'fuse.js';
+import { KEY_ESCAPE_COMMAND } from 'lexical';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useHotkeysContext } from 'react-hotkeys-hook';
+import { useTranslation } from 'react-i18next';
+
+import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
+import { useEnterToSend } from '@/hooks/useEnterToSend';
+import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { usePermission } from '@/hooks/usePermission';
+import { useSingleton } from '@/hooks/useSingleton';
+import { aiChatService } from '@/services/aiChat';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import {
+  labPreferSelectors,
+  settingsSelectors,
+  systemAgentSelectors,
+  userProfileSelectors,
+} from '@/store/user/selectors';
+
+import { useAgentId } from '../hooks/useAgentId';
+import { useChatInputDraft } from '../hooks/useChatInputDraft';
+import { useChatInputHistory } from '../hooks/useChatInputHistory';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { useEffectiveModel } from '../hooks/useEffectiveModel';
+import { useLargeFileLocalPath } from '../hooks/useLargeFileLocalPath';
+import { useChatInputStore, useStoreApi } from '../store';
+import {
+  INSERT_ACTION_TAG_COMMAND,
+  type InsertActionTagPayload,
+  useSlashActionItems,
+} from './ActionTag';
+import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
+import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
+import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
+import { mentionPlainClassName } from './mentionStyle';
+import Placeholder, { type PlaceholderVariant } from './Placeholder';
+import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
+import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
+import { useLocalFileTag } from './useLocalFileTag';
+import { useMentionCategories } from './useMentionCategories';
+
+const className = cx(
+  css`
+    p {
+      margin-block-end: 0;
+    }
+  `,
+  mentionPlainClassName,
+);
+
+// Single-line dimmed preview of the highlighted history entry, shown through the
+// editor's placeholder slot while the input is empty (history popup open).
+const ghostClassName = cx(css`
+  overflow: hidden;
+  display: block;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`);
+
+type MentionOption = ISlashMenuOption | ISlashSectionOption;
+
+const InputEditor = memo<{
+  defaultRows?: number;
+  initialContent?: string;
+  placeholder?: ReactNode;
+  placeholderVariant?: PlaceholderVariant;
+}>(({ defaultRows = 2, initialContent = '', placeholder, placeholderVariant }) => {
+  const { t } = useTranslation('chat');
+  const mobile = useServerConfigStore((s) => s.isMobile);
+  const [
+    editor,
+    slashMenuRef,
+    send,
+    updateMarkdownContent,
+    expand,
+    slashPlacement,
+    isInputCompletionEnabled,
+    isInputHistoryEnabled,
+    isMentionEnabled,
+    isSlashEnabled,
+  ] = useChatInputStore((s) => [
+    s.editor,
+    s.slashMenuRef,
+    s.handleSendButton,
+    s.updateMarkdownContent,
+    s.expand,
+    s.slashPlacement ?? 'top',
+    s.feature?.inputCompletion ?? true,
+    s.feature?.inputHistory ?? true,
+    s.feature?.mention ?? true,
+    s.feature?.slash ?? true,
+  ]);
+
+  const storeApi = useStoreApi();
+  const { restoreDraft, saveDraftDebounced } = useChatInputDraft();
+  const restoredDraftEditorRef = useRef<IEditor | null>(null);
+  const state = useEditorState(editor);
+  const { allowed: canCreateContent } = usePermission('create_content');
+  // view-level General access on the bound agent/group = full read-only input,
+  // matching the workspace-viewer treatment (ChatInputNotice explains why).
+  const { canUseResource } = useChatInputResourceAccess();
+  const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
+  const userId = useUserStore(userProfileSelectors.userId);
+  const { enableScope, disableScope } = useHotkeysContext();
+  const agentId = useAgentId();
+  const inputHistoryScope = useMemo(() => ({ agentId, userId }), [agentId, userId]);
+
+  const { compositionProps, isComposingRef } = useIMECompositionEvent();
+
+  const shouldSendOnEnter = useEnterToSend();
+  const getMarkdownContent = useCallback(
+    () => storeApi.getState().getMarkdownContent(),
+    [storeApi],
+  );
+  const inputHistory = useChatInputHistory({
+    editor,
+    enabled: isInputHistoryEnabled,
+    getMarkdownContent,
+    isComposingRef,
+    scope: inputHistoryScope,
+  });
+
+  // --- Category-based mention system ---
+  const categories = useMentionCategories();
+
+  // Get agent's model info for vision support check and handle paste upload
+  const { model, provider } = useEffectiveModel(agentId);
+  const heterogeneousType = useAgentStore(
+    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
+  );
+
+  const { enableLocalFileTag, searchLocalFiles } = useLocalFileTag();
+
+  const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
+  const mentionSections = useMemo<ISlashSectionOption[]>(
+    () =>
+      categories.map((category) => ({
+        items: category.items,
+        key: `mention-section-${category.id}`,
+        label: category.label,
+        type: 'section',
+      })),
+    [categories],
+  );
+
+  const fuse = useMemo(
+    () =>
+      new Fuse(allMentionItems, {
+        // Agent labels are ReactNodes (name + role + description), which Fuse
+        // skips — their searchable text lives in `metadata.label`/`searchText`.
+        keys: ['key', 'label', 'metadata.label', 'metadata.searchText', 'metadata.topicTitle'],
+        threshold: 0.3,
+      }),
+    [allMentionItems],
+  );
+
+  const mentionItemsFn = useCallback(
+    async (
+      search: { leadOffset: number; matchingString: string; replaceableString: string } | null,
+    ) => {
+      if (search?.matchingString) {
+        const [localFileItems, mentionItems] = await Promise.all([
+          searchLocalFiles(search.matchingString),
+          Promise.resolve(fuse.search(search.matchingString).map((r) => r.item)),
+        ]);
+
+        const rankByKey = new Map(mentionItems.map((item, index) => [String(item.key), index]));
+        const matchedSections = categories
+          .map((category): ISlashSectionOption => {
+            const items = category.items
+              .filter((item) => rankByKey.has(String(item.key)))
+              .sort(
+                (a, b) =>
+                  (rankByKey.get(String(a.key)) ?? Number.MAX_SAFE_INTEGER) -
+                  (rankByKey.get(String(b.key)) ?? Number.MAX_SAFE_INTEGER),
+              );
+
+            return {
+              items,
+              key: `mention-section-${category.id}`,
+              label: category.label,
+              type: 'section',
+            };
+          })
+          .filter((section) => section.items.length > 0);
+
+        if (localFileItems.length > 0) {
+          return [
+            {
+              items: localFileItems,
+              key: 'mention-section-local-file',
+              label: t('mention.category.files'),
+              type: 'section',
+            },
+            ...matchedSections,
+          ] satisfies MentionOption[];
+        }
+
+        return matchedSections;
+      }
+      return mentionSections;
+    },
+    [categories, fuse, mentionSections, searchLocalFiles, t],
+  );
+
+  const enableMention = isMentionEnabled && (allMentionItems.length > 0 || enableLocalFileTag);
+  const heterogeneousName = heterogeneousType
+    ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+    : undefined;
+  // Heterogeneous agents (e.g. Claude Code) don't yet support @-assigning to other agents
+  const showAgentAssignmentHint =
+    isMentionEnabled &&
+    !heterogeneousName &&
+    categories.some((category) => category.id === 'agent');
+  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
+  const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
+  const handlePasteFiles = useCallback(
+    (files: File[]) => handleUploadFiles(routeLargeFilesToLocalPaths(files)),
+    [handleUploadFiles, routeLargeFilesToLocalPaths],
+  );
+
+  // Listen to editor's paste event for file uploads
+  usePasteFile(editor, handlePasteFiles);
+
+  useEffect(() => {
+    const fn = (e: BeforeUnloadEvent) => {
+      if (!state.isEmpty) {
+        // set returnValue to trigger alert modal
+        // Note: No matter what value is set, the browser will display the standard text
+        e.returnValue = 'You are typing something, are you sure you want to leave?';
+      }
+    };
+    window.addEventListener('beforeunload', fn);
+    return () => {
+      window.removeEventListener('beforeunload', fn);
+    };
+  }, [state.isEmpty]);
+
+  const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
+
+  const slashActionItems = useSlashActionItems();
+  const slashItems = useCallback(
+    async (
+      search: { leadOffset: number; matchingString: string; replaceableString: string } | null,
+    ) => {
+      const actionItems =
+        typeof slashActionItems === 'function' ? await slashActionItems(search) : slashActionItems;
+
+      return actionItems;
+    },
+    [slashActionItems],
+  );
+
+  // --- Auto-completion ---
+  const inputCompletionConfig = useUserStore(systemAgentSelectors.inputCompletion);
+  const isAutoCompleteEnabled = isInputCompletionEnabled && inputCompletionConfig.enabled;
+
+  useEffect(() => {
+    storeApi.getState().clearInputCompletionError();
+  }, [inputCompletionConfig.model, inputCompletionConfig.provider, storeApi]);
+
+  const getMessagesRef = useSingleton(() => ({
+    current: storeApi.getState().getMessages,
+  }));
+  useEffect(() => {
+    return storeApi.subscribe((s) => {
+      getMessagesRef.current = s.getMessages;
+    });
+  }, [getMessagesRef, storeApi]);
+
+  // Map each in-flight suggestion to its tracing row so the Tab/Esc/typing
+  // callbacks below can report `recordFeedback` against the correct id.
+  // Keyed by editor-provided `suggestionId`; entries are dropped on
+  // accept/reject (the plugin guarantees one of those eventually fires).
+  const tracingIdBySuggestion = useSingleton(() => new Map<string, string>());
+
+  const handleAutoComplete = useCallback(
+    async ({
+      abortSignal,
+      afterText,
+      input,
+      suggestionId,
+    }: {
+      abortSignal: AbortSignal;
+      afterText: string;
+      editor: any;
+      input: string;
+      selectionType: string;
+      suggestionId?: string;
+    }): Promise<string | null> => {
+      // Skip autocomplete during IME composition (e.g. Chinese input method)
+      if (isComposingRef.current) return null;
+
+      if (storeApi.getState().inputCompletionError) return null;
+
+      if (!input.trim()) return null;
+
+      // Skip when cursor is not at end of paragraph — inserting a placeholder
+      // mid-text causes nested editor updates that freeze the input
+      if (afterText.trim()) return null;
+
+      const config = systemAgentSelectors.inputCompletion(useUserStore.getState());
+      const context = getMessagesRef.current?.();
+      const { messages, schema } = chainInputCompletion(input, afterText, context);
+
+      const abortController = new AbortController();
+      abortSignal.addEventListener('abort', () => abortController.abort());
+
+      const currentTopicId = useChatStore.getState().activeTopicId;
+
+      let envelope: { data?: { completion?: string } | null; tracingId?: string } | null;
+      try {
+        envelope = (await aiChatService.generateJSON(
+          {
+            messages,
+            metadata: { trigger: RequestTrigger.InputCompletion },
+            model: config.model,
+            provider: config.provider,
+            schema,
+            tracing: {
+              agentId,
+              // Use the user's actual typed text as the row's `input_hint`
+              // — the wrapped prompt's first user message is templated and
+              // not human-scannable.
+              inputHint: input,
+              promptVersion: INPUT_COMPLETION_PROMPT_VERSION,
+              scenario: TRACING_SCENARIOS.InputCompletion,
+              schemaName: INPUT_COMPLETION_SCHEMA_NAME,
+              topicId: currentTopicId,
+            },
+          },
+          abortController,
+        )) as { data?: { completion?: string } | null; tracingId?: string } | null;
+      } catch (error) {
+        if (!isInputCompletionAbortError(error)) {
+          storeApi.getState().pauseInputCompletion(createInputCompletionError(error));
+        }
+        return null;
+      }
+
+      if (abortSignal.aborted) return null;
+
+      // Another in-flight request may have failed while this one was waiting.
+      // Keep the breaker active and drop this stale suggestion in that race.
+      if (storeApi.getState().inputCompletionError) return null;
+
+      const completion = envelope?.data?.completion?.trimEnd();
+      if (!completion) return null;
+
+      if (suggestionId && envelope?.tracingId) {
+        tracingIdBySuggestion.set(suggestionId, envelope.tracingId);
+      }
+      return completion;
+    },
+    [agentId, getMessagesRef, isComposingRef, storeApi, tracingIdBySuggestion],
+  );
+
+  const handleSuggestionAccepted = useCallback(
+    ({
+      acceptedText,
+      suggestionId,
+      visibleMs,
+    }: {
+      acceptedText: string;
+      suggestionId: string;
+      visibleMs: number;
+    }) => {
+      const tracingId = tracingIdBySuggestion.get(suggestionId);
+      if (!tracingId) return;
+      tracingIdBySuggestion.delete(suggestionId);
+      aiChatService
+        .recordTracingFeedback({
+          data: { acceptedText, visibleMs },
+          signal: 'positive',
+          source: 'autocomplete_tab',
+          tracingId,
+        })
+        .catch((err) => {
+          console.warn('[InputCompletion] recordFeedback (accepted) failed', err);
+        });
+    },
+    [tracingIdBySuggestion],
+  );
+
+  const handleSuggestionRejected = useCallback(
+    ({
+      reason,
+      suggestionId,
+      visibleMs,
+    }: {
+      reason: 'cursor-move' | 'typing' | 'esc' | 'blur' | 'other';
+      suggestionId: string;
+      visibleMs: number;
+    }) => {
+      const tracingId = tracingIdBySuggestion.get(suggestionId);
+      if (!tracingId) return;
+      tracingIdBySuggestion.delete(suggestionId);
+      // IME composition starts by dispatching KEY_ESCAPE_COMMAND from this
+      // component (see onCompositionStart below); that arrives here with
+      // reason='esc' but it isn't a real reject — recode as neutral so the
+      // signal isn't poisoned for CJK input users.
+      const isImeClear = reason === 'esc' && isComposingRef.current;
+      const signal: 'positive' | 'negative' | 'neutral' =
+        !isImeClear && reason === 'esc' ? 'negative' : 'neutral';
+      const source = isImeClear ? 'autocomplete_ime' : `autocomplete_${reason}`;
+      aiChatService
+        .recordTracingFeedback({
+          data: { reason, visibleMs },
+          signal,
+          source,
+          tracingId,
+        })
+        .catch((err) => {
+          console.warn('[InputCompletion] recordFeedback (rejected) failed', err);
+        });
+    },
+    [isComposingRef, tracingIdBySuggestion],
+  );
+
+  const autoCompletePlugin = useMemo(
+    () =>
+      isAutoCompleteEnabled
+        ? Editor.withProps(ReactAutoCompletePlugin, {
+            delay: 600,
+            onAutoComplete: handleAutoComplete,
+            onSuggestionAccepted: handleSuggestionAccepted,
+            onSuggestionRejected: handleSuggestionRejected,
+          })
+        : null,
+    [isAutoCompleteEnabled, handleAutoComplete, handleSuggestionAccepted, handleSuggestionRejected],
+  );
+
+  // --- Stable mentionOption & slashOption to prevent infinite re-render on paste ---
+  const mentionMarkdownWriter = useCallback((mention: any) => {
+    if (mention.metadata?.type === 'topic') {
+      return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
+    }
+    // localFile references are their own node (LocalFileTagNode) and serialize
+    // via that plugin's always-registered markdown writer — they never reach this
+    // generic mention writer, which is only wired up when mentionOption is enabled.
+    return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
+  }, []);
+
+  const mentionOnSelect = useCallback((editor: any, option: any) => {
+    if (option.metadata?.type === 'topic') {
+      editor.dispatchCommand(INSERT_REFER_TOPIC_COMMAND, {
+        topicId: option.metadata.topicId as string,
+        topicTitle: String(option.metadata.topicTitle ?? option.label),
+      });
+    } else if (option.metadata?.type === 'skill' || option.metadata?.type === 'tool') {
+      const payload: InsertActionTagPayload = {
+        category: option.metadata.actionCategory as 'skill' | 'tool',
+        label: String(option.label),
+        type: String(option.metadata.actionType),
+      };
+      editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+    } else if (option.metadata?.type === 'localFile') {
+      editor.dispatchCommand(INSERT_LOCAL_FILE_TAG_COMMAND, {
+        isDirectory: !!option.metadata.isDirectory,
+        name: String(option.metadata.name ?? option.label),
+        path: String(option.metadata.path ?? ''),
+      });
+    } else {
+      // Agent options carry a ReactNode label; the chip needs the plain name
+      // kept in `metadata.label`. Other types (member) still use `label` itself.
+      editor.dispatchCommand(INSERT_MENTION_COMMAND, {
+        label: String(option.metadata?.label ?? option.label),
+        metadata: option.metadata,
+      });
+    }
+  }, []);
+
+  const mentionOption = useMemo(
+    () =>
+      enableMention
+        ? {
+            items: mentionItemsFn,
+            markdownWriter: mentionMarkdownWriter,
+            maxLength: 50,
+            onSelect: mentionOnSelect,
+          }
+        : undefined,
+    [enableMention, mentionItemsFn, mentionMarkdownWriter, mentionOnSelect],
+  );
+
+  const slashOption = useMemo(
+    () => (isSlashEnabled ? { items: slashItems } : undefined),
+    [isSlashEnabled, slashItems],
+  );
+
+  const richRenderProps = useMemo(() => {
+    const basePlugins = !enableRichRender
+      ? CHAT_INPUT_EMBED_PLUGINS
+      : createChatInputRichPlugins({ linkPlugin: false });
+
+    const plugins = autoCompletePlugin ? [...basePlugins, autoCompletePlugin] : basePlugins;
+
+    return !enableRichRender
+      ? { enablePasteMarkdown: false, markdownOption: false, plugins }
+      : { plugins };
+  }, [enableRichRender, autoCompletePlugin]);
+
+  const handleEditorInit = useCallback(
+    (editor: IEditor) => {
+      const saved = storeApi.getState()._savedEditorState;
+      storeApi.setState({ _savedEditorState: undefined, editor });
+      if (saved) {
+        requestAnimationFrame(() => {
+          editor.setDocument('json', saved);
+        });
+        return;
+      }
+
+      if (restoredDraftEditorRef.current === editor) return;
+      restoredDraftEditorRef.current = editor;
+
+      requestAnimationFrame(() => {
+        restoreDraft(editor);
+      });
+    },
+    [restoreDraft, storeApi],
+  );
+
+  const ghostMarkdown = inputHistory.ghostMarkdown;
+
+  return (
+    <>
+      <InputHistoryPopup
+        activeIndex={inputHistory.popup.activeIndex}
+        container={(slashMenuRef as any)?.current ?? null}
+        entries={inputHistory.popup.entries}
+        open={inputHistory.popup.open}
+        onClose={inputHistory.close}
+        onHover={inputHistory.setActiveIndex}
+        onSelect={inputHistory.confirm}
+      />
+      <Editor
+        autoFocus
+        pasteAsPlainText
+        className={className}
+        content={initialContent}
+        editable={canCreateContent && canUseResource}
+        editor={editor}
+        getPopupContainer={() => (slashMenuRef as any)?.current ?? null}
+        {...{ slashPlacement }}
+        {...richRenderProps}
+        mentionOption={mentionOption}
+        slashOption={slashOption}
+        type={'text'}
+        variant={'chat'}
+        placeholder={
+          ghostMarkdown === undefined ? (
+            (placeholder ?? (
+              <Placeholder
+                heterogeneousName={heterogeneousName}
+                showAgentAssignmentHint={showAgentAssignmentHint}
+                variant={placeholderVariant}
+              />
+            ))
+          ) : (
+            <span className={ghostClassName}>{getHistoryPreviewText(ghostMarkdown)}</span>
+          )
+        }
+        style={{
+          fontSize: mobile ? 16 : undefined,
+          minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
+        }}
+        onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
+        onInit={handleEditorInit}
+        onBlur={() => {
+          disableScope(HotkeyEnum.AddUserMessage);
+          saveDraftDebounced.flush();
+        }}
+        onChange={() => {
+          updateMarkdownContent();
+          inputHistory.handleEditorChange();
+          saveDraftDebounced();
+        }}
+        onCompositionStart={({ event }) => {
+          compositionProps.onCompositionStart(event);
+          // Clear autocomplete placeholder nodes before IME composition starts —
+          // composing next to placeholder inline nodes freezes the editor.
+          if (isAutoCompleteEnabled) {
+            editor?.dispatchCommand(
+              KEY_ESCAPE_COMMAND,
+              new KeyboardEvent('keydown', { key: 'Escape' }),
+            );
+          }
+        }}
+        onContextMenu={async ({ event: e, editor }) => {
+          if (isDesktop) {
+            e.preventDefault();
+            const { electronSystemService } = await import('@/services/electron/system');
+
+            const selectionText = editor.getSelectionDocument('markdown') as unknown as string;
+
+            await electronSystemService.showContextMenu('editor', {
+              selectionText: selectionText || undefined,
+            });
+          }
+        }}
+        onFocus={() => {
+          enableScope(HotkeyEnum.AddUserMessage);
+        }}
+        onKeyDown={({ event }) => {
+          if (inputHistory.handleKeyDown(event)) return true;
+        }}
+        onPressEnter={({ event: e }) => {
+          // While the history popup is open, Enter confirms the highlighted entry
+          // instead of sending. onPressEnter runs before onKeyDown for Enter, so
+          // returning true here also prevents a newline / send.
+          if (inputHistory.popup.open) {
+            inputHistory.confirm();
+            return true;
+          }
+          if (e.shiftKey || isComposingRef.current) return;
+          // when user like alt + enter to add ai message
+          if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
+          // In fullscreen mode, Enter inserts newline; only Cmd/Ctrl+Enter sends
+          if (expand) {
+            if (isCommandPressed(e)) {
+              send();
+              return true;
+            }
+            return;
+          }
+          if (shouldSendOnEnter(e)) {
+            send();
+            return true;
+          }
+        }}
+      />
+    </>
+  );
+});
+
+InputEditor.displayName = 'InputEditor';
+
+export default InputEditor;

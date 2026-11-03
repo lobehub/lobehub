@@ -1,0 +1,103 @@
+---
+title: 在 LobeHub 中集成 Ollama
+description: 学习如何在 LobeHub 中配置与部署 Ollama 语言模型框架，提升本地大模型使用体验。
+tags:
+  - Ollama
+  - LobeHub
+  - 语言模型
+  - 集成
+  - 配置
+  - 部署
+---
+
+# 与 Ollama 集成
+
+Ollama 是一款强大的本地运行大型语言模型（LLM）的框架，支持多种语言模型，包括 Llama 2, Mistral 等。现在，LobeHub 已经支持与 Ollama 的集成，这意味着你可以在 LobeHub 中轻松使用 Ollama 提供的语言模型来增强你的应用。
+
+本文档将指导你如何配置与部署 LobeHub 来使用 Ollama：
+
+## 本地启动 Ollama
+
+首先，你需要安装 Ollama，安装与配置 Ollama 的详细步骤可以参考 [Ollama 官方站点](https://ollama.com)。
+
+## 本地运行 LobeHub
+
+假设你已经在本地 `11434` 端口启动了 Ollama 服务。运行以下 Docker 命令行，在本地启动 LobeHub：
+
+```bash
+docker run -d -p 3210:3210 -e OLLAMA_PROXY_URL=http://host.docker.internal:11434 lobehub/lobehub
+```
+
+接下来，你就可以使用 LobeHub 与本地 LLM 对话了。
+
+关于在 LobeHub 中使用 Ollama 的更多信息，请查阅 [Ollama 使用](/zh/docs/usage/providers/ollama)。
+
+## 非本地访问 Ollama
+
+由于 Ollama 默认参数在启动时设置了仅本地访问，所以跨域访问以及端口监听需要进行额外的环境变量设置 `OLLAMA_ORIGINS` 和 `OLLAMA_HOST`。
+
+### Ollama 环境变量
+
+| 环境变量                | 描述               | 默认值                                                      | 附加说明                          |
+| ------------------- | ---------------- | -------------------------------------------------------- | ----------------------------- |
+| `OLLAMA_HOST`       | 绑定的主机和端口         | "127.0.0.1:11434"                                        | 设置 0.0.0.0: 端口号 可以指定所有人访问特定端口 |
+| `OLLAMA_ORIGINS`    | 允许的跨域源列表，逗号分隔    | 仅本地访问                                                    | 设置 "\*" 可以避免 CORS 跨域错误，按需设置   |
+| `OLLAMA_MODELS`     | 模型存放的路径          | "\~/.ollama/models" 或 "/usr/share/ollama/.ollama/models" | 按需指定                          |
+| `OLLAMA_KEEP_ALIVE` | 模型在显存中保持加载的持续时间  | "5m"                                                     | 按需加载和释放显存可以有效降低显卡压力，但会增加硬盘读写  |
+| `OLLAMA_DEBUG`      | 设置为 1 以启用额外的调试日志 | 默认关闭                                                     |                               |
+
+### 在 Windows 上设置环境变量
+
+在 Windows 上，Ollama 继承了您的用户和系统环境变量。
+
+1. 首先通过 Windows 任务栏点击 Ollama 退出程序。
+2. 从控制面板编辑系统环境变量。
+3. 为您的用户账户编辑或新建 Ollama 的环境变量，比如`OLLAMA_HOST`、`OLLAMA_ORIGINS`等。
+4. 点击`OK/应用`保存。
+5. 重新运行`Ollama`。
+
+### 在 Mac 上设置环境变量
+
+如果 Ollama 作为 macOS 应用程序运行，你需要使用 `launchctl` 设置环境变量：
+
+1. 对于每个环境变量，调用 `launchctl setenv`。
+
+   ```bash
+   launchctl setenv OLLAMA_HOST "0.0.0.0"
+   launchctl setenv OLLAMA_ORIGINS "*"
+   ```
+
+2. 重启 Ollama 应用程序。
+
+### 在 Linux 上设置环境变量
+
+如果 Ollama 作为 systemd 服务运行，应该使用`systemctl`设置环境变量：
+
+1. 通过调用`sudo systemctl edit ollama.service`编辑 systemd 服务。
+
+   ```bash
+   sudo systemctl edit ollama.service
+   ```
+
+2. 对于每个环境变量，在`[Service]`部分下添加`Environment`：
+
+   ```bash
+   [Service]
+   Environment="OLLAMA_HOST=0.0.0.0"
+   Environment="OLLAMA_ORIGINS=*"
+   ```
+
+3. 保存并退出。
+
+4. 重载`systemd`并重启 Ollama：
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl restart ollama
+   ```
+
+### 在 Docker 上设置环境变量
+
+如果 Ollama 作为 Docker 容器运行，你可以将环境变量添加到 `docker run` 命令中。
+
+详细配置方法可以参考 [Ollama 官方文档](https://github.com/ollama/ollama/blob/main/docs/faq.md#how-do-i-configure-ollama-server)。

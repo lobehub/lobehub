@@ -1,0 +1,1065 @@
+import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
+import { projectToolViewModels } from '@lobechat/tool-view-model';
+import {
+  AgentSenderMetadataSchema,
+  CreateNewMessageParamsSchema,
+  omitServerOwnedMessageMetadata,
+  UpdateMessageParamsSchema,
+  UpdateMessagePluginSchema,
+  UpdateMessageRAGParamsSchema,
+} from '@lobechat/types';
+import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
+import { TRPCError } from '@trpc/server';
+import { z } from 'zod';
+
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import {
+  cloudWorkspaceAuth,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
+import { MESSAGE_KEYWORD_SEARCH_MAX_LIMIT, MessageModel } from '@/database/models/message';
+import { TopicShareModel } from '@/database/models/topicShare';
+import { CompressionRepository } from '@/database/repositories/compression';
+import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
+import { publicProcedure, router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { FileService } from '@/server/services/file';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
+import { type MessageBatchOperation, MessageService } from '@/server/services/message';
+
+import {
+  assertCanUseConversationTargets,
+  assertCanUseCreateMessageTargets,
+  assertCanUseMessageTargets,
+  assertCanUseTopicTargets,
+  assertCanViewMessageTargets,
+  assertCanViewTopicTargets,
+} from './_helpers/conversationResourceGuard';
+import { getMessagesPageSizeSchema } from './_helpers/getMessagesPageSize';
+import { messagesByCursorInputSchema, readMessagesByCursor } from './_helpers/messagesByCursor';
+import { projectSharedTopicMessages } from './_helpers/projectSharedTopicMessages';
+import { resolveContext } from './_helpers/resolveContext';
+import {
+  assertCreatorMessageTargets,
+  assertCreatorTopicTargets,
+} from './_helpers/shareVisitorTargetGuard';
+import { readTopicPreviews, topicPreviewsInputSchema } from './_helpers/topicPreviews';
+import { basicContextSchema } from './_schema/context';
+
+const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
+
+/** Ctx slice consumed by the conversation General-access guards. */
+const guardCtx = (ctx: {
+  serverDB: Parameters<typeof assertCanUseMessageTargets>[0]['db'];
+  userId: string;
+  workspaceId?: string | null;
+}) => ({ db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId });
+
+const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
+
+  return opts.next({
+    ctx: {
+      compressionRepo: new CompressionRepository(ctx.serverDB, ctx.userId, wsId),
+      fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
+      topicDoctorRepo: new TopicDoctorRepo(ctx.serverDB, ctx.userId, wsId),
+    },
+  });
+});
+
+const messageSearchProcedure = messageProcedure.use(async (opts) => {
+  const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const ftsSearchRepo = await createFtsSearchRepo({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+    usage: 'message_search',
+    workspaceId,
+  });
+
+  return opts.next({
+    ctx: {
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
+    },
+  });
+});
+
+/**
+ * Shared input for the ownership-scoped message analytics queries
+ * (count / countByTopic / topicStats). Every field is an optional filter
+ * applied on top of the `userId × workspace` ownership predicate.
+ */
+const messageAnalyticsSchema = z.object({
+  agentId: z.string().optional(),
+  endDate: z.string().optional(),
+  range: z.tuple([z.string(), z.string()]).optional(),
+  role: z.string().optional(),
+  startDate: z.string().optional(),
+  topicId: z.string().optional(),
+});
+
+const heterogeneousToolStateSnapshotSchema = z.object({
+  operationId: z.string().min(1),
+  snapshotSeq: z.number().int().positive(),
+});
+
+const messageBatchOperationSchema = z.discriminatedUnion('type', [
+  z.object({
+    message: CreateNewMessageParamsSchema,
+    type: z.literal('createMessage'),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('updateMessage'),
+    value: UpdateMessageParamsSchema,
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('updateToolMessage'),
+    value: z.object({
+      content: z.string().optional(),
+      heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
+      metadata: z.object({}).passthrough().optional(),
+      pluginError: z.any().optional(),
+      pluginState: z.record(z.string(), z.any()).optional(),
+    }),
+  }),
+]);
+
+export const messageRouter = router({
+  addFilesToMessage: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z
+        .object({
+          fileIds: z.array(z.string()),
+          id: z.string(),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, fileIds, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      // Agent-share visitor messages live under the creator's `userId`;
+      // attaching files to one on the creator's behalf would leak into the
+      // visitor's transcript — see `assertCreatorMessageTargets` for why this
+      // guard sits at the RPC boundary rather than in the model defaults.
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.addFilesToMessage(id, fileIds, resolved);
+    }),
+
+  batchMutate: messageProcedure
+    .use(withScopedPermission('message:create'))
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        operations: z.array(messageBatchOperationSchema).min(1).max(200),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const operations: MessageBatchOperation[] = await Promise.all(
+        input.operations.map(async (rawOperation): Promise<MessageBatchOperation> => {
+          // Creates are passthrough, so a client could carry server-owned metadata.
+          const operation =
+            rawOperation.type === 'createMessage'
+              ? {
+                  ...rawOperation,
+                  message: {
+                    ...rawOperation.message,
+                    metadata: omitServerOwnedMessageMetadata(rawOperation.message.metadata),
+                  },
+                }
+              : rawOperation;
+          if (operation.type !== 'createMessage') return operation as MessageBatchOperation;
+          const resolved = await resolveContext(
+            { ...operation.message, agentId: operation.message.agentId ?? undefined },
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          );
+
+          return {
+            ...operation,
+            message: {
+              ...operation.message,
+              agentId: resolved.agentId,
+              sessionId: resolved.sessionId,
+            },
+          } as MessageBatchOperation;
+        }),
+      );
+
+      const targetedIds = operations.flatMap((op) => (op.type === 'createMessage' ? [] : [op.id]));
+      await assertCanUseMessageTargets(guardCtx(ctx), targetedIds);
+      // Same visitor exclusion the single-message update RPCs apply — the
+      // batch path reaches the ownership-only model writes directly.
+      await assertCreatorMessageTargets(guardCtx(ctx), targetedIds);
+      await assertCanUseCreateMessageTargets(
+        guardCtx(ctx),
+        operations.flatMap((op) => (op.type === 'createMessage' ? [op.message] : [])),
+      );
+      // Creates carry no message id, but they DO name a topic: refuse to
+      // append creator rows into a visitor transcript (the workspace guard
+      // above is a no-op in personal mode, where every share lives).
+      await assertCreatorTopicTargets(
+        guardCtx(ctx),
+        operations.flatMap((op) =>
+          op.type === 'createMessage' && op.message.topicId ? [op.message.topicId] : [],
+        ),
+      );
+
+      return ctx.messageService.batchMutate(operations);
+    }),
+
+  /**
+   * Cancel compression by deleting the compression group and restoring original messages
+   */
+  cancelCompression: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        agentId: z.string(),
+        groupId: z.string().nullish(),
+        messageGroupId: z.string(),
+        sourceGroupIds: z.array(z.string()).optional(),
+        threadId: z.string().nullish(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { messageGroupId, agentId, groupId, threadId, topicId } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
+      // Same visitor guard as `addFilesToMessage` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [topicId]);
+
+      return ctx.messageService.cancelCompression(messageGroupId, {
+        agentId,
+        groupId,
+        threadId,
+        topicId,
+      });
+    }),
+
+  listAll: messageProcedure
+    .input(
+      messageAnalyticsSchema
+        .extend({
+          current: z.number().optional(),
+          pageSize: z.number().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.messageModel.queryAll(input);
+    }),
+
+  count: messageProcedure
+    .input(messageAnalyticsSchema.extend({ approximate: z.boolean().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const { approximate, ...filters } = input ?? {};
+
+      // Dashboard totals tolerate an estimate; an exact COUNT over a heavy
+      // account's messages takes tens of seconds.
+      if (approximate) return ctx.messageModel.countApproximate(filters);
+
+      return ctx.messageModel.count(filters);
+    }),
+
+  /**
+   * Count messages grouped by topic (server-side GROUP BY), sorted by count
+   * desc. Optionally scoped by agent / role / date range.
+   */
+  countByTopic: messageProcedure
+    .input(messageAnalyticsSchema.optional())
+    .query(async ({ ctx, input }) => {
+      return ctx.messageModel.countGroupByTopic(input);
+    }),
+
+  countWords: messageProcedure
+    .input(
+      z
+        .object({
+          endDate: z.string().optional(),
+          range: z.tuple([z.string(), z.string()]).optional(),
+          startDate: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.messageModel.countWords(input);
+    }),
+
+  /**
+   * Create a compression group for old messages
+   * Creates a placeholder group, marks messages as compressed
+   * Returns messages to summarize for frontend AI generation
+   */
+  createCompressionGroup: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        agentId: z.string(),
+        groupId: z.string().nullish(),
+        messageIds: z.array(z.string()),
+        threadId: z.string().nullish(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { topicId, messageIds, agentId, groupId, threadId } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
+      // Same visitor guard as `addFilesToMessage` above, plus the message ids
+      // themselves — compression reads and rewrites their content.
+      await assertCreatorTopicTargets(guardCtx(ctx), [topicId]);
+      await assertCreatorMessageTargets(guardCtx(ctx), messageIds);
+
+      return ctx.messageService.createCompressionGroup(topicId, messageIds, {
+        agentId,
+        groupId,
+        threadId,
+        topicId,
+      });
+    }),
+
+  createMessage: messageProcedure
+    .use(withScopedPermission('message:create'))
+    .input(CreateNewMessageParamsSchema)
+    .mutation(async ({ input, ctx }) => {
+      const resolved = await resolveContext(
+        { ...input, agentId: input.agentId ?? undefined },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
+      // The declared agent/group is client-supplied and can be omitted or
+      // forged while still inserting into `topicId` — guard the topic's own
+      // DB-resolved target as well.
+      if (input.topicId) {
+        await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+        // Visitor topics carry the creator's userId, so ownership alone would
+        // let the creator write into a visitor's private transcript.
+        await assertCreatorTopicTargets(guardCtx(ctx), [input.topicId]);
+      }
+
+      // Create message with the resolved agentId. The input is passthrough, so
+      // server-owned metadata a client slipped in is dropped here.
+      return ctx.messageService.createMessage({
+        ...input,
+        agentId: resolved.agentId,
+        sessionId: resolved.sessionId,
+        metadata: omitServerOwnedMessageMetadata(input.metadata),
+      } as any);
+    }),
+
+  /**
+   * Finalize compression by updating the group with generated summary
+   */
+  finalizeCompression: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        agentId: z.string(),
+        content: z.string(),
+        groupId: z.string().nullish(),
+        messageGroupId: z.string(),
+        threadId: z.string().nullish(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { messageGroupId, content, ...params } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [params.topicId]);
+      // Same visitor guard as `addFilesToMessage` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [params.topicId]);
+
+      return ctx.messageService.finalizeCompression(messageGroupId, content, params);
+    }),
+
+  /**
+   * Report the messages this topic's tree keeps off screen, and what could be done about it.
+   * Read-only — the repair is a separate, explicit call.
+   */
+  diagnoseTopic: messageProcedure
+    .input(z.object({ agentId: z.string().nullish(), topicId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.topicDoctorRepo.diagnose(input);
+    }),
+
+  /**
+   * Rewrite the minimum needed to put those messages back on screen. The patch is re-derived
+   * from the database here rather than taken from the client — this edits conversation
+   * history, so it runs off the server's own view of the tree.
+   */
+  repairTopic: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(z.object({ agentId: z.string().nullish(), topicId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.topicDoctorRepo.repair(input);
+    }),
+
+  /**
+   * Raw tool payload for one message, fetched on demand when the projected
+   * read path dropped it (`UIChatMessage.payloadOmitted`).
+   */
+  /** Bulk form of {@link getToolResultPayload}; see its note on ids as locators. */
+  getToolResultPayloads: messageProcedure
+    .input(z.object({ messageIds: z.array(z.string()).min(1).max(500) }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(guardCtx(ctx), input.messageIds);
+
+      return ctx.messageService.getToolResultPayloads(input.messageIds);
+    }),
+
+  /**
+   * Where a message came from, for answering it: its conversation and, for a
+   * message another agent sent, that agent and its conversation
+   * (`metadata.agentSender`). Read by `lh message reply`.
+   */
+  getMessageOrigin: messageProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(guardCtx(ctx), [input.id]);
+
+      const message = await ctx.messageModel.findById(input.id);
+      if (!message) return null;
+
+      const agentSender = AgentSenderMetadataSchema.safeParse(
+        (message.metadata as Record<string, unknown> | null)?.agentSender,
+      );
+      return {
+        agentId: message.agentId ?? null,
+        agentSender: agentSender.success ? agentSender.data : null,
+        id: message.id,
+        role: message.role,
+        threadId: message.threadId ?? null,
+        topicId: message.topicId ?? null,
+      };
+    }),
+
+  getToolResultPayload: messageProcedure
+    .input(z.object({ messageId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      // A message id is a locator, not an authorization. In a workspace the
+      // model reads are workspace-scoped, so without this a member who kept an
+      // id could pull tool output from a conversation they cannot open — the
+      // same guard `getMessages` applies before returning the list.
+      await assertCanViewMessageTargets(guardCtx(ctx), [input.messageId]);
+
+      return ctx.messageService.getToolResultPayload(input.messageId);
+    }),
+
+  getHeatmaps: messageProcedure.query(async ({ ctx }) => {
+    return ctx.messageModel.getHeatmaps();
+  }),
+
+  getTokenHeatmaps: messageProcedure.query(async ({ ctx }) => {
+    return ctx.messageModel.getTokenHeatmaps();
+  }),
+
+  getMessages: publicProcedure
+    .use(cloudWorkspaceAuth)
+    .use(serverDatabase)
+    .input(
+      z.object({
+        agentId: z.string().nullish(),
+        // Round-cursor for loading older history: only rows strictly older than
+        // this (createdAt, id) tuple, round-aligned like page 0. See
+        // `QueryMessageParams.before`.
+        before: z.object({ createdAt: z.date(), id: z.string() }).optional(),
+        current: z.number().optional(),
+        groupId: z.string().nullish(),
+        // Opt-in for `file` work summaries in the payload. Absent → the legacy
+        // set, so already-deployed clients (no `file` descriptor) never receive
+        // a `file` summary that would crash their works UI. New clients set it.
+        includeFileWorks: z.boolean().optional(),
+        pageSize: getMessagesPageSizeSchema,
+        /**
+         * Hand back render-facing tool view models instead of the stored
+         * payloads (`@lobechat/tool-view-model`). Opt-in per read: see the
+         * note where it is applied.
+         */
+        projectToolPayloads: z.boolean().optional(),
+        sessionId: z.string().nullish(),
+        // Mid-stream refetches skip the Work-summary assembly — see
+        // `QueryMessageParams.skipWorks`.
+        skipWorks: z.boolean().optional(),
+        threadId: z.string().nullish(),
+        topicId: z.string().nullish(),
+        topicShareId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const { topicShareId, ...queryParams } = input;
+
+      // Public access via topicShareId
+      if (topicShareId) {
+        const share = await TopicShareModel.findByShareIdWithAccessCheck(
+          ctx.serverDB,
+          topicShareId,
+          ctx.userId ?? undefined,
+        );
+
+        // Workspace shares store their workspaceId on the share record; without
+        // it the ownership filter degrades to `workspace_id IS NULL` and returns
+        // no messages for workspace topics.
+        const shareWorkspaceId = share.workspaceId ?? undefined;
+        // Legacy `share.topicId` (chat share) is a creator topic. Agent-share
+        // visitor topics have their own router (`shareChat.ts`), and this
+        // path is only entered when a creator publishes their own conversation
+        // via the classic share link — so we do NOT opt into visitor scope.
+        const messageModel = new MessageModel(ctx.serverDB, share.ownerId, shareWorkspaceId);
+        const fileService = new FileService(ctx.serverDB, share.ownerId, shareWorkspaceId);
+
+        const messages = await messageModel.query(
+          // Force skipWorks: Work summaries join LIVE task/version state (not a
+          // share-time snapshot), so serving them here would leak post-share
+          // mutations to anonymous visitors. Share pages render no Work chips.
+          { ...queryParams, skipWorks: true, topicId: share.topicId },
+          {
+            postProcessUrl: (path, file) =>
+              fileService.getFileAccessUrl({ id: file.id, url: path }),
+          },
+        );
+
+        return projectSharedTopicMessages(messages);
+      }
+
+      // Authenticated access - require userId
+      if (!ctx.userId) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
+      }
+
+      // Align with every other topic-scoped procedure in this router: a raw
+      // `topicId` from the client must still pass the conversation
+      // General-access guard before its messages are read.
+      if (queryParams.topicId) {
+        await assertCanUseTopicTargets(
+          guardCtx({
+            serverDB: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+          [queryParams.topicId],
+        );
+      }
+
+      const wsId = ctx.workspaceId ?? undefined;
+      const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
+      const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
+
+      const resolved = await resolveContext(
+        { ...queryParams, agentId: queryParams.agentId ?? undefined },
+        ctx.serverDB,
+        ctx.userId,
+        wsId,
+      );
+      await assertCanUseConversationTargets(guardCtx({ ...ctx, userId: ctx.userId }), [resolved]);
+      const messages = await messageModel.query(
+        { ...queryParams, ...resolved },
+        {
+          postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
+        },
+      );
+
+      // Only the caller knows whether this list is going to be rendered or fed
+      // to a model: a run that executes in the browser assembles its context
+      // from the very list this read returns, and a projected tool result would
+      // silently disappear from it. Absent ⇒ whole payloads, which is never the
+      // answer that loses data.
+      const visibleMessages = messages.map(omitToolWorkRegistration);
+      return input.projectToolPayloads ? projectToolViewModels(visibleMessages) : visibleMessages;
+    }),
+
+  /**
+   * Round-boundary cursor pagination for a topic's mainline conversation. Used by
+   * callers that only DISPLAY history (server-runtime / hetero); legacy client
+   * mode keeps using `getMessages` (full fetch) because it resends the session.
+   * Omit `cursor` for the first page; pass a prior `nextCursor` to continue.
+   * `direction: 'forward'` pages from the first round (shared transcripts).
+   */
+  getMessagesByCursor: publicProcedure
+    .use(cloudWorkspaceAuth)
+    .use(serverDatabase)
+    .input(messagesByCursorInputSchema)
+    .query(({ ctx, input }) => readMessagesByCursor(ctx, input)),
+
+  getTopicPreviews: messageProcedure
+    .input(topicPreviewsInputSchema)
+    .query(({ ctx, input }) => readTopicPreviews(ctx, input)),
+
+  rankModels: messageProcedure.query(async ({ ctx }) => {
+    return ctx.messageModel.rankModels();
+  }),
+
+  /**
+   * Distribution of message counts per topic (topics / mean / median / p90 /
+   * p99 / one-shot ratio + histogram). Aggregated server-side; optionally
+   * scoped by agent / role / date range.
+   */
+  topicStats: messageProcedure
+    .input(messageAnalyticsSchema.optional())
+    .query(async ({ ctx, input }) => {
+      return ctx.messageModel.topicMessageStats(input);
+    }),
+
+  removeMessage: messageProcedure
+    .use(withScopedPermission('message:delete'))
+    .input(
+      z
+        .object({
+          id: z.string(),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.removeMessage(id, resolved);
+    }),
+
+  removeMessageQuery: messageProcedure
+    .use(withScopedPermission('message:delete'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+
+      return ctx.messageModel.deleteMessageQuery(input.id);
+    }),
+
+  removeMessages: messageProcedure
+    .use(withScopedPermission('message:delete'))
+    .input(
+      z
+        .object({
+          ids: z.array(z.string()),
+          /** Skip the recycle bin: internal cleanup whose rows must never be restored. */
+          permanent: z.boolean().optional(),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { ids, agentId, permanent, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), ids);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.removeMessages(ids, resolved, { permanent });
+    }),
+
+  removeMessagesByAssistant: messageProcedure
+    .use(withScopedPermission('message:delete'))
+    .input(
+      z
+        .object({
+          groupId: z.string().nullish(),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { agentId, ...options } = input;
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
+      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
+
+      return ctx.messageModel.deleteMessagesBySession(
+        resolved.sessionId,
+        resolved.topicId,
+        input.groupId,
+        { agentId: resolved.agentId ?? undefined },
+      );
+    }),
+
+  removeMessagesByGroup: messageProcedure
+    .use(withScopedPermission('message:delete'))
+    .input(
+      z.object({
+        groupId: z.string(),
+        topicId: z.string().nullish(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (input.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+      else await assertCanUseConversationTargets(guardCtx(ctx), [{ groupId: input.groupId }]);
+      // Same visitor guard as `addFilesToMessage` above.
+      if (input.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [input.topicId]);
+
+      return ctx.messageModel.deleteMessagesBySession(null, input.topicId, input.groupId);
+    }),
+
+  /** Find-in-topic: literal keyword matches across a topic's whole history. */
+  searchInTopic: messageProcedure
+    .input(z.object({ keyword: z.string().max(200), topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]);
+
+      return ctx.messageModel.searchInTopic(input);
+    }),
+
+  searchMessages: messageSearchProcedure
+    .input(z.object({ keywords: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return ctx.messageModel.queryByKeyword(input.keywords);
+    }),
+
+  /**
+   * Filtered, paginated history search for CLI and agent callers. Returns a
+   * lean projection (topic title, snippet) instead of full message rows, and
+   * hides system-written prompts of automation topics unless asked.
+   */
+  searchByKeyword: messageSearchProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        endDate: z.coerce.date().optional(),
+        exact: z.boolean().optional(),
+        includeAutomatedPrompts: z.boolean().optional(),
+        keywords: z.string(),
+        limit: z.number().int().min(1).max(MESSAGE_KEYWORD_SEARCH_MAX_LIMIT).optional(),
+        offset: z.number().int().min(0).optional(),
+        roles: z.array(z.string()).optional(),
+        startDate: z.coerce.date().optional(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const { keywords, ...params } = input;
+      return ctx.messageModel.searchByKeyword({ ...params, keyword: keywords });
+    }),
+
+  update: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z
+        .object({
+          id: z.string(),
+          value: UpdateMessageParamsSchema,
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      // Agent-share visitor messages live under the creator's `userId`, so the
+      // ownership predicate alone would let a creator edit a visitor's turn —
+      // see `assertCreatorMessageTargets` for why the guard sits here and not
+      // in the model defaults (the runtime writes visitor turns through them).
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
+      const timingContext = { requestId: createTimingRequestId(), startedAt: Date.now() };
+      logTiming(timingContext, 'lambda.message.update:start', {
+        hasAgentId: !!agentId,
+        hasTopicId: !!options.topicId,
+        valueKeys: Object.keys(value ?? {}),
+      });
+
+      const resolved = await runTimedStage(
+        timingContext,
+        'lambda.message.update.resolveContext',
+        () =>
+          resolveContext(
+            { agentId, ...options },
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ),
+        { hasAgentId: !!agentId },
+      );
+
+      const result = await runTimedStage(
+        timingContext,
+        'lambda.message.update.service',
+        () =>
+          ctx.messageService.updateMessage(id, value as any, {
+            ...resolved,
+            timingRequestId: timingContext.requestId,
+            timingStartedAt: timingContext.startedAt,
+          }),
+        { hasResolvedTopicId: !!resolved.topicId },
+      );
+
+      logTiming(timingContext, 'lambda.message.update:done', {
+        messageCount: result.messages?.length ?? 0,
+        success: result.success,
+      });
+      return result;
+    }),
+
+  /**
+   * Update message group metadata (e.g., expanded state)
+   */
+  updateMessageGroupMetadata: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        context: z.object({
+          agentId: z.string(),
+          groupId: z.string().nullish(),
+          threadId: z.string().nullish(),
+          topicId: z.string(),
+        }),
+        expanded: z.boolean().optional(),
+        messageGroupId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { messageGroupId, expanded, context } = input;
+      await assertCanUseTopicTargets(guardCtx(ctx), [context.topicId]);
+      // Same visitor guard as `addFilesToMessage` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [context.topicId]);
+
+      return ctx.messageService.updateMessageGroupMetadata(messageGroupId, { expanded }, context);
+    }),
+
+  updateMessagePlugin: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z
+        .object({
+          id: z.string(),
+          value: UpdateMessagePluginSchema.partial(),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.updateMessagePlugin(id, value, resolved);
+    }),
+
+  updateMessageRAG: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(UpdateMessageRAGParamsSchema.extend(basicContextSchema.shape))
+    .mutation(async ({ input, ctx }) => {
+      const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.updateMessageRAG(id, value, resolved);
+    }),
+
+  updateMetadata: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z
+        .object({
+          id: z.string(),
+          value: z.object({}).passthrough(),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.updateMetadata(id, omitServerOwnedMessageMetadata(value), resolved);
+    }),
+
+  updatePluginError: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z
+        .object({
+          id: z.string(),
+          value: z.object({}).passthrough().nullable(),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.updatePluginError(id, value, resolved);
+    }),
+
+  updatePluginState: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z
+        .object({
+          id: z.string(),
+          value: z.object({}).passthrough(),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.updatePluginState(id, value, resolved);
+    }),
+
+  updateTTS: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        value: z
+          .object({
+            contentMd5: z.string().optional(),
+            file: z.string().optional(),
+            voice: z.string().optional(),
+          })
+          .or(z.literal(false)),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [input.id]);
+      if (input.value === false) {
+        return ctx.messageModel.deleteMessageTTS(input.id);
+      }
+
+      return ctx.messageModel.updateTTS(input.id, input.value);
+    }),
+
+  updateToolArguments: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z
+        .object({
+          toolCallId: z.string(),
+          value: z.union([z.string(), z.record(z.string(), z.unknown())]),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { toolCallId, value, agentId, ...options } = input;
+      // No message id in the input — guard by the topic row when present,
+      // falling back to the declared conversation target.
+      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
+      else
+        await assertCanUseConversationTargets(guardCtx(ctx), [
+          { agentId, groupId: options.groupId },
+        ]);
+      // Same visitor guard as `addFilesToMessage` above — no message id here,
+      // so it's applied to the resolved topic instead.
+      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.updateToolArguments(toolCallId, value, resolved);
+    }),
+
+  /**
+   * Update tool message with content, metadata, pluginState, and pluginError in a single transaction
+   * This prevents race conditions when updating multiple fields
+   */
+  updateToolMessage: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z
+        .object({
+          id: z.string(),
+          value: z.object({
+            content: z.string().optional(),
+            heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
+            metadata: z.object({}).passthrough().optional(),
+            pluginError: z.any().optional(),
+            pluginState: z.object({}).passthrough().optional(),
+          }),
+        })
+        .extend(basicContextSchema.shape),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, value, agentId, ...options } = input;
+      await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
+      const resolved = await resolveContext(
+        { agentId, ...options },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      return ctx.messageService.updateToolMessage(id, value, resolved);
+    }),
+  updateTranslate: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        value: z
+          .object({
+            content: z.string().optional(),
+            from: z.string().optional(),
+            to: z.string(),
+          })
+          .or(z.literal(false)),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [input.id]);
+      if (input.value === false) {
+        return ctx.messageModel.deleteMessageTranslate(input.id);
+      }
+
+      return ctx.messageModel.updateTranslate(input.id, input.value);
+    }),
+});

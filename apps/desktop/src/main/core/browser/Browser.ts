@@ -1,0 +1,823 @@
+import console from 'node:console';
+import path from 'node:path';
+
+import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
+import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import type { BrowserWindowConstructorOptions } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, session as electronSession, shell } from 'electron';
+
+import { preloadDir, resourcesDir } from '@/const/dir';
+import { DESKTOP_EXTERNAL_NAVIGATION_HOSTS, isMac } from '@/const/env';
+import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
+import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
+import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
+import { createLogger } from '@/utils/logger';
+import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
+import { LOADING_SCREEN_PAINTED_CHANNEL } from '~common/loadingScreen';
+import { SYSTEM_LANGUAGE_ARG_PREFIX } from '~common/systemLanguage';
+
+import type { App } from '../App';
+import { WindowStateManager } from './WindowStateManager';
+import { WindowThemeManager } from './WindowThemeManager';
+
+const logger = createLogger('core:Browser');
+const BROWSER_WEBVIEW_PARTITION = 'persist:lobe-browser-app';
+
+const getExternalNavigationHosts = () =>
+  DESKTOP_EXTERNAL_NAVIGATION_HOSTS.split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+
+const EXTERNALLY_OPENABLE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+
+/**
+ * The renderer runs on `app://renderer`, so a link the renderer did not claim can
+ * reach the window-open handler with an internal URL. Handing those to the OS opens
+ * nothing — deny instead of silently failing.
+ */
+const isExternallyOpenableUrl = (rawUrl: string) => {
+  try {
+    return EXTERNALLY_OPENABLE_PROTOCOLS.has(new URL(rawUrl).protocol);
+  } catch {
+    return false;
+  }
+};
+
+const shouldOpenTopLevelNavigationExternally = (rawUrl: string) => {
+  const externalNavigationHosts = getExternalNavigationHosts();
+  if (externalNavigationHosts.length === 0) return false;
+
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+
+  const hostname = url.hostname.toLowerCase();
+
+  return externalNavigationHosts.some(
+    (externalHost) => hostname === externalHost || hostname.endsWith(`.${externalHost}`),
+  );
+};
+
+// ==================== Types ====================
+
+export interface BrowserWindowOpts extends BrowserWindowConstructorOptions {
+  devTools?: boolean;
+  height?: number;
+  identifier: string;
+  keepAlive?: boolean;
+  parentIdentifier?: string;
+  path: string;
+  restoreWindowState?: boolean;
+  showOnInit?: boolean;
+  title?: string;
+  width?: number;
+}
+
+// ==================== Browser Class ====================
+
+export default class Browser {
+  private readonly app: App;
+  private readonly stateManager: WindowStateManager;
+  private readonly themeManager: WindowThemeManager;
+
+  private _browserWindow?: BrowserWindow;
+  private hasPresentedFirstFrame = false;
+  private ignoreNextPreventUnload = false;
+  private promptBeforeUnload = true;
+  private unloadOperation: (() => void) | null = null;
+  private pendingUnloadConfirmation: { ota: boolean; resume: () => void } | null = null;
+  private resolveFirstFrame!: () => void;
+  private readonly firstFramePromise = new Promise<void>((resolve) => {
+    this.resolveFirstFrame = resolve;
+  });
+
+  readonly identifier: string;
+  readonly options: BrowserWindowOpts;
+
+  // ==================== Accessors ====================
+
+  get browserWindow(): BrowserWindow {
+    return this.retrieveOrInitialize();
+  }
+
+  get webContents() {
+    if (this._browserWindow?.isDestroyed()) return null;
+    return this._browserWindow?.webContents ?? null;
+  }
+
+  reloadIgnoringCache = (ignoreBeforeUnload = false, promptBeforeUnload = true) => {
+    this.runWithUnloadConfirmation(
+      () => this.browserWindow.webContents.reloadIgnoringCache(),
+      promptBeforeUnload,
+      ignoreBeforeUnload,
+    );
+  };
+
+  runWithUnloadConfirmation = (
+    operation: () => void,
+    promptBeforeUnload = true,
+    ignoreBeforeUnload = false,
+  ) => {
+    if (this.pendingUnloadConfirmation) return;
+    this.unloadOperation = operation;
+    this.promptBeforeUnload = promptBeforeUnload;
+    this.ignoreNextPreventUnload = ignoreBeforeUnload;
+    try {
+      operation();
+    } catch (error) {
+      this.unloadOperation = null;
+      this.ignoreNextPreventUnload = false;
+      this.promptBeforeUnload = true;
+      throw error;
+    }
+  };
+
+  cancelUnloadConfirmation = () => {
+    if (!this.pendingUnloadConfirmation) return;
+    this.pendingUnloadConfirmation = null;
+    this.broadcast('reloadConfirmationCancelled');
+  };
+
+  resolveUnloadConfirmation = (proceed: boolean) => {
+    const pending = this.pendingUnloadConfirmation;
+    this.pendingUnloadConfirmation = null;
+    if (!pending) return;
+    if (
+      pending.ota &&
+      !this.app.coreUpdateManager.resolveUnloadConfirmation(
+        this.browserWindow.webContents.id,
+        proceed,
+      )
+    )
+      return;
+    if (proceed) this.runWithUnloadConfirmation(pending.resume, true, true);
+  };
+
+  // ==================== Constructor ====================
+
+  constructor(options: BrowserWindowOpts, application: App) {
+    logger.debug(`Creating Browser instance: ${options.identifier}`);
+    logger.debug(`Browser options: ${JSON.stringify(options)}`);
+
+    this.app = application;
+    this.identifier = options.identifier;
+    this.options = options;
+
+    // Initialize managers
+    this.stateManager = new WindowStateManager(application, {
+      identifier: options.identifier,
+      keepAlive: options.keepAlive,
+    });
+    this.themeManager = new WindowThemeManager(options.identifier);
+
+    // Initialize window
+    this.retrieveOrInitialize();
+  }
+
+  // ==================== Window Lifecycle ====================
+
+  /**
+   * Initialize or retrieve existing browser window
+   */
+  retrieveOrInitialize(): BrowserWindow {
+    if (this._browserWindow && !this._browserWindow.isDestroyed()) {
+      logger.debug(`[${this.identifier}] Returning existing BrowserWindow instance.`);
+      return this._browserWindow;
+    }
+
+    const browserWindow = this.createBrowserWindow();
+    this._browserWindow = browserWindow;
+
+    this.setupWindow(browserWindow);
+
+    logger.debug(`[${this.identifier}] retrieveOrInitialize completed.`);
+    return browserWindow;
+  }
+
+  /**
+   * Destroy window instance and cleanup resources
+   */
+  destroy(): void {
+    logger.debug(`Destroying window instance: ${this.identifier}`);
+    this.themeManager.cleanup();
+    this._browserWindow = undefined;
+  }
+
+  // ==================== Window Creation ====================
+
+  private createBrowserWindow(): BrowserWindow {
+    const {
+      title,
+      width,
+      height,
+      restoreWindowState = true,
+      // Strip platform visual effect props — these are managed exclusively
+      // by WindowThemeManager.getPlatformConfig() to prevent config leaking
+      // from appBrowsers/windowTemplates into the BrowserWindow constructor.
+      vibrancy: _vibrancy,
+      visualEffectState: _visualEffectState,
+      transparent: _transparent,
+      ...rest
+    } = this.options;
+
+    const resolvedState = restoreWindowState
+      ? this.stateManager.resolveState({ height, width })
+      : { height, width };
+    logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
+    logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
+
+    return new BrowserWindow({
+      ...rest,
+      autoHideMenuBar: true,
+      backgroundColor: '#00000000',
+      darkTheme: this.themeManager.isDarkMode,
+      frame: false,
+      height: resolvedState.height,
+      show: false,
+      title,
+      webPreferences: {
+        additionalArguments: [`${SYSTEM_LANGUAGE_ARG_PREFIX}${getSystemLanguage()}`],
+        backgroundThrottling: false,
+        contextIsolation: true,
+        preload: path.join(preloadDir, 'index.js'),
+        sandbox: false,
+        scrollBounce: true,
+        webviewTag: true,
+      },
+      width: resolvedState.width,
+      x: resolvedState.x,
+      y: resolvedState.y,
+      // Platform visual config is the SOLE source of vibrancy / transparency / titleBarOverlay.
+      ...this.themeManager.getPlatformConfig(),
+    });
+  }
+
+  private setupWindow(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] BrowserWindow instance created.`);
+
+    // Setup theme management
+    this.themeManager.attach(browserWindow);
+
+    // Setup network interceptors
+    this.setupCORSBypass(browserWindow);
+    this.setupRemoteServerRequestHook(browserWindow);
+
+    // Load content
+    this.initiateContentLoading();
+
+    // Setup devtools if enabled
+    if (this.options.devTools) {
+      logger.debug(`[${this.identifier}] Opening DevTools.`);
+      browserWindow.webContents.openDevTools({ mode: 'detach' });
+    }
+
+    // Setup event listeners
+    this.setupEventListeners(browserWindow);
+
+    // Setup external link handler (prevents opening new windows in renderer)
+    this.setupWindowOpenHandler(browserWindow);
+    this.setupWebviewSecurity(browserWindow);
+  }
+
+  private setupWebviewSecurity(browserWindow: BrowserWindow): void {
+    browserWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+      if (params.partition !== BROWSER_WEBVIEW_PARTITION) {
+        event.preventDefault();
+        return;
+      }
+
+      let url: URL;
+      try {
+        url = new URL(params.src);
+      } catch {
+        event.preventDefault();
+        return;
+      }
+
+      if (!['about:', 'http:', 'https:'].includes(url.protocol)) {
+        event.preventDefault();
+        return;
+      }
+
+      delete webPreferences.preload;
+      webPreferences.contextIsolation = true;
+      webPreferences.nodeIntegration = false;
+      webPreferences.partition = BROWSER_WEBVIEW_PARTITION;
+      webPreferences.sandbox = true;
+    });
+  }
+
+  private initiateContentLoading(): void {
+    logger.debug(`[${this.identifier}] Loading initial renderer URL directly.`);
+    this.loadUrl(this.options.path).catch((e) => {
+      logger.error(
+        `[${this.identifier}] Initial loadUrl error for path '${this.options.path}':`,
+        e,
+      );
+    });
+  }
+
+  // ==================== Event Listeners ====================
+
+  private setupEventListeners(browserWindow: BrowserWindow): void {
+    this.setupReadyToShowListener(browserWindow);
+    this.setupCloseListener(browserWindow);
+    this.setupFocusListener(browserWindow);
+    this.setupFullscreenListener(browserWindow);
+    this.setupTopLevelNavigationListener(browserWindow);
+    this.setupWillPreventUnloadListener(browserWindow);
+    this.setupContextMenu(browserWindow);
+  }
+
+  private setupTopLevelNavigationListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up top-level navigation listener.`);
+
+    browserWindow.webContents.on('will-navigate', (event, url) => {
+      if (!shouldOpenTopLevelNavigationExternally(url)) return;
+
+      logger.info(`[${this.identifier}] Opening top-level navigation externally: ${url}`);
+      event.preventDefault();
+
+      shell.openExternal(url).catch((error) => {
+        logger.error(`[${this.identifier}] Failed to open external navigation URL: ${url}`, error);
+      });
+    });
+  }
+
+  /**
+   * Setup window open handler to intercept external links
+   * Prevents opening new windows in renderer and uses system browser instead
+   */
+  private setupWindowOpenHandler(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up window open handler for external links`);
+
+    browserWindow.webContents.setWindowOpenHandler(({ url }) => {
+      logger.info(`[${this.identifier}] Intercepted window open for URL: ${url}`);
+
+      if (!isExternallyOpenableUrl(url)) {
+        logger.debug(`[${this.identifier}] Denied non-external window open URL: ${url}`);
+        return { action: 'deny' };
+      }
+
+      // Open external URL in system browser
+      shell.openExternal(url).catch((error) => {
+        logger.error(`[${this.identifier}] Failed to open external URL: ${url}`, error);
+      });
+
+      // Deny creating new window in renderer
+      return { action: 'deny' };
+    });
+  }
+
+  private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up 'will-prevent-unload' event listener.`);
+    // Loading starts before beforeunload; clear approval only after navigation commits.
+    browserWindow.webContents.on('did-navigate', () => {
+      this.unloadOperation = null;
+      this.ignoreNextPreventUnload = false;
+      this.promptBeforeUnload = true;
+    });
+    browserWindow.webContents.on('will-prevent-unload', (event) => {
+      logger.debug(
+        `[${this.identifier}] 'will-prevent-unload' fired. isQuiting: ${this.app.isQuiting}`,
+      );
+      const resume = this.unloadOperation;
+      this.unloadOperation = null;
+      const promptBeforeUnload = this.promptBeforeUnload;
+      this.promptBeforeUnload = true;
+      const ignorePreventUnload = this.ignoreNextPreventUnload;
+      this.ignoreNextPreventUnload = false;
+      if (this.app.isQuiting || ignorePreventUnload) {
+        logger.info(`[${this.identifier}] Ignoring beforeunload cancellation.`);
+        event.preventDefault();
+        return;
+      }
+      if (promptBeforeUnload) {
+        // An unload event has no continuation; only replay operations captured at their source.
+        if (!resume) return;
+        if (!this.pendingUnloadConfirmation) {
+          this.pendingUnloadConfirmation = {
+            resume,
+            ota: this.app.coreUpdateManager.pauseForUnloadConfirmation(
+              browserWindow.webContents.id,
+            ),
+          };
+          this.broadcast('reloadConfirmationRequested');
+        }
+        return;
+      }
+      this.app.coreUpdateManager.handleUnloadPrevented();
+    });
+  }
+
+  private setupReadyToShowListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up 'ready-to-show' event listener.`);
+    // `ready-to-show` only fires with the `load` event here, ~150-250ms after the
+    // loading screen was actually painted (measured with --trace-startup). The
+    // preload reports that first paint directly; `ready-to-show` stays as fallback.
+    browserWindow.webContents.ipc.once(LOADING_SCREEN_PAINTED_CHANNEL, () => {
+      logger.debug(`[${this.identifier}] Loading screen painted.`);
+      this.presentFirstFrame();
+    });
+    browserWindow.once('ready-to-show', () => {
+      logger.debug(`[${this.identifier}] Window 'ready-to-show' event fired.`);
+      this.presentFirstFrame();
+    });
+  }
+
+  private presentFirstFrame(): void {
+    if (this.hasPresentedFirstFrame) return;
+    this.hasPresentedFirstFrame = true;
+    this.resolveFirstFrame();
+    if (this.options.showOnInit) this.show();
+  }
+
+  private setupCloseListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up 'close' event listener.`);
+    const closeHandler = this.stateManager.createCloseHandler(browserWindow, {
+      onCleanup: () => this.themeManager.cleanup(),
+      onHide: () => this.hide(),
+    });
+    browserWindow.on('close', (event) => {
+      if (this.pendingUnloadConfirmation && !this.app.isQuiting) {
+        event.preventDefault();
+        return;
+      }
+      closeHandler(event);
+      if (!event.defaultPrevented && !this.options.keepAlive) {
+        this.unloadOperation = () => browserWindow.close();
+      }
+    });
+  }
+
+  private setupFocusListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up 'focus' event listener.`);
+    browserWindow.on('focus', () => {
+      logger.debug(`[${this.identifier}] Window 'focus' event fired.`);
+      this.broadcast('windowFocused');
+      // Clear any completion badge once the user returns to the app.
+      try {
+        app.setBadgeCount(0);
+        if (process.platform === 'darwin' && app.dock) app.dock.setBadge('');
+      } catch {
+        /* noop — some platforms may not support badge counts */
+      }
+    });
+  }
+
+  private setupFullscreenListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up fullscreen event listeners.`);
+
+    browserWindow.on('enter-full-screen', () => {
+      this.themeManager.handleFullscreenChange(true);
+      this.broadcast('windowFullscreenChanged', { isFullScreen: true });
+    });
+
+    browserWindow.on('leave-full-screen', () => {
+      this.themeManager.handleFullscreenChange(false);
+      this.broadcast('windowFullscreenChanged', { isFullScreen: false });
+    });
+  }
+
+  /**
+   * Setup context menu with platform-specific features
+   * Delegates to MenuManager for consistent platform behavior
+   */
+  private setupContextMenu(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up context menu.`);
+
+    browserWindow.webContents.on('context-menu', (_event, params) => {
+      const { x, y, selectionText, linkURL, srcURL, mediaType, isEditable, hasImageContents } =
+        params;
+
+      // Use the platform menu system with full context data
+      this.app.menuManager.showContextMenu(
+        'default',
+        {
+          hasImageContents,
+          isEditable,
+          linkURL: linkURL || undefined,
+          mediaType: mediaType as any,
+          selectionText: selectionText || undefined,
+          srcURL: srcURL || undefined,
+          x,
+          y,
+        },
+        browserWindow,
+      );
+    });
+  }
+
+  // ==================== Window Actions ====================
+
+  show(): void {
+    logger.debug(`Showing window: ${this.identifier}`);
+    this.ensureForegroundAppOnMac();
+    if (!this._browserWindow?.isDestroyed()) {
+      this.determineWindowPosition();
+    }
+    this.browserWindow.show();
+  }
+
+  hide(): void {
+    logger.debug(`Hiding window: ${this.identifier}`);
+
+    // Fix for macOS fullscreen black screen issue
+    // See: https://github.com/electron/electron/issues/20263
+    if (isMac && this.browserWindow.isFullScreen()) {
+      logger.debug(`[${this.identifier}] Exiting fullscreen before hiding.`);
+      this.browserWindow.once('leave-full-screen', () => {
+        this.browserWindow.hide();
+      });
+      this.browserWindow.setFullScreen(false);
+    } else {
+      this.browserWindow.hide();
+    }
+  }
+
+  close(): void {
+    logger.debug(`Attempting to close window: ${this.identifier}`);
+    this.browserWindow.close();
+  }
+
+  toggleVisible(): void {
+    logger.debug(`Toggling visibility for window: ${this.identifier}`);
+    if (this._browserWindow?.isVisible() && this._browserWindow.isFocused()) {
+      this.hide();
+    } else {
+      this.show();
+      this._browserWindow?.focus();
+    }
+  }
+
+  moveToCenter(): void {
+    logger.debug(`Centering window: ${this.identifier}`);
+    this._browserWindow?.center();
+  }
+
+  setWindowSize(boundSize: { height?: number; width?: number }): void {
+    logger.debug(`Setting window size for ${this.identifier}: ${JSON.stringify(boundSize)}`);
+    const currentBounds = this._browserWindow?.getBounds();
+    this._browserWindow?.setBounds({
+      height: boundSize.height || currentBounds?.height,
+      width: boundSize.width || currentBounds?.width,
+    });
+  }
+
+  setWindowMinimumSize(size: { height?: number; width?: number }): void {
+    logger.debug(`[${this.identifier}] Setting window minimum size: ${JSON.stringify(size)}`);
+
+    const currentMinimumSize = this._browserWindow?.getMinimumSize?.() ?? [0, 0];
+    const rawWidth = size.width ?? currentMinimumSize[0];
+    const rawHeight = size.height ?? currentMinimumSize[1];
+
+    // Electron doesn't "reset" minimum size with 0x0 reliably.
+    // Treat 0 / negative as fallback to app-level default preset.
+    const width = rawWidth > 0 ? rawWidth : APP_WINDOW_MIN_SIZE.width;
+    const height = rawHeight > 0 ? rawHeight : APP_WINDOW_MIN_SIZE.height;
+
+    this._browserWindow?.setMinimumSize?.(width, height);
+  }
+
+  // ==================== Window Position ====================
+
+  private determineWindowPosition(): void {
+    const { parentIdentifier } = this.options;
+    if (!parentIdentifier) return;
+
+    // todo: fix ts type
+    const parentWin = this.app.browserManager.retrieveByIdentifier(parentIdentifier as any);
+    if (!parentWin) return;
+
+    logger.debug(`[${this.identifier}] Found parent window: ${parentIdentifier}`);
+
+    const display = screen.getDisplayNearestPoint(parentWin.browserWindow.getContentBounds());
+    if (!display) return;
+
+    const { workArea } = display;
+    const { width, height } = this._browserWindow!.getContentBounds();
+
+    const newX = Math.floor(Math.max(workArea.x + (workArea.width - width) / 2, workArea.x));
+    const newY = Math.floor(Math.max(workArea.y + (workArea.height - height) / 2, workArea.y));
+
+    logger.debug(`[${this.identifier}] Calculated position: x=${newX}, y=${newY}`);
+    this._browserWindow!.setPosition(newX, newY, false);
+  }
+
+  private ensureForegroundAppOnMac(): void {
+    if (!isMac || this.identifier !== 'app') return;
+
+    try {
+      app.setActivationPolicy('regular');
+      app.dock?.show();
+    } catch (error) {
+      logger.warn(`[${this.identifier}] Failed to restore regular activation policy:`, error);
+    }
+  }
+
+  // ==================== Content Loading ====================
+
+  loadPlaceholder = async (): Promise<void> => {
+    logger.debug(`[${this.identifier}] Loading splash screen placeholder`);
+    await this._browserWindow!.loadFile(path.join(resourcesDir, 'splash.html'));
+    logger.debug(`[${this.identifier}] Splash screen placeholder loaded.`);
+  };
+
+  /** Wait until Chromium has produced a presentable frame, with a safety timeout. */
+  waitForFirstFrame = async (timeoutMs: number = 5000): Promise<void> => {
+    if (this.hasPresentedFirstFrame) return;
+
+    let timeout: NodeJS.Timeout | undefined;
+    await Promise.race([
+      this.firstFramePromise,
+      new Promise<void>((resolve) => {
+        timeout = setTimeout(resolve, timeoutMs);
+        timeout.unref?.();
+      }),
+    ]);
+    if (timeout) clearTimeout(timeout);
+  };
+
+  loadUrl = async (path: string): Promise<void> => {
+    const initUrl = await this.app.buildRendererUrl(path);
+    const urlWithLocale = this.buildUrlWithLocale(initUrl);
+
+    console.log('[Browser] initUrl', urlWithLocale);
+
+    try {
+      logger.debug(`[${this.identifier}] Attempting to load URL: ${urlWithLocale}`);
+      await this._browserWindow!.loadURL(urlWithLocale);
+      logger.debug(`[${this.identifier}] Successfully loaded URL: ${urlWithLocale}`);
+    } catch (error) {
+      logger.error(`[${this.identifier}] Failed to load URL (${urlWithLocale}):`, error);
+      await this.handleLoadError(urlWithLocale);
+    }
+  };
+
+  private buildUrlWithLocale(initUrl: string): string {
+    // Always inject `lng` — including for `auto`, where the main process is the
+    // only side that can resolve the real OS language (the renderer's
+    // `navigator.language` reports English once packaging prunes the app's locales).
+    const locale = resolveUILocale(this.app.storeManager.get('locale', 'auto'));
+
+    return `${initUrl}${initUrl.includes('?') ? '&' : '?'}lng=${locale}`;
+  }
+
+  private async handleLoadError(urlWithLocale: string): Promise<void> {
+    try {
+      logger.info(`[${this.identifier}] Attempting to load error page...`);
+      await this._browserWindow!.loadFile(path.join(resourcesDir, 'error.html'));
+      logger.info(`[${this.identifier}] Error page loaded successfully.`);
+
+      this.setupRetryHandler(urlWithLocale);
+    } catch (err) {
+      logger.error(`[${this.identifier}] Failed to load error page:`, err);
+      await this.loadFallbackError();
+    }
+  }
+
+  private setupRetryHandler(urlWithLocale: string): void {
+    ipcMain.removeHandler('retry-connection');
+    logger.debug(`[${this.identifier}] Removed existing retry-connection handler if any.`);
+
+    ipcMain.handle('retry-connection', async () => {
+      logger.info(`[${this.identifier}] Retry connection requested for: ${urlWithLocale}`);
+      try {
+        await this._browserWindow?.loadURL(urlWithLocale);
+        logger.info(`[${this.identifier}] Reconnection successful to ${urlWithLocale}`);
+        return { success: true };
+      } catch (err: any) {
+        logger.error(`[${this.identifier}] Retry connection failed:`, err);
+        try {
+          await this._browserWindow?.loadFile(path.join(resourcesDir, 'error.html'));
+        } catch (loadErr) {
+          logger.error(`[${this.identifier}] Failed to reload error page:`, loadErr);
+        }
+        return { error: err.message, success: false };
+      }
+    });
+    logger.debug(`[${this.identifier}] Set up retry-connection handler.`);
+  }
+
+  private async loadFallbackError(): Promise<void> {
+    try {
+      logger.warn(`[${this.identifier}] Attempting to load fallback error HTML string...`);
+      await this._browserWindow!.loadURL(
+        'data:text/html,<html><body><h1>Loading Failed</h1><p>Unable to connect to server, please restart the application</p></body></html>',
+      );
+      logger.info(`[${this.identifier}] Fallback error HTML string loaded.`);
+    } catch (finalErr) {
+      logger.error(`[${this.identifier}] Unable to display any page:`, finalErr);
+    }
+  }
+
+  // ==================== Communication ====================
+
+  broadcast = <T extends MainBroadcastEventKey>(
+    channel: T,
+    data?: MainBroadcastParams<T>,
+  ): void => {
+    if (this._browserWindow?.isDestroyed()) return;
+    logger.debug(`Broadcasting to window ${this.identifier}, channel: ${channel}`);
+    this._browserWindow!.webContents.send(channel, data);
+  };
+
+  // ==================== Theme (Delegated) ====================
+
+  /**
+   * Handle application theme mode change (called from BrowserManager)
+   */
+  handleAppThemeChange = (): void => {
+    this.themeManager.handleAppThemeChange();
+  };
+
+  /**
+   * Manually reapply visual effects
+   */
+  reapplyVisualEffects(): void {
+    this.themeManager.reapplyVisualEffects();
+  }
+
+  // ==================== Network Setup ====================
+
+  /**
+   * Setup CORS bypass for ALL requests
+   * In production, the renderer uses app://renderer protocol which triggers CORS
+   */
+  private setupCORSBypass(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up CORS bypass for all requests`);
+
+    const session = browserWindow.webContents.session;
+    const originMap = new Map<number, string>();
+
+    session.webRequest.onBeforeSendHeaders((details, callback) => {
+      const requestHeaders = { ...details.requestHeaders };
+
+      if (requestHeaders['Origin']) {
+        originMap.set(details.id, requestHeaders['Origin']);
+        delete requestHeaders['Origin'];
+        logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
+      }
+
+      appendVercelCookie(requestHeaders);
+
+      callback({ requestHeaders });
+    });
+
+    session.webRequest.onHeadersReceived((details, callback) => {
+      const responseHeaders = details.responseHeaders || {};
+      const origin = originMap.get(details.id) || '*';
+
+      // Force set CORS headers (replace existing to avoid duplicates from case-insensitive keys)
+      setResponseHeader(responseHeaders, 'Access-Control-Allow-Origin', origin);
+      setResponseHeader(
+        responseHeaders,
+        'Access-Control-Allow-Methods',
+        'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+      );
+      setResponseHeader(responseHeaders, 'Access-Control-Allow-Headers', '*');
+      setResponseHeader(responseHeaders, 'Access-Control-Allow-Credentials', 'true');
+
+      originMap.delete(details.id);
+
+      if (details.method === 'OPTIONS') {
+        setResponseHeader(responseHeaders, 'Access-Control-Max-Age', '86400');
+        callback({ responseHeaders, statusLine: 'HTTP/1.1 200 OK' });
+        return;
+      }
+
+      callback({ responseHeaders });
+    });
+
+    logger.debug(`[${this.identifier}] CORS bypass setup completed`);
+  }
+
+  /**
+   * Bind this window's session to the backend proxy. The `app://` request
+   * interceptor (wired in `App.ts`) consumes this context to route
+   * `/trpc`, `/webapi`, `/api/auth`, and `/market` requests to the remote
+   * LobeHub server.
+   */
+  private setupRemoteServerRequestHook(browserWindow: BrowserWindow): void {
+    const session = browserWindow.webContents.session;
+    const remoteServerConfigCtr = this.app.getController(RemoteServerConfigCtr);
+
+    const targetSession = session || electronSession.defaultSession;
+    if (!targetSession) return;
+
+    backendProxyProtocolManager.registerWithRemoteBaseUrl(targetSession, {
+      getAccessToken: () => remoteServerConfigCtr.getAccessToken(),
+      getRemoteBaseUrl: async () => {
+        const config = await remoteServerConfigCtr.getRemoteServerConfig();
+        const remoteServerUrl = await remoteServerConfigCtr.getRemoteServerUrl(config);
+        return remoteServerUrl || null;
+      },
+      source: this.identifier,
+    });
+  }
+}

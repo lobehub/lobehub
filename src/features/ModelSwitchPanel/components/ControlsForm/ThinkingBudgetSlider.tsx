@@ -1,0 +1,132 @@
+import { Flexbox, InputNumber } from '@lobehub/ui';
+import { memo, useMemo } from 'react';
+import useMergeState from 'use-merge-value';
+
+import DiscreteSlider from '@/components/DiscreteSlider';
+
+// Define special value mappings
+const SPECIAL_VALUES = {
+  AUTO: -1,
+  OFF: 0,
+};
+
+// Define slider position to actual value mapping
+const SLIDER_TO_VALUE_MAP = [
+  SPECIAL_VALUES.AUTO, // Position 0 -> -1 (Auto)
+  SPECIAL_VALUES.OFF, // Position 1 -> 0 (OFF)
+  128, // Position 2 -> 128
+  512, // Position 3 -> 512
+  1024, // Position 4 -> 1024
+  2048, // Position 5 -> 2048
+  4096, // Position 6 -> 4096
+  8192, // Position 7 -> 8192
+  16_384, // Position 8 -> 16384
+  24_576, // Position 9 -> 24576
+  32_768, // Position 10 -> 32768
+];
+
+// Get slider position from actual value
+const getSliderPosition = (value: number): number => {
+  const exactIndex = SLIDER_TO_VALUE_MAP.indexOf(value);
+  if (exactIndex !== -1) return exactIndex;
+
+  if (value <= SPECIAL_VALUES.AUTO) return 0;
+  if (value > SPECIAL_VALUES.OFF && value <= 128) return 2;
+
+  let position = 0;
+
+  for (const [index, mappedValue] of SLIDER_TO_VALUE_MAP.entries()) {
+    if (mappedValue <= value) {
+      position = index;
+      continue;
+    }
+
+    break;
+  }
+
+  return position;
+};
+
+// Get actual value from slider position (fix: 0 is no longer treated as falsy)
+const getValueFromPosition = (position: number): number => {
+  const v = SLIDER_TO_VALUE_MAP[position];
+  return v === undefined ? SPECIAL_VALUES.AUTO : v;
+};
+
+const getStepForValue = (value: number): number => {
+  if (value < 0) return 1;
+  if (value <= 1024) return 128;
+  if (value < 8192) return 1024;
+  return 2048;
+};
+
+interface ThinkingBudgetSliderProps {
+  defaultValue?: number;
+  onChange?: (value: number) => void;
+  value?: number;
+}
+
+const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
+  ({ value, onChange, defaultValue }) => {
+    // First determine the initial budget value
+    const initialBudget = value ?? defaultValue ?? SPECIAL_VALUES.AUTO;
+
+    const [budget, setBudget] = useMergeState(initialBudget, {
+      defaultValue,
+      onChange,
+      value,
+    });
+
+    const sliderPosition = getSliderPosition(budget);
+
+    const updateWithSliderPosition = (position: number) => {
+      const newValue = getValueFromPosition(position);
+      setBudget(newValue);
+    };
+
+    const updateWithRealValue = (value: number) => {
+      setBudget(value);
+    };
+
+    const inputStep = useMemo(() => getStepForValue(budget), [budget]);
+    const specialLabel =
+      budget === SPECIAL_VALUES.AUTO ? 'Auto' : budget === SPECIAL_VALUES.OFF ? 'OFF' : undefined;
+
+    const options = useMemo(
+      () =>
+        ['Auto', 'OFF', '128', '512', '1K', '2K', '4K', '8K', '16K', '24K', '32K'].map(
+          (label, value) => ({ label, value }),
+        ),
+      [],
+    );
+
+    return (
+      <Flexbox horizontal align={'center'} gap={12} paddingInline={'4px 0'}>
+        <Flexbox flex={1}>
+          <DiscreteSlider
+            options={options}
+            value={sliderPosition}
+            onChange={updateWithSliderPosition}
+          />
+        </Flexbox>
+        <div>
+          <InputNumber
+            changeOnWheel
+            max={32_768}
+            min={-1}
+            placeholder={specialLabel}
+            step={inputStep}
+            style={{ width: 80 }}
+            value={specialLabel ? null : budget}
+            onChange={(e) => {
+              if (e === null) return;
+              updateWithRealValue(e);
+            }}
+          />
+        </div>
+      </Flexbox>
+    );
+  },
+);
+
+export default ThinkingBudgetSlider;

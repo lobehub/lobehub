@@ -1,0 +1,56 @@
+---
+title: A Home That Tracks Your Agents
+description: >-
+  Home is rebuilt around what your Agents have been doing, desktop tabs stay
+  usable past a handful, and local Agents connect through one wizard.
+tags:
+  - Home
+  - Desktop
+  - Onboarding
+  - MCP
+  - Models
+---
+
+# A Home That Tracks Your Agents
+
+## Features
+
+- **See what your Agents did while you were away.** Home is now a dashboard: a greeting and composer on one side, and a rail of cards on the other showing what needs you, what is still running, your daily brief, and suggestions. The composer switches between Chat, Task, and Note, so the same box can open a Topic, create a Task, or start a page.
+- **Get starter Tasks when you begin.** Onboarding now suggests concrete first Tasks based on what you tell it about your work, instead of leaving you with an empty screen.
+- **Keep more tabs open on desktop.** Tabs now shrink to fit rather than scrolling out of view, the active tab keeps a readable title, extra tabs collapse into a dropdown, and you can pin tabs to the front or close one with a middle click.
+- **Connect a local Agent through one wizard.** Setting up an Agent on your own machine now runs through a single guided flow instead of a different path per connector.
+- **Install local tools on the desktop app.** Desktop can now install and run MCP connectors that live on your machine or your local network.
+- **Write your Agent profile in Markdown.** Agent profiles have a source mode for editing the raw Markdown directly.
+- **Zoom the desktop app to a fixed set of levels.** Zoom now uses the same preset steps as the browser, so text lands at a predictable size.
+- **Adjust thinking effort on Kimi K3.** Kimi K3 exposes reasoning effort controls, and Kimi K3 Fast is described in the model list.
+
+## Improvements
+
+- **Start the app faster.** Desktop and web both open sooner, and the loading screen now shows the real app layout instead of a centered logo, so the first frame no longer jumps.
+- **Switch tabs without losing your place.** Each desktop tab keeps its own view alive, so moving away and back does not reset work in progress.
+- **Find the right Agent when searching.** Agent search filters before ranking, which restores correct ordering and real relevance scores.
+- **Answer Agent questions from the keyboard.** When an Agent asks you to pick something, Enter confirms and Esc dismisses.
+- **Read delivery checks more easily.** Acceptance checklists group their items more sensibly, scroll as one page, and show verification details in a clearer layout.
+- **See which model a Topic is stuck on.** The model picker now names a model that is no longer available instead of showing a raw provider and model id.
+- **Return to your Task list without a loading flash.** The sidebar Task list is cached between visits, so the skeleton no longer replays each time.
+- **Know where you are from the tab title.** Browser tab titles on Agent sub-pages now include the section and the Agent name.
+- **Free up storage with clear guidance.** Storage messages now point you at deleting files rather than stating the limit.
+- **Trust sub-Agent tool access.** A sub-Agent can only reach the tools it was granted, not everything the parent can use.
+- **Move through settings more predictably.** Settings pages share one header layout, and the About page was reorganized.
+
+## Fixes
+
+- **Shell commands work reliably on Windows.** Several frequently reported shell execution problems are resolved, and file search now resolves paths against your workspace.
+- **Desktop no longer crashes on image results.** Uploading an image returned by a tool no longer takes down the app, and a cold start no longer opens a duplicate tab.
+- **The desktop app follows your system language.** The interface language is read from the operating system rather than a trimmed app setting.
+- **Sub-Agents keep the model you chose.** An explicit model override now survives into sub-Agent Topics, and grouped sub-Agent answers are no longer dropped.
+- **Retries stop duplicating messages.** Retrying a step reuses the existing message, repeated continuations are omitted, and failed placeholders are filtered out.
+- **Cancelling one thread leaves the others running.** Stopping a conversation in one thread no longer cancels work elsewhere.
+- **Step counts match reality.** The step count shown on an assistant message now matches how many model calls actually ran.
+- **Scheduled Tasks run as expected.** Tasks with a schedule now start on their cron timing by default.
+- **Resolved briefs stay resolved.** Briefs you have already handled no longer come back after navigating away.
+- **Reasoning models behave correctly.** Moonshot supports structured output together with thinking, OpenAI Responses reasoning is stored in full, and Cerebras and Groq accept advanced reasoning parameters.
+- **Empty and image-only replies are handled.** Responses with no text, including image-only ones, are recognized and reported instead of failing quietly.
+- **Switching accounts clears the previous session.** Stale sign-in state no longer carries over to the new account.
+- **Notifications keep their close button reachable.** Long notification text no longer covers the dismiss control.
+- **The prompt editor stays where you left it.** Toggling the view mode no longer scrolls the prompt to the bottom.

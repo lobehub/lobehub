@@ -1,0 +1,53 @@
+[
+  {
+    "id": "comp-group-1",
+    "role": "compressedGroup",
+    "content": "Summary: User asked about prime numbers. Assistant provided implementation and test cases.",
+    "parentId": null,
+    "createdAt": 1704067205000,
+    "updatedAt": 1704067205000,
+    "meta": {},
+    "lastMessageId": "msg-compressed-last",
+    "pinnedMessages": [
+      {
+        "id": "pinned-msg-001",
+        "role": "assistant",
+        "content": "Here's a prime number checker function...",
+        "createdAt": "2024-01-01T10:01:00.000Z",
+        "model": "gpt-4",
+        "provider": "openai"
+      },
+      {
+        "id": "pinned-msg-002",
+        "role": "user",
+        "content": "Can you add documentation?",
+        "createdAt": "2024-01-01T10:02:00.000Z",
+        "model": null,
+        "provider": null
+      }
+    ]
+  },
+  {
+    "id": "msg-recent-001",
+    "role": "user",
+    "content": "Now let's optimize it further",
+    "parentId": null,
+    "createdAt": 1704067210000,
+    "updatedAt": 1704067210000,
+    "meta": {}
+  },
+  {
+    "id": "msg-recent-002",
+    "role": "assistant",
+    "content": "Sure! Here's an optimized version using the Sieve of Eratosthenes...",
+    "parentId": "msg-recent-001",
+    "createdAt": 1704067215000,
+    "updatedAt": 1704067215000,
+    "meta": {},
+    "metadata": {
+      "totalInputTokens": 200,
+      "totalOutputTokens": 150,
+      "totalTokens": 350
+    }
+  }
+]

@@ -1,0 +1,200 @@
+---
+title: Environment Setup Guide
+description: >-
+  Step-by-step guide to set up LobeHub development environment locally or
+  online.
+tags:
+  - LobeHub
+  - Development Setup
+  - Node.js
+  - PNPM
+  - Bun
+  - Git
+  - Docker
+  - PostgreSQL
+---
+
+# Environment Setup Guide
+
+Welcome to the LobeHub development environment setup guide.
+
+## Online Development
+
+If you have access to GitHub Codespaces, you can click the button below to enter the online development environment with just one click:
+
+[![][codespaces-shield]][codespaces-link]
+
+## Local Development
+
+Before starting development on LobeHub, you need to install and configure some necessary software and tools in your local environment. This document will guide you through these steps.
+
+### Development Environment Requirements
+
+First, you need to install the following software:
+
+- Node.js: LobeHub is built on Node.js, so you need to install Node.js. We recommend installing the latest stable version.
+- PNPM: We use PNPM as the preferred package manager. You can download and install it from the [PNPM official website](https://pnpm.io/installation).
+- Bun: We use Bun as the npm scripts runner. You can download and install it from the [Bun official website](https://bun.com/docs/installation).
+- Git: We use Git for version control. You can download and install it from the Git official website.
+- Docker: Required for running PostgreSQL, RustFS, and other services. You can download and install it from the [Docker official website](https://www.docker.com/get-started).
+- IDE: You can choose your preferred integrated development environment (IDE). We recommend using WebStorm/VSCode.
+
+### VSCode Users
+
+We recommend installing the extensions listed in [.vscode/extensions.json](https://github.com/lobehub/lobehub/blob/main/.vscode/extensions.json) for the best development experience.
+
+### Project Setup
+
+After installing the above software, you can start setting up the LobeHub project.
+
+#### 1. Get the Code
+
+First, you need to clone the LobeHub codebase from GitHub. Run the following command in the terminal:
+
+```bash
+git clone https://github.com/lobehub/lobehub.git
+cd lobehub
+```
+
+#### 2. Install Dependencies
+
+Use PNPM to install the project's dependencies:
+
+```bash
+pnpm i
+```
+
+#### 3. Configure Environment
+
+Copy the example environment files:
+
+```bash
+# Docker services configuration
+cp docker-compose/dev/.env.example docker-compose/dev/.env
+
+# Next.js development server configuration
+cp .env.example.development .env
+```
+
+Edit these files as needed:
+
+- `docker-compose/dev/.env` - Docker services (PostgreSQL, Redis, RustFS, SearXNG)
+- `.env` - Next.js dev server (database connection, S3 storage, auth, etc.)
+
+#### 4. Start Docker Services
+
+Start all required services using Docker Compose:
+
+```bash
+bun run dev:docker
+```
+
+This will start the following services:
+
+- PostgreSQL database (port 5432)
+- Redis cache (port 6379)
+- RustFS storage (API port 9000, Console port 9001)
+- SearXNG search (port 8180)
+
+You can check all Docker services are running by running:
+
+```bash
+docker compose -f docker-compose/dev/docker-compose.yml ps
+```
+
+#### 5. Run Database Migrations
+
+Execute the database migration script to create all necessary tables:
+
+```bash
+pnpm db:migrate
+```
+
+You should see: `✅ database migration pass.`
+
+#### 6. Start Development Server
+
+Launch the LobeHub development server:
+
+```bash
+bun run dev
+```
+
+Now, you can open `http://localhost:3010` in your browser, and you should see the welcome page of LobeHub. This indicates that you have successfully set up the development environment.
+
+![](https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/274655364-414bc31e-8511-47a3-af17-209b530effc7.png)
+
+## Service URLs
+
+When running with Docker Compose development setup:
+
+- **PostgreSQL**: `postgres://postgres@localhost:5432/lobechat`
+- **Redis**: `redis://localhost:6379`
+- **RustFS API**: `http://localhost:9000`
+- **RustFS Console**: `http://localhost:9001`
+- **SearXNG**: `http://localhost:8180`
+- **Application**: `http://localhost:3010`
+
+## Alternative Development Modes
+
+**Desktop App Development** — To work on the Electron desktop app:
+
+```bash
+cd apps/desktop
+pnpm run dev
+```
+
+**Mobile SPA Development** — To develop the mobile web app:
+
+```bash
+bun run dev:spa:mobile
+```
+
+Access at [http://localhost:3012](http://localhost:3012)
+
+## Troubleshooting
+
+### Reset Services
+
+If you encounter issues, you can reset the entire stack:
+
+```bash
+# Completely reset Docker environment (delete all data and restart)
+bun run dev:docker:reset
+```
+
+### Port Conflicts
+
+If ports are already in use:
+
+```bash
+# Check what's using the ports
+lsof -i :5432  # PostgreSQL
+lsof -i :6379  # Redis
+lsof -i :9000  # RustFS API
+lsof -i :9001  # RustFS Console
+lsof -i :8180  # SearXNG
+```
+
+### Database Migrations
+
+Run migrations manually when needed:
+
+```bash
+pnpm db:migrate
+```
+
+### Clean Install
+
+If you encounter dependency issues, remove all `node_modules` and reinstall:
+
+```bash
+bun run clean:node_modules && pnpm install
+```
+
+---
+
+During the development process, if you encounter any issues with environment setup or have any questions about LobeHub development, feel free to ask us at any time. We look forward to seeing your contributions!
+
+[codespaces-link]: https://codespaces.new/lobehub/lobehub
+[codespaces-shield]: https://github.com/codespaces/badge.svg

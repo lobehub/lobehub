@@ -1,0 +1,364 @@
+{
+  "root": {
+    "children": [
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "雨点敲打咖啡馆之玻璃窗，若无数纤指弹奏无声之琴。林晓坐于窗边，手中咖啡已凉，而浑然不觉。此乃其第三次至此咖啡馆，每回皆同一位置，同一时辰。",
+            "type": "text",
+            "version": 1,
+            "id": "183"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "182"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "窗外雨丝如帘，街灯昏黄，映照雨滴如珠帘垂落。咖啡馆内灯光柔和，墙上挂旧时照片，书架列满古籍，空气中咖啡香与旧书纸香交织。",
+            "type": "text",
+            "version": 1,
+            "id": "138"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "137"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "忆其初至之时，亦如是雨夜。彼日方了结五载之情，身心若被掏空。馆中奏轻柔爵士之乐，空气中弥漫咖啡豆之香与雨水之湿气。彼点美式咖啡一杯，遂静坐观窗外之雨，直至打烊。",
+            "type": "text",
+            "version": 1,
+            "id": "178"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "177"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "二次来时，遇彼男子。身着灰色风衣，身形颀长，坐于对面之位。其面如冠玉，眉目清朗，虽不言不语，自有儒雅之气。二人之间虽隔一桌，却似隔整个宇宙。彼未视林晓，唯专注观手中之书，偶抬头望窗外。林晓见其手指修长如玉，翻书之态优雅从容，颇有君子之风。",
+            "type": "text",
+            "version": 1,
+            "id": "130"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "129"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "今日，彼复至。雨仍如是下，咖啡馆依旧寂静。林晓不知己所期待者何，或已习惯此孤独之仪式。",
+            "type": "text",
+            "version": 1,
+            "id": "173"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "172"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "门上风铃响，有人推门而入。林晓下意识抬头，心跳忽漏一拍。",
+            "type": "text",
+            "version": 1,
+            "id": "168"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "167"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "风铃叮咚，如清泉击石。林晓抬眼望去，见一身影立于门口，雨伞滴水成线，灯光勾勒其轮廓，若水墨画中走出之人。",
+            "type": "text",
+            "version": 1,
+            "id": "135"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "134"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "是他。",
+            "type": "text",
+            "version": 1,
+            "id": "24"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "23"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "彼收雨伞，抖身上水珠，径走向林晓。此番，未坐对面之位，而于其面前止步。",
+            "type": "text",
+            "version": 1,
+            "id": "163"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "162"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "“吾可坐此处乎？”其声低沉温和，如山涧清泉。",
+            "type": "text",
+            "version": 1,
+            "id": "158"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "157"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "林晓点头，喉中微干。窗外雨声似渐小，馆中音乐愈显清晰。",
+            "type": "text",
+            "version": 1,
+            "id": "153"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "152"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "“吾观汝每回皆在此处，”彼言，眼中含笑，“吾亦然。”",
+            "type": "text",
+            "version": 1,
+            "id": "148"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "147"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "林晓不知何言，唯凝视之。彼目深褐色，若秋日落叶，温暖深邃，似藏无尽故事。其鼻梁挺直，唇线分明，微笑时眼角微纹，更添几分沧桑韵味。林晓忽觉此人似曾相识，却又分明初见。",
+            "type": "text",
+            "version": 1,
+            "id": "125"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "124"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "“吾名陈默，”彼伸手，指节分明，掌心温暖，“甚悦终能与汝言。观汝三回，每回皆静坐观雨，若有所思，若有所待。”",
+            "type": "text",
+            "version": 1,
+            "id": "120"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "119"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "林晓握其手，感掌心之温，心中忽生异样。彼手虽温，却有薄茧，似是常执笔或抚琴之人。雨仍下，然咖啡馆中忽觉温暖如春，先前之孤独寂寥，竟悄然消散。",
+            "type": "text",
+            "version": 1,
+            "id": "115"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "114"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "或曰，有些相遇注定于雨夜发生。如有些故事，注定始于一句简单问候。",
+            "type": "text",
+            "version": 1,
+            "id": "143"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "142"
+      }
+    ],
+    "direction": "ltr",
+    "format": "",
+    "indent": 0,
+    "type": "root",
+    "version": 1,
+    "id": "root"
+  }
+}

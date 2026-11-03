@@ -1,0 +1,395 @@
+import {
+  formatBrowserMcpShortLabel,
+  formatLinearMcpShortLabel,
+} from '@lobechat/builtin-tool-claude-code/client/labels';
+import { getGoalCommand, isGoalCommandFailed } from '@lobechat/shared-tool-ui/goal-command';
+import type { ChatToolPayloadWithResult } from '@lobechat/types';
+import { formatDuration } from '@lobechat/utils';
+import { t } from 'i18next';
+
+import { LOADING_FLAT } from '@/const/message';
+import type { AssistantContentBlock } from '@/types/index';
+
+import {
+  TIME_MS_PER_SECOND,
+  TOOL_API_DISPLAY_NAMES,
+  TOOL_HEADLINE_DETAIL_MAX_CHARS,
+  TOOL_HEADLINE_DETAIL_TRUNCATE_LEN,
+  TOOL_HEADLINE_TRUNCATION_SUFFIX,
+  WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL,
+  WORKFLOW_PROSE_HEADLINE_MAX_CHARS,
+  WORKFLOW_PROSE_LIST_MARKER_MAX_TAIL_WORD_CHARS,
+  WORKFLOW_PROSE_MIN_CHARS,
+  WORKFLOW_PROSE_SOURCE_MIN_CHARS,
+  WORKFLOW_TRUNCATE_WORD_BOUNDARY_MIN_RATIO,
+} from './constants';
+import { extractToolKeyword } from './Tool/Inspector/extractToolKeyword';
+
+export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): boolean => {
+  const collapsible = tools.filter((t) => t.intervention?.status !== 'pending');
+  if (collapsible.length === 0) return false;
+  return collapsible.every((t) => t.result != null && t.result.content !== LOADING_FLAT);
+};
+
+const toTitleCase = (apiName: string): string => {
+  return apiName
+    .replaceAll(/([A-Z])/g, ' $1')
+    .replace(/^./, (s) => s.toUpperCase())
+    .trim();
+};
+
+export const getToolDisplayName = (apiName: string): string => {
+  const linearLabel = formatLinearMcpShortLabel(apiName);
+  if (linearLabel) return linearLabel;
+
+  // MCP wire names title-case into gibberish ("Mcp  lobe cc  browser navigate"),
+  // so the browser tools resolve to their own labels before the fallback.
+  const browserLabel = formatBrowserMcpShortLabel(apiName, (key, defaultValue) =>
+    t(key, { defaultValue, ns: 'chat' }),
+  );
+  if (browserLabel) return browserLabel;
+
+  const defaultValue = toTitleCase(apiName);
+  const key = TOOL_API_DISPLAY_NAMES[apiName];
+  if (!key) return defaultValue;
+
+  return t(key, { defaultValue, ns: 'chat' });
+};
+
+export const getToolSummaryText = (tools: ChatToolPayloadWithResult[]): string => {
+  const groups = new Map<string, number>();
+  for (const tool of tools) {
+    groups.set(tool.apiName, (groups.get(tool.apiName) || 0) + 1);
+  }
+
+  const parts: string[] = [];
+  for (const [apiName, count] of groups) {
+    const name = getToolDisplayName(apiName);
+    if (count > 1) {
+      parts.push(`${name} (${count})`);
+    } else {
+      parts.push(name);
+    }
+  }
+
+  return parts.join(', ');
+};
+
+export const hasToolError = (tools: ChatToolPayloadWithResult[]): boolean => {
+  return tools.some((t) => t.result?.error);
+};
+
+export const getWorkflowCompletionStatus = (
+  tools: ChatToolPayloadWithResult[],
+): 'success' | 'partial' | 'error' => {
+  const collapsible = tools.filter((t) => t.intervention?.status !== 'pending');
+  if (collapsible.length === 0) return 'success';
+
+  const completed = collapsible.filter(
+    (t) => t.result != null && t.result.content !== LOADING_FLAT,
+  );
+  if (completed.length === 0) return 'success';
+
+  const errorCount = completed.filter((t) => t.result?.error).length;
+  if (errorCount === 0) return 'success';
+  if (errorCount === completed.length) return 'error';
+  return 'partial';
+};
+
+/**
+ * Identifier-aware action label ("Run command" / 执行命令) — the same builtin
+ * per-API copy the collapsed inspector rows use; workflow display name (or
+ * title-cased apiName) otherwise.
+ */
+const getToolActionLabel = (tool: ChatToolPayloadWithResult): string => {
+  const builtinLabel = tool.identifier
+    ? t(`builtins.${tool.identifier}.apiName.${tool.apiName}`, { defaultValue: '', ns: 'plugin' })
+    : '';
+  return builtinLabel || getToolDisplayName(tool.apiName);
+};
+
+/** The single most informative token from the args — never the raw args dump. */
+const getToolKeywordDetail = (tool: ChatToolPayloadWithResult): string => {
+  try {
+    return extractToolKeyword(JSON.parse(tool.arguments || '{}')) ?? '';
+  } catch {
+    // arguments still streaming or invalid
+    return '';
+  }
+};
+
+/** Optional progress line from tool-runtime state (pluginState → result.state) or metadata */
+interface WorkflowHeadlinePayload {
+  metadata?: { workflow?: { stepMessage?: string } };
+  state?: { workflowHeadline?: { stepMessage?: string } };
+}
+
+const getResultStepMessage = (tool: ChatToolPayloadWithResult): string => {
+  const r = tool.result as WorkflowHeadlinePayload | null | undefined;
+  if (!r) return '';
+  const fromState = r.state?.workflowHeadline?.stepMessage?.trim();
+  if (fromState) return fromState;
+  return r.metadata?.workflow?.stepMessage?.trim() ?? '';
+};
+
+/** B — runtime stepMessage only (no args fallback). */
+export const getExplicitStepHeadlineLine = (tool: ChatToolPayloadWithResult): string => {
+  const step = getResultStepMessage(tool).trim();
+  if (!step) return '';
+  const label = getToolActionLabel(tool);
+  const short =
+    step.length > TOOL_HEADLINE_DETAIL_MAX_CHARS
+      ? step.slice(0, TOOL_HEADLINE_DETAIL_TRUNCATE_LEN) + TOOL_HEADLINE_TRUNCATION_SUFFIX
+      : step;
+  return `${label}: ${short}`;
+};
+
+/**
+ * `/goal` in a CLI agent conversation creates and plans the goal through `lh`
+ * shell calls. While the run streams, that step reads as the goal step it is
+ * ("正在创建目标 <title>") rather than "执行命令 <description>".
+ */
+const getGoalCommandHeadlineLine = (tool: ChatToolPayloadWithResult): string => {
+  if (!tool.arguments?.includes('goal ')) return '';
+
+  let command: unknown;
+  try {
+    command = JSON.parse(tool.arguments).command;
+  } catch {
+    // arguments still streaming or invalid
+    return '';
+  }
+  const goalCommand = typeof command === 'string' ? getGoalCommand(command) : undefined;
+  if (!goalCommand) return '';
+
+  const status =
+    tool.result == null || tool.result.content === LOADING_FLAT
+      ? 'loading'
+      : isGoalCommandFailed(tool.result)
+        ? 'failed'
+        : 'completed';
+  const label = t(`builtins.goalCommand.${goalCommand.kind}.${status}`, { ns: 'plugin' });
+  const title = goalCommand.kind === 'create' ? goalCommand.title : undefined;
+
+  return title ? `${label} ${title}` : label;
+};
+
+/**
+ * C — action label + one keyword (no explicit step). This is the shining line
+ * of a RUNNING collapsed workflow, so it reads as a sentence ("执行命令
+ * monthly.ts"), never as a raw args dump.
+ */
+export const getToolFallbackHeadlineLine = (tool: ChatToolPayloadWithResult): string => {
+  const goalHeadline = getGoalCommandHeadlineLine(tool);
+  if (goalHeadline) return goalHeadline;
+
+  const label = getToolActionLabel(tool);
+  const keyword = getToolKeywordDetail(tool);
+  return keyword ? `${label} ${keyword}` : label;
+};
+
+/**
+ * One-line status for a single tool: label + optional step / first string arg.
+ * Prefer explicit stepMessage when backends populate workflowHeadline / metadata.workflow.
+ */
+export const getToolStepHeadlineLine = (tool: ChatToolPayloadWithResult): string => {
+  const explicit = getExplicitStepHeadlineLine(tool);
+  if (explicit) return explicit;
+  return getToolFallbackHeadlineLine(tool);
+};
+
+const truncateDisplayAtWord = (s: string, max: number): string => {
+  if (s.length <= max) return s;
+  const slice = s.slice(0, max);
+  const lastSpace = slice.lastIndexOf(' ');
+  if (lastSpace > max * WORKFLOW_TRUNCATE_WORD_BOUNDARY_MIN_RATIO)
+    return `${slice.slice(0, lastSpace)}${TOOL_HEADLINE_TRUNCATION_SUFFIX}`;
+  return `${slice}${TOOL_HEADLINE_TRUNCATION_SUFFIX}`;
+};
+
+/** Han / full-width CJK punctuation — if present, prefer 。！？ only (ASCII . is not a sentence end). */
+/** CJK Han block — prefer 。！？ sentence ends (see constants module comment). */
+const hasCjkScript = (s: string): boolean => /[\u4E00-\u9FFF]/.test(s);
+
+const firstSentenceEndCjk = (s: string): number => {
+  const i = s.search(/[。！？]/);
+  return i;
+};
+
+const isAlphanum = (c: string) => /[a-z\d]/i.test(c);
+
+/** Latin-heavy: treat .!? as ends but skip dots inside tokens (Node.js, 3.14, …). */
+const firstSentenceEndLatin = (s: string): number => {
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '。' || ch === '！' || ch === '？') return i;
+    if (ch === '!' || ch === '?') return i;
+    if (ch === '.') {
+      const prev = s[i - 1] ?? '';
+      const next = s[i + 1] ?? '';
+      if (isAlphanum(prev) && isAlphanum(next)) continue;
+      if (/\d/.test(prev) && /\d/.test(next)) continue;
+      return i;
+    }
+  }
+  return -1;
+};
+
+const stripLightMarkdownForHeadline = (md: string): string => {
+  let s = md;
+  s = s.replaceAll(/```[\s\S]*?```/g, ' ');
+  s = s.replaceAll(/`([^`]+)`/g, '$1');
+  s = s.replaceAll(/\*\*?|__/g, '');
+  s = s.replaceAll(new RegExp(`^#{1,${WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL}}\\s+`, 'gm'), '');
+  s = s.replaceAll(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
+  return s;
+};
+
+const extractMarkdownHeadingTitle = (md: string): string => {
+  const withoutCode = md.replaceAll(/```[\s\S]*?```/g, ' ');
+  const lines = withoutCode.split('\n');
+  let lastTitle = '';
+
+  for (const line of lines) {
+    const match = line.match(
+      new RegExp(`^\\s{0,3}#{1,${WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL}}\\s+(.+?)\\s*$`),
+    );
+    if (!match) continue;
+
+    const raw = match[1]?.replace(/\s+#+\s*$/, '') ?? '';
+    const title = stripLightMarkdownForHeadline(raw).replaceAll(/\s+/g, ' ').trim();
+    if (!title) continue;
+
+    lastTitle = truncateDisplayAtWord(title, WORKFLOW_PROSE_HEADLINE_MAX_CHARS);
+  }
+
+  return lastTitle;
+};
+
+/**
+ * Deterministic one-line snippet from streamed assistant prose (A path).
+ * Prefers a full sentence when punctuation exists; otherwise trims to max width.
+ */
+export const shapeProseForWorkflowHeadline = (source: string): string => {
+  let s = stripLightMarkdownForHeadline(source);
+  s = s.replaceAll(/\s+/g, ' ').trim();
+  if (s.length < WORKFLOW_PROSE_MIN_CHARS) return '';
+  if (new RegExp(`^[-*+]\\s*\\w{0,${WORKFLOW_PROSE_LIST_MARKER_MAX_TAIL_WORD_CHARS}}$`).test(s))
+    return '';
+
+  const endIdx = hasCjkScript(s) ? firstSentenceEndCjk(s) : firstSentenceEndLatin(s);
+  if (endIdx >= 0) {
+    const sentence = s.slice(0, endIdx + 1).trim();
+    if (sentence.length >= WORKFLOW_PROSE_MIN_CHARS)
+      return truncateDisplayAtWord(sentence, WORKFLOW_PROSE_HEADLINE_MAX_CHARS);
+  }
+
+  return truncateDisplayAtWord(s, WORKFLOW_PROSE_HEADLINE_MAX_CHARS);
+};
+
+const getBlockContent = (block: AssistantContentBlock): string => {
+  const content = block.content?.trim() ?? '';
+  if (!content || content === LOADING_FLAT) return '';
+  return content;
+};
+
+const getBlockReasoningContent = (block: AssistantContentBlock): string => {
+  const reasoning = block.reasoning?.content?.trim() ?? '';
+  if (!reasoning || reasoning === LOADING_FLAT) return '';
+  return reasoning;
+};
+
+const isThinkingOnlyBlock = (block: AssistantContentBlock): boolean => {
+  if (block.tools?.length) return false;
+  if ((block.imageList?.length ?? 0) > 0) return false;
+  return !!getBlockReasoningContent(block) && !getBlockContent(block) && !block.error;
+};
+
+export type WorkflowStreamingHeadlineState =
+  | { kind: 'idle' }
+  | { kind: 'prose'; proseSource: string }
+  | { kind: 'thinking'; reasoningTitle: string }
+  | { explicitStep: string; fallbackTool: string; kind: 'tool' };
+
+const getHeadlineStateFromBlock = (
+  block: AssistantContentBlock,
+): WorkflowStreamingHeadlineState | null => {
+  if (block.tools?.length) {
+    const lastTool = block.tools.at(-1);
+    const explicitStep = lastTool ? getExplicitStepHeadlineLine(lastTool) : '';
+    const fallbackTool = lastTool ? getToolFallbackHeadlineLine(lastTool) : '';
+    if (!explicitStep && !fallbackTool) return null;
+
+    return {
+      explicitStep,
+      fallbackTool,
+      kind: 'tool',
+    };
+  }
+
+  if (isThinkingOnlyBlock(block)) {
+    const reasoningTitle = extractMarkdownHeadingTitle(getBlockReasoningContent(block));
+    if (!reasoningTitle) return null;
+
+    return {
+      kind: 'thinking',
+      reasoningTitle,
+    };
+  }
+
+  const proseSource = getBlockContent(block);
+  if (proseSource.length < WORKFLOW_PROSE_SOURCE_MIN_CHARS) return null;
+
+  return { kind: 'prose', proseSource };
+};
+
+/** Walk backward and return the first block that can produce a meaningful headline state. */
+export const getWorkflowStreamingHeadlineState = (
+  blocks: AssistantContentBlock[],
+): WorkflowStreamingHeadlineState => {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i];
+    if (!block) continue;
+
+    const state = getHeadlineStateFromBlock(block);
+    if (state) return state;
+  }
+
+  return { kind: 'idle' };
+};
+
+/**
+ * Hour-scale turns roll up to "4h 11m": seconds are noise next to hours, and a
+ * bare "251m 49s" makes the reader do the division themselves.
+ */
+export const formatReasoningDuration = (ms: number): string =>
+  formatDuration(Math.round(ms / TIME_MS_PER_SECOND) * TIME_MS_PER_SECOND, { trimZero: true });
+
+/**
+ * Collapsed-workflow summary: the total number of tool calls, nothing more.
+ * A per-tool breakdown ("Ran a command (62), Read output (2)") is detail the
+ * expanded list already carries — the fold only needs the scale of the work.
+ */
+export const getWorkflowSummaryText = (blocks: AssistantContentBlock[]): string => {
+  const totalCalls = blocks.reduce((sum, block) => sum + (block.tools?.length ?? 0), 0);
+
+  if (totalCalls > 0)
+    return t('workflow.summaryCallsTotal', {
+      count: totalCalls,
+      defaultValue_one: '{{count}} call',
+      defaultValue_other: '{{count}} calls',
+      ns: 'chat',
+    });
+
+  // Thinking-only workflows have no calls to count — fall back to the reasoning time
+  // so the collapsed row is never blank.
+  const totalReasoningMs = blocks.reduce((sum, b) => sum + (b.reasoning?.duration ?? 0), 0);
+  if (totalReasoningMs > 0)
+    return t('workflow.thoughtForDuration', {
+      defaultValue: 'Thought for {{duration}}',
+      duration: formatReasoningDuration(totalReasoningMs),
+      ns: 'chat',
+    });
+
+  return '';
+};

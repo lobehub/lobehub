@@ -1,0 +1,250 @@
+[
+  {
+    "pageContent": "import { copyToClipboard } from '@lobehub/ui';\nimport isEqual from 'fast-deep-equal';\nimport { produce } from 'immer';\nimport { template } from 'lodash-es';\nimport { SWRResponse, mutate } from 'swr';\nimport { StateCreator } from 'zustand/vanilla';",
+    "metadata": { "loc": { "lines": { "from": 1, "to": 6 } } }
+  },
+  {
+    "pageContent": "import { chainAnswerWithContext } from '@/chains/answerWithContext';\nimport { LOADING_FLAT } from '@/const/message';\nimport { TraceEventType, TraceNameMap } from '@/const/trace';\nimport { isServerMode } from '@/const/version';\nimport { useClientDataSWR } from '@/libs/swr';\nimport { chatService } from '@/services/chat';\nimport { messageService } from '@/services/message';\nimport { topicService } from '@/services/topic';\nimport { traceService } from '@/services/trace';\nimport { useAgentStore } from '@/store/agent';\nimport { agentSelectors } from '@/store/agent/selectors';\nimport { chatHelpers } from '@/store/chat/helpers';\nimport { messageMapKey } from '@/store/chat/slices/message/utils';\nimport { ChatStore } from '@/store/chat/store';\nimport { useSessionStore } from '@/store/session';",
+    "metadata": { "loc": { "lines": { "from": 8, "to": 22 } } }
+  },
+  {
+    "pageContent": "import { traceService } from '@/services/trace';\nimport { useAgentStore } from '@/store/agent';\nimport { agentSelectors } from '@/store/agent/selectors';\nimport { chatHelpers } from '@/store/chat/helpers';\nimport { messageMapKey } from '@/store/chat/slices/message/utils';\nimport { ChatStore } from '@/store/chat/store';\nimport { useSessionStore } from '@/store/session';\nimport { UploadFileItem } from '@/types/files/upload';\nimport {\n  ChatMessage,\n  ChatMessageError,\n  CreateMessageParams,\n  MessageToolCall,\n} from '@lobechat/types';\nimport { TraceEventPayloads } from '@/types/trace';\nimport { setNamespace } from '@/utils/storeDebug';\nimport { nanoid } from '@/utils/uuid';",
+    "metadata": { "loc": { "lines": { "from": 16, "to": 32 } } }
+  },
+  {
+    "pageContent": "import type { ChatStoreState } from '../../initialState';\nimport { chatSelectors, topicSelectors } from '../../selectors';\nimport { preventLeavingFn, toggleBooleanList } from '../../utils';\nimport { ChatRAGAction, chatRag } from './actions/rag';\nimport { MessageDispatch, messagesReducer } from './reducer';",
+    "metadata": { "loc": { "lines": { "from": 34, "to": 38 } } }
+  },
+  {
+    "pageContent": "const n = setNamespace('m');",
+    "metadata": { "loc": { "lines": { "from": 40, "to": 40 } } }
+  },
+  {
+    "pageContent": "const SWR_USE_FETCH_MESSAGES = 'SWR_USE_FETCH_MESSAGES';\n\nexport interface SendMessageParams {\n  message: string;\n  files?: UploadFileItem[];\n  onlyAddUserMessage?: boolean;\n  /**\n   *\n   * https://github.com/lobehub/lobe-chat/pull/2086\n   */\n  isWelcomeQuestion?: boolean;\n}\n\ninterface ProcessMessageParams {\n  traceId?: string;\n  isWelcomeQuestion?: boolean;\n  /**\n   * the RAG query content, should be embedding and used in the semantic search\n   */\n  ragQuery?: string;\n}\n\nexport interface ChatMessageAction extends ChatRAGAction {\n  // create\n  sendMessage: (params: SendMessageParams) => Promise<void>;\n  addAIMessage: () => Promise<void>;\n  /**\n   * regenerate message\n   * trace enabled\n   * @param id\n   */\n  regenerateMessage: (id: string) => Promise<void>;",
+    "metadata": { "loc": { "lines": { "from": 42, "to": 73 } } }
+  },
+  {
+    "pageContent": "// delete\n  /**\n   * clear message on the active session\n   */\n  clearMessage: () => Promise<void>;\n  deleteMessage: (id: string) => Promise<void>;\n  deleteToolMessage: (id: string) => Promise<void>;\n  delAndRegenerateMessage: (id: string) => Promise<void>;\n  clearAllMessages: () => Promise<void>;\n  // update\n  updateInputMessage: (message: string) => void;\n  modifyMessageContent: (id: string, content: string) => Promise<void>;\n  // query\n  useFetchMessages: (sessionId: string, topicId?: string) => SWRResponse<ChatMessage[]>;\n  stopGenerateMessage: () => void;\n  copyMessage: (id: string, content: string) => Promise<void>;\n  refreshMessages: () => Promise<void>;\n  toggleMessageEditing: (id: string, editing: boolean) => void;",
+    "metadata": { "loc": { "lines": { "from": 75, "to": 92 } } }
+  },
+  {
+    "pageContent": "// =========  ↓ Internal Method ↓  ========== //\n  // ========================================== //\n  // ========================================== //",
+    "metadata": { "loc": { "lines": { "from": 94, "to": 96 } } }
+  },
+  {
+    "pageContent": "/**\n   * update message at the frontend point\n   * this method will not update messages to database\n   */\n  internal_dispatchMessage: (payload: MessageDispatch) => void;\n  /**\n   * core process of the AI message (include preprocess and postprocess)\n   */\n  internal_coreProcessMessage: (\n    messages: ChatMessage[],\n    parentId: string,\n    params?: ProcessMessageParams,\n  ) => Promise<void>;\n  /**\n   * the method to fetch the AI message\n   */\n  internal_fetchAIChatMessage: (\n    messages: ChatMessage[],\n    assistantMessageId: string,\n    params?: ProcessMessageParams,\n  ) => Promise<{\n    isFunctionCall: boolean;\n    traceId?: string;\n  }>;",
+    "metadata": { "loc": { "lines": { "from": 98, "to": 121 } } }
+  },
+  {
+    "pageContent": "/**\n   * update the message content with optimistic update\n   * a method used by other action\n   */\n  internal_updateMessageContent: (\n    id: string,\n    content: string,\n    toolCalls?: MessageToolCall[],\n  ) => Promise<void>;\n  /**\n   * update the message error with optimistic update\n   */\n  internal_updateMessageError: (id: string, error: ChatMessageError | null) => Promise<void>;\n  /**\n   * create a message with optimistic update\n   */\n  internal_createMessage: (\n    params: CreateMessageParams,\n    context?: { tempMessageId?: string; skipRefresh?: boolean },\n  ) => Promise<string>;\n  /**\n   * create a temp message for optimistic update\n   * otherwise the message will be too slow to show\n   */\n  internal_createTmpMessage: (params: CreateMessageParams) => string;\n  /**",
+    "metadata": { "loc": { "lines": { "from": 123, "to": 148 } } }
+  },
+  {
+    "pageContent": "/**\n   * create a message with optimistic update\n   */\n  internal_createMessage: (\n    params: CreateMessageParams,\n    context?: { tempMessageId?: string; skipRefresh?: boolean },\n  ) => Promise<string>;\n  /**\n   * create a temp message for optimistic update\n   * otherwise the message will be too slow to show\n   */\n  internal_createTmpMessage: (params: CreateMessageParams) => string;\n  /**\n   * delete the message content with optimistic update\n   */\n  internal_deleteMessage: (id: string) => Promise<void>;\n  internal_resendMessage: (id: string, traceId?: string) => Promise<void>;",
+    "metadata": { "loc": { "lines": { "from": 136, "to": 152 } } }
+  },
+  {
+    "pageContent": "internal_fetchMessages: () => Promise<void>;\n  internal_traceMessage: (id: string, payload: TraceEventPayloads) => Promise<void>;",
+    "metadata": { "loc": { "lines": { "from": 154, "to": 155 } } }
+  },
+  {
+    "pageContent": "/**\n   * method to toggle message create loading state\n   * the AI message status is creating -> generating\n   * other message role like user and tool , only this method need to be called\n   */\n  internal_toggleMessageLoading: (loading: boolean, id: string) => void;\n  /**\n   * method to toggle ai message generating loading\n   */\n  internal_toggleChatLoading: (\n    loading: boolean,\n    id?: string,\n    action?: string,\n  ) => AbortController | undefined;\n  /**\n   * method to toggle the tool calling loading state\n   */\n  internal_toggleToolCallingStreaming: (id: string, streaming: boolean[] | undefined) => void;\n  /**\n   * helper to toggle the loading state of the array,used by these three toggleXXXLoading\n   */\n  internal_toggleLoadingArrays: (\n    key: keyof ChatStoreState,",
+    "metadata": { "loc": { "lines": { "from": 157, "to": 179 } } }
+  },
+  {
+    "pageContent": "action?: string,\n  ) => AbortController | undefined;\n  /**\n   * method to toggle the tool calling loading state\n   */\n  internal_toggleToolCallingStreaming: (id: string, streaming: boolean[] | undefined) => void;\n  /**\n   * helper to toggle the loading state of the array,used by these three toggleXXXLoading\n   */\n  internal_toggleLoadingArrays: (\n    key: keyof ChatStoreState,\n    loading: boolean,\n    id?: string,\n    action?: string,\n  ) => AbortController | undefined;\n}",
+    "metadata": { "loc": { "lines": { "from": 169, "to": 184 } } }
+  },
+  {
+    "pageContent": "const getAgentConfig = () => agentSelectors.currentAgentConfig(useAgentStore.getState());\nconst getAgentChatConfig = () => agentSelectors.currentAgentChatConfig(useAgentStore.getState());",
+    "metadata": { "loc": { "lines": { "from": 186, "to": 187 } } }
+  },
+  {
+    "pageContent": "const hasEnabledKnowledge = () => agentSelectors.hasEnabledKnowledge(useAgentStore.getState());\n\nexport const chatMessage: StateCreator<\n  ChatStore,\n  [['zustand/devtools', never]],\n  [],\n  ChatMessageAction\n> = (set, get, ...rest) => ({\n  ...chatRag(set, get, ...rest),\n\n  deleteMessage: async (id) => {\n    const message = chatSelectors.getMessageById(id)(get());\n    if (!message) return;\n\n    let ids = [message.id];\n\n    // if the message is a tool calls, then delete all the related messages\n    if (message.tools) {\n      const toolMessageIds = message.tools.flatMap((tool) => {\n        const messages = chatSelectors\n          .currentChats(get())\n          .filter((m) => m.tool_call_id === tool.id);",
+    "metadata": { "loc": { "lines": { "from": 188, "to": 209 } } }
+  },
+  {
+    "pageContent": "let ids = [message.id];\n\n    // if the message is a tool calls, then delete all the related messages\n    if (message.tools) {\n      const toolMessageIds = message.tools.flatMap((tool) => {\n        const messages = chatSelectors\n          .currentChats(get())\n          .filter((m) => m.tool_call_id === tool.id);\n\n        return messages.map((m) => m.id);\n      });\n      ids = ids.concat(toolMessageIds);\n    }\n\n    get().internal_dispatchMessage({ type: 'deleteMessages', ids });\n    await messageService.removeMessages(ids);\n    await get().refreshMessages();\n  },\n\n  deleteToolMessage: async (id) => {\n    const message = chatSelectors.getMessageById(id)(get());\n    if (!message || message.role !== 'tool') return;",
+    "metadata": { "loc": { "lines": { "from": 202, "to": 223 } } }
+  },
+  {
+    "pageContent": "get().internal_dispatchMessage({ type: 'deleteMessages', ids });\n    await messageService.removeMessages(ids);\n    await get().refreshMessages();\n  },\n\n  deleteToolMessage: async (id) => {\n    const message = chatSelectors.getMessageById(id)(get());\n    if (!message || message.role !== 'tool') return;\n\n    const removeToolInAssistantMessage = async () => {\n      if (!message.parentId) return;\n      await get().internal_removeToolToAssistantMessage(message.parentId, message.tool_call_id);\n    };\n\n    await Promise.all([\n      // 1. remove tool message\n      get().internal_deleteMessage(id),\n      // 2. remove the tool item in the assistant tools\n      removeToolInAssistantMessage(),\n    ]);\n  },",
+    "metadata": { "loc": { "lines": { "from": 216, "to": 236 } } }
+  },
+  {
+    "pageContent": "await Promise.all([\n      // 1. remove tool message\n      get().internal_deleteMessage(id),\n      // 2. remove the tool item in the assistant tools\n      removeToolInAssistantMessage(),\n    ]);\n  },\n\n  delAndRegenerateMessage: async (id) => {\n    const traceId = chatSelectors.getTraceIdByMessageId(id)(get());\n    get().internal_resendMessage(id, traceId);\n    get().deleteMessage(id);\n\n    // trace the delete and regenerate message\n    get().internal_traceMessage(id, { eventType: TraceEventType.DeleteAndRegenerateMessage });\n  },\n  regenerateMessage: async (id: string) => {\n    const traceId = chatSelectors.getTraceIdByMessageId(id)(get());\n    await get().internal_resendMessage(id, traceId);",
+    "metadata": { "loc": { "lines": { "from": 230, "to": 248 } } }
+  },
+  {
+    "pageContent": "// trace the delete and regenerate message\n    get().internal_traceMessage(id, { eventType: TraceEventType.DeleteAndRegenerateMessage });\n  },\n  regenerateMessage: async (id: string) => {\n    const traceId = chatSelectors.getTraceIdByMessageId(id)(get());\n    await get().internal_resendMessage(id, traceId);\n\n    // trace the delete and regenerate message\n    get().internal_traceMessage(id, { eventType: TraceEventType.RegenerateMessage });\n  },\n  clearMessage: async () => {\n    const { activeId, activeTopicId, refreshMessages, refreshTopic, switchTopic } = get();\n\n    await messageService.removeMessagesByAssistant(activeId, activeTopicId);\n\n    if (activeTopicId) {\n      await topicService.removeTopic(activeTopicId);\n    }\n    await refreshTopic();\n    await refreshMessages();",
+    "metadata": { "loc": { "lines": { "from": 243, "to": 262 } } }
+  },
+  {
+    "pageContent": "await messageService.removeMessagesByAssistant(activeId, activeTopicId);\n\n    if (activeTopicId) {\n      await topicService.removeTopic(activeTopicId);\n    }\n    await refreshTopic();\n    await refreshMessages();\n\n    // after remove topic , go back to default topic\n    switchTopic();\n  },\n  clearAllMessages: async () => {\n    const { refreshMessages } = get();\n    await messageService.removeAllMessages();\n    await refreshMessages();\n  },\n  sendMessage: async ({ message, files, onlyAddUserMessage, isWelcomeQuestion }) => {\n    const { internal_coreProcessMessage, activeTopicId, activeId } = get();\n    if (!activeId) return;\n\n    const fileIdList = files?.map((f) => f.id);\n\n    const hasFile = !!fileIdList && fileIdList.length > 0;",
+    "metadata": { "loc": { "lines": { "from": 256, "to": 278 } } }
+  },
+  {
+    "pageContent": "const fileIdList = files?.map((f) => f.id);\n\n    const hasFile = !!fileIdList && fileIdList.length > 0;\n\n    // if message is empty or no files, then stop\n    if (!message && !hasFile) return;\n\n    set({ isCreatingMessage: true }, false, 'creatingMessage/start');\n\n    const newMessage: CreateMessageParams = {\n      content: message,\n      // if message has attached with files, then add files to message and the agent\n      files: fileIdList,\n      role: 'user',\n      sessionId: activeId,\n      // if there is activeTopicId，then add topicId to message\n      topicId: activeTopicId,\n    };\n\n    const agentConfig = getAgentChatConfig();\n\n    let tempMessageId: string | undefined = undefined;\n    let newTopicId: string | undefined = undefined;",
+    "metadata": { "loc": { "lines": { "from": 276, "to": 298 } } }
+  },
+  {
+    "pageContent": "const agentConfig = getAgentChatConfig();\n\n    let tempMessageId: string | undefined = undefined;\n    let newTopicId: string | undefined = undefined;\n\n    // it should be the default topic, then\n    // if autoCreateTopic is enabled, check to whether we need to create a topic\n    if (!onlyAddUserMessage && !activeTopicId && agentConfig.enableAutoCreateTopic) {\n      // check activeTopic and then auto create topic\n      const chats = chatSelectors.currentChats(get());\n\n      // we will add two messages (user and assistant), so the finial length should +2\n      const featureLength = chats.length + 2;",
+    "metadata": { "loc": { "lines": { "from": 295, "to": 307 } } }
+  },
+  {
+    "pageContent": "// we will add two messages (user and assistant), so the finial length should +2\n      const featureLength = chats.length + 2;\n\n      // if there is no activeTopicId and the feature length is greater than the threshold\n      // then create a new topic and active it\n      if (!get().activeTopicId && featureLength >= agentConfig.autoCreateTopicThreshold) {\n        // we need to create a temp message for optimistic update\n        tempMessageId = get().internal_createTmpMessage(newMessage);\n        get().internal_toggleMessageLoading(true, tempMessageId);\n\n        const topicId = await get().createTopic();\n\n        if (topicId) {\n          newTopicId = topicId;\n          newMessage.topicId = topicId;",
+    "metadata": { "loc": { "lines": { "from": 306, "to": 320 } } }
+  },
+  {
+    "pageContent": "const topicId = await get().createTopic();\n\n        if (topicId) {\n          newTopicId = topicId;\n          newMessage.topicId = topicId;\n\n          // we need to copy the messages to the new topic or the message will disappear\n          const mapKey = chatSelectors.currentChatKey(get());\n          const newMaps = {\n            ...get().messagesMap,\n            [messageMapKey(activeId, topicId)]: get().messagesMap[mapKey],\n          };\n          set({ messagesMap: newMaps }, false, 'internal_copyMessages');\n\n          // get().internal_dispatchMessage({ type: 'deleteMessage', id: tempMessageId });\n          get().internal_toggleMessageLoading(false, tempMessageId);",
+    "metadata": { "loc": { "lines": { "from": 316, "to": 331 } } }
+  },
+  {
+    "pageContent": "// get().internal_dispatchMessage({ type: 'deleteMessage', id: tempMessageId });\n          get().internal_toggleMessageLoading(false, tempMessageId);\n\n          // make the topic loading\n          get().internal_updateTopicLoading(topicId, true);\n        }\n      }\n    }\n    //  update assistant update to make it rerank\n    useSessionStore.getState().triggerSessionUpdate(get().activeId);\n\n    const id = await get().internal_createMessage(newMessage, {\n      tempMessageId,\n      skipRefresh: !onlyAddUserMessage,\n    });\n\n    // switch to the new topic if create the new topic\n    if (!!newTopicId) {\n      await get().switchTopic(newTopicId, true);\n      await get().internal_fetchMessages();",
+    "metadata": { "loc": { "lines": { "from": 330, "to": 349 } } }
+  },
+  {
+    "pageContent": "const id = await get().internal_createMessage(newMessage, {\n      tempMessageId,\n      skipRefresh: !onlyAddUserMessage,\n    });\n\n    // switch to the new topic if create the new topic\n    if (!!newTopicId) {\n      await get().switchTopic(newTopicId, true);\n      await get().internal_fetchMessages();\n\n      // delete previous messages\n      // remove the temp message map\n      const newMaps = { ...get().messagesMap, [messageMapKey(activeId, null)]: [] };\n      set({ messagesMap: newMaps }, false, 'internal_copyMessages');\n    }\n\n    // if only add user message, then stop\n    if (onlyAddUserMessage) {\n      set({ isCreatingMessage: false }, false, 'creatingMessage/start');\n      return;\n    }",
+    "metadata": { "loc": { "lines": { "from": 341, "to": 361 } } }
+  },
+  {
+    "pageContent": "// delete previous messages\n      // remove the temp message map\n      const newMaps = { ...get().messagesMap, [messageMapKey(activeId, null)]: [] };\n      set({ messagesMap: newMaps }, false, 'internal_copyMessages');\n    }\n\n    // if only add user message, then stop\n    if (onlyAddUserMessage) {\n      set({ isCreatingMessage: false }, false, 'creatingMessage/start');\n      return;\n    }\n\n    // Get the current messages to generate AI response\n    const messages = chatSelectors.currentChats(get());\n    const userFiles = chatSelectors.currentUserFiles(get()).map((f) => f.id);",
+    "metadata": { "loc": { "lines": { "from": 351, "to": 365 } } }
+  },
+  {
+    "pageContent": "// if only add user message, then stop\n    if (onlyAddUserMessage) {\n      set({ isCreatingMessage: false }, false, 'creatingMessage/start');\n      return;\n    }\n\n    // Get the current messages to generate AI response\n    const messages = chatSelectors.currentChats(get());\n    const userFiles = chatSelectors.currentUserFiles(get()).map((f) => f.id);\n\n    await internal_coreProcessMessage(messages, id, {\n      isWelcomeQuestion,\n      // if there is relative files or enabled knowledge, try with ragQuery\n      ragQuery: hasEnabledKnowledge() || userFiles.length > 0 ? message : undefined,\n    });\n\n    set({ isCreatingMessage: false }, false, 'creatingMessage/stop');",
+    "metadata": { "loc": { "lines": { "from": 357, "to": 373 } } }
+  },
+  {
+    "pageContent": "await internal_coreProcessMessage(messages, id, {\n      isWelcomeQuestion,\n      // if there is relative files or enabled knowledge, try with ragQuery\n      ragQuery: hasEnabledKnowledge() || userFiles.length > 0 ? message : undefined,\n    });\n\n    set({ isCreatingMessage: false }, false, 'creatingMessage/stop');\n\n    const summaryTitle = async () => {\n      // if autoCreateTopic is false, then stop\n      if (!agentConfig.enableAutoCreateTopic) return;\n\n      // check activeTopic and then auto update topic title\n      if (newTopicId) {\n        const chats = chatSelectors.currentChats(get());\n        await get().summaryTopicTitle(newTopicId, chats);\n        return;\n      }\n\n      const topic = topicSelectors.currentActiveTopic(get());",
+    "metadata": { "loc": { "lines": { "from": 367, "to": 386 } } }
+  },
+  {
+    "pageContent": "// check activeTopic and then auto update topic title\n      if (newTopicId) {\n        const chats = chatSelectors.currentChats(get());\n        await get().summaryTopicTitle(newTopicId, chats);\n        return;\n      }\n\n      const topic = topicSelectors.currentActiveTopic(get());\n\n      if (topic && !topic.title) {\n        const chats = chatSelectors.currentChats(get());\n        await get().summaryTopicTitle(topic.id, chats);\n      }\n    };\n\n    // if there is relative files, then add files to agent\n    // only available in server mode\n    const addFilesToAgent = async () => {\n      if (userFiles.length === 0 || !isServerMode) return;\n\n      await useAgentStore.getState().addFilesToAgent(userFiles, false);\n    };",
+    "metadata": { "loc": { "lines": { "from": 379, "to": 400 } } }
+  },
+  {
+    "pageContent": "// if there is relative files, then add files to agent\n    // only available in server mode\n    const addFilesToAgent = async () => {\n      if (userFiles.length === 0 || !isServerMode) return;\n\n      await useAgentStore.getState().addFilesToAgent(userFiles, false);\n    };\n\n    await Promise.all([summaryTitle(), addFilesToAgent()]);\n  },\n  addAIMessage: async () => {\n    const { internal_createMessage, updateInputMessage, activeTopicId, activeId, inputMessage } =\n      get();\n    if (!activeId) return;\n\n    await internal_createMessage({\n      content: inputMessage,\n      role: 'assistant',\n      sessionId: activeId,\n      // if there is activeTopicId，then add topicId to message\n      topicId: activeTopicId,\n    });",
+    "metadata": { "loc": { "lines": { "from": 394, "to": 415 } } }
+  },
+  {
+    "pageContent": "await internal_createMessage({\n      content: inputMessage,\n      role: 'assistant',\n      sessionId: activeId,\n      // if there is activeTopicId，then add topicId to message\n      topicId: activeTopicId,\n    });\n\n    updateInputMessage('');\n  },\n  copyMessage: async (id, content) => {\n    await copyToClipboard(content);\n\n    get().internal_traceMessage(id, { eventType: TraceEventType.CopyMessage });\n  },\n  toggleMessageEditing: (id, editing) => {\n    set(\n      { messageEditingIds: toggleBooleanList(get().messageEditingIds, id, editing) },\n      false,\n      'toggleMessageEditing',\n    );\n  },\n  stopGenerateMessage: () => {\n    const { abortController, internal_toggleChatLoading } = get();\n    if (!abortController) return;\n\n    abortController.abort('canceled');",
+    "metadata": { "loc": { "lines": { "from": 409, "to": 435 } } }
+  },
+  {
+    "pageContent": "abortController.abort('canceled');\n\n    internal_toggleChatLoading(false, undefined, n('stopGenerateMessage') as string);\n  },\n\n  updateInputMessage: (message) => {\n    if (isEqual(message, get().inputMessage)) return;\n\n    set({ inputMessage: message }, false, n('updateInputMessage', message));\n  },\n  modifyMessageContent: async (id, content) => {\n    // tracing the diff of update\n    // due to message content will change, so we need send trace before update,or will get wrong data\n    get().internal_traceMessage(id, {\n      eventType: TraceEventType.ModifyMessage,\n      nextContent: content,\n    });",
+    "metadata": { "loc": { "lines": { "from": 435, "to": 451 } } }
+  },
+  {
+    "pageContent": "await get().internal_updateMessageContent(id, content);\n  },\n  useFetchMessages: (sessionId, activeTopicId) =>\n    useClientDataSWR<ChatMessage[]>(\n      [SWR_USE_FETCH_MESSAGES, sessionId, activeTopicId],\n      async ([, sessionId, topicId]: [string, string, string | undefined]) =>\n        messageService.getMessages(sessionId, topicId),\n      {\n        onSuccess: (messages, key) => {\n          const nextMap = {\n            ...get().messagesMap,\n            [messageMapKey(sessionId, activeTopicId)]: messages,\n          };\n          // no need to update map if the messages have been init and the map is the same\n          if (get().messagesInit && isEqual(nextMap, get().messagesMap)) return;",
+    "metadata": { "loc": { "lines": { "from": 453, "to": 467 } } }
+  },
+  {
+    "pageContent": "set(\n            { messagesInit: true, messagesMap: nextMap },\n            false,\n            n('useFetchMessages', { messages, queryKey: key }),\n          );\n        },\n      },\n    ),\n  refreshMessages: async () => {\n    await mutate([SWR_USE_FETCH_MESSAGES, get().activeId, get().activeTopicId]);\n  },\n\n  // the internal process method of the AI message\n  internal_coreProcessMessage: async (originalMessages, userMessageId, params) => {\n    const { internal_fetchAIChatMessage, triggerToolCalls, refreshMessages, activeTopicId } = get();\n\n    // create a new array to avoid the original messages array change\n    const messages = [...originalMessages];\n\n    const { model, provider } = getAgentConfig();\n\n    let fileChunkIds: string[] | undefined;",
+    "metadata": { "loc": { "lines": { "from": 469, "to": 490 } } }
+  },
+  {
+    "pageContent": "// create a new array to avoid the original messages array change\n    const messages = [...originalMessages];\n\n    const { model, provider } = getAgentConfig();\n\n    let fileChunkIds: string[] | undefined;\n\n    // go into RAG flow if there is ragQuery flag\n    if (params?.ragQuery) {\n      // 1. get the relative chunks from semantic search\n      const chunks = await get().internal_retrieveChunks(\n        userMessageId,\n        params?.ragQuery,\n        // should skip the last content\n        messages.map((m) => m.content).slice(0, messages.length - 1),\n      );\n      console.log('召回 chunks', chunks);\n\n      // 2. build the retrieve context messages\n      const retrieveContext = chainAnswerWithContext(\n        params?.ragQuery,\n        chunks.map((c) => c.text as string),\n      );",
+    "metadata": { "loc": { "lines": { "from": 485, "to": 507 } } }
+  },
+  {
+    "pageContent": "// 2. build the retrieve context messages\n      const retrieveContext = chainAnswerWithContext(\n        params?.ragQuery,\n        chunks.map((c) => c.text as string),\n      );\n\n      // 3. add the retrieve context messages to the messages history\n      if (retrieveContext.messages && retrieveContext.messages?.length > 0) {\n        // remove the last message due to the query is in the retrieveContext\n        messages.pop();\n        retrieveContext.messages?.forEach((m) => messages.push(m as ChatMessage));\n      }\n\n      fileChunkIds = chunks.map((c) => c.id);\n    }\n\n    // 2. Add an empty message to place the AI response\n    const assistantMessage: CreateMessageParams = {\n      role: 'assistant',\n      content: LOADING_FLAT,\n      fromModel: model,\n      fromProvider: provider,",
+    "metadata": { "loc": { "lines": { "from": 503, "to": 524 } } }
+  },
+  {
+    "pageContent": "fileChunkIds = chunks.map((c) => c.id);\n    }\n\n    // 2. Add an empty message to place the AI response\n    const assistantMessage: CreateMessageParams = {\n      role: 'assistant',\n      content: LOADING_FLAT,\n      fromModel: model,\n      fromProvider: provider,\n\n      parentId: userMessageId,\n      sessionId: get().activeId,\n      topicId: activeTopicId, // if there is activeTopicId，then add it to topicId\n      fileChunkIds,\n      ragQueryId: userMessageId,\n    };\n\n    const assistantId = await get().internal_createMessage(assistantMessage);\n\n    // 3. fetch the AI response\n    const { isFunctionCall } = await internal_fetchAIChatMessage(messages, assistantId, params);",
+    "metadata": { "loc": { "lines": { "from": 516, "to": 536 } } }
+  },
+  {
+    "pageContent": "const assistantId = await get().internal_createMessage(assistantMessage);\n\n    // 3. fetch the AI response\n    const { isFunctionCall } = await internal_fetchAIChatMessage(messages, assistantId, params);\n\n    // 4. if it's the function call message, trigger the function method\n    if (isFunctionCall) {\n      await refreshMessages();\n      await triggerToolCalls(assistantId);\n    }\n  },\n  internal_dispatchMessage: (payload) => {\n    const { activeId } = get();\n\n    if (!activeId) return;\n\n    const messages = messagesReducer(chatSelectors.currentChats(get()), payload);\n\n    const nextMap = { ...get().messagesMap, [chatSelectors.currentChatKey(get())]: messages };\n\n    if (isEqual(nextMap, get().messagesMap)) return;",
+    "metadata": { "loc": { "lines": { "from": 533, "to": 553 } } }
+  },
+  {
+    "pageContent": "if (!activeId) return;\n\n    const messages = messagesReducer(chatSelectors.currentChats(get()), payload);\n\n    const nextMap = { ...get().messagesMap, [chatSelectors.currentChatKey(get())]: messages };\n\n    if (isEqual(nextMap, get().messagesMap)) return;\n\n    set({ messagesMap: nextMap }, false, { type: `dispatchMessage/${payload.type}`, payload });\n  },\n  internal_fetchAIChatMessage: async (messages, assistantId, params) => {\n    const {\n      internal_toggleChatLoading,\n      refreshMessages,\n      internal_updateMessageContent,\n      internal_dispatchMessage,\n      internal_toggleToolCallingStreaming,\n    } = get();\n\n    const abortController = internal_toggleChatLoading(\n      true,\n      assistantId,\n      n('generateMessage(start)', { assistantId, messages }) as string,\n    );",
+    "metadata": { "loc": { "lines": { "from": 547, "to": 570 } } }
+  },
+  {
+    "pageContent": "const abortController = internal_toggleChatLoading(\n      true,\n      assistantId,\n      n('generateMessage(start)', { assistantId, messages }) as string,\n    );\n\n    const agentConfig = getAgentConfig();\n    const chatConfig = agentConfig.chatConfig;\n\n    const compiler = template(chatConfig.inputTemplate, { interpolate: /{{([\\S\\s]+?)}}/g });\n\n    // ================================== //\n    //   messages uniformly preprocess    //\n    // ================================== //\n\n    // 1. slice messages with config\n    let preprocessMsgs = chatHelpers.getSlicedMessages(messages, chatConfig);",
+    "metadata": { "loc": { "lines": { "from": 566, "to": 582 } } }
+  },
+  {
+    "pageContent": "const compiler = template(chatConfig.inputTemplate, { interpolate: /{{([\\S\\s]+?)}}/g });\n\n    // ================================== //\n    //   messages uniformly preprocess    //\n    // ================================== //\n\n    // 1. slice messages with config\n    let preprocessMsgs = chatHelpers.getSlicedMessages(messages, chatConfig);\n\n    // 2. replace inputMessage template\n    preprocessMsgs = !chatConfig.inputTemplate\n      ? preprocessMsgs\n      : preprocessMsgs.map((m) => {\n          if (m.role === 'user') {\n            try {\n              return { ...m, content: compiler({ text: m.content }) };\n            } catch (error) {\n              console.error(error);\n\n              return m;\n            }\n          }\n\n          return m;\n        });",
+    "metadata": { "loc": { "lines": { "from": 575, "to": 599 } } }
+  },
+  {
+    "pageContent": "return m;\n            }\n          }\n\n          return m;\n        });\n\n    // 3. add systemRole\n    if (agentConfig.systemRole) {\n      preprocessMsgs.unshift({ content: agentConfig.systemRole, role: 'system' } as ChatMessage);\n    }\n\n    // 4. handle max_tokens\n    agentConfig.params.max_tokens = chatConfig.enableMaxTokens\n      ? agentConfig.params.max_tokens\n      : undefined;",
+    "metadata": { "loc": { "lines": { "from": 594, "to": 609 } } }
+  },
+  {
+    "pageContent": "return m;\n        });\n\n    // 3. add systemRole\n    if (agentConfig.systemRole) {\n      preprocessMsgs.unshift({ content: agentConfig.systemRole, role: 'system' } as ChatMessage);\n    }\n\n    // 4. handle max_tokens\n    agentConfig.params.max_tokens = chatConfig.enableMaxTokens\n      ? agentConfig.params.max_tokens\n      : undefined;\n\n    // 5. handle config for the vision model\n    // Due to the gpt-4-vision-preview model's default max_tokens is very small\n    // we need to set the max_tokens a larger one.\n    if (agentConfig.model === 'gpt-4-vision-preview') {\n      /* eslint-disable unicorn/no-lonely-if */\n      if (!agentConfig.params.max_tokens)\n        // refs: https://github.com/lobehub/lobe-chat/issues/837\n        agentConfig.params.max_tokens = 2048;\n    }",
+    "metadata": { "loc": { "lines": { "from": 598, "to": 619 } } }
+  },
+  {
+    "pageContent": "let isFunctionCall = false;\n    let msgTraceId: string | undefined;\n    let output = '';",
+    "metadata": { "loc": { "lines": { "from": 621, "to": 623 } } }
+  },
+  {
+    "pageContent": "await chatService.createAssistantMessageStream({\n      abortController,\n      params: {\n        messages: preprocessMsgs,\n        model: agentConfig.model,\n        provider: agentConfig.provider,\n        ...agentConfig.params,\n        plugins: agentConfig.plugins,\n      },\n      trace: {\n        traceId: params?.traceId,\n        sessionId: get().activeId,\n        topicId: get().activeTopicId,\n        traceName: TraceNameMap.Conversation,\n      },\n      isWelcomeQuestion: params?.isWelcomeQuestion,\n      onErrorHandle: async (error) => {\n        await messageService.updateMessageError(assistantId, error);\n        await refreshMessages();\n      },\n      onFinish: async (content, { traceId, observationId, toolCalls }) => {\n        // if there is traceId, update it\n        if (traceId) {",
+    "metadata": { "loc": { "lines": { "from": 625, "to": 647 } } }
+  },
+  {
+    "pageContent": "traceName: TraceNameMap.Conversation,\n      },\n      isWelcomeQuestion: params?.isWelcomeQuestion,\n      onErrorHandle: async (error) => {\n        await messageService.updateMessageError(assistantId, error);\n        await refreshMessages();\n      },\n      onFinish: async (content, { traceId, observationId, toolCalls }) => {\n        // if there is traceId, update it\n        if (traceId) {\n          msgTraceId = traceId;\n          await messageService.updateMessage(assistantId, {\n            traceId,\n            observationId: observationId ?? undefined,\n          });\n        }",
+    "metadata": { "loc": { "lines": { "from": 638, "to": 653 } } }
+  },
+  {
+    "pageContent": "if (toolCalls && toolCalls.length > 0) {\n          internal_toggleToolCallingStreaming(assistantId, undefined);\n        }\n\n        // update the content after fetch result\n        await internal_updateMessageContent(assistantId, content, toolCalls);\n      },\n      onMessageHandle: async (chunk) => {\n        switch (chunk.type) {\n          case 'text': {\n            output += chunk.text;\n            internal_dispatchMessage({\n              id: assistantId,\n              type: 'updateMessage',\n              value: { content: output },\n            });\n            break;\n          }",
+    "metadata": { "loc": { "lines": { "from": 655, "to": 672 } } }
+  },
+  {
+    "pageContent": "// is this message is just a tool call\n          case 'tool_calls': {\n            internal_toggleToolCallingStreaming(assistantId, chunk.isAnimationActives);\n            internal_dispatchMessage({\n              id: assistantId,\n              type: 'updateMessage',\n              value: { tools: get().internal_transformToolCalls(chunk.tool_calls) },\n            });\n            isFunctionCall = true;\n          }\n        }\n      },\n    });\n\n    internal_toggleChatLoading(false, assistantId, n('generateMessage(end)') as string);\n\n    return {\n      isFunctionCall,\n      traceId: msgTraceId,\n    };\n  },\n\n  internal_resendMessage: async (messageId, traceId) => {\n    // 1. 构造所有相关的历史记录\n    const chats = chatSelectors.currentChats(get());",
+    "metadata": { "loc": { "lines": { "from": 674, "to": 698 } } }
+  },
+  {
+    "pageContent": "internal_toggleChatLoading(false, assistantId, n('generateMessage(end)') as string);\n\n    return {\n      isFunctionCall,\n      traceId: msgTraceId,\n    };\n  },\n\n  internal_resendMessage: async (messageId, traceId) => {\n    // 1. 构造所有相关的历史记录\n    const chats = chatSelectors.currentChats(get());\n\n    const currentIndex = chats.findIndex((c) => c.id === messageId);\n    if (currentIndex < 0) return;\n\n    const currentMessage = chats[currentIndex];\n\n    let contextMessages: ChatMessage[] = [];",
+    "metadata": { "loc": { "lines": { "from": 688, "to": 705 } } }
+  },
+  {
+    "pageContent": "const currentIndex = chats.findIndex((c) => c.id === messageId);\n    if (currentIndex < 0) return;\n\n    const currentMessage = chats[currentIndex];\n\n    let contextMessages: ChatMessage[] = [];\n\n    switch (currentMessage.role) {\n      case 'tool':\n      case 'user': {\n        contextMessages = chats.slice(0, currentIndex + 1);\n        break;\n      }\n      case 'assistant': {\n        // 消息是 AI 发出的因此需要找到它的 user 消息\n        const userId = currentMessage.parentId;\n        const userIndex = chats.findIndex((c) => c.id === userId);\n        // 如果消息没有 parentId，那么同 user/function 模式\n        contextMessages = chats.slice(0, userIndex < 0 ? currentIndex + 1 : userIndex + 1);\n        break;\n      }\n    }\n\n    if (contextMessages.length <= 0) return;",
+    "metadata": { "loc": { "lines": { "from": 700, "to": 723 } } }
+  },
+  {
+    "pageContent": "if (contextMessages.length <= 0) return;\n\n    const { internal_coreProcessMessage } = get();\n\n    const latestMsg = contextMessages.findLast((s) => s.role === 'user');\n\n    if (!latestMsg) return;\n\n    await internal_coreProcessMessage(contextMessages, latestMsg.id, {\n      traceId,\n      ragQuery: currentMessage.content,\n    });\n  },\n\n  internal_updateMessageError: async (id, error) => {\n    get().internal_dispatchMessage({ id, type: 'updateMessage', value: { error } });\n    await messageService.updateMessage(id, { error });\n    await get().refreshMessages();\n  },\n  internal_updateMessageContent: async (id, content, toolCalls) => {\n    const { internal_dispatchMessage, refreshMessages, internal_transformToolCalls } = get();",
+    "metadata": { "loc": { "lines": { "from": 723, "to": 743 } } }
+  },
+  {
+    "pageContent": "// Due to the async update method and refresh need about 100ms\n    // we need to update the message content at the frontend to avoid the update flick\n    // refs: https://medium.com/@kyledeguzmanx/what-are-optimistic-updates-483662c3e171\n    if (toolCalls) {\n      internal_dispatchMessage({\n        id,\n        type: 'updateMessage',\n        value: { tools: internal_transformToolCalls(toolCalls) },\n      });\n    } else {\n      internal_dispatchMessage({ id, type: 'updateMessage', value: { content } });\n    }\n\n    await messageService.updateMessage(id, {\n      content,\n      tools: toolCalls ? internal_transformToolCalls(toolCalls) : undefined,\n    });\n    await refreshMessages();\n  },",
+    "metadata": { "loc": { "lines": { "from": 745, "to": 763 } } }
+  },
+  {
+    "pageContent": "await messageService.updateMessage(id, {\n      content,\n      tools: toolCalls ? internal_transformToolCalls(toolCalls) : undefined,\n    });\n    await refreshMessages();\n  },\n\n  internal_createMessage: async (message, context) => {\n    const { internal_createTmpMessage, refreshMessages, internal_toggleMessageLoading } = get();\n    let tempId = context?.tempMessageId;\n    if (!tempId) {\n      // use optimistic update to avoid the slow waiting\n      tempId = internal_createTmpMessage(message);\n\n      internal_toggleMessageLoading(true, tempId);\n    }\n\n    const id = await messageService.createMessage(message);\n    if (!context?.skipRefresh) {\n      await refreshMessages();\n    }\n\n    internal_toggleMessageLoading(false, tempId);\n    return id;\n  },",
+    "metadata": { "loc": { "lines": { "from": 758, "to": 782 } } }
+  },
+  {
+    "pageContent": "internal_toggleMessageLoading(true, tempId);\n    }\n\n    const id = await messageService.createMessage(message);\n    if (!context?.skipRefresh) {\n      await refreshMessages();\n    }\n\n    internal_toggleMessageLoading(false, tempId);\n    return id;\n  },\n\n  internal_fetchMessages: async () => {\n    const messages = await messageService.getMessages(get().activeId, get().activeTopicId);\n    const nextMap = { ...get().messagesMap, [chatSelectors.currentChatKey(get())]: messages };\n    // no need to update map if the messages have been init and the map is the same\n    if (get().messagesInit && isEqual(nextMap, get().messagesMap)) return;",
+    "metadata": { "loc": { "lines": { "from": 772, "to": 788 } } }
+  },
+  {
+    "pageContent": "internal_fetchMessages: async () => {\n    const messages = await messageService.getMessages(get().activeId, get().activeTopicId);\n    const nextMap = { ...get().messagesMap, [chatSelectors.currentChatKey(get())]: messages };\n    // no need to update map if the messages have been init and the map is the same\n    if (get().messagesInit && isEqual(nextMap, get().messagesMap)) return;\n\n    set(\n      { messagesInit: true, messagesMap: nextMap },\n      false,\n      n('internal_fetchMessages', { messages }),\n    );\n  },\n  internal_createTmpMessage: (message) => {\n    const { internal_dispatchMessage } = get();\n\n    // use optimistic update to avoid the slow waiting\n    const tempId = 'tmp_' + nanoid();\n    internal_dispatchMessage({ type: 'createMessage', id: tempId, value: message });",
+    "metadata": { "loc": { "lines": { "from": 784, "to": 801 } } }
+  },
+  {
+    "pageContent": "// use optimistic update to avoid the slow waiting\n    const tempId = 'tmp_' + nanoid();\n    internal_dispatchMessage({ type: 'createMessage', id: tempId, value: message });\n\n    return tempId;\n  },\n  internal_deleteMessage: async (id: string) => {\n    get().internal_dispatchMessage({ type: 'deleteMessage', id });\n    await messageService.removeMessage(id);\n    await get().refreshMessages();\n  },\n  internal_traceMessage: async (id, payload) => {\n    // tracing the diff of update\n    const message = chatSelectors.getMessageById(id)(get());\n    if (!message) return;\n\n    const traceId = message?.traceId;\n    const observationId = message?.observationId;",
+    "metadata": { "loc": { "lines": { "from": 799, "to": 816 } } }
+  },
+  {
+    "pageContent": "const traceId = message?.traceId;\n    const observationId = message?.observationId;\n\n    if (traceId && message?.role === 'assistant') {\n      traceService\n        .traceEvent({ traceId, observationId, content: message.content, ...payload })\n        .catch();\n    }\n  },",
+    "metadata": { "loc": { "lines": { "from": 815, "to": 823 } } }
+  },
+  {
+    "pageContent": "// ----- Loading ------- //\n  internal_toggleMessageLoading: (loading, id) => {\n    set(\n      {\n        messageLoadingIds: toggleBooleanList(get().messageLoadingIds, id, loading),\n      },\n      false,\n      'internal_toggleMessageLoading',\n    );\n  },\n  internal_toggleChatLoading: (loading, id, action) => {\n    return get().internal_toggleLoadingArrays('chatLoadingIds', loading, id, action);\n  },\n  internal_toggleToolCallingStreaming: (id, streaming) => {\n    set(\n      {\n        toolCallingStreamIds: produce(get().toolCallingStreamIds, (draft) => {\n          if (!!streaming) {\n            draft[id] = streaming;\n          } else {\n            delete draft[id];\n          }\n        }),\n      },",
+    "metadata": { "loc": { "lines": { "from": 825, "to": 848 } } }
+  },
+  {
+    "pageContent": "false,\n      'toggleToolCallingStreaming',\n    );\n  },\n  internal_toggleLoadingArrays: (key, loading, id, action) => {\n    if (loading) {\n      window.addEventListener('beforeunload', preventLeavingFn);\n\n      const abortController = new AbortController();\n      set(\n        {\n          abortController,\n          [key]: toggleBooleanList(get()[key] as string[], id!, loading),\n        },\n        false,\n        action,\n      );\n\n      return abortController;\n    } else {\n      if (!id) {\n        set({ abortController: undefined, [key]: [] }, false, action);\n      } else\n        set(\n          {\n            abortController: undefined,\n            [key]: toggleBooleanList(get()[key] as string[], id, loading),\n          },\n          false,\n          action,\n        );",
+    "metadata": { "loc": { "lines": { "from": 850, "to": 880 } } }
+  },
+  {
+    "pageContent": "return abortController;\n    } else {\n      if (!id) {\n        set({ abortController: undefined, [key]: [] }, false, action);\n      } else\n        set(\n          {\n            abortController: undefined,\n            [key]: toggleBooleanList(get()[key] as string[], id, loading),\n          },\n          false,\n          action,\n        );\n\n      window.removeEventListener('beforeunload', preventLeavingFn);\n    }\n  },\n});",
+    "metadata": { "loc": { "lines": { "from": 868, "to": 885 } } }
+  }
+]

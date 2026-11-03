@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["dom", "dom.iterable", "dom.asynciterable", "esnext", "webworker"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "types": ["vitest/globals"],
+    "paths": {
+      "@/database/*": ["./packages/database/src/*"],
+      "@/const/*": ["./packages/const/src/*", "./src/const/*"],
+      "@/utils/*": ["./packages/utils/src/*", "./src/utils/*"],
+      "@/types/*": ["./packages/types/src/*", "./src/types/*"],
+      "@/envs/*": ["./packages/env/src/*", "./src/envs/*"],
+      "@/libs/trpc/*": ["./packages/trpc/src/*", "./src/libs/trpc/*"],
+      "@/config/*": ["./packages/app-config/src/*", "./src/config/*"],
+      "@/locales/*": ["./packages/locales/src/*", "./src/locales/*"],
+      "@/business/server/*": ["./packages/business-server/src/*", "./src/business/server/*"],
+      "@/server/*": ["./apps/server/src/*"],
+      "@/*": ["./src/*"],
+      "~base-ui-stubs": ["./tests/mocks/baseUiStubs.tsx"],
+      "~test-utils": ["./tests/utils.tsx"]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "exclude": [
+    "node_modules",
+    "apps/desktop/**",
+    "apps/mobile/**",
+    "apps/share/**",
+    "apps/workbench/**",
+    "tmp",
+    "temp",
+    ".temp",
+    "e2e/**",
+    "knip.ts",
+    "packages/alint/fixtures/**",
+    "packages/*/alint/fixtures/**"
+  ],
+  "include": [
+    "src/**/*.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/**/*.d.ts",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "tests/**/*.d.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "apps/server/**/*.ts",
+    "apps/server/**/*.tsx",
+    "scripts/elasticsearchReindex/**/*.ts",
+    "scripts/elasticsearchSync/**/*.ts",
+    "scripts/installFtsSearchSyncCapture/**/*.ts",
+    "scripts/pgSearchCleanup/**/*.ts",
+    "*.ts",
+    "*.mts",
+    "*.cts",
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "./apps/desktop"
+    }
+  ]
+}

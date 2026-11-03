@@ -1,0 +1,352 @@
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
+import isEqual from 'fast-deep-equal';
+import { gt, parse, valid } from 'semver';
+import type { SWRResponse } from 'swr';
+
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { WEB_APP_VERSION } from '@/const/appVersion';
+import { CURRENT_VERSION, isDesktop } from '@/const/version';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useOnlyFetchOnceSWR } from '@/libs/swr';
+import { globalKeys } from '@/libs/swr/keys';
+import { globalService } from '@/services/global';
+import { getElectronStoreState } from '@/store/electron';
+import { electronSyncSelectors } from '@/store/electron/selectors';
+import type { SystemStatus } from '@/store/global/initialState';
+import {
+  DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+  DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+} from '@/store/global/initialState';
+import type { StoreSetter } from '@/store/types';
+import type { LocaleMode } from '@/types/locale';
+import { switchLang } from '@/utils/client/switchLang';
+import { merge } from '@/utils/merge';
+import { setNamespace } from '@/utils/storeDebug';
+
+import {
+  DEFAULT_HIDDEN_SECTIONS,
+  DEFAULT_SIDEBAR_ITEMS,
+  routeOverlayWrites,
+} from '../selectors/systemStatus';
+import type { GlobalStore } from '../store';
+
+const n = setNamespace('g');
+
+type Setter = StoreSetter<GlobalStore>;
+export const generalActionSlice = (set: Setter, get: () => GlobalStore, _api?: unknown) =>
+  new GlobalGeneralActionImpl(set, get, _api);
+
+export class GlobalGeneralActionImpl {
+  readonly #get: () => GlobalStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => GlobalStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  openAgentInNewWindow = async (agentId: string): Promise<void> => {
+    if (isDesktop) {
+      try {
+        const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+        const path = `/agent/${agentId}?mode=single`;
+
+        const result = await ensureElectronIpc().windows.createMultiInstanceWindow({
+          path,
+          templateId: 'chatSingle',
+          uniqueId: `chat_${agentId}`,
+        });
+
+        if (!result.success) {
+          console.error('Failed to open agent in new window:', result.error);
+        }
+      } catch (error) {
+        console.error('Error opening agent in new window:', error);
+      }
+    } else {
+      // Open in popup window for browser
+      const browserUrl = buildWorkspaceAwarePath(`/agent/${agentId}`, getActiveWorkspaceSlug());
+      const width = 1200;
+      const height = 800;
+      const left = (window.screen.width - width) / 2;
+      const top = (window.screen.height - height) / 2;
+      const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
+      window.open(browserUrl, `agent_${agentId}`, features);
+    }
+  };
+
+  openTopicInNewWindow = async (agentId: string, topicId: string): Promise<void> => {
+    const popupPath = `/popup/agent/${agentId}/${topicId}`;
+
+    if (isDesktop) {
+      try {
+        const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+
+        const result = await ensureElectronIpc().windows.createMultiInstanceWindow({
+          path: popupPath,
+          templateId: 'topicPopup',
+          uniqueId: `topicPopup_agent_${agentId}_${topicId}`,
+        });
+
+        if (!result.success) {
+          console.error('Failed to open topic in new window:', result.error);
+        }
+      } catch (error) {
+        console.error('Error opening topic in new window:', error);
+      }
+    } else {
+      // Open in popup window for browser
+      const browserUrl = buildWorkspaceAwarePath(
+        AGENT_CHAT_TOPIC_URL(agentId, topicId),
+        getActiveWorkspaceSlug(),
+      );
+      const width = 1200;
+      const height = 800;
+      const left = (window.screen.width - width) / 2;
+      const top = (window.screen.height - height) / 2;
+      const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
+      window.open(browserUrl, `agent_${agentId}_topic_${topicId}`, features);
+    }
+  };
+
+  openGroupTopicInNewWindow = async (groupId: string, topicId: string): Promise<void> => {
+    const popupPath = `/popup/group/${groupId}/${topicId}`;
+
+    if (isDesktop) {
+      try {
+        const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+
+        const result = await ensureElectronIpc().windows.createMultiInstanceWindow({
+          path: popupPath,
+          templateId: 'topicPopup',
+          uniqueId: `topicPopup_group_${groupId}_${topicId}`,
+        });
+
+        if (!result.success) {
+          console.error('Failed to open group topic in new window:', result.error);
+        }
+      } catch (error) {
+        console.error('Error opening group topic in new window:', error);
+      }
+    } else {
+      const browserUrl = buildWorkspaceAwarePath(
+        GROUP_CHAT_TOPIC_URL(groupId, topicId),
+        getActiveWorkspaceSlug(),
+      );
+      const width = 1200;
+      const height = 800;
+      const left = (window.screen.width - width) / 2;
+      const top = (window.screen.height - height) / 2;
+      const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
+      window.open(browserUrl, `group_${groupId}_topic_${topicId}`, features);
+    }
+  };
+
+  switchLocale = (
+    locale: LocaleMode,
+    { skipBroadcast }: { skipBroadcast?: boolean } = {},
+  ): void => {
+    this.#get().updateSystemStatus({ language: locale });
+
+    switchLang(locale);
+
+    if (isDesktop && !skipBroadcast) {
+      (async () => {
+        try {
+          const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+
+          await ensureElectronIpc().system.updateLocale(locale);
+        } catch (error) {
+          console.error('Failed to update locale in main process:', error);
+        }
+      })();
+    }
+  };
+
+  updateResourceManagerColumnWidth = (
+    column: 'name' | 'date' | 'size' | 'uploader',
+    width: number,
+  ): void => {
+    const currentWidths = {
+      ...DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+      ...this.#get().status.resourceManagerColumnWidths,
+    };
+
+    this.#get().updateSystemStatus({
+      resourceManagerColumnWidths: {
+        ...currentWidths,
+        [column]: width,
+      },
+    });
+  };
+
+  /**
+   * Replace the workspace overlay's sidebar-layout fields wholesale. An
+   * absent field is DELETED from the overlay (falling back to "untouched"
+   * defaults) — `updateSystemStatus` deep-merges and can neither delete keys
+   * nor drop a field the incoming server preference no longer carries.
+   */
+  setWorkspaceSidebarOverlay = (layout: {
+    hiddenSidebarSections?: string[];
+    sidebarItems?: string[];
+  }): void => {
+    if (!this.#get().isStatusInit) return;
+    const status = this.#get().status;
+    const {
+      hiddenSidebarSections: _hidden,
+      sidebarItems: _items,
+      ...rest
+    } = status.workspace ?? {};
+    const workspace = {
+      ...rest,
+      ...(layout.hiddenSidebarSections
+        ? { hiddenSidebarSections: layout.hiddenSidebarSections }
+        : {}),
+      ...(layout.sidebarItems ? { sidebarItems: layout.sidebarItems } : {}),
+    };
+    if (isEqual(status.workspace ?? {}, workspace)) return;
+    const nextStatus = { ...status, workspace };
+    this.#set({ status: nextStatus }, false, n('setWorkspaceSidebarOverlay'));
+    this.#get().statusStorage.saveToLocalStorage(nextStatus);
+  };
+
+  resetSidebarCustomization = (): void => {
+    this.#get().updateSystemStatus(
+      {
+        hiddenSidebarSections: DEFAULT_HIDDEN_SECTIONS,
+        sidebarExpandedKeys: DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+        sidebarItems: DEFAULT_SIDEBAR_ITEMS,
+      },
+      n('resetSidebarCustomization'),
+    );
+  };
+
+  setNavPanelResizing = (resizing: boolean): void => {
+    if (!!this.#get().isNavPanelResizing === resizing) return;
+
+    this.#set({ isNavPanelResizing: resizing }, false, n('setNavPanelResizing'));
+  };
+
+  updateSystemStatus = (
+    status: Partial<SystemStatus>,
+    action?: any,
+    options?: { skipWorkspaceOverlay?: boolean },
+  ): void => {
+    if (!this.#get().isStatusInit) return;
+
+    // When inside a workspace, route whitelisted sidebar-layout fields into
+    // `status.workspace.*` so personal-mode preferences stay untouched. The
+    // init path bypasses routing — it rehydrates whatever shape was persisted.
+    const workspaceId = options?.skipWorkspaceOverlay ? null : getActiveWorkspaceId();
+    const routedPatch = routeOverlayWrites(status, workspaceId);
+
+    const nextStatus = merge(this.#get().status, routedPatch);
+
+    if (isEqual(this.#get().status, nextStatus)) return;
+
+    this.#set({ status: nextStatus }, false, action || n('updateSystemStatus'));
+    this.#get().statusStorage.saveToLocalStorage(nextStatus);
+  };
+
+  useCheckLatestVersion = (enabledCheck: boolean = true): SWRResponse<string> => {
+    return useOnlyFetchOnceSWR(
+      enabledCheck ? globalKeys.latestVersion() : null,
+      async () => globalService.getLatestVersion(),
+      {
+        focusThrottleInterval: 1000 * 60 * 30,
+        onSuccess: (data: string) => {
+          const version = isDesktop ? CURRENT_VERSION : WEB_APP_VERSION;
+          if (!valid(version) || !valid(data)) return;
+
+          const currentVersion = parse(version);
+          const latestVersion = parse(data);
+
+          if (!currentVersion || !latestVersion) return;
+
+          const currentMajorMinor = `${currentVersion.major}.${currentVersion.minor}.0`;
+          const latestMajorMinor = `${latestVersion.major}.${latestVersion.minor}.0`;
+
+          if (gt(latestMajorMinor, currentMajorMinor)) {
+            this.#set({ hasNewVersion: true, latestVersion: data }, false, n('checkLatestVersion'));
+          }
+        },
+      },
+    );
+  };
+
+  useCheckServerVersion = (): SWRResponse<string | null> => {
+    return useOnlyFetchOnceSWR(
+      isDesktop && !electronSyncSelectors.isOfficialServer(getElectronStoreState())
+        ? globalKeys.serverVersion()
+        : null,
+      async () => globalService.getServerVersion(),
+      {
+        onSuccess: (data: string | null) => {
+          if (data === null) {
+            this.#set({ isServerVersionOutdated: true }, false);
+            return;
+          }
+
+          this.#set({ serverVersion: data }, false);
+
+          if (!valid(CURRENT_VERSION) || !valid(data)) return;
+
+          const clientVersion = parse(CURRENT_VERSION);
+          const serverVersion = parse(data);
+
+          if (!clientVersion || !serverVersion) return;
+
+          const DIFF_THRESHOLD = 5;
+          //         Version difference calculation rules
+          // ┌─────────────────┬────────┬───────────┐
+          // │ Client → Server │  Diff  │  Result   │
+          // ├─────────────────┼────────┼───────────┤
+          // │ 1.0.5 → 1.0.0   │ 5      │ ⚠️ Too old│
+          // ├─────────────────┼────────┼───────────┤
+          // │ 1.1.0 → 1.0.5   │ 5      │ ⚠️ Too old│
+          // ├─────────────────┼────────┼───────────┤
+          // │ 2.0.0 → 1.9.9   │ 91     │ ⚠️ Too old│
+          // ├─────────────────┼────────┼───────────┤
+          // │ 1.0.4 → 1.0.0   │ 4      │ ✅ Normal │
+          // └─────────────────┴────────┴───────────┘
+          const versionDiff =
+            (clientVersion.major - serverVersion.major) * 100 +
+            (clientVersion.minor - serverVersion.minor) * 10 +
+            (clientVersion.patch - serverVersion.patch);
+
+          if (versionDiff >= DIFF_THRESHOLD) {
+            this.#set({ isServerVersionOutdated: true }, false);
+          }
+        },
+      },
+    );
+  };
+
+  useInitSystemStatus = (): SWRResponse => {
+    return useOnlyFetchOnceSWR<SystemStatus>(
+      globalKeys.systemStatus(),
+      () => this.#get().statusStorage.getFromLocalStorage(),
+      {
+        onSuccess: (status) => {
+          this.#set({ isStatusInit: true }, false, 'setStatusInit');
+
+          // Reset transient UI states that should not persist across page reloads
+          const statusWithResetTransientStates = {
+            ...status,
+            showCommandMenu: false,
+            showHotkeyHelper: false,
+            workingSidebarRevealRequest: undefined,
+          };
+
+          this.#get().updateSystemStatus(statusWithResetTransientStates, 'initSystemStatus', {
+            skipWorkspaceOverlay: true,
+          });
+        },
+      },
+    );
+  };
+}
+
+export type GlobalGeneralAction = Pick<GlobalGeneralActionImpl, keyof GlobalGeneralActionImpl>;

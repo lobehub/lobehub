@@ -1,0 +1,242 @@
+{
+  "contextTree": [
+    {
+      "id": "msg-501",
+      "type": "message"
+    },
+    {
+      "id": "msg-502",
+      "type": "message"
+    },
+    {
+      "activeBranchIndex": 1,
+      "branches": [
+        [
+          {
+            "id": "msg-503",
+            "type": "message"
+          },
+          {
+            "id": "msg-504",
+            "type": "message"
+          },
+          {
+            "id": "msg-505",
+            "type": "message"
+          },
+          {
+            "id": "msg-506",
+            "type": "message"
+          }
+        ],
+        [
+          {
+            "id": "msg-507",
+            "type": "message"
+          },
+          {
+            "id": "msg-508",
+            "type": "message"
+          },
+          {
+            "id": "msg-509",
+            "type": "message"
+          },
+          {
+            "id": "msg-510",
+            "type": "message"
+          }
+        ]
+      ],
+      "id": "branch-msg-502-0",
+      "parentMessageId": "msg-502",
+      "type": "branch"
+    }
+  ],
+  "flatList": [
+    {
+      "id": "msg-501",
+      "role": "user",
+      "content": "What's the difference between map and forEach in JavaScript?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000
+    },
+    {
+      "id": "msg-502",
+      "role": "assistant",
+      "content": "The main difference is that `map()` returns a new array with transformed elements, while `forEach()` just iterates and returns undefined. Map is better for transformations, forEach is better for side effects.",
+      "parentId": "msg-501",
+      "createdAt": 1704067202000,
+      "updatedAt": 1704067202000,
+      "metadata": {
+        "totalInputTokens": 18,
+        "totalOutputTokens": 42,
+        "totalTokens": 60,
+        "cost": 0.00018,
+        "activeBranchIndex": 1
+      }
+    },
+    {
+      "id": "msg-507",
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 2
+      },
+      "role": "user",
+      "content": "Can you explain the technical implementation details?",
+      "parentId": "msg-502",
+      "createdAt": 1704067210100,
+      "updatedAt": 1704067210100
+    },
+    {
+      "id": "msg-508",
+      "role": "assistant",
+      "content": "Certainly! From a technical perspective:\n\n**map():**\n- Allocates a new array in memory\n- Iterates through each element\n- Applies the callback function\n- Stores the result in the new array\n- Returns the new array\n\n**forEach():**\n- Iterates through each element\n- Applies the callback function\n- Discards the return value\n- Returns undefined",
+      "parentId": "msg-507",
+      "createdAt": 1704067212100,
+      "updatedAt": 1704067212100,
+      "metadata": {
+        "totalInputTokens": 68,
+        "totalOutputTokens": 82,
+        "totalTokens": 150,
+        "cost": 0.00045
+      }
+    },
+    {
+      "id": "msg-509",
+      "role": "user",
+      "content": "What about memory usage?",
+      "parentId": "msg-508",
+      "createdAt": 1704067220100,
+      "updatedAt": 1704067220100
+    },
+    {
+      "id": "msg-510",
+      "role": "assistant",
+      "content": "Great question! Map uses more memory because it creates a new array. If you have a large dataset (millions of items) and don't need the result array, forEach is more memory-efficient. However, if you're doing functional programming and need immutability, the memory overhead of map is usually worth it.",
+      "parentId": "msg-509",
+      "createdAt": 1704067222100,
+      "updatedAt": 1704067222100,
+      "metadata": {
+        "totalInputTokens": 160,
+        "totalOutputTokens": 68,
+        "totalTokens": 228,
+        "cost": 0.00068
+      }
+    }
+  ],
+  "messageMap": {
+    "msg-501": {
+      "id": "msg-501",
+      "role": "user",
+      "content": "What's the difference between map and forEach in JavaScript?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000
+    },
+    "msg-502": {
+      "id": "msg-502",
+      "role": "assistant",
+      "content": "The main difference is that `map()` returns a new array with transformed elements, while `forEach()` just iterates and returns undefined. Map is better for transformations, forEach is better for side effects.",
+      "parentId": "msg-501",
+      "createdAt": 1704067202000,
+      "updatedAt": 1704067202000,
+      "metadata": {
+        "totalInputTokens": 18,
+        "totalOutputTokens": 42,
+        "totalTokens": 60,
+        "cost": 0.00018,
+        "activeBranchIndex": 1
+      }
+    },
+    "msg-503": {
+      "id": "msg-503",
+      "role": "user",
+      "content": "Can you show me a practical example?",
+      "parentId": "msg-502",
+      "createdAt": 1704067210000,
+      "updatedAt": 1704067210000
+    },
+    "msg-504": {
+      "id": "msg-504",
+      "role": "assistant",
+      "content": "Sure! Here's a practical example:\n\n```javascript\nconst numbers = [1, 2, 3, 4, 5];\n\n// Using map - creates new array\nconst doubled = numbers.map(n => n * 2);\nconsole.log(doubled); // [2, 4, 6, 8, 10]\n\n// Using forEach - just iterates\nnumbers.forEach(n => console.log(n * 2));\n// Prints: 2, 4, 6, 8, 10\n```",
+      "parentId": "msg-503",
+      "createdAt": 1704067212000,
+      "updatedAt": 1704067212000,
+      "metadata": {
+        "totalInputTokens": 68,
+        "totalOutputTokens": 95,
+        "totalTokens": 163,
+        "cost": 0.00049
+      }
+    },
+    "msg-505": {
+      "id": "msg-505",
+      "role": "user",
+      "content": "Thanks! What about performance differences?",
+      "parentId": "msg-504",
+      "createdAt": 1704067220000,
+      "updatedAt": 1704067220000
+    },
+    "msg-506": {
+      "id": "msg-506",
+      "role": "assistant",
+      "content": "Performance-wise, forEach is slightly faster because it doesn't create a new array. However, the difference is negligible for most use cases. Choose based on functionality: use map when you need the transformed array, use forEach when you just need to iterate.",
+      "parentId": "msg-505",
+      "createdAt": 1704067222000,
+      "updatedAt": 1704067222000,
+      "metadata": {
+        "totalInputTokens": 175,
+        "totalOutputTokens": 58,
+        "totalTokens": 233,
+        "cost": 0.0007
+      }
+    },
+    "msg-507": {
+      "id": "msg-507",
+      "role": "user",
+      "content": "Can you explain the technical implementation details?",
+      "parentId": "msg-502",
+      "createdAt": 1704067210100,
+      "updatedAt": 1704067210100
+    },
+    "msg-508": {
+      "id": "msg-508",
+      "role": "assistant",
+      "content": "Certainly! From a technical perspective:\n\n**map():**\n- Allocates a new array in memory\n- Iterates through each element\n- Applies the callback function\n- Stores the result in the new array\n- Returns the new array\n\n**forEach():**\n- Iterates through each element\n- Applies the callback function\n- Discards the return value\n- Returns undefined",
+      "parentId": "msg-507",
+      "createdAt": 1704067212100,
+      "updatedAt": 1704067212100,
+      "metadata": {
+        "totalInputTokens": 68,
+        "totalOutputTokens": 82,
+        "totalTokens": 150,
+        "cost": 0.00045
+      }
+    },
+    "msg-509": {
+      "id": "msg-509",
+      "role": "user",
+      "content": "What about memory usage?",
+      "parentId": "msg-508",
+      "createdAt": 1704067220100,
+      "updatedAt": 1704067220100
+    },
+    "msg-510": {
+      "id": "msg-510",
+      "role": "assistant",
+      "content": "Great question! Map uses more memory because it creates a new array. If you have a large dataset (millions of items) and don't need the result array, forEach is more memory-efficient. However, if you're doing functional programming and need immutability, the memory overhead of map is usually worth it.",
+      "parentId": "msg-509",
+      "createdAt": 1704067222100,
+      "updatedAt": 1704067222100,
+      "metadata": {
+        "totalInputTokens": 160,
+        "totalOutputTokens": 68,
+        "totalTokens": 228,
+        "cost": 0.00068
+      }
+    }
+  }
+}

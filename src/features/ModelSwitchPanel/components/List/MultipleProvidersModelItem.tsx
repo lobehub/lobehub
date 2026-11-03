@@ -1,0 +1,175 @@
+import {
+  cx,
+  DropdownMenuGroup,
+  DropdownMenuGroupLabel,
+  DropdownMenuItem,
+  DropdownMenuItemIcon,
+  DropdownMenuItemLabel,
+  DropdownMenuPopup,
+  DropdownMenuPortal,
+  DropdownMenuPositioner,
+  DropdownMenuSubmenuRoot,
+  DropdownMenuSubmenuTrigger,
+  Flexbox,
+  menuSharedStyles,
+  Tag,
+} from '@lobehub/ui';
+import { Check } from 'lucide-react';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { ProviderItemRender } from '@/components/ModelSelect';
+
+import { styles } from '../../styles';
+import { type ModelWithProviders } from '../../types';
+import { menuKey } from '../../utils';
+import ModelDetailPanel from '../ModelDetailPanel';
+import { ModelRowRender } from './ModelRowRender';
+
+interface MultipleProvidersModelItemProps {
+  activeKey: string;
+  /** Muted text shown after the name when this model is the active one */
+  activeSecondaryText?: string;
+  data: ModelWithProviders;
+  defaultProviderId?: string;
+  isModelRestricted?: (modelId: string, providerId: string) => boolean;
+  newLabel: string;
+  onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
+  onClose: () => void;
+  onModelChange: (modelId: string, providerId: string) => void;
+  onRestrictedModelClick?: () => void;
+  proLabel?: string;
+}
+
+export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
+  ({
+    activeKey,
+    activeSecondaryText,
+    data,
+    isModelRestricted,
+    newLabel,
+    onBeforeModelSelect,
+    onModelChange,
+    onClose,
+    onRestrictedModelClick,
+    proLabel,
+  }) => {
+    const { t } = useTranslation('components');
+    const [submenuOpen, setSubmenuOpen] = useState(false);
+
+    const activeProvider = data.providers.find((p) => menuKey(p.id, data.model.id) === activeKey);
+    const isActive = !!activeProvider;
+    const defaultProvider = data.providers[0];
+    const defaultProviderRestricted = Boolean(
+      defaultProvider && isModelRestricted?.(data.model.id, defaultProvider.id),
+    );
+
+    const allRestricted =
+      isModelRestricted &&
+      data.providers.length > 0 &&
+      data.providers.every((p) => isModelRestricted(data.model.id, p.id));
+
+    const selectModel = async (providerId: string) => {
+      setSubmenuOpen(false);
+      onClose();
+      if ((await onBeforeModelSelect?.(data.model.id, providerId)) === false) return;
+
+      onModelChange(data.model.id, providerId);
+    };
+
+    return (
+      <DropdownMenuSubmenuRoot
+        open={submenuOpen}
+        onOpenChange={(open) => {
+          if (allRestricted && open) return;
+          setSubmenuOpen(open);
+        }}
+      >
+        <DropdownMenuSubmenuTrigger
+          className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+          style={{ paddingBlock: 8, paddingInline: 8 }}
+          onClick={() => {
+            if (defaultProviderRestricted) {
+              onRestrictedModelClick?.();
+              onClose();
+              return;
+            }
+            if (!defaultProvider) {
+              onClose();
+              return;
+            }
+            void selectModel(defaultProvider.id);
+          }}
+        >
+          <ModelRowRender
+            activeEffortLabel={activeSecondaryText}
+            isActive={isActive}
+            model={data.model}
+            newLabel={newLabel}
+            proBadgeLabel={defaultProviderRestricted ? proLabel : undefined}
+            provider={(activeProvider ?? defaultProvider)?.id ?? ''}
+          />
+        </DropdownMenuSubmenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
+            <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
+              <ModelDetailPanel
+                model={data.model.id}
+                provider={(activeProvider ?? data.providers[0]).id}
+              />
+              <DropdownMenuGroup>
+                <DropdownMenuGroupLabel>
+                  {t('ModelSwitchPanel.useModelFrom')}
+                </DropdownMenuGroupLabel>
+                {data.providers.map((p) => {
+                  const key = menuKey(p.id, data.model.id);
+                  const isProviderActive = isActive ? activeKey === key : p.id === 'lobehub';
+                  const providerRestricted = isModelRestricted?.(data.model.id, p.id);
+
+                  return (
+                    <DropdownMenuItem
+                      key={key}
+                      onClick={() => {
+                        if (providerRestricted) {
+                          onRestrictedModelClick?.();
+                          onClose();
+                          return;
+                        }
+                        void selectModel(p.id);
+                      }}
+                    >
+                      <DropdownMenuItemIcon>
+                        {isProviderActive ? <Check size={16} /> : null}
+                      </DropdownMenuItemIcon>
+                      <DropdownMenuItemLabel>
+                        <Flexbox horizontal align="center" gap={8}>
+                          <Flexbox horizontal align="center" style={{ flex: 'none' }}>
+                            <ProviderItemRender
+                              logo={p.logo}
+                              name={p.name}
+                              provider={p.id}
+                              size={20}
+                              source={p.source}
+                              type={'avatar'}
+                            />
+                          </Flexbox>
+                          {providerRestricted && proLabel && (
+                            <Tag color="gold" size="small">
+                              {proLabel}
+                            </Tag>
+                          )}
+                        </Flexbox>
+                      </DropdownMenuItemLabel>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuGroup>
+            </DropdownMenuPopup>
+          </DropdownMenuPositioner>
+        </DropdownMenuPortal>
+      </DropdownMenuSubmenuRoot>
+    );
+  },
+);
+
+MultipleProvidersModelItem.displayName = 'MultipleProvidersModelItem';

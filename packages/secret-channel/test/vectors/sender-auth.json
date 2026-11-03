@@ -1,0 +1,630 @@
+{
+  "description": "Sender authentication (spec §6.10, [ASC-L2-33]..[ASC-L2-40], [ASC-EXT-07]). Value-accepting Requests use the Auth suite: HPKE mode_auth (RFC 9180 §5.1.3) with the paired Client key as sender key. Client key = DeriveKeyPair(ikmS); recipient key = DeriveKeyPair(ikmR); sender ephemeral key = DeriveKeyPair(ikmE). AAD field 2 is the Request's suite label. relayInjection cases are Envelopes a malicious Relay can build from public data only; expectedOpenError is what a conforming Executor that has pairedClients returns, consumesKey says whether the single-use key is consumed (checked by opening the genuine Envelope afterwards). Deterministic ikm is for vectors only.",
+  "generator": "spec/test-vectors/generate.ts (packages/asc-core reference implementation)",
+  "suiteAuth": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+  "suiteBase": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+  "suiteIds": {
+    "mode": 2,
+    "kem": 32,
+    "kdf": 1,
+    "aead": 2
+  },
+  "hpkeInfo": "asc/v1/hpke-info",
+  "clientKey": {
+    "ikmS": {
+      "derivation": "SHA-256(UTF-8(\"ASC test vector: client key ikmS #1\"))",
+      "hex": "1b88fd7d23edf16fbfa0ef1f54a70879e349dd48c00d301b7dd23bccc039e557"
+    },
+    "skSHex": "cba0c513b668e2668bdfd86612de5b3f1b11252bafa57be5f7526d7d1dfa56ea",
+    "pkSHex": "3dd931609688b359bb419bf7eabfab66e54499bf8cbcaf336860af89a3aebd52",
+    "publicKey": "PdkxYJaIs1m7QZv36r-rZuVEmb-MvK8zaGCviaOuvVI",
+    "clientKeyFp": "SHA256:TdRBdJDCv5ozX90YTqWSgfzhw3a53p_u7w9-2y6kKAk",
+    "displayFingerprint": "4DD4-4174-90C2-BF9A-335F"
+  },
+  "relayClientKey": {
+    "ikmS": {
+      "derivation": "SHA-256(UTF-8(\"ASC test vector: relay-held client key ikmS\"))",
+      "hex": "490e51d7ae9a4b352a1fd37bebf551ba83e268598c0b323b86b90f7b24212cce"
+    },
+    "skSHex": "90f4dc3c13bb2e5de6e46ff4f053ee80bc4626952e2a451276a9c7063a6437f1",
+    "pkSHex": "8be95e73c264185be07cee9bb61e42b0867f5597583365fe04c26d96f80dc277",
+    "publicKey": "i-lec8JkGFvgfO6bth5CsIZ_VZdYM2X-BMJtlvgNwnc",
+    "clientKeyFp": "SHA256:E7KVhOim_PjHu3_upZSZIEOBmCyR7m1Bi-pSy5CGKYI",
+    "displayFingerprint": "13B2-9584-E8A6-FCF8-C7BB"
+  },
+  "relayValueUtf8": "relay-chosen-token-TEST-ONLY",
+  "classification": [
+    {
+      "kind": "password",
+      "targetKind": "sudo",
+      "class": "verifier-checked",
+      "suite": "Base permitted; Auth SHOULD once a Client is paired"
+    },
+    {
+      "kind": "passphrase",
+      "targetKind": "ssh",
+      "class": "verifier-checked",
+      "suite": "Base permitted; Auth SHOULD once a Client is paired"
+    },
+    {
+      "kind": "otp",
+      "targetKind": "ssh",
+      "class": "verifier-checked",
+      "suite": "Base permitted; Auth SHOULD once a Client is paired"
+    },
+    {
+      "kind": "password",
+      "targetKind": "ssh",
+      "class": "verifier-checked",
+      "suite": "Base permitted; Auth SHOULD once a Client is paired"
+    },
+    {
+      "kind": "passphrase",
+      "targetKind": "ssh",
+      "setsNewSecret": true,
+      "note": "the Sink sets a new secret (e.g. ssh-keygen asking for a new passphrase)",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    },
+    {
+      "kind": "password",
+      "targetKind": "git",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    },
+    {
+      "kind": "token",
+      "targetKind": "git",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    },
+    {
+      "kind": "token",
+      "targetKind": "env-run",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    },
+    {
+      "kind": "token",
+      "targetKind": "mcp-url",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    },
+    {
+      "kind": "approval",
+      "targetKind": "sudo",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    },
+    {
+      "kind": "otp",
+      "targetKind": "oauth",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    },
+    {
+      "kind": "password",
+      "targetKind": "pty-prompt",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    },
+    {
+      "kind": "x-unknown",
+      "targetKind": "sudo",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    },
+    {
+      "kind": "password",
+      "targetKind": "x-unknown",
+      "class": "value-accepting",
+      "suite": "Auth REQUIRED"
+    }
+  ],
+  "positive": [
+    {
+      "name": "value-accepting-token",
+      "verifierChecked": false,
+      "ikmR": {
+        "derivation": "SHA-256(UTF-8(\"ASC test vector: sender-auth ikmR #1\"))",
+        "hex": "daa89dddf952ac001acdf26c114e2814d354639cce2bccbc534d1d4ef2a1804f"
+      },
+      "pkRHex": "d1d3b51d75581b551b472537c694c88d5ceacca646bcfc4d31097ae47c954f31",
+      "ikmE": {
+        "derivation": "SHA-256(UTF-8(\"ASC test vector: sender-auth ikmE #1\"))",
+        "hex": "6a5f5b82408979b01ae36915c977f4ff51ad6c96e9012502416e7a7d7b92b391"
+      },
+      "secretUtf8": "token-TEST-ONLY-not-a-real-credential",
+      "framedPlaintextHex": "010025746f6b656e2d544553542d4f4e4c592d6e6f742d612d7265616c2d63726564656e7469616c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "0dO1HXVYG1UbRyU3xpTIjVzqzKZGvPxNMQl65HyVTzE",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "8JJN__ZOP6ffsSXlOa1VRxMzGc-fn-pWkMv2Y2sjW0-OgDYJnd5UbSZXo-q9x5te1oC181ajhFJ8xLNZiAg7Aw"
+        },
+        "expiresAt": 1790000300000,
+        "id": "ICEiIyQlJicoKSorLC0uLw",
+        "kind": "token",
+        "label": "git-token",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Push the release branch (agent claim, unverified)",
+          "systemObserved": "git at /usr/bin/git, not verifiable"
+        },
+        "requester": {
+          "runId": "run-TEST-0002",
+          "source": "askpass"
+        },
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "target": {
+          "argvDisplay": "git push https://example.test/org/repo.git main",
+          "argvHash": "-fzGOGdGnxqOUIj2fa1dH_p-GbgHNkjCO0ixMJi4j9s",
+          "exePath": "/usr/bin/git",
+          "kind": "git",
+          "promptText": "Password for 'https://u@example.test':",
+          "verification": "unverified"
+        },
+        "v": 1
+      },
+      "aadHex": "0000000e0000000a6173632f76312f61616400000001310000003a44484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d2f6d6f64655f6175746800000016494345694979516c4a69636f4b536f724c4330754c770000000d72756e2d544553542d303030320000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b30644f31485856594731556252795533787054496a567a717a4b5a477650784e4d516c3635487956547a45000000036769740000000c2f7573722f62696e2f6769740000002b2d667a474f4764476e78714f55496a3266613164485f702d476267484e6b6a434f3069784d4a69346a397300000005746f6b656e0000002b334e334a78357a6766487453756e4161634f62474e6e794d7532354f78515469766c304b757a64425642340000000d31373930303030333030303030",
+      "envelope": {
+        "ct": "nKMg1m4a58l1lvAzCUphKGjIPRgWcUX_SsIIZa8cNxMTH4iEcRRk4WgbYmgKC7CvoO3zLZlaALFaW_3-0dqzqV0CukdVXFLnZS2bMp28vXXjPL4ZfjA2si-nQcI4BGSzoiUHCGlKKYHZWpGVdactD01odZiyVHoyLe56xL_nTe53_7t7tZ1V-kIciygB9otVtlhijAgoztnvbukTdU6Z17DSgZBN3tXyoQ8DZbsjJZ74I13StSI8Iiqedk-ZFgnh6o6rSkWjzWJx4hGSIqhDXMCnDnLFb9HmWFqH23xYhAhi6Q8mSCIjwipt8xByLmeUueb_FFsokNvqE3s_p_5r5qPH-RcPsvN0UJvtacLpCfE",
+        "enc": "FJ69T60lb6Qfe0tNkXDH3J2ei7LKSF9VuxER7i0puBA",
+        "requestId": "ICEiIyQlJicoKSorLC0uLw",
+        "sender": "SHA256:TdRBdJDCv5ozX90YTqWSgfzhw3a53p_u7w9-2y6kKAk",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "v": 1
+      },
+      "encHex": "149ebd4fad256fa41f7b4b4d9170c7dc9d9e8bb2ca485f55bb1111ee2d29b810",
+      "ctHex": "9ca320d66e1ae7c97596f033094a612868c83d18167145ff4ac20865af1c3713131f8884711464e1681b62680a0bb0afa0edf32d995a00b15a5bfdfed1dab3a95d02ba47555c52e7652d9b329dbcbd75e33cbe197e3036b22fa741c2380464b3a2250708694a2981d95a919575a72d0f4d687598b2547a322dee7ac4bfe74dee77ffbb7bb59d55fa421c8b2801f68b55b658628c0828ced9ef6ee913754e99d7b0d281904dded5f2a10f0365bb23259ef8235dd2b5223c222a9e764f991609e1ea8eab4a45a3cd6271e2119222a8435cc0a70e72c56fd1e6585a87db7c58840862e90f26482223c22a6df310722e6794b9e6ff145b2890dbea137b3fa7fe6be6a3c7f9170fb2f374509bed69c2e909f1",
+      "openAt": 1790000001000,
+      "expectedOpenError": null
+    },
+    {
+      "name": "verifier-checked-sudo-auth",
+      "verifierChecked": true,
+      "ikmR": {
+        "derivation": "SHA-256(UTF-8(\"ASC test vector: sender-auth ikmR #2\"))",
+        "hex": "190f1240daf5e30248ad01ce337ceb060d3e63039721412847dcc7726fa1138a"
+      },
+      "pkRHex": "5dec36026b16aefe163c5aaa553b77b65a36f179a40b8f433b8fa75a0213bd2b",
+      "ikmE": {
+        "derivation": "SHA-256(UTF-8(\"ASC test vector: sender-auth ikmE #2\"))",
+        "hex": "b61b5c936fe16b25a8a432fe35cb02ae76713b7c5fb3e4eed0ef364ac3d3959f"
+      },
+      "secretUtf8": "correct-horse-battery-staple-TEST-ONLY",
+      "framedPlaintextHex": "010026636f72726563742d686f7273652d626174746572792d737461706c652d544553542d4f4e4c590000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "Xew2AmsWrv4WPFqqVTt3tlo28XmkC49DO4-nWgITvSs",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "g4R_IxUq5VVZStYbak5QiySDjDiG3JEJNtxH9uKFN-NlpVi_sYEll8e3vnMVRjM1NB-7P-pPBB9cLc9il4WHDA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "aadHex": "0000000e0000000a6173632f76312f61616400000001310000003a44484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d2f6d6f64655f617574680000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b58657732416d7357727634575046717156547433746c6f3238586d6b433439444f342d6e57674954765373000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "envelope": {
+        "ct": "UwU4c7s9OhHiQgqsh-Uavj3QapCQHIVej-GZn3Z_ihKuKeZVGMdECEWrlJuMd-7AZV__AGar7H_atd_UF9VY59hdcSKToZi_w3lvY9cotdY1ddENQHjVMZ8dI4C3GYNPSejvHKpzoxLT3FUjJuzHXA3Ev2IQwtrrjRik4AF56GizswkDqWrev8gBYPGsPGBHhLtLpyBrxUR7WU4SlvxUnLo0btSfijDJPaFJvqOseCekx6R_frAQjoY9Vn4oiVjfYgortOrAvJ-KjASJXS9a5O0tcHIna6v9H8xfRhFhflQ1io3UgU460ES-YBP0h9FNlNKqCDpeuH-HADiRYIGG__qhFNSp386-iaiveKmg1T8",
+        "enc": "U5IWsC3OJWLhtrfy2DnXUDfuhSpb8FtP36z2BDjAfQc",
+        "requestId": "AAECAwQFBgcICQoLDA0ODw",
+        "sender": "SHA256:TdRBdJDCv5ozX90YTqWSgfzhw3a53p_u7w9-2y6kKAk",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "v": 1
+      },
+      "encHex": "539216b02dce2562e1b6b7f2d839d75037ee852a5bf05b4fdfacf60438c07d07",
+      "ctHex": "53053873bb3d3a11e2420aac87e51abe3dd06a90901c855e8fe1999f767f8a12ae29e65518c7440845ab949b8c77eec0655fff0066abec7fdab5dfd417d558e7d85d712293a198bfc3796f63d728b5d63575d10d4078d5319f1d2380b719834f49e8ef1caa73a312d3dc552326ecc75c0dc4bf6210c2daeb8d18a4e00179e868b3b30903a96adebfc80160f1ac3c604784bb4ba7206bc5447b594e1296fc549cba346ed49f8a30c93da149bea3ac7827a4c7a47f7eb0108e863d567e288958df620a2bb4eac0bc9f8a8c04895d2f5ae4ed2d7072276babfd1fcc5f4611617e54358a8dd4814e3ad044be6013f487d14d94d2aa083a5eb87f87003891608186fffaa114d4a9dfcebe89a8af78a9a0d53f",
+      "openAt": 1790000001000,
+      "expectedOpenError": null
+    }
+  ],
+  "relayInjection": [
+    {
+      "name": "relay-self-sealed-base-mode",
+      "note": "The draft-00 attack: the Relay seals its own value with HPKE Base mode to ephPub under the Base-suite AAD and submits a Base Envelope. Under draft-00 an Executor would accept it (see baseSuiteResidual). An Auth-suite Request refuses it before consuming the key.",
+      "envelope": {
+        "ct": "PBGKy0LWN4SuupIDwEAwkBF7fX64JzdAnEpaTpsU51wVCChnuGaG_DJD8EhYRsC0ovJj9HnPsYUOADn1P307ZOkWDRkAYvGtG4YO6I3QEJItGPsHqrhx1-pokt9It582_aftyQ4albvwGRaYMcKUqm6VHpFK8sFa58CYzB0MQGD4__AmuR4T4w-F5tUfFCjpEh8AOg9gjbfSWFUdaJZEw7UkoDbmOvIIEnbEYXCtJxu9JAms0VjXnZuRP5blAsPMr3cOkhfJKLsBhl7TXnPjDTkNrhd8hZSeCLJaZOqnGAywNrCNwlV_G8A7KH_RpjparwntoM0WuiIPVYSOhYw7Cseyg_T8C5M_ffx6vhXA40w",
+        "enc": "kW8UFQfL9muUqRgtcgA9CWJWJnLRmQCaifdRXLMyhG0",
+        "requestId": "ICEiIyQlJicoKSorLC0uLw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 1
+      },
+      "pairedClients": [
+        "PdkxYJaIs1m7QZv36r-rZuVEmb-MvK8zaGCviaOuvVI"
+      ],
+      "expectedOpenError": "SENDER_AUTH_REQUIRED",
+      "consumesKey": false,
+      "genuineEnvelopeAfterwards": null,
+      "rawBaseOpenUnderBaseAad": "relay-chosen-token-TEST-ONLY",
+      "rawAuthOpenWithPairedClient": null
+    },
+    {
+      "name": "relay-self-sealed-base-mode-auth-aad",
+      "note": "Relay seals in Base mode but under the Auth-suite AAD, Envelope labelled Base: refused before consumption.",
+      "envelope": {
+        "ct": "Q0XDreCw2se8U5CGB9cl1cfo4egozwliy3CKtOYg48Rsp-ZmJoXck6Ru4Xh-HYFCjdOuc26nczE7M3UgcRHGsK_CJEIyxTHw0_0uzwd3InZjuYxGERL4xwwwdjfqUq_jL6ugfJ1g3QV1-WpDau7Jsas8unxqYBzOIsmmDoy0c_NVmwi59y1Qx9D80T1QrsjLWCi5qgnvF6HvhKHQgxBkwTzNYhnmslMMKjYmta_xWgVyTVXd2gASU0Ls07O2Z5Q3G7CfsPVBoIyYCktnrHdWsXlFlGNYppsLEUWt9aONAEHPmJpvDTDbHOi4UX1w60IvdI7yBLhB8CRopqvTspL3X4inqR_EkBtz0ntbu3Ae9fY",
+        "enc": "jcVExdFapsSfwUFpVEd1_G1KePCjzBp6tk_1HRN5dE0",
+        "requestId": "ICEiIyQlJicoKSorLC0uLw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 1
+      },
+      "pairedClients": [
+        "PdkxYJaIs1m7QZv36r-rZuVEmb-MvK8zaGCviaOuvVI"
+      ],
+      "expectedOpenError": "SENDER_AUTH_REQUIRED",
+      "consumesKey": false,
+      "genuineEnvelopeAfterwards": null,
+      "rawBaseOpenUnderBaseAad": null,
+      "rawAuthOpenWithPairedClient": null
+    },
+    {
+      "name": "relay-base-ciphertext-claims-paired-sender",
+      "note": "Relay seals in Base mode but labels the Envelope Auth and names the paired Client: AuthDecap with the paired pkS fails.",
+      "envelope": {
+        "ct": "Q0XDreCw2se8U5CGB9cl1cfo4egozwliy3CKtOYg48Rsp-ZmJoXck6Ru4Xh-HYFCjdOuc26nczE7M3UgcRHGsK_CJEIyxTHw0_0uzwd3InZjuYxGERL4xwwwdjfqUq_jL6ugfJ1g3QV1-WpDau7Jsas8unxqYBzOIsmmDoy0c_NVmwi59y1Qx9D80T1QrsjLWCi5qgnvF6HvhKHQgxBkwTzNYhnmslMMKjYmta_xWgVyTVXd2gASU0Ls07O2Z5Q3G7CfsPVBoIyYCktnrHdWsXlFlGNYppsLEUWt9aONAEHPmJpvDTDbHOi4UX1w60IvdI7yBLhB8CRopqvTspL3X4inqR_EkBtz0ntbu3Ae9fY",
+        "enc": "jcVExdFapsSfwUFpVEd1_G1KePCjzBp6tk_1HRN5dE0",
+        "requestId": "ICEiIyQlJicoKSorLC0uLw",
+        "sender": "SHA256:TdRBdJDCv5ozX90YTqWSgfzhw3a53p_u7w9-2y6kKAk",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "v": 1
+      },
+      "pairedClients": [
+        "PdkxYJaIs1m7QZv36r-rZuVEmb-MvK8zaGCviaOuvVI"
+      ],
+      "expectedOpenError": "DECRYPT_FAILED",
+      "consumesKey": true,
+      "genuineEnvelopeAfterwards": "REPLAYED",
+      "rawBaseOpenUnderBaseAad": null,
+      "rawAuthOpenWithPairedClient": null
+    },
+    {
+      "name": "relay-self-sealed-own-client-key",
+      "note": "Relay seals in Auth mode with a Client key of its own and names it: not paired, refused before consumption.",
+      "envelope": {
+        "ct": "ARi8eNdelVCIBJW2OSI0MRu3vyFvKWKhcVxf7v8yI0hY7_EyAwS3ypLBB6vRruFRG8JtqLtC2Dsxj38EZbxlAshJ1bBS4HdnB2IPK3JpQ-CUdcawZxfYfDTfAoRW9n74_MXMagF9ToHNTPHytvcYUYDj6f3KOw9cQpHQ6QixfxGtvvrXtF6YwV1Rn1AtS_nz1JvwB4zDhwjh35gVdwW2WNiTp5V0Dsq577od37Dgn3YmVaq2s4OujW72vYRtdcX_OOmj8M90aZ_2FH38HlAGVMmQz5DtnlmfxCPJDMv4ghRUk5N-BjgMCGW0bXUKRukmKXgGGf7qbtTnXyhuAzeGbFOU1q5hbA0XU63FqYSIXTA",
+        "enc": "2eLB9S3b03AtC98kxalJu8vJS5HJj1JcFccJuCOf-BQ",
+        "requestId": "ICEiIyQlJicoKSorLC0uLw",
+        "sender": "SHA256:E7KVhOim_PjHu3_upZSZIEOBmCyR7m1Bi-pSy5CGKYI",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "v": 1
+      },
+      "pairedClients": [
+        "PdkxYJaIs1m7QZv36r-rZuVEmb-MvK8zaGCviaOuvVI"
+      ],
+      "expectedOpenError": "UNKNOWN_SENDER",
+      "consumesKey": false,
+      "genuineEnvelopeAfterwards": null,
+      "rawBaseOpenUnderBaseAad": null,
+      "rawAuthOpenWithPairedClient": null
+    },
+    {
+      "name": "relay-own-client-key-claims-paired-sender",
+      "note": "Relay seals in Auth mode with its own key but names the paired Client: AuthDecap uses the paired pkS and fails.",
+      "envelope": {
+        "ct": "ARi8eNdelVCIBJW2OSI0MRu3vyFvKWKhcVxf7v8yI0hY7_EyAwS3ypLBB6vRruFRG8JtqLtC2Dsxj38EZbxlAshJ1bBS4HdnB2IPK3JpQ-CUdcawZxfYfDTfAoRW9n74_MXMagF9ToHNTPHytvcYUYDj6f3KOw9cQpHQ6QixfxGtvvrXtF6YwV1Rn1AtS_nz1JvwB4zDhwjh35gVdwW2WNiTp5V0Dsq577od37Dgn3YmVaq2s4OujW72vYRtdcX_OOmj8M90aZ_2FH38HlAGVMmQz5DtnlmfxCPJDMv4ghRUk5N-BjgMCGW0bXUKRukmKXgGGf7qbtTnXyhuAzeGbFOU1q5hbA0XU63FqYSIXTA",
+        "enc": "2eLB9S3b03AtC98kxalJu8vJS5HJj1JcFccJuCOf-BQ",
+        "requestId": "ICEiIyQlJicoKSorLC0uLw",
+        "sender": "SHA256:TdRBdJDCv5ozX90YTqWSgfzhw3a53p_u7w9-2y6kKAk",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "v": 1
+      },
+      "pairedClients": [
+        "PdkxYJaIs1m7QZv36r-rZuVEmb-MvK8zaGCviaOuvVI"
+      ],
+      "expectedOpenError": "DECRYPT_FAILED",
+      "consumesKey": true,
+      "genuineEnvelopeAfterwards": "REPLAYED",
+      "rawBaseOpenUnderBaseAad": null,
+      "rawAuthOpenWithPairedClient": null
+    },
+    {
+      "name": "relay-strips-sender",
+      "note": "The genuine Auth Envelope with `sender` removed.",
+      "envelope": {
+        "ct": "nKMg1m4a58l1lvAzCUphKGjIPRgWcUX_SsIIZa8cNxMTH4iEcRRk4WgbYmgKC7CvoO3zLZlaALFaW_3-0dqzqV0CukdVXFLnZS2bMp28vXXjPL4ZfjA2si-nQcI4BGSzoiUHCGlKKYHZWpGVdactD01odZiyVHoyLe56xL_nTe53_7t7tZ1V-kIciygB9otVtlhijAgoztnvbukTdU6Z17DSgZBN3tXyoQ8DZbsjJZ74I13StSI8Iiqedk-ZFgnh6o6rSkWjzWJx4hGSIqhDXMCnDnLFb9HmWFqH23xYhAhi6Q8mSCIjwipt8xByLmeUueb_FFsokNvqE3s_p_5r5qPH-RcPsvN0UJvtacLpCfE",
+        "enc": "FJ69T60lb6Qfe0tNkXDH3J2ei7LKSF9VuxER7i0puBA",
+        "requestId": "ICEiIyQlJicoKSorLC0uLw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "v": 1
+      },
+      "pairedClients": [
+        "PdkxYJaIs1m7QZv36r-rZuVEmb-MvK8zaGCviaOuvVI"
+      ],
+      "expectedOpenError": "SENDER_AUTH_REQUIRED",
+      "consumesKey": false,
+      "genuineEnvelopeAfterwards": null,
+      "rawBaseOpenUnderBaseAad": null,
+      "rawAuthOpenWithPairedClient": "token-TEST-ONLY-not-a-real-credential"
+    },
+    {
+      "name": "relay-malformed-sender",
+      "note": "`sender` is not a clientKeyFp: it names no paired Client.",
+      "envelope": {
+        "ct": "nKMg1m4a58l1lvAzCUphKGjIPRgWcUX_SsIIZa8cNxMTH4iEcRRk4WgbYmgKC7CvoO3zLZlaALFaW_3-0dqzqV0CukdVXFLnZS2bMp28vXXjPL4ZfjA2si-nQcI4BGSzoiUHCGlKKYHZWpGVdactD01odZiyVHoyLe56xL_nTe53_7t7tZ1V-kIciygB9otVtlhijAgoztnvbukTdU6Z17DSgZBN3tXyoQ8DZbsjJZ74I13StSI8Iiqedk-ZFgnh6o6rSkWjzWJx4hGSIqhDXMCnDnLFb9HmWFqH23xYhAhi6Q8mSCIjwipt8xByLmeUueb_FFsokNvqE3s_p_5r5qPH-RcPsvN0UJvtacLpCfE",
+        "enc": "FJ69T60lb6Qfe0tNkXDH3J2ei7LKSF9VuxER7i0puBA",
+        "requestId": "ICEiIyQlJicoKSorLC0uLw",
+        "sender": "not-a-fingerprint",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "v": 1
+      },
+      "pairedClients": [
+        "PdkxYJaIs1m7QZv36r-rZuVEmb-MvK8zaGCviaOuvVI"
+      ],
+      "expectedOpenError": "UNKNOWN_SENDER",
+      "consumesKey": false,
+      "genuineEnvelopeAfterwards": null,
+      "rawBaseOpenUnderBaseAad": null,
+      "rawAuthOpenWithPairedClient": "token-TEST-ONLY-not-a-real-credential"
+    },
+    {
+      "name": "client-key-removed",
+      "note": "The genuine Envelope after the Human removed the Client key on the Executor device (paired set empty).",
+      "envelope": {
+        "ct": "nKMg1m4a58l1lvAzCUphKGjIPRgWcUX_SsIIZa8cNxMTH4iEcRRk4WgbYmgKC7CvoO3zLZlaALFaW_3-0dqzqV0CukdVXFLnZS2bMp28vXXjPL4ZfjA2si-nQcI4BGSzoiUHCGlKKYHZWpGVdactD01odZiyVHoyLe56xL_nTe53_7t7tZ1V-kIciygB9otVtlhijAgoztnvbukTdU6Z17DSgZBN3tXyoQ8DZbsjJZ74I13StSI8Iiqedk-ZFgnh6o6rSkWjzWJx4hGSIqhDXMCnDnLFb9HmWFqH23xYhAhi6Q8mSCIjwipt8xByLmeUueb_FFsokNvqE3s_p_5r5qPH-RcPsvN0UJvtacLpCfE",
+        "enc": "FJ69T60lb6Qfe0tNkXDH3J2ei7LKSF9VuxER7i0puBA",
+        "requestId": "ICEiIyQlJicoKSorLC0uLw",
+        "sender": "SHA256:TdRBdJDCv5ozX90YTqWSgfzhw3a53p_u7w9-2y6kKAk",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "v": 1
+      },
+      "pairedClients": [],
+      "expectedOpenError": "UNKNOWN_SENDER",
+      "consumesKey": false,
+      "genuineEnvelopeAfterwards": null,
+      "rawBaseOpenUnderBaseAad": null,
+      "rawAuthOpenWithPairedClient": "token-TEST-ONLY-not-a-real-credential"
+    }
+  ],
+  "clientSide": [
+    {
+      "name": "client-without-key",
+      "note": "an Auth-suite Request and a Client that holds no Client key: refuses to seal (no Base fallback, [ASC-EXT-07])",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "0dO1HXVYG1UbRyU3xpTIjVzqzKZGvPxNMQl65HyVTzE",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "8JJN__ZOP6ffsSXlOa1VRxMzGc-fn-pWkMv2Y2sjW0-OgDYJnd5UbSZXo-q9x5te1oC181ajhFJ8xLNZiAg7Aw"
+        },
+        "expiresAt": 1790000300000,
+        "id": "ICEiIyQlJicoKSorLC0uLw",
+        "kind": "token",
+        "label": "git-token",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Push the release branch (agent claim, unverified)",
+          "systemObserved": "git at /usr/bin/git, not verifiable"
+        },
+        "requester": {
+          "runId": "run-TEST-0002",
+          "source": "askpass"
+        },
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_auth",
+        "target": {
+          "argvDisplay": "git push https://example.test/org/repo.git main",
+          "argvHash": "-fzGOGdGnxqOUIj2fa1dH_p-GbgHNkjCO0ixMJi4j9s",
+          "exePath": "/usr/bin/git",
+          "kind": "git",
+          "promptText": "Password for 'https://u@example.test':",
+          "verification": "unverified"
+        },
+        "v": 1
+      },
+      "withSender": false,
+      "expectedSealError": "SENDER_AUTH_REQUIRED"
+    },
+    {
+      "name": "relay-strips-suite-member",
+      "note": "the Relay removes `suite` so that a Client would seal in Base mode: AAD field 2 changes, the signature fails",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "0dO1HXVYG1UbRyU3xpTIjVzqzKZGvPxNMQl65HyVTzE",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "8JJN__ZOP6ffsSXlOa1VRxMzGc-fn-pWkMv2Y2sjW0-OgDYJnd5UbSZXo-q9x5te1oC181ajhFJ8xLNZiAg7Aw"
+        },
+        "expiresAt": 1790000300000,
+        "id": "ICEiIyQlJicoKSorLC0uLw",
+        "kind": "token",
+        "label": "git-token",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Push the release branch (agent claim, unverified)",
+          "systemObserved": "git at /usr/bin/git, not verifiable"
+        },
+        "requester": {
+          "runId": "run-TEST-0002",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "git push https://example.test/org/repo.git main",
+          "argvHash": "-fzGOGdGnxqOUIj2fa1dH_p-GbgHNkjCO0ixMJi4j9s",
+          "exePath": "/usr/bin/git",
+          "kind": "git",
+          "promptText": "Password for 'https://u@example.test':",
+          "verification": "unverified"
+        },
+        "v": 1
+      },
+      "withSender": true,
+      "expectedSealError": "BAD_SIGNATURE"
+    },
+    {
+      "name": "unknown-suite",
+      "note": "a suite label the Client does not implement",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "0dO1HXVYG1UbRyU3xpTIjVzqzKZGvPxNMQl65HyVTzE",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "8JJN__ZOP6ffsSXlOa1VRxMzGc-fn-pWkMv2Y2sjW0-OgDYJnd5UbSZXo-q9x5te1oC181ajhFJ8xLNZiAg7Aw"
+        },
+        "expiresAt": 1790000300000,
+        "id": "ICEiIyQlJicoKSorLC0uLw",
+        "kind": "token",
+        "label": "git-token",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Push the release branch (agent claim, unverified)",
+          "systemObserved": "git at /usr/bin/git, not verifiable"
+        },
+        "requester": {
+          "runId": "run-TEST-0002",
+          "source": "askpass"
+        },
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM/mode_psk",
+        "target": {
+          "argvDisplay": "git push https://example.test/org/repo.git main",
+          "argvHash": "-fzGOGdGnxqOUIj2fa1dH_p-GbgHNkjCO0ixMJi4j9s",
+          "exePath": "/usr/bin/git",
+          "kind": "git",
+          "promptText": "Password for 'https://u@example.test':",
+          "verification": "unverified"
+        },
+        "v": 1
+      },
+      "withSender": true,
+      "expectedSealError": "UNSUPPORTED_VERSION"
+    }
+  ],
+  "baseEnvelopeWithSender": {
+    "name": "base-envelope-with-sender",
+    "note": "a Base-suite Request and an Envelope carrying `sender` ([ASC-L2-40])",
+    "ikmR": {
+      "derivation": "SHA-256(UTF-8(\"ASC test vector: sender-auth base ikmR\"))",
+      "hex": "a12dae9ab39b8d7d19d71f2da4d0c8c3a1ed4cc4c50792a76dbd2dc917033786"
+    },
+    "request": {
+      "createdAt": 1790000000000,
+      "executor": {
+        "ephPub": "PFdvWw2DLt6rx32dEdzwWfaP6VFnC5G_1sNwYYtSxEg",
+        "executorId": "exec-TEST-0001",
+        "executorName": "Test Laptop",
+        "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+        "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+        "sig": "WJhHAJzOk1WteTOD5krfJCXU3wEk1luq8hPU8IdCH8Yopequa83zxKfalXDIsBcDQPOnyptEfZ1QyrBcZtFqAw"
+      },
+      "expiresAt": 1790000300000,
+      "id": "AAECAwQFBgcICQoLDA0ODw",
+      "kind": "password",
+      "label": "sudo-password",
+      "persistence": "once",
+      "purpose": {
+        "agentClaim": "Install the example package (agent claim, unverified)",
+        "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+      },
+      "requester": {
+        "runId": "run-TEST-0001",
+        "source": "askpass"
+      },
+      "target": {
+        "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+        "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+        "exePath": "/usr/bin/sudo",
+        "kind": "sudo",
+        "promptText": "Password:",
+        "verification": "verified"
+      },
+      "v": 1
+    },
+    "envelope": {
+      "ct": "FX80mfUdiE-P-QMHnwGU4tmAVLx4-lUNOVAJmyZRr_Khzi_uvYwQYeS2TOh67k9qOHHc1532N5sOZQtHCYbwDrg927nmlPLawzJKdNjLwI7ibZbLOnchxrUfUh7II6tvI0OOLQsrIHDhYMsxlsSQniDr6QiXX8mvtPHhuU6QDyLVBVdHojklmxD6W1gkbpKK1QbKWn0M8GuboXnaEd3SxKOs4MPCtnaymCW7k8IivqmCpZn_ET17N9VHpgpN8wSqNA3MoTG_QEEIOm4ooDFNJnWZrmZ16lrd46vt53-vyJQC4jhb6KWZkVWBABKgbBD_12WhGCi49ZCj6pxnJWr6FFfRW9aj6oWzW-LCQAKQYsU",
+      "enc": "8qB6Ebk59OnIGY00Cz8rC1q0fZfF-cADYhF9E5tybzs",
+      "requestId": "AAECAwQFBgcICQoLDA0ODw",
+      "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+      "v": 1,
+      "sender": "SHA256:TdRBdJDCv5ozX90YTqWSgfzhw3a53p_u7w9-2y6kKAk"
+    },
+    "openAt": 1790000001000,
+    "expectedOpenError": "INVALID_ENVELOPE"
+  },
+  "baseSuiteResidual": {
+    "name": "verifier-checked-base-suite-accepts-relay-value",
+    "note": "Documented residual (spec §10.3 L14): a verifier-checked Request in the Base suite (no Client paired) opens a Relay-sealed value. The Sink (sudo) then rejects it as a wrong password, the same outcome as the denial of service a Relay can always cause. This is why value-accepting Requests MUST use the Auth suite.",
+    "ikmR": {
+      "derivation": "SHA-256(UTF-8(\"ASC test vector: sender-auth base ikmR\"))",
+      "hex": "a12dae9ab39b8d7d19d71f2da4d0c8c3a1ed4cc4c50792a76dbd2dc917033786"
+    },
+    "request": {
+      "createdAt": 1790000000000,
+      "executor": {
+        "ephPub": "PFdvWw2DLt6rx32dEdzwWfaP6VFnC5G_1sNwYYtSxEg",
+        "executorId": "exec-TEST-0001",
+        "executorName": "Test Laptop",
+        "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+        "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+        "sig": "WJhHAJzOk1WteTOD5krfJCXU3wEk1luq8hPU8IdCH8Yopequa83zxKfalXDIsBcDQPOnyptEfZ1QyrBcZtFqAw"
+      },
+      "expiresAt": 1790000300000,
+      "id": "AAECAwQFBgcICQoLDA0ODw",
+      "kind": "password",
+      "label": "sudo-password",
+      "persistence": "once",
+      "purpose": {
+        "agentClaim": "Install the example package (agent claim, unverified)",
+        "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+      },
+      "requester": {
+        "runId": "run-TEST-0001",
+        "source": "askpass"
+      },
+      "target": {
+        "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+        "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+        "exePath": "/usr/bin/sudo",
+        "kind": "sudo",
+        "promptText": "Password:",
+        "verification": "verified"
+      },
+      "v": 1
+    },
+    "envelope": {
+      "ct": "Vl6XbepI7ma9nkGWIlJ3RjKxKOl8EK9Pzg6Mc9Dw33mUQC6X0kPJztqmZePuzWwCtmShBJi2cT2bGzDyM3Ds8FHS1aufMjXqEKjEQver0y7MYpIvu8dQyN1WS0Gf-uh_RATzgFlJqN9TdpYTaEC2BWURIr4R8r5lDSAXzUv3g29e6Z_6pz07uZ-oCHQM7MRbt2Uq5G1wi9uM5u-nAHSLl-0GXRR0ujhMt0o9jGoPtWOpO0jhQw7vXZck6NPeMRDfjZQpz-OnGbgV1TcIYMZjGrv_L4twzPhR6uGy1E_q5m9SbIr6hwTB26ol2PbNxcYKBB3rVyP6XxjJri8MRFbaokXROWM7A4Oj7Tcspzse61E",
+      "enc": "shH3GCfs4ASe8Y_Y1-3CFVyNkzuW6estKevha2_uq0g",
+      "requestId": "AAECAwQFBgcICQoLDA0ODw",
+      "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+      "v": 1
+    },
+    "openAt": 1790000001000,
+    "expectedOpenError": null,
+    "openedValueUtf8": "relay-chosen-token-TEST-ONLY"
+  }
+}

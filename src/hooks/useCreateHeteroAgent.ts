@@ -1,0 +1,57 @@
+import { type HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
+import { useCallback } from 'react';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAgentStore } from '@/store/agent';
+import { useHomeStore } from '@/store/home';
+
+export interface CreateHeteroAgentOptions {
+  groupId?: string;
+  onSuccess?: () => void;
+  /**
+   * Forwarded to the server-side `visibility` column when the call originates
+   * from the sidebar's "Private" bucket. Defaults to undefined (public).
+   */
+  visibility?: 'private' | 'public';
+}
+
+/**
+ * Create a heterogeneous agent (CLI-backed: Claude Code, Codex, …) and navigate
+ * straight to the chat page. Skips the standard /profile redirect because the
+ * external CLI runtime has a fixed config — there's nothing to edit upfront.
+ */
+export const useCreateHeteroAgent = () => {
+  const storeCreateAgent = useAgentStore((s) => s.createAgent);
+  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
+  const navigate = useWorkspaceAwareNavigate();
+
+  return useCallback(
+    async (definition: HeterogeneousAgentClientConfig, options?: CreateHeteroAgentOptions) => {
+      const result = await storeCreateAgent({
+        config: {
+          agencyConfig: {
+            heterogeneousProvider: {
+              command: definition.defaultCommand,
+              type: definition.type,
+            },
+          },
+          avatar: definition.avatar,
+          // Stamp the heterogeneous type as the agent's provider so every reader
+          // (op rows, agent list, message tags) attributes the run to claude-code /
+          // codex rather than the inherited default chat provider (e.g. lobehub).
+          // The real chat model is reported by the CLI at runtime, so `model` stays
+          // unset here and is backfilled per-run.
+          provider: definition.type,
+          systemRole: '',
+          title: definition.title,
+        },
+        groupId: options?.groupId,
+        visibility: options?.visibility,
+      });
+      await refreshAgentList();
+      navigate(`/agent/${result.agentId}`);
+      options?.onSuccess?.();
+    },
+    [storeCreateAgent, refreshAgentList, navigate],
+  );
+};

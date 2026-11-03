@@ -1,0 +1,253 @@
+---
+title: Web Search
+description: >-
+  Agents search the internet for real-time information — with source citations
+  and grounding.
+tags:
+  - LobeHub
+  - Web Search
+  - Real-time Information
+  - Citations
+  - Grounding
+---
+
+# Web Search
+
+With Web Search, Agents can look up current news, prices, documentation, and other information beyond their training data. When an Agent searches, it cites the sources used in its answer.
+
+## What Web Search Enables
+
+With web search enabled, Agents can:
+
+- Access real-time information — current news, prices, and events
+- Verify information against the latest sources
+- Cite the web pages they consulted
+- Research topics from multiple sources simultaneously
+- Answer questions about recent events outside their training data
+
+## How It Works
+
+When you ask a question that requires current information:
+
+1. The Agent turns your question into search queries
+2. Searches are performed across the internet
+3. Relevant sources are retrieved and analyzed
+4. The Agent summarizes its findings in a response
+5. The response includes source citations
+
+When Web Search is enabled, the Agent can search as needed or respond to an explicit search request. Search execution still requires available services and permissions.
+
+## Search Grounding Display
+
+When web search is used, a **search grounding** section appears above the AI's response as a collapsible card showing:
+
+- **Source count** — How many web sources were consulted
+- **Favicon preview** — Icons from source websites
+- **Expandable search queries** — The exact queries the AI used (click to expand)
+- **Citations** — Source titles, domains, and URLs you can click to visit
+
+Expand the grounding card to see exactly where the information came from and evaluate source credibility.
+
+## Enabling Web Search
+
+Enable Web Search below the Agent chat input. This does not require Agent settings or a Skill package.
+
+1. Click **+** below the Agent chat input.
+2. Enable **Web Search**.
+3. Select **Smart Search** or **Provider Search** from the search options.
+4. Enter your question. For current information, specify the scope and time range.
+
+### Two Search Options
+
+| Mode | Description |
+| --- | --- |
+| **Smart Search** | The LobeHub-optimized search service, designed for better retrieval results. |
+| **Provider Search** | Provider-side search. The interface warns that this option can cause unexpected behavior and is not recommended. |
+
+**Off** is the disabled state, not a third search mode. Select **Off** to disable Web Search.
+
+If search does not run, check whether Web Search is enabled. Also check search-tool permissions and search service settings.
+
+### Web Search, Browser Tools, and In-App Search
+
+| Capability | Purpose | Boundary |
+| --- | --- | --- |
+| **Web search** | Find internet information through a search provider and read accessible source pages | Does not operate your signed-in browser |
+| **Browser tools** | Open pages, click controls, fill forms, or interact with dynamic pages | Require a browser tool, execution environment, and permissions. Web Search does not grant these |
+| **LobeHub in-app search** | Find Agents, Topics, pages, and other LobeHub content | Searches accessible in-app content, not the internet |
+
+To search files or knowledge bases, use their own search tools and check access permissions. A Skill can guide research steps, but the search tools still need to be enabled separately.
+
+<Callout type={'info'}>
+  Built-in Web Search does not need a marketplace plugin or MCP install on the client. **Self-hosted
+  deployments** still need a server search provider configured (default is SearXNG via
+  `SEARXNG_URL` / `SEARCH_PROVIDERS`) — see [Online Search](/docs/self-hosting/advanced/online-search).
+  Managed LobeHub Cloud already has this wired for you.
+</Callout>
+
+### Optional: MCP-Based Search Tools
+
+For a specific search backend, connect a search MCP server in **Settings → Connectors**. Examples include Brave Search, Google Search, and DuckDuckGo. This optional connection is separate from built-in web search. It requires service authorization, Agent enablement, and tool policy approval. See [MCP Marketplace](/docs/usage/community/mcp-market).
+
+## Using Web Search
+
+### Automatic Search
+
+When Web Search is enabled, questions about current information can prompt a search. Not every message requires a search:
+
+```
+"What's the current price of Bitcoin?"
+"Who won the most recent World Cup?"
+"What are the latest developments in AI?"
+```
+
+### Explicit Search Requests
+
+You can also explicitly request a web search:
+
+```
+"Search the web for recent reviews of the iPhone 15"
+"Look up the latest research on climate change"
+"Find current mortgage rates in California"
+```
+
+### Follow-Up Searches
+
+Each search builds on the conversation context. Chain searches to go deeper:
+
+```
+"What are the top programming languages in 2024?"
+→ "Search for job market trends for Python developers"
+→ "Find salary data for senior Python engineers in Europe"
+```
+
+## Search Quality
+
+### Optimized Queries
+
+The Agent can add dates, choose precise terms, or split a complex question into several searches.
+
+### Source Selection
+
+Results are ranked by relevance, authority, and recency. The AI considers whether sources are authoritative (news outlets, official docs, academic papers) vs. informal (blogs, forum posts).
+
+### Information Synthesis
+
+The AI synthesizes findings from multiple sources into a coherent response, noting when sources agree or disagree, and flagging any uncertainty.
+
+## Use Cases
+
+<Tabs>
+  <Tab title="Research & News">
+    - Get current information on news, markets, finance, and academic topics
+    - "Latest news on \[subject]"
+    - "Recent papers on \[topic]"
+    - "Current stock price of X"
+  </Tab>
+
+  <Tab title="Technical Information">
+    - Access up-to-date docs, API changes, package releases, and bug fix discussions
+    - "What's new in React 19?"
+    - "Find solutions to \[specific error]"
+    - Especially useful for fast-moving frameworks where training data may be outdated
+  </Tab>
+
+  <Tab title="Product Research">
+    - Compare current prices, find recent reviews, and identify alternatives
+    - "Compare the latest MacBook models"
+    - "Reviews for noise-cancelling headphones under $200"
+  </Tab>
+
+  <Tab title="Planning">
+    - Get real-world current data for travel, events, and local recommendations
+    - "Best restaurants in Austin right now"
+    - "Current museum exhibits in Paris"
+    - "Tech conferences in 2025"
+  </Tab>
+</Tabs>
+
+## Understanding Citations
+
+Web search responses can include citations. Check them:
+
+- **Source title** — The page or article name
+- **Domain** — The website hosting the information
+- **URL** — Click to visit the original source
+- **Relevance snippet** — Preview of the relevant content used
+
+### Citation Verification
+
+<AccordionGroup>
+  <Accordion title="Check Publication Dates">
+    For time-sensitive topics, verify the publication date. A result from two years ago may be outdated for rapidly evolving subjects.
+  </Accordion>
+
+  <Accordion title="Evaluate Source Authority">
+    Consider whether sources are authoritative (news outlet, official docs, academic paper) vs. informal (blog, forum post). Weight your trust accordingly.
+  </Accordion>
+
+  <Accordion title="Cross-Reference Key Facts">
+    For critical information, check that multiple sources agree. If only one source makes a claim, treat it with more skepticism.
+  </Accordion>
+
+  <Accordion title="Click Through to Originals">
+    Expand the grounding card and open the original sources to verify critical information.
+  </Accordion>
+</AccordionGroup>
+
+## Tips for Better Results
+
+**Be specific** — "What are the latest LLM releases in November 2024?" gives the Agent a clearer search scope than "Tell me about AI".
+
+**Include time context** — Add "recent", "latest", "current", or specific dates to get timely results.
+
+**Ask for comparisons** — "Compare X and Y" or "What are the pros and cons of Z" triggers useful multi-source searches.
+
+**Review the citations** — You can expand the grounding card to see which sources were consulted and judge their quality.
+
+**Use follow-ups** — Chain questions to go from broad overview to specific details.
+
+## Privacy
+
+<Callout type={'warning'}>
+  Web searches may be logged by the search provider you've configured. Avoid searching for
+  sensitive or personally identifying information.
+</Callout>
+
+Search queries are sent to your configured search provider. Source websites may also track visits when you click through to citations. Review the privacy policy of your chosen search provider for details.
+
+## Limitations
+
+<Tabs>
+  <Tab title="Content Limitations">
+    - **Paywalled content** — Cannot access subscription-only content (e.g., academic journals, news sites with paywalls)
+    - **Geo-restricted content** — Some sources may be regionally limited
+    - **Very recent events** — Slight indexing delay means very recent information (hours old) may not appear
+  </Tab>
+
+  <Tab title="Performance Limitations">
+    - **Added latency** — Web search adds a few seconds to response time
+    - **Token usage** — Search results consume additional tokens in the context
+    - **Rate limits** — Some search providers have usage limits
+  </Tab>
+
+  <Tab title="Scope Limitations">
+    - **Creative tasks** — Web search isn't helpful for purely creative writing or personal advice
+    - **Real-time data** — Not suitable for data that changes by the second (live stock tickers, etc.)
+    - **Deep web** — Cannot access content not indexed by search engines
+  </Tab>
+</Tabs>
+
+<Callout type={'info'}>
+  Client-side, built-in web search needs no Skill package or MCP install. Self-hosted servers
+  still require search-provider env setup ([Online Search](/docs/self-hosting/advanced/online-search)).
+  Optional MCP search backends may need their own API key or subscription.
+</Callout>
+
+<Cards>
+  <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
+
+  <Card href={'/docs/usage/agent/scheduled-task'} title={'Scheduled Tasks'} />
+
+  <Card href={'/docs/usage/agent/chain-of-thought'} title={'Chain of Thought'} />
+</Cards>

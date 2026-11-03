@@ -1,0 +1,105 @@
+---
+title: Messenger 概览
+description: >-
+  将 LobeHub 账号关联到 Telegram、Slack、Discord 和微信上的 LobeHub Messenger。只需绑定一次，选择默认
+  Agent，就能在常用聊天工具里直接和你的 AI 助手对话，无需自建机器人。
+tags:
+  - Messenger
+  - Telegram
+  - Slack
+  - Discord
+  - 微信
+  - 集成
+---
+
+# Messenger
+
+**Messenger 适合通过 LobeHub 官方机器人使用你自己的 Agent。** 你不需要创建机器人，只需关联自己的 Telegram、Slack、Discord 或微信账号，再选择当前 Agent。之后，你发给官方机器人的消息会转给这个 Agent。
+
+```text
+你 → LobeHub 官方机器人或托管服务 → 当前 Agent
+```
+
+你可以在同一个官方机器人里切换 Agent。切换的是后台接收消息的 Agent，不会出现另一个机器人或新的聊天窗口。
+
+所有配置都在 LobeHub 的 **设置 → Messenger** 页面完成。
+
+## 我该使用 Messenger 还是渠道？
+
+- **选择 Messenger**：你想在常用聊天应用里使用自己的 Agent，并希望由 LobeHub 管理机器人。
+- **选择 [渠道（Channels）](/zh/docs/usage/channels/overview)**：你想创建自己的机器人，让同事、客户或群成员与一个指定 Agent 对话。
+
+| | **Messenger** | **渠道（Channels）** |
+| --- | --- | --- |
+| 聊天入口 | LobeHub 官方机器人或托管服务 | 你创建或连接的机器人 |
+| Agent 关系 | 每个账号选择一个当前 Agent，可随时切换 | 每个渠道固定绑定一个 Agent |
+| 谁来使用 | 已关联 LobeHub 账号的用户本人 | 你、获准用户、团队或社区成员 |
+| 配置位置 | **设置 → Messenger** | **Agent → 渠道** |
+| 你需要做什么 | 关联平台账号并选择 Agent | 准备平台机器人或应用凭据，并设置访问范围 |
+
+是否公开不是两者的区别。渠道也可以限制为仅自己或指定用户使用。
+
+## 支持的平台
+
+| 平台           | 接入模式                | 文档                                                      |
+| ------------ | ------------------- | ------------------------------------------------------- |
+| **Telegram** | 全局机器人 —— 任意账号都可直接私聊 | [在 Telegram 使用 LobeHub](/zh/docs/usage/messenger/telegram) |
+| **Slack**    | 按工作区安装 + 成员各自关联     | [在 Slack 使用 LobeHub](/zh/docs/usage/messenger/slack)       |
+| **Discord**  | 按服务器安装 + 成员各自关联     | [在 Discord 使用 LobeHub](/zh/docs/usage/messenger/discord)   |
+| **微信**       | 扫码关联账号（Pro）          | [在微信使用 LobeHub](/zh/docs/usage/messenger/wechat)            |
+
+如果 **设置 → Messenger** 页面没有出现某个平台的卡片，说明当前部署尚未启用该平台 —— 请稍后再来，或联系管理员开启。
+
+{/* TODO: 截图 —— 设置 → Messenger 入口页，四个平台卡片 */}
+
+## 工作原理
+
+1. 将你的平台账号与 LobeHub 账号关联。不同平台会使用确认链接、OAuth 授权或二维码。
+2. 选择一个当前 Agent。你发给 LobeHub 官方机器人的消息会路由到它。在已安装官方机器人的 Slack 工作区或 Discord 服务器中，也可以通过频道 `@提及` 使用当前 Agent。
+3. 发送 `/agents`，或在 **设置 → Messenger** 中选择其他 Agent。下一条消息会立即使用新的 Agent。
+4. 如果启用了工作区，还可以发送 `/switch` 在个人空间和团队工作区之间切换。
+5. 断开个人关联后，官方机器人会保留在平台中，但不再把你的消息路由到 LobeHub，直到你重新关联。
+
+每个 LobeHub 账号在 Telegram、Discord 和微信各保留一条个人关联；Slack 按工作区分别保留关联。
+
+## 常用指令
+
+- `/agents`：查看并切换当前 Agent。
+- `/switch`：切换个人空间或团队工作区；没有可用工作区时不会显示。
+- `/new`：开始一个新对话。
+- `/mode`：查看或切换 Agent / Chat 模式。
+- `/stop`：停止当前执行。
+- `/feedback <内容>`：向 LobeHub 团队发送反馈。
+- `/help`：查看可用指令。
+
+除微信外，未关联账号时可使用 `/start` 开始关联；微信使用二维码关联。
+
+## 切换接收消息的 Agent
+
+你可以随时切换接收你消息的 Agent：
+
+- **在机器人里** —— 发送 `/agents`，挑一个新的 Agent。
+- **在 LobeHub 里** —— 打开 **设置 → Messenger**，选择平台，在你的关联行里使用 Agent 选择器。
+
+切换会立即对你发送的下一条消息生效。
+
+## 断开连接
+
+Telegram 和微信只有个人关联。Slack 和 Discord 还会显示工作区或服务器安装，因此有两种含义不同的断开操作：
+
+| 操作                               | 效果                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| 在 *user* 行点 **断开**               | 解除 **你自己** 的 LobeHub 账号与该平台账号的关联。机器人不再接收你的消息，直到你重新完成该平台的关联流程。             |
+| 在 *workspace / server* 行点 **断开** | 仅适用于存在工作区或服务器安装的平台。该操作会移除安装审计记录；Slack 会因此让该工作区的整个机器人失效，Discord 上机器人会继续留在服务器，直到 Discord 管理员把它踢出。 |
+
+任何时候都可以重新完成对应平台的关联流程。
+
+## 通用报错
+
+使用一次性确认链接的平台在关联时可能出现以下提示：
+
+- **"This link is already used"（链接已被使用）** —— 一次性确认链接只能使用一次。请回到机器人重新发送 `/start` 获取新链接。
+- **"This account is already linked"（该账号已被关联）** —— 该平台账号已绑定到另一个 LobeHub 账号。请用那个 LobeHub 账号登录管理；或先在那边解绑后再尝试。
+- **"Another \<platform> account is already linked"（另一个平台账号已关联）** —— 你的 LobeHub 账号在该平台上已有关联。先在 **设置 → Messenger** 里断开旧关联，再绑定新账号。
+
+平台特有的报错和细节请见各平台文档的「故障排查」一节。

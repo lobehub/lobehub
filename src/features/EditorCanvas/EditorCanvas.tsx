@@ -1,0 +1,266 @@
+'use client';
+
+import { type IEditor, type SlashOptions } from '@lobehub/editor';
+import type { ChatInputActionsProps, Editor, EditorProps } from '@lobehub/editor/react';
+import { type CSSProperties, type ReactNode } from 'react';
+import { memo } from 'react';
+
+import SafeBoundary from '@/components/ErrorBoundary';
+
+import DocumentIdMode from './DocumentIdMode';
+import EditorDataMode from './EditorDataMode';
+import InternalEditor from './InternalEditor';
+
+/**
+ * Plugin type for the editor
+ * Allows any array of plugins that the Editor component accepts
+ */
+type EditorPlugins = Parameters<typeof Editor>[0]['plugins'];
+
+interface UnsavedChangesGuardOptions {
+  /**
+   * Whether to enable unsaved-changes guard for route navigation and browser unload.
+   * Defaults to false.
+   */
+  enabled?: boolean;
+
+  /**
+   * Custom message shown in leave confirmation.
+   */
+  message?: string;
+
+  /**
+   * Custom title shown in leave confirmation.
+   */
+  title?: string;
+}
+
+export interface EditorCanvasProps {
+  /**
+   * Allow block plugins to render outside the editor's normal text column.
+   * Keep disabled for compact editor surfaces; PageEditor enables it for wide
+   * table scroll areas and their resize controls.
+   */
+  allowContentBleed?: boolean;
+
+  /**
+   * Whether to enable auto-save in DocumentStore. Defaults to true.
+   * Only applies when documentId is provided.
+   */
+  autoSave?: boolean;
+
+  /**
+   * Keep the caret out of Lexical's root node around block images by pushing
+   * an empty paragraph next to the image (otherwise a horizontal root-level
+   * caret shows above / below it), and let a click in an image's row or
+   * typing with the image selected continue on the line after it. Off by
+   * default; comment editors and the create-task modal opt in.
+   */
+  blockImageCaretGuard?: boolean;
+
+  /**
+   * Class name applied to the editor wrapper, e.g. to restyle inline chips.
+   */
+  className?: string;
+
+  /**
+   * The body comes from a live collaboration room instead of the fetched row
+   * (documentId mode only).
+   */
+  collab?: boolean;
+
+  /**
+   * Reload an already-mounted editor when an authoritative external content
+   * revision changes. Keep this stable for local autosave echoes and unchanged
+   * refetches so unsaved input is never replaced by prop identity churn.
+   */
+  contentRevision?: number;
+
+  /** Styles applied to the editable content instead of the outer data-mode wrapper. */
+  contentStyle?: CSSProperties;
+
+  disabled?: boolean;
+
+  /**
+   * Document ID to load from server.
+   * When provided, component will use useSWR to fetch document data.
+   */
+  documentId?: string;
+
+  /**
+   * Whether the editor accepts input. Defaults to true. Set false to render
+   * the content read-only (still preserves Lexical-node attributes like image
+   * width/height, which a plain markdown renderer would drop).
+   */
+  editable?: boolean;
+
+  /**
+   * Editor data to render directly (skip fetch).
+   * Use this when you already have the content and don't need to fetch.
+   */
+  editorData?: {
+    content?: string;
+    editorData?: unknown;
+  };
+
+  /**
+   * Convert `$...$` input and Markdown inline-math tokens into formula nodes.
+   * Defaults to true. PageEditor disables this because business documents use
+   * dollar signs far more often than inline formulas.
+   */
+  enableInlineMath?: boolean;
+
+  /**
+   * Entity ID (e.g., agentId, groupId) to track which entity is being edited.
+   * When entityId changes, editor content will be reloaded.
+   * When entityId stays the same, editorData changes won't trigger reload.
+   * This prevents focus loss during auto-save and optimistic updates.
+   */
+  entityId?: string;
+
+  /**
+   * Extra plugins to prepend to BASE_PLUGINS (e.g., ReactLiteXmlPlugin)
+   */
+  extraPlugins?: EditorPlugins;
+
+  /**
+   * Whether to show the floating toolbar. Defaults to true.
+   */
+  floatingToolbar?: boolean;
+
+  /** Resolve the portal host used by slash and mention menus. */
+  getPopupContainer?: EditorProps['getPopupContainer'];
+
+  /** Structured @mention configuration forwarded to the editor. */
+  mentionOption?: EditorProps['mentionOption'];
+
+  /**
+   * Content change handler
+   */
+  onContentChange?: () => void;
+
+  /**
+   * Editor initialization handler
+   */
+  onInit?: (editor: IEditor) => void;
+
+  /**
+   * Press-enter handler. Return true to claim the event (suppresses newline).
+   * Forwarded to the underlying Editor.
+   */
+  onPressEnter?: (props: { editor: IEditor; event: KeyboardEvent }) => boolean | void;
+
+  /**
+   * Shown in place of the editor while the body is not in it yet (a room still
+   * syncing); the editor stays mounted behind it (documentId mode only).
+   */
+  pendingBody?: ReactNode;
+
+  /**
+   * Placeholder text for empty editor
+   */
+  placeholder?: string;
+
+  /**
+   * Custom plugins for the editor. If provided, replaces BASE_PLUGINS entirely.
+   * Use this when you need complete control over plugins.
+   */
+  plugins?: EditorPlugins;
+
+  /**
+   * Selection actions that stay available while the editor is NOT editable
+   * (locked or view-only page). They render in a floating toolbar of their
+   * own with no formatting controls, so a reader can still act on a selection
+   * — comment on it, ask about it — without being offered edits that would
+   * never save. Ignored while editable; use `toolbarExtraItems` there.
+   */
+  readonlySelectionItems?: ChatInputActionsProps['items'];
+
+  /**
+   * Slash menu items
+   */
+  slashItems?: SlashOptions['items'];
+
+  /**
+   * Source type for DocumentStore. Defaults to 'page'.
+   */
+  sourceType?: 'page' | 'notebook';
+
+  /**
+   * Custom styles for the editor
+   */
+  style?: CSSProperties;
+
+  /**
+   * Extra items to add to the floating toolbar (e.g., "Ask Copilot" button)
+   */
+  toolbarExtraItems?: ChatInputActionsProps['items'];
+
+  /**
+   * Topic ID for notebook documents.
+   * Used to preserve active topic document context after leaving the page route.
+   */
+  topicId?: string | null;
+
+  /**
+   * Unsaved changes guard for documentId mode.
+   */
+  unsavedChangesGuard?: UnsavedChangesGuardOptions;
+}
+
+export interface EditorCanvasWithEditorProps extends EditorCanvasProps {
+  /**
+   * Editor instance
+   */
+  editor: IEditor | undefined;
+}
+
+/**
+ * EditorCanvas component that accepts editor as a prop
+ *
+ * Three modes of operation:
+ * 1. documentId mode: Pass documentId, component fetches data via useSWR, shows loading/error states
+ * 2. editorData mode: Pass editorData directly, skips fetch and renders immediately
+ * 3. Basic mode: No documentId or editorData, just renders the editor (original behavior)
+ *
+ * Features:
+ * - Internal ErrorBoundary for graceful error handling
+ * - Loading skeleton during fetch (documentId mode)
+ * - Error state display for fetch failures (documentId mode)
+ * - Auto-save integration with DocumentStore (documentId mode)
+ * - AutoSave hint display (documentId mode)
+ */
+export const EditorCanvas = memo<EditorCanvasWithEditorProps>(
+  ({ editor, documentId, editorData, entityId, collab, ...props }) => {
+    // documentId mode - fetch and render with loading/error states
+    if (documentId) {
+      return (
+        <SafeBoundary alertTitle="Editor Error" variant="alert">
+          <DocumentIdMode collab={collab} documentId={documentId} editor={editor} {...props} />
+        </SafeBoundary>
+      );
+    }
+
+    // editorData mode - render with provided data
+    if (editorData) {
+      return (
+        <SafeBoundary alertTitle="Editor Error" variant="alert">
+          <EditorDataMode editor={editor} editorData={editorData} entityId={entityId} {...props} />
+        </SafeBoundary>
+      );
+    }
+
+    // Basic mode - original behavior
+    if (!editor) return null;
+
+    return (
+      <SafeBoundary alertTitle="Editor Error" variant="alert">
+        <InternalEditor editor={editor} {...props} />
+      </SafeBoundary>
+    );
+  },
+);
+
+EditorCanvas.displayName = 'EditorCanvas';
+
+export default EditorCanvas;

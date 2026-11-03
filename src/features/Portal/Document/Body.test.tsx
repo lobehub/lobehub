@@ -1,0 +1,321 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import DocumentBody from './Body';
+
+vi.mock('@/features/FileViewer/FileDocumentPreview', () => ({
+  FileDocumentPreview: ({ fileId }: { fileId?: string | null }) => (
+    <div data-file-id={fileId} data-testid="original-file-preview" />
+  ),
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+
+  return {
+    ...actual,
+    createStaticStyles: () => ({
+      content: 'content',
+    }),
+    cssVar: {
+      colorBgContainer: 'var(--color-bg-container)',
+      colorBorderSecondary: 'var(--color-border-secondary)',
+      colorTextSecondary: 'var(--color-text-secondary)',
+      fontFamilyCode: 'monospace',
+    },
+  };
+});
+
+vi.mock('@/components/CodeEditorPane', () => ({
+  default: ({
+    onChange,
+    onSave,
+    value,
+  }: {
+    onChange?: (next: string) => void;
+    onSave?: () => void;
+    value: string;
+  }) => (
+    <textarea
+      data-testid="highlight-editor"
+      value={value}
+      onChange={(event) => onChange?.(event.target.value)}
+      onKeyDown={(event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+          event.preventDefault();
+          onSave?.();
+        }
+      }}
+    />
+  ),
+}));
+
+const mockDocumentMeta = vi.hoisted(() => ({
+  current: { content: '', filename: 'doc.md' } as {
+    content?: string;
+    fileId?: string | null;
+    sourceType?: string;
+    fileType?: string | null;
+    filename?: string | null;
+    title?: string | null;
+  },
+}));
+
+const mockDocumentError = vi.hoisted(() => ({ current: undefined as Error | undefined }));
+/** The persisted row has been read; `false` = the replica is still hydrating. */
+const mockDocumentHydrated = vi.hoisted(() => ({ current: true }));
+
+const mockUpdateDocument = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock('@/services/document', () => ({
+  documentService: {
+    getDocumentById: vi.fn(),
+    updateDocument: mockUpdateDocument,
+  },
+}));
+
+vi.mock('./EditorCanvas', () => ({
+  default: () => <div data-testid="editor-canvas" />,
+}));
+
+vi.mock('./TodoList', () => ({
+  default: () => <div data-testid="todo-list" />,
+}));
+
+vi.mock('@/features/FloatingChatPanel', () => ({
+  default: () => <div data-testid="floating-chat-panel" />,
+}));
+
+const mockChatState = vi.hoisted(() => ({
+  current: {
+    activeTopicId: 'topic-1',
+    portalStack: [
+      {
+        agentDocumentId: 'agent-document-1' as string | undefined,
+        documentId: 'document-1',
+        type: 'document',
+      },
+    ],
+  },
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: any) => selector(mockChatState.current),
+}));
+
+const mockAgentState = vi.hoisted(() => ({
+  current: {
+    activeAgentId: 'agent-1' as string | undefined,
+  },
+}));
+
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: any) => selector(mockAgentState.current),
+}));
+
+const mockDocumentState = vi.hoisted(() => ({
+  current: {
+    documents: {
+      'document-1': {},
+    },
+    internal_dispatchDocument: vi.fn(),
+    beginDocumentDetailPatch: vi.fn(() => vi.fn()),
+    performSave: vi.fn(),
+    updateSkillFrontmatter: vi.fn(),
+    // The document's replica entry, as the store's read hook reports it.
+    useFetchDocumentDetail: vi.fn(() => ({
+      data: mockDocumentMeta.current,
+      error: mockDocumentError.current,
+      isHydrated: mockDocumentHydrated.current,
+      isLoading: mockDocumentMeta.current === undefined && !mockDocumentError.current,
+      isValidating: false,
+      mutate: vi.fn(),
+    })),
+  },
+}));
+
+vi.mock('@/store/document', () => ({
+  useDocumentStore: (selector: any) => selector(mockDocumentState.current),
+}));
+
+describe('DocumentBody', () => {
+  afterEach(() => {
+    mockDocumentError.current = undefined;
+    mockDocumentHydrated.current = true;
+  });
+
+  it('paints nothing while the persisted document is still being read', () => {
+    mockDocumentMeta.current = undefined as never;
+    mockDocumentHydrated.current = false;
+
+    const { container } = render(<DocumentBody />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  /** @example A file-backed document previews its upload and keeps the portal actions. */
+  it('shows the original upload without mounting either editor', () => {
+    // ROOT CAUSE:
+    // File-backed documents used the empty content field as an editable document.
+    // Selecting a file preview must not mount an editor that could save this empty copy.
+    mockDocumentMeta.current = { content: '', fileId: 'file-original', filename: 'source.unknown' };
+    render(<DocumentBody />);
+    /** @example The original file id reaches the read-only preview. */
+    expect(screen.getByTestId('original-file-preview').dataset.fileId).toBe('file-original');
+    /** @example Neither editor mounts. */
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
+    expect(screen.queryByTestId('editor-canvas')).toBeNull();
+  });
+
+  beforeEach(() => {
+    mockAgentState.current.activeAgentId = 'agent-1';
+    mockChatState.current.portalStack[0].agentDocumentId = 'agent-document-1';
+    mockDocumentMeta.current = { content: '', filename: 'doc.md' };
+    mockUpdateDocument.mockClear();
+    mockDocumentState.current.internal_dispatchDocument.mockClear();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps the cached document on screen when the background refresh fails', () => {
+    mockDocumentMeta.current = { content: 'cached log', filename: 'topic_call.txt' };
+    mockDocumentError.current = new Error('Failed to fetch');
+
+    render(<DocumentBody />);
+
+    expect(screen.getByTestId('highlight-editor')).toHaveValue('cached log');
+  });
+
+  it('renders highlight editor for non-markdown files', () => {
+    mockDocumentMeta.current = { content: 'raw log content', filename: 'topic_call.txt' };
+
+    render(<DocumentBody />);
+
+    expect(screen.getByTestId('highlight-editor')).toHaveValue('raw log content');
+    expect(screen.queryByTestId('editor-canvas')).toBeNull();
+  });
+
+  it('renders EditorCanvas for markdown files', () => {
+    mockDocumentMeta.current = { content: '# hi', filename: 'note.md' };
+
+    render(<DocumentBody />);
+
+    expect(screen.getByTestId('editor-canvas')).toBeDefined();
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
+  });
+
+  it('renders an HTML page in a sandboxed frame without mounting either editor', () => {
+    mockDocumentMeta.current = {
+      content: '<!doctype html><html><body><h1>Goal report</h1></body></html>',
+      fileType: 'custom/html',
+      filename: 'Goal report',
+      title: 'Goal report',
+    };
+
+    const { container } = render(<DocumentBody />);
+
+    const frame = container.querySelector('iframe')!;
+    expect(frame.getAttribute('srcdoc')).toContain('<h1>Goal report</h1>');
+    expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
+    expect(screen.queryByTestId('editor-canvas')).toBeNull();
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
+  });
+
+  it('renders EditorCanvas for notebook documents that have no filename', () => {
+    mockDocumentMeta.current = {
+      content: '# notes',
+      fileType: 'markdown',
+      filename: null,
+      title: 'Meeting notes',
+    };
+
+    render(<DocumentBody />);
+
+    expect(screen.getByTestId('editor-canvas')).toBeDefined();
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
+  });
+
+  it('autosaves highlight editor edits after the debounce window', async () => {
+    mockDocumentMeta.current = { content: 'before', filename: 'config.json' };
+
+    render(<DocumentBody />);
+    const editor = screen.getByTestId('highlight-editor');
+
+    fireEvent.change(editor, { target: { value: 'after' } });
+    expect(mockUpdateDocument).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(mockUpdateDocument).toHaveBeenCalledWith({
+      content: 'after',
+      id: 'document-1',
+      saveSource: 'autosave',
+    });
+  });
+
+  it('flushes pending highlight edits when the editor unmounts', async () => {
+    mockDocumentMeta.current = { content: 'before', filename: 'config.json' };
+
+    const { unmount } = render(<DocumentBody />);
+    const editor = screen.getByTestId('highlight-editor');
+
+    fireEvent.change(editor, { target: { value: 'after' } });
+    expect(mockUpdateDocument).not.toHaveBeenCalled();
+
+    await act(async () => {
+      unmount();
+    });
+
+    expect(mockUpdateDocument).toHaveBeenCalledWith({
+      content: 'after',
+      id: 'document-1',
+      saveSource: 'autosave',
+    });
+  });
+
+  it('does not save on unmount when the highlight buffer is clean', async () => {
+    mockDocumentMeta.current = { content: 'before', filename: 'config.json' };
+
+    const { unmount } = render(<DocumentBody />);
+
+    await act(async () => {
+      unmount();
+    });
+
+    expect(mockUpdateDocument).not.toHaveBeenCalled();
+  });
+
+  it('mirrors the live highlight buffer into the document store for export', () => {
+    mockDocumentMeta.current = { content: 'before', filename: 'config.json' };
+
+    render(<DocumentBody />);
+    const editor = screen.getByTestId('highlight-editor');
+
+    // Initial mount mirrors the persisted content into the store record
+    // (the mock record already exists, so this is an update).
+    expect(mockDocumentState.current.internal_dispatchDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'document-1',
+        type: 'updateDocument',
+        value: { content: 'before' },
+      }),
+    );
+
+    fireEvent.change(editor, { target: { value: 'after' } });
+
+    // The typed buffer becomes the store content immediately, so a concurrent
+    // Export downloads the text on screen instead of the last saved copy.
+    expect(mockDocumentState.current.internal_dispatchDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'document-1',
+        type: 'updateDocument',
+        value: { content: 'after' },
+      }),
+    );
+  });
+});

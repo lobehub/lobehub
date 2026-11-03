@@ -1,0 +1,35 @@
+---
+title: Agent Tasks GA & Cloud Heterogeneous Agent
+description: >-
+  Agent Tasks reaches GA with templates, cron, and batch runs; heterogeneous
+  agents now run in the cloud; bot platforms expand to Messenger, Line, and
+  Telegram.
+tags:
+  - Agent Tasks
+  - Heterogeneous Agent
+  - Bots
+  - Models
+---
+
+# Agent Tasks GA & Cloud Heterogeneous Agent
+
+## Features
+
+- **Agent Tasks (GA).** Create a task the way you'd file an issue (title, description, optional template) and assign it to an agent instead of a person. The agent picks up the task, does the work, posts updates in comments, and moves the status from todo to in progress to done. Tasks can have subtasks with dependencies, so a parent task fans out work and runs subtasks in order. Recurring tasks can run on a schedule, parent assignments can change at any time, and each task has its own comment thread. [Task guide](/docs/usage/getting-started/task)
+- **Nightly self-review.** Agents run an automatic self-review each night and add what they find to your briefs.
+- **Cloud heterogeneous agents.** Claude Code and Codex now run in the cloud, with sessions that survive restarts.
+- **`lh hetero exec` command.** Run a standalone coding agent from the terminal, with multimodal input on desktop and CLI.
+- **Mid-run questions.** Claude Code can pause and ask you a question while it works.
+- **Inline agents in chat.** The `lobeAgents` Markdown tag renders agent cards, and a newly created agent shows up as a clickable card.
+- **More bot platforms.** Messenger, Line, and Telegram, with direct-message pairing and per-sender tool controls.
+- **New models.** Gemini 3.1 Flash-Lite, SiliconCloud model sync, and DeepSeek V4 Pro as the new open-source default.
+
+## Improvements
+
+- Knowledge-base answers can cite specific passages from your documents.
+- The Daily Brief was redesigned with a linkable welcome card and a paired input hint, and resolved briefs show a mute icon.
+- Long tool-call parameters wrap instead of truncating, and tool run time shows as `Xmin Ys`.
+- A divider between queued messages makes it clear which sends are still pending.
+- Copy session ID is now in the topic dropdown menu.
+- The home sidebar remembers its collapsed state across reloads.
+- The desktop tray icon's visibility is now a setting.

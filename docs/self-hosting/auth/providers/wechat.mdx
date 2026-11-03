@@ -1,0 +1,77 @@
+---
+title: Configuring WeChat Authentication for LobeHub
+description: >-
+  Learn how to configure WeChat SSO for LobeHub, including creating an
+  application on WeChat Open Platform.
+tags:
+  - WeChat
+  - Authentication
+  - LobeHub
+  - Single Sign-On
+---
+
+# Configuring WeChat Authentication
+
+[WeChat Open Platform](https://open.weixin.qq.com/) enables third-party applications to integrate WeChat login.
+
+<Callout type={'warning'}>
+  WeChat Web Login requires a verified WeChat Open Platform account and an
+  approved website application. This process requires business verification in
+  China.
+</Callout>
+
+<Steps>
+  ### Create Website Application on WeChat Open Platform
+
+  1. Go to [WeChat Open Platform](https://open.weixin.qq.com/)
+  2. Register and verify your developer account
+  3. Go to **Management Center** > **Website Application**
+  4. Click **Create Website Application**
+  5. Fill in the application information and submit for review
+
+  ### Configure OAuth Settings
+
+  After your application is approved:
+
+  1. Go to your application settings
+  2. In **Website Information**, configure the callback domain
+
+  <Callout type={'info'}>
+    Callback domain format:
+
+    - **Callback Domain**: `your-domain.com` (without protocol or path)
+    - **Full Callback URL**: `https://your-domain.com/api/auth/callback/wechat`
+  </Callout>
+
+  3. Note down the **AppID** and **AppSecret**
+
+  ### Configure Environment Variables
+
+  | Environment Variable | Type     | Description                                                     |
+  | -------------------- | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`        | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS` | Required | Set to `wechat`                                                 |
+  | `AUTH_WECHAT_ID`     | Required | AppID from WeChat Open Platform                                 |
+  | `AUTH_WECHAT_SECRET` | Required | AppSecret from WeChat Open Platform                             |
+
+  <Callout type={'tip'}>
+    Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#wechat)
+    for detailed information.
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  After successful deployment, users will be able to authenticate with WeChat
+  and use LobeHub.
+</Callout>
+
+## Notes
+
+- WeChat login uses QR code scanning, users need to use WeChat mobile app
+- A verified WeChat Open Platform account is required
+- The callback domain must be filed with ICP in China
+
+## Related Resources
+
+- [WeChat Open Platform](https://open.weixin.qq.com/)
+- [WeChat Login Documentation](https://developers.weixin.qq.com/doc/oplatform/Website_App/WeChat_Login/Wechat_Login.html)

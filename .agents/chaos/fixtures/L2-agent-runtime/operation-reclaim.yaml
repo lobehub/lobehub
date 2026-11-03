@@ -1,0 +1,22 @@
+id: operation-reclaim
+description: A stale running operation is abandoned and replaced without reviving the old attempt.
+layer: L2-agent-runtime
+discoveredFrom: Goal runtime resilience canary incident
+seed: operation-reclaim-v1
+timeoutMs: 10000
+cleanup: always
+safety:
+  allowedEnvironments: [test, ci]
+  maxInjections: 1
+target:
+  adapter: state
+  selector:
+    operationStatus: running
+trigger:
+  when: immediate
+effect:
+  type: delay
+  durationMs: 300000
+oracles:
+  - name: operation-reclaimed
+    timeoutMs: 5000

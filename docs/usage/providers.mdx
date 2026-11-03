@@ -1,0 +1,78 @@
+---
+title: Using Multiple Model Providers in LobeHub
+description: >-
+  Find setup guides for commercial providers, inference platforms, local
+  models, and image services. Compare options and troubleshoot connections.
+tags:
+  - LobeHub
+  - AI Chat Services
+  - Model Providers
+  - Multi-Model Support
+  - Local Model Support
+  - AWS Bedrock
+  - Google AI
+  - Zhipu
+  - Moonshot AI
+  - 01 AI
+  - Together AI
+  - Ollama
+---
+
+# Using Multiple Model Providers in LobeHub
+
+<Image alt={'Multi-Model Provider Support'} borderless cover src={'/blog/assets17870709/1148639c-2687-4a9c-9950-8ca8672f34b6.webp'} />
+
+You can choose a model provider for each Agent or connect a local inference service. This page groups setup guides by use case. The full provider cards remain at the end.
+
+## Why Multi-Provider Support?
+
+- **One interface** — Select models and modalities that each provider supports.
+- **Cost comparison** — Compare task quality, latency, and budget.
+- **Less dependence on one vendor** — If a provider becomes unavailable, select a compatible, configured alternative. This does not guarantee automatic failover.
+- **Per-Agent choice** — Set different default models for different responsibilities.
+- **Local inference** — Run local models with Ollama or LM Studio. Local inference usually avoids cloud model API charges, but hardware and operation still have costs.
+
+A local model does not make the entire workflow private or offline. Cloud sync, search, and other Connectors can still transmit data.
+
+## Find Guides by Category
+
+These groups are shortcuts, not exclusive capability categories or a complete provider list. One provider can offer both text and image models.
+
+Models, regional access, prices, and API support depend on the provider and your account.
+
+| Category | Setup guides |
+| --- | --- |
+| **Major Commercial Providers** | [OpenAI](/docs/usage/providers/openai) (GPT-6 Astra) · [Anthropic](/docs/usage/providers/anthropic) (Claude Fable 5.1, Claude Opus 5, Claude Sonnet 5) · [Google](/docs/usage/providers/google) (Gemini 3.8 Flash) · [Azure OpenAI](/docs/usage/providers/azure) · [AWS Bedrock](/docs/usage/providers/bedrock) |
+| **Aggregators and Inference Platforms** | [OpenRouter](/docs/usage/providers/openrouter) · [Together AI](/docs/usage/providers/togetherai) · [Groq](/docs/usage/providers/groq) · [Fireworks AI](/docs/usage/providers/fireworksai) · [SambaNova](/docs/usage/providers/sambanova) |
+| **Chinese Providers** | [DeepSeek](/docs/usage/providers/deepseek) (DeepSeek-V4.1-Flash) · [Moonshot](/docs/usage/providers/moonshot) · [Zhipu](/docs/usage/providers/zhipu) · [Qwen](/docs/usage/providers/qwen) (Qwen3.8-Max) · [Baichuan](/docs/usage/providers/baichuan) · [Baidu Wenxin](/docs/usage/providers/wenxin) · [iFlytek Spark](/docs/usage/providers/spark) |
+| **Local and Self-Hosted Inference** | [Ollama](/docs/usage/providers/ollama) · [LM Studio](/docs/usage/providers/lmstudio) · [vLLM](/docs/usage/providers/vllm) |
+| **Image and Media Services** | [OpenAI](/docs/usage/providers/openai) · [Black Forest Labs](/docs/usage/providers/bfl) · [fal](/docs/usage/providers/fal) · [ComfyUI](/docs/usage/providers/comfyui) · [Google](/docs/usage/providers/google) · [Volcengine](/docs/usage/providers/volcengine) |
+
+An image model name is not a provider name. Select the guide for the provider or local runtime that serves the model.
+
+## Setting Up Providers
+
+Open **App Settings → AI Providers**, then select the provider you want to configure. The available fields depend on the provider:
+
+1. Select a provider from the list and turn on its switch.
+2. Enter the credentials shown on the page. Most cloud providers use an API key. Providers such as Amazon Bedrock and Azure OpenAI also show region, endpoint, or other provider-specific fields.
+3. If **Proxy URL** is available, enter the provider API base URL or a compatible endpoint. For local services, enter the Ollama or vLLM server address.
+4. Select **Check** to test the connection.
+5. Enable a model in the model list. You can also fetch or add models when those actions are available.
+6. Your changes are saved automatically. You can then select the provider and model in the Agent settings.
+
+For environment variable configuration in self-hosted deployments, see the [model provider environment variables](/docs/self-hosting/environment-variables/model-provider) reference.
+
+See the [Agent guide](/docs/usage/getting-started/agent) for model selection principles. See [Feature Status and Availability](/docs/usage/feature-status) for Cloud and Desktop definitions.
+
+## Troubleshooting
+
+**Connection error / API key invalid** — Check your API key for extra spaces. Check that the key type matches the provider.
+
+**Model not available** — Your account tier can exclude a model, or the provider can retire it. Check the provider's model availability page.
+
+**Rate limit errors** — You reached the provider's request rate limit. Reduce the request rate, use another configured provider, or review account upgrade options.
+
+## How to Use Model Providers
+
+<ProviderCards locale={'en'} />

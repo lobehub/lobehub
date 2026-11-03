@@ -1,0 +1,134 @@
+import type { RawFile } from '@discordjs/rest';
+import debug from 'debug';
+
+import type { AttachmentFailure } from '../attachmentDelivery';
+import { loadAttachmentBufferWithDetail } from '../loadAttachmentBuffer';
+import type { BotMessageAttachment } from '../types';
+
+const log = debug('bot-platform:discord:send-attachments');
+
+/**
+ * Discord caps each message at 10 attachments. Batches beyond that go into
+ * follow-up messages.
+ *
+ * See: https://discord.com/developers/docs/resources/channel#create-message
+ */
+export const DISCORD_MAX_ATTACHMENTS_PER_MESSAGE = 10;
+
+/**
+ * Pick a filename for the Discord upload. Falls back to a generic name with
+ * the appropriate extension inferred from `mimeType` so Discord's preview
+ * works (Discord uses the filename extension, not mimeType, to pick its
+ * viewer).
+ */
+const resolveFilename = (attachment: BotMessageAttachment, index: number): string => {
+  if (attachment.name) return attachment.name;
+  if (attachment.fetchUrl) {
+    try {
+      const base = new URL(attachment.fetchUrl).pathname.split('/').pop();
+      if (base) return base;
+    } catch {
+      // ignore — fall through to the generic name
+    }
+  }
+  const ext = mimeToExt(attachment.mimeType) ?? defaultExtForType(attachment.type);
+  return `attachment-${index + 1}${ext}`;
+};
+
+const mimeToExt = (mimeType?: string): string | undefined => {
+  if (!mimeType) return undefined;
+  // Common cases; Discord's previewer covers far more, but we only need the
+  // ones the agent runtime is realistically going to emit.
+  const map: Record<string, string> = {
+    'application/json': '.json',
+    'application/pdf': '.pdf',
+    'audio/mp4': '.m4a',
+    'audio/mpeg': '.mp3',
+    'audio/ogg': '.ogg',
+    'audio/wav': '.wav',
+    'image/bmp': '.bmp',
+    'image/gif': '.gif',
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/svg+xml': '.svg',
+    'image/webp': '.webp',
+    'text/plain': '.txt',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+  };
+  return map[mimeType];
+};
+
+const defaultExtForType = (type: BotMessageAttachment['type']): string => {
+  switch (type) {
+    case 'image': {
+      return '.png';
+    }
+    case 'video': {
+      return '.mp4';
+    }
+    case 'audio': {
+      return '.mp3';
+    }
+    case 'file':
+    default: {
+      return '';
+    }
+  }
+};
+
+export interface MaterializedDiscordAttachments {
+  /** Attachments whose bytes could not be materialized, with why. */
+  failures: AttachmentFailure[];
+  files: RawFile[];
+}
+
+/**
+ * Convert JSON-safe `BotMessageAttachment[]` into `@discordjs/rest`-shaped
+ * `RawFile[]` ready to ride along a `rest.post(channelMessages)` call. Each
+ * item that fails to materialize is skipped so the rest still ship, and
+ * reported back so the caller can tell the user which ones never landed.
+ */
+export const materializeAttachmentsForDiscord = async (
+  attachments: BotMessageAttachment[],
+): Promise<MaterializedDiscordAttachments> => {
+  const files: RawFile[] = [];
+  const failures: AttachmentFailure[] = [];
+  for (const [index, att] of attachments.entries()) {
+    const loaded = await loadAttachmentBufferWithDetail(att);
+    if (!loaded.buffer) {
+      log(
+        'materializeAttachmentsForDiscord: skipping attachment "%s": %s',
+        att.name ?? '(unnamed)',
+        loaded.error,
+      );
+      failures.push({
+        detail: loaded.error,
+        name: att.name,
+        reason: 'source-unavailable',
+        type: att.type,
+      });
+      continue;
+    }
+    files.push({
+      contentType: att.mimeType,
+      data: loaded.buffer,
+      name: resolveFilename(att, index),
+    });
+  }
+  return { failures, files };
+};
+
+/**
+ * Split a list of materialized files into batches of `DISCORD_MAX_ATTACHMENTS_PER_MESSAGE`.
+ * Callers send the first batch with `content`, and subsequent batches with no
+ * text so the agent's reply doesn't repeat once per batch.
+ */
+export const batchDiscordFiles = (files: RawFile[]): RawFile[][] => {
+  if (files.length === 0) return [];
+  const batches: RawFile[][] = [];
+  for (let i = 0; i < files.length; i += DISCORD_MAX_ATTACHMENTS_PER_MESSAGE) {
+    batches.push(files.slice(i, i + DISCORD_MAX_ATTACHMENTS_PER_MESSAGE));
+  }
+  return batches;
+};

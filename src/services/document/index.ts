@@ -1,0 +1,333 @@
+import { type DocumentItem } from '@lobechat/database/schemas';
+
+import { lambdaClient } from '@/libs/trpc/client';
+import type {
+  CompareHistoryItemsInput,
+  CompareHistoryItemsOutput,
+  GetHistoryItemInput,
+  GetHistoryItemOutput,
+  ListHistoryInput,
+  ListHistoryOutput,
+  SaveDocumentHistoryInput,
+  SaveDocumentHistoryOutput,
+  UpdateDocumentInput,
+  UpdateDocumentOutput,
+} from '@/server/routers/lambda/_schema/documentHistory';
+import { workService } from '@/services/work';
+
+import { abortableRequest } from '../utils/abortableRequest';
+
+const serializeSavedAt = (savedAt: Date | string) =>
+  savedAt instanceof Date ? savedAt.toISOString() : savedAt;
+
+type SerializedSavedAt<T extends { savedAt: Date | string }> = Omit<T, 'savedAt'> & {
+  savedAt: string;
+};
+
+const serializeHistoryTimestamp = <T extends { savedAt: Date | string }>(
+  result: T,
+): SerializedSavedAt<T> => ({
+  ...result,
+  savedAt: serializeSavedAt(result.savedAt),
+});
+
+const serializeHistoryList = <
+  T extends {
+    items: Array<{
+      id: string;
+      isCurrent: boolean;
+      saveSource: ListHistoryOutput['items'][number]['saveSource'];
+      savedAt: Date | string;
+      userId: string;
+    }>;
+    nextBeforeSavedAt?: Date | string;
+  },
+>(
+  result: T,
+): ListHistoryOutput => ({
+  ...result,
+  items: result.items.map((item) => ({
+    ...item,
+    savedAt: serializeSavedAt(item.savedAt),
+  })),
+  nextBeforeSavedAt: result.nextBeforeSavedAt
+    ? serializeSavedAt(result.nextBeforeSavedAt)
+    : undefined,
+});
+
+const serializeHistoryItem = <
+  T extends {
+    editorData: GetHistoryItemOutput['editorData'];
+    id: string;
+    isCurrent: boolean;
+    saveSource: GetHistoryItemOutput['saveSource'];
+    savedAt: Date | string;
+  },
+>(
+  result: T,
+): GetHistoryItemOutput => serializeHistoryTimestamp(result);
+
+const serializeHistoryComparison = <
+  T extends {
+    from: {
+      editorData: CompareHistoryItemsOutput['from']['editorData'];
+      id: string;
+      isCurrent: boolean;
+      saveSource: CompareHistoryItemsOutput['from']['saveSource'];
+      savedAt: Date | string;
+    };
+    to: {
+      editorData: CompareHistoryItemsOutput['to']['editorData'];
+      id: string;
+      isCurrent: boolean;
+      saveSource: CompareHistoryItemsOutput['to']['saveSource'];
+      savedAt: Date | string;
+    };
+  },
+>(
+  result: T,
+): CompareHistoryItemsOutput => ({
+  from: serializeHistoryTimestamp(result.from),
+  to: serializeHistoryTimestamp(result.to),
+});
+
+export interface CreateDocumentParams {
+  content?: string;
+  editorData: string;
+  fileType?: string;
+  knowledgeBaseId?: string;
+  metadata?: Record<string, any>;
+  parentId?: string;
+  slug?: string;
+  title: string;
+  /**
+   * Workspace-only: force the new document into a specific visibility bucket.
+   * Omit to let the server pick the default (`api` sourceType top-level docs
+   * default to `private`, nested docs inherit their parent).
+   */
+  visibility?: 'private' | 'public';
+}
+
+export interface ListDocumentHistoryParams extends ListHistoryInput {}
+
+export interface GetDocumentHistoryItemParams extends GetHistoryItemInput {}
+
+export interface CompareDocumentHistoryItemsParams extends CompareHistoryItemsInput {}
+
+export interface UpdateDocumentParams extends UpdateDocumentInput {}
+
+export interface DocumentHistoryClientSurface {
+  compareDocumentHistoryItems: (
+    params: CompareDocumentHistoryItemsParams,
+  ) => Promise<CompareHistoryItemsOutput>;
+  getDocumentHistoryItem: (
+    params: GetDocumentHistoryItemParams,
+    uniqueKey?: string,
+  ) => Promise<GetHistoryItemOutput>;
+  listDocumentHistory: (params: ListDocumentHistoryParams) => Promise<ListHistoryOutput>;
+  saveDocumentHistory: (params: SaveDocumentHistoryInput) => Promise<SaveDocumentHistoryOutput>;
+  updateDocument: (params: UpdateDocumentParams) => Promise<UpdateDocumentOutput>;
+}
+
+const autosavedOnceIds = new Set<string>();
+
+/**
+ * A deleted document leaves its Work history intact but changes every card
+ * that points at it into an orphan. Revalidate both ordinary Work caches and
+ * the mounted SWR Infinite galleries before the delete interaction settles.
+ */
+const refreshWorksAfterDocumentDelete = async () => {
+  const results = await Promise.allSettled([
+    workService.refreshAllConversations(),
+    workService.refreshWorkspaceLists(),
+  ]);
+
+  // The document is already deleted at this point. Cache refresh failures must
+  // not make callers roll the optimistic document state back to a row that no
+  // longer exists on the server, but every refresh still needs time to settle.
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.error(
+        '[DocumentService] Failed to refresh Works after document deletion:',
+        result.reason,
+      );
+    }
+  }
+};
+
+export class DocumentService {
+  async createDocument(params: CreateDocumentParams): Promise<DocumentItem> {
+    return lambdaClient.document.createDocument.mutate(params);
+  }
+
+  async createDocuments(documents: CreateDocumentParams[]): Promise<DocumentItem[]> {
+    return lambdaClient.document.createDocuments.mutate({ documents });
+  }
+
+  async queryDocuments(params?: {
+    creator?: 'others' | 'self';
+    current?: number;
+    fileTypes?: string[];
+    pageSize?: number;
+    sortBy?: 'createdAt' | 'title' | 'updatedAt';
+    sourceTypes?: string[];
+    standaloneOnly?: boolean;
+  }): Promise<{ items: DocumentItem[]; total: number }> {
+    return lambdaClient.document.queryDocuments.query(params);
+  }
+
+  async listDocumentHistory(params: ListDocumentHistoryParams): Promise<ListHistoryOutput> {
+    const result = await lambdaClient.document.listDocumentHistory.query(params);
+
+    return serializeHistoryList(result);
+  }
+
+  async getDocumentHistoryItem(
+    params: GetDocumentHistoryItemParams,
+    uniqueKey?: string,
+  ): Promise<GetHistoryItemOutput> {
+    if (uniqueKey) {
+      return abortableRequest.execute(uniqueKey, async (signal) => {
+        const result = await lambdaClient.document.getDocumentHistoryItem.query(params, {
+          signal,
+        });
+
+        return serializeHistoryItem(result);
+      });
+    }
+
+    const result = await lambdaClient.document.getDocumentHistoryItem.query(params);
+
+    return serializeHistoryItem(result);
+  }
+
+  async compareDocumentHistoryItems(
+    params: CompareDocumentHistoryItemsParams,
+  ): Promise<CompareHistoryItemsOutput> {
+    const result = await lambdaClient.document.compareDocumentHistoryItems.query(params);
+
+    return serializeHistoryComparison(result);
+  }
+
+  async getDocumentById(id: string, uniqueKey?: string): Promise<DocumentItem | undefined> {
+    if (uniqueKey) {
+      // Use fixed key so switching documents cancels the previous request
+      // This prevents race conditions where old document's data overwrites new document's editor
+      return abortableRequest.execute(uniqueKey, async (signal) =>
+        lambdaClient.document.getDocumentById.query({ id }, { signal }),
+      );
+    }
+
+    return lambdaClient.document.getDocumentById.query({ id });
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    await lambdaClient.document.deleteDocument.mutate({ id });
+    await refreshWorksAfterDocumentDelete();
+  }
+
+  async deleteDocuments(ids: string[]): Promise<void> {
+    await lambdaClient.document.deleteDocuments.mutate({ ids });
+    await refreshWorksAfterDocumentDelete();
+  }
+
+  async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {
+    const isFirstAutosave = params.saveSource === 'autosave' && !autosavedOnceIds.has(params.id);
+    const mutationParams = isFirstAutosave ? { ...params, breakAutosaveWindow: true } : params;
+    const result = await lambdaClient.document.updateDocument.mutate(mutationParams);
+    if (isFirstAutosave) autosavedOnceIds.add(params.id);
+
+    return {
+      ...result,
+      savedAt: result.savedAt
+        ? result.savedAt instanceof Date
+          ? result.savedAt.toISOString()
+          : result.savedAt
+        : undefined,
+      updatedAt:
+        result.updatedAt instanceof Date ? result.updatedAt.toISOString() : result.updatedAt,
+    };
+  }
+
+  /**
+   * Acquire or refresh the collaborative edit lock for a workspace page.
+   * Doubles as the heartbeat. Personal pages always report as unlocked.
+   */
+  async acquireDocumentLock(id: string, ownerId?: string) {
+    return lambdaClient.document.acquireDocumentLock.mutate({ id, ownerId });
+  }
+
+  /** Read-only peek of the current edit lock (does not acquire). */
+  async getDocumentLock(id: string, ownerId?: string) {
+    return lambdaClient.document.getDocumentLock.query({ id, ownerId });
+  }
+
+  async releaseDocumentLock(id: string, ownerId?: string): Promise<void> {
+    await lambdaClient.document.releaseDocumentLock.mutate({ id, ownerId });
+  }
+
+  async saveDocumentHistory(params: SaveDocumentHistoryInput): Promise<SaveDocumentHistoryOutput> {
+    const result = await lambdaClient.document.saveDocumentHistory.mutate(params);
+
+    return {
+      savedAt: result.savedAt instanceof Date ? result.savedAt.toISOString() : result.savedAt,
+    };
+  }
+
+  /** Store a page's live collaboration room as a version; false when it has no live room. */
+  async snapshotPageVersion(documentId: string, saveSource: 'manual'): Promise<boolean> {
+    const { recorded } = await lambdaClient.document.snapshotPageVersion.mutate({
+      documentId,
+      saveSource,
+    });
+    return recorded;
+  }
+
+  async transferDocument(
+    documentId: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ): Promise<void> {
+    await lambdaClient.document.transferDocument.mutate({
+      documentId,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+  }
+
+  async copyDocumentToWorkspace(
+    documentId: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ): Promise<{ rootId: string }> {
+    return lambdaClient.document.copyDocumentToWorkspace.mutate({
+      documentId,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+  }
+
+  /**
+   * Publish a private document (and its whole subtree) into the workspace.
+   * Thin wrapper around `setDocumentVisibility(id, 'public')`; kept for
+   * existing callers.
+   */
+  async publishDocumentToWorkspace(id: string): Promise<{ documentIds: string[] }> {
+    return lambdaClient.document.publishDocumentToWorkspace.mutate({ id });
+  }
+
+  /**
+   * Flip a document subtree's workspace visibility. Bidirectional companion
+   * to `publishDocumentToWorkspace`. Server cascades over the whole subtree
+   * for P1 tree consistency.
+   */
+  async setDocumentVisibility(
+    id: string,
+    visibility: 'private' | 'public',
+  ): Promise<{ documentIds: string[] }> {
+    return lambdaClient.document.setDocumentVisibility.mutate({ id, visibility });
+  }
+}
+
+export const documentService = new DocumentService() as DocumentService &
+  DocumentHistoryClientSurface;

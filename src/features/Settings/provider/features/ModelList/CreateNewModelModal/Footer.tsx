@@ -1,0 +1,57 @@
+'use client';
+
+import { Button, ModalFooter, useModalContext } from '@lobehub/ui';
+import type { FormInstance } from '@lobehub/ui/form';
+import { type CreateAiModelParams } from 'model-bank';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useAiInfraStore } from '@/store/aiInfra';
+
+interface CreateNewModelFooterProps {
+  formRef: { current?: FormInstance };
+}
+
+const CreateNewModelFooter = memo<CreateNewModelFooterProps>(({ formRef }) => {
+  const { t } = useTranslation('common');
+  const { close } = useModalContext();
+  const [loading, setLoading] = useState(false);
+  const [editingProvider, createNewAiModel] = useAiInfraStore((s) => [
+    s.activeAiProvider!,
+    s.createNewAiModel,
+  ]);
+
+  return (
+    <ModalFooter>
+      <Button onClick={close}>{t('cancel')}</Button>
+      <Button
+        loading={loading}
+        type="primary"
+        onClick={async () => {
+          const form = formRef.current;
+          if (!editingProvider || !form) return;
+
+          setLoading(true);
+
+          try {
+            const { valid } = await form.validate();
+            if (!valid) {
+              setLoading(false);
+              return;
+            }
+            const data = form.getValues() as Omit<CreateAiModelParams, 'providerId'>;
+            await createNewAiModel({ ...data, providerId: editingProvider });
+            setLoading(false);
+            close();
+          } catch {
+            setLoading(false);
+          }
+        }}
+      >
+        {t('ok')}
+      </Button>
+    </ModalFooter>
+  );
+});
+
+export default CreateNewModelFooter;

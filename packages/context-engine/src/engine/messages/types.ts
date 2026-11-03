@@ -1,0 +1,401 @@
+/* eslint-disable perfectionist/sort-interfaces */
+import type { AgentIdentityContext, FileContent, KnowledgeBaseInfo } from '@lobechat/prompts';
+import type {
+  ExpertiseContextSnapshot,
+  RuntimeAdditionalContextFragment,
+  RuntimeInitialContext,
+  RuntimeSelectedSkill,
+  RuntimeSelectedTool,
+  RuntimeStepContext,
+} from '@lobechat/types';
+
+import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
+
+import type { AgentInfo } from '../../processors/GroupRoleTransform';
+import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
+import type { AgentContextDocument } from '../../providers/AgentDocumentInjector';
+import type { AgentManagementContext } from '../../providers/AgentManagementContextInjector';
+import type { BotPlatformContext } from '../../providers/BotPlatformContextInjector';
+import type { DiscordContext } from '../../providers/DiscordContextProvider';
+import type { EvalContext } from '../../providers/EvalContextSystemInjector';
+import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
+import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
+import type { OnboardingContext } from '../../providers/OnboardingContextInjector';
+import type { Plan } from '../../providers/PlanInjector';
+import type { ProjectInstructionFile } from '../../providers/ProjectInstructionsInjector';
+import type { SkillMeta } from '../../providers/SkillContextProvider';
+import type { TodoList } from '../../providers/TodoInjector';
+import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
+import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
+import type { WorkspaceContext } from '../../providers/WorkspaceContextInjector';
+import type { PipelineContextMetadata } from '../../types';
+import type { LobeToolManifest } from '../tools/types';
+
+/**
+ * Model capability checker
+ * Injected by caller to check if model supports specific capabilities
+ */
+export interface ModelCapabilityChecker {
+  /** Check if audio input is supported */
+  isCanUseAudio?: (model: string, provider: string) => boolean;
+  /** Check if function calling is supported */
+  isCanUseFC?: (model: string, provider: string) => boolean;
+  /** Check if video is supported */
+  isCanUseVideo?: (model: string, provider: string) => boolean;
+  /** Check if vision is supported */
+  isCanUseVision?: (model: string, provider: string) => boolean;
+}
+
+/**
+ * Knowledge configuration
+ */
+export interface KnowledgeConfig {
+  /** File contents to inject */
+  fileContents?: FileContent[];
+  /** Knowledge base metadata to inject */
+  knowledgeBases?: KnowledgeBaseInfo[];
+}
+
+/**
+ * Tools configuration
+ */
+export interface ToolsConfig {
+  /** Tool identifiers that must be removed from historical tool calls in this runtime scope */
+  disabledToolIdentifiers?: string[];
+  /** Tool manifests with systemRole and API definitions */
+  manifests?: LobeToolManifest[];
+  /** Enabled tool IDs (kept for compatibility) */
+  tools?: string[];
+}
+
+/**
+ * Skills configuration
+ */
+export interface SkillsConfig {
+  enabledSkills?: SkillMeta[];
+}
+
+/**
+ * Tool Discovery configuration
+ */
+export interface ToolDiscoveryConfig {
+  availableTools?: ToolDiscoveryMeta[];
+}
+
+/**
+ * Variable generators for placeholder replacement
+ * Used to replace {{variable}} placeholders in messages
+ */
+export type VariableGenerators = Record<string, () => string>;
+
+/**
+ * File context configuration
+ */
+export interface FileContextConfig {
+  /** Whether to enable file context injection */
+  enabled: boolean;
+  /** Whether to include file URLs (desktop typically uses false) */
+  includeFileUrl: boolean;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (see `planAttachmentPreviews`).
+   */
+  previewFileIds?: string[];
+}
+
+/**
+ * User memory item interfaces
+ * Uses index signature to allow additional properties from database models
+ * Note: Properties can be null (from database) or undefined
+ */
+export interface UserMemoryContextItem {
+  description?: string | null;
+  id?: string;
+  title?: string | null;
+  [key: string]: unknown;
+}
+
+export interface UserMemoryExperienceItem {
+  id?: string;
+  keyLearning?: string | null;
+  situation?: string | null;
+  [key: string]: unknown;
+}
+
+export interface UserMemoryPreferenceItem {
+  conclusionDirectives?: string | null;
+  id?: string;
+  [key: string]: unknown;
+}
+
+export interface UserMemoryActivityItem {
+  endsAt?: string | Date | null;
+  id?: string;
+  startsAt?: string | Date | null;
+  status?: string | null;
+  timezone?: string | null;
+  type?: string | null;
+  [key: string]: unknown;
+}
+
+export interface UserMemoryIdentityItem {
+  capturedAt?: string | Date | null;
+  description?: string | null;
+  id?: string;
+  role?: string | null;
+  /** Identity type: personal (role), professional (occupation), demographic (attribute) */
+  type?: 'demographic' | 'personal' | 'professional' | string | null;
+  [key: string]: unknown;
+}
+
+export interface UserMemoryPersonaItem {
+  narrative?: string | null;
+  tagline?: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * User memory data structure
+ * Compatible with SearchMemoryResult from @lobechat/types
+ */
+export interface UserMemoryData {
+  activities?: UserMemoryActivityItem[];
+  contexts: UserMemoryContextItem[];
+  experiences: UserMemoryExperienceItem[];
+  identities?: UserMemoryIdentityItem[];
+  persona?: UserMemoryPersonaItem;
+  preferences: UserMemoryPreferenceItem[];
+}
+
+/**
+ * User memory configuration
+ */
+export interface UserMemoryConfig {
+  /** Whether user memory is enabled */
+  enabled?: boolean;
+  /** When the memories were fetched */
+  fetchedAt?: number;
+  /** User memories data */
+  memories?: UserMemoryData;
+}
+
+/**
+ * Agent group configuration
+ * Used to inject sender identity into assistant messages in multi-agent scenarios
+ */
+export interface AgentGroupConfig {
+  /** Mapping from agentId to agent info (name, role) */
+  agentMap?: Record<string, AgentInfo>;
+
+  // ========== Group context injection (for current agent's identity) ==========
+  /** Current agent's ID (the one who will respond) */
+  currentAgentId?: string;
+  /** Current agent's name */
+  currentAgentName?: string;
+  /** Current agent's role */
+  currentAgentRole?: 'supervisor' | 'participant';
+  /** Group title/name */
+  groupTitle?: string;
+  /** List of group members for context injection */
+  members?: GroupMemberInfo[];
+  /** Custom system prompt/role description for the group */
+  systemPrompt?: string;
+}
+
+/**
+ * Plan + Todo configuration
+ * Used to inject plan and todo context for task management
+ */
+export interface PlanTodoConfig {
+  /** Whether plan/todo context injection is enabled */
+  enabled?: boolean;
+  /** Whether to inject the current todos into this LLM call */
+  injectTodos?: boolean;
+  /** The current plan to inject (injected before first user message) */
+  plan?: Plan;
+  /** The current todo list to inject (injected at end of last user message) */
+  todos?: TodoList;
+}
+
+/**
+ * MessagesEngine main parameters
+ */
+export interface MessagesEngineParams {
+  // ========== Required parameters ==========
+  /** Original message list */
+  messages: UIChatMessage[];
+  /** Model ID */
+  model: string;
+  /** Human-friendly model name, e.g. `Fable 5`. Omit when unknown. */
+  modelDisplayName?: string;
+  /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
+  modelKnowledgeCutoff?: string;
+  /** Provider ID */
+  provider: string;
+
+  // ========== System date ==========
+  /** Whether to inject current date into system message (default: true) */
+  enableSystemDate?: boolean;
+  /** User timezone for system date formatting (e.g. 'Asia/Shanghai') */
+  timezone?: string | null;
+
+  // ========== Agent configuration ==========
+  /**
+   * Whether the agent runs in agent mode. When explicitly `false` (chat mode)
+   * the engine force-disables agentic-only injectors — skills (`<available_skills>`)
+   * and agent documents — regardless of whether their data is supplied.
+   * Undefined / true → agent mode (default).
+   */
+  enableAgentMode?: boolean;
+  /** Whether to enable history message count limit */
+  enableHistoryCount?: boolean;
+  /**
+   * Whether stale tool results are replaced with short placeholders in the
+   * model context. Undefined / true → trimming enabled (default).
+   */
+  enableStaleToolResultTrim?: boolean;
+  /** Whether to inject the operation expertise snapshot */
+  enableExpertise?: boolean;
+  /** Force finish flag: when true, injects summary prompt for max-steps completion */
+  forceFinish?: boolean;
+  /** Function to format history summary */
+  formatHistorySummary?: (summary: string) => string;
+  /** History message count limit */
+  historyCount?: number;
+  /** History summary content */
+  historySummary?: string;
+  /** Input template */
+  inputTemplate?: string;
+  /** System role */
+  systemRole?: string;
+  /**
+   * The agent's identity (personal `name` + role `title`), appended to the
+   * system message so the model can introduce itself by the name the user gave
+   * it. Ignored in group chat, where GroupContextInjector owns identity.
+   */
+  agentIdentity?: AgentIdentityContext;
+  /** Agent-materialized presentation contexts for this LLM call */
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
+  /** Immutable expertise captured when the operation started. */
+  expertise?: ExpertiseContextSnapshot;
+
+  // ========== Capability injection (dependency injection) ==========
+  /** Model capability checker */
+  capabilities?: ModelCapabilityChecker;
+  /** Variable generators for placeholder replacement */
+  variableGenerators?: VariableGenerators;
+
+  // ========== Knowledge ==========
+  /** Knowledge configuration */
+  knowledge?: KnowledgeConfig;
+  /** Agent document configuration for context injection */
+  agentDocuments?: AgentContextDocument[];
+
+  // ========== Skills ==========
+  /** Skills configuration */
+  skillsConfig?: SkillsConfig;
+  /** Skills explicitly selected by the user for the current request */
+  selectedSkills?: RuntimeSelectedSkill[];
+  /** Tools explicitly selected by the user for the current request */
+  selectedTools?: RuntimeSelectedTool[];
+
+  // ========== Tool Discovery ==========
+  /** Tool Discovery configuration (available tools for dynamic activation) */
+  toolDiscoveryConfig?: ToolDiscoveryConfig;
+
+  // ========== Tools ==========
+  /** Tools configuration */
+  toolsConfig?: ToolsConfig;
+
+  // ========== File handling ==========
+  /** File context configuration */
+  fileContext?: FileContextConfig;
+
+  // ========== Extended contexts (both frontend and backend) ==========
+  /** Agent Builder context */
+  agentBuilderContext?: AgentBuilderContext;
+  /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
+  botPlatformContext?: BotPlatformContext;
+  /**
+   * Where the conversation lives (app origin + workspace slug), so the model
+   * writes in-app links that resolve to the right scope.
+   */
+  workspaceContext?: WorkspaceContext;
+  /** Discord context for injecting channel/guild info into system injection message */
+  discordContext?: DiscordContext;
+  /** Eval context for injecting environment prompts into system message */
+  /** Borrowed-connector attribution note, already rendered by the caller. */
+  connectorOwnershipNote?: string;
+  evalContext?: EvalContext;
+  /** A project's root instruction files (`AGENTS.md` / `CLAUDE.md`). */
+  projectInstructions?: ProjectInstructionFile[];
+  /** Onboarding context for injecting phase guidance and documents */
+  onboardingContext?: OnboardingContext;
+  /** Agent Management context */
+  agentManagementContext?: AgentManagementContext;
+  /** Agent group configuration for multi-agent scenarios */
+  agentGroup?: AgentGroupConfig;
+  /** Group Agent Builder context */
+  groupAgentBuilderContext?: GroupAgentBuilderContext;
+  /** Plan + Todo configuration */
+  planTodo?: PlanTodoConfig;
+  /** Reaction feedback configuration */
+  reactionFeedback?: {
+    enabled?: boolean;
+  };
+  /** User memory configuration */
+  userMemory?: UserMemoryConfig;
+
+  // ========== Topic References ==========
+  /** Topic reference summaries to inject into last user message */
+  topicReferences?: TopicReferenceItem[];
+
+  // ========== Page Editor context ==========
+  /**
+   * Initial context captured at operation start (frontend runtime usage)
+   * Contains static state like initial page content that doesn't change during execution
+   */
+  initialContext?: RuntimeInitialContext;
+  /**
+   * Step context computed at the beginning of each step (frontend runtime usage)
+   * Contains dynamic state like latest XML that changes between steps
+   */
+  stepContext?: RuntimeStepContext;
+}
+
+/**
+ * MessagesEngine result
+ */
+export interface MessagesEngineResult {
+  /** Processed messages in OpenAI format */
+  messages: OpenAIChatMessage[];
+  /** Processing metadata */
+  metadata: PipelineContextMetadata;
+  /** Processing statistics */
+  stats: {
+    /** Number of processors executed */
+    processedCount: number;
+    /** Execution time for each processor */
+    processorDurations: Record<string, number>;
+    /** Total processing time in ms */
+    totalDuration: number;
+  };
+}
+
+// Re-export types for convenience
+
+export { type AgentInfo } from '../../processors/GroupRoleTransform';
+export { type AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
+export { type AgentManagementContext } from '../../providers/AgentManagementContextInjector';
+export { type BotPlatformContext } from '../../providers/BotPlatformContextInjector';
+export { type DiscordContext } from '../../providers/DiscordContextProvider';
+export { type EvalContext } from '../../providers/EvalContextSystemInjector';
+export { type GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
+export { type Plan } from '../../providers/PlanInjector';
+export { type SkillMeta } from '../../providers/SkillContextProvider';
+export { type TodoItem, type TodoList } from '../../providers/TodoInjector';
+export { type ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
+export { type TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
+export { type WorkspaceContext } from '../../providers/WorkspaceContextInjector';
+export { type OpenAIChatMessage, type UIChatMessage } from '@/types/index';
+export { type FileContent, type KnowledgeBaseInfo } from '@lobechat/prompts';

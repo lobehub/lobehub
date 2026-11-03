@@ -1,0 +1,1349 @@
+import type { WorkingDirConfigValue } from '../device';
+import type { LobeAgentChatConfig } from './chatConfig';
+import type { AgentGraph } from './graph';
+import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
+import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from './heterogeneousAgent';
+import type {
+  AmpAgentMode,
+  ClaudeCodeReasoningEffort,
+  CodexReasoningEffort,
+  CodexSpeedMode,
+  GrokBuildReasoningEffort,
+  HeteroCliEncoding,
+  HeterogeneousAgentMode,
+  HeterogeneousReasoningEffort,
+  HeterogeneousSpeedMode,
+  QoderReasoningEffort,
+} from './heteroSelectorCapabilities';
+import {
+  applyHeteroSelection,
+  CODEX_REASONING_EFFORT_CONFIG_KEY,
+  CODEX_SERVICE_TIER_CONFIG_KEY,
+  getHeteroSelectorCapability,
+  GROK_BUILD_REASONING_EFFORT_FLAGS,
+  HETERO_SELECTOR_CAPABILITIES,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  isAmpAgentMode,
+  isClaudeCodeReasoningEffort,
+  isCodexFastServiceTier,
+  isCodexReasoningEffort,
+  isGrokBuildReasoningEffort,
+  isQoderReasoningEffort,
+  QODER_REASONING_EFFORT_FLAG,
+} from './heteroSelectorCapabilities';
+
+export type HeterogeneousAgentModelCatalogErrorCode =
+  | 'cli_not_found'
+  | 'command_failed'
+  | 'device_unavailable'
+  | 'timeout'
+  | 'unsupported_client'
+  | 'unsupported_configuration';
+
+/** One model reported by a heterogeneous CLI's device-local model catalog. */
+export interface HeterogeneousAgentModel {
+  /** Exact value accepted by the provider's native model selector. Treat as opaque. */
+  id: string;
+  /** Optional human-readable model label. */
+  label?: string;
+  /** Model identifier shown when the CLI does not provide a separate display label. */
+  modelId: string;
+  /** Provider or CLI family, used only for display grouping. */
+  providerId: string;
+}
+
+export interface ListHeterogeneousAgentModelsParams {
+  args?: string[];
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  type:
+    | 'codebuddy'
+    | 'codex'
+    | 'cursor'
+    | 'devin'
+    | 'droid'
+    | 'grok-build'
+    | 'kimi-code'
+    | 'opencode'
+    | 'pi'
+    | 'qoder'
+    | 'trae';
+}
+
+export interface HeterogeneousAgentModelCatalogSuccess {
+  models: HeterogeneousAgentModel[];
+  status: 'success';
+  updatedAt: number;
+}
+
+export interface HeterogeneousAgentModelCatalogFailure {
+  error: {
+    code: HeterogeneousAgentModelCatalogErrorCode;
+    message: string;
+  };
+  status: 'error';
+  updatedAt: number;
+}
+
+export type HeterogeneousAgentModelCatalog =
+  HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
+
+/** Authentication source used by a heterogeneous agent CLI. */
+export type HeterogeneousAuthMode = 'api' | 'subscription';
+
+/**
+ * Reference-only user-provider API binding for a heterogeneous agent.
+ * Provider credentials are resolved at launch and are never persisted here.
+ */
+export interface HeterogeneousProviderApiConfig {
+  /** Primary model used by the CLI. */
+  model: string;
+  /** User provider whose runtime credentials are resolved locally. */
+  providerId: string;
+  /** Optional model used for fast/background work. Defaults to the primary model. */
+  smallFastModel?: string | null;
+  /** Omitted by existing records; any omitted source is a user-provider binding. */
+  source?: 'provider';
+}
+
+export * from './serverDefaultHeterogeneous';
+
+/** Deployment-owned API binding whose provider and credentials stay on the server. */
+export interface HeterogeneousServerDefaultApiConfig {
+  /** Model id from the deployment's enabled model catalog. */
+  model: string;
+  source: 'server-default';
+}
+
+export type HeterogeneousApiConfig =
+  HeterogeneousProviderApiConfig | HeterogeneousServerDefaultApiConfig;
+
+/**
+ * Heterogeneous agent provider configuration.
+ * When set, the assistant delegates execution to an external agent runtime
+ * instead of using the built-in model runtime.
+ *
+ * Two families of hetero agents are supported:
+ *
+ * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
+ *   `cursor` | `droid` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
+ *   spawned as a child process on the desktop or a connected device; uses
+ *   `command`, `args`, `env`, `systemContext`.
+ *
+ * - **Platform task** (`openclaw` | `hermes`): runs on this desktop when
+ *   `executionTarget` is `local`, or on a machine connected via `lh connect`
+ *   when it is `device`. `platformAgentId` selects the named platform agent.
+ */
+export interface HeterogeneousProviderConfig {
+  /** Credential-free API binding used when `authMode` is `api`. */
+  apiConfig?: HeterogeneousApiConfig;
+  /** Additional CLI arguments for the agent command (local CLI only). */
+  args?: string[];
+  /** Defaults to `subscription` for backwards compatibility. */
+  authMode?: HeterogeneousAuthMode;
+  /** Command to spawn the agent (e.g. 'claude') (local CLI only). */
+  command?: string;
+  /**
+   * Reasoning effort, surfaced through the chat-input model selector and
+   * translated into the provider-specific CLI flags/config at spawn time.
+   * Omitted or `'default'` values are displayed as Default in the UI and are
+   * not passed as CLI overrides, so the CLI can keep its own settings, env
+   * vars, and account defaults.
+   */
+  effort?: HeterogeneousReasoningEffort;
+  /** Custom environment variables (local CLI only). */
+  env?: Record<string, string>;
+  /**
+   * Amp agent mode, surfaced through the chat-input selector and translated
+   * into `--mode <mode>` at spawn time. Omitted or `'default'` values leave
+   * Amp's own account and environment defaults in control.
+   */
+  mode?: HeterogeneousAgentMode;
+  /**
+   * CLI model, surfaced through the chat-input model selector and translated
+   * into the provider-specific model override at spawn time. Empty / omitted
+   * values are displayed as Default in the UI, but are not passed as CLI flags
+   * so the CLI can keep its own settings, env vars, and account defaults.
+   */
+  model?: string;
+  /**
+   * Platform-side agent identifier used by remote device runtimes.
+   * - openclaw: selects the named agent (defaults to `'main'`)
+   * - hermes: reserved for future use
+   */
+  platformAgentId?: string;
+  /**
+   * Speed mode (Codex only), surfaced through the chat-input model selector
+   * and translated into the `service_tier` CLI config at spawn time. Omitted
+   * or `'default'` values are displayed as Standard in the UI and are not
+   * passed as CLI overrides, so the CLI keeps its own settings and account
+   * defaults.
+   */
+  speed?: HeterogeneousSpeedMode;
+  /**
+   * Static context prepended to every user prompt before it reaches the agent CLI.
+   * Use this to prime the agent with workspace conventions, rules, or instructions
+   * that should apply to every conversation.
+   * Combined with any runtime-generated context (e.g. cloned repo list).
+   */
+  systemContext?: string;
+  /** Agent runtime type, derived from the shared heterogeneous-agent descriptor catalog. */
+  type: HeterogeneousAgentType;
+}
+
+export interface HeterogeneousTopicModel {
+  model: string;
+  provider: string;
+}
+
+/**
+ * Everything a topic pins for a heterogeneous run: the model/provider pair from
+ * the top-level `topics.model`/`provider` columns plus the reasoning effort and
+ * speed from `topics.metadata.heteroEffort` / `heteroSpeed`. Each part is
+ * optional — a topic may pin an effort or speed without a model (runtimes
+ * without a model selector) or the other way round.
+ */
+export interface HeterogeneousTopicPin extends Partial<HeterogeneousTopicModel> {
+  effort?: HeterogeneousReasoningEffort;
+  speed?: HeterogeneousSpeedMode;
+}
+
+/**
+ * The effort and speed a newly created topic snapshots from the agent, so later
+ * agent edits do not change a running conversation. Speed is resolved through
+ * the selector capability, which also reads legacy `service_tier` CLI args.
+ *
+ * Like effort, speed is snapshotted only when the agent sets it explicitly. An
+ * agent without a speed emits no CLI flag, so the CLI's own config (for Codex,
+ * `service_tier` in `~/.codex/config.toml`) decides; pinning a resolved
+ * Standard there would claim a choice that never reaches the CLI.
+ */
+export const resolveHeterogeneousTopicRuntimeSnapshot = (
+  config: HeterogeneousProviderConfig | undefined,
+): { heteroEffort?: HeterogeneousReasoningEffort; heteroSpeed?: HeterogeneousSpeedMode } => {
+  if (!config) return {};
+  const speedCapability = getHeteroSelectorCapability(config.type)?.speed;
+  const hasExplicitSpeed =
+    config.speed !== undefined ||
+    !!speedCapability?.encodings.some((encoding) =>
+      encoding.kind === 'flag'
+        ? hasAnyCliFlag(config.args ?? [], encoding.flags)
+        : hasCliConfigKey(config.args ?? [], encoding.key),
+    );
+  const speed = hasExplicitSpeed ? speedCapability?.resolve(config) : undefined;
+  return {
+    ...(config.effort === undefined ? {} : { heteroEffort: config.effort }),
+    ...(speed === undefined ? {} : { heteroSpeed: speed }),
+  };
+};
+
+/**
+ * Resolve the topic-level model snapshot for a heterogeneous provider.
+ *
+ * Server-default API models intentionally remain Agent-scoped: unlike a user-provider
+ * binding, their deployment-owned provider identity cannot be represented by the topic's
+ * model/provider pair. Their topic execution therefore ignores any stale pin from another
+ * auth mode and follows the current Agent config.
+ */
+export const resolveHeterogeneousProviderTopicModel = (
+  config: HeterogeneousProviderConfig,
+): HeterogeneousTopicModel | undefined => {
+  if (config.authMode === 'api') {
+    if (!config.apiConfig || config.apiConfig.source === 'server-default') return undefined;
+    return { model: config.apiConfig.model, provider: config.apiConfig.providerId };
+  }
+
+  const model = getHeteroSelectorCapability(config.type)?.model?.resolve(config);
+  return model ? { model, provider: config.type } : undefined;
+};
+
+/**
+ * Resolves the provider for an explicit model-only Task override.
+ *
+ * Use when:
+ * - Creating a Task or filling missing fields on an older Task.
+ *
+ * Expects:
+ * - The assignee's current heterogeneous runtime configuration.
+ *
+ * Returns:
+ * - The runtime provider for subscription/local auth, or the personal API binding ID.
+ * - Null when API auth has no Topic-compatible binding; do not infer a wrapper provider.
+ * - Undefined for a regular Agent, which uses its model/provider snapshot.
+ *
+ * The previous native-only lookup deliberately omitted API auth. Task callers
+ * also need the API binding identity so model-only input cannot become codex/openai.
+ */
+export const getHeterogeneousTaskModelProvider = (
+  config: HeterogeneousProviderConfig | null | undefined,
+): string | null | undefined => {
+  if (!config) return undefined;
+  if (config.authMode !== 'api') return config.type;
+  return resolveHeterogeneousProviderTopicModel(config)?.provider || null;
+};
+
+/**
+ * Narrows a per-run model override (a Task's `model`/`provider`) to one the
+ * external runtime can execute.
+ *
+ * Use when:
+ * - Applying a Task override to a heterogeneous Agent before dispatch or display.
+ *
+ * Expects:
+ * - The Agent's heterogeneous provider and the raw override pair.
+ *
+ * Returns:
+ * - The pair to apply: the runtime's own provider under subscription/local auth,
+ *   or the Agent's current personal API binding under API auth.
+ * - Undefined for anything else. Agent rows keep a wrapper `model`/`provider`
+ *   (a runtime ID such as `codex/openai`, or an ordinary chat model from an
+ *   earlier configuration). Neither names a CLI model, so it must not become
+ *   `--model` or replace an API binding.
+ */
+export const resolveHeterogeneousModelOverride = (
+  config: HeterogeneousProviderConfig,
+  override: { model?: string | null; provider?: string | null },
+): HeterogeneousTopicModel | undefined => {
+  const model = override.model?.trim();
+  if (!model || HETEROGENEOUS_AGENT_TYPES.has(model)) return undefined;
+  const provider = override.provider || undefined;
+
+  if (config.authMode === 'api') {
+    const binding = resolveHeterogeneousProviderTopicModel(config);
+    return binding && provider === binding.provider ? { model, provider } : undefined;
+  }
+
+  return !provider || provider === config.type ? { model, provider: config.type } : undefined;
+};
+
+const applyTopicModelPin = (
+  config: HeterogeneousProviderConfig,
+  topicModel: HeterogeneousTopicPin | undefined,
+): HeterogeneousProviderConfig => {
+  if (!topicModel?.model) return config;
+
+  if (config.authMode === 'api') {
+    const apiConfig = config.apiConfig;
+    // Server-default is Agent-scoped. In particular, do not turn it back into a
+    // user-provider binding when this topic retains a pin from an earlier auth mode.
+    if (apiConfig?.source === 'server-default') return config;
+    if (!topicModel.provider || topicModel.provider === config.type) return config;
+    return {
+      ...config,
+      apiConfig: {
+        model: topicModel.model,
+        providerId: topicModel.provider,
+        ...(apiConfig?.providerId === topicModel.provider
+          ? { smallFastModel: apiConfig.smallFastModel }
+          : {}),
+      },
+    };
+  }
+
+  if (topicModel.provider !== config.type) return config;
+  return {
+    ...config,
+    ...applyHeteroSelection(config, { model: topicModel.model }),
+  };
+};
+
+/**
+ * Overlay a topic's pins (model/provider, reasoning effort and speed) on the
+ * agent's heterogeneous provider config. The model pin follows the auth-mode
+ * rules of {@link applyTopicModelPin}; effort and speed are plain CLI-level
+ * overrides, so they apply when supported by the effective model — independent
+ * of whether a model was pinned. `'default'` is a real pin (it drops the
+ * agent's effort or Fast flag for this topic), only `undefined` keeps the agent
+ * value.
+ */
+export const applyTopicModelToHeterogeneousProvider = (
+  config: HeterogeneousProviderConfig,
+  topicModel: HeterogeneousTopicPin | undefined,
+): HeterogeneousProviderConfig => {
+  const withModel = applyTopicModelPin(config, topicModel);
+  const capability = getHeteroSelectorCapability(withModel.type);
+  if (!capability) return withModel;
+  const model =
+    (withModel.authMode === 'api'
+      ? withModel.apiConfig?.model
+      : capability.model?.resolve(withModel)) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+
+  // Only overridden dimensions may enter the selection: a present key also
+  // clears that dimension's inherited CLI args.
+  const selection: { effort?: HeterogeneousReasoningEffort; speed?: HeterogeneousSpeedMode } = {};
+  const { effort, speed } = topicModel ?? {};
+  /** Auth-mode changes can reject the topic model while leaving its old pins behind. */
+  if (effort !== undefined && capability.effort) {
+    selection.effort =
+      effort === HETEROGENEOUS_AGENT_DEFAULT_SELECTION ||
+      capability.effort.levels(model).includes(effort)
+        ? effort
+        : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+  }
+  if (speed !== undefined && capability.speed) {
+    selection.speed = capability.speed.supported(model)
+      ? speed
+      : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+  }
+  if (Object.keys(selection).length === 0) return withModel;
+
+  return { ...withModel, ...applyHeteroSelection(withModel, selection) };
+};
+
+const HETEROGENEOUS_AGENT_TYPES = new Set<string>([
+  ...HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+  ...LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+  ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+]);
+
+const LEGACY_COMMAND_INFERENCE_TYPES = new Set<LocalHeterogeneousAgentType>([
+  'claude-code',
+  'codex',
+]);
+
+interface LegacyHeterogeneousProviderConfig extends HeterogeneousProviderConfig {
+  adapterType?: unknown;
+}
+
+const resolveKnownHeterogeneousAgentType = (value: unknown): HeterogeneousAgentType | undefined => {
+  if (typeof value !== 'string' || !value) return;
+  if (!HETEROGENEOUS_AGENT_TYPES.has(value)) {
+    throw new Error(`Unknown heterogeneous agent type: "${value}"`);
+  }
+  return value as HeterogeneousAgentType;
+};
+
+/**
+ * Upgrade a persisted provider config written before `type` became required.
+ *
+ * New callers must always write `type`; this compatibility path exists because
+ * `agents.agency_config` is JSONB and older rows are not runtime-schema parsed
+ * or backfilled. The old renderer preferred `adapterType`, then recognized
+ * Claude/Codex from `command`, and otherwise defaulted to Claude Code.
+ */
+export const normalizeHeterogeneousProviderConfig = (
+  config: HeterogeneousProviderConfig,
+): HeterogeneousProviderConfig => {
+  const legacyConfig = config as LegacyHeterogeneousProviderConfig;
+  const explicitType = resolveKnownHeterogeneousAgentType(legacyConfig.type);
+  if (explicitType && legacyConfig.adapterType === undefined) return config;
+
+  const adapterType = explicitType
+    ? undefined
+    : resolveKnownHeterogeneousAgentType(legacyConfig.adapterType);
+  const normalizedCommand = config.command?.trim().toLowerCase();
+  const inferredType = normalizedCommand
+    ? HETEROGENEOUS_AGENT_CONFIGS.find(
+        ({ defaultCommand, type }) =>
+          LEGACY_COMMAND_INFERENCE_TYPES.has(type) &&
+          normalizedCommand.includes(defaultCommand.toLowerCase()),
+      )?.type
+    : undefined;
+  const type = explicitType ?? adapterType ?? inferredType ?? 'claude-code';
+  const normalizedConfig = { ...legacyConfig };
+  delete normalizedConfig.adapterType;
+
+  return { ...normalizedConfig, type };
+};
+
+const normalizeAgencyConfigHeterogeneousProvider = (
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+): LobeAgentAgencyConfig | undefined => {
+  const base = agencyConfig ?? undefined;
+  if (!base?.heterogeneousProvider) return base;
+
+  const heterogeneousProvider = normalizeHeterogeneousProviderConfig(base.heterogeneousProvider);
+  return heterogeneousProvider === base.heterogeneousProvider
+    ? base
+    : { ...base, heterogeneousProvider };
+};
+
+interface ClaudeCodeSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
+interface AmpSelectionSource {
+  args?: string[];
+  mode?: string | null;
+}
+
+interface CodexSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+  speed?: string | null;
+}
+
+interface GrokBuildSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
+interface QoderSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
+const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
+
+const modelFlagsOf = (
+  type: 'codex' | 'grok-build' | 'kimi-code' | 'opencode' | 'pi' | 'qoder',
+): readonly string[] =>
+  HETERO_SELECTOR_CAPABILITIES[type].model.encodings.flatMap((encoding: HeteroCliEncoding) =>
+    encoding.kind === 'flag' ? encoding.flags : [],
+  );
+
+const CODEX_MODEL_FLAGS = modelFlagsOf('codex');
+const CURSOR_MODEL_FLAGS = ['--model'] as const;
+const GROK_BUILD_MODEL_FLAGS = modelFlagsOf('grok-build');
+const KIMI_CODE_MODEL_FLAGS = modelFlagsOf('kimi-code');
+const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
+const PI_MODEL_FLAGS = modelFlagsOf('pi');
+const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
+
+const getExplicitAmpAgentMode = (
+  source: AmpSelectionSource | null | undefined,
+): AmpAgentMode | undefined => {
+  const mode = source?.mode?.trim();
+  return isAmpAgentMode(mode) ? mode : undefined;
+};
+
+const getExplicitClaudeCodeModel = (
+  source: ClaudeCodeSelectionSource | null | undefined,
+): string | undefined => {
+  const model = source?.model?.trim();
+  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION ? model : undefined;
+};
+
+const getExplicitClaudeCodeReasoningEffort = (
+  source: ClaudeCodeSelectionSource | null | undefined,
+): ClaudeCodeReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isClaudeCodeReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitCodexModel = (
+  source: CodexSelectionSource | null | undefined,
+): string | undefined => {
+  const model = source?.model?.trim();
+  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION ? model : undefined;
+};
+
+const getExplicitCodexReasoningEffort = (
+  source: CodexSelectionSource | null | undefined,
+): CodexReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isCodexReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitGrokBuildReasoningEffort = (
+  source: GrokBuildSelectionSource | null | undefined,
+): GrokBuildReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isGrokBuildReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitQoderReasoningEffort = (
+  source: QoderSelectionSource | null | undefined,
+): QoderReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isQoderReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitCodexSpeedMode = (
+  source: CodexSelectionSource | null | undefined,
+): CodexSpeedMode | undefined => {
+  const speed = source?.speed?.trim();
+  return isCodexFastServiceTier(speed) ? 'fast' : undefined;
+};
+
+/**
+ * Resolve the effective native CLI args for a heterogeneous spawn.
+ *
+ * For Amp, Claude Code, CodeBuddy, and Codex, explicit mode/model/effort
+ * selections are persisted on the provider config; this is the single place
+ * that maps those stored settings onto provider-specific argv for direct local
+ * desktop spawns. OpenCode, Pi, and Qoder use their device-local model catalogs
+ * and forward the selected model using the native `--model` flag.
+ * Missing/default settings are resolved by the UI helpers for display only.
+ * They are not appended here because CLI overrides must not mask each CLI's
+ * own settings/env/account defaults. User-authored `args` win, so there is
+ * never a duplicate flag/config override.
+ *
+ * Returns `provider.args` unchanged (possibly `undefined`) when there is
+ * nothing to inject, preserving the prior `args: provider.args` behavior for
+ * every other provider type.
+ */
+export const buildHeteroSpawnArgs = (
+  provider: HeterogeneousProviderConfig | undefined | null,
+): string[] | undefined => {
+  if (!provider) return undefined;
+  if (
+    provider.type !== 'amp' &&
+    provider.type !== 'claude-code' &&
+    provider.type !== 'codebuddy' &&
+    provider.type !== 'codex' &&
+    provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
+    provider.type !== 'devin' &&
+    provider.type !== 'grok-build' &&
+    provider.type !== 'kimi-code' &&
+    provider.type !== 'opencode' &&
+    provider.type !== 'pi' &&
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
+  ) {
+    return provider.args;
+  }
+
+  const baseArgs = provider.args ?? [];
+  const extraArgs: string[] = [];
+
+  if (provider.type === 'amp') {
+    const mode = getExplicitAmpAgentMode(provider);
+    if (mode && !hasCliFlag(baseArgs, '--mode')) extraArgs.push('--mode', mode);
+  }
+
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+    const model = getExplicitClaudeCodeModel(provider);
+    if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
+  }
+
+  if (provider.type === 'codex') {
+    const model = getExplicitCodexModel(provider);
+    if (
+      model &&
+      !hasAnyCliFlag(baseArgs, CODEX_MODEL_FLAGS) &&
+      !hasCliConfigKey(baseArgs, 'model')
+    ) {
+      extraArgs.push('--model', model);
+    }
+
+    const effort = getExplicitCodexReasoningEffort(provider);
+    if (effort && !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)) {
+      extraArgs.push('-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${effort}"`);
+    }
+
+    const speed = getExplicitCodexSpeedMode(provider);
+    if (speed && !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)) {
+      extraArgs.push('-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${speed}"`);
+    }
+  }
+
+  if (provider.type === 'grok-build') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+    const effort = getExplicitGrokBuildReasoningEffort(provider);
+    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
+      extraArgs.push('--effort', effort);
+    }
+  }
+
+  if (provider.type === 'opencode') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'cursor' || provider.type === 'devin') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'kimi-code') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, KIMI_CODE_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'pi') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, PI_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'qoder') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      extraArgs.push(QODER_REASONING_EFFORT_FLAG, effort);
+    }
+  }
+
+  if (extraArgs.length === 0) return provider.args;
+  return [...baseArgs, ...extraArgs];
+};
+
+/**
+ * Resolve args for the `lh hetero exec` wrapper.
+ *
+ * Unlike `buildHeteroSpawnArgs`, these args are consumed by the LobeHub CLI
+ * wrapper first, not by the native agent binary. Native provider args are
+ * encoded with `--agent-arg=<arg>` so wrapper flags such as `-c, --command`
+ * never collide with provider flags. Keep selector overrides in the wrapper's
+ * structured `--model` / `--effort` form; `lh hetero exec` translates them
+ * into native provider arguments immediately before `spawnAgent`. Amp mode is
+ * encoded as a native argument because older device CLIs predate the wrapper's
+ * structured `--mode` option but already support `--agent-arg`.
+ */
+export const buildHeteroExecArgs = (
+  provider: HeterogeneousProviderConfig | undefined | null,
+): string[] | undefined => {
+  if (!provider) return undefined;
+  if (
+    provider.type !== 'amp' &&
+    provider.type !== 'claude-code' &&
+    provider.type !== 'codebuddy' &&
+    provider.type !== 'codex' &&
+    provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
+    provider.type !== 'devin' &&
+    provider.type !== 'grok-build' &&
+    provider.type !== 'kimi-code' &&
+    provider.type !== 'opencode' &&
+    provider.type !== 'pi' &&
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
+  ) {
+    return provider.args;
+  }
+
+  const baseArgs = provider.args ?? [];
+  const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
+  const selectorArgs: string[] = [];
+
+  if (provider.type === 'amp') {
+    const mode = getExplicitAmpAgentMode(provider);
+    if (mode && !hasCliFlag(baseArgs, '--mode')) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--mode`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${mode}`,
+      );
+    }
+  }
+
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+    const model = getExplicitClaudeCodeModel(provider);
+    if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) selectorArgs.push('--effort', effort);
+  }
+
+  if (provider.type === 'codex') {
+    const model = getExplicitCodexModel(provider);
+    if (
+      model &&
+      !hasAnyCliFlag(baseArgs, CODEX_MODEL_FLAGS) &&
+      !hasCliConfigKey(baseArgs, 'model')
+    ) {
+      selectorArgs.push('--model', model);
+    }
+
+    const effort = getExplicitCodexReasoningEffort(provider);
+    if (
+      effort &&
+      !hasCliFlag(baseArgs, '--effort') &&
+      !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)
+    ) {
+      selectorArgs.push('--effort', effort);
+    }
+
+    const speed = getExplicitCodexSpeedMode(provider);
+    if (
+      speed &&
+      !hasCliFlag(baseArgs, '--speed') &&
+      !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)
+    ) {
+      selectorArgs.push('--speed', speed);
+    }
+  }
+
+  if (provider.type === 'grok-build') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
+    ) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--model`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${model}`,
+      );
+    }
+    const effort = getExplicitGrokBuildReasoningEffort(provider);
+    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--effort`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${effort}`,
+      );
+    }
+  }
+
+  if (provider.type === 'opencode') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'cursor' || provider.type === 'devin') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'kimi-code') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, KIMI_CODE_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'pi') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, PI_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'qoder') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      selectorArgs.push('--effort', effort);
+    }
+  }
+
+  if (provider.type === 'droid' || provider.type === 'trae') {
+    const model = provider.model?.trim();
+    if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  const args = [...wrapperArgs, ...selectorArgs];
+  return args.length > 0 ? args : undefined;
+};
+
+/**
+ * Where an agent runs.
+ * - `none`    : no execution environment — plain chat, no built-in run tools
+ * - `auto`    : auto-pick a device — when exactly one is online it is activated
+ *               automatically; with several online the model selects one via the
+ *               remote-device tool. The ONLY mode that touches a device the user
+ *               did not explicitly select. Opt-in: never a silent default.
+ * - `local`   : run on the user's Electron desktop (desktop only)
+ * - `device`  : dispatched to an `lh connect` device identified by `boundDeviceId`
+ * - `sandbox` : server-spawned cloud sandbox
+ *
+ * Platform task agents (`openclaw` | `hermes`) support `local` and `device` targets.
+ */
+export type DeviceExecutionTarget = 'auto' | 'device' | 'local' | 'none' | 'sandbox';
+
+export type ExecutionPlanUnroutedReason =
+  /** `auto` mode with more than one device online — the model must pick one */
+  | 'ambiguous-online-devices'
+  /** an explicitly bound device exists but is offline — never silently fall back */
+  | 'bound-device-offline'
+  /**
+   * device-capable target (`auto` / `local` / `device`) but no device selected —
+   * nothing bound/requested, and not the `auto` single-online-device case
+   */
+  | 'no-bound-device'
+  /** `auto` mode but no device online at all */
+  | 'no-online-device';
+
+/**
+ * Where (and whether) a run executes, resolved ONCE at the entry point.
+ * Downstream layers consume the plan instead of re-deriving the answer from
+ * `executionTarget` / `boundDeviceId` / online state themselves.
+ *
+ * `target` is the EFFECTIVE execution target (platform defaults and coercions
+ * applied; degraded to `none` when device access is denied) — consumers must
+ * read it instead of re-resolving `agencyConfig.executionTarget`.
+ */
+export type ExecutionPlan = { target: DeviceExecutionTarget } &
+  /** route execution / device tools to this device (the local machine is a registered device) */
+  (
+    | { deviceId: string; kind: 'device' }
+    /**
+     * Device-targeted but no routable device right now. The run proceeds without
+     * an active device; the remote-device proxy may let the model activate one
+     * mid-run (native agents), or the caller may treat this as a hard error
+     * (hetero dispatch).
+     */
+    | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
+    /** plain chat — no execution environment, no run tools, no device ever */
+    | { kind: 'none' }
+    /** ephemeral cloud sandbox */
+    | { kind: 'sandbox' }
+  );
+
+/**
+ * Whether a workspace member may override the agent's shared execution target.
+ *
+ * - `member`: the shared config is a default; each member may override it
+ * - `fixed`: every caller must use the shared execution target
+ *
+ * Missing values intentionally resolve as `member` for backwards compatibility.
+ */
+export type ExecutionTargetSelectionPolicy = 'fixed' | 'member';
+
+/**
+ * Controls whether a workspace agent always uses its shared model or lets
+ * each member choose a personal model for that agent.
+ *
+ * Missing values resolve contextually: public Workspace Agents inherit the
+ * current `member` default, while personal/private Agents remain fixed.
+ */
+export type AgentModelSelectionPolicy = 'fixed' | 'member';
+
+/**
+ * Controls who may publish a share link for the topics a workspace agent
+ * holds.
+ *
+ * The permission is about the AGENT's topics, not just one's own: `member`
+ * (the default, which missing values resolve to) lets every workspace member
+ * publish any of this agent's topics they can open — including topics other
+ * members created. `restricted` narrows publishing to the agent's creator and
+ * workspace owners, the same "creator or workspace owner" bucket the
+ * Permission page's `canManage` uses.
+ *
+ * Only *publishing* is gated. Revoking a link (or the private placeholder the
+ * share popover creates on open) is never restricted: taking a topic back out
+ * of circulation is always safe, and blocking the placeholder would leave a
+ * restricted member staring at a popover that cannot load.
+ */
+export type AgentTopicSharePolicy = 'member' | 'restricted';
+
+/**
+ * Agent agency configuration.
+ * Contains settings for agent execution modes and device binding.
+ */
+export interface LobeAgentAgencyConfig {
+  /**
+   * Device ID of the machine connected via `lh connect`.
+   * Required when `executionTarget === 'device'`.
+   */
+  boundDeviceId?: string;
+  /**
+   * Whether to route this agent through a graph-style orchestration runtime
+   * (Graph Agent). Undefined means the agent uses the default runtime path.
+   *
+   * The graph is the agent's behavior definition — node policies, routing
+   * conditions and data contracts — so it lives on the agency config (how the
+   * agent behaves and executes) rather than the chat config (per-session
+   * preferences). This lets an agent evolve its own behavior by evolving its
+   * graph nodes.
+   */
+  enableGraphMode?: boolean;
+  /**
+   * Execution target for the hetero agent. When omitted, resolves to a
+   * platform default: `'local'` on desktop and `'none'` on web.
+   */
+  executionTarget?: DeviceExecutionTarget;
+  /**
+   * Workspace execution-target selection policy. A fixed `device` target is
+   * valid only with a public workspace device; other fixed targets do not bind
+   * a device.
+   */
+  executionTargetSelectionPolicy?: ExecutionTargetSelectionPolicy;
+  /**
+   * Graph Agent behavior definition. The `AgentGraph` snapshot describing
+   * nodes, edges, field contracts and routing conditions for graph-style
+   * orchestration. Together with `enableGraphMode`, this is the agent's
+   * behavior body — one graph is one agent.
+   */
+  graph?: null | AgentGraph;
+  heterogeneousProvider?: HeterogeneousProviderConfig;
+  /**
+   * Confine the run's shell commands to the device sandbox. A *modifier* on
+   * `executionTarget: 'local'`, not a target of its own — the run still goes to
+   * the same machine through the same routing, it is only what the spawned
+   * command may touch that changes (writes limited to the working directory,
+   * no network).
+   *
+   * Modelled as a flag rather than a sixth `DeviceExecutionTarget` deliberately:
+   * every existing routing rule (web coercion, gateway upgrade, bot-trigger
+   * promotion, fixed-workspace policy) stays literally unchanged, and the flag
+   * composes if sandboxed execution later extends to `device` targets.
+   *
+   * Only shell commands are affected. File tools (`writeFile` / `editFile`) run
+   * in the desktop process itself, and heterogeneous CLI agents spawn through
+   * their own path — neither passes through the sandboxed runner. Say
+   * "commands" in user-facing copy, never "the agent".
+   */
+  localSandbox?: boolean;
+  /**
+   * Let the sandboxed commands reach the package-registry allowlist. Only
+   * meaningful with {@link localSandbox}; defaults to off.
+   *
+   * A separate field rather than a tri-state on `localSandbox` because the two
+   * answer different questions ("fence this?" vs "may the fence let installs
+   * through?"), and because the network choice must survive toggling the
+   * sandbox off and back on.
+   *
+   * Never means "the network is open" — the sandbox backend rejects a catch-all
+   * allowlist outright, so this opens a fixed set of registries and forges.
+   * User-facing copy must not promise more than that.
+   */
+  localSandboxNetwork?: boolean;
+  /**
+   * Workspace model-selection policy. `fixed` keeps the shared agent model
+   * authoritative; `member` enables a per-user model override stored in
+   * `workspace_user_settings.preference`. Missing values on public Workspace
+   * Agents resolve to `member` for legacy rows.
+   */
+  modelSelectionPolicy?: AgentModelSelectionPolicy;
+  /**
+   * Model override for sub-agents this agent spawns via
+   * `lobe-agent.callSubAgent`. When unset (or nulled to clear a previous
+   * override), sub-agents follow the parent run's effective model — same
+   * provider, same model. Configurable in the params panel; `null` rather than
+   * `undefined` marks the cleared state because the config deep-merge skips
+   * `undefined` and would resurrect the old override.
+   */
+  subagent?: {
+    /**
+     * chatConfig overrides (thinking / reasoning-effort extend params) for the
+     * overridden sub-agent model, merged over the parent's chatConfig at spawn.
+     * Only meaningful together with a `model` override — when sub-agents follow
+     * the parent model they inherit the parent's chatConfig wholesale, so the
+     * effort follows automatically.
+     */
+    chatConfig?: Partial<LobeAgentChatConfig> | null;
+    model?: string | null;
+    provider?: string | null;
+  };
+  /**
+   * Who may publish a share link for this agent's topics. Missing values
+   * resolve to `member` for legacy rows — see {@link AgentTopicSharePolicy}.
+   *
+   * Enforced server-side in the topic share procedures; the share controls only
+   * mirror it so a restricted member sees a disabled button with a reason
+   * instead of a request that fails.
+   */
+  topicSharePolicy?: AgentTopicSharePolicy;
+  /**
+   * Ad-hoc verify criteria mounted directly on this agent, in addition to any
+   * `verifyRubricId`. Use for one-off checks that don't warrant a reusable
+   * rubric. References `verify_criteria.id`.
+   */
+  verifyCriteriaIds?: string[];
+  /**
+   * Verify (delivery checker) rubric (reusable criteria template) mounted on
+   * this agent. Every run instantiates this rubric's criteria — together with
+   * any `verifyCriteriaIds` — into its check plan. References `verify_rubrics.id`.
+   */
+  verifyRubricId?: string;
+  /**
+   * Per-device working directory source chosen for this agent. Key = `deviceId`
+   * (the local machine uses its own gateway deviceId, so local and remote share
+   * one model). This is the **agent-level** source in the resolution precedence:
+   *
+   *   `topic.metadata.workingDirectory`
+   *     > effective path of `workingDirByDevice[targetDeviceId]`
+   *     > `device.defaultCwd`
+   *
+   * Legacy values are plain path strings. New git-aware values may carry `git`
+   * metadata; when `git.activeWorktree` is present, that active worktree is the
+   * effective cwd while `path` remains the source/recent entry.
+   * Each device value is a complete selection: updating it replaces the value,
+   * including Git metadata. Other devices are preserved; `undefined` deletes
+   * an explicitly patched device entry.
+   *
+   * Keyed per device so switching the bound device never resolves a path that
+   * only exists on another machine. Persisted (server-synced) so the choice
+   * follows the user across sessions / ends.
+   */
+  workingDirByDevice?: Record<string, WorkingDirConfigValue>;
+}
+
+/**
+ * The `agencyConfig` keys that govern every workspace member rather than the
+ * agent's own behaviour, and which only the agent's creator or the workspace
+ * primary owner may write.
+ *
+ * Any surface that writes `agencyConfig` has to account for these: the TRPC
+ * writer strips them from an unauthorized patch, and the public API — whose
+ * schema cannot express them at all — must never drop them, not even when
+ * clearing the column.
+ */
+export const AGENT_PERMISSION_POLICY_KEYS = [
+  'executionTargetSelectionPolicy',
+  'modelSelectionPolicy',
+  'topicSharePolicy',
+] as const satisfies readonly (keyof LobeAgentAgencyConfig)[];
+
+/**
+ * Explicit defaults written when a workspace agent is created.
+ *
+ * Members may choose their own model and execution environment, and may share
+ * the agent's topics, by default. Legacy public Workspace rows without these
+ * policies resolve to the same `member` defaults at runtime.
+ */
+export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
+  executionTargetSelectionPolicy: 'member',
+  modelSelectionPolicy: 'member',
+  topicSharePolicy: 'member',
+} as const satisfies Pick<
+  LobeAgentAgencyConfig,
+  'executionTargetSelectionPolicy' | 'modelSelectionPolicy' | 'topicSharePolicy'
+>;
+
+/**
+ * Resolve who may publish a share link for a topic held by this agent.
+ *
+ * Personal (non-workspace) agents are never restricted — there is no one else
+ * to restrict — and legacy workspace rows without the field keep the `member`
+ * behaviour they were created with.
+ */
+export const resolveAgentTopicSharePolicy = (
+  shared: Pick<AgentTopicShareSubject, 'agencyConfig' | 'workspaceId'>,
+): AgentTopicSharePolicy => {
+  if (!shared.workspaceId) return 'member';
+
+  return shared.agencyConfig?.topicSharePolicy ?? 'member';
+};
+
+/** The agent fields a topic-share decision reads. */
+export interface AgentTopicShareSubject {
+  agencyConfig?: Pick<LobeAgentAgencyConfig, 'topicSharePolicy'> | null;
+  /** Creator of the agent — always allowed to publish its topics. */
+  userId?: string | null;
+  workspaceId?: string | null;
+}
+
+/**
+ * Whether `viewerId` may publish a share link for a topic held by this agent.
+ *
+ * The bypass bucket is deliberately the same one the Permission page calls
+ * `canManage`: the agent's creator, or a workspace owner (which the caller
+ * resolves — server-side from RBAC, client-side from the workspace role).
+ */
+export const canPublishAgentTopicLink = (
+  agent: AgentTopicShareSubject | null | undefined,
+  viewer: { isWorkspaceOwner?: boolean; userId?: string | null },
+): boolean => {
+  // No agent resolved (legacy session-only topic, or a row this caller cannot
+  // see): there is no policy to apply, so fall back to the role gate alone.
+  if (!agent) return true;
+  if (resolveAgentTopicSharePolicy(agent) === 'member') return true;
+  if (viewer.isWorkspaceOwner) return true;
+
+  return !!agent.userId && agent.userId === viewer.userId;
+};
+
+/**
+ * The raw override merge behind {@link resolveAgencyConfig}, without the
+ * `fixed`-policy short-circuit. The owner path of
+ * {@link resolveAgentAgencyConfig} needs it directly: the stored selection
+ * policy constrains members, not the owner, so the owner's own override
+ * applies even while the shared policy is `fixed`.
+ */
+const applyAgencyConfigOverride = (
+  base: LobeAgentAgencyConfig | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
+): LobeAgentAgencyConfig | undefined => {
+  if (!override) return base;
+  const hasTarget = override.executionTarget !== undefined;
+  const hasDevice = override.boundDeviceId !== undefined;
+  // `false` is a real value here — a member turning the sandbox (or its network
+  // allowance) back off must override a shared `true`, so test for presence,
+  // not truthiness.
+  const hasLocalSandbox = override.localSandbox !== undefined;
+  const hasLocalSandboxNetwork = override.localSandboxNetwork !== undefined;
+  if (!hasTarget && !hasDevice && !hasLocalSandbox && !hasLocalSandboxNetwork) return base;
+  return {
+    ...base,
+    ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
+    ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
+    ...(hasLocalSandbox ? { localSandbox: override.localSandbox } : {}),
+    ...(hasLocalSandboxNetwork ? { localSandboxNetwork: override.localSandboxNetwork } : {}),
+  };
+};
+
+/**
+ * The workspace-shared `agencyConfig` on the agent row is one row per agent —
+ * inherently a *single* execution decision for the whole workspace. Real users
+ * want each member to pick their own machine independently (see
+ * `UserPreference.agentDeviceOverrides`). This helper merges the shared
+ * baseline with the caller's per-agent override so every code path — client
+ * device switcher, server dispatch, workingDir resolution — sees one
+ * consistent "effective" config.
+ *
+ * Rules:
+ * - `fixed` shared config ignores the caller override entirely
+ * - `override.executionTarget` wins when set; falls back to shared
+ * - `override.boundDeviceId` wins when set; falls back to shared
+ * - `override.localSandbox` wins when set; falls back to shared. It rides along
+ *   with the target because it qualifies *this member's* local execution — one
+ *   member sandboxing their own machine says nothing about anyone else's.
+ * - Nothing else (heterogeneousProvider, verifyRubricId, workingDirByDevice)
+ *   is overridable — those describe the agent, not this user's routing
+ *
+ * A `null`-ish `override` is a no-op — safe to call on personal agents (where
+ * no override ever exists) or on paths that don't yet know about the current
+ * user's preference.
+ */
+export const resolveAgencyConfig = (
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
+): LobeAgentAgencyConfig | undefined => {
+  const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
+  if (base?.executionTargetSelectionPolicy === 'fixed') return base;
+  return applyAgencyConfigOverride(base, override);
+};
+
+export interface AgentAgencyConfigContext {
+  /** Author/admin callers manage the shared config instead of using member overrides. */
+  canManage?: boolean;
+  visibility?: 'private' | 'public';
+  workspaceId?: string | null;
+}
+
+/**
+ * Resolve an Agent's effective agency config in its ownership context.
+ *
+ * Member execution-target policies apply only after a Workspace Agent is
+ * public. The caller's per-user override, however, merges for EVERY workspace
+ * agent — member, manager, or private owner alike: a `local` / this-machine
+ * pick is inherently per-user (the shared row must never carry a personal
+ * device — the server rejects it), so managers and private-agent owners store
+ * that pick in the same `agentDeviceOverrides` slot members use. The owner
+ * path bypasses the `fixed` short-circuit (the policy constrains members, not
+ * the owner) and keeps stripping the stored selection policy, which is
+ * retained only as the policy that takes effect once the Agent is published.
+ */
+export const resolveAgentAgencyConfig = (
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
+  context: AgentAgencyConfigContext,
+): LobeAgentAgencyConfig | undefined => {
+  const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
+  const isPublicWorkspaceAgent =
+    !!context.workspaceId && context.visibility !== 'private' && context.canManage !== true;
+
+  if (isPublicWorkspaceAgent) return resolveAgencyConfig(base, override);
+
+  const merged = context.workspaceId ? applyAgencyConfigOverride(base, override) : base;
+
+  if (!merged?.executionTargetSelectionPolicy) return merged;
+
+  const { executionTargetSelectionPolicy, ...ownerConfig } = merged;
+  return executionTargetSelectionPolicy ? ownerConfig : merged;
+};
+
+/**
+ * Apply per-device replacement semantics to a `workingDirByDevice` patch.
+ *
+ * Run after a config deep-merge. Only explicitly marked devices are complete
+ * selections: omitted Git fields must not survive from the previous repository.
+ * Unmarked entries retain legacy deep-merge semantics because older clients
+ * send cached complete maps. Explicit `undefined` values still remove entries.
+ *
+ * Mutates `merged` in place (safe on an immer draft) and is a no-op when the
+ * patch touches no device entries.
+ */
+export const applyWorkingDirByDevicePatch = (
+  merged: { workingDirByDevice?: Record<string, unknown> } | null | undefined,
+  patch: { workingDirByDevice?: Record<string, unknown> } | null | undefined,
+  replaceDeviceIds: readonly string[] = [],
+): void => {
+  const incoming = patch?.workingDirByDevice;
+  const target = merged?.workingDirByDevice;
+  if (!incoming || !target) return;
+
+  for (const key of Object.keys(incoming)) {
+    if (incoming[key] === undefined) delete target[key];
+    else if (replaceDeviceIds.includes(key)) target[key] = incoming[key];
+  }
+};

@@ -1,0 +1,384 @@
+{
+  "contextTree": [
+    {
+      "id": "msg-301",
+      "type": "message"
+    },
+    {
+      "activeBranchIndex": 0,
+      "branches": [
+        [
+          {
+            "id": "msg-302",
+            "type": "message"
+          },
+          {
+            "id": "msg-305",
+            "type": "message"
+          },
+          {
+            "activeBranchIndex": 1,
+            "branches": [
+              [
+                {
+                  "id": "msg-306",
+                  "type": "message"
+                }
+              ],
+              [
+                {
+                  "id": "msg-307",
+                  "type": "message"
+                },
+                {
+                  "id": "msg-310",
+                  "type": "message"
+                },
+                {
+                  "activeBranchIndex": 0,
+                  "branches": [
+                    [
+                      {
+                        "id": "msg-311",
+                        "type": "message"
+                      },
+                      {
+                        "id": "msg-314",
+                        "type": "message"
+                      },
+                      {
+                        "activeBranchIndex": 1,
+                        "branches": [
+                          [
+                            {
+                              "id": "msg-315",
+                              "type": "message"
+                            }
+                          ],
+                          [
+                            {
+                              "id": "msg-316",
+                              "type": "message"
+                            }
+                          ]
+                        ],
+                        "id": "branch-msg-314-0",
+                        "parentMessageId": "msg-314",
+                        "type": "branch"
+                      }
+                    ],
+                    [
+                      {
+                        "id": "msg-312",
+                        "type": "message"
+                      }
+                    ]
+                  ],
+                  "id": "branch-msg-310-1",
+                  "parentMessageId": "msg-310",
+                  "type": "branch"
+                }
+              ]
+            ],
+            "id": "branch-msg-305-2",
+            "parentMessageId": "msg-305",
+            "type": "branch"
+          }
+        ],
+        [
+          {
+            "id": "msg-303",
+            "type": "message"
+          }
+        ],
+        [
+          {
+            "id": "msg-304",
+            "type": "message"
+          }
+        ]
+      ],
+      "id": "branch-msg-301-3",
+      "parentMessageId": "msg-301",
+      "type": "branch"
+    }
+  ],
+  "flatList": [
+    {
+      "id": "msg-301",
+      "role": "user",
+      "content": "What's your favorite programming paradigm?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000
+    },
+    {
+      "id": "msg-302",
+      "role": "assistant",
+      "content": "I appreciate functional programming for its elegance.",
+      "parentId": "msg-301",
+      "createdAt": 1704067202000,
+      "updatedAt": 1704067202000,
+      "metadata": {
+        "totalInputTokens": 10,
+        "totalOutputTokens": 15,
+        "totalTokens": 25,
+        "cost": 0.00008
+      },
+      "branch": {
+        "activeBranchIndex": 0,
+        "count": 3
+      }
+    },
+    {
+      "id": "msg-305",
+      "role": "user",
+      "content": "Can you explain more about functional programming?",
+      "parentId": "msg-302",
+      "createdAt": 1704067210000,
+      "updatedAt": 1704067210000,
+      "metadata": {
+        "activeBranchIndex": 1
+      }
+    },
+    {
+      "id": "msg-307",
+      "role": "assistant",
+      "content": "In functional programming, functions are first-class citizens and side effects are minimized.",
+      "parentId": "msg-305",
+      "createdAt": 1704067212100,
+      "updatedAt": 1704067212100,
+      "metadata": {
+        "totalInputTokens": 30,
+        "totalOutputTokens": 22,
+        "totalTokens": 52,
+        "cost": 0.00016
+      },
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 2
+      }
+    },
+    {
+      "id": "msg-310",
+      "role": "user",
+      "content": "What are some benefits of immutability?",
+      "parentId": "msg-307",
+      "createdAt": 1704067220000,
+      "updatedAt": 1704067220000
+    },
+    {
+      "id": "msg-311",
+      "role": "assistant",
+      "content": "Immutability prevents bugs from unexpected data changes.",
+      "parentId": "msg-310",
+      "createdAt": 1704067222000,
+      "updatedAt": 1704067222000,
+      "metadata": {
+        "totalInputTokens": 55,
+        "totalOutputTokens": 16,
+        "totalTokens": 71,
+        "cost": 0.00021
+      },
+      "branch": {
+        "activeBranchIndex": 0,
+        "count": 2
+      }
+    },
+    {
+      "id": "msg-314",
+      "role": "user",
+      "content": "Can you give me an example?",
+      "parentId": "msg-311",
+      "createdAt": 1704067230000,
+      "updatedAt": 1704067230000,
+      "metadata": {
+        "activeBranchIndex": 1
+      }
+    },
+    {
+      "id": "msg-316",
+      "role": "assistant",
+      "content": "Here's a better example: Instead of mutating an array with push(), functional programming uses methods like concat() or the spread operator to create new arrays.",
+      "parentId": "msg-314",
+      "createdAt": 1704067232100,
+      "updatedAt": 1704067232100,
+      "metadata": {
+        "totalInputTokens": 75,
+        "totalOutputTokens": 42,
+        "totalTokens": 117,
+        "cost": 0.00035
+      },
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 2
+      }
+    }
+  ],
+  "messageMap": {
+    "msg-301": {
+      "id": "msg-301",
+      "role": "user",
+      "content": "What's your favorite programming paradigm?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000
+    },
+    "msg-302": {
+      "id": "msg-302",
+      "role": "assistant",
+      "content": "I appreciate functional programming for its elegance.",
+      "parentId": "msg-301",
+      "createdAt": 1704067202000,
+      "updatedAt": 1704067202000,
+      "metadata": {
+        "totalInputTokens": 10,
+        "totalOutputTokens": 15,
+        "totalTokens": 25,
+        "cost": 0.00008
+      }
+    },
+    "msg-303": {
+      "id": "msg-303",
+      "role": "assistant",
+      "content": "Object-oriented programming offers great structure.",
+      "parentId": "msg-301",
+      "createdAt": 1704067202100,
+      "updatedAt": 1704067202100,
+      "metadata": {
+        "totalInputTokens": 10,
+        "totalOutputTokens": 12,
+        "totalTokens": 22,
+        "cost": 0.00007
+      }
+    },
+    "msg-304": {
+      "id": "msg-304",
+      "role": "assistant",
+      "content": "Procedural programming is straightforward and efficient.",
+      "parentId": "msg-301",
+      "createdAt": 1704067202200,
+      "updatedAt": 1704067202200,
+      "metadata": {
+        "totalInputTokens": 10,
+        "totalOutputTokens": 13,
+        "totalTokens": 23,
+        "cost": 0.000069
+      }
+    },
+    "msg-305": {
+      "id": "msg-305",
+      "role": "user",
+      "content": "Can you explain more about functional programming?",
+      "parentId": "msg-302",
+      "createdAt": 1704067210000,
+      "updatedAt": 1704067210000,
+      "metadata": {
+        "activeBranchIndex": 1
+      }
+    },
+    "msg-306": {
+      "id": "msg-306",
+      "role": "assistant",
+      "content": "Functional programming focuses on pure functions and immutability.",
+      "parentId": "msg-305",
+      "createdAt": 1704067212000,
+      "updatedAt": 1704067212000,
+      "metadata": {
+        "totalInputTokens": 30,
+        "totalOutputTokens": 18,
+        "totalTokens": 48,
+        "cost": 0.00014
+      }
+    },
+    "msg-307": {
+      "id": "msg-307",
+      "role": "assistant",
+      "content": "In functional programming, functions are first-class citizens and side effects are minimized.",
+      "parentId": "msg-305",
+      "createdAt": 1704067212100,
+      "updatedAt": 1704067212100,
+      "metadata": {
+        "totalInputTokens": 30,
+        "totalOutputTokens": 22,
+        "totalTokens": 52,
+        "cost": 0.00016
+      }
+    },
+    "msg-310": {
+      "id": "msg-310",
+      "role": "user",
+      "content": "What are some benefits of immutability?",
+      "parentId": "msg-307",
+      "createdAt": 1704067220000,
+      "updatedAt": 1704067220000
+    },
+    "msg-311": {
+      "id": "msg-311",
+      "role": "assistant",
+      "content": "Immutability prevents bugs from unexpected data changes.",
+      "parentId": "msg-310",
+      "createdAt": 1704067222000,
+      "updatedAt": 1704067222000,
+      "metadata": {
+        "totalInputTokens": 55,
+        "totalOutputTokens": 16,
+        "totalTokens": 71,
+        "cost": 0.00021
+      }
+    },
+    "msg-312": {
+      "id": "msg-312",
+      "role": "assistant",
+      "content": "It makes code easier to reason about and test.",
+      "parentId": "msg-310",
+      "createdAt": 1704067222100,
+      "updatedAt": 1704067222100,
+      "metadata": {
+        "totalInputTokens": 55,
+        "totalOutputTokens": 14,
+        "totalTokens": 69,
+        "cost": 0.0002
+      }
+    },
+    "msg-314": {
+      "id": "msg-314",
+      "role": "user",
+      "content": "Can you give me an example?",
+      "parentId": "msg-311",
+      "createdAt": 1704067230000,
+      "updatedAt": 1704067230000,
+      "metadata": {
+        "activeBranchIndex": 1
+      }
+    },
+    "msg-315": {
+      "id": "msg-315",
+      "role": "assistant",
+      "content": "Sure! In JavaScript, using `const` with arrays means you can't reassign the variable, but you can still modify the array with push/pop.",
+      "parentId": "msg-314",
+      "createdAt": 1704067232000,
+      "updatedAt": 1704067232000,
+      "metadata": {
+        "totalInputTokens": 75,
+        "totalOutputTokens": 35,
+        "totalTokens": 110,
+        "cost": 0.00033
+      }
+    },
+    "msg-316": {
+      "id": "msg-316",
+      "role": "assistant",
+      "content": "Here's a better example: Instead of mutating an array with push(), functional programming uses methods like concat() or the spread operator to create new arrays.",
+      "parentId": "msg-314",
+      "createdAt": 1704067232100,
+      "updatedAt": 1704067232100,
+      "metadata": {
+        "totalInputTokens": 75,
+        "totalOutputTokens": 42,
+        "totalTokens": 117,
+        "cost": 0.00035
+      }
+    }
+  }
+}

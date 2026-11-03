@@ -1,0 +1,374 @@
+// @vitest-environment node
+import { ModelProvider } from 'model-bank';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { LobeCerebrasAI, params } from './index';
+
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
+describe('LobeCerebrasAI - custom features', () => {
+  let instance: InstanceType<typeof LobeCerebrasAI>;
+
+  beforeEach(() => {
+    instance = new LobeCerebrasAI({ apiKey: 'test_api_key' });
+    vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
+      new ReadableStream() as any,
+    );
+  });
+
+  describe('params configuration', () => {
+    it('should export params object with correct baseURL', () => {
+      expect(params.baseURL).toBe('https://api.cerebras.ai/v1');
+    });
+
+    it('should export params with correct provider', () => {
+      expect(params.provider).toBe(ModelProvider.Cerebras);
+    });
+  });
+
+  describe('debug configuration', () => {
+    it('should disable debug by default', () => {
+      delete process.env.DEBUG_CEREBRAS_CHAT_COMPLETION;
+      const result = params.debug.chatCompletion();
+      expect(result).toBe(false);
+    });
+
+    it('should enable debug when env is set to 1', () => {
+      process.env.DEBUG_CEREBRAS_CHAT_COMPLETION = '1';
+      const result = params.debug.chatCompletion();
+      expect(result).toBe(true);
+    });
+
+    it('should disable debug when env is set to 0', () => {
+      process.env.DEBUG_CEREBRAS_CHAT_COMPLETION = '0';
+      const result = params.debug.chatCompletion();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('handlePayload', () => {
+    it('should remove frequency_penalty and presence_penalty from payload', async () => {
+      await instance.chat({
+        frequency_penalty: 0.5,
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'llama3.1-8b',
+        presence_penalty: 0.5,
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.frequency_penalty).toBeUndefined();
+      expect(calledPayload.presence_penalty).toBeUndefined();
+      expect(calledPayload.model).toBe('llama3.1-8b');
+    });
+
+    it('should preserve model in the payload', async () => {
+      await instance.chat({
+        frequency_penalty: 0.5,
+        messages: [{ content: 'Test', role: 'user' }],
+        model: 'llama3.1-70b',
+        presence_penalty: 0.5,
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.model).toBe('llama3.1-70b');
+    });
+
+    it('should preserve other payload properties', async () => {
+      await instance.chat({
+        frequency_penalty: 0.5,
+        max_tokens: 1000,
+        messages: [{ content: 'Test', role: 'user' }],
+        model: 'llama3.1-8b',
+        presence_penalty: 0.5,
+        stream: true,
+        temperature: 0.8,
+        top_p: 0.9,
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.temperature).toBe(0.8);
+      expect(calledPayload.max_tokens).toBe(1000);
+      expect(calledPayload.top_p).toBe(0.9);
+      expect(calledPayload.stream).toBe(true);
+      expect(calledPayload.frequency_penalty).toBeUndefined();
+      expect(calledPayload.presence_penalty).toBeUndefined();
+    });
+
+    it('should handle payload without frequency_penalty and presence_penalty', async () => {
+      await instance.chat({
+        messages: [{ content: 'Test', role: 'user' }],
+        model: 'llama3.1-8b',
+        temperature: 0.7,
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.model).toBe('llama3.1-8b');
+      expect(calledPayload.temperature).toBe(0.7);
+      expect(calledPayload.frequency_penalty).toBeUndefined();
+      expect(calledPayload.presence_penalty).toBeUndefined();
+    });
+    describe('reasoning configuration', () => {
+      it('should handle Z.ai GLM 4.7 default reasoning settings (reasoning_format: parsed)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'zai-glm-4.7',
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBeUndefined();
+      });
+
+      it('should handle Z.ai GLM 4.7 with thinking enabled (reasoning_format: parsed)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'zai-glm-4.7',
+          thinking: { type: 'enabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBeUndefined();
+      });
+
+      it('should handle Z.ai GLM 4.7 with effort value (e.g. high) via backward compatibility', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'zai-glm-4.7',
+          reasoning_effort: 'high',
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBeUndefined(); // GLM 4.7 no longer maps effort when using enableReasoning, but resolves isThinkingEnabled/Disabled correctly
+      });
+
+      it('should handle Z.ai GLM 4.7 with thinking disabled (reasoning_effort: none)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'zai-glm-4.7',
+          thinking: { type: 'disabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_effort).toBe('none');
+        expect(calledPayload.reasoning_format).toBeUndefined();
+      });
+
+      it('should handle Gemma 4 31B reasoning settings when thinking is enabled (reasoning_format: parsed, reasoning_effort: medium)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'gemma-4-31b',
+          thinking: { type: 'enabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBe('medium');
+      });
+
+      it('should handle Gemma 4 31B with thinking disabled (reasoning_effort: none)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'gemma-4-31b',
+          thinking: { type: 'disabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_effort).toBe('none');
+        expect(calledPayload.reasoning_format).toBeUndefined();
+      });
+
+      it('should handle GPT-OSS with high effort (reasoning_format: parsed, reasoning_effort: high)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'gpt-oss-120b',
+          reasoning_effort: 'high',
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('parsed');
+        expect(calledPayload.reasoning_effort).toBe('high');
+      });
+
+      it('should handle GPT-OSS with thinking disabled (reasoning_format: hidden)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Test', role: 'user' }],
+          model: 'gpt-oss-120b',
+          thinking: { type: 'disabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.reasoning_format).toBe('hidden');
+        expect(calledPayload.reasoning_effort).toBeUndefined();
+      });
+
+      it('should map reasoning field to reasoning_content for non-streaming response transformation', () => {
+        const mockCompletion = {
+          choices: [
+            {
+              index: 0,
+              message: {
+                content: 'Test content',
+                role: 'assistant',
+                reasoning: 'Test reasoning',
+              },
+            },
+          ],
+        };
+
+        const stream = params.chatCompletion!.handleTransformResponseToStream!(
+          mockCompletion as any,
+        );
+        expect(stream).toBeDefined();
+      });
+    });
+  });
+
+  describe('models function', () => {
+    it('should fetch and process models with data property', async () => {
+      const mockClient = {
+        apiKey: 'test_api_key',
+        baseURL: 'https://api.cerebras.ai/v1',
+        models: {
+          list: vi.fn().mockResolvedValue({
+            data: [
+              { id: 'llama3.1-8b', object: 'model', owned_by: 'cerebras' },
+              { id: 'llama3.1-70b', object: 'model', owned_by: 'cerebras' },
+            ],
+          }),
+        },
+      } as any;
+
+      const models = await params.models!({ client: mockClient });
+
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
+      expect(models).toBeDefined();
+      expect(Array.isArray(models)).toBe(true);
+    });
+
+    it('should handle models list without data property (direct array)', async () => {
+      const mockClient = {
+        apiKey: 'test_api_key',
+        baseURL: 'https://api.cerebras.ai/v1',
+        models: {
+          list: vi.fn().mockResolvedValue([
+            { id: 'llama3.1-8b', object: 'model', owned_by: 'cerebras' },
+            { id: 'llama3.1-70b', object: 'model', owned_by: 'cerebras' },
+          ]),
+        },
+      } as any;
+
+      const models = await params.models!({ client: mockClient });
+
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
+      expect(models).toBeDefined();
+      expect(Array.isArray(models)).toBe(true);
+    });
+
+    it('should handle empty models list with data property', async () => {
+      const mockClient = {
+        apiKey: 'test_api_key',
+        baseURL: 'https://api.cerebras.ai/v1',
+        models: {
+          list: vi.fn().mockResolvedValue({
+            data: [],
+          }),
+        },
+      } as any;
+
+      const models = await params.models!({ client: mockClient });
+
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
+      expect(models).toBeDefined();
+      expect(Array.isArray(models)).toBe(true);
+      expect(models).toHaveLength(0);
+    });
+    it('should handle null response', async () => {
+      const mockClient = {
+        apiKey: 'test_api_key',
+        baseURL: 'https://api.cerebras.ai/v1',
+        models: {
+          list: vi.fn().mockResolvedValue(null),
+        },
+      } as any;
+
+      const models = await params.models!({ client: mockClient });
+
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
+      expect(models).toBeDefined();
+      expect(Array.isArray(models)).toBe(true);
+      expect(models).toHaveLength(0);
+    });
+    it('should handle response with non-array data', async () => {
+      const mockClient = {
+        apiKey: 'test_api_key',
+        baseURL: 'https://api.cerebras.ai/v1',
+        models: {
+          list: vi.fn().mockResolvedValue({
+            data: 'not-an-array',
+          }),
+        },
+      } as any;
+
+      const models = await params.models!({ client: mockClient });
+
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
+      expect(models).toBeDefined();
+      expect(Array.isArray(models)).toBe(true);
+      expect(models).toHaveLength(0);
+    });
+
+    it('should throw when network error occurs', async () => {
+      const mockClient = {
+        apiKey: 'test_api_key',
+        baseURL: 'https://api.cerebras.ai/v1',
+        models: {
+          list: vi.fn().mockRejectedValue(new Error('Network error')),
+        },
+      } as any;
+
+      await expect(params.models!({ client: mockClient })).rejects.toThrow('Network error');
+
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
+    });
+    it('should handle malformed JSON response', async () => {
+      const mockClient = {
+        apiKey: 'test_api_key',
+        baseURL: 'https://api.cerebras.ai/v1',
+        models: {
+          list: vi.fn().mockRejectedValue(new Error('Invalid JSON')),
+        },
+      } as any;
+
+      await expect(params.models!({ client: mockClient })).rejects.toThrow('Invalid JSON');
+
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
+    });
+
+    it('should pass correct client to processMultiProviderModelList', async () => {
+      const mockModelList = [
+        { id: 'llama3.1-8b', object: 'model', owned_by: 'cerebras' },
+        { id: 'llama3.1-70b', object: 'model', owned_by: 'cerebras' },
+      ];
+
+      const mockClient = {
+        apiKey: 'test_api_key',
+        baseURL: 'https://api.cerebras.ai/v1',
+        models: {
+          list: vi.fn().mockResolvedValue({ data: mockModelList }),
+        },
+      } as any;
+
+      const models = await params.models!({ client: mockClient });
+
+      // Verify processMultiProviderModelList was called with correct parameters
+      expect(models).toBeDefined();
+      expect(Array.isArray(models)).toBe(true);
+    });
+  });
+});

@@ -1,0 +1,50 @@
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { AlertTriangle, CornerUpRight } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { resolveRejectedCopyKey } from './resolveRejectedCopyKey';
+
+const styles = stylex.create({
+  container: { paddingBlock: '8px', paddingInline: '6px' },
+  title: { fontSize: '14px', color: cssVar.colorTextSecondary },
+});
+
+interface RejectedResponseProps {
+  /** Distinguishes question skips from other skipped interactions in the copy. */
+  apiName?: string;
+  reason?: string;
+  /**
+   * The user skipped the interaction (e.g. an AskUserQuestion) instead of
+   * rejecting the tool call — render a neutral note, not a warning.
+   */
+  skipped?: boolean;
+  /**
+   * The producer stopped waiting before anyone answered. Neutral like a skip:
+   * nothing went wrong and nobody made a choice.
+   */
+  timedOut?: boolean;
+}
+
+const RejectedResponse = memo<RejectedResponseProps>(({ apiName, reason, skipped, timedOut }) => {
+  const { t } = useTranslation('chat');
+
+  const copyKey = resolveRejectedCopyKey({ apiName, reason, skipped, timedOut });
+
+  return (
+    <Flexbox className={stylex.props(styles.container).className} gap={8}>
+      <Flexbox horizontal align={'center'} gap={8}>
+        {skipped || timedOut ? (
+          <Icon color={cssVar.colorTextTertiary} icon={CornerUpRight} size={16} />
+        ) : (
+          <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={16} />
+        )}
+        <div {...stylex.props(styles.title)}>{t(copyKey, { reason })}</div>
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+export default RejectedResponse;

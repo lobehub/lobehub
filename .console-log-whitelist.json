@@ -1,0 +1,14 @@
+{
+  "files": ["drizzle.config.ts"],
+  "patterns": [
+    "scripts/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/examples/**",
+    "e2e/**",
+    ".github/scripts/**",
+    "apps/desktop/**"
+  ]
+}

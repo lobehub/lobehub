@@ -1,0 +1,440 @@
+import { type AgentState } from '@lobechat/agent-runtime';
+import { type UIChatMessage } from '@lobechat/types';
+import debug from 'debug';
+
+import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
+import { createAgentStateManager, createStreamEventManager } from './factory';
+import type { GatewayInitMeta } from './GatewayStreamNotifier';
+import { type IAgentStateManager, type IStreamEventManager } from './types';
+import { hasVisibleOutputEndPublished } from './visibleOutputEnd';
+
+const log = debug('lobe-server:agent-runtime:coordinator');
+
+/**
+ * Statuses that end the event stream for the current operationId.
+ *
+ * `done` / `error` / `interrupted` are genuinely terminal — the op cannot
+ * resume. `waiting_for_human` is *stream-terminal but state-resumable*:
+ * the paused state lives on until a resume op (carrying the user's
+ * decision) starts, but that resume runs under a **new** operationId with
+ * its own event stream. For the paused operationId no further events will
+ * arrive, so clients should stop waiting the same way they do on done.
+ *
+ * `waiting_for_async_tool` is different: deferred tools such as server
+ * sub-agents resume the SAME operationId after the out-of-band result is
+ * backfilled. Ending the stream at park time makes the client mark the turn
+ * as stopped while the server is still waiting for sub-agents.
+ */
+const STREAM_END_STATUSES = new Set<AgentState['status']>([
+  'done',
+  'error',
+  'interrupted',
+  'waiting_for_human',
+]);
+
+const hasEnteredStreamEndState = (
+  previousStatus?: AgentState['status'],
+  nextStatus?: AgentState['status'],
+): nextStatus is 'done' | 'error' | 'interrupted' | 'waiting_for_human' => {
+  const wasStreamEnd = previousStatus ? STREAM_END_STATUSES.has(previousStatus) : false;
+  return Boolean(nextStatus && STREAM_END_STATUSES.has(nextStatus) && !wasStreamEnd);
+};
+
+export interface AgentRuntimeCoordinatorOptions {
+  /** Whether terminal reconciliation is delivered by protocol-v2 message patches. */
+  messagePatchModeResolver?: (state: AgentState) => boolean;
+  /**
+   * Custom state manager implementation
+   * Defaults to automatic selection based on Redis availability
+   */
+  stateManager?: IAgentStateManager;
+  /**
+   * Custom stream event manager implementation
+   * Defaults to automatic selection based on Redis availability
+   */
+  streamEventManager?: IStreamEventManager;
+  /**
+   * Resolve the canonical UIChatMessage[] snapshot for a terminal-state
+   * agent run, attached to `agent_runtime_end` events so the client can
+   * use the pushed payload as Source of Truth instead of refetching from
+   * DB.
+   *
+   * Optional: when omitted (e.g. tests, embedded usage without DB access)
+   * the coordinator falls back to publishing without `uiMessages` and the
+   * client behaves as before.
+   */
+  uiMessagesResolver?: (state: AgentState) => Promise<UIChatMessage[] | undefined>;
+}
+
+/**
+ * Agent Runtime Coordinator
+ * Coordinates operations between AgentStateManager and StreamEventManager
+ * Responsible for sending corresponding events when state changes occur
+ *
+ * Default behavior:
+ * - Uses Redis implementation when Redis is available
+ * - Automatically falls back to in-memory implementation when Redis is unavailable (local development mode)
+ *
+ * Supports dependency injection, allowing custom implementations to be passed in
+ */
+export class AgentRuntimeCoordinator {
+  private messagePatchModeResolver?: (state: AgentState) => boolean;
+  private stateManager: IAgentStateManager;
+  private streamEventManager: IStreamEventManager;
+  private uiMessagesResolver?: (state: AgentState) => Promise<UIChatMessage[] | undefined>;
+
+  constructor(options?: AgentRuntimeCoordinatorOptions) {
+    this.messagePatchModeResolver = options?.messagePatchModeResolver;
+    this.stateManager = options?.stateManager ?? createAgentStateManager();
+    this.streamEventManager = options?.streamEventManager ?? createStreamEventManager();
+    this.uiMessagesResolver = options?.uiMessagesResolver;
+  }
+
+  /**
+   * Create a new Agent operation and send initialization event
+   */
+  async createAgentOperation(
+    operationId: string,
+    data: {
+      acceptsMemberRuntimeEnd?: boolean;
+      agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
+      mirrorToOperationId?: string;
+      modelRuntimeConfig?: any;
+      streamOwnerUserId?: string;
+      userId?: string;
+      workspaceId?: string;
+    },
+    /**
+     * Routing facts (topicId, agentId, …) sent with the gateway `init` but not
+     * persisted: the hub's `op_lifecycle` carries them to every socket of the
+     * user, so a client that did not start the run can tell where it belongs.
+     */
+    initMeta?: GatewayInitMeta,
+  ): Promise<void> {
+    try {
+      // Create operation metadata
+      await this.stateManager.createOperationMetadata(operationId, data);
+
+      // Get the created metadata
+      const metadata = await this.stateManager.getOperationMetadata(operationId);
+
+      if (metadata) {
+        // Send agent runtime init event
+        await this.streamEventManager.publishAgentRuntimeInit(operationId, {
+          ...metadata,
+          ...initMeta,
+        });
+        log('[%s] Agent operation created and initialized', operationId);
+      }
+    } catch (error) {
+      console.error('Failed to create agent operation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Invoke the optional uiMessagesResolver and shield callers from its
+   * failures — stream-event publishing must never fail the surrounding
+   * save. Errors are logged and surfaced to the client as a missing field,
+   * which falls back to the legacy refresh path.
+   *
+   * Skip the resolve entirely when the run is moving into
+   * `interrupted`. The executor's per-step finalize at line 1078 of
+   * RuntimeExecutors only runs on the success path, so a mid-stream cancel
+   * leaves the assistant row as the LOADING_FLAT placeholder. Pushing that
+   * placeholder as SoT would clobber the client's in-memory streamed
+   * content. The executor's catch-block partial-finalize
+   * writes the real partial content asynchronously, but that update may
+   * not be durable by the time we publish — leaving the field undefined
+   * lets the client preserve its in-memory state (`gatewayEventHandler.ts`
+   * also skips the DB refetch fallback when reason='interrupted').
+   */
+  private async resolveUiMessages(state: AgentState): Promise<UIChatMessage[] | undefined> {
+    if (!this.uiMessagesResolver) return undefined;
+    // `waiting_for_async_tool` is the deferred-tool pause (client tool or
+    // sub-agent): the result message is written back later, so don't push a
+    // premature SoT snapshot that would clobber the client's in-memory state.
+    if (state.status === 'interrupted' || state.status === 'waiting_for_async_tool')
+      return undefined;
+    try {
+      return await this.uiMessagesResolver(state);
+    } catch (error) {
+      console.error('Failed to resolve uiMessages for agent_runtime_end:', error);
+      return undefined;
+    }
+  }
+
+  private resolveMessagePatchMode(state: AgentState): boolean {
+    if (!this.messagePatchModeResolver) return false;
+    try {
+      return this.messagePatchModeResolver(state);
+    } catch (error) {
+      console.error('Failed to resolve message patch mode:', error);
+      return false;
+    }
+  }
+
+  private async publishVisibleOutputEnd(
+    operationId: string,
+    state: AgentState,
+    stepIndex: number,
+  ): Promise<void> {
+    try {
+      await this.streamEventManager.publishStreamEvent(operationId, {
+        data: { reason: state.status },
+        stepIndex,
+        type: 'visible_output_end',
+      });
+    } catch (error) {
+      // Example: a transient Redis write failure may drop the early UI hint.
+      // Keep publishing agent_runtime_end because it is the authoritative
+      // terminal event that drains queues and reconciles final state.
+      console.error('Failed to publish visible_output_end:', error);
+    }
+  }
+
+  /**
+   * Save Agent state and handle corresponding events
+   */
+  async saveAgentState(operationId: string, state: AgentState): Promise<void> {
+    try {
+      const previousState = await this.stateManager.loadAgentState(operationId);
+
+      // Save state
+      await this.stateManager.saveAgentState(operationId, state);
+
+      // Send a terminal event once the operation first enters a terminal state.
+      if (hasEnteredStreamEndState(previousState?.status, state.status)) {
+        const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
+        const messagePatchMode = this.resolveMessagePatchMode(state);
+        if (!hasVisibleOutputEndPublished(state)) {
+          await this.publishVisibleOutputEnd(operationId, state, stepIndex);
+        }
+        await this.streamEventManager.publishAgentRuntimeEnd({
+          finalState: state,
+          ...(messagePatchMode && { messagePatchMode: true, messageRevision: stepIndex + 1 }),
+          operationId,
+          reason: state.status,
+          stepIndex,
+          uiMessages: await this.resolveUiMessages(state),
+        });
+        log('[%s] Agent runtime reached terminal state: %s', operationId, state.status);
+      }
+    } catch (error) {
+      console.error('Failed to save agent state and handle events:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save step result and handle corresponding events
+   */
+  async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {
+    try {
+      // Get previous state for detecting state changes
+      const previousState = await this.stateManager.loadAgentState(operationId);
+
+      // Save step result
+      await this.stateManager.saveStepResult(operationId, stepResult);
+
+      // This ensures agent_runtime_end is sent after all step events.
+      if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
+        // Example: call_llm step 3 can early-publish visible_output_end, then
+        // finish step 4 enters done. Keep terminal stepIndex for end payloads,
+        // but suppress visible_output_end once the operation marker exists.
+        const stepIndex =
+          stepResult.stepIndex ?? stepResult.newState.stepCount ?? previousState?.stepCount ?? 0;
+        const messagePatchMode = this.resolveMessagePatchMode(stepResult.newState);
+        if (!hasVisibleOutputEndPublished(stepResult.newState)) {
+          await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
+        }
+        await this.streamEventManager.publishAgentRuntimeEnd({
+          finalState: stepResult.newState,
+          ...(messagePatchMode && { messagePatchMode: true, messageRevision: stepIndex + 1 }),
+          operationId,
+          reason: stepResult.newState.status,
+          stepIndex,
+          uiMessages: await this.resolveUiMessages(stepResult.newState),
+        });
+        log(
+          '[%s] Agent runtime reached terminal state after step result: %s',
+          operationId,
+          stepResult.newState.status,
+        );
+      }
+    } catch (error) {
+      console.error('Failed to save step result and handle events:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Agent state
+   */
+  async loadAgentState(operationId: string): Promise<AgentState | null> {
+    return this.stateManager.loadAgentState(operationId);
+  }
+
+  /**
+   * Set the interrupt sentinel so pollers can observe the stop request
+   * without loading the full state blob.
+   */
+  async markInterrupted(operationId: string): Promise<void> {
+    return this.stateManager.markInterrupted(operationId);
+  }
+
+  /**
+   * Check the interrupt sentinel.
+   */
+  async isInterrupted(operationId: string): Promise<boolean> {
+    return this.stateManager.isInterrupted(operationId);
+  }
+
+  /**
+   * Record whether the client holds user messages queued behind the operation.
+   */
+  async setQueuedMessages(operationId: string, pending: boolean): Promise<void> {
+    return this.stateManager.setQueuedMessages(operationId, pending);
+  }
+
+  /**
+   * Check the client's queued-messages flag.
+   */
+  async hasQueuedMessages(operationId: string): Promise<boolean> {
+    return this.stateManager.hasQueuedMessages(operationId);
+  }
+
+  /**
+   * Get operation metadata
+   */
+  async getOperationMetadata(operationId: string): Promise<AgentOperationMetadata | null> {
+    return this.stateManager.getOperationMetadata(operationId);
+  }
+
+  /**
+   * Get execution history
+   */
+  async getExecutionHistory(operationId: string, limit?: number): Promise<any[]> {
+    return this.stateManager.getExecutionHistory(operationId, limit);
+  }
+
+  /**
+   * Delete Agent operation
+   */
+  async deleteAgentOperation(operationId: string): Promise<void> {
+    try {
+      await Promise.all([
+        this.stateManager.deleteAgentOperation(operationId),
+        this.streamEventManager.cleanupOperation(operationId),
+      ]);
+      log('Agent operation deleted: %s', operationId);
+    } catch (error) {
+      console.error('Failed to delete agent operation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get active operations
+   */
+  async getActiveOperations(): Promise<string[]> {
+    return this.stateManager.getActiveOperations();
+  }
+
+  /**
+   * Get statistics
+   */
+  async getStats(): Promise<{
+    activeOperations: number;
+    completedOperations: number;
+    errorOperations: number;
+    totalOperations: number;
+  }> {
+    return this.stateManager.getStats();
+  }
+
+  /**
+   * Clean up expired operations
+   */
+  async cleanupExpiredOperations(): Promise<number> {
+    return this.stateManager.cleanupExpiredOperations();
+  }
+
+  /**
+   * Park the envelope for the step an inline loop is about to run. This stands in
+   * for the queue message that the loop chose not to publish, so a redelivery
+   * that arrives after the loop died resumes from the step it actually reached
+   * instead of being dismissed as a stale duplicate.
+   */
+  async saveInlineResume<T>(operationId: string, envelope: T): Promise<boolean> {
+    return this.stateManager.saveInlineResume(operationId, JSON.stringify(envelope));
+  }
+
+  /**
+   * Read a parked inline envelope. Returns null when there is none.
+   *
+   * A read failure propagates, so the delivery is retried rather than treated as
+   * "no envelope" — see `loadInlineResume` on the state manager. A value that no
+   * longer parses is different: retrying cannot fix it, so it is reported and
+   * treated as absent instead of looping the delivery into the DLQ.
+   */
+  async loadInlineResume<T>(operationId: string): Promise<null | T> {
+    const serialized = await this.stateManager.loadInlineResume(operationId);
+    if (!serialized) return null;
+
+    try {
+      return JSON.parse(serialized) as T;
+    } catch (error) {
+      console.error(`Unparseable inline resume envelope for ${operationId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Drop a parked inline envelope once the queue owns the next step again.
+   * Scoped to the lock owner, so a worker that lost the race cannot delete the
+   * envelope of the worker that is still running.
+   */
+  async clearInlineResume(operationId: string, ownerId: string): Promise<void> {
+    return this.stateManager.clearInlineResume(operationId, ownerId);
+  }
+
+  /**
+   * Atomically try to claim a step for execution (distributed lock).
+   */
+  async tryClaimStep(
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds?: number,
+    ownerId?: string,
+  ): Promise<boolean> {
+    return this.stateManager.tryClaimStep(operationId, stepIndex, ttlSeconds, ownerId);
+  }
+
+  /**
+   * Release the step execution lock.
+   */
+  async releaseStepLock(operationId: string, stepIndex: number, ownerId?: string): Promise<void> {
+    return this.stateManager.releaseStepLock(operationId, stepIndex, ownerId);
+  }
+
+  /**
+   * Extend the step execution lock if it is still owned by this worker.
+   */
+  async refreshStepLock(
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ): Promise<boolean> {
+    return this.stateManager.refreshStepLock(operationId, stepIndex, ttlSeconds, ownerId);
+  }
+
+  /**
+   * Close connections
+   */
+  async disconnect(): Promise<void> {
+    await Promise.all([this.stateManager.disconnect(), this.streamEventManager.disconnect()]);
+  }
+}

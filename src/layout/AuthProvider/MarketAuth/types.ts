@@ -1,0 +1,108 @@
+import type { MarketAuthScene } from './scenes';
+
+export interface MarketUserInfo {
+  accountId: number;
+  clientId: string;
+  grantId: string;
+  scopes: string[];
+  sub: string;
+  tokenData: {
+    accountId: string;
+    clientId: string;
+    exp: number;
+    expiresWithSession: boolean;
+    grantId: string;
+    gty: string;
+    iat: number;
+    jti: string;
+    kind: string;
+    scope: string;
+    sessionUid: string;
+  };
+}
+
+/**
+ * Market User Profile - Extended user information from Market SDK
+ */
+export interface MarketUserProfile {
+  avatarUrl: string | null;
+  bannerUrl: string | null;
+  createdAt: string;
+  description: string | null;
+  displayName: string | null;
+  id: number;
+  namespace: string;
+  socialLinks: {
+    github?: string;
+    twitter?: string;
+    website?: string;
+  } | null;
+  type: string | null;
+  userName: string | null;
+}
+
+export interface MarketAuthSession {
+  accessToken: string;
+  expiresAt: number;
+  expiresIn: number;
+  scope: string;
+  tokenType: 'Bearer';
+  userInfo?: MarketUserInfo;
+}
+
+export interface MarketAuthState {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  session: MarketAuthSession | null;
+  status: 'loading' | 'authenticated' | 'unauthenticated';
+}
+
+export interface MarketAuthContextType extends MarketAuthState {
+  /**
+   * Check for claimable resources and show modal if any found
+   * Call this when user enters their profile page
+   * @param onClaimSuccess - Optional callback to run after successful claim (e.g., to refresh page data)
+   * @returns true if claimable resources were found and modal was shown
+   */
+  checkAndShowClaimableResources: (onClaimSuccess?: () => void) => Promise<boolean>;
+  getAccessToken: () => string | null;
+  getCurrentUserInfo: () => MarketUserInfo | null;
+  getRefreshToken: () => string | null;
+  /**
+   * Handle unauthorized (401) error from Market API
+   * Attempts to refresh token first, then triggers signIn if refresh fails
+   * @param scene - capability that triggered the auth, controls the modal copy
+   * @returns true if successfully re-authenticated, false if user cancelled or failed
+   */
+  handleUnauthorized: (scene?: MarketAuthScene) => Promise<boolean>;
+  openProfileSetup: (onSuccess?: (profile: MarketUserProfile) => void) => void;
+  refreshToken: () => Promise<boolean>;
+  /**
+   * Sign in to the Market.
+   * @param scene - capability that triggered the auth, controls the modal copy
+   */
+  signIn: (scene?: MarketAuthScene) => Promise<number | null>;
+  signOut: () => Promise<void>;
+}
+
+export interface OIDCConfig {
+  baseUrl: string;
+  clientId: string;
+  redirectUri: string;
+  scope: string;
+}
+
+export interface PKCEParams {
+  codeChallenge: string;
+  codeVerifier: string;
+  state: string;
+}
+
+export interface TokenResponse {
+  accessToken: string;
+  expiresIn: number;
+  idToken?: string;
+  refreshToken?: string;
+  scope: string;
+  tokenType: string;
+}

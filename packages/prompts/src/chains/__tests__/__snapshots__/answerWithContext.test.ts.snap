@@ -1,0 +1,164 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`chainAnswerWithContext > should filter out empty context strings 1`] = `
+{
+  "messages": [
+    {
+      "content": "You are a helpful assistant specialized in Test. Your task is to answer questions based on the provided context passages.
+
+IMPORTANT RULES:
+- First, check if the context is relevant to the question topic
+- If the context is about a COMPLETELY DIFFERENT topic than the question:
+  * State what topic the context is about
+  * Clearly state "The provided context does not contain information about [question topic]"
+  * Do NOT answer using your general knowledge
+- If the context is related to the question topic (even if information is limited):
+  * ALWAYS use the context information as a foundation
+  * You SHOULD supplement with your general knowledge to provide a complete, helpful answer
+  * For "how to" questions, MUST provide practical, actionable steps combining context + your expertise
+  * The context provides the topic relevance - you provide the comprehensive answer
+  * Example: If context mentions "Docker is for containerization", and question is "How to deploy with Docker?", you should explain deployment steps using your knowledge
+- Answer in the same language as the question
+- Use markdown formatting for better readability
+
+The provided context passages:
+
+<context>
+Valid context
+Another valid context
+</context>
+
+Question to answer:
+
+Test question",
+      "role": "user",
+    },
+  ],
+}
+`;
+
+exports[`chainAnswerWithContext > should generate correct payload with context and knowledge 1`] = `
+{
+  "messages": [
+    {
+      "content": "You are a helpful assistant specialized in AI/Machine Learning. Your task is to answer questions based on the provided context passages.
+
+IMPORTANT RULES:
+- First, check if the context is relevant to the question topic
+- If the context is about a COMPLETELY DIFFERENT topic than the question:
+  * State what topic the context is about
+  * Clearly state "The provided context does not contain information about [question topic]"
+  * Do NOT answer using your general knowledge
+- If the context is related to the question topic (even if information is limited):
+  * ALWAYS use the context information as a foundation
+  * You SHOULD supplement with your general knowledge to provide a complete, helpful answer
+  * For "how to" questions, MUST provide practical, actionable steps combining context + your expertise
+  * The context provides the topic relevance - you provide the comprehensive answer
+  * Example: If context mentions "Docker is for containerization", and question is "How to deploy with Docker?", you should explain deployment steps using your knowledge
+- Answer in the same language as the question
+- Use markdown formatting for better readability
+
+The provided context passages:
+
+<context>
+Context passage 1
+Context passage 2
+</context>
+
+Question to answer:
+
+What is artificial intelligence?",
+      "role": "user",
+    },
+  ],
+}
+`;
+
+exports[`chainAnswerWithContext > should handle empty context array 1`] = `
+{
+  "messages": [
+    {
+      "content": "You are a helpful assistant specialized in AI. Please answer the following question using your knowledge.
+
+Answer in the same language as the question and use markdown formatting for better readability.
+
+Question to answer:
+
+What is AI?",
+      "role": "user",
+    },
+  ],
+}
+`;
+
+exports[`chainAnswerWithContext > should handle multiple knowledge areas 1`] = `
+{
+  "messages": [
+    {
+      "content": "You are a helpful assistant specialized in AI/ML/NLP/Computer Vision. Your task is to answer questions based on the provided context passages.
+
+IMPORTANT RULES:
+- First, check if the context is relevant to the question topic
+- If the context is about a COMPLETELY DIFFERENT topic than the question:
+  * State what topic the context is about
+  * Clearly state "The provided context does not contain information about [question topic]"
+  * Do NOT answer using your general knowledge
+- If the context is related to the question topic (even if information is limited):
+  * ALWAYS use the context information as a foundation
+  * You SHOULD supplement with your general knowledge to provide a complete, helpful answer
+  * For "how to" questions, MUST provide practical, actionable steps combining context + your expertise
+  * The context provides the topic relevance - you provide the comprehensive answer
+  * Example: If context mentions "Docker is for containerization", and question is "How to deploy with Docker?", you should explain deployment steps using your knowledge
+- Answer in the same language as the question
+- Use markdown formatting for better readability
+
+The provided context passages:
+
+<context>
+Context
+</context>
+
+Question to answer:
+
+Tell me about these fields",
+      "role": "user",
+    },
+  ],
+}
+`;
+
+exports[`chainAnswerWithContext > should handle single knowledge area 1`] = `
+{
+  "messages": [
+    {
+      "content": "You are a helpful assistant specialized in Technology. Your task is to answer questions based on the provided context passages.
+
+IMPORTANT RULES:
+- First, check if the context is relevant to the question topic
+- If the context is about a COMPLETELY DIFFERENT topic than the question:
+  * State what topic the context is about
+  * Clearly state "The provided context does not contain information about [question topic]"
+  * Do NOT answer using your general knowledge
+- If the context is related to the question topic (even if information is limited):
+  * ALWAYS use the context information as a foundation
+  * You SHOULD supplement with your general knowledge to provide a complete, helpful answer
+  * For "how to" questions, MUST provide practical, actionable steps combining context + your expertise
+  * The context provides the topic relevance - you provide the comprehensive answer
+  * Example: If context mentions "Docker is for containerization", and question is "How to deploy with Docker?", you should explain deployment steps using your knowledge
+- Answer in the same language as the question
+- Use markdown formatting for better readability
+
+The provided context passages:
+
+<context>
+Single context
+</context>
+
+Question to answer:
+
+How does it work?",
+      "role": "user",
+    },
+  ],
+}
+`;

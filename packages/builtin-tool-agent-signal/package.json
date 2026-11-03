@@ -1,0 +1,14 @@
+{
+  "name": "@lobechat/builtin-tool-agent-signal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./executionRuntime": "./src/shared/ExecutionRuntime.ts"
+  },
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
+}

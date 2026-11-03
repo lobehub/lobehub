@@ -1,0 +1,931 @@
+import fs from 'node:fs';
+import { mkdir, truncate, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import {
+  editLocalFile,
+  globLocalFiles,
+  grepContent,
+  listLocalFiles,
+  moveLocalFiles,
+  readLocalFile,
+  renameLocalFile,
+  searchLocalFiles,
+  writeLocalFile,
+} from '../index';
+
+describe('file operations', () => {
+  const tmpDir = path.join(os.tmpdir(), 'local-file-shell-test-' + process.pid);
+
+  beforeEach(async () => {
+    await mkdir(tmpDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { force: true, recursive: true });
+  });
+
+  // ─── readLocalFile ───
+
+  describe('readLocalFile', () => {
+    it('should read file with default line range (0-1000)', async () => {
+      const filePath = path.join(tmpDir, 'test.txt');
+      const lines = Array.from({ length: 1200 }, (_, i) => `line ${i}`);
+      await writeFile(filePath, lines.join('\n'));
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.lineCount).toBe(1000);
+      expect(result.totalLineCount).toBe(1200);
+      expect(result.loc).toEqual([0, 1000]);
+      expect(result.filename).toBe('test.txt');
+      expect(result.fileType).toBe('txt');
+    });
+
+    it('should clamp the reported window at EOF for short files', async () => {
+      const filePath = path.join(tmpDir, 'short.txt');
+      await writeFile(filePath, 'a\nb\nc\nd\ne');
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.lineCount).toBe(5);
+      expect(result.loc).toEqual([0, 5]);
+    });
+
+    it('should clamp an explicit range that extends past EOF', async () => {
+      const filePath = path.join(tmpDir, 'past-eof.txt');
+      const lines = Array.from({ length: 10 }, (_, i) => `line ${i}`);
+      await writeFile(filePath, lines.join('\n'));
+
+      const result = await readLocalFile({ loc: [5, 100], path: filePath });
+
+      expect(result.lineCount).toBe(5);
+      expect(result.content).toBe('line 5\nline 6\nline 7\nline 8\nline 9');
+      expect(result.loc).toEqual([5, 10]);
+    });
+
+    it('should read full content when fullContent is true', async () => {
+      const filePath = path.join(tmpDir, 'full.txt');
+      const lines = Array.from({ length: 300 }, (_, i) => `line ${i}`);
+      await writeFile(filePath, lines.join('\n'));
+
+      const result = await readLocalFile({ fullContent: true, path: filePath });
+
+      expect(result.lineCount).toBe(300);
+      expect(result.loc).toEqual([0, 300]);
+    });
+
+    it('should read specific line range', async () => {
+      const filePath = path.join(tmpDir, 'range.txt');
+      const lines = Array.from({ length: 10 }, (_, i) => `line ${i}`);
+      await writeFile(filePath, lines.join('\n'));
+
+      const result = await readLocalFile({ loc: [2, 5], path: filePath });
+
+      expect(result.lineCount).toBe(3);
+      expect(result.content).toBe('line 2\nline 3\nline 4');
+      expect(result.loc).toEqual([2, 5]);
+    });
+
+    it('should handle non-existent file', async () => {
+      const result = await readLocalFile({ path: path.join(tmpDir, 'nope.txt') });
+
+      expect(result.content).toContain('Error');
+      expect(result.lineCount).toBe(0);
+      expect(result.totalLineCount).toBe(0);
+    });
+
+    it('should detect file type from extension', async () => {
+      const filePath = path.join(tmpDir, 'code.ts');
+      await writeFile(filePath, 'const x = 1;');
+
+      const result = await readLocalFile({ path: filePath });
+      expect(result.fileType).toBe('ts');
+    });
+
+    it('should handle file without extension', async () => {
+      const filePath = path.join(tmpDir, 'Makefile');
+      await writeFile(filePath, 'all: build');
+
+      const result = await readLocalFile({ path: filePath });
+      expect(result.fileType).toBe('unknown');
+    });
+
+    it('should include timestamps', async () => {
+      const filePath = path.join(tmpDir, 'time.txt');
+      await writeFile(filePath, 'content');
+
+      const result = await readLocalFile({ path: filePath });
+      expect(result.createdTime).toBeInstanceOf(Date);
+      expect(result.modifiedTime).toBeInstanceOf(Date);
+    });
+
+    it('should reject unsupported binary file extensions', async () => {
+      const filePath = path.join(tmpDir, 'cm.bundle.b64');
+      await writeFile(filePath, 'A'.repeat(20_000));
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.content).toContain('Unsupported binary file type');
+      expect(result.content).toContain('.b64');
+      expect(result.charCount).toBe(0);
+      expect(result.lineCount).toBe(0);
+    });
+
+    it('should reject .bin / .exe / .zip extensions', async () => {
+      for (const ext of ['bin', 'exe', 'zip']) {
+        const filePath = path.join(tmpDir, `payload.${ext}`);
+        await writeFile(filePath, 'data');
+        const result = await readLocalFile({ path: filePath });
+        expect(result.content).toContain('Unsupported binary file type');
+        expect(result.content).toContain(`.${ext}`);
+      }
+    });
+
+    it('should reject files whose content sniffs as binary even with text extension', async () => {
+      const filePath = path.join(tmpDir, 'sneaky.txt');
+      const buf = Buffer.concat([Buffer.from('header\n'), Buffer.from([0x00, 0x01, 0x02, 0x03])]);
+      await writeFile(filePath, buf);
+
+      const result = await readLocalFile({ path: filePath });
+      expect(result.content).toContain('binary');
+    });
+
+    it('should truncate single very long lines to per-line cap', async () => {
+      const filePath = path.join(tmpDir, 'long-line.txt');
+      // 27KB single line of base64-like text — the scenario.
+      await writeFile(filePath, 'A'.repeat(27_000));
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.linesTruncated).toBeGreaterThan(0);
+      // The returned content for a single line must be bounded.
+      expect(result.content.length).toBeLessThan(10_000);
+      expect(result.content).toContain('line truncated');
+    });
+
+    it('should cap total content length and set truncated flag', async () => {
+      const filePath = path.join(tmpDir, 'huge.txt');
+      // Many short lines, totalling > 500K chars.
+      const lines = Array.from({ length: 8000 }, (_, i) => `line ${i} ${'x'.repeat(80)}`);
+      await writeFile(filePath, lines.join('\n'));
+
+      const result = await readLocalFile({ fullContent: true, path: filePath });
+
+      expect(result.truncated).toBe(true);
+      expect(result.content).toContain('content truncated');
+    });
+
+    it('should reject files larger than the hard size cap', async () => {
+      const filePath = path.join(tmpDir, 'big.txt');
+      // Slightly over 10MB.
+      await writeFile(filePath, 'a'.repeat(10 * 1024 * 1024 + 1));
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.content).toContain('too large');
+      expect(result.charCount).toBe(0);
+    });
+
+    it('should parse PDFs larger than the text file size cap', async () => {
+      const filePath = path.join(tmpDir, 'large.pdf');
+      const objects = [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+        '<< /Length 45 >>\nstream\nBT /F1 12 Tf 72 720 Td (Large PDF works) Tj ET\nendstream',
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        `<< /Length ${10 * 1024 * 1024} >>\nstream\n${' '.repeat(10 * 1024 * 1024)}\nendstream`,
+      ];
+      let pdf = '%PDF-1.4\n';
+      const offsets = objects.map((object, index) => {
+        const offset = Buffer.byteLength(pdf);
+        pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+        return offset;
+      });
+      const xrefOffset = Buffer.byteLength(pdf);
+      pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+      pdf += offsets.map((offset) => `${offset.toString().padStart(10, '0')} 00000 n \n`).join('');
+      pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+      await writeFile(filePath, pdf);
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.content).toContain('Large PDF works');
+      expect(result.content).not.toContain('too large');
+    });
+
+    it('should reject PDFs larger than the PDF size cap before parsing', async () => {
+      const filePath = path.join(tmpDir, 'oversized.pdf');
+      await writeFile(filePath, 'not actually a PDF');
+      await truncate(filePath, 50 * 1024 * 1024 + 1);
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.content).toContain('too large');
+      expect(result.content).toContain(`limit ${50 * 1024 * 1024}`);
+      expect(result.content).toContain('split it into multiple documents');
+      expect(result.charCount).toBe(0);
+    });
+
+    it('should still read normal source files of allowed extensions', async () => {
+      const filePath = path.join(tmpDir, 'app.cjs');
+      await writeFile(filePath, "module.exports = { hello: 'world' };\n");
+
+      const result = await readLocalFile({ path: filePath });
+      expect(result.content).toContain("hello: 'world'");
+      expect(result.charCount).toBeGreaterThan(0);
+    });
+  });
+
+  // ─── writeLocalFile ───
+
+  describe('writeLocalFile', () => {
+    it('should write file successfully', async () => {
+      const filePath = path.join(tmpDir, 'output.txt');
+      const result = await writeLocalFile({ content: 'hello world', path: filePath });
+
+      expect(result.success).toBe(true);
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('hello world');
+    });
+
+    it('should create parent directories', async () => {
+      const filePath = path.join(tmpDir, 'sub', 'dir', 'file.txt');
+      const result = await writeLocalFile({ content: 'nested', path: filePath });
+
+      expect(result.success).toBe(true);
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('nested');
+    });
+
+    it('should return error for empty path', async () => {
+      const result = await writeLocalFile({ content: 'data', path: '' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Path cannot be empty');
+    });
+
+    it('should return error for undefined content', async () => {
+      const result = await writeLocalFile({
+        content: undefined as any,
+        path: path.join(tmpDir, 'f.txt'),
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Content cannot be empty');
+    });
+  });
+
+  // ─── editLocalFile ───
+
+  describe('editLocalFile', () => {
+    it('should replace the single occurrence by default', async () => {
+      const filePath = path.join(tmpDir, 'edit.txt');
+      await writeFile(filePath, 'hello world\ngoodbye again');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'hi',
+        old_string: 'hello',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.replacements).toBe(1);
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('hi world\ngoodbye again');
+      expect(result.diffText).toBeDefined();
+      expect(result.linesAdded).toBeDefined();
+      expect(result.linesDeleted).toBeDefined();
+    });
+
+    // Picking the first of several matches silently resolves an ambiguity the
+    // caller never sees: the tool used to report "replaced 1 occurrence(s)"
+    // while the edit may have landed on the wrong one.
+    it('refuses an ambiguous old_string instead of editing an arbitrary match', async () => {
+      const filePath = path.join(tmpDir, 'ambiguous.txt');
+      await writeFile(filePath, 'hello world\nhello again');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'hi',
+        old_string: 'hello',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.replacements).toBe(0);
+      expect(result.error).toContain('not unique');
+      expect(result.error).toContain('L1, L2');
+      expect(result.error).toContain('replace_all');
+      // The file must be untouched.
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('hello world\nhello again');
+    });
+
+    it('reports at most five match locations for a heavily repeated old_string', async () => {
+      const filePath = path.join(tmpDir, 'many.txt');
+      await writeFile(filePath, Array.from({ length: 9 }, () => 'dup').join('\n'));
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'x',
+        old_string: 'dup',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('L1, L2, L3, L4, L5, …');
+    });
+
+    it('still allows an ambiguous old_string when replace_all is set', async () => {
+      const filePath = path.join(tmpDir, 'ambiguous-all.txt');
+      await writeFile(filePath, 'hello world\nhello again');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'hi',
+        old_string: 'hello',
+        replace_all: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.replacements).toBe(2);
+    });
+
+    it('should replace all occurrences when replace_all is true', async () => {
+      const filePath = path.join(tmpDir, 'edit-all.txt');
+      await writeFile(filePath, 'hello world\nhello again');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'hi',
+        old_string: 'hello',
+        replace_all: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.replacements).toBe(2);
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('hi world\nhi again');
+    });
+
+    it('should return error when old_string not found', async () => {
+      const filePath = path.join(tmpDir, 'no-match.txt');
+      await writeFile(filePath, 'hello world');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'hi',
+        old_string: 'xyz',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.replacements).toBe(0);
+      expect(result.error).toContain(filePath);
+    });
+
+    // A bare "not found" makes the agent spend a readFile + LLM round trip just
+    // to learn why. The content is already in hand here, so name the cause.
+    describe('not-found diagnosis', () => {
+      it('points at whitespace when the block matches apart from indentation', async () => {
+        const filePath = path.join(tmpDir, 'indent.txt');
+        await writeFile(filePath, 'function f() {\n    return 1;\n}');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: 'function f() {\n  return 2;\n}',
+          // Same block, re-indented to 2 spaces — the classic miss.
+          old_string: 'function f() {\n  return 1;\n}',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('whitespace/indentation');
+      });
+
+      it('points at letter case when the block matches apart from case', async () => {
+        const filePath = path.join(tmpDir, 'case.txt');
+        await writeFile(filePath, 'const Enabled = true;');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: 'const enabled = false;',
+          old_string: 'const enabled = true;',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('letter case');
+      });
+
+      it('anchors on the first line when the block diverges partway', async () => {
+        const filePath = path.join(tmpDir, 'diverge.txt');
+        await writeFile(filePath, 'header\n## images\n- p01: current\nfooter');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: '## images\n- p01: next',
+          old_string: '## images\n- p01: stale',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('L2');
+        expect(result.error).toContain('diverges');
+      });
+
+      it('says the text is absent when nothing matches', async () => {
+        const filePath = path.join(tmpDir, 'absent.txt');
+        await writeFile(filePath, 'hello world');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: 'hi',
+          old_string: 'xyz',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('None of it appears in the file');
+      });
+
+      // The CRLF fallback runs before the diagnosis; a `\n` old_string against a
+      // CRLF file must still edit rather than report a whitespace mismatch.
+      it('still edits CRLF files instead of diagnosing them', async () => {
+        const filePath = path.join(tmpDir, 'crlf.txt');
+        await writeFile(filePath, 'alpha\r\nbeta\r\ngamma');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: 'beta\nBETA',
+          old_string: 'beta\ngamma',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.replacements).toBe(1);
+      });
+    });
+
+    it('should handle special regex characters in old_string with replace_all', async () => {
+      const filePath = path.join(tmpDir, 'regex.txt');
+      await writeFile(filePath, 'price is $10.00 and $20.00');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: '$XX.XX',
+        old_string: '$10.00',
+        replace_all: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('price is $XX.XX and $20.00');
+    });
+
+    it('should handle non-existent file', async () => {
+      const result = await editLocalFile({
+        file_path: path.join(tmpDir, 'nonexistent.txt'),
+        new_string: 'new',
+        old_string: 'old',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+
+    it('should count lines added and deleted', async () => {
+      const filePath = path.join(tmpDir, 'multiline.txt');
+      await writeFile(filePath, 'line1\nline2\nline3');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'newA\nnewB\nnewC\nnewD',
+        old_string: 'line2',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.linesAdded).toBeGreaterThan(0);
+      expect(result.linesDeleted).toBeGreaterThan(0);
+    });
+
+    it('should match a multi-line LF old_string against a CRLF file (Windows)', async () => {
+      const filePath = path.join(tmpDir, 'crlf.txt');
+      await writeFile(filePath, 'line1\r\nline2\r\nline3\r\n');
+
+      // LLM emits `\n` even though the file on disk uses `\r\n`.
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'lineA\nlineB',
+        old_string: 'line1\nline2',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.replacements).toBe(1);
+      // Existing CRLF line-ending style is preserved.
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('lineA\r\nlineB\r\nline3\r\n');
+    });
+
+    it('should replace_all with an LF old_string against a CRLF file', async () => {
+      const filePath = path.join(tmpDir, 'crlf-all.txt');
+      await writeFile(filePath, 'a\r\nb\r\na\r\nb\r\n');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'x\ny',
+        old_string: 'a\nb',
+        replace_all: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.replacements).toBe(2);
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('x\r\ny\r\nx\r\ny\r\n');
+    });
+  });
+
+  // ─── listLocalFiles ───
+
+  describe('listLocalFiles', () => {
+    it('should list files in directory', async () => {
+      await writeFile(path.join(tmpDir, 'a.txt'), 'a');
+      await writeFile(path.join(tmpDir, 'b.txt'), 'b');
+      await mkdir(path.join(tmpDir, 'subdir'));
+
+      const result = await listLocalFiles({ path: tmpDir });
+
+      expect(result.totalCount).toBe(3);
+      expect(result.files.length).toBe(3);
+      const names = result.files.map((f) => f.name);
+      expect(names).toContain('a.txt');
+      expect(names).toContain('b.txt');
+      expect(names).toContain('subdir');
+    });
+
+    it('should sort by name ascending', async () => {
+      await writeFile(path.join(tmpDir, 'c.txt'), 'c');
+      await writeFile(path.join(tmpDir, 'a.txt'), 'a');
+      await writeFile(path.join(tmpDir, 'b.txt'), 'b');
+
+      const result = await listLocalFiles({
+        path: tmpDir,
+        sortBy: 'name',
+        sortOrder: 'asc',
+      });
+
+      expect(result.files[0].name).toBe('a.txt');
+      expect(result.files[2].name).toBe('c.txt');
+    });
+
+    it('should sort by size', async () => {
+      await writeFile(path.join(tmpDir, 'small.txt'), 'x');
+      await writeFile(path.join(tmpDir, 'large.txt'), 'x'.repeat(1000));
+
+      const result = await listLocalFiles({
+        path: tmpDir,
+        sortBy: 'size',
+        sortOrder: 'asc',
+      });
+
+      expect(result.files[0].name).toBe('small.txt');
+    });
+
+    it('should respect limit', async () => {
+      await writeFile(path.join(tmpDir, 'a.txt'), 'a');
+      await writeFile(path.join(tmpDir, 'b.txt'), 'b');
+      await writeFile(path.join(tmpDir, 'c.txt'), 'c');
+
+      const result = await listLocalFiles({ limit: 2, path: tmpDir });
+
+      expect(result.files.length).toBe(2);
+      expect(result.totalCount).toBe(3);
+    });
+
+    it('should handle non-existent directory', async () => {
+      const result = await listLocalFiles({ path: path.join(tmpDir, 'nope') });
+      expect(result.files).toEqual([]);
+      expect(result.totalCount).toBe(0);
+    });
+
+    it('should mark directories correctly', async () => {
+      await mkdir(path.join(tmpDir, 'mydir'));
+
+      const result = await listLocalFiles({ path: tmpDir });
+      const dir = result.files.find((f) => f.name === 'mydir');
+
+      expect(dir!.isDirectory).toBe(true);
+      expect(dir!.type).toBe('directory');
+    });
+
+    it('should expand leading ~ to the user home directory', async () => {
+      const home = os.homedir();
+      const homeListing = await listLocalFiles({ path: home });
+      const tildeListing = await listLocalFiles({ path: '~' });
+
+      expect(tildeListing.totalCount).toBe(homeListing.totalCount);
+      expect(tildeListing.totalCount).toBeGreaterThan(0);
+    });
+  });
+
+  // ─── moveLocalFiles ───
+
+  describe('moveLocalFiles', () => {
+    it('should move a file', async () => {
+      const src = path.join(tmpDir, 'src.txt');
+      const dst = path.join(tmpDir, 'dst.txt');
+      await writeFile(src, 'content');
+
+      const result = await moveLocalFiles({
+        items: [{ newPath: dst, oldPath: src }],
+      });
+
+      expect(result[0].success).toBe(true);
+      expect(result[0].newPath).toBe(dst);
+      expect(fs.existsSync(dst)).toBe(true);
+      expect(fs.existsSync(src)).toBe(false);
+    });
+
+    it('should handle identical source and target', async () => {
+      const filePath = path.join(tmpDir, 'same.txt');
+      await writeFile(filePath, 'content');
+
+      const result = await moveLocalFiles({
+        items: [{ newPath: filePath, oldPath: filePath }],
+      });
+
+      expect(result[0].success).toBe(true);
+    });
+
+    it('should return error for non-existent source', async () => {
+      const result = await moveLocalFiles({
+        items: [{ newPath: path.join(tmpDir, 'dst.txt'), oldPath: path.join(tmpDir, 'nope.txt') }],
+      });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toContain('Source path not found');
+    });
+
+    it('should return empty array for empty items', async () => {
+      const result = await moveLocalFiles({ items: [] });
+      expect(result).toEqual([]);
+    });
+
+    it('should refuse to overwrite an existing target file', async () => {
+      const src = path.join(tmpDir, 'src.txt');
+      const dst = path.join(tmpDir, 'dst.txt');
+      await writeFile(src, 'incoming');
+      await writeFile(dst, 'keep me');
+
+      const result = await moveLocalFiles({ items: [{ newPath: dst, oldPath: src }] });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toContain('already exists');
+      expect(fs.readFileSync(dst, 'utf8')).toBe('keep me');
+      expect(fs.readFileSync(src, 'utf8')).toBe('incoming');
+    });
+
+    it('should refuse to move onto an existing directory', async () => {
+      const src = path.join(tmpDir, 'src-dir');
+      const dst = path.join(tmpDir, 'dst-dir');
+      await mkdir(src);
+      await mkdir(dst);
+
+      const result = await moveLocalFiles({ items: [{ newPath: dst, oldPath: src }] });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toContain('already exists');
+      expect(fs.existsSync(src)).toBe(true);
+    });
+
+    it('should create target directory if missing', async () => {
+      const src = path.join(tmpDir, 'src.txt');
+      const dst = path.join(tmpDir, 'new', 'dir', 'dst.txt');
+      await writeFile(src, 'content');
+
+      const result = await moveLocalFiles({
+        items: [{ newPath: dst, oldPath: src }],
+      });
+
+      expect(result[0].success).toBe(true);
+      expect(fs.existsSync(dst)).toBe(true);
+    });
+  });
+
+  // ─── renameLocalFile ───
+
+  describe('renameLocalFile', () => {
+    it('should rename a file', async () => {
+      const filePath = path.join(tmpDir, 'old.txt');
+      await writeFile(filePath, 'content');
+
+      const result = await renameLocalFile({ newName: 'new.txt', path: filePath });
+
+      expect(result.success).toBe(true);
+      expect(result.newPath).toBe(path.join(tmpDir, 'new.txt'));
+      expect(fs.existsSync(path.join(tmpDir, 'new.txt'))).toBe(true);
+    });
+
+    it('should return error for empty params', async () => {
+      const result = await renameLocalFile({ newName: '', path: '' });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject invalid characters in new name', async () => {
+      const result = await renameLocalFile({
+        newName: 'bad/name',
+        path: path.join(tmpDir, 'file.txt'),
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Invalid new name');
+    });
+
+    it('should handle identical name (no-op)', async () => {
+      const filePath = path.join(tmpDir, 'same.txt');
+      await writeFile(filePath, 'content');
+
+      const result = await renameLocalFile({ newName: 'same.txt', path: filePath });
+      expect(result.success).toBe(true);
+    });
+
+    it('should refuse to overwrite an existing sibling', async () => {
+      const filePath = path.join(tmpDir, 'old.txt');
+      const taken = path.join(tmpDir, 'taken.txt');
+      await writeFile(filePath, 'incoming');
+      await writeFile(taken, 'keep me');
+
+      const result = await renameLocalFile({ newName: 'taken.txt', path: filePath });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already exists');
+      expect(fs.readFileSync(taken, 'utf8')).toBe('keep me');
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('incoming');
+    });
+
+    it('should allow a case-only rename', async () => {
+      const filePath = path.join(tmpDir, 'readme.md');
+      await writeFile(filePath, 'content');
+
+      const result = await renameLocalFile({ newName: 'README.md', path: filePath });
+
+      expect(result.success).toBe(true);
+      expect(fs.readdirSync(tmpDir)).toContain('README.md');
+      expect(fs.readdirSync(tmpDir)).not.toContain('readme.md');
+    });
+
+    it('should return error for non-existent file', async () => {
+      const result = await renameLocalFile({
+        newName: 'new.txt',
+        path: path.join(tmpDir, 'nope.txt'),
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  // ─── globLocalFiles ───
+
+  describe('globLocalFiles', () => {
+    it('should match glob patterns', async () => {
+      await writeFile(path.join(tmpDir, 'a.ts'), 'a');
+      await writeFile(path.join(tmpDir, 'b.ts'), 'b');
+      await writeFile(path.join(tmpDir, 'c.js'), 'c');
+
+      const result = await globLocalFiles({ cwd: tmpDir, pattern: '*.ts' });
+
+      expect(result.files.length).toBe(2);
+      expect(result.files).toContain('a.ts');
+      expect(result.files).toContain('b.ts');
+    });
+
+    it('should ignore node_modules and .git', async () => {
+      await mkdir(path.join(tmpDir, 'node_modules', 'pkg'), { recursive: true });
+      await writeFile(path.join(tmpDir, 'node_modules', 'pkg', 'index.ts'), 'x');
+      await writeFile(path.join(tmpDir, 'src.ts'), 'y');
+
+      const result = await globLocalFiles({ cwd: tmpDir, pattern: '**/*.ts' });
+
+      expect(result.files).toEqual(['src.ts']);
+    });
+
+    it('should auto-enable hidden matching when pattern contains a dot-prefixed segment', async () => {
+      await mkdir(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+      await writeFile(path.join(tmpDir, '.github', 'workflows', 'ci.yml'), 'name: ci');
+      await writeFile(path.join(tmpDir, '.github', 'workflows', 'release.yaml'), 'name: release');
+
+      const result = await globLocalFiles({
+        cwd: tmpDir,
+        pattern: '.github/workflows/*.{yml,yaml}',
+      });
+
+      expect(result.files).toHaveLength(2);
+      expect(result.files).toContain('.github/workflows/ci.yml');
+      expect(result.files).toContain('.github/workflows/release.yaml');
+      expect(result.hint).toContain('hidden');
+    });
+
+    it('should not return a hint when pattern has no dot-prefixed segment', async () => {
+      await writeFile(path.join(tmpDir, 'a.ts'), 'a');
+
+      const result = await globLocalFiles({ cwd: tmpDir, pattern: '*.ts' });
+
+      expect(result.hint).toBeUndefined();
+    });
+
+    it('should treat ./ and ../ as relative path indicators, not hidden segments', async () => {
+      await writeFile(path.join(tmpDir, 'a.ts'), 'a');
+
+      const result = await globLocalFiles({ cwd: tmpDir, pattern: './*.ts' });
+
+      expect(result.hint).toBeUndefined();
+    });
+  });
+
+  // ─── grepContent ───
+
+  describe('grepContent', () => {
+    it('should return matches', async () => {
+      await writeFile(path.join(tmpDir, 'search.txt'), 'hello world\nfoo bar\nhello again');
+
+      const result = await grepContent({ cwd: tmpDir, pattern: 'hello' });
+
+      expect(result).toHaveProperty('success');
+      expect(result).toHaveProperty('matches');
+      expect(result.matches).toContain('./search.txt');
+    });
+
+    it('should return matching lines in content mode', async () => {
+      await writeFile(path.join(tmpDir, 'search.txt'), 'hello world\nfoo bar\nhello again');
+
+      const result = await grepContent({ cwd: tmpDir, output_mode: 'content', pattern: 'hello' });
+
+      expect(result.matches[0]).toContain('./search.txt:1:1:hello world');
+    });
+
+    it('should handle no matches', async () => {
+      await writeFile(path.join(tmpDir, 'empty.txt'), 'nothing here');
+
+      const result = await grepContent({ cwd: tmpDir, pattern: 'xyz_not_found' });
+      expect(result.matches).toEqual([]);
+    });
+
+    it('should return a hidden-matching hint when filePattern contains a dot-prefixed segment', async () => {
+      // The hint is set regardless of whether rg is installed on the host —
+      // it signals to the agent why we're auto-enabling --hidden so a zero
+      // match doesn't look like a silent failure.
+      const result = await grepContent({
+        cwd: tmpDir,
+        filePattern: '.github/workflows/*.yml',
+        pattern: 'jobs',
+      });
+
+      expect(result.hint).toContain('hidden');
+    });
+
+    it('should not return a hint for a normal filePattern', async () => {
+      const result = await grepContent({
+        cwd: tmpDir,
+        filePattern: '*.ts',
+        pattern: 'jobs',
+      });
+
+      expect(result.hint).toBeUndefined();
+    });
+  });
+
+  // ─── searchLocalFiles ───
+
+  describe('searchLocalFiles', () => {
+    it('should find files by keyword', async () => {
+      await writeFile(path.join(tmpDir, 'config.json'), '{}');
+      await writeFile(path.join(tmpDir, 'config.yaml'), '');
+      await writeFile(path.join(tmpDir, 'readme.md'), '');
+
+      const result = await searchLocalFiles({ directory: tmpDir, keywords: 'config' });
+
+      expect(result.length).toBe(2);
+      expect(result.map((r) => r.name)).toContain('config.json');
+    });
+
+    it('should respect limit', async () => {
+      for (let i = 0; i < 5; i++) {
+        await writeFile(path.join(tmpDir, `file${i}.log`), `content ${i}`);
+      }
+
+      const result = await searchLocalFiles({
+        directory: tmpDir,
+        keywords: 'file',
+        limit: 2,
+      });
+
+      expect(result.length).toBe(2);
+    });
+
+    it('should handle errors gracefully', async () => {
+      const result = await searchLocalFiles({
+        directory: '/nonexistent/path/xyz',
+        keywords: 'test',
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    it('should find dot-prefixed files when keywords starts with a dot', async () => {
+      await writeFile(path.join(tmpDir, '.env'), 'A=1');
+      await writeFile(path.join(tmpDir, '.envrc'), 'export A=1');
+      await writeFile(path.join(tmpDir, 'env.txt'), 'unrelated');
+
+      const result = await searchLocalFiles({ directory: tmpDir, keywords: '.env' });
+
+      const names = result.map((r) => r.name);
+      expect(names).toContain('.env');
+      expect(names).toContain('.envrc');
+    });
+  });
+});

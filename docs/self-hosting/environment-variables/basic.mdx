@@ -1,0 +1,354 @@
+---
+title: Customize LobeHub Deployment with Environment Variables
+description: >-
+  Learn about the common environment variables used to customize LobeHub
+  deployment, including access code, OAuth SSO, base path, and default agent
+  configuration.
+tags:
+  - LobeHub
+  - environment variables
+  - deployment
+  - OAuth SSO
+  - base path
+  - default agent configuration
+---
+
+# Environment Variables
+
+LobeHub provides some additional configuration options during deployment, which can be customized using environment variables.
+
+## Common Variables
+
+### `KEY_VAULTS_SECRET`
+
+- Type: Optional
+- Description: Add a password to access the LobeHub service. You can set a long password to prevent brute force attacks.
+- Default: -
+- Example: `Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=`
+
+<Callout type={'warning'}>
+  This key is used to encrypt sensitive data. Once set, do not change it, otherwise encrypted data
+  cannot be decrypted.
+</Callout>
+
+<GenerateSecret envName="KEY_VAULTS_SECRET" />
+
+### `API_KEY_SELECT_MODE`
+
+- Type：Optional
+- Description：Controls the mode for selecting the API Key when multiple API Keys are available. Currently supports `random` and `turn`.
+- Default：`random`
+- Example：`random` or `turn`
+
+When using the `random` mode, a random API Key will be selected from the available multiple API Keys.
+
+When using the `turn` mode, the API Keys will be retrieved in a polling manner according to the specified order.
+
+### `DEFAULT_AGENT_CONFIG`
+
+- Type: Optional
+- Description: Used to configure the default settings for the LobeHub default agent. It supports various data types and structures, including key-value pairs, nested fields, array values, and more.
+- Default: -
+- Example: `'model=gpt-4o;params.max_tokens=300;plugins=search-engine,lobe-image-designer'`
+
+The `DEFAULT_AGENT_CONFIG` is used to configure the default settings for the LobeHub default agent. It supports various data types and structures, including key-value pairs, nested fields, array values, and more. The table below provides detailed information on the configuration options, examples, and corresponding explanations for the `DEFAULT_AGENT_CONFIG` environment variable:
+
+| Configuration Type      | Example                                                                                                            | Explanation                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Basic Key-Value Pair    | `model=gpt-4`                                                                                                      | Set the model to `gpt-4`.                                                                              |
+| Nested Field            | `tts.voice.openai=nova`                                                                                            | Set the default OpenAI text-to-speech voice to `nova`.                                                 |
+| Array                   | `plugins=search-engine,lobe-image-designer`                                                                        | Enable the `search-engine` and `lobe-image-designer` plugins.                                          |
+| Chinese Comma           | `plugins=search-engine，lobe-image-designer`                                                                        | Same as above, demonstrating support for Chinese comma separation.                                     |
+| Multiple Configurations | `model=glm-4;provider=zhipu`                                                                                       | Set the model to `glm-4` and the model provider to `zhipu`.                                            |
+| Numeric Value           | `params.max_tokens=300`, `chatConfig.historyCount=5`                                                               | Set the maximum tokens to `300`, Set the number of historical messages to 5.                           |
+| Boolean Value           | `chatConfig.enableHistoryCount=true`, `chatConfig.enableCompressThreshold=true`, `chatConfig.enableStreaming=true` | Enable history length limit, history length compression threshold, and streaming output.               |
+| Special Characters      | `inputTemplate="Hello; I am a bot;"`                                                                               | Set the input template to `Hello; I am a bot;`.                                                        |
+| Error Handling          | `model=gpt-4;maxToken`                                                                                             | Ignore invalid entry `maxToken` and only parse `model=gpt-4`.                                          |
+| Value Override          | `model=gpt-4;model=gpt-4o`                                                                                         | If a key is repeated, use the value that appears last; in this case, the value of `model` is `gpt-4o`. |
+
+Further reading:
+
+- [\[RFC\] 022 - Default Assistant Parameters Configuration via Environment Variables](https://github.com/lobehub/lobehub/discussions/913)
+
+### `SYSTEM_AGENT`
+
+- Type: Optional
+- Description: Used to configure models and providers for LobeHub system agents (such as topic generation, translation, etc.).
+- Default value: `-`
+- Example: `default=ollama/deepseek-v3` or `topic=openai/gpt-4,translation=anthropic/claude-sonnet-4-5-20250929`
+
+The `SYSTEM_AGENT` environment variable supports two configuration methods:
+
+1. Use `default=provider/model` to set the same default configuration for all system agents
+2. Configure specific system agents individually using the format `agent-name=provider/model`
+
+Configuration details:
+
+| Config Type         | Format                                          | Explanation                                                            |
+| ------------------- | ----------------------------------------------- | ---------------------------------------------------------------------- |
+| Default setting     | `default=ollama/deepseek-v3`                    | Set deepseek-v3 from ollama as the default model for all system agents |
+| Specific setting    | `topic=openai/gpt-4`                            | Set a specific provider and model for topic generation                 |
+| Mixed configuration | `default=ollama/deepseek-v3,topic=openai/gpt-4` | First set default values for all agents, then override specific agents |
+
+Available system agents and their functions:
+
+| System Agent            | Key Name          | Function Description                                                                   |
+| ----------------------- | ----------------- | -------------------------------------------------------------------------------------- |
+| Topic Generation        | `topic`           | Automatically generates topic names and summaries based on chat content                |
+| Translation             | `translation`     | Handles text translation between multiple languages                                    |
+| Metadata Generation     | `agentMeta`       | Generates descriptive information and metadata for assistants                          |
+| History Compression     | `historyCompress` | Compresses and organizes history for long conversations, optimizing context management |
+| Branch Conversation     | `thread`          | Automatically generate titles for branch conversations                                 |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
+| Input Auto-completion   | `inputCompletion` | Input auto-completion suggestions (similar to GitHub Copilot ghost text)               |
+| Prompt Rewrite          | `promptRewrite`   | Optimize prompts before generation                                                     |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
+
+### `FEATURE_FLAGS`
+
+- Type: Optional
+- Description: Used to control LobeHub's feature functionalities. Supports multiple feature flags, using `+` to add a feature and `-` to disable a feature. Separate multiple feature flags with a comma `,` and enclose the entire value in quotes `"` to avoid parsing errors.
+- Default: `-`
+- Example: `"-welcome_suggest"`
+
+For specific content, please refer to the [Feature Flags](/docs/self-hosting/advanced/feature-flags) documentation.
+
+### `ENABLE_AGENT_GATEWAY`
+
+- Type: Optional
+- Description: Enables Gateway Mode for self-hosted deployments. It only takes effect when `AGENT_GATEWAY_URL` is also configured.
+- Default: `0`
+- Example: `1`
+
+Business builds enable Gateway Mode automatically. Self-hosted deployments can set `ENABLE_AGENT_GATEWAY=1` together with `AGENT_GATEWAY_URL` to expose Gateway Mode to clients.
+
+### `AGENT_GATEWAY_URL`
+
+- Type: Optional
+- Description: Agent Gateway endpoint used by Gateway Mode to run supported agent tasks through the backend. Browsers open their WebSocket connection to this address, so it must be reachable from the browser.
+- Default: -
+- Example: `https://agent-gateway.example.com`
+
+### `AGENT_GATEWAY_PROTOCOL`
+
+- Type: Optional
+- Description: Which Agent Gateway wire protocol clients may use. `1` is the per-operation WebSocket (`GET /ws`), which is what `lobehub/lobehub-gateway` serves; `2` adds the per-user multiplexed socket (`GET /v2/ws`). Self-hosted deployments default to `1` — a client that dials `/v2/ws` on a gateway without it cannot stream until it falls back. Set it only if you run a gateway that does serve `/v2/ws`.
+- Default: `1`
+- Example: `2`
+
+### `AGENT_GATEWAY_INTERNAL_URL`
+
+- Type: Optional
+- Description: Agent Gateway endpoint for server-to-gateway requests. Set it when the LobeHub server cannot reach `AGENT_GATEWAY_URL` directly, for example to use the Docker Compose service name. Falls back to `AGENT_GATEWAY_URL`.
+- Default: -
+- Example: `http://gateway:8787`
+
+### `AGENT_GATEWAY_SERVICE_TOKEN`
+
+- Type: Optional
+- Description: Agent Gateway authentication token, used for authentication between Gateway Mode and self-deployed Agent Gateway
+- Default: -
+- Example: `dev-secret`
+
+### `DEVICE_GATEWAY_URL`
+
+- Type: Optional
+- Description: Device Gateway address for server requests. This internal address is not sent to clients.
+- Default: -
+- Example: `http://gateway:8788`
+
+### `DEVICE_GATEWAY_PUBLIC_URL`
+
+- Type: Optional
+- Description: Device Gateway address that desktop and CLI clients can discover automatically. Leave unset to specify the address on each client. Use an HTTP or HTTPS base URL without the `/ws` suffix, credentials, query parameters or a `#` fragment.
+- Default: -
+- Example: `https://device-gateway.example.com` or `http://your_server_ip:8788`
+
+### `PROXY_URL`
+
+- Type: Optional
+- Description: Used to specify the proxy URL for connecting to external services. The value of this variable should be different in different deployment environments.
+- Default: -
+- Example: `http://127.0.0.1:7890` or `socks5://localhost:7891`
+
+<Callout type="info">
+  If you're using Docker Desktop on Windows or macOS, it relies on a virtual machine. In this setup,
+  `localhost` / `127.0.0.1` refers to the localhost of the container itself. In such cases, please
+  try using `host.docker.internal` instead of `localhost`. Use `http://user:password@127.0.0.1:7890`
+  to connect to an authenticated proxy server.
+</Callout>
+
+### `SSRF_ALLOW_PRIVATE_IP_ADDRESS`
+
+- Type: Optional
+- Description: Controls whether to allow connections to private IP addresses. Set to `1` to disable SSRF protection and allow all private IP addresses. In a trusted environment (e.g., internal network), this can be enabled to allow access to internal resources.
+- Default: `0`
+- Example: `1` or `0`
+
+<Callout type="warning">
+  **Security Notice**: Enabling this option will disable SSRF protection and allow connections to
+  private IP addresses (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, etc.). Only enable
+  this in trusted environments where you need to access internal network resources.
+</Callout>
+
+**Use Cases**:
+
+LobeHub performs SSRF security checks in the following scenarios:
+
+1. **Image/Video URL to Base64 Conversion**: When processing media messages (e.g., vision models, multimodal models), LobeHub converts image and video URLs to base64 format. This check prevents malicious users from accessing internal network resources.
+
+   Examples:
+
+   - Image: A user sends an image message with URL `http://192.168.1.100/admin/secrets.png`
+   - Video: A user sends a video message with URL `http://10.0.0.50/internal/meeting.mp4`
+
+   Without SSRF protection, these requests could expose internal network resources.
+
+2. **Web Crawler**: When using web crawling features to fetch external content.
+
+3. **Proxy Requests**: When proxying external API requests.
+
+**Configuration Examples**:
+
+```bash
+# Scenario 1: Public deployment (recommended)
+# Block all private IP addresses for security
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=0
+
+# Scenario 2: Internal deployment
+# Allow all private IP addresses to access internal image servers
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=1
+
+# Scenario 3: Hybrid deployment (most common)
+# Block private IPs by default, but allow specific trusted internal servers
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=0
+SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
+```
+
+### `SSRF_ALLOW_IP_ADDRESS_LIST`
+
+- Type: Optional
+- Description: Whitelist of allowed IP addresses, separated by commas. Only takes effect when `SSRF_ALLOW_PRIVATE_IP_ADDRESS` is `0`. Use this to allow specific internal IP addresses while keeping SSRF protection enabled for other private IPs.
+- Default: -
+- Example: `192.168.1.100,10.0.0.50,172.16.0.10`
+
+**Common Use Cases**:
+
+- Allow access to internal image storage server: `192.168.1.100`
+- Allow access to internal API gateway: `10.0.0.50`
+- Allow access to internal documentation server: `172.16.0.10`
+
+### `ASSET_BASE_URL`
+
+- Type: Optional
+- Description: Base URL for build output (Next.js static assets and the SPA bundles). Set it to a CDN or object-storage origin to serve build assets from somewhere other than the app itself. It maps to Next.js [assetPrefix](https://nextjs.org/docs/app/api-reference/config/next-config-js/assetPrefix). Leave it unset to serve everything from the app origin.
+- Default: -
+- Example: `https://cdn.example.com`
+
+<Callout type={'warning'}>
+  When this points at a different origin than the app, that host **must** respond with an
+  `Access-Control-Allow-Origin` header covering your app's origin. Once an asset base URL is
+  configured, LobeHub emits `crossorigin` on the generated `<script>` and `<link>` tags — a host
+  without the header makes the browser refuse to execute those assets, leaving a blank page. It also
+  means script errors from those files reach error monitoring with a real stack instead of an opaque
+  `Script error.` frame.
+</Callout>
+
+### `NEXT_PUBLIC_ASSET_PREFIX`
+
+- Type: Optional, **deprecated** — use `ASSET_BASE_URL` instead
+- Description: Previous name for `ASSET_BASE_URL`. Still used as a fallback when `ASSET_BASE_URL` is unset, and carries the same cross-origin requirement described above.
+- Default: -
+- Example: `https://cdn.example.com`
+
+## Multimodal Understanding
+
+### `MULTIMODAL_UNDERSTANDING_PROVIDER`
+
+- Type: Optional
+- Description: Provider ID of the fallback multimodal understanding model. Configure this together with `MULTIMODAL_UNDERSTANDING_MODEL` to let models without native audio, image, or video understanding inspect uploaded media through the built-in multimodal understanding tool.
+- Default: -
+- Example: `openai`, `google`, or `ollama`
+
+### `MULTIMODAL_UNDERSTANDING_MODEL`
+
+- Type: Optional
+- Description: Model ID used by the fallback multimodal understanding tool. This model should support the media types you want to analyze. The feature is enabled only when both `MULTIMODAL_UNDERSTANDING_PROVIDER` and `MULTIMODAL_UNDERSTANDING_MODEL` are configured.
+- Default: -
+- Example: `gemini-2.5-flash` or your local multimodal model ID
+
+### `MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS`
+
+- Type: Optional
+- Description: Comma-separated image formats accepted by the fallback multimodal understanding model. Supported values are `jpeg`, `png`, `webp`, or their MIME types. The image format is inferred from the URL extension when available; unsupported formats are converted to the first configured format before being sent to the model. URLs without a recognizable extension are downloaded to detect their format.
+- Default: `jpeg,png`
+- Example: `png,jpeg,webp`
+
+Configuration example:
+
+```bash
+MULTIMODAL_UNDERSTANDING_PROVIDER=google
+MULTIMODAL_UNDERSTANDING_MODEL=gemini-2.5-flash
+MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS=png,jpeg,webp
+```
+
+For migration compatibility, `VISUAL_UNDERSTANDING_PROVIDER` and `VISUAL_UNDERSTANDING_MODEL` remain supported as legacy aliases. When both old and new variables are set, `MULTIMODAL_UNDERSTANDING_*` takes precedence.
+
+When this feature is enabled, users can upload audio, images, or videos while using a model that does not have the corresponding native multimodal capability, as long as the active model supports tool use. File upload still requires the normal file storage configuration for your deployment.
+
+## AI Image
+
+### `AI_IMAGE_DEFAULT_IMAGE_NUM`
+
+- Type: Optional
+- Description: Sets the default number of images to generate for AI image generation. Users can still override this value in their settings.
+- Default: `2`
+- Example: `6`
+- Range: `1-20`
+
+This environment variable allows administrators to customize the default image generation count for their deployment. The value must be between 1 and 20. If not set, it defaults to 2. Users can still adjust this value in their personal settings.
+
+## Plugin Service
+
+### `TOOL_NAME_MAX_LENGTH`
+
+- Type: Optional
+- Description: The length at which a function-call tool name is compressed into an opaque `MD5HASH_…` name. OpenAI caps function names at 64 characters, but providers without that limit only pay the readability cost, so the threshold is configurable. Set it to `0` to disable length-based compression entirely and keep full, readable tool names. Names containing characters providers reject (non-ASCII, dots, spaces…) are still hashed regardless of this setting.
+- Default: `64`
+- Example: `0`
+- Note: an unset, invalid, or negative value falls back to the default.
+
+### `PLUGINS_INDEX_URL`
+
+- Type: Optional
+- Description: Index address of the LobeHub plugin market. If you have deployed the plugin market service on your own, you can use this variable to override the default plugin market address.
+- Default: `https://registry.npmmirror.com/@lobehub/plugins-index/v1/files/public`
+
+### `PLUGIN_SETTINGS`
+
+- Type: Optional
+- Description: Used to configure plugin settings. Use the format `plugin-name:setting-field=setting-value` to configure the settings of the plugin. Separate multiple setting fields with a semicolon `;`, and separate multiple plugin settings with a comma `,`.
+- Default: `-`
+- Example: `search-engine:SERPAPI_API_KEY=xxxxx,plugin-2:key1=value1;key2=value2`
+
+The above example sets the `SERPAPI_API_KEY` of the `search-engine` plugin to `xxxxx`, and sets `key1` of `plugin-2` to `value1`, and `key2` to `value2`. The generated plugin settings configuration is as follows:
+
+```json
+{
+  "plugin-2": {
+    "key1": "value1",
+    "key2": "value2"
+  },
+  "search-engine": {
+    "SERPAPI_API_KEY": "xxxxx"
+  }
+}
+```
+
+## Assistant Market
+
+### `AGENTS_INDEX_URL`
+
+- Type: Optional
+- Description: Index address of the LobeHub assistant market. If you have deployed the assistant market service on your own, you can use this variable to override the default market address.
+- Default: `https://registry.npmmirror.com/@lobehub/agents-index/v1/files/public`

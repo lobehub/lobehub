@@ -1,0 +1,129 @@
+'use client';
+
+import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { getSelectedBlocksLiteXML } from '@lobechat/editor-runtime';
+import { nanoid } from '@lobechat/utils';
+import { type IEditor } from '@lobehub/editor';
+import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
+import { type ChatInputActionsProps } from '@lobehub/editor/react';
+import { Avatar, Block, createStaticStyles, cssVar } from '@lobehub/ui';
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useConversationStore } from '@/features/Conversation/store';
+import type { ComposerTarget } from '@/features/Conversation/types';
+import { useFileStore } from '@/store/file';
+
+import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
+import { usePageEditorStore } from '../store';
+
+const styles = createStaticStyles(({ css }) => ({
+  askCopilot: css`
+    border-radius: 6px;
+    color: ${cssVar.colorTextDescription};
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+    }
+  `,
+}));
+
+export const useAskCopilotItem = (
+  editor: IEditor | undefined,
+  explicitComposerTarget?: ComposerTarget,
+): ChatInputActionsProps['items'] => {
+  const { t } = useTranslation('common');
+  const providerComposerTarget = useConversationStore((s) => s.composerTarget);
+  const composerTarget = explicitComposerTarget ?? providerComposerTarget;
+  const addSelectionContext = useFileStore((s) => s.addChatContextSelection);
+  const pageId = usePageEditorStore((s) => s.documentId);
+  const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
+  const { toggle: togglePageAgentPanel } = usePageAgentPanelControl();
+
+  return useMemo(() => {
+    if (!editor || !composerTarget.writable) return [];
+
+    const label = t('cmdk.askLobeAI');
+
+    return [
+      {
+        children: (
+          <Block
+            clickable
+            horizontal
+            align="center"
+            className={styles.askCopilot}
+            gap={8}
+            paddingBlock={6}
+            paddingInline={12}
+            variant="borderless"
+            onClick={() => {
+              const xml =
+                getSelectedBlocksLiteXML(editor) ||
+                (editor.getSelectionDocument?.('litexml') as string) ||
+                '';
+              const plainText = (editor.getSelectionDocument?.('text') as string) || '';
+              const content = plainText || xml;
+
+              if (!content) return;
+
+              const format = xml.trim() ? 'xml' : 'text';
+              const preview =
+                (plainText || xml)
+                  .replaceAll(/<[^>]*>/g, ' ')
+                  .replaceAll(/\s+/g, ' ')
+                  .trim() || undefined;
+
+              // Store action handles deduplication
+              addSelectionContext({
+                contextKey: composerTarget.contextKey,
+                selection: {
+                  content,
+                  format,
+                  id: `selection-${nanoid(6)}`,
+                  pageId,
+                  preview,
+                  title: 'Selection',
+                  type: 'text',
+                  xml,
+                },
+              });
+
+              // Open right panel if not opened
+              setRightPanelMode('copilot');
+              togglePageAgentPanel(true);
+
+              // Focus on chat input after a short delay to ensure panel is opened
+              setTimeout(() => {
+                // Find the chat input editor within the right panel
+                // Query all lexical editors and get the last one (which should be the chat input)
+                const allEditors = [...document.querySelectorAll('[data-lexical-editor="true"]')];
+                const chatInputEditor = allEditors.at(-1) as HTMLElement;
+                if (chatInputEditor) {
+                  chatInputEditor.focus();
+                }
+              }, 300);
+
+              editor.dispatchCommand(HIDE_TOOLBAR_COMMAND, undefined);
+              editor.blur();
+            }}
+          >
+            <Avatar avatar={DEFAULT_INBOX_AVATAR} shape="square" size={16} />
+            <span>{label}</span>
+          </Block>
+        ),
+        key: 'ask-copilot',
+        label,
+        onClick: () => {},
+      },
+    ];
+  }, [
+    addSelectionContext,
+    composerTarget,
+    editor,
+    pageId,
+    setRightPanelMode,
+    t,
+    togglePageAgentPanel,
+  ]);
+};

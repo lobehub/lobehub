@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN IF NOT EXISTS "editor_data" jsonb;

@@ -1,0 +1,43 @@
+'use client';
+
+import { cssVar, Text } from '@lobehub/ui';
+import { memo, useCallback } from 'react';
+
+import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
+import NavItem from '@/features/NavPanel/components/NavItem';
+import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
+
+type TaskRow = TaskGroupItem['tasks'][number];
+
+interface TaskItemProps {
+  active?: boolean;
+  task: TaskRow;
+}
+
+const TaskItem = memo<TaskItemProps>(({ task, active }) => {
+  const navigateToTaskDetail = useNavigateToTaskDetail();
+
+  const handleClick = useCallback(() => {
+    navigateToTaskDetail(task.identifier, undefined, task.name);
+  }, [navigateToTaskDetail, task.identifier, task.name]);
+
+  const hasName = Boolean(task.name?.trim());
+  const displayTitle = hasName ? task.name : task.identifier;
+
+  return (
+    <NavItem
+      active={active}
+      title={displayTitle}
+      slots={{
+        titlePrefix: hasName ? (
+          <Text fontSize={12} style={{ color: cssVar.colorTextTertiary, flex: 'none' }}>
+            {task.identifier}
+          </Text>
+        ) : undefined,
+      }}
+      onClick={handleClick}
+    />
+  );
+});
+
+export default TaskItem;

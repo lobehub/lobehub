@@ -1,0 +1,329 @@
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useClientDataSWR } from '@/libs/swr';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { useChatStore } from '@/store/chat/store';
+
+vi.mock('@/libs/swr', () => ({
+  useClientDataSWR: vi.fn(),
+}));
+
+// Test Constants
+const TEST_IDS = {
+  GROUP_ID: 'test-group-id',
+  SUPERVISOR_AGENT_ID: 'test-supervisor-agent-id',
+  TOPIC_ID: 'test-topic-id',
+  OPERATION_ID: 'test-operation-id',
+} as const;
+
+// Helper to reset test environment
+const resetTestEnvironment = () => {
+  vi.clearAllMocks();
+  useChatStore.setState(
+    {
+      activeAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+      activeGroupId: TEST_IDS.GROUP_ID,
+      activeTopicId: TEST_IDS.TOPIC_ID,
+      messagesMap: {},
+      dbMessagesMap: {},
+      operations: {},
+      messageOperationMap: {},
+    },
+    false,
+  );
+};
+
+describe('groupOrchestration actions', () => {
+  beforeEach(() => {
+    resetTestEnvironment();
+
+    // Setup default mocks for store methods
+    act(() => {
+      useChatStore.setState({
+        startOperation: vi.fn().mockReturnValue({
+          operationId: TEST_IDS.OPERATION_ID,
+          abortController: new AbortController(),
+        }),
+        completeOperation: vi.fn(),
+        failOperation: vi.fn(),
+      });
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('internal_execGroupOrchestration', () => {
+    it('should create operation with scope: group in context', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      // Spy on startOperation to verify it's called with correct context
+      const startOperationSpy = vi.spyOn(result.current, 'startOperation');
+
+      // Call internal_execGroupOrchestration - it will fail after startOperation
+      // because the runtime needs more setup, but we only care about the startOperation call
+      try {
+        await act(async () => {
+          await result.current.internal_execGroupOrchestration({
+            groupId: TEST_IDS.GROUP_ID,
+            supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+            topicId: TEST_IDS.TOPIC_ID,
+            initialResult: {
+              type: 'supervisor_decided',
+              payload: {
+                decision: 'finish',
+                params: {},
+                skipCallSupervisor: true,
+              },
+            },
+          });
+        });
+      } catch {
+        // Expected to fail after startOperation due to runtime dependencies
+      }
+
+      // Verify startOperation was called with scope: 'group' in context
+      // This is the key assertion - ensures supervisor messages have correct scope
+      // after broadcast completes and call_supervisor is invoked
+      expect(startOperationSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'execAgentRuntime',
+          context: expect.objectContaining({
+            groupId: TEST_IDS.GROUP_ID,
+            topicId: TEST_IDS.TOPIC_ID,
+            agentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+            scope: 'group',
+          }),
+          label: expect.stringContaining('Group Orchestration'),
+        }),
+      );
+    });
+  });
+
+  describe('useEnablePollingTaskStatus', () => {
+    it('should stop polling after a terminal task status is fetched', () => {
+      vi.mocked(useClientDataSWR).mockReturnValue({ data: undefined } as any);
+
+      const useEnablePollingTaskStatus = useChatStore.getState().useEnablePollingTaskStatus;
+      renderHook(() => useEnablePollingTaskStatus('thread-1', 'message-1', true));
+
+      const refreshInterval = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]
+        ?.refreshInterval as ((data?: { status?: string }) => number) | undefined;
+
+      expect(refreshInterval).toBeTypeOf('function');
+      expect(refreshInterval?.()).toBe(5000);
+      expect(refreshInterval?.({ status: 'processing' })).toBe(5000);
+      expect(refreshInterval?.({ status: 'completed' })).toBe(0);
+      expect(refreshInterval?.({ status: 'failed' })).toBe(0);
+      expect(refreshInterval?.({ status: 'cancel' })).toBe(0);
+    });
+  });
+
+  describe('triggerBroadcast', () => {
+    it('should call internal_execGroupOrchestration with broadcast decision', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const internal_execGroupOrchestrationSpy = vi.fn().mockResolvedValue({ status: 'done' });
+      act(() => {
+        useChatStore.setState({
+          internal_execGroupOrchestration: internal_execGroupOrchestrationSpy,
+        });
+      });
+
+      await act(async () => {
+        await result.current.triggerBroadcast({
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+          agentIds: ['agent-1', 'agent-2'],
+          instruction: 'Test instruction',
+          skipCallSupervisor: false,
+          toolMessageId: 'tool-msg-id',
+        });
+      });
+
+      expect(internal_execGroupOrchestrationSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId: TEST_IDS.GROUP_ID,
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+          topicId: TEST_IDS.TOPIC_ID,
+          initialResult: expect.objectContaining({
+            type: 'supervisor_decided',
+            payload: expect.objectContaining({
+              decision: 'broadcast',
+              params: expect.objectContaining({
+                agentIds: ['agent-1', 'agent-2'],
+                instruction: 'Test instruction',
+                toolMessageId: 'tool-msg-id',
+              }),
+              skipCallSupervisor: false,
+            }),
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('triggerSpeak', () => {
+    it('should call internal_execGroupOrchestration with speak decision', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const internal_execGroupOrchestrationSpy = vi.fn().mockResolvedValue({ status: 'done' });
+      act(() => {
+        useChatStore.setState({
+          internal_execGroupOrchestration: internal_execGroupOrchestrationSpy,
+        });
+      });
+
+      await act(async () => {
+        await result.current.triggerSpeak({
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+          agentId: 'target-agent-id',
+          instruction: 'Test instruction',
+          skipCallSupervisor: true,
+        });
+      });
+
+      expect(internal_execGroupOrchestrationSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId: TEST_IDS.GROUP_ID,
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+          initialResult: expect.objectContaining({
+            type: 'supervisor_decided',
+            payload: expect.objectContaining({
+              decision: 'speak',
+              params: expect.objectContaining({
+                agentId: 'target-agent-id',
+                instruction: 'Test instruction',
+              }),
+              skipCallSupervisor: true,
+            }),
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('triggerDelegate', () => {
+    it('should call internal_execGroupOrchestration with delegate decision', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const internal_execGroupOrchestrationSpy = vi.fn().mockResolvedValue({ status: 'done' });
+      act(() => {
+        useChatStore.setState({
+          internal_execGroupOrchestration: internal_execGroupOrchestrationSpy,
+        });
+      });
+
+      await act(async () => {
+        await result.current.triggerDelegate({
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+          agentId: 'delegate-agent-id',
+          reason: 'Test reason',
+        });
+      });
+
+      expect(internal_execGroupOrchestrationSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId: TEST_IDS.GROUP_ID,
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+          initialResult: expect.objectContaining({
+            type: 'supervisor_decided',
+            payload: expect.objectContaining({
+              decision: 'delegate',
+              params: expect.objectContaining({
+                agentId: 'delegate-agent-id',
+                reason: 'Test reason',
+              }),
+              skipCallSupervisor: false,
+            }),
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('#resolveGroupId fallback (chat store has no active group)', () => {
+    afterEach(() => {
+      useAgentGroupStore.setState({ activeGroupId: undefined, groupMap: {} }, false);
+    });
+
+    it('resolves the group from this run’s supervisor', async () => {
+      // Chat store active group is cleared (e.g. left the group route in a popup)…
+      useChatStore.setState({ activeGroupId: undefined }, false);
+      // …but the group is still known via its supervisor.
+      useAgentGroupStore.setState(
+        {
+          activeGroupId: undefined,
+          groupMap: {
+            [TEST_IDS.GROUP_ID]: {
+              agents: [],
+              id: TEST_IDS.GROUP_ID,
+              supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+            } as any,
+          },
+        },
+        false,
+      );
+
+      const { result } = renderHook(() => useChatStore());
+      const internal_execGroupOrchestrationSpy = vi.fn().mockResolvedValue({ status: 'done' });
+      act(() => {
+        useChatStore.setState({
+          internal_execGroupOrchestration: internal_execGroupOrchestrationSpy,
+        });
+      });
+
+      await act(async () => {
+        await result.current.triggerSpeak({
+          agentId: 'target-agent-id',
+          instruction: 'hi',
+          skipCallSupervisor: false,
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+        });
+      });
+
+      expect(internal_execGroupOrchestrationSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: TEST_IDS.GROUP_ID }),
+      );
+    });
+
+    it('skips instead of running against a stale popup group from a different supervisor', async () => {
+      useChatStore.setState({ activeGroupId: undefined }, false);
+      // A stale popup group lingers in the agentGroup store, but it is NOT this
+      // run’s supervisor — the trigger must skip, not run against it.
+      useAgentGroupStore.setState(
+        {
+          activeGroupId: 'stale-popup-group',
+          groupMap: {
+            'stale-popup-group': {
+              agents: [],
+              id: 'stale-popup-group',
+              supervisorAgentId: 'some-other-supervisor',
+            } as any,
+          },
+        },
+        false,
+      );
+
+      const { result } = renderHook(() => useChatStore());
+      const internal_execGroupOrchestrationSpy = vi.fn().mockResolvedValue({ status: 'done' });
+      act(() => {
+        useChatStore.setState({
+          internal_execGroupOrchestration: internal_execGroupOrchestrationSpy,
+        });
+      });
+
+      await act(async () => {
+        await result.current.triggerSpeak({
+          agentId: 'target-agent-id',
+          instruction: 'hi',
+          skipCallSupervisor: false,
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+        });
+      });
+
+      expect(internal_execGroupOrchestrationSpy).not.toHaveBeenCalled();
+    });
+  });
+});

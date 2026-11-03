@@ -1,0 +1,15 @@
+{
+  "name": "@lobechat/canvas-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build && vite build --mode highlight && vite build --mode mermaid && node scripts/finalize.mjs",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@lobechat/canvas": "workspace:*",
+    "@pierre/highlights": "^0.2.0",
+    "pele": "^1.6.0"
+  }
+}

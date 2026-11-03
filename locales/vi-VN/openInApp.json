@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "Mở thư mục làm việc trong",
+  "errors.appNotInstalled": "{{appName}} chưa được cài đặt",
+  "errors.launchFailed": "Không thể mở trong {{appName}}: {{error}}",
+  "errors.pathNotFound": "Không tìm thấy đường dẫn: {{path}}",
+  "errors.unknown": "lỗi không xác định",
+  "tooltip": "Mở trong {{appName}}"
+}

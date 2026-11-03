@@ -1,0 +1,439 @@
+import type {
+  ChatToolPayload,
+  ModelUsage,
+  RuntimeAdditionalContextFragment,
+  RuntimeInitialContext,
+  RuntimeStepContext,
+} from '@lobechat/types';
+
+import type { FinishReason } from './event';
+import type { AgentState, ToolRegistry } from './state';
+import type { Cost, CostCalculationContext, Usage } from './usage';
+
+/**
+ * Runtime execution context passed to Agent runner
+ */
+export interface AgentRuntimeContext {
+  /**
+   * Initial context captured at operation start
+   * Contains static state like initial page content that doesn't change during execution
+   * Set once during initialization and passed through to Context Engine
+   */
+  initialContext?: RuntimeInitialContext;
+
+  /** Zero-based instruction position within the current runtime step */
+  instructionIndex?: number;
+
+  metadata?: Record<string, unknown>;
+
+  /** Operation ID (links to Operation for business context) */
+  operationId?: string;
+
+  /** Phase-specific payload/context */
+  payload?: unknown;
+
+  /** Current execution phase */
+  phase:
+    | 'init'
+    | 'user_input'
+    | 'llm_result'
+    | 'tool_result'
+    | 'tools_batch_result'
+    | 'sub_agent_result'
+    | 'sub_agents_batch_result'
+    | 'human_response'
+    | 'human_approved_tool'
+    | 'human_abort'
+    | 'compression_result'
+    | 'error';
+
+  /** Session info (kept for backward compatibility, will be optional in the future) */
+  session?: {
+    eventCount?: number;
+    messageCount: number;
+    sessionId: string;
+    status: AgentState['status'];
+    stepCount: number;
+  };
+
+  /**
+   * Step context computed at the beginning of each step
+   * Contains dynamic state like lobe-agent todos that changes between steps
+   * Computed by AgentRuntime and passed to Context Engine and Tool Executors
+   */
+  stepContext?: RuntimeStepContext;
+
+  /** Usage statistics from the current step (if applicable) */
+  stepUsage?: ModelUsage | unknown;
+}
+
+/**
+ * Represents the "Brain" of an agent.
+ * It contains all the decision-making logic and is completely stateless.
+ */
+export interface Agent {
+  /**
+   * Calculate cost from usage statistics
+   * @param context - Cost calculation context with usage and limits
+   * @returns Updated cost information
+   */
+  calculateCost?: (context: CostCalculationContext) => Cost;
+
+  /**
+   * Calculate usage statistics from operation results
+   * @param operationType - Type of operation that was performed
+   * @param operationResult - Result data from the operation
+   * @param previousUsage - Previous usage statistics
+   * @returns Updated usage statistics
+   */
+  calculateUsage?: (
+    operationType: 'llm' | 'tool' | 'human_interaction',
+    operationResult: any,
+    previousUsage: Usage,
+  ) => Usage;
+
+  /** Optional custom executors mapping to extend runtime behaviors */
+  executors?: Partial<Record<AgentInstruction['type'], any>>;
+
+  /**
+   * Model runtime function for LLM calls - Agent owns its model integration
+   * @param payload - LLM call payload (messages, tools, etc.)
+   * @returns Async iterable of streaming response chunks
+   */
+  modelRuntime?: (payload: unknown) => AsyncIterable<any>;
+
+  /**
+   * The core runner method. Based on the current execution context and state,
+   * it decides what the next action should be.
+   * @param context - Current runtime context with phase and payload
+   * @param state - Complete agent state for reference
+   */
+  runner: (
+    context: AgentRuntimeContext,
+    state: AgentState,
+  ) => Promise<AgentInstruction | AgentInstruction[]>;
+
+  /** Optional tools registry held by the agent */
+  tools?: ToolRegistry;
+}
+
+// ── Payloads ──────────────────────────────────────────────
+
+export interface CallLLMPayload {
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
+  allowedToolNames?: string[];
+  /**
+   * Attachments the context engine sends as a preview plus file id, planned by
+   * `shouldCompress` so attachment text fits under the compression threshold.
+   */
+  attachmentPreviewFileIds?: string[];
+  isFirstMessage?: boolean;
+  messages: any[];
+  model: string;
+  parentId?: string;
+  provider: string;
+  tools: any[];
+}
+
+export interface CallingToolPayload {
+  apiName: string;
+  arguments: string;
+  id: string;
+  identifier: string;
+  type: 'mcp' | 'default' | 'markdown' | 'standalone';
+}
+
+export interface HumanAbortPayload {
+  /** Whether there are pending tool calls */
+  hasToolsCalling?: boolean;
+  /** Parent message ID (assistant message) */
+  parentMessageId: string;
+  /** Reason for the abort */
+  reason: string;
+  /** LLM result including content and tool_calls */
+  result?: {
+    content: string;
+    tool_calls?: any[];
+  };
+  /** Pending tool calls that need to be cancelled */
+  toolsCalling?: ChatToolPayload[];
+}
+
+/**
+ * Sub-agent definition for exec_sub_agents instruction
+ */
+export interface SubAgentTask {
+  /** Brief description of what this sub-agent does (shown in UI) */
+  description: string;
+  /** Whether to inherit context messages from parent conversation */
+  inheritMessages?: boolean;
+  /** Detailed instruction/prompt for the sub-agent execution */
+  instruction: string;
+  /**
+   * Whether to execute the sub-agent on the client side (desktop only).
+   * When true and running on desktop, the sub-agent runs locally with
+   * access to local tools (file system, shell commands, etc.).
+   *
+   * IMPORTANT: This MUST be set to true when the sub-agent requires:
+   * - Reading/writing local files via `local-system` tool
+   * - Executing shell commands
+   * - Any other desktop-only local tool operations
+   *
+   * If not specified or false, the sub-agent runs on the server (default behavior).
+   * On non-desktop platforms (web), this flag is ignored and sub-agents always
+   * run on the server.
+   */
+  runInClient?: boolean;
+  /** Agent selected by callAgent; defaults to the current runtime agent when omitted */
+  targetAgentId?: string;
+  /** Timeout in milliseconds (optional, default 30 minutes) */
+  timeout?: number;
+}
+
+/**
+ * Payload for sub_agent_result phase (single sub-agent)
+ */
+export interface SubAgentResultPayload {
+  /** Parent message ID */
+  parentMessageId: string;
+  /** Result from executed sub-agent */
+  result: {
+    /** Error message if sub-agent failed */
+    error?: string;
+    /** Sub-agent result content */
+    result?: string;
+    /** Whether the sub-agent completed successfully */
+    success: boolean;
+    /** Thread ID where the sub-agent was executed */
+    threadId: string;
+  };
+}
+
+/**
+ * Payload for sub_agents_batch_result phase (multiple sub-agents)
+ */
+export interface SubAgentsBatchResultPayload {
+  /** Parent message ID */
+  parentMessageId: string;
+  /** Results from executed sub-agents */
+  results: Array<{
+    /** Error message if sub-agent failed */
+    error?: string;
+    /** Sub-agent result content */
+    result?: string;
+    /** Whether the sub-agent completed successfully */
+    success: boolean;
+    /** Thread ID where the sub-agent was executed */
+    threadId: string;
+  }>;
+}
+
+// ── Instructions ──────────────────────────────────────────
+
+/**
+ * Common fields shared across all instruction types.
+ * Agents can set `stepLabel` to label the current step for display in streaming events and hooks.
+ */
+export interface AgentInstructionBase {
+  /** Human-readable label for this step (e.g. graph node name). Propagated to stream events and hooks. */
+  stepLabel?: string;
+}
+
+// ─ LLM ───────────────────────────────────────────────────
+
+export interface AgentInstructionCallLlm extends AgentInstructionBase {
+  payload: any;
+  type: 'call_llm';
+}
+
+// ─ Tool ──────────────────────────────────────────────────
+
+export interface AgentInstructionCallTool extends AgentInstructionBase {
+  payload: {
+    parentMessageId: string;
+    /**
+     * When true, the runtime is resuming execution for a previously pending
+     * tool call (e.g. after human approval). The executor must NOT insert a
+     * new tool message; instead it updates the existing one referenced by
+     * `parentMessageId` with the tool result.
+     */
+    skipCreateToolMessage?: boolean;
+    toolCalling: ChatToolPayload;
+  };
+  type: 'call_tool';
+}
+
+export interface AgentInstructionCallToolsBatch extends AgentInstructionBase {
+  payload: {
+    /**
+     * `tool_call_id → existing tool message id`, for tools whose row already
+     * exists as a pending placeholder (batch human approval: the approval pause
+     * created one row per pending tool). The executor UPDATES those rows instead
+     * of inserting new ones — without this, resuming an approved batch would
+     * duplicate every tool message and orphan the pending originals.
+     */
+    existingToolMessageIds?: Record<string, string>;
+    parentMessageId: string;
+    toolsCalling: ChatToolPayload[];
+  } & any;
+  type: 'call_tools_batch';
+}
+
+export interface AgentInstructionResolveAbortedTools extends AgentInstructionBase {
+  payload: {
+    /**
+     * `tool_call_id → existing tool message id`, for calls whose row is already
+     * on disk as a pending placeholder (an approval pause creates one row per
+     * pending tool). The executor UPDATES those rows to the aborted state
+     * instead of inserting new ones — without this, aborting a parked approval
+     * duplicates every tool row and leaves the originals `pending`, so the
+     * approval cards stay on screen after Stop.
+     */
+    existingToolMessageIds?: Record<string, string>;
+    /** Parent message ID (assistant message) */
+    parentMessageId: string;
+    /** Reason for the abort */
+    reason?: string;
+    /** Tool calls that need to be resolved/cancelled */
+    toolsCalling: ChatToolPayload[];
+  };
+  type: 'resolve_aborted_tools';
+}
+
+export interface AgentInstructionResolveBlockedTools extends AgentInstructionBase {
+  payload: {
+    /** Optional message to write into blocked tool result content */
+    blockedContent?: string;
+    /** Optional machine-readable blocked reason */
+    blockedReason?: string;
+    /** Parent message ID (assistant message) */
+    parentMessageId: string;
+    /** Tool calls that were blocked and need tool results */
+    toolsCalling: ChatToolPayload[];
+    /**
+     * These calls named tools that resolved to nothing, so the parent assistant
+     * was persisted without any `tools` of its own. Two consequences the
+     * executor has to handle:
+     *
+     * - The tool rows must be advertised on the parent, or the next step loses
+     *   them: state messages are rebuilt from the DB every step, and
+     *   conversation-flow only collects a tool row when its parent assistant
+     *   lists the matching call. An unadvertised rejection never reaches the
+     *   model, which is the feedback this whole path exists to deliver.
+     * - The instruction counts as one round against
+     *   {@link AgentState.unresolvedToolFeedbackRounds}.
+     */
+    unresolvedToolNames?: boolean;
+  };
+  type: 'resolve_blocked_tools';
+}
+
+// ─ Sub-Agent ─────────────────────────────────────────────
+
+export interface AgentInstructionExecSubAgent extends AgentInstructionBase {
+  payload: {
+    /** Parent message ID (tool message that dispatched the sub-agent) */
+    parentMessageId: string;
+    /** Sub-agent to execute */
+    task: SubAgentTask;
+  };
+  type: 'exec_sub_agent';
+}
+
+export interface AgentInstructionExecSubAgents extends AgentInstructionBase {
+  payload: {
+    /** Parent message ID (tool message that dispatched the sub-agents) */
+    parentMessageId: string;
+    /** Array of sub-agents to execute */
+    tasks: SubAgentTask[];
+  };
+  type: 'exec_sub_agents';
+}
+
+// ─ Human Interaction ─────────────────────────────────────
+
+export interface AgentInstructionRequestHumanPrompt extends AgentInstructionBase {
+  metadata?: Record<string, unknown>;
+  prompt: string;
+  reason?: string;
+  type: 'request_human_prompt';
+}
+
+export interface AgentInstructionRequestHumanSelect extends AgentInstructionBase {
+  metadata?: Record<string, unknown>;
+  multi?: boolean;
+  options: Array<{ label: string; value: string }>;
+  prompt?: string;
+  reason?: string;
+  type: 'request_human_select';
+}
+
+export interface AgentInstructionRequestHumanApprove extends AgentInstructionBase {
+  /**
+   * The assistant message that emitted `pendingToolsCalling`. Any producer that
+   * creates pending tool rows should set it, so those rows land under their real
+   * owner — see the parent resolution comment in `executors/humanApprove.ts`.
+   *
+   * Required by `skipCreateToolMessage` (resume) paths so an unresolved subset
+   * can be rebound to its authoritative assistant owner. Optional only for
+   * backwards compatibility with fresh producers that omit it: the executor
+   * still falls back to scanning `state.messages`, which is accurate only
+   * within a single step.
+   */
+  parentMessageId?: string;
+  pendingToolsCalling: ChatToolPayload[];
+  reason?: string;
+  skipCreateToolMessage?: boolean;
+  /** Previous sealed batch for a partial-decision re-park. */
+  supersedes?: {
+    batchId: string;
+    operationId: string;
+    toolCallIds: string[];
+  };
+  type: 'request_human_approve';
+}
+
+// ─ Control ───────────────────────────────────────────────
+
+export interface AgentInstructionCompressContext extends AgentInstructionBase {
+  payload: {
+    /** Current token count before compression */
+    currentTokenCount: number;
+    /** Existing summary to incorporate (for incremental compression) */
+    existingSummary?: string;
+    /** Messages to compress */
+    messages: any[];
+  };
+  type: 'compress_context';
+}
+
+export interface AgentInstructionFinish extends AgentInstructionBase {
+  reason: FinishReason;
+  reasonDetail?: string;
+  type: 'finish';
+}
+
+// ── Union Type ────────────────────────────────────────────
+
+/**
+ * A serializable instruction object that the "Agent" (Brain) returns
+ * to the "AgentRuntime" (Engine) to execute.
+ */
+export type AgentInstruction =
+  // LLM
+  | AgentInstructionCallLlm
+  // Tool
+  | AgentInstructionCallTool
+  | AgentInstructionCallToolsBatch
+  | AgentInstructionResolveAbortedTools
+  | AgentInstructionResolveBlockedTools
+  // Sub-Agent
+  | AgentInstructionExecSubAgent
+  | AgentInstructionExecSubAgents
+  // Human Interaction
+  | AgentInstructionRequestHumanPrompt
+  | AgentInstructionRequestHumanSelect
+  | AgentInstructionRequestHumanApprove
+  // Control
+  | AgentInstructionCompressContext
+  | AgentInstructionFinish;

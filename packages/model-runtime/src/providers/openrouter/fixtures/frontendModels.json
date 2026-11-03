@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "slug": "mattshumer/reflection-70b:free",
+      "endpoint": {
+        "supports_reasoning": true,
+        "supports_tool_parameters": true
+      }
+    },
+    {
+      "slug": "openai/gpt-4o",
+      "endpoint": {
+        "supports_reasoning": true,
+        "supports_tool_parameters": true
+      }
+    },
+    {
+      "slug": "anthropic/claude-3-opus",
+      "endpoint": {
+        "supports_reasoning": true,
+        "supports_tool_parameters": false
+      }
+    }
+  ]
+}

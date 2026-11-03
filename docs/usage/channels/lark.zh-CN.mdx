@@ -1,0 +1,296 @@
+---
+title: 将 LobeHub 连接到 Lark
+description: 了解如何创建 Lark 自定义应用并将其连接到您的 LobeHub 代理作为消息渠道，使您的 AI 助手能够在 Lark 聊天中与团队成员互动。
+tags:
+  - Lark
+  - 消息渠道
+  - 机器人设置
+  - 集成
+---
+
+# 将 LobeHub 连接到 Lark
+
+通过将 Lark 渠道连接到您的 LobeHub 代理，团队成员可以直接在 Lark 的私聊和群组对话中与 AI 助手互动。
+
+> 如果您使用的是中国版（飞书），请参阅[飞书设置指南](/docs/usage/channels/feishu)。
+
+## 前置条件
+
+- 一个拥有有效订阅的 LobeHub 账户
+- 一个拥有创建企业应用权限的 Lark 账户
+
+## 连接模式
+
+LobeHub 支持两种 Lark 机器人连接模式：
+
+- **WebSocket（推荐）** — 使用 Lark 官方的长连接客户端建立持久连接。事件实时推送，无需配置公网可访问的 Webhook 地址，即使没有公网服务器也能开箱即用。这是新机器人的默认模式。
+- **Webhook** — 基于事件订阅 URL 的 HTTP 回调。如果您倾向于无状态的回调方式，或应用已在 Lark 开放平台配置了事件订阅 URL，可使用此模式。
+
+> **注意：** 两种模式都需要订阅消息接收事件。快捷创建会预置权限与事件，手动创建的应用则需要自行配置。只有 **Webhook 模式**需要配置 **Event Subscription URL**；**WebSocket 模式**使用长连接订阅。
+
+## 快捷创建 Lark 智能体应用（推荐）
+
+新建机器人时，可以使用 Lark 开放平台的智能体应用快捷入口，自动预置权限与事件。这里创建的是 Lark 应用，仍需在 LobeHub 中选择要连接的智能体。
+
+<Steps>
+  ### 打开快捷创建入口
+
+  登录 [Lark 开放平台](https://open.larksuite.com/app)，在应用列表顶部找到 **Built for agents. Ready to connect.**，点击 **Create**。
+
+  ![Lark 开放平台顶部智能体应用入口与 Create 按钮](https://app.lobehub.com/f/file_bJQtafLrKIjL)
+
+  ### 选择头像和名称
+
+  在 **Create a Lark app for your agent** 页面选择 **Avatar**（头像），填写 **Name**（名称），例如「Lobehub Weekly Helper」。点击 **Create**，等待自动配置完成。
+
+  ![Lark 智能体应用创建表单，已选择头像并填写 Lobehub Weekly Helper](https://app.lobehub.com/f/file_5nzE06PzNsqi)
+
+  ### 复制应用凭证
+
+  在 **App created** 页面复制 **App ID** 和 **App Secret**。请妥善保管 App Secret，不要发送到群聊或出现在公开截图中。
+
+  ![Lark 创建成功页面，展示 App ID，App Secret 已隐藏](https://app.lobehub.com/f/file_5P7dVZyinqXa)
+
+  ### 连接到 LobeHub
+
+  在 LobeHub 中打开要连接的智能体，进入 **设置** → **渠道** → **Lark**，填入刚才复制的 **App ID** 和 **App Secret**。在 **高级设置** 中保留默认的 **WebSocket** 连接模式，点击 **保存配置**。
+
+  WebSocket 模式无需填写事件订阅 URL、Verification Token 或 Encrypt Key，也无需重复添加已有的预置权限与事件。如果后续使用工具时提示缺少权限，再按提示补充对应权限。
+
+  ### 打开应用并测试
+
+  根据 Lark 页面提示确认应用已发布并可用；如果企业要求管理员审批，请先完成审批。点击 **Open App**，向机器人发送消息，确认 LobeHub 智能体能够回复。
+
+  如果没有回复，请检查机器人功能是否已启用、事件订阅是否使用长连接、是否包含 `im.message.receive_v1`，以及 LobeHub 中的渠道配置是否已保存。更多检查项见下方「故障排除」。
+</Steps>
+
+截图来自 open.larksuite.com 的 Lark 国际版英文界面，以「Lobehub Weekly Helper」为例，你可以使用自己的应用名称。
+
+连接成功后，无需重复执行下方的手动创建流程，可继续查看「第七步：设置平台身份」和「访问策略」。如果没有快捷入口、需要配置已有应用，或选择 Webhook 模式，请参考下方手动配置。
+
+## 手动配置（备用方式）
+
+以下步骤从创建企业应用开始。已有应用可直接跳到需要补充或修改的步骤；快捷创建的应用只需检查缺失配置，不要重复创建。
+
+## 第一步：创建 Lark 应用
+
+<Steps>
+  ### 打开开发者门户
+
+  访问 [open.larksuite.com/app](https://open.larksuite.com/app) 并使用您的账户登录。
+
+  ### 创建企业应用
+
+  点击 **Create Enterprise App**。填写应用名称（例如 "LobeHub Assistant"）、描述和图标，然后提交表单。
+
+  ![](/blog/assetsa8003533498461272ea15a19407db9f4.webp)
+
+  ### 复制应用凭证
+
+  进入 **Credentials & Basic Info**，复制以下内容：
+
+  - **App ID**（格式：`cli_xxx`）
+  - **App Secret**
+
+  > **重要提示：** 请妥善保管您的 App Secret。切勿公开分享。
+
+  ![](/blog/assetscb1c097430e064f8f99de85e5f078784.webp)
+</Steps>
+
+## 第二步：配置应用权限和机器人功能
+
+<Steps>
+  ### 导入所需权限
+
+  在您的应用设置中，进入 **Permissions & Scopes**，点击 **Batch Import**，然后粘贴以下 JSON 以授予机器人所需的所有权限。
+
+  ```json
+  {
+    "scopes": {
+      "tenant": [
+        "application:application.app_message_stats.overview:readonly",
+        "application:application:self_manage",
+        "application:bot.menu:write",
+        "cardkit:card:read",
+        "cardkit:card:write",
+        "contact:user.employee_id:readonly",
+        "event:ip_list",
+        "im:chat.members:bot_access",
+        "im:chat:readonly",
+        "im:message",
+        "im:message.group_at_msg:readonly",
+        "im:message.group_msg",
+        "im:message.p2p_msg:readonly",
+        "im:message:readonly",
+        "im:message:send_as_bot",
+        "im:resource"
+      ],
+      "user": []
+    }
+  }
+  ```
+
+  <Callout type={'info'}>
+    以上权限码已针对 Lark（国际版）进行调整。部分飞书特有的权限码（如 `aily:*`、`corehr:*`、`im:chat.access_event.bot_p2p_chat:read`）在 Lark 上不可用，已被排除。
+  </Callout>
+
+  ![](/blog/assets1aaca5d65761b58564e3f196a91cde3e.webp)
+
+  ### 启用机器人功能
+
+  进入 **App Capability** → **Bot**。开启机器人功能并设置您喜欢的机器人名称。
+</Steps>
+
+## 第三步：在 LobeHub 中配置 Lark
+
+<Steps>
+  ### 打开渠道设置
+
+  在 LobeHub 中，导航到您的代理设置，然后选择 **渠道** 标签。点击平台列表中的 **Lark**。
+
+  ### 填写应用凭证
+
+  输入以下字段：
+
+  - **App ID** — 来自 Lark 应用的 App ID
+  - **App Secret** — 来自 Lark 应用的 App Secret
+
+  ### 选择连接模式
+
+  在 **Advanced Settings** 中，选择 **Connection Mode**：
+
+  - **WebSocket**（默认）— 推荐新机器人使用。保存后继续第四步，在 Lark 开放平台启用长连接订阅。
+  - **Webhook** — 适用于已配置公网回调地址的应用。保存后复制 Event Subscription URL，并在第四步配置回调。
+
+  > **Verification Token** 和 **Encrypt Key** 仅用于 Webhook 模式。此时可以先留空，在第四步配置回调后再填写。
+
+  ### 保存配置
+
+  点击 **Save Configuration**。WebSocket 模式会立即尝试建立长连接；Webhook 模式会显示一个 **Event Subscription URL**，请复制此 URL 供下一步使用。
+
+  ![](/blog/assets0a25d3ffb02d35f6f28cdfa9da2dccd8.webp)
+</Steps>
+
+## 第四步：在 Lark 中设置事件订阅
+
+无论选择哪种连接模式，都必须完成此步骤，否则机器人无法收到消息。
+
+<Steps>
+  ### 打开事件订阅设置
+
+  返回 Lark 开发者门户中的应用。导航到 **Event Subscription**。
+
+  ### 选择订阅方式
+
+  根据您在 LobeHub 中选择的连接模式完成配置：
+
+  - **WebSocket（推荐）** — 选择 **Use long connection to receive events** 并保存。请确保 LobeHub 中的渠道配置已保存且机器人保持连接；此模式不需要公网 Request URL。
+  - **Webhook** — 选择 **Send events to developer server**，将从 LobeHub 复制的 **Event Subscription URL** 粘贴到 **Request URL** 字段。平台会自动验证端点。
+
+  ### 添加消息事件
+
+  添加以下事件：
+
+  - `im.message.receive_v1` — 当收到消息时触发
+
+  这将使您的应用能够接收消息并将其转发到 LobeHub。
+
+  ![](/blog/assets313dfd5108d6fade542c846a87e2aa5a.webp)
+
+  ### 配置 Webhook 安全参数（仅 Webhook 模式）
+
+  如果使用 Webhook 模式，您可以在事件订阅页面顶部的 **Encryption Strategy** 中找到 **Verification Token** 和 **Encrypt Key**。WebSocket 模式无需配置这两个字段。
+
+  返回 LobeHub 的渠道设置，填写：
+
+  - **Verification Token** — 用于验证 webhook 事件是否来自 Lark
+  - **Encrypt Key**（可选）— 用于解密加密事件负载
+
+  再次点击 **Save Configuration** 以应用。
+
+  ![](/blog/assetscfcdfc63bc4f8defc06accef81339a5b.webp)
+</Steps>
+
+## 第五步：发布应用
+
+<Steps>
+  ### 创建版本
+
+  在您的应用设置中，进入 **Version Management & Release**。创建一个新版本并填写发布说明。
+
+  ### 提交审核
+
+  提交版本进行审核并发布。对于企业自管理应用，通常会自动批准。
+
+  ![](/blog/assets39788a720a65b89f84b2d0d844c4791d.webp)
+</Steps>
+
+## 第六步：测试连接
+
+回到 LobeHub 的渠道设置，点击 **Test Connection** 以验证凭证。然后在 Lark 中搜索您的机器人名称并发送消息，确认其是否响应。
+
+## 第七步：填写你的平台身份（推荐）
+
+**高级设置**里有一个可选字段影响日常使用体验，建议一开始就填好。
+
+### 你的平台用户 ID
+
+也就是你自己的 Lark `open_id`（按应用、按用户隔离的标识符 ——**不是**手机号或邮箱），用于：
+
+- **配对审批** — 当 **私信策略** 为 **配对审批** 时为必填项，`/approve <code>` 是属主命令，runtime 会用这个 ID 校验发起人。
+- **AI 工具主动推送** — 让 Agent 能主动联系你（提醒、通知），把内部用户引用映射到你的 Lark 账号。
+- **防自锁** — 自动被 **允许的用户** 信任，给同事收紧 bot 时不会把自己挡在外面。
+
+获取方式：先用任意消息私信 bot 一次，查看入站事件 payload 中发送方的 `open_id` 字段，那就是你的。Lark 开发者后台也提供 **User ID 查询** 工具，用手机号 / 邮箱反查 `open_id`。粘贴到 LobeHub 高级设置的 **你的平台用户 ID** 字段。
+
+> Lark 没有一个 AI 工具能默认指向的 "默认服务器" 概念（bot 通过凭证按租户运行），因此 Lark 渠道不展示 **默认服务器** 字段。
+
+## 接入策略
+
+两个独立的策略控制入站消息，默认都为 **开放**。
+
+### 允许的用户 ID（全局）
+
+填入 **允许的用户 ID** 后，**所有**入站消息（私信和群聊 `@提及`）都必须来自列表里的 Lark `open_id`。留空则不做用户级过滤。`open_id` 可从事件 payload 读取，或在 Lark 开发者后台查看 **User ID**。
+
+### 私信策略
+
+- **开放 (Open)（默认）** — 租户内任何成员都可以私信机器人（若设置了全局白名单则受其约束）。
+- **白名单 (Allowlist)** — 私信需要发送者在 **允许的用户 ID** 里。和 `Open` 的差别在白名单为空时：`Allowlist` 模式**全部拒绝**。
+- **配对审批 (Pairing)** — 与 `Allowlist` 共享同一份名单，但非名单用户被拒后会收到一次性配对码，由你（属主）通过 `/approve <code>` 审批。审批通过的用户会被自动追加到 **允许的用户 ID**，后续 DM 直通。需先填 **你的平台用户 ID**（runtime 用它校验 `/approve` 发起人），并需要部署 Redis。
+- **禁用 (Disabled)** — 机器人忽略所有私信，只在群聊里被 `@提及` 时回复。
+
+### 群组策略
+
+控制机器人会在哪些 Lark 群里响应。
+
+- **开放 (Open)（默认）** — 在机器人加入的任何群里被 `@` 都响应。
+- **白名单 (Allowlist)** — 只在 **允许的频道 ID** 列出的会话里响应（使用事件 payload 里的 `chat_id`）。
+- **禁用 (Disabled)** — 忽略所有群聊流量，机器人只接受私信。
+
+跨平台细节见 [渠道概览](/docs/usage/channels/overview#direct-message-policy)。
+
+## 配置参考
+
+| 字段                         | 是否必需 | 描述                                                         |
+| -------------------------- | ---- | ---------------------------------------------------------- |
+| **App ID**                 | 是    | 您的 Lark 应用的 App ID（`cli_xxx`）                              |
+| **App Secret**             | 是    | 您的 Lark 应用的 App Secret                                     |
+| **Connection Mode**        | 否    | `websocket`（默认）或 `webhook`，根据应用是否能接收公网 Webhook 请求来选择       |
+| **Verification Token**     | 否    | 验证 Webhook 事件来源（仅 Webhook 模式，推荐）                           |
+| **Encrypt Key**            | 否    | 解密加密事件负载（仅 Webhook 模式使用）                                   |
+| **Event Subscription URL** | —    | Webhook 模式下保存后自动生成；粘贴到 Lark 开发者门户                          |
+| **允许的用户 ID**               | 否    | 逗号或空格分隔的 Lark `open_id`。全局闸门 — 私信和群聊 @ 都受其约束               |
+| **私信策略**                   | 否    | `open`（默认）、`allowlist`、`pairing` 或 `disabled` — 控制谁可以私信机器人 |
+| **群组策略**                   | 否    | `open`（默认）、`allowlist` 或 `disabled` — 控制机器人在哪些群中响应         |
+| **允许的频道 ID**               | 否    | 逗号或空格分隔的 Lark `chat_id`。仅在群组策略为白名单时使用                      |
+
+## 故障排除
+
+- **机器人无法连接（WebSocket 模式）：** 验证 App ID 和 App Secret 是否正确，并确认 LobeHub 服务可以访问 Lark 开放平台。
+- **连接成功但收不到消息（WebSocket 模式）：** 确认 Lark 开放平台的订阅方式为 **Use long connection to receive events**，已添加 `im.message.receive_v1`，并已发布包含这些变更的应用版本。
+- **Event Subscription URL 验证失败（Webhook 模式）：** 确保您已在 LobeHub 中保存配置，并正确复制了 URL。
+- **机器人未响应：** 验证应用已发布并获得批准，机器人功能已启用，并订阅了 `im.message.receive_v1` 事件。
+- **机器人不回私信：** 在 LobeHub 的 **高级设置** 检查 **私信策略**。如果是 `Disabled`，改成 `Open` 或 `Allowlist`；如果是 `Allowlist`，确认发起方的 `open_id` 已加入 **允许的用户 ID**。
+- **权限错误：** 确保所有所需权限已在开发者门户中添加并获得批准。
+- **测试连接失败：** 仔细检查 App ID 和 App Secret。确保您在 LobeHub 的渠道设置中选择了 "Lark"（而不是 "飞书"）。

@@ -1,0 +1,331 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`createSSEDataExtractor > real world data > should convert azure ai data 1`] = `
+[
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": "",
+          "reasoning_content": null,
+          "role": "assistant",
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714651,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": "<think>",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714651,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": "</think>",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714651,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": "Hello",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714651,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": "!",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": " How",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": " can",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": " I",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": " assist",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": " you",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": " today",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": "?",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": " ",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": "😊",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": null,
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": null,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [
+      {
+        "delta": {
+          "content": "",
+          "reasoning_content": null,
+          "role": null,
+          "tool_calls": null,
+        },
+        "finish_reason": "stop",
+        "index": 0,
+        "logprobs": null,
+        "matched_stop": 1,
+      },
+    ],
+    "created": 1739714652,
+    "id": "1392a93d52c3483ea872d0ab2aaff7d7",
+    "model": "DeepSeek-R1",
+    "object": "chat.completion.chunk",
+    "usage": null,
+  },
+  {
+    "choices": [],
+    "id": "79fca0de792a4ffb8ec836442a2a42c0",
+    "model": "DeepSeek-R1",
+    "usage": {
+      "completion_tokens": 16,
+      "prompt_tokens": 4,
+      "total_tokens": 20,
+    },
+  },
+]
+`;

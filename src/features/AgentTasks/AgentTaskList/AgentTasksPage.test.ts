@@ -1,0 +1,325 @@
+import { describe, expect, it } from 'vitest';
+
+import type { TaskListItem } from '@/store/task/slices/list/initialState';
+
+import {
+  clampCollectionPage,
+  getMyTaskViewOptions,
+  getScheduledTaskViewOptions,
+  getTaskCreateActionBehavior,
+  getTaskPageHeaderVisibility,
+  PAGINATED_COLLECTION_PINNED_OPTIONS,
+  resolveHeaderEmptyHero,
+  resolveMyTaskScope,
+  resolveTaskCollection,
+  resolveTaskCollectionView,
+} from './AgentTasksPage';
+import {
+  collapseSubTasks,
+  compareTaskItems,
+  DEFAULT_TASK_LIST_VIEW_OPTIONS,
+  isTaskHiddenByCompletedFilter,
+} from './listViewOptions';
+import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
+
+const taskUpdatedAt = (id: string, updatedAt: string): TaskListItem =>
+  ({ id, identifier: id, status: 'backlog', updatedAt: new Date(updatedAt) }) as TaskListItem;
+
+describe('AgentTasksPage', () => {
+  describe('resolveHeaderEmptyHero', () => {
+    it('keeps the view options reachable when only archived tasks remain', () => {
+      expect(
+        resolveHeaderEmptyHero({
+          hasOnlyArchivedTasks: true,
+          isEmptyHero: true,
+          isOrdinaryCollection: true,
+        }),
+      ).toBe(false);
+    });
+
+    it('treats a truly empty ordinary list as empty', () => {
+      expect(
+        resolveHeaderEmptyHero({
+          hasOnlyArchivedTasks: false,
+          isEmptyHero: true,
+          isOrdinaryCollection: true,
+        }),
+      ).toBe(true);
+    });
+
+    it('never treats the other collections as empty', () => {
+      expect(
+        resolveHeaderEmptyHero({
+          hasOnlyArchivedTasks: false,
+          isEmptyHero: true,
+          isOrdinaryCollection: false,
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe('clampCollectionPage', () => {
+    it('moves a stale last page back into range when the result total shrinks', () => {
+      expect(clampCollectionPage(2, 50)).toBe(1);
+      expect(clampCollectionPage(3, 51)).toBe(2);
+    });
+
+    it('keeps the first page valid for an empty result', () => {
+      expect(clampCollectionPage(1, 0)).toBe(1);
+    });
+  });
+
+  describe('getScheduledTaskViewOptions', () => {
+    it('keeps client sorting aligned with the updatedAt-desc server pagination and renders every fetched row', () => {
+      expect(
+        getScheduledTaskViewOptions({
+          ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+          orderBy: 'title',
+          orderDirection: 'asc',
+          showSubTasks: false,
+        }),
+      ).toEqual({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        groupBy: 'automationMode',
+        completedTasks: 'all',
+        orderBy: 'updatedAt',
+        orderDirection: 'asc',
+        showSubTasks: true,
+      });
+    });
+
+    it('renders a page newest-first, like the server paginates it', () => {
+      const options = getScheduledTaskViewOptions(DEFAULT_TASK_LIST_VIEW_OPTIONS);
+      const newer = taskUpdatedAt('a', '2026-02-01');
+      const older = taskUpdatedAt('b', '2026-01-01');
+      expect(compareTaskItems(newer, older, options)).toBeLessThan(0);
+    });
+  });
+
+  describe('getMyTaskViewOptions', () => {
+    it('pins ordering to the updatedAt-desc server page, renders every fetched row, keeps the rest', () => {
+      expect(
+        getMyTaskViewOptions({
+          ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+          groupBy: 'priority',
+          completedTasks: 'week',
+          orderBy: 'title',
+          orderDirection: 'asc',
+          showSubTasks: false,
+        }),
+      ).toEqual({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        groupBy: 'priority',
+        completedTasks: 'all',
+        orderBy: 'updatedAt',
+        orderDirection: 'asc',
+        showSubTasks: true,
+      });
+    });
+
+    it('never folds a fetched sub-task away, so a page is never sparser than the server sent it', () => {
+      const options = getMyTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        showSubTasks: false,
+      });
+      const parent = { ...taskUpdatedAt('p', '2026-02-01'), parentTaskId: null };
+      const child = { ...taskUpdatedAt('c', '2026-02-02'), parentTaskId: 'p' };
+      // `collapseSubTasks` is what `TaskList` applies when sub-tasks are hidden;
+      // pinning `showSubTasks` keeps it out of the paginated path.
+      expect(options.showSubTasks).toBe(true);
+      expect(collapseSubTasks([parent, child]).map((t) => t.id)).toEqual(['p']);
+    });
+
+    it('never re-applies the completed window to a page the server already cut', () => {
+      // The server counted this row inside the window; a browser clock that is
+      // ahead (or a cutoff crossed since the fetch) must not drop it again.
+      const options = getMyTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        completedTasks: 'day',
+      });
+      const justOutside = {
+        ...taskUpdatedAt('done', '2026-01-01'),
+        completedAt: new Date('2026-01-01T00:00:00Z'),
+        status: 'completed',
+      } as TaskListItem;
+      const now = new Date('2026-01-02T00:00:01Z').getTime();
+      expect(isTaskHiddenByCompletedFilter(justOutside, options.completedTasks, now)).toBe(false);
+    });
+
+    it('renders a page newest-first, like the server paginates it', () => {
+      const options = getMyTaskViewOptions(DEFAULT_TASK_LIST_VIEW_OPTIONS);
+      const newer = taskUpdatedAt('a', '2026-02-01');
+      const older = taskUpdatedAt('b', '2026-01-01');
+      expect(compareTaskItems(newer, older, options)).toBeLessThan(0);
+    });
+  });
+
+  describe('resolveTaskCollectionView', () => {
+    it('renders the board in every collection that offers the switch', () => {
+      // The reported bug: "My tasks" showed the list/board switch but rendered
+      // its list unconditionally, so picking Board changed nothing.
+      expect(resolveTaskCollectionView('mine', 'kanban')).toBe('board');
+      expect(resolveTaskCollectionView('tasks', 'kanban')).toBe('board');
+    });
+
+    it('renders the list whenever the list mode is selected', () => {
+      expect(resolveTaskCollectionView('mine', 'list')).toBe('list');
+      expect(resolveTaskCollectionView('tasks', 'list')).toBe('list');
+    });
+
+    it('keeps the scheduled roll-up a list — it is offered no switch', () => {
+      expect(resolveTaskCollectionView('scheduled', 'kanban')).toBe('list');
+      expect(resolveTaskCollectionView('scheduled', 'list')).toBe('list');
+    });
+  });
+
+  describe('PAGINATED_COLLECTION_PINNED_OPTIONS', () => {
+    it('names exactly the controls a paginated collection overrides', () => {
+      // Each pinned name must be a control the view options actually fix, or
+      // the panel would hide a switch that still works.
+      const pinned = getMyTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        orderBy: 'title',
+        orderDirection: 'desc',
+        showSubTasks: false,
+      });
+      expect(PAGINATED_COLLECTION_PINNED_OPTIONS).toEqual(['ordering', 'showSubTasks']);
+      expect(pinned.orderBy).toBe('updatedAt');
+      expect(pinned.orderDirection).toBe('asc');
+      expect(pinned.showSubTasks).toBe(true);
+      // `completedTasks` stays offered: it takes effect server-side
+      // (`getVisibleTaskStatuses` / `getCompletedWithin`), so only the
+      // rendered page is told not to cut again.
+      expect(pinned.completedTasks).toBe('all');
+      // Not pinned: the panel keeps offering these, and they still take effect.
+      expect(pinned.groupBy).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy);
+      expect(pinned.nestedSubTasks).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.nestedSubTasks);
+    });
+  });
+
+  describe('resolveTaskCollection', () => {
+    it('opens the scheduled collection from its addressable URL', () => {
+      expect(resolveTaskCollection(new URLSearchParams('collection=scheduled'))).toBe('scheduled');
+    });
+
+    it('falls back to ordinary tasks for absent or unknown values', () => {
+      expect(resolveTaskCollection(new URLSearchParams())).toBe('tasks');
+      expect(resolveTaskCollection(new URLSearchParams('collection=unknown'))).toBe('tasks');
+    });
+
+    it('opens "My tasks" only where the tab is offered', () => {
+      const params = new URLSearchParams('collection=mine');
+      expect(resolveTaskCollection(params, { allowMine: true })).toBe('mine');
+      // Agent/project scopes and personal mode have no member assignment, so a
+      // deep link into the tab lands on ordinary tasks instead of a blank view.
+      expect(resolveTaskCollection(params, { allowMine: false })).toBe('tasks');
+      expect(resolveTaskCollection(params)).toBe('tasks');
+    });
+  });
+
+  describe('resolveMyTaskScope', () => {
+    it('defaults to tasks assigned to me', () => {
+      expect(resolveMyTaskScope(new URLSearchParams())).toBe('assigned');
+      expect(resolveMyTaskScope(new URLSearchParams('scope=unknown'))).toBe('assigned');
+    });
+
+    it('opens the created sub-view from its addressable URL', () => {
+      expect(resolveMyTaskScope(new URLSearchParams('scope=created'))).toBe('created');
+    });
+  });
+
+  describe('getTaskCreateActionBehavior', () => {
+    it('should allow workspace viewers to reopen the collapsed inline entry in list view', () => {
+      expect(
+        getTaskCreateActionBehavior({
+          canCreateTask: false,
+          inlineCollapsed: true,
+          viewMode: 'list',
+        }),
+      ).toEqual({ disabled: false, mode: 'inline' });
+    });
+
+    it('should keep the modal create action disabled for workspace viewers in kanban view', () => {
+      expect(
+        getTaskCreateActionBehavior({
+          canCreateTask: false,
+          inlineCollapsed: false,
+          viewMode: 'kanban',
+        }),
+      ).toEqual({ disabled: true, mode: 'modal' });
+    });
+  });
+
+  describe('shouldRenderTaskAgentPanelToggle', () => {
+    it('should render the task agent panel toggle on desktop layouts', () => {
+      expect(shouldRenderTaskAgentPanelToggle(false)).toBe(true);
+    });
+
+    it('should hide the task agent panel toggle on mobile layouts', () => {
+      expect(shouldRenderTaskAgentPanelToggle(true)).toBe(false);
+    });
+  });
+
+  describe('getTaskPageHeaderVisibility', () => {
+    it('hides empty global-task chrome that has no useful content yet', () => {
+      expect(
+        getTaskPageHeaderVisibility({ agentId: undefined, isEmptyHero: true, isMobile: false }),
+      ).toEqual({
+        showBreadcrumb: false,
+        showTaskAgentPanelToggle: false,
+        showViewOptions: false,
+      });
+    });
+
+    it('keeps scoped task-list context when only the selected agent has no tasks', () => {
+      expect(
+        getTaskPageHeaderVisibility({ agentId: 'agent-1', isEmptyHero: true, isMobile: false }),
+      ).toEqual({
+        showBreadcrumb: true,
+        showTaskAgentPanelToggle: true,
+        showViewOptions: true,
+      });
+    });
+
+    it('drops the scoped breadcrumb on the mobile surface, where back and the drawer lead to the scope', () => {
+      expect(
+        getTaskPageHeaderVisibility({
+          agentId: 'agent-1',
+          isEmptyHero: false,
+          isMobile: true,
+          mobileSurface: true,
+        }).showBreadcrumb,
+      ).toBe(false);
+      expect(
+        getTaskPageHeaderVisibility({
+          isEmptyHero: false,
+          isMobile: true,
+          mobileSurface: true,
+          projectId: 'p-1',
+        }).showBreadcrumb,
+      ).toBe(false);
+    });
+
+    it('keeps the scoped breadcrumb in a narrow desktop window, which has no mobile back button', () => {
+      expect(
+        getTaskPageHeaderVisibility({ agentId: 'agent-1', isEmptyHero: false, isMobile: true })
+          .showBreadcrumb,
+      ).toBe(true);
+    });
+
+    it('keeps the breadcrumb for a project scope and drops it for the global list', () => {
+      expect(
+        getTaskPageHeaderVisibility({ isEmptyHero: false, isMobile: false, projectId: 'p-1' }),
+      ).toEqual({
+        showBreadcrumb: true,
+        showTaskAgentPanelToggle: true,
+        showViewOptions: true,
+      });
+      expect(getTaskPageHeaderVisibility({ isEmptyHero: false, isMobile: false })).toEqual({
+        showBreadcrumb: false,
+        showTaskAgentPanelToggle: true,
+        showViewOptions: true,
+      });
+    });
+  });
+});

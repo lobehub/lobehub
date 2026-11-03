@@ -1,0 +1,147 @@
+{
+  "exportedAt": "2025-12-22T08:50:13.752Z",
+  "messages": [
+    {
+      "content": "你好",
+      "createdAt": "2025-12-22T05:28:22.890Z",
+      "id": "msg_1",
+      "role": "user",
+      "updatedAt": "2025-12-22T05:28:39.982Z",
+      "metadata": { "activeBranchIndex": 1 }
+    },
+    {
+      "content": "你好！(回复A)",
+      "createdAt": "2025-12-22T05:28:22.924Z",
+      "id": "msg_2",
+      "model": "claude-sonnet-4-5-20250929",
+      "parentId": "msg_1",
+      "provider": "anthropic",
+      "role": "assistant",
+      "updatedAt": "2025-12-22T05:28:31.794Z"
+    },
+    {
+      "content": "你好！(回复B - 分支)",
+      "createdAt": "2025-12-22T05:28:40.645Z",
+      "id": "msg_3",
+      "model": "claude-sonnet-4-5-20250929",
+      "parentId": "msg_1",
+      "provider": "anthropic",
+      "role": "assistant",
+      "updatedAt": "2025-12-22T05:28:45.853Z"
+    },
+    {
+      "content": "你是谁？",
+      "createdAt": "2025-12-22T08:13:22.122Z",
+      "id": "msg_4",
+      "parentId": "msg_3",
+      "role": "user",
+      "updatedAt": "2025-12-22T08:13:22.122Z"
+    },
+    {
+      "content": "我是 Lobe",
+      "createdAt": "2025-12-22T08:13:22.811Z",
+      "id": "msg_5",
+      "model": "claude-sonnet-4-5-20250929",
+      "parentId": "msg_4",
+      "provider": "anthropic",
+      "role": "assistant",
+      "updatedAt": "2025-12-22T08:13:33.887Z"
+    },
+    {
+      "content": "杭州天气如何",
+      "createdAt": "2025-12-22T08:13:39.070Z",
+      "id": "msg_6",
+      "parentId": "msg_5",
+      "role": "user",
+      "updatedAt": "2025-12-22T08:13:39.070Z"
+    },
+    {
+      "content": "让我帮你查询一下杭州的天气情况。",
+      "createdAt": "2025-12-22T08:13:40.327Z",
+      "id": "msg_7",
+      "model": "claude-sonnet-4-5-20250929",
+      "parentId": "msg_6",
+      "provider": "anthropic",
+      "role": "assistant",
+      "updatedAt": "2025-12-22T08:13:51.821Z",
+      "tools": [
+        {
+          "id": "toolu_1",
+          "type": "builtin",
+          "apiName": "search",
+          "arguments": "{\"query\": \"杭州天气\"}",
+          "identifier": "lobe-web-browsing"
+        }
+      ]
+    },
+    {
+      "content": "<searchResults><item>杭州今天多云，气温3-14℃</item></searchResults>",
+      "createdAt": "2025-12-22T08:13:54.734Z",
+      "id": "msg_8",
+      "parentId": "msg_7",
+      "role": "tool",
+      "updatedAt": "2025-12-22T08:14:00.457Z",
+      "plugin": {
+        "apiName": "search",
+        "arguments": "{\"query\": \"杭州天气\"}",
+        "identifier": "lobe-web-browsing",
+        "type": "builtin"
+      },
+      "pluginState": {
+        "query": "杭州天气",
+        "results": [{ "title": "杭州天气", "content": "多云 3-14℃" }]
+      },
+      "tool_call_id": "toolu_1"
+    },
+    {
+      "content": "让我搜索更具体的信息。",
+      "createdAt": "2025-12-22T08:14:04.076Z",
+      "id": "msg_9",
+      "model": "claude-sonnet-4-5-20250929",
+      "parentId": "msg_8",
+      "provider": "anthropic",
+      "role": "assistant",
+      "updatedAt": "2025-12-22T08:14:12.238Z",
+      "tools": [
+        {
+          "id": "toolu_2",
+          "type": "builtin",
+          "apiName": "search",
+          "arguments": "{\"query\": \"杭州天气预报\"}",
+          "identifier": "lobe-web-browsing"
+        }
+      ]
+    },
+    {
+      "content": "<searchResults><item>杭州明天多云转阴，最高16℃</item></searchResults>",
+      "createdAt": "2025-12-22T08:14:18.182Z",
+      "id": "msg_10",
+      "parentId": "msg_9",
+      "role": "tool",
+      "updatedAt": "2025-12-22T08:14:29.605Z",
+      "plugin": {
+        "apiName": "search",
+        "arguments": "{\"query\": \"杭州天气预报\"}",
+        "identifier": "lobe-web-browsing",
+        "type": "builtin"
+      },
+      "pluginState": {
+        "query": "杭州天气预报",
+        "results": [{ "title": "杭州天气预报", "content": "明天多云转阴 16℃" }]
+      },
+      "tool_call_id": "toolu_2"
+    },
+    {
+      "content": "杭州今天多云，气温3-14℃，明天16℃。",
+      "createdAt": "2025-12-22T08:14:37.596Z",
+      "id": "msg_11",
+      "model": "claude-sonnet-4-5-20250929",
+      "parentId": "msg_10",
+      "provider": "anthropic",
+      "role": "assistant",
+      "updatedAt": "2025-12-22T08:15:00.663Z"
+    }
+  ],
+  "title": "简单问候",
+  "version": "2.0"
+}

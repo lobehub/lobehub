@@ -1,0 +1,213 @@
+{
+  "contextTree": [
+    {
+      "id": "msg-601",
+      "type": "message"
+    },
+    {
+      "activeColumnId": "msg-603",
+      "columns": [
+        [
+          {
+            "id": "msg-602",
+            "type": "message"
+          }
+        ],
+        [
+          {
+            "id": "msg-603",
+            "type": "message"
+          }
+        ]
+      ],
+      "id": "compare-msg-601-msg-602-msg-603",
+      "messageId": "msg-601",
+      "type": "compare"
+    },
+    {
+      "id": "msg-604",
+      "type": "message"
+    },
+    {
+      "id": "msg-605",
+      "type": "message"
+    }
+  ],
+  "flatList": [
+    {
+      "id": "msg-601",
+      "role": "user",
+      "content": "Should I use REST or GraphQL for my API?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000,
+      "metadata": {
+        "compare": true
+      }
+    },
+    {
+      "activeColumnId": "msg-603",
+      "columns": [
+        [
+          {
+            "id": "msg-602",
+            "role": "assistant",
+            "content": "**REST is a great choice:**\n\nREST is simple, well-understood, and has excellent caching support. It's perfect for:\n\n- CRUD operations\n- Public APIs\n- Mobile apps with limited bandwidth\n- Teams familiar with HTTP conventions\n\n**Advantages:**\n- HTTP caching works out of the box\n- Stateless architecture\n- Wide tooling support\n- Easy to learn\n\n**Trade-offs:**\n- Over-fetching/under-fetching data\n- Multiple endpoints to maintain\n- Versioning can be complex",
+            "parentId": "msg-601",
+            "model": "gpt-4",
+            "provider": "openai",
+            "createdAt": 1704067205000,
+            "updatedAt": 1704067205000,
+            "metadata": {
+              "totalInputTokens": 12,
+              "totalOutputTokens": 145,
+              "totalTokens": 157,
+              "cost": 0.00471,
+              "tps": 42,
+              "ttft": 387,
+              "duration": 3452,
+              "latency": 3839
+            }
+          }
+        ],
+        [
+          {
+            "id": "msg-603",
+            "role": "assistant",
+            "content": "**GraphQL offers more flexibility:**\n\nGraphQL provides a powerful query language that lets clients request exactly what they need. It's ideal for:\n\n- Complex data relationships\n- Multiple client types (web, mobile, desktop)\n- Rapidly evolving requirements\n- Real-time applications\n\n**Advantages:**\n- Single endpoint\n- No over-fetching\n- Strong typing with schema\n- Powerful developer tools\n\n**Trade-offs:**\n- Steeper learning curve\n- More complex server setup\n- Caching requires extra effort\n- Can be overkill for simple APIs",
+            "parentId": "msg-601",
+            "model": "claude-3-5-sonnet-20241022",
+            "provider": "anthropic",
+            "createdAt": 1704067205100,
+            "updatedAt": 1704067205100,
+            "metadata": {
+              "totalInputTokens": 12,
+              "totalOutputTokens": 158,
+              "totalTokens": 170,
+              "cost": 0.00085,
+              "tps": 51,
+              "ttft": 298,
+              "duration": 3098,
+              "latency": 3396,
+              "activeColumn": true
+            }
+          }
+        ]
+      ],
+      "content": "",
+      "createdAt": 1704067205000,
+      "extra": {
+        "parentMessageId": "msg-601"
+      },
+      "id": "compare-msg-601-msg-602-msg-603",
+      "role": "compare",
+      "updatedAt": 1704067205100
+    },
+    {
+      "id": "msg-604",
+      "role": "user",
+      "content": "What about performance differences?",
+      "parentId": "msg-603",
+      "createdAt": 1704067215000,
+      "updatedAt": 1704067215000
+    },
+    {
+      "id": "msg-605",
+      "role": "assistant",
+      "content": "Performance-wise, both can be highly performant when implemented correctly:\n\n**REST Performance:**\n- Leverages HTTP caching (CDNs, browser cache)\n- Simpler server logic = faster response times\n- Can over-fetch data, wasting bandwidth\n\n**GraphQL Performance:**\n- Eliminates over-fetching, reducing payload size\n- Single request vs. multiple REST calls\n- Requires query complexity analysis to prevent abuse\n- DataLoader pattern helps with N+1 queries\n\n**Recommendation:** For your use case, if you're building a simple CRUD API, REST will likely perform better with less effort. If you need flexible data fetching across multiple clients, GraphQL's efficiency gains will outweigh the setup complexity.",
+      "parentId": "msg-604",
+      "createdAt": 1704067217000,
+      "updatedAt": 1704067217000,
+      "metadata": {
+        "totalInputTokens": 182,
+        "totalOutputTokens": 167,
+        "totalTokens": 349,
+        "cost": 0.001745,
+        "tps": 48,
+        "ttft": 345,
+        "duration": 3479,
+        "latency": 3824
+      }
+    }
+  ],
+  "messageMap": {
+    "msg-601": {
+      "id": "msg-601",
+      "role": "user",
+      "content": "Should I use REST or GraphQL for my API?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000,
+      "metadata": {
+        "compare": true
+      }
+    },
+    "msg-602": {
+      "id": "msg-602",
+      "role": "assistant",
+      "content": "**REST is a great choice:**\n\nREST is simple, well-understood, and has excellent caching support. It's perfect for:\n\n- CRUD operations\n- Public APIs\n- Mobile apps with limited bandwidth\n- Teams familiar with HTTP conventions\n\n**Advantages:**\n- HTTP caching works out of the box\n- Stateless architecture\n- Wide tooling support\n- Easy to learn\n\n**Trade-offs:**\n- Over-fetching/under-fetching data\n- Multiple endpoints to maintain\n- Versioning can be complex",
+      "parentId": "msg-601",
+      "model": "gpt-4",
+      "provider": "openai",
+      "createdAt": 1704067205000,
+      "updatedAt": 1704067205000,
+      "metadata": {
+        "totalInputTokens": 12,
+        "totalOutputTokens": 145,
+        "totalTokens": 157,
+        "cost": 0.00471,
+        "tps": 42,
+        "ttft": 387,
+        "duration": 3452,
+        "latency": 3839
+      }
+    },
+    "msg-603": {
+      "id": "msg-603",
+      "role": "assistant",
+      "content": "**GraphQL offers more flexibility:**\n\nGraphQL provides a powerful query language that lets clients request exactly what they need. It's ideal for:\n\n- Complex data relationships\n- Multiple client types (web, mobile, desktop)\n- Rapidly evolving requirements\n- Real-time applications\n\n**Advantages:**\n- Single endpoint\n- No over-fetching\n- Strong typing with schema\n- Powerful developer tools\n\n**Trade-offs:**\n- Steeper learning curve\n- More complex server setup\n- Caching requires extra effort\n- Can be overkill for simple APIs",
+      "parentId": "msg-601",
+      "model": "claude-3-5-sonnet-20241022",
+      "provider": "anthropic",
+      "createdAt": 1704067205100,
+      "updatedAt": 1704067205100,
+      "metadata": {
+        "totalInputTokens": 12,
+        "totalOutputTokens": 158,
+        "totalTokens": 170,
+        "cost": 0.00085,
+        "tps": 51,
+        "ttft": 298,
+        "duration": 3098,
+        "latency": 3396,
+        "activeColumn": true
+      }
+    },
+    "msg-604": {
+      "id": "msg-604",
+      "role": "user",
+      "content": "What about performance differences?",
+      "parentId": "msg-603",
+      "createdAt": 1704067215000,
+      "updatedAt": 1704067215000
+    },
+    "msg-605": {
+      "id": "msg-605",
+      "role": "assistant",
+      "content": "Performance-wise, both can be highly performant when implemented correctly:\n\n**REST Performance:**\n- Leverages HTTP caching (CDNs, browser cache)\n- Simpler server logic = faster response times\n- Can over-fetch data, wasting bandwidth\n\n**GraphQL Performance:**\n- Eliminates over-fetching, reducing payload size\n- Single request vs. multiple REST calls\n- Requires query complexity analysis to prevent abuse\n- DataLoader pattern helps with N+1 queries\n\n**Recommendation:** For your use case, if you're building a simple CRUD API, REST will likely perform better with less effort. If you need flexible data fetching across multiple clients, GraphQL's efficiency gains will outweigh the setup complexity.",
+      "parentId": "msg-604",
+      "createdAt": 1704067217000,
+      "updatedAt": 1704067217000,
+      "metadata": {
+        "totalInputTokens": 182,
+        "totalOutputTokens": 167,
+        "totalTokens": 349,
+        "cost": 0.001745,
+        "tps": 48,
+        "ttft": 345,
+        "duration": 3479,
+        "latency": 3824
+      }
+    }
+  }
+}

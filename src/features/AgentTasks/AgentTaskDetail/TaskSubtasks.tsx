@@ -1,0 +1,438 @@
+import type { TaskDetailSubtask } from '@lobechat/types';
+import type { TreeDataNode } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Collapsible,
+  confirmModal,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+  Tree,
+} from '@lobehub/ui';
+import { ArchiveIcon, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
+import type { MouseEvent } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
+import { showContextMenu } from '@/libs/contextMenu';
+import { taskService } from '@/services/task';
+import { useTaskStore } from '@/store/task';
+import { taskDetailSelectors } from '@/store/task/selectors';
+
+import CreateTaskInlineEntry from '../AgentTaskList/CreateTaskInlineEntry';
+import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
+import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
+import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
+import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskStatusTag from '../features/TaskStatusTag';
+import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
+import TaskTriggerTag from '../features/TaskTriggerTag';
+import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { useTaskContextMenuActions } from '../features/useTaskItemContextMenu';
+import AccordionArrowIcon from '../shared/AccordionArrowIcon';
+import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
+import { styles } from '../shared/style';
+import { taskDetailPath } from '../shared/taskDetailPath';
+import RunSubtasksPreview from './RunSubtasksPreview';
+import TopicStatusIcon from './TopicStatusIcon';
+
+type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
+
+const TASK_STATUS_SET = new Set<TaskStatus>([
+  'backlog',
+  'canceled',
+  'completed',
+  'failed',
+  'paused',
+  'running',
+]);
+
+const toTaskStatus = (status: string): TaskStatus =>
+  TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
+
+interface TaskTreeNode {
+  children: TaskTreeNode[];
+  task: TaskDetailSubtask;
+}
+
+const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] =>
+  subtasks.map((task) => ({
+    children: buildTree(task.children ?? []),
+    task,
+  }));
+
+const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
+  const status = toTaskStatus(task.status);
+  const isRunning = status === 'running';
+  const hasRunningTopic = Boolean(task.runningTopic);
+  const hasName = !!task.name;
+  const activeWorkspaceId = useActiveWorkspaceId();
+
+  return (
+    <Flexbox
+      horizontal
+      align="center"
+      gap={8}
+      justify="space-between"
+      style={{ minWidth: 0, width: '100%' }}
+    >
+      <span
+        style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <TaskPriorityTag priority={task.priority} size={14} taskIdentifier={task.id} />
+      </span>
+      <span
+        style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <TaskStatusTag size={14} status={status} taskIdentifier={task.id}>
+          {hasRunningTopic ? <TopicStatusIcon size={14} status="running" /> : undefined}
+        </TaskStatusTag>
+      </span>
+      {hasName && (
+        <Text fontSize={13} style={{ flex: 'none' }} type={'secondary'}>
+          {task.identifier}
+        </Text>
+      )}
+      {task.archivedAt && <Icon color={cssVar.colorTextDescription} icon={ArchiveIcon} size={14} />}
+      <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
+        {task.name || task.identifier}
+      </Text>
+      {task.automationMode ? (
+        <span
+          style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TaskTriggerTag
+            automationMode={task.automationMode}
+            heartbeatInterval={task.heartbeat?.interval}
+            schedulePattern={task.schedule?.pattern}
+            scheduleTimezone={task.schedule?.timezone}
+          />
+        </span>
+      ) : null}
+      <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
+        {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
+          <AssigneeMemberSelector
+            currentUserId={task.assigneeUserId ?? null}
+            disabled={isRunning}
+            taskCreatorId={task.createdByUserId}
+            taskIdentifier={task.id}
+            taskVisibility={task.visibility}
+          >
+            <span
+              style={{
+                alignItems: 'center',
+                cursor: isRunning ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                flex: 'none',
+              }}
+            >
+              {task.assigneeUserId ? (
+                <AssigneeUserAvatar size={18} userId={task.assigneeUserId} />
+              ) : (
+                <UnassignedAssigneeIcon kind={'human'} />
+              )}
+            </span>
+          </AssigneeMemberSelector>
+        )}
+        <AssigneeAgentSelector
+          currentAgentId={task.assignee?.id ?? null}
+          disabled={isRunning}
+          taskCreatorId={task.createdByUserId}
+          taskIdentifier={task.id}
+          taskVisibility={task.visibility}
+        >
+          <span
+            style={{
+              alignItems: 'center',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              flex: 'none',
+            }}
+          >
+            <AssigneeAvatar agentId={task.assignee?.id} size={18} />
+          </span>
+        </AssigneeAgentSelector>
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+const toTreeData = (tree: TaskTreeNode[]): TreeDataNode[] => {
+  return tree.map((node) => ({
+    children: toTreeData(node.children),
+    key: node.task.id!,
+    title: <SubtaskTitle task={node.task} />,
+  }));
+};
+
+const TaskSubtasks = memo(() => {
+  const { t } = useTranslation('chat');
+
+  const navigate = useWorkspaceAwareNavigate();
+  const { allowed: canEditTask, reason } = usePermission('create_content');
+  const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  // Subtask composers inherit the parent's visibility as their default — a
+  // child under a private parent must not default to workspace-visible (the
+  // server rejects a subtask more public than its parent).
+  const parentVisibility = useTaskStore(taskDetailSelectors.activeTaskVisibility);
+  const subtasks = useTaskStore(taskDetailSelectors.activeTaskSubtasks);
+  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const runReadySubtasks = useTaskStore((s) => s.runReadySubtasks);
+
+  const { buildItems, installKeyboardHandlers } = useTaskContextMenuActions();
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [isPlanning, setIsPlanning] = useState(false);
+
+  const subtaskMap = useMemo(() => {
+    const map = new Map<string, TaskDetailSubtask>();
+    const walk = (items: TaskDetailSubtask[]) => {
+      for (const item of items) {
+        if (item.id) map.set(item.id, item);
+        if (item.children?.length) walk(item.children);
+      }
+    };
+    walk(subtasks);
+    return map;
+  }, [subtasks]);
+
+  const handleNavigate = useCallback(
+    (id: string) => {
+      const subtask = subtaskMap.get(id);
+      if (!subtask?.id) return;
+      navigate(
+        taskDetailPath(subtask.identifier, subtask?.assignee?.id ?? undefined, subtask?.name),
+      );
+    },
+    [navigate, subtaskMap],
+  );
+
+  const treeData = useMemo(() => {
+    if (subtasks.length === 0) return [];
+    return toTreeData(buildTree(subtasks));
+  }, [subtasks]);
+
+  const handleRightClick = useCallback(
+    ({ event, node }: { event: MouseEvent; node: TreeDataNode }) => {
+      if (!canEditTask) return;
+      const subtask = subtaskMap.get(node.key);
+      if (!subtask) return;
+      event.preventDefault();
+      showContextMenu(
+        buildItems({
+          id: subtask.id!,
+          archivedAt: subtask.archivedAt ?? null,
+          assigneeAgentId: subtask.assignee?.id,
+          assigneeUserId: subtask.assigneeUserId,
+          automationMode: subtask.automationMode,
+          heartbeatInterval: subtask.heartbeat?.interval,
+          identifier: subtask.identifier,
+          priority: subtask.priority,
+          schedulePattern: subtask.schedule?.pattern,
+          status: subtask.status,
+        }),
+      );
+      installKeyboardHandlers({
+        id: subtask.id!,
+        archivedAt: subtask.archivedAt ?? null,
+        assigneeAgentId: subtask.assignee?.id,
+        assigneeUserId: subtask.assigneeUserId,
+        automationMode: subtask.automationMode,
+        heartbeatInterval: subtask.heartbeat?.interval,
+        identifier: subtask.identifier,
+        priority: subtask.priority,
+        schedulePattern: subtask.schedule?.pattern,
+        status: subtask.status,
+      });
+    },
+    [canEditTask, subtaskMap, buildItems, installKeyboardHandlers],
+  );
+
+  const toggleCreating = useCallback(() => {
+    if (!canEditTask) return;
+    setIsCreating((prev) => !prev);
+  }, [canEditTask]);
+
+  const handleRunAll = useCallback(async () => {
+    if (!canEditTask) return;
+    if (!taskId || isPlanning) return;
+    setIsPlanning(true);
+    try {
+      const preview = await taskService.previewSubtaskLayers(taskId);
+      const plan = preview.data;
+
+      // No runnable layer AND nothing informative to show → just a toast.
+      // If there are externally-blocked or cycled tasks, still open the modal
+      // so the user understands why "Run all" can't start anything right now.
+      const hasInformativeState =
+        plan.blockedExternally.length > 0 ||
+        plan.blockedByCycle.length > 0 ||
+        plan.cycles.length > 0;
+      if (plan.totalRunnable === 0 && !hasInformativeState) {
+        toast.info(t('taskDetail.runAll.empty'));
+        return;
+      }
+
+      const canRun = plan.totalRunnable > 0;
+      confirmModal({
+        cancelText: t('taskDetail.runAll.cancel'),
+        content: <RunSubtasksPreview plan={plan} />,
+        okButtonProps: canRun ? undefined : { disabled: true },
+        okText: t('taskDetail.runAll.confirm', { count: plan.totalRunnable }),
+        onOk: async () => {
+          if (!canRun) return;
+          const res = await runReadySubtasks(taskId);
+          const kicked = res.data.kickedOff.length;
+          const failed = res.data.failed?.length ?? 0;
+          if (failed > 0) {
+            toast.warning(
+              t('taskDetail.runAll.partialFailure', {
+                failed,
+                ok: kicked,
+                total: kicked + failed,
+              }),
+            );
+          } else {
+            toast.success(t('taskDetail.runAll.kickedOff', { count: kicked }));
+          }
+        },
+        title: t('taskDetail.runAll.title'),
+      });
+    } catch (error) {
+      console.error('[TaskSubtasks] Failed to plan subtasks:', error);
+      toast.error(t('taskDetail.updateFailed'));
+    } finally {
+      setIsPlanning(false);
+    }
+  }, [canEditTask, taskId, isPlanning, t, runReadySubtasks]);
+
+  if (!taskId) return null;
+
+  const hasSubtasks = subtasks.length > 0;
+
+  return (
+    <Flexbox gap={8}>
+      {hasSubtasks ? (
+        <>
+          <Flexbox horizontal align="center" justify="space-between">
+            <Flexbox horizontal align="center" gap={8}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={8}
+                paddingBlock={4}
+                paddingInline={8}
+                style={{ cursor: 'pointer', width: 'fit-content' }}
+                variant="borderless"
+                onClick={() => setIsExpanded((prev) => !prev)}
+              >
+                <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
+                <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+                  {t('taskDetail.subtasks')}
+                </Text>
+                <AccordionArrowIcon
+                  isOpen={isExpanded}
+                  style={{ color: cssVar.colorTextDescription }}
+                />
+              </Block>
+              <TaskSubtaskProgressTag
+                currentIdentifier={taskId}
+                subtasks={subtasks}
+                onSubtaskClick={handleNavigate}
+              />
+            </Flexbox>
+            <Flexbox horizontal align="center" gap={4}>
+              <ActionIcon
+                disabled={!canEditTask || isPlanning}
+                icon={PlayCircle}
+                loading={isPlanning}
+                size="small"
+                title={canEditTask ? t('taskDetail.runAll') : reason}
+                onClick={handleRunAll}
+              />
+              <ActionIcon
+                disabled={!canEditTask}
+                icon={Plus}
+                size="small"
+                title={canEditTask ? t('taskDetail.addSubtask') : reason}
+                onClick={toggleCreating}
+              />
+            </Flexbox>
+          </Flexbox>
+          <Collapsible open={isExpanded}>
+            <Flexbox gap={8}>
+              {isCreating && (
+                <CreateTaskInlineEntry
+                  autoFocus
+                  agentId={agentId ?? undefined}
+                  defaultVisibility={parentVisibility}
+                  parentTaskId={taskId}
+                  placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
+                  onCollapse={() => setIsCreating(false)}
+                  onCreated={() => setIsCreating(false)}
+                />
+              )}
+              <Tree
+                blockNode
+                defaultExpandAll
+                showLine
+                classNames={{ title: styles.subtaskTreeTitle }}
+                styles={{ node: { height: 36 } }}
+                treeData={treeData}
+                onRightClick={handleRightClick}
+                onSelect={(keys) => {
+                  if (keys[0]) handleNavigate(keys[0]);
+                }}
+              />
+            </Flexbox>
+          </Collapsible>
+        </>
+      ) : (
+        <>
+          <Block
+            clickable
+            horizontal
+            align="center"
+            gap={8}
+            paddingBlock={4}
+            paddingInline={8}
+            style={{ width: 'fit-content' }}
+            title={canEditTask ? undefined : reason}
+            variant="borderless"
+            onClick={toggleCreating}
+          >
+            <Icon color={cssVar.colorTextDescription} icon={Plus} size={16} />
+            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+              {t('taskDetail.addSubtask')}
+            </Text>
+          </Block>
+          {isCreating && (
+            <CreateTaskInlineEntry
+              autoFocus
+              agentId={agentId ?? undefined}
+              defaultVisibility={parentVisibility}
+              parentTaskId={taskId}
+              placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
+              onCollapse={() => setIsCreating(false)}
+              onCreated={() => setIsCreating(false)}
+            />
+          )}
+        </>
+      )}
+    </Flexbox>
+  );
+});
+
+export default TaskSubtasks;

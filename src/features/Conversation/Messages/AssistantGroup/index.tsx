@@ -1,0 +1,445 @@
+'use client';
+
+import { findLatestWorkRootOperationId } from '@lobechat/conversation-flow';
+import type { AssistantContentBlock, EmojiReaction, UISignalCallbacksBlock } from '@lobechat/types';
+import { Flexbox, Tag } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
+import type { MouseEventHandler, ReactNode } from 'react';
+import { Fragment, memo, Suspense, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
+import AgentGroupAvatar from '@/features/AgentGroupAvatar';
+import { ChatItem } from '@/features/Conversation/ChatItem';
+import { useMessageCommentCount } from '@/features/TopicComment/hooks';
+import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
+import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
+import dynamic from '@/libs/next/dynamic';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { useGlobalStore } from '@/store/global';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
+
+import { ReactionDisplay } from '../../components/Reaction';
+import { useAgentMeta } from '../../hooks';
+import {
+  contextSelectors,
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+} from '../../store';
+import type { SteerContinuation } from '../../store/slices/data/steerChains';
+import InterruptedHint from '../Assistant/components/InterruptedHint';
+import Usage from '../components/Extras/Usage';
+import MessageBranch from '../components/MessageBranch';
+import RefreshingIndicator from '../components/RefreshingIndicator';
+import {
+  useSetMessageItemActionElementPortialContext,
+  useSetMessageItemActionTypeContext,
+} from '../Contexts/message-action-context';
+import EditedFilesCard from '../EditedFilesCard';
+import { useOperationEditedFiles } from '../EditedFilesCard/useOperationEditedFiles';
+import GoalTaskCard from '../GoalTaskCard';
+import { useOperationGoals } from '../GoalTaskCard/useOperationGoals';
+import MessageWorks from '../MessageWorks';
+import SignalCallbacks from '../SignalCallbacks';
+import FileListViewer from '../User/components/FileListViewer';
+import Group from './components/Group';
+import { resolveWorkflowExpandLevel } from './components/segments';
+import TaskCompletionNotice from './components/TaskCompletionNotice';
+import type { WorkflowExpandLevelDefault } from './components/WorkflowCollapse';
+import { buildContinuationChains, collectSignalCallbacks } from './utils/continuations';
+import { resolveTaskCompletionSource } from './utils/taskCompletionSource';
+
+const EditState = dynamic(() => import('./components/EditState'), {
+  ssr: false,
+});
+
+const actionBarHolder = (
+  <div
+    {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistantGroup]: '' }}
+    style={{ height: '28px' }}
+  />
+);
+
+interface GroupMessageProps {
+  /** Later turns steered onto this one, rendered as one continuous chain. */
+  continuations?: SteerContinuation[];
+  defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
+  disableEditing?: boolean;
+  footerRender?: ReactNode;
+  id: string;
+  index: number;
+  isLatestItem?: boolean;
+}
+
+const EMPTY_CONTINUATIONS: SteerContinuation[] = [];
+
+const GroupMessage = memo<GroupMessageProps>(
+  ({
+    continuations = EMPTY_CONTINUATIONS,
+    defaultWorkflowExpandLevel,
+    id,
+    index,
+    disableEditing,
+    footerRender,
+    isLatestItem,
+  }) => {
+    // Get message and actionsConfig from ConversationStore
+    const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
+
+    const {
+      agentId,
+      usage,
+      createdAt,
+      children: groupChildren,
+      performance,
+      model,
+      provider,
+      branch,
+      metadata,
+      signalCallbacks,
+      taskCompletions,
+    } = item;
+    const children = useMemo(
+      () =>
+        item.role === 'assistant' ? [item as unknown as AssistantContentBlock] : groupChildren,
+      [groupChildren, item],
+    );
+    const avatar = useAgentMeta(agentId);
+    const continuationMessages = useConversationStore(
+      (s) => continuations.map((c) => dataSelectors.getDisplayMessageById(c.groupId)(s)),
+      isEqual,
+    );
+    const chains = useMemo(
+      () => buildContinuationChains(continuations, continuationMessages),
+      [continuationMessages, continuations],
+    );
+    const allSignalCallbacks = useMemo(
+      () =>
+        collectSignalCallbacks(
+          signalCallbacks as UISignalCallbacksBlock[] | undefined,
+          continuationMessages,
+        ),
+      [continuationMessages, signalCallbacks],
+    );
+    const tailMessage = continuationMessages.at(-1);
+    const tailId = chains.at(-1)?.id ?? id;
+    const allChildren = useMemo(
+      () => [...(children ?? []), ...chains.flatMap((chain) => chain.blocks)],
+      [chains, children],
+    );
+    // One Group per wake-up turn, each preceded by a notice naming the tool
+    // whose completion woke it. The block arrays depend on the completions
+    // only, so the main chain streaming does not re-render those Groups.
+    const completionBlocks = useMemo(
+      () =>
+        ((taskCompletions as AssistantContentBlock[] | undefined) ?? []).map((block) => [block]),
+      [taskCompletions],
+    );
+    const completionItems = useMemo(
+      () =>
+        completionBlocks.map((blocks: AssistantContentBlock[]) => ({
+          blocks,
+          source: resolveTaskCompletionSource(blocks[0]!, allChildren),
+        })),
+      [allChildren, completionBlocks],
+    );
+
+    // Supervisor messages render the GROUP's identity (avatar + name + 主管 badge)
+    // rather than the supervisor agent's own bare meta (whose title is literally
+    // "Supervisor" with no avatar). The flag is a persisted snapshot on the
+    // message metadata; see metadata.orchestrationRole.
+    const isSupervisor = metadata?.orchestrationRole === 'supervisor' || !!metadata?.isSupervisor;
+    const groupId = useConversationStore(contextSelectors.groupId);
+    const groupMeta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(groupId ?? '')(s));
+    const memberAvatars = useAgentGroupStore(
+      (s) => agentGroupSelectors.getGroupMemberAvatars(groupId ?? '')(s),
+      isEqual,
+    );
+    const { t } = useTranslation('chat');
+    const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
+
+    const streamingExpandLevel = useUserStore(
+      userGeneralSettingsSelectors.workflowStreamingExpandLevel,
+    );
+    const workflowExpandLevel = useMemo(
+      () => resolveWorkflowExpandLevel(defaultWorkflowExpandLevel, streamingExpandLevel),
+      [defaultWorkflowExpandLevel, streamingExpandLevel],
+    );
+
+    // Collect fileList from all children blocks
+    const aggregatedFileList = useMemo(
+      () => allChildren.flatMap((child: AssistantContentBlock) => child.fileList || []),
+      [allChildren],
+    );
+    const workRootOperationId = useMemo(
+      () => findLatestWorkRootOperationId(metadata, allChildren, taskCompletions),
+      [allChildren, metadata, taskCompletions],
+    );
+    // Codex-style aggregate of files edited this round. Purely derived from the
+    // group's tool calls (entity-format files are excluded — they surface as
+    // `file` Works below), so it rides the same afterActions slot as Works.
+    // The card is a turn-end artifact, so skip the scan entirely while the group
+    // (or any child block) is still streaming: `children` changes on every token,
+    // and the finished card is all users see anyway.
+    const isGroupGenerating = useConversationStore(
+      messageStateSelectors.isAssistantGroupItemGenerating(tailId),
+    );
+    const editedFiles = useOperationEditedFiles(
+      isGroupGenerating ? undefined : allChildren,
+      // The sandbox-entity → Work handoff only happens on server-runtime rounds
+      // (the work anchor marks them); without it the card keeps every entry.
+      !!workRootOperationId,
+    );
+    const derivedGoals = useOperationGoals(allChildren);
+    // A goal a CLI agent creates with `lh` gets its card as soon as it exists:
+    // `/goal` keeps the same run going to plan it, and the card is how the user
+    // sees the goal while that happens. A builtin createGoal call already renders
+    // live inline, so its card stays a turn-end artifact like edited files.
+    const operationGoals = useMemo(
+      () =>
+        isGroupGenerating ? derivedGoals.filter((goal) => goal.source === 'command') : derivedGoals,
+      [derivedGoals, isGroupGenerating],
+    );
+
+    const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
+    const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
+    const openChatSettings = useOpenChatSettings();
+
+    // Get the latest message block from the group that doesn't contain tools
+    const groupLatestMsg = useConversationStore(
+      dataSelectors.getGroupLatestMessageWithoutTools(tailId),
+    );
+    const lastAssistantMsg =
+      tailMessage?.role === 'assistant'
+        ? tailMessage.tools?.length
+          ? undefined
+          : tailMessage
+        : groupLatestMsg;
+
+    const contentId = lastAssistantMsg?.id;
+    const groupChains = useMemo(
+      () => chains.map((chain, i) => (i === chains.length - 1 ? { ...chain, contentId } : chain)),
+      [chains, contentId],
+    );
+
+    // Get editing and interrupted state from ConversationStore
+    const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
+    // Check interrupted on both the group root and the active block, because
+    // continuation runs attach their operations to lastBlockId (contentId),
+    // not the group root.
+    const groupInterrupted = useConversationStore(
+      messageStateSelectors.isMessageInterrupted(tailId),
+    );
+    const blockInterrupted = useConversationStore(
+      messageStateSelectors.isMessageInterrupted(contentId || ''),
+    );
+    const interrupted = groupInterrupted || blockInterrupted;
+
+    const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+    const addReaction = useConversationStore((s) => s.addReaction);
+    const removeReaction = useConversationStore((s) => s.removeReaction);
+    const userId = useUserStore(userProfileSelectors.userId)!;
+    const reactions = useMemo<EmojiReaction[]>(
+      () => metadata?.reactions || [],
+      [metadata?.reactions],
+    );
+
+    const handleReactionClick = useCallback(
+      (emoji: string) => {
+        const existing = reactions.find((r) => r.emoji === emoji);
+        if (existing && existing.users.includes(userId)) {
+          removeReaction(id, emoji);
+        } else {
+          addReaction(id, emoji);
+        }
+      },
+      [addReaction, id, reactions, removeReaction, userId],
+    );
+
+    const isReactionActive = useCallback(
+      (emoji: string) => {
+        const reaction = reactions.find((r) => r.emoji === emoji);
+        return !!reaction && reaction.users.includes(userId);
+      },
+      [reactions, userId],
+    );
+
+    const setMessageItemActionElementPortialContext =
+      useSetMessageItemActionElementPortialContext();
+    const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
+
+    const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
+      (e) => {
+        if (disableEditing) return;
+        setMessageItemActionElementPortialContext(e.currentTarget);
+        setMessageItemActionTypeContext({ id, index, type: 'assistantGroup' });
+      },
+      [
+        disableEditing,
+        id,
+        index,
+        setMessageItemActionElementPortialContext,
+        setMessageItemActionTypeContext,
+      ],
+    );
+
+    const onAvatarClick = useCallback(() => {
+      if (!isInbox) {
+        toggleSystemRole(true);
+      } else {
+        openChatSettings();
+      }
+    }, [isInbox, openChatSettings, toggleSystemRole]);
+
+    return (
+      <ChatItem
+        showTitle
+        // The supervisor row is labelled by the group, not by the agent behind it —
+        // drop `name` too, or the renderer's name-first resolution would surface the
+        // agent's personal name over the group title.
+        agentId={agentId ?? null}
+        avatar={isSupervisor ? { ...avatar, name: undefined, title: groupMeta.title } : avatar}
+        id={id}
+        placement={'left'}
+        time={createdAt}
+        actionAddon={
+          reactions.length > 0 || (commentCount > 0 && commentTopicId) ? (
+            <>
+              {reactions.length > 0 && (
+                <ReactionDisplay
+                  isActive={isReactionActive}
+                  reactions={reactions}
+                  onReactionClick={handleReactionClick}
+                />
+              )}
+              {commentCount > 0 && commentTopicId && (
+                <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
+              )}
+            </>
+          ) : undefined
+        }
+        actions={
+          <>
+            {!disableEditing && (
+              <>
+                {isDevMode && branch && (
+                  <MessageBranch
+                    activeBranchIndex={branch.activeBranchIndex}
+                    count={branch.count}
+                    messageId={id}
+                  />
+                )}
+                {actionBarHolder}
+              </>
+            )}
+            {/* Model + token usage rides the action row instead of claiming a
+                band of its own between the answer and the round's artifacts. */}
+            {isDevMode && model && (
+              <Flexbox horizontal align={'center'} paddingInline={8}>
+                <Usage model={model} performance={performance} provider={provider!} usage={usage} />
+              </Flexbox>
+            )}
+          </>
+        }
+        belowMessage={
+          // Virtual round artifacts (edited files / Goal handoffs) are derived
+          // from the group's tool calls and stay visible after the tool steps
+          // collapse. They sit above the action row — they are the round's
+          // result, while the action row is chrome about the message. Only
+          // mount the wrapper when one exists: a work anchor can be present
+          // while `MessageWorks` itself resolves to null.
+          editedFiles.length > 0 || operationGoals.length > 0 ? (
+            <Flexbox gap={8}>
+              {editedFiles.length > 0 && <EditedFilesCard entries={editedFiles} />}
+              {operationGoals.length > 0 && <GoalTaskCard goals={operationGoals} />}
+              {workRootOperationId && <MessageWorks rootOperationId={workRootOperationId} />}
+            </Flexbox>
+          ) : workRootOperationId ? (
+            <MessageWorks rootOperationId={workRootOperationId} />
+          ) : undefined
+        }
+        customAvatarRender={
+          isSupervisor
+            ? () => (
+                <AgentGroupAvatar
+                  avatar={groupMeta.avatar}
+                  backgroundColor={groupMeta.backgroundColor}
+                  memberAvatars={memberAvatars}
+                />
+              )
+            : undefined
+        }
+        titleAddon={
+          <>
+            {isSupervisor && <Tag>{t('supervisor.label')}</Tag>}
+            <RefreshingIndicator messageId={id} />
+          </>
+        }
+        onAvatarClick={onAvatarClick}
+        onMouseEnter={onMouseEnter}
+      >
+        {/*
+          Wrap main chain + signal callbacks + post-task summary in a tight
+          flex stack so the SignalCallbacks accordion sits visually inside
+          the same "agent reply" block. The ChatItem body gap (16px) would
+          otherwise stretch them apart and the natural narrative — initial
+          reply → callbacks → summary — reads as three disconnected
+          sections ().
+        */}
+        <Flexbox gap={4}>
+          {children && children.length > 0 && (
+            <Group
+              enableProcessFold
+              blocks={children}
+              content={lastAssistantMsg?.content}
+              contentId={groupChains.length > 0 ? undefined : contentId}
+              continuations={groupChains}
+              // Folding a finished turn's process is the default behavior now
+              // (graduated from Labs) — always on for the conversation.
+              defaultWorkflowExpandLevel={workflowExpandLevel}
+              disableEditing={disableEditing}
+              id={id}
+              isLatestItem={isLatestItem}
+              messageIndex={index}
+            />
+          )}
+          {allSignalCallbacks.map((block) => (
+            <SignalCallbacks block={block} key={block.sourceToolMessageId} />
+          ))}
+          {completionItems.map(({ blocks, source }) => (
+            <Fragment key={blocks[0]!.id}>
+              {source && <TaskCompletionNotice {...source} />}
+              <Group
+                blocks={blocks}
+                contentId={blocks[0]!.id}
+                defaultWorkflowExpandLevel={workflowExpandLevel}
+                disableEditing={disableEditing}
+                id={id}
+                messageIndex={index}
+              />
+            </Fragment>
+          ))}
+        </Flexbox>
+
+        {aggregatedFileList.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <FileListViewer items={aggregatedFileList} />
+          </div>
+        )}
+        {interrupted && <InterruptedHint />}
+        {footerRender}
+        <Suspense fallback={null}>
+          {editing && contentId && <EditState content={lastAssistantMsg?.content} id={contentId} />}
+        </Suspense>
+      </ChatItem>
+    );
+  },
+  isEqual,
+);
+
+export default GroupMessage;

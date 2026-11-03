@@ -1,0 +1,282 @@
+import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { CodexFileChangeTracker } from './codexFileChangeTracker';
+
+describe('CodexFileChangeTracker', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(tempDirs.map((dir) => rm(dir, { force: true, recursive: true })));
+    tempDirs.length = 0;
+  });
+
+  it('enriches completed file_change payloads with per-file diffs and total line stats', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const updatePath = path.join(dir, 'a.txt');
+    const addPath = path.join(dir, 'b.txt');
+
+    await writeFile(updatePath, 'hello\n', 'utf8');
+
+    const tracker = new CodexFileChangeTracker();
+
+    await tracker.track({
+      item: {
+        changes: [
+          { kind: 'update', path: updatePath },
+          { kind: 'add', path: addPath },
+        ],
+        id: 'item_1',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    await writeFile(updatePath, 'hello\nappended line\n', 'utf8');
+    await writeFile(addPath, 'line one\nline two\n', 'utf8');
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [
+          { kind: 'update', path: updatePath },
+          { kind: 'add', path: addPath },
+        ],
+        id: 'item_1',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [
+        {
+          diffText: expect.stringContaining('+appended line'),
+          kind: 'update',
+          linesAdded: 1,
+          linesDeleted: 0,
+          path: updatePath,
+        },
+        {
+          diffText: expect.stringContaining('+line two'),
+          kind: 'add',
+          linesAdded: 2,
+          linesDeleted: 0,
+          path: addPath,
+        },
+      ],
+      linesAdded: 3,
+      linesDeleted: 0,
+    });
+    expect((enriched.item as any).diffText).toContain(`diff --git a${updatePath} b${updatePath}`);
+    expect((enriched.item as any).diffText).toContain(`diff --git a${addPath} b${addPath}`);
+  });
+
+  it('does not synthesize a whole-file diff when an update starts without a path snapshot', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const updatePath = path.join(dir, 'existing.ts');
+    await writeFile(updatePath, 'line one\nline two\nline three\n', 'utf8');
+
+    const tracker = new CodexFileChangeTracker();
+
+    await tracker.track({
+      item: {
+        changes: [],
+        id: 'item_missing_snapshot',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    await writeFile(updatePath, 'line one\nline two updated\nline three\n', 'utf8');
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [{ kind: 'update', path: updatePath }],
+        id: 'item_missing_snapshot',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [{ kind: 'update', linesAdded: 0, linesDeleted: 0, path: updatePath }],
+      linesAdded: 0,
+      linesDeleted: 0,
+    });
+    expect(enriched.item).not.toHaveProperty('diffText');
+    expect(enriched.item.changes?.[0]).not.toHaveProperty('diffText');
+  });
+
+  it('does not synthesize a whole-file diff when an update snapshot says the file is missing', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const updatePath = path.join(dir, 'large-existing.md');
+    const tracker = new CodexFileChangeTracker();
+
+    await tracker.track({
+      item: {
+        changes: [{ kind: 'update', path: updatePath }],
+        id: 'item_missing_file_snapshot',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    const originalContent = Array.from({ length: 1200 }, (_, index) => `line ${index + 1}`).join(
+      '\n',
+    );
+    await writeFile(updatePath, `${originalContent}\nnew 1\nnew 2\nnew 3\nnew 4\nnew 5\n`, 'utf8');
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [{ kind: 'update', linesAdded: 5, linesDeleted: 0, path: updatePath }],
+        id: 'item_missing_file_snapshot',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [{ kind: 'update', linesAdded: 5, linesDeleted: 0, path: updatePath }],
+      linesAdded: 5,
+      linesDeleted: 0,
+    });
+    expect(enriched.item).not.toHaveProperty('diffText');
+    expect(enriched.item.changes?.[0]).not.toHaveProperty('diffText');
+  });
+
+  it('treats rename changes as metadata-only and keeps line stats at zero', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const beforePath = path.join(dir, 'before.txt');
+    const afterPath = path.join(dir, 'after.txt');
+
+    await writeFile(beforePath, 'content\n', 'utf8');
+
+    const tracker = new CodexFileChangeTracker();
+
+    await tracker.track({
+      item: {
+        changes: [{ kind: 'rename', path: afterPath }],
+        id: 'item_rename',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    await rename(beforePath, afterPath);
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [{ kind: 'rename', path: afterPath }],
+        id: 'item_rename',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [{ kind: 'rename', linesAdded: 0, linesDeleted: 0, path: afterPath }],
+      linesAdded: 0,
+      linesDeleted: 0,
+    });
+    expect(enriched.item).not.toHaveProperty('diffText');
+  });
+
+  it('resolves relative file_change paths from the configured cwd', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const relativePath = 'nested/relative.txt';
+    const absolutePath = path.join(dir, relativePath);
+
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, 'before\n', 'utf8');
+
+    const tracker = new CodexFileChangeTracker(dir);
+
+    await tracker.track({
+      item: {
+        changes: [{ kind: 'update', path: relativePath }],
+        id: 'item_relative',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    await writeFile(absolutePath, 'before\nafter\n', 'utf8');
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [{ kind: 'update', path: relativePath }],
+        id: 'item_relative',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [
+        {
+          diffText: expect.stringContaining(`diff --git a/${relativePath} b/${relativePath}`),
+          linesAdded: 1,
+          linesDeleted: 0,
+          path: relativePath,
+        },
+      ],
+      linesAdded: 1,
+      linesDeleted: 0,
+    });
+  });
+
+  it('counts added lines even when file content begins with repeated plus markers', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const addPath = path.join(dir, 'plus-prefixed.txt');
+    const tracker = new CodexFileChangeTracker();
+
+    await tracker.track({
+      item: {
+        changes: [{ kind: 'add', path: addPath }],
+        id: 'item_plus_prefix',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    await writeFile(addPath, '++leading content\n+++header lookalike\n', 'utf8');
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [{ kind: 'add', path: addPath }],
+        id: 'item_plus_prefix',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [
+        {
+          diffText: expect.stringContaining('++++header lookalike'),
+          kind: 'add',
+          linesAdded: 2,
+          linesDeleted: 0,
+          path: addPath,
+        },
+      ],
+      linesAdded: 2,
+      linesDeleted: 0,
+    });
+  });
+});

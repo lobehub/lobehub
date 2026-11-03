@@ -1,0 +1,146 @@
+import { HomeIcon, SearchIcon } from 'lucide-react';
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { getRouteById } from '@/config/routes';
+import { useGlobalStore } from '@/store/global';
+import { SidebarTabKey } from '@/store/global/initialState';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+
+export interface NavItem {
+  hidden?: boolean;
+  icon: any;
+  isNew?: boolean;
+  key: string;
+  onClick?: () => void;
+  title: string;
+  url?: string;
+}
+
+export interface NavLayout {
+  bottomMenuItems: NavItem[];
+  footer: {
+    hideGitHub: boolean;
+    layout: 'expanded' | 'compact';
+    showEvalEntry: boolean;
+    showSettingsEntry: boolean;
+  };
+  topNavItems: NavItem[];
+  userPanel: {
+    showDataImporter: boolean;
+    showMemory: boolean;
+  };
+}
+
+export const useNavLayout = (): NavLayout => {
+  const { t } = useTranslation('common');
+  const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+  const { showMarket, hideGitHub } = useServerConfigStore(featureFlagsSelectors);
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const enableDashboard = useServerConfigStore(serverConfigSelectors.enableDashboard);
+  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
+
+  const topNavItems = useMemo(
+    () =>
+      [
+        {
+          icon: SearchIcon,
+          key: 'search',
+          onClick: () => toggleCommandMenu(true),
+          title: t('tab.search'),
+        },
+        {
+          icon: HomeIcon,
+          key: SidebarTabKey.Home,
+          title: t('tab.home'),
+          url: '/',
+        },
+        {
+          icon: getRouteById('tasks')!.icon,
+          key: SidebarTabKey.Tasks,
+          title: t('tab.tasks'),
+          url: '/tasks',
+        },
+        {
+          // Behind the same lab toggle as the agent-scoped goal pages.
+          hidden: !enableGoals,
+          icon: getRouteById('goals')!.icon,
+          key: SidebarTabKey.Goals,
+          title: t('tab.goals'),
+          url: '/goals',
+        },
+        {
+          // Personal boards only for now — workspace-level boards have no UI
+          // yet — and only while the `dashboard` feature flag is on.
+          hidden: !!activeWorkspaceSlug || !enableDashboard,
+          icon: getRouteById('dashboard')!.icon,
+          key: SidebarTabKey.Dashboard,
+          title: t('tab.dashboard'),
+          url: '/dashboard',
+        },
+        {
+          icon: getRouteById('resource')!.icon,
+          key: SidebarTabKey.Resource,
+          title: t('tab.resource'),
+          url: '/resource',
+        },
+      ] as NavItem[],
+    [t, toggleCommandMenu, activeWorkspaceSlug, enableDashboard, enableGoals],
+  );
+
+  const bottomMenuItems = useMemo(
+    () =>
+      [
+        {
+          icon: getRouteById('image')!.icon,
+          key: SidebarTabKey.Image,
+          title: t('tab.generation'),
+          url: '/image',
+        },
+        {
+          hidden: !showMarket,
+          icon: getRouteById('community')!.icon,
+          key: SidebarTabKey.Community,
+          title: t('tab.community'),
+          url: '/community',
+        },
+        {
+          hidden: !!activeWorkspaceSlug,
+          icon: getRouteById('memory')!.icon,
+          key: SidebarTabKey.Memory,
+          title: t('tab.memory'),
+          url: '/memory',
+        },
+      ] as NavItem[],
+    [t, showMarket, activeWorkspaceSlug],
+  );
+
+  const footer = useMemo(
+    () => ({
+      hideGitHub: !!hideGitHub,
+      layout: 'compact' as const,
+      showEvalEntry: false,
+      showSettingsEntry: true,
+    }),
+    [hideGitHub],
+  );
+
+  const userPanel = useMemo(
+    () => ({
+      showDataImporter: false,
+      // Memory now appears in the sidebar by default; drop the duplicate entry
+      // from the user dropdown to keep that menu focused on account / settings.
+      showMemory: false,
+    }),
+    [],
+  );
+
+  return { bottomMenuItems, footer, topNavItems, userPanel };
+};

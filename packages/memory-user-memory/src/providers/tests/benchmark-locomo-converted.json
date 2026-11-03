@@ -1,0 +1,280 @@
+[
+  {
+    "force": true,
+    "layers": [],
+    "sampleId": "conv-26",
+    "sessions": [
+      {
+        "sessionId": "session_1",
+        "timestamp": "2023-05-08T13:56:00.000Z",
+        "turns": [
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:1",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "Hey Mel! Good to see you! How have you been?"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:2",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Hey Caroline! Good to see you! I'm swamped with the kids & work. What's up with you? Anything new?"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:3",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "I went to a LGBTQ support group yesterday and it was so powerful."
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:4",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Wow, that's cool, Caroline! What happened that was so awesome? Did you hear any inspiring stories?"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:5",
+            "imageCaption": "a photo of a dog walking past a wall with a painting of a woman",
+            "imageUrls": [
+              "https://i.redd.it/l7hozpetnhlb1.jpg"
+            ],
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "The transgender stories were so inspiring! I was so happy and thankful for all the support.\n[Image: a photo of a dog walking past a wall with a painting of a woman]"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:6",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Wow, love that painting! So cool you found such a helpful group. What's it done for you?"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:7",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "The support group has made me feel accepted and given me courage to embrace myself."
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:8",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "That's really cool. You've got guts. What now?"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:9",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "Gonna continue my edu and check out career options, which is pretty exciting!"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:10",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Wow, Caroline! What kinda jobs are you thinkin' of? Anything that stands out?"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:11",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "I'm keen on counseling or working in mental health - I'd love to support those with similar issues."
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:12",
+            "imageCaption": "a photo of a painting of a sunset over a lake",
+            "imageUrls": [
+              "http://candicealexander.com/cdn/shop/products/IMG_7269_a49d5af8-c76c-4ecd-ae20-48c08cb11dec.jpg"
+            ],
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "You'd be a great counselor! Your empathy and understanding will really help the people you work with. By the way, take a look at this.\n[Image: a photo of a painting of a sunset over a lake]"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:13",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "Thanks, Melanie! That's really sweet. Is this your own painting?"
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:14",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Yeah, I painted that lake sunrise last year! It's special to me."
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:15",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "Wow, Melanie! The colors really blend nicely. Painting looks like a great outlet for expressing yourself."
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:16",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Thanks, Caroline! Painting's a fun way to express my feelings and get creative. It's a great way to relax after a long day."
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:17",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "Totally agree, Mel. Relaxing and expressing ourselves is key. Well, I'm off to go do some research."
+          },
+          {
+            "createdAt": "2023-05-08T13:56:00.000Z",
+            "diaId": "D1:18",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Yep, Caroline. Taking care of ourselves is vital. I'm off to go swimming with the kids. Talk to you soon!"
+          }
+        ]
+      },
+      {
+        "sessionId": "session_2",
+        "timestamp": "2023-05-25T13:14:00.000Z",
+        "turns": [
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:1",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Hey Caroline, since we last chatted, I've had a lot of things happening to me. I ran a charity race for mental health last Saturday – it was really rewarding. Really made me think about taking care of our minds."
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:2",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "That charity race sounds great, Mel! Making a difference & raising awareness for mental health is super rewarding - I'm really proud of you for taking part!"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:3",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Thanks, Caroline! The event was really thought-provoking. I'm starting to realize that self-care is really important. It's a journey for me, but when I look after myself, I'm able to better look after my family."
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:4",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "I totally agree, Melanie. Taking care of ourselves is so important - even if it's not always easy. Great that you're prioritizing self-care."
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:5",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Yeah, it's tough. So I'm carving out some me-time each day - running, reading, or playing my violin - which refreshes me and helps me stay present for my fam!"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:6",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "That's great, Mel! Taking time for yourself is so important. You're doing an awesome job looking after yourself and your family!"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:7",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Thanks, Caroline. It's still a work in progress, but I'm doing my best. My kids are so excited about summer break! We're thinking about going camping next month. Any fun plans for the summer?"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:8",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "Researching adoption agencies — it's been a dream to have a family and give a loving home to kids who need it."
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:9",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Wow, Caroline! That's awesome! Taking in kids in need - you're so kind. Your future family is gonna be so lucky to have you!"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:10",
+            "imageCaption": "a photography of a sign for a new arrival and an information and domestic building",
+            "imageUrls": [
+              "https://live.staticflickr.com/3437/3935231341_b2955b00dd_b.jpg"
+            ],
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "Thanks, Mel! My goal is to give kids a loving home. I'm truly grateful for all the support I've got from friends and mentors. Now the hard work starts to turn my dream into a reality. And here's one of the adoption agencies I'm looking into. It's a lot to take in, but I'm feeling hopeful and optimistic.\n[Image: a photography of a sign for a new arrival and an information and domestic building]"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:11",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "Wow, that agency looks great! What made you pick it?"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:12",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "I chose them 'cause they help LGBTQ+ folks with adoption. Their inclusivity and support really spoke to me."
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:13",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "That's great, Caroline! Loving the inclusivity and support. Anything you're excited for in the adoption process?"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:14",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "I'm thrilled to make a family for kids who need one. It'll be tough as a single parent, but I'm up for the challenge!"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:15",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "You're doing something amazing! Creating a family for those kids is so lovely. You'll be an awesome mom! Good luck!"
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:16",
+            "role": "user",
+            "speaker": "Caroline",
+            "text": "Thanks, Melanie! Your kind words really mean a lot. I'll do my best to make sure these kids have a safe and loving home."
+          },
+          {
+            "createdAt": "2023-05-25T13:14:00.000Z",
+            "diaId": "D2:17",
+            "role": "assistant",
+            "speaker": "Melanie",
+            "text": "No doubts, Caroline. You have such a caring heart - they'll get all the love and stability they need! Excited for this new chapter!"
+          }
+        ]
+      }
+    ],
+    "source": "benchmark_locomo",
+    "topicId": "sample_conv-26"
+  }
+]

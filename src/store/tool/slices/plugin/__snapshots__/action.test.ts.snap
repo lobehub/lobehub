@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`useToolStore:plugin > validatePluginSettings > should return invalid result if settings do not match the schema 1`] = `
+{
+  "errors": [
+    {
+      "error": "Instance does not have required property "abc".",
+      "instanceLocation": "#",
+      "keyword": "required",
+      "keywordLocation": "#/required",
+    },
+  ],
+  "valid": false,
+}
+`;

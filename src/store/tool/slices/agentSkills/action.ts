@@ -1,0 +1,234 @@
+import type {
+  CreateSkillInput,
+  ImportGitHubInput,
+  ImportUrlInput,
+  ImportZipInput,
+  SkillImportResult,
+  UpdateSkillInput,
+} from '@lobechat/types';
+
+import {
+  createReplicaSlice,
+  linkReplicaEntity,
+  recordLens,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
+import { agentSkillService } from '@/services/skill';
+import type { StoreSetter } from '@/store/types';
+
+import type { ToolStore } from '../../store';
+import { useToolStore } from '../../store';
+import {
+  AGENT_SKILL_LIST_KEY,
+  type AgentSkillDetail,
+  agentSkillDetailEntity,
+  type AgentSkillDetailItem,
+  agentSkillDetailResource,
+  agentSkillListEntity,
+  type AgentSkillListItem,
+  agentSkillListResource,
+} from './projection';
+import { agentSkillsSelectors } from './selectors';
+
+/** The skills list has a single entry; its params carry no filter. */
+const LIST_PARAMS = {} as Record<string, never>;
+
+/** Sync result of the skills list: replica flags plus the value the UI reads. */
+export interface AgentSkillsSyncResult extends ReplicaSyncResult {
+  /** The installed skills, `undefined` until the first entry lands. */
+  data: AgentSkillListItem[] | undefined;
+  /** A request is in flight and there is nothing to show for this entry yet. */
+  isLoading: boolean;
+  /** Alias of `revalidate`, kept for the existing "reload skills" controls. */
+  mutate: () => Promise<unknown>;
+}
+
+/** Sync result of one skill detail page. */
+export interface AgentSkillDetailSyncResult extends ReplicaSyncResult {
+  /** The detail value: the skill and its resource tree. */
+  data: AgentSkillDetail | undefined;
+  /** A request is in flight and there is nothing to show for this entry yet. */
+  isLoading: boolean;
+}
+
+type Setter = StoreSetter<ToolStore>;
+
+export const createAgentSkillsSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
+  new AgentSkillsActionImpl(set, get, _api);
+
+export class AgentSkillsActionImpl {
+  readonly #detail;
+  readonly #get: () => ToolStore;
+  readonly #list;
+  /** One skill lives in the list row and in every loaded detail entry. */
+  readonly #skill;
+
+  constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
+    void _api;
+    this.#get = get;
+    this.#list = createReplicaSlice(agentSkillListResource, {
+      actionPrefix: 'agentSkillList',
+      entity: agentSkillListEntity,
+      fetcher: () => agentSkillService.list(),
+      get,
+      merge: (response) => response.data,
+      set,
+      stateKey: 'agentSkillListReplica',
+      view: recordLens<ToolStore, AgentSkillListItem[]>('agentSkillListMap'),
+    });
+    this.#detail = createReplicaSlice(agentSkillDetailResource, {
+      actionPrefix: 'agentSkillDetail',
+      entity: agentSkillDetailEntity,
+      fetcher: (id) => this.#fetchDetail(id),
+      get,
+      set,
+      stateKey: 'agentSkillDetailReplica',
+      view: recordLens<ToolStore, AgentSkillDetail>('agentSkillDetailMap'),
+    });
+    this.#skill = linkReplicaEntity<AgentSkillListItem>([this.#list, this.#detail]);
+  }
+
+  #fetchDetail = async (id: string): Promise<AgentSkillDetail> => {
+    const [skillDetail, resourceTree] = await Promise.all([
+      agentSkillService.getById(id),
+      agentSkillService.listResources(id, true),
+    ]);
+    return { resourceTree, skillDetail };
+  };
+
+  /** The replica scope a request starts under; its result may only land there. */
+  #captureScope = (): string => this.#list.resource.scope.get();
+
+  /** Whether the identity a request started under is still the active one. */
+  #isCurrentScope = (scope: string): boolean => this.#list.resource.scope.get() === scope;
+
+  /**
+   * Fetch the list and settle it into the replica. `refreshAgentSkills` is
+   * also called from flows where the list hook is not mounted (installing a
+   * suggested skill from the create-agent modal), and it must populate the
+   * store regardless, so this does not just revalidate the SWR entry.
+   *
+   * It runs after mutations, so it never joins a request already in flight
+   * (`fresh`): that one may hold the pre-mutation list. The replica drops a
+   * response that resolves after an identity switch instead of writing (and
+   * persisting) it into the next scope's partition.
+   */
+  #refreshList = async (): Promise<void> => {
+    await this.#list.fetch(LIST_PARAMS, { fresh: true });
+  };
+
+  createAgentSkill = async (
+    params: CreateSkillInput,
+  ): Promise<AgentSkillDetailItem | undefined> => {
+    const scope = this.#captureScope();
+    const result = await agentSkillService.createSkill(params);
+    // A created skill belongs to the scope that started the create; never
+    // splice it into a list the identity has since switched to.
+    if (result && this.#isCurrentScope(scope)) {
+      this.#list.update(AGENT_SKILL_LIST_KEY, (items) =>
+        items && !items.some((item) => item.id === result.id) ? [result, ...items] : items,
+      );
+    }
+    await this.#refreshList();
+    return result;
+  };
+
+  deleteAgentSkill = async (id: string): Promise<void> => {
+    const scope = this.#captureScope();
+    await agentSkillService.deleteSkill(id);
+    // Drops the list row and the loaded detail entry in one fan-out.
+    if (this.#isCurrentScope(scope)) this.#skill.remove(id);
+    await this.#refreshList();
+  };
+
+  importAgentSkillFromGitHub = async (
+    params: ImportGitHubInput,
+  ): Promise<SkillImportResult | undefined> => {
+    const result = await agentSkillService.importFromGitHub(params);
+    await this.#refreshList();
+    return result;
+  };
+
+  importAgentSkillFromUrl = async (
+    params: ImportUrlInput,
+  ): Promise<SkillImportResult | undefined> => {
+    const result = await agentSkillService.importFromUrl(params);
+    await this.#refreshList();
+    return result;
+  };
+
+  importAgentSkillFromZip = async (
+    params: ImportZipInput,
+  ): Promise<SkillImportResult | undefined> => {
+    const result = await agentSkillService.importFromZip(params);
+    await this.#refreshList();
+    return result;
+  };
+
+  /**
+   * Make sure the installed skills list is in the store, for callers that need
+   * it while no list view is mounted (assembling a chat request right after a
+   * page load). A list the server has confirmed is not requested again, while
+   * one hydrated from the persisted copy is: it can miss a skill installed on
+   * another device. A request in flight is joined. Rejects when the fetch fails; callers decide whether that is
+   * fatal.
+   */
+  ensureAgentSkillsLoaded = async (): Promise<void> => {
+    if (agentSkillsSelectors.isAgentSkillListSynced(this.#get())) return;
+    await this.#list.fetch(LIST_PARAMS);
+  };
+
+  refreshAgentSkills = async (): Promise<void> => {
+    await this.#refreshList();
+  };
+
+  updateAgentSkill = async (
+    params: UpdateSkillInput,
+  ): Promise<AgentSkillDetailItem | undefined> => {
+    const scope = this.#captureScope();
+    const result = await this.#skill.optimistic(
+      params.id,
+      (skill) => ({
+        ...skill,
+        ...(params.name !== undefined ? { name: params.name } : {}),
+        ...(params.description !== undefined ? { description: params.description } : {}),
+        ...(params.manifest ? { manifest: { ...skill.manifest, ...params.manifest } } : {}),
+      }),
+      () => agentSkillService.updateSkill(params),
+    );
+    // The detail holds the full skill (content, resources); take the server
+    // value — but only while the identity that started the edit is still active.
+    if (this.#isCurrentScope(scope)) {
+      this.#detail.update(params.id, (data) => (data ? { ...data, skillDetail: result } : data));
+    }
+    await this.#refreshList();
+    return result;
+  };
+
+  /**
+   * Fetch orchestration only; read the value through `agentSkillDetailMap[id]`.
+   */
+  useFetchAgentSkillDetail = (skillId?: string): AgentSkillDetailSyncResult => {
+    const sync = this.#detail.useSync(skillId || null);
+    const data = useToolStore((s) => (skillId ? s.agentSkillDetailMap[skillId] : undefined));
+    return {
+      ...sync,
+      data,
+      isLoading: !data && (sync.isValidating || !sync.isHydrated),
+    };
+  };
+
+  /** Fetch orchestration only; read the rows through `agentSkillsSelectors`. */
+  useFetchAgentSkills = (enabled: boolean): AgentSkillsSyncResult => {
+    const sync = this.#list.useSync(LIST_PARAMS, { enabled });
+    const data = useToolStore((s) => s.agentSkillListMap[AGENT_SKILL_LIST_KEY]);
+    return {
+      ...sync,
+      data,
+      isLoading: !data && (sync.isValidating || !sync.isHydrated),
+      mutate: sync.revalidate,
+    };
+  };
+}
+
+export type AgentSkillsAction = Pick<AgentSkillsActionImpl, keyof AgentSkillsActionImpl>;

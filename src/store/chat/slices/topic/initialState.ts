@@ -1,0 +1,148 @@
+import { createReplicaState, type ReplicaPagedData, type ReplicaState } from '@/libs/replica';
+import { type ChatTopic, type TopicQuerySortBy } from '@/types/topic';
+
+/** The project (and directory, when there is one) a blank conversation was opened in. */
+export type PendingNewTopicDirectory =
+  | { agentId: string; projectId?: undefined; projectWorkingDirectoryId: string }
+  | { agentId: string; projectId: string; projectWorkingDirectoryId?: undefined };
+
+/**
+ * Unified topic data structure for each agent: the generic local-first paged
+ * view plus topic query descriptors.
+ */
+export interface TopicData extends ReplicaPagedData<ChatTopic, number> {
+  currentPage: number;
+  excludeStatuses?: string[];
+  excludeTriggers?: string[];
+  hasMore: boolean;
+  isExpandingPageSize?: boolean;
+  isInbox?: boolean;
+  isLoadingMore?: boolean;
+  items: ChatTopic[];
+  /**
+   * Last page-fetch failure. Kept separate from the first-page SWR `error` so
+   * infinite-scroll surfaces can render an inline Retry row instead of silently
+   * dropping the loading-more row while `hasMore` remains true.
+   */
+  loadMoreError?: unknown;
+  /** Only the caller's own topics (workspace "only mine" filter; part of the query identity). */
+  onlyMine?: boolean;
+  /**
+   * Last fetched/used page size for this topic container.
+   * Used to detect "pageSize expansion" (user increases pageSize) without being affected by SWR revalidation
+   * or cases where total items < pageSize.
+   */
+  pageSize: number;
+  /** Server-side ordering the bucket was fetched with (part of its query identity). */
+  sortBy?: TopicQuerySortBy;
+  total: number;
+  /**
+   * Tracks whether the first fetch for this container asked the server for
+   * the heavier card-detail columns. `loadMoreTopics` reads it back so
+   * subsequent pages stay shape-consistent with the initial fetch.
+   */
+  withDetails?: boolean;
+}
+
+export interface ChatTopicState {
+  // TODO: need to add the null to the type
+  activeTopicId?: string;
+  /**
+   * Topic data map dedicated to the Agent Topics management page
+   * (`/agent/:aid/topics`). Kept separate from `topicDataMap` because the page
+   * fetches with `withDetails: true` and a larger page size, and otherwise it
+   * would share a bucket with the sidebar's cheap fetch — whichever response
+   * lands last wins, tangling both views.
+   */
+  agentTopicsViewMap: Record<string, TopicData>;
+  /** Local-first bookkeeping for `agentTopicsViewMap`. */
+  agentTopicsViewReplica: ReplicaState<TopicData>;
+  /**
+   * whether all topics drawer is open
+   */
+  allTopicsDrawerOpen: boolean;
+  creatingTopic: boolean;
+  /**
+   * Ids of client-minted topics whose server row does not exist yet (the
+   * first-send window between minting the id and the server confirming the
+   * topic). State rather than a private field because consumers must react to
+   * it: `#reconcileFetchedTopics` keeps these rows across refetches, and the
+   * message-fetch gate skips fetching a topic that cannot return rows yet —
+   * an early fetch would come back empty and wipe the optimistic messages.
+   *
+   * Registered on an `optimistic` addTopic dispatch; cleared by
+   * `replaceTopicId` (server confirmed) or `deleteTopic` (rollback).
+   */
+  creatingTopicIds: string[];
+  inSearchingMode?: boolean;
+  isSearchingTopic: boolean;
+  /**
+   * The active topic, when the user archived it while on it. The sidebar keeps
+   * the active topic visible even when archived (so a search hit or direct URL
+   * still shows the selection), but one just archived must disappear at once.
+   * Cleared whenever `activeTopicId` changes, so reopening it later pins it
+   * again. Maintained by `subscribeJustArchivedTopic`.
+   */
+  justArchivedTopicId?: string;
+  /**
+   * Project working directory the *next* topic creation should bind to.
+   *
+   * Set when a project group's "+" opens a blank conversation and cleared by
+   * any later switch to a real topic (or by the creation itself), so it can
+   * only ever describe that one pending new topic. `internal_createTopic` folds
+   * it into the create call, which is what keeps the deferred row inside the
+   * project instead of dropping it into a path-only conversation. The agent id
+   * is part of the value: switching agents must not let one agent's pending
+   * directory land on another agent's topic. A project without a directory the
+   * agent can run in stages the project alone: the topic is born
+   * conversation-only inside it.
+   */
+  pendingNewTopicDirectory?: PendingNewTopicDirectory;
+  searchTopics: ChatTopic[];
+  /**
+   * Unified topic data map for each agent
+   * Contains items, total count, pagination state, and loading states
+   */
+  topicDataMap: Record<string, TopicData>;
+  /**
+   * Per-id topic detail cache, filled by `useFetchTopicDetail` when the active
+   * topic is missing from the loaded list bucket — e.g. an archived
+   * (`completed`) topic that the sidebar fetch excludes via `excludeStatuses`.
+   * `currentActiveTopic` / `getTopicById` read it as a fallback so the header
+   * keeps the real title instead of degrading to the "new topic" placeholder.
+   */
+  topicDetailMap: Record<string, ChatTopic>;
+  /** Local-first bookkeeping for `topicDetailMap`. */
+  topicDetailReplica: ReplicaState<ChatTopic>;
+  /** Topics with effort selections queued or being persisted. */
+  topicEffortUpdatingIds: string[];
+  /** Local-first bookkeeping for `topicDataMap` (scope, optimistic overlays). */
+  topicListReplica: ReplicaState<TopicData>;
+  /**
+   * Internal ref-count for topic loading owners. A topic can be loading because
+   * the agent is running and because title-summary is streaming at the same time.
+   */
+  topicLoadingIdCounts: Record<string, number>;
+  topicLoadingIds: string[];
+  topicRenamingId?: string;
+  topicSearchKeywords: string;
+}
+
+export const initialTopicState: ChatTopicState = {
+  activeTopicId: null as any,
+  agentTopicsViewMap: {},
+  agentTopicsViewReplica: createReplicaState<TopicData>(),
+  creatingTopicIds: [],
+  allTopicsDrawerOpen: false,
+  creatingTopic: false,
+  isSearchingTopic: false,
+  searchTopics: [],
+  topicDataMap: {},
+  topicDetailMap: {},
+  topicDetailReplica: createReplicaState<ChatTopic>(),
+  topicListReplica: createReplicaState<TopicData>(),
+  topicLoadingIdCounts: {},
+  topicLoadingIds: [],
+  topicEffortUpdatingIds: [],
+  topicSearchKeywords: '',
+};

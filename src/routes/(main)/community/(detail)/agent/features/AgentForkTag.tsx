@@ -1,0 +1,57 @@
+'use client';
+
+import { Icon, Tag } from '@lobehub/ui';
+import { GitFork } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
+import urlJoin from 'url-join';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { forkKeys } from '@/libs/swr/keys';
+import { marketApiService } from '@/services/marketApi';
+
+import { useDetailContext } from './DetailProvider';
+
+/**
+ * Agent Fork Tag Component
+ * Displays fork source information if the agent is forked from another agent
+ */
+const AgentForkTag = memo(() => {
+  const { t } = useTranslation('discover');
+  const navigate = useWorkspaceAwareNavigate();
+  const { identifier, forkedFromAgentId } = useDetailContext();
+
+  // Fetch fork source info
+  const { data: forkSource } = useSWR(
+    identifier && forkedFromAgentId ? forkKeys.source(identifier) : null,
+    () => marketApiService.getAgentForkSource(identifier!),
+    { revalidateOnFocus: false },
+  );
+
+  if (!forkSource?.source) return null;
+
+  const handleClick = () => {
+    if (forkSource?.source?.identifier) {
+      navigate(urlJoin('/community/agent', forkSource.source.identifier));
+    }
+  };
+
+  return (
+    <Tag
+      color="default"
+      icon={<Icon icon={GitFork} />}
+      style={{ cursor: 'pointer' }}
+      title={t('fork.forkedFrom', {
+        defaultValue: `Forked from ${forkSource.source.name}`,
+      })}
+      onClick={handleClick}
+    >
+      {t('fork.forkedFrom')}: {forkSource.source.name}
+    </Tag>
+  );
+});
+
+AgentForkTag.displayName = 'AgentForkTag';
+
+export default AgentForkTag;

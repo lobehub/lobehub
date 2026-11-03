@@ -1,0 +1,73 @@
+import { type LobeToolCustomPlugin } from '@lobechat/types';
+import { Block, Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { type FormInstance, useWatch } from '@lobehub/ui/form';
+import { FileCode } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import ManifestPreviewer from '@/components/ManifestPreviewer';
+import PluginAvatar from '@/components/Plugins/PluginAvatar';
+import PluginTag from '@/components/Plugins/PluginTag';
+import { pluginHelpers } from '@/store/tool';
+
+import ApiVisualizer from './ApiVisualizer';
+import PluginEmptyState from './EmptyState';
+import { getMcpManifestSummary } from './mcpManifestSummary';
+
+const PluginPreview = memo<{ form: FormInstance<LobeToolCustomPlugin> }>(({ form }) => {
+  const { t, i18n } = useTranslation('plugin');
+  const manifest = useWatch(form, 'manifest');
+  const meta = manifest?.meta;
+
+  if (!manifest)
+    return (
+      <Flexbox flex={2} height={'100%'} style={{ background: cssVar.colorBgLayout }}>
+        <PluginEmptyState />
+      </Flexbox>
+    );
+
+  return (
+    <Flexbox
+      flex={2}
+      gap={24}
+      padding={12}
+      style={{ background: cssVar.colorBgLayout, overflowY: 'auto' }}
+    >
+      <Block
+        horizontal
+        gap={16}
+        justify={'space-between'}
+        padding={16}
+        title={t('dev.preview.card')}
+        variant={'outlined'}
+      >
+        <Flexbox horizontal gap={16}>
+          <PluginAvatar avatar={pluginHelpers.getPluginAvatar(meta)} size={40} />
+          <Flexbox gap={2}>
+            <Flexbox horizontal align={'center'} gap={8}>
+              {pluginHelpers.getPluginTitle(meta) || 'Plugin Title'}
+              <PluginTag type={'customPlugin'} />
+            </Flexbox>
+            <Text style={{ fontSize: 12 }} type={'secondary'}>
+              {pluginHelpers.getPluginDesc(meta) ||
+                (manifest.type === 'mcp'
+                  ? getMcpManifestSummary(manifest, t, i18n.resolvedLanguage)
+                  : 'Plugin Description')}
+            </Text>
+          </Flexbox>
+        </Flexbox>
+
+        {manifest && (
+          <ManifestPreviewer manifest={manifest}>
+            <Flexbox>
+              <Button icon={<Icon icon={FileCode} />}>{t('dev.mcp.previewManifest')}</Button>
+            </Flexbox>
+          </ManifestPreviewer>
+        )}
+      </Block>
+      {manifest && <ApiVisualizer apis={manifest.api as any} />}
+    </Flexbox>
+  );
+});
+
+export default PluginPreview;

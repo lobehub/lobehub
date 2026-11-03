@@ -1,0 +1,228 @@
+'use client';
+
+import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
+import { Center, Spin } from '@lobehub/ui';
+import type { CSSProperties, JSXElementConstructor, ReactNode } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
+
+import AsyncError from '@/components/AsyncError';
+import { isHtmlFile } from '@/components/HtmlPreview';
+import { type FileListItem } from '@/types/files';
+
+import { isPdfFile } from './fileType';
+import NotSupport from './NotSupport';
+import CodeViewer from './Renderer/Code';
+import HTMLViewer from './Renderer/HTML';
+import ImageViewer from './Renderer/Image';
+import MarkdownViewer from './Renderer/Markdown';
+import MSDocViewer from './Renderer/MSDoc';
+import type { PDFViewerProps } from './Renderer/PDF';
+import { preloadPDFRenderer } from './Renderer/PDF/loader';
+import VideoViewer from './Renderer/Video';
+
+// File type definitions
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
+const IMAGE_MIME_TYPES = new Set([
+  'image/jpg',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+]);
+
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogg'];
+const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/ogg', 'mp4', 'webm', 'ogg']);
+
+// Markdown renders as rich text (with a raw toggle) instead of the highlighted
+// source view — must be checked before the code fallback, whose lists also
+// contain the md/mdx extensions and MIME types.
+const MARKDOWN_EXTENSIONS = ['.md', '.mdx', '.markdown'];
+const MARKDOWN_FILE_MIME_TYPES = new Set(['md', 'mdx', 'markdown', ...MARKDOWN_MIME_TYPES]);
+
+const MSDOC_EXTENSIONS = ['.doc', '.docx', '.odt', '.ppt', '.pptx', '.xls', '.xlsx'];
+const MSDOC_MIME_TYPES = new Set([
+  'doc',
+  'docx',
+  'odt',
+  'ppt',
+  'pptx',
+  'xls',
+  'xlsx',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+
+// Archive file types - not supported for preview
+const ARCHIVE_EXTENSIONS = ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz'];
+const ARCHIVE_MIME_TYPES = new Set([
+  'zip',
+  'rar',
+  '7z',
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/x-rar-compressed',
+  'application/x-7z-compressed',
+  'application/x-tar',
+  'application/gzip',
+  'application/x-gzip',
+  'application/x-bzip2',
+  'application/x-xz',
+]);
+
+// Helper function to check file type
+// Note: fileType is matched exactly against the MIME set; substring matching would let
+// generic values like `custom/document` bleed into MSDoc via the `doc` substring.
+const matchesFileType = (
+  fileType: string | undefined,
+  fileName: string | undefined,
+  extensions: string[],
+  mimeTypes: Set<string>,
+): boolean => {
+  const lowerFileType = fileType?.toLowerCase();
+  const lowerFileName = fileName?.toLowerCase();
+
+  if (lowerFileType && mimeTypes.has(lowerFileType)) {
+    return true;
+  }
+
+  if (lowerFileName && extensions.some((ext) => lowerFileName.endsWith(ext))) {
+    return true;
+  }
+
+  return false;
+};
+
+interface FileViewerProps extends FileListItem {
+  className?: string;
+  /**
+   * Editing tools for image files (`ImageEditTools`). Only hosts that show a
+   * persisted library file mount them; omit for read-only previews.
+   */
+  imageTools?: ReactNode;
+  /** Host close action, surfaced in the image viewer's top bar. */
+  onClose?: () => void;
+  /** Forwarded to the PDF renderer; see {@link PDFViewerProps.showChunkHighlights}. */
+  showChunkHighlights?: boolean;
+  style?: CSSProperties;
+}
+
+type PDFRenderer = JSXElementConstructor<PDFViewerProps>;
+
+type PDFRendererState =
+  | { status: 'idle' | 'loading' }
+  | { error: unknown; status: 'error' }
+  | { Renderer: PDFRenderer; status: 'ready' };
+
+const usePDFRenderer = (enabled: boolean) => {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<PDFRendererState>({ status: 'idle' });
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    let active = true;
+    setState({ status: 'loading' });
+
+    void preloadPDFRenderer().then(
+      ({ default: Renderer }) => {
+        if (active) setState({ Renderer, status: 'ready' });
+      },
+      (error: unknown) => {
+        if (active) setState({ error, status: 'error' });
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [attempt, enabled]);
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+
+  return { retry, state };
+};
+
+/**
+ * Preview any file type.
+ */
+const FileViewer = memo<FileViewerProps>((props) => {
+  const { id, style, fileType, url, name, imageTools, onClose, showChunkHighlights } = props;
+  const isPDF = isPdfFile({ fileName: name, fileType, path: url });
+  const { retry: retryPDFRenderer, state: pdfRendererState } = usePDFRenderer(isPDF);
+
+  // PDF files
+  if (isPDF) {
+    if (pdfRendererState.status === 'error')
+      return (
+        <Center height={'100%'} width={'100%'}>
+          <AsyncError error={pdfRendererState.error} variant={'block'} onRetry={retryPDFRenderer} />
+        </Center>
+      );
+
+    if (pdfRendererState.status === 'ready') {
+      const { Renderer } = pdfRendererState;
+      return <Renderer fileId={id} showChunkHighlights={showChunkHighlights} url={url} />;
+    }
+
+    return (
+      <Center height={'100%'} width={'100%'}>
+        <Spin size="large" />
+      </Center>
+    );
+  }
+
+  // Image files
+  if (matchesFileType(fileType, name, IMAGE_EXTENSIONS, IMAGE_MIME_TYPES)) {
+    return (
+      <ImageViewer
+        // A document-coalesced item carries a `docs_*` id; the tools need the
+        // persisted file behind it.
+        fileId={props.fileId ?? id}
+        key={url}
+        name={name}
+        tools={imageTools}
+        url={url}
+        onClose={onClose}
+      />
+    );
+  }
+
+  // Video files
+  if (matchesFileType(fileType, name, VIDEO_EXTENSIONS, VIDEO_MIME_TYPES)) {
+    return <VideoViewer fileId={id} url={url} />;
+  }
+
+  // Archive files (zip, rar, 7z, etc.) - not supported for preview
+  // Check before code files to avoid false matches
+  if (matchesFileType(fileType, name, ARCHIVE_EXTENSIONS, ARCHIVE_MIME_TYPES)) {
+    return <NotSupport fileName={name} style={style} url={url} />;
+  }
+
+  // Microsoft Office documents - check before code files to avoid false matches
+  // (e.g., 'doc' contains 'c' which would match CODE_EXTENSIONS)
+  if (matchesFileType(fileType, name, MSDOC_EXTENSIONS, MSDOC_MIME_TYPES)) {
+    return <MSDocViewer fileId={id} fileName={name} fileType={fileType} url={url} />;
+  }
+
+  // HTML files should render as a sandboxed preview before the broader code-file fallback.
+  if (isHtmlFile({ fileName: name, fileType })) {
+    return <HTMLViewer fileId={id} url={url} />;
+  }
+
+  // Markdown files render as rich text with a raw toggle.
+  if (matchesFileType(fileType, name, MARKDOWN_EXTENSIONS, MARKDOWN_FILE_MIME_TYPES)) {
+    return <MarkdownViewer fileId={id} url={url} />;
+  }
+
+  // The former code-extension/MIME list is replaced by byte detection: unknown extensions can still contain text. The loader checks bytes and caps downloads;
+  // binary, oversized, or unreadable content falls back to the download view.
+  return <CodeViewer fileId={id} fileName={name} key={url} url={url} />;
+});
+
+export default FileViewer;

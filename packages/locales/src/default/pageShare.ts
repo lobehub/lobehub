@@ -1,0 +1,23 @@
+// Cloud-only feature; namespace kept here so locale dictionary stays centralized.
+export default {
+  'error.invalidFormat.desc': 'You can still read it. Layout may differ from the original.',
+  'error.invalidFormat.ownerHint': 'Re-save it in the editor to restore the original layout.',
+  'error.invalidFormat.title': "This page couldn't be shown in its original format",
+  'popover.copyLink': 'Copy Link',
+  'popover.copyLinkSuccess': 'Link copied',
+  'popover.linkHint': 'Anyone with the link can view this page',
+  'popover.permissionLink': 'Anyone with the link',
+  'popover.permissionPrivate': 'Private',
+  'popover.permissionWorkspace': 'Anyone in the workspace',
+  'popover.privateHint': 'Only you can access this page',
+  'popover.sectionViews_one': '{{count}} view',
+  'popover.sectionViews_other': '{{count}} views',
+  'popover.title': 'Share Page',
+  'popover.updateError': 'Failed to update sharing settings',
+  'popover.visibility': 'Visibility',
+  'popover.visibilityUpdated': 'Visibility updated',
+  'popover.workspaceHint': 'Anyone in this workspace can view this page',
+  'shareButton.label': 'Share',
+  'shell.sharedBy': 'Shared by {{name}}',
+  'shell.updatedAt': 'Updated {{relative}}',
+};

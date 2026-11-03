@@ -1,0 +1,597 @@
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import type {
+  AgentDeviceOverride,
+  DeviceExecutionTarget,
+  ExecutionPlan,
+  LobeAgentAgencyConfig,
+  LobeAgentChatConfig,
+  RuntimeEnvMode,
+} from '@lobechat/types';
+import {
+  executionTargetToRuntimeMode,
+  isDeviceCapablePlan,
+  isDeviceLockedPlan,
+  RequestTrigger,
+  resolveToolMode,
+} from '@lobechat/types';
+
+// The pure mode / plan predicates live in `@lobechat/types` so the shared
+// tool rules in `@lobechat/mecha` can use them; re-exported here for the
+// existing host consumers.
+export { executionTargetToRuntimeMode, isDeviceCapablePlan, isDeviceLockedPlan, resolveToolMode };
+
+/**
+ * Whether a workspace config still needs the shared-row safety coercion.
+ * A member opts out only by explicitly choosing an execution target; a missing
+ * or bound-device-only override still inherits the raw shared target.
+ */
+export const resolveWorkspaceScoped = (
+  isWorkspaceAgent: boolean,
+  deviceOverride: AgentDeviceOverride | null | undefined,
+): boolean => isWorkspaceAgent && deviceOverride?.executionTarget === undefined;
+
+export interface ResolveExecutionTargetOptions {
+  /**
+   * Whether tools can run on the user's own client/device in this environment —
+   * i.e. the `local` target (`runtimeMode: 'local'`, the `'client'` executor)
+   * has somewhere to run. This is the boolean form of `RuntimePlatform`
+   * (`'desktop'` vs `'web'`); it is NOT "the build is desktop" and NOT "the
+   * message came from a desktop client". It is true for:
+   *   - the Electron desktop build (the client runs tools in-process), and
+   *   - a server with a device gateway (`!!DEVICE_GATEWAY_URL`), which tunnels
+   *     the run to a registered device — the client lives at the other end.
+   * When false (plain web / a server with no gateway) there is no client to run
+   * on, so a `local` target coerces to `sandbox` (cloud) or the default is
+   * `none` (plain chat). Each layer passes the value that means this for it:
+   * `isDesktop` (build const) in the UI, `gatewayConfigured` on the server,
+   * `hasDeviceProxy` in the tools engine.
+   *
+   * Note this gates only `local` — `device` (an explicit `boundDeviceId`) is a
+   * concrete remote target reachable from anywhere, so it is honoured even when
+   * this is false.
+   */
+  clientExecutionAvailable: boolean;
+  /**
+   * Whether a device-gateway can route the run to a registered device in this
+   * environment. Orthogonal to {@link clientExecutionAvailable} (in-process
+   * `local` capability): the two coincide on a server (both equal
+   * `gatewayConfigured`), but split on the web client — the browser can't run
+   * `local` in-process (`clientExecutionAvailable` false) yet its backend may
+   * still have a device-gateway that routes to a `lh connect`-ed machine
+   * (`deviceRoutingAvailable` true).
+   *
+   * Gates ONLY the web-display upgrade of a bound `local` target to `device`
+   * (see `resolveExecutionTarget`). Server execution never relies on it: with a
+   * gateway `clientExecutionAvailable` is already true (branch skipped, `local`
+   * routes to a device via `resolveExecutionPlan`); without one the target must
+   * stay `sandbox`. So server callers leave it `undefined` (false) and the
+   * branch is a no-op there — only web display sites pass
+   * `!!serverConfig.agentGatewayUrl` to keep the honest device display
+   *. `isHetero` also satisfies the gate: a hetero agent's bound
+   * `local` was always surfaced as `device` on web regardless of gateway state.
+   */
+  deviceRoutingAvailable?: boolean;
+  /**
+   * Heterogeneous agents bring their own toolchain and must execute somewhere,
+   * so `'none'` normally coerces to `'local'` on desktop and `'sandbox'` on
+   * web. A provider without sandbox support keeps `'none'` as a pending device
+   * selection instead.
+   */
+  isHetero?: boolean;
+  /**
+   * Whether this heterogeneous provider can execute in the server cloud
+   * sandbox. Defaults to `false` for Amp, CodeBuddy, Droid, OpenCode, Pi, and Qoder
+   * (which currently
+   * require a local or connected device) and `true` otherwise. Callers that only
+   * know the provider through a legacy model discriminator can override the
+   * inferred capability.
+   */
+  sandboxExecutionAvailable?: boolean;
+  /**
+   * What initiated the run. A `bot` trigger has no UI to pick a device, and
+   * `local` (in-process IPC) is unreachable from the cloud bot server — so a
+   * stored `local` target is upgraded: to `device` when it carries a
+   * `boundDeviceId` (route to the pinned machine), otherwise to `auto`
+   * (auto-activate an online device). `none` / `sandbox` are explicit opt-outs
+   * and are left untouched.
+   */
+  trigger?: RequestTrigger;
+  /**
+   * The supplied config is the raw workspace-shared fallback and has NOT been
+   * merged with the current member's `agentDeviceOverrides`. Such a config
+   * must not run `local` on whichever member happened to open it, so this
+   * treats client execution as unavailable and coerces legacy local values to
+   * sandbox/device as appropriate.
+   *
+   * Set this to `false` only when the current member has an explicit
+   * `executionTarget` override. Calling `resolveAgencyConfig` alone is not
+   * sufficient: without an override it returns the raw shared config unchanged.
+   * `useEffectiveAgencyConfig` exposes this distinction as `workspaceScoped`.
+   */
+  workspaceScoped?: boolean;
+}
+
+/** Whether a heterogeneous provider can run in LobeHub's cloud sandbox. */
+export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefined): boolean =>
+  type !== 'amp' &&
+  type !== 'codebuddy' &&
+  type !== 'cursor' &&
+  type !== 'droid' &&
+  type !== 'devin' &&
+  type !== 'kimi-code' &&
+  type !== 'hermes' &&
+  type !== 'opencode' &&
+  type !== 'openclaw' &&
+  type !== 'pi' &&
+  type !== 'qoder' &&
+  type !== 'trae';
+
+/**
+ * Single source of truth for where an agent executes — one global
+ * `agencyConfig.executionTarget` drives both desktop and web.
+ *
+ * - `none`    → no execution environment (plain chat)
+ * - `auto`    → auto-pick a device (opt-in; the only mode that activates a
+ *               device the user did not explicitly select)
+ * - `local`   → this machine (in-process; desktop only)
+ * - `sandbox` → server cloud sandbox
+ * - `device`  → remote device (dispatched to `boundDeviceId`)
+ *
+ * `local` and `device` stay DISTINCT even when the bound device is this very
+ * machine: `device` dispatches through the server gateway, so progress streams
+ * to every client (mobile/web can follow the run); `local` is the faster
+ * in-process IPC path whose run lives only in this desktop session. Which one
+ * to use is the user's observability/latency trade-off — never auto-collapse
+ * `device(currentDeviceId)` into the in-process path.
+ *
+ * Defaults: desktop → `local`, web → `none`. On web `local` isn't available
+ * (no local filesystem). A desktop `local` pick pins that desktop's own
+ * `deviceId` as `boundDeviceId` (see `useSelectExecutionTarget`), and the
+ * server routes such a config to that bound device — so on web we resolve it
+ * to `device`, surfacing honestly that it runs on the user's machine (via
+ * `lh connect`) instead of masquerading as `sandbox`. This applies to plain
+ * agents too, not just heterogeneous CLI agents (plain agents used
+ * to leak here, showing "cloud sandbox" while the server ran on the device).
+ *
+ * This upgrade is gated on `deviceRoutingAvailable` (or `isHetero`): the run
+ * can only reach the bound device if a device-gateway exists to route it. Web
+ * display sites pass `!!serverConfig.agentGatewayUrl` (cloud always has one);
+ * a no-gateway self-host has no route, so its bound `local` stays `sandbox`
+ * when the provider supports it. An UNBOUND `local` (no `boundDeviceId`) falls
+ * back to `sandbox` on web, or to the pending `none` state for device-only
+ * providers.
+ * Server callers leave `deviceRoutingAvailable` unset — with a gateway they
+ * already pass `clientExecutionAvailable: true` and skip this branch, so it is
+ * inert server-side and never diverts a no-gateway run away from `sandbox`.
+ *
+ * Bot triggers (`trigger === bot`) upgrade a `local` target (a bot has no UI
+ * to pick a device and `local` in-process IPC is unreachable from the cloud
+ * bot server): to `device` when a `boundDeviceId` pins a specific machine,
+ * otherwise to `auto` to auto-activate an online device. `none` / `sandbox`
+ * are explicit opt-outs and stay.
+ */
+export const resolveExecutionTarget = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  {
+    clientExecutionAvailable,
+    deviceRoutingAvailable,
+    isHetero,
+    sandboxExecutionAvailable,
+    trigger,
+    workspaceScoped,
+  }: ResolveExecutionTargetOptions,
+): DeviceExecutionTarget => {
+  // An unmerged workspace-shared config never executes on the current member's
+  // own client — see `workspaceScoped` above. Same coercions as a client-less
+  // environment.
+  const clientAvailable = clientExecutionAvailable && !workspaceScoped;
+  const sandboxAvailable =
+    sandboxExecutionAvailable ??
+    isHeterogeneousSandboxExecutionAvailable(agencyConfig?.heterogeneousProvider?.type);
+  const stored = agencyConfig?.executionTarget;
+  // Compatibility for platform agents created before execution-target selection
+  // was introduced: their bound device was the complete routing contract.
+  if (
+    stored === undefined &&
+    agencyConfig?.boundDeviceId &&
+    isRemoteHeterogeneousType(agencyConfig.heterogeneousProvider?.type ?? '')
+  ) {
+    return 'device';
+  }
+  let effective = stored ?? (clientAvailable ? 'local' : 'none');
+  if (
+    !clientAvailable &&
+    (isHetero || deviceRoutingAvailable) &&
+    stored === 'local' &&
+    agencyConfig?.boundDeviceId
+  ) {
+    return 'device';
+  }
+  if (isHetero && effective === 'none') {
+    if (clientAvailable) effective = 'local';
+    else if (sandboxAvailable) effective = 'sandbox';
+  }
+  // Never leave an unsupported sandbox target active. `none` is a pending
+  // selection for hetero providers without cloud execution: the UI blocks the
+  // run and prompts for a local or connected device.
+  if (!sandboxAvailable && effective === 'sandbox') effective = 'none';
+  if (!clientAvailable && effective === 'local') return sandboxAvailable ? 'sandbox' : 'none';
+  // Bot trigger: a `local` target can't run in-process from the cloud bot
+  // server, so it has to reach a real device. If the user pinned a specific
+  // machine (the switcher persists that desktop's own `deviceId` as
+  // `boundDeviceId` for a `local` pick), honour it as `device` — `auto` would
+  // ignore the binding and could grab a different online device, or go
+  // ambiguous with several. Only an UNBOUND `local` auto-activates. Sits after
+  // the web→sandbox coercion, so `effective` is only still `local` when a
+  // client/device can actually run it here.
+  if (trigger === RequestTrigger.Bot && effective === 'local') {
+    return agencyConfig?.boundDeviceId ? 'device' : 'auto';
+  }
+  return effective;
+};
+
+/**
+ * Whether this run's shell commands must go through the device sandbox.
+ *
+ * The stored flag alone is not the answer: `localSandbox` qualifies *local*
+ * execution, so it applies only once the effective target actually resolved to
+ * `local`. A config that carries the flag but ran into a web coercion, a bot
+ * trigger promotion, or a `device` selection is not sandboxed — pretending
+ * otherwise would claim a guarantee the run never had.
+ *
+ * Callers pass the target they already resolved (`resolveExecutionTarget` /
+ * `ExecutionPlan.target`) rather than re-deriving it, so the picker, the server
+ * device-proxy, and the desktop runner cannot drift apart on which runs are
+ * fenced.
+ */
+export const isLocalSandboxEnabled = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  effectiveTarget: DeviceExecutionTarget,
+): boolean => effectiveTarget === 'local' && agencyConfig?.localSandbox === true;
+
+/**
+ * Whether a run resolved to `target` executes somewhere that can read absolute
+ * paths on THIS machine — the gate for inserting `<localFile>` path references
+ * (drag-drop) instead of uploading the file. Only `local` (in-process on this
+ * desktop) or a `device` target whose bound device IS this machine qualifies.
+ * `sandbox` runs in a cloud container where the user's filesystem does not
+ * exist, and `auto` / a foreign `device` may land on another machine — a path
+ * reference dragged from here would be unreadable there, so those runs must
+ * fall back to attachment upload.
+ */
+export const canExecutionTargetReadLocalPaths = (
+  target: DeviceExecutionTarget,
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  currentDeviceId: string | undefined,
+): boolean =>
+  target === 'local' ||
+  (target === 'device' && !!currentDeviceId && agencyConfig?.boundDeviceId === currentDeviceId);
+
+interface TopicDeviceBindingSource {
+  agentId?: string | null;
+  groupId?: string | null;
+  metadata?: {
+    boundDeviceId?: string;
+    workingDirectory?: string;
+    workingDirectoryConfig?: { path?: string };
+  } | null;
+  projectWorkingDirectoryId?: string | null;
+}
+
+/**
+ * The machine a conversation is pinned to, as seen by `agentId`.
+ *
+ * A group topic's binding belongs to its owning agent; member agents keep
+ * their own target. Mirrors the server's `canUseTopicPin` rule in turnSetup.
+ */
+export const getTopicBoundDeviceId = (
+  topic: TopicDeviceBindingSource | null | undefined,
+  agentId: string | undefined,
+): string | undefined => {
+  const deviceId = topic?.metadata?.boundDeviceId;
+  if (!topic || !deviceId || !agentId) return;
+  if (topic.agentId ? topic.agentId !== agentId : !!topic.groupId) return;
+  return deviceId;
+};
+
+/**
+ * A conversation that holds a cwd but never recorded the machine it belongs
+ * to — a row written before device pinning existed. The cwd is a bare path, so
+ * the agent default must not be presented as its machine: the picker says the
+ * machine is unknown until the user names one. Project-directory topics take
+ * their machine from the directory, and a `fixed` target ignores the topic.
+ */
+export const isTopicDeviceUnknown = (
+  topic: TopicDeviceBindingSource | null | undefined,
+  agentId: string | undefined,
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+): boolean => {
+  if (!topic || !agentId || topic.projectWorkingDirectoryId) return false;
+  if (topic.metadata?.boundDeviceId) return false;
+  if (topic.agentId ? topic.agentId !== agentId : !!topic.groupId) return false;
+  if (agencyConfig?.executionTargetSelectionPolicy === 'fixed') return false;
+  return !!(topic.metadata?.workingDirectory || topic.metadata?.workingDirectoryConfig?.path);
+};
+
+export interface TopicDeviceBindingResult {
+  agencyConfig: LobeAgentAgencyConfig | undefined;
+  workspaceScoped: boolean;
+}
+
+/**
+ * Keep a conversation on the machine it already ran on.
+ *
+ * The agent-level target is only the default for NEW conversations: a topic
+ * that ran on device A holds A's working directory and CLI session, so a later
+ * turn sent after the agent was switched to device B must still go to A —
+ * otherwise the topic's cwd is skipped on B and resume silently starts fresh.
+ *
+ * The agent config is kept as-is when it already targets the topic's machine
+ * (preserving the user's `local` vs gateway transport choice). Otherwise the
+ * topic's machine becomes `local` when it is this desktop and `device`
+ * elsewhere. A `fixed` workspace policy is author-controlled and always wins,
+ * and `auto` opted into a fresh device pick every run. Mirrors the server
+ * default in turnSetup.
+ *
+ * The binding is this member's own run history, so it lifts `workspaceScoped`.
+ */
+export const applyTopicDeviceBinding = (
+  {
+    agencyConfig,
+    workspaceScoped,
+  }: { agencyConfig: LobeAgentAgencyConfig | undefined; workspaceScoped: boolean },
+  topicDeviceId: string | undefined,
+  currentDeviceId: string | undefined,
+): TopicDeviceBindingResult => {
+  const unchanged = { agencyConfig, workspaceScoped };
+  const target = agencyConfig?.executionTarget;
+  if (
+    !topicDeviceId ||
+    target === 'auto' ||
+    agencyConfig?.executionTargetSelectionPolicy === 'fixed'
+  )
+    return unchanged;
+
+  const alreadyOnTopicMachine =
+    (target === 'device' && agencyConfig?.boundDeviceId === topicDeviceId) ||
+    (target === 'local' &&
+      (currentDeviceId ?? agencyConfig?.boundDeviceId) === topicDeviceId &&
+      !workspaceScoped);
+  if (alreadyOnTopicMachine) return unchanged;
+
+  return {
+    agencyConfig: {
+      ...agencyConfig,
+      boundDeviceId: topicDeviceId,
+      executionTarget: topicDeviceId === currentDeviceId ? 'local' : 'device',
+    },
+    workspaceScoped: false,
+  };
+};
+
+/**
+ * The effective `runtimeMode` (server tool gate) from the unified execution
+ * target.
+ */
+export const resolveRuntimeMode = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  clientExecutionAvailable: boolean,
+  deviceRoutingAvailable?: boolean,
+  workspaceScoped?: boolean,
+): RuntimeEnvMode =>
+  executionTargetToRuntimeMode(
+    resolveExecutionTarget(agencyConfig, {
+      clientExecutionAvailable,
+      deviceRoutingAvailable,
+      workspaceScoped,
+    }),
+  );
+
+export type { ExecutionPlan, ExecutionPlanUnroutedReason } from '@lobechat/types';
+
+export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
+
+/**
+ * Preserve the desktop-local capability signal after the server resolves that
+ * target to the caller's registered desktop. A per-request device override can
+ * keep `target: local` while routing to another machine, so the device IDs must
+ * match before the manifest advertises desktop-only image reads. Unrouted local
+ * targets keep their plan kind so manifests describe the sandbox degradation.
+ */
+export const executionPlanToManifestExecutionEnv = (
+  plan: ExecutionPlan,
+  localDeviceId?: string,
+): ExecutionManifestEnvironment =>
+  plan.kind === 'device' && plan.target === 'local' && plan.deviceId === localDeviceId
+    ? 'local'
+    : plan.kind;
+
+export interface ResolveExecutionPlanParams {
+  agencyConfig: LobeAgentAgencyConfig | undefined;
+  /**
+   * Verdict of `resolveDeviceAccessPolicy` — `false` (e.g. an external bot
+   * sender) kills device routing entirely but does NOT block the sandbox.
+   * Defaults to `true` (first-party callers).
+   */
+  canUseDevice?: boolean;
+  /**
+   * The agent's chat config. Chat mode (`resolveToolMode` → `chat`) means "no
+   * execution environment" — plain chat. It is orthogonal to `executionTarget`:
+   * the UI toggle only writes `enableAgentMode` and never touches the target, so
+   * a stored/default `local` target would otherwise still resolve a device and
+   * `buildStepToolDelta` would re-inject local-system. The plan honours chat
+   * mode at the source (degraded to `none`) — except for hetero agents, which
+   * always need a runtime.
+   */
+  chatConfig?: LobeAgentChatConfig;
+  /** See {@link ResolveExecutionTargetOptions.clientExecutionAvailable}. */
+  clientExecutionAvailable: boolean;
+  isHetero?: boolean;
+  /** This desktop's device ID. Used only when the resolved target is `local`. */
+  localDeviceId?: string;
+  /**
+   * Online device ids from the device gateway. Pass `undefined` to skip
+   * online checks and single-device auto-activation entirely — the binding is
+   * trusted as-is and dispatch fails loudly if the device is offline (hetero
+   * dispatch semantics).
+   */
+  onlineDeviceIds?: string[];
+  /**
+   * Explicit per-request device override (e.g. the desktop preset, or a
+   * batch-task `deviceId`). It forces device routing regardless of the stored
+   * target unless the shared workspace policy is `fixed`.
+   */
+  requestedDeviceId?: string;
+  /** See {@link ResolveExecutionTargetOptions.sandboxExecutionAvailable}. */
+  sandboxExecutionAvailable?: boolean;
+  /**
+   * Resolve to the cloud sandbox instead of `none` whenever the run cannot
+   * route to a device (a device-capable target denied by `canUseDevice`, or a
+   * stored `none` target). Set by the aiAgent caller for Agent Share visitor
+   * runs the creator granted `lobe-cloud-sandbox`: a visitor can never reach
+   * the creator's device, so the sandbox is the only surface that grant can
+   * mean, and it only materializes when the plan resolves to `sandbox`. Chat
+   * mode still wins — it means "no tools", not "no device".
+   */
+  sandboxFallback?: boolean;
+  /**
+   * What initiated this run. Bot triggers have no UI to pick a device, so a
+   * stored `local` target (in-process IPC, unreachable from the cloud bot
+   * server) is upgraded to `auto` and auto-activates an online device. `none`
+   * and `sandbox` are deliberate opt-outs and are left untouched. See
+   * `resolveExecutionPlan`.
+   */
+  trigger?: RequestTrigger;
+  /** See {@link ResolveExecutionTargetOptions.workspaceScoped}. */
+  workspaceScoped?: boolean;
+}
+
+/**
+ * Resolve the execution plan for a run. This is THE device decision — every
+ * rule about which device (if any) a run touches lives here:
+ *
+ * 1. `requestedDeviceId` forces device routing unless the shared policy is
+ *    `fixed`; otherwise the resolved `executionTarget` decides (`auto` /
+ *    `local` route to a device too — the local machine is just a device).
+ * 2. `none` / `sandbox` NEVER route to a device — no auto-activation, no
+ *    step-level re-injection, no exceptions.
+ * 3. `canUseDevice === false` degrades any device-capable target to `none`
+ *    (sandbox stays available — it never touches the user's machines). With
+ *    `sandboxFallback` the degraded run resolves to the sandbox instead.
+ * 4. With online info: a bound device is used only if online (an offline
+ *    binding stays unrouted rather than guessing another machine). An UNBOUND
+ *    run auto-activates ONLY in the opt-in `auto` mode (single device → use it;
+ *    several → stay unrouted so the model picks one). `local` / `device` never
+ *    silently grab a device — they stay unrouted until one is bound/requested.
+ * Bot triggers coerce a `local` target to `auto` upstream in
+ * `resolveExecutionTarget` (not here) — by the time the plan resolves, a bot
+ * run already carries `target: 'auto'` and follows the auto-activation rules
+ * above. `none` / `sandbox` stay as the owner's explicit opt-out.
+ */
+export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): ExecutionPlan => {
+  const {
+    agencyConfig,
+    canUseDevice = true,
+    chatConfig,
+    clientExecutionAvailable,
+    isHetero,
+    localDeviceId,
+    onlineDeviceIds,
+    requestedDeviceId,
+    sandboxExecutionAvailable,
+    sandboxFallback,
+    trigger,
+    workspaceScoped,
+  } = params;
+
+  // Chat mode = no execution environment (plain chat). It's orthogonal to the
+  // execution target, so collapse the whole plan to `none` here — this is the
+  // single point that stops a default/stored `local` target from resolving a
+  // device and letting `buildStepToolDelta` re-inject local-system. Hetero
+  // agents always need a runtime, so they never take this path.
+  if (resolveToolMode(chatConfig) === 'chat' && !isHetero) return { kind: 'none', target: 'none' };
+
+  const target = resolveExecutionTarget(agencyConfig, {
+    isHetero,
+    clientExecutionAvailable,
+    sandboxExecutionAvailable,
+    trigger,
+    workspaceScoped,
+  });
+  const sandboxAvailable =
+    sandboxExecutionAvailable ??
+    isHeterogeneousSandboxExecutionAvailable(agencyConfig?.heterogeneousProvider?.type);
+  // A fixed workspace execution target is an author-controlled contract. A
+  // stale member preference or an explicit task/request override must never
+  // route the run somewhere else.
+  const effectiveRequestedDeviceId =
+    agencyConfig?.executionTargetSelectionPolicy === 'fixed' ? undefined : requestedDeviceId;
+  const isFixedSelection = agencyConfig?.executionTargetSelectionPolicy === 'fixed';
+  const wantsDevice =
+    !!effectiveRequestedDeviceId || target === 'device' || target === 'local' || target === 'auto';
+
+  if (!wantsDevice || !canUseDevice) {
+    if (target === 'sandbox') return { kind: 'sandbox', target: 'sandbox' };
+    // Hetero agents that support cloud execution fall back to the sandbox when
+    // no device can run. Device-only providers stay pending at `none` so the
+    // caller can require an explicit local/connected-device selection.
+    if (isHetero && sandboxAvailable) return { kind: 'sandbox', target: 'sandbox' };
+    // Share-visitor runs granted the cloud sandbox land here for every
+    // device-capable target (visitors never pass `canUseDevice`); the grant
+    // is honoured with the sandbox rather than dropped with `none`.
+    if (sandboxFallback) return { kind: 'sandbox', target: 'sandbox' };
+    // a device-capable target denied by the access policy degrades to plain
+    // chat — the effective target is `none`, not the stored one
+    return { kind: 'none', target: 'none' };
+  }
+
+  // In `auto` mode a stored `boundDeviceId` is NOT an explicit selection (that
+  // is what `device` mode is for) — ignore it so `auto` always picks fresh and
+  // a stale binding left over from a previous `device` selection can't pin the
+  // run. An explicit `requestedDeviceId` still wins everywhere.
+  const isPlatformTask = isRemoteHeterogeneousType(agencyConfig?.heterogeneousProvider?.type ?? '');
+  const boundDeviceId =
+    effectiveRequestedDeviceId ||
+    (target === 'local'
+      ? isFixedSelection
+        ? agencyConfig?.boundDeviceId
+        : localDeviceId || (isPlatformTask ? undefined : agencyConfig?.boundDeviceId)
+      : target === 'auto'
+        ? undefined
+        : agencyConfig?.boundDeviceId);
+  // requestedDeviceId may force device routing over a non-device stored target;
+  // keep `auto` / `local` distinct, everything else collapses to `device`.
+  const effectiveTarget = target === 'local' ? 'local' : target === 'auto' ? 'auto' : 'device';
+
+  // No online info: trust the binding (the gateway errors on dispatch if the
+  // device is offline). No auto-activation without visibility.
+  if (!onlineDeviceIds) {
+    if (boundDeviceId) return { deviceId: boundDeviceId, kind: 'device', target: effectiveTarget };
+    return { kind: 'device-unrouted', reason: 'no-bound-device', target: effectiveTarget };
+  }
+
+  if (boundDeviceId) {
+    return onlineDeviceIds.includes(boundDeviceId)
+      ? { deviceId: boundDeviceId, kind: 'device', target: effectiveTarget }
+      : { kind: 'device-unrouted', reason: 'bound-device-offline', target: effectiveTarget };
+  }
+
+  // Unbound. Auto-activation — picking a device the user never selected — is
+  // exclusive to the opt-in `auto` mode: one online device is used directly;
+  // with several, stay unrouted so the model selects one via the remote-device
+  // tool.
+  if (target === 'auto') {
+    if (onlineDeviceIds.length === 1) {
+      return { deviceId: onlineDeviceIds[0], kind: 'device', target: effectiveTarget };
+    }
+    return {
+      kind: 'device-unrouted',
+      reason: onlineDeviceIds.length === 0 ? 'no-online-device' : 'ambiguous-online-devices',
+      target: effectiveTarget,
+    };
+  }
+
+  // `local` / `device` with nothing bound: never auto-grab a device — stay
+  // unrouted until the user binds/requests one (or switches to `auto`).
+  return { kind: 'device-unrouted', reason: 'no-bound-device', target: effectiveTarget };
+};

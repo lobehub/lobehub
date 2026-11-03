@@ -1,0 +1,136 @@
+---
+title: Technical Development Getting Started Guide
+description: >-
+  Explore the LobeHub development setup, technology stack, and contribution
+  guidelines.
+tags:
+  - LobeHub
+  - Next.js
+  - Development Guide
+  - Internationalization
+  - Open Source
+---
+
+# Technical Development Getting Started Guide
+
+Choose a path based on your goal: changing LobeHub source code, operating an existing instance from a terminal, or integrating an application through an API. The rest of this page covers **source development and contributions**.
+
+## Choose a Development Path
+
+| Goal | Start here | Boundary |
+| --- | --- | --- |
+| Change the UI, server, or runtimes | [Development environment setup](/docs/development/basic/setup-development), then the stack and directory structure below | Requires a source development environment. Using the CLI or API alone does not require the full application development setup. |
+| Operate an existing instance from a terminal | [CLI README](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/cli/README.md); task examples in [Task Tools](/docs/usage/agent/connectors#using-the-cli) | The README covers source builds, shell linking, and server configuration. Check the installed version, target server, and account permissions. |
+| Integrate through HTTP | [OpenAPI specification](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/openapi/openapi.yml) | Use the public REST API, authentication, and parameters supported by the target deployment. Internal application routes are not the public API contract. |
+| Integrate through TypeScript | [Official SDK README](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/sdk/README.md) | `@lobehub/sdk` is generated from OpenAPI. Follow the matching README and specification for methods, authentication, and streaming. Do not assume every UI or CLI feature has an SDK method. |
+| Understand internal chat calls | [Chat API internals](/docs/development/basic/chat-api) | For source reading and debugging, not an external application integration tutorial. |
+
+### CLI and Execution Environments
+
+If the CLI is installed, run `lh --help` to inspect commands. Local build commands in the CLI README are for development in `apps/cli`, not a universal installation procedure.
+
+The [May 4, 2026 release](/changelog/2026-05-04-task-scheduler) described Claude Code / Codex delegation as desktop-only at that time; despite its filename, it is not evidence for the scheduled-task form. The [May 11 release](/changelog/2026-05-11-agent-tasks-ga) subsequently introduced cloud heterogeneous agents and `lh hetero exec`; the [June 22 release](/changelog/2026-06-22-delivery-checks) documented `lh update`. These entries do not imply identical tools, commands, or execution environments in every deployment.
+
+These entry points were checked against the repository snapshot on September 14, 2026. Verify your installed version before integration. Do not treat `/webapi/chat/[provider]` or internal tRPC routes as stable public interfaces.
+
+
+## Basic Technology Stack
+
+The core technology stack of LobeHub is as follows:
+
+- **Framework**: [Next.js](https://nextjs.org/) 16 + [React](https://react.dev/) 19, providing server-side rendering, Router Handler, and other key features.
+- **Component Library**: [Ant Design (antd)](https://ant.design/) as the base component library, [@lobehub/ui](https://github.com/lobehub/lobe-ui) as the business component library.
+- **State Management**: [zustand](https://github.com/pmndrs/zustand), a lightweight and easy-to-use state management library.
+- **Data Fetching**: [SWR](https://swr.vercel.app/) for client-side data fetching.
+- **Routing**: Hybrid routing architecture — [Next.js App Router](https://nextjs.org/) for static pages (e.g., auth pages), [React Router DOM](https://reactrouter.com/) for the main SPA.
+- **API**: [tRPC](https://trpc.io/) for end-to-end type-safe API communication.
+- **Database**: [Drizzle ORM](https://orm.drizzle.team/) + PostgreSQL.
+- **Internationalization**: [react-i18next](https://react.i18next.com/) for multilingual support.
+- **Styling**: [`@lobehub/ui`](https://ui.lobehub.com) — components ship their own styles; app code uses its `createStaticStyles` + `cssVar` tokens.
+- **Unit Testing**: [Vitest](https://github.com/vitest-dev/vitest) for unit testing.
+
+## Folder Directory Structure
+
+LobeHub uses a Monorepo architecture
+(`@lobechat/` namespace).
+The top-level directory structure is as follows:
+
+```bash
+lobehub/
+├── apps/
+│   ├── cli/               # LobeHub CLI
+│   ├── desktop/           # Electron desktop app
+│   └── server/            # Standalone server (tRPC routers, services, modules)
+├── packages/              # Shared packages (@lobechat/*)
+│   ├── database/          # Database schemas, models, repositories
+│   ├── agent-runtime/     # Agent runtime
+│   ├── model-runtime/     # Model runtime
+│   ├── app-config/        # App configuration, client and server env vars
+│   ├── env/               # Env var definitions and validation (analytics, auth, LLM, etc.)
+│   ├── locales/           # Internationalization default language files
+│   ├── builtin-tools/     # Built-in tools registry (inspectors, interventions, etc.)
+│   └── ...                # More shared packages
+├── src/                   # Main application source code
+│   ├── app/               # Next.js App Router: backend API routes + SPA/auth HTML shell serving
+│   ├── components/        # Reusable UI components
+│   ├── const/             # Application constants and enums
+│   ├── features/          # Business feature modules (Agent settings, plugin dev, etc.)
+│   ├── helpers/           # Utility helper functions
+│   ├── hooks/             # Reusable custom Hooks
+│   ├── layout/            # Layout components (AuthProvider, GlobalProvider, etc.)
+│   ├── libs/              # Third-party integrations (better-auth, OIDC, tRPC, etc.)
+│   ├── routes/            # SPA page segments, grouped by platform ((main)/(mobile)/(desktop)/(popup))
+│   ├── server/            # Remaining server-side modules not yet moved to apps/server
+│   ├── services/          # Client-side service interfaces
+│   ├── spa/               # SPA entry points and React Router config
+│   ├── store/             # Zustand state management
+│   ├── styles/            # Global styles and CSS-in-JS configurations
+│   ├── types/             # TypeScript type definitions
+│   └── utils/             # General utility functions
+├── locales/               # i18n translation files (zh-CN, en-US, etc.)
+└── e2e/                   # E2E tests (Cucumber + Playwright)
+```
+
+For a detailed introduction to the directory structure, see: [Folder Directory Structure](/docs/development/basic/folder-structure)
+
+## Local Development Environment Setup
+
+Please refer to the
+[Environment Setup Guide](/docs/development/basic/setup-development)
+for the complete setup process,
+including software installation, project configuration,
+Docker service startup, and database migrations.
+
+## Code Style and Contribution Guide
+
+In the LobeHub project, we place great emphasis on the quality and consistency of the code. For this reason, we have established a series of code style standards and contribution processes to ensure that every developer can smoothly participate in the project. Here are the code style and contribution guidelines you need to follow as a developer.
+
+- **Code Style**: We use `@lobehub/lint` to unify the code style, including ESLint, Prettier, remarklint, and stylelint configurations. Please adhere to our code standards to maintain code consistency and readability.
+- **Contribution Process**: We use gitmoji and semantic release for code submission and release processes. Please use gitmoji to annotate your commit messages and ensure compliance with the semantic release standards so that our automation systems can correctly handle version control and releases.
+
+All contributions will undergo code review. Maintainers may suggest modifications or requirements. Please respond actively to review comments and make timely adjustments. We look forward to your participation and contribution.
+
+For detailed code style and contribution guidelines, please refer to [Code Style and Contribution Guide](/docs/development/basic/contributing-guidelines).
+
+## Internationalization Implementation Guide
+
+LobeHub uses `react-i18next` for multilingual support,
+ensuring a global user experience.
+
+Default language files are located in `packages/locales/src/default/`
+(English). Translation files are in the `locales/` directory.
+During development, you only need to edit keys in
+`packages/locales/src/default/` — CI automatically generates
+translation files for other languages.
+
+If you want to add a new language, follow specific steps detailed in [New Language Addition Guide](/docs/development/internationalization/add-new-locale). We encourage you to participate in our internationalization efforts to provide better services to global users.
+
+For a detailed guide on internationalization implementation, please refer to [Internationalization Implementation Guide](/docs/development/internationalization/internationalization-implementation).
+
+## Appendix: Resources and References
+
+To support developers in better understanding and using the technology stack of LobeHub, we provide a comprehensive list of resources and references — [LobeHub Resources and References](/docs/development/basic/resources) - Visit our maintained list of resources, including tutorials, articles, and other useful links.
+
+We encourage developers to utilize these resources to deepen their learning and enhance their skills, join community discussions through [LobeHub GitHub Discussions](https://github.com/lobehub/lobehub/discussions) or [Discord](https://discord.com/invite/AYFPHvv2jT), ask questions, or share your experiences.
+
+If you have any questions or need further assistance, please do not hesitate to contact us through the above channels.

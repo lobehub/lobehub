@@ -1,0 +1,248 @@
+'use client';
+
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { ArrowLeftRight } from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import UploadCard, { UPLOAD_CARD_SIZE, type UploadData } from './UploadCard';
+
+const STACK_OFFSET = -(UPLOAD_CARD_SIZE - 8);
+const EXPAND_OFFSET = 4;
+
+const styles = createStaticStyles(({ css }) => ({
+  addCirclePos: css`
+    position: absolute;
+    z-index: 100;
+    inset-block-end: -2px;
+    inset-inline-end: -2px;
+  `,
+  refGroup: css`
+    position: relative;
+  `,
+  stack: css`
+    position: relative;
+    padding-block: 4px;
+    padding-inline: 0;
+
+    &:hover {
+      .inline-ref-close {
+        opacity: 1;
+      }
+    }
+  `,
+  swapIcon: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+}));
+
+interface InlineVideoFramesProps {
+  /** Label of the empty add card; defaults to the reference image label. */
+  addLabel?: string;
+  endImageUrl?: string | null;
+  imageUrl?: string | null;
+  imageUrls?: string[] | null;
+  isSupportEndImage?: boolean;
+  maxCount?: number;
+  maxFileSize?: number;
+  /**
+   * Label images as "Image 1", "Image 2"… so prompts can refer to them, and show the used
+   * count on the add card. Used when every image is a reference.
+   */
+  numberReferences?: boolean;
+  onEndImageChange: (data: UploadData | null) => void;
+  onImageChange: (data: UploadData | null) => void;
+  onImageUrlsChange?: (data: UploadData) => void;
+  onRemoveImageUrl?: (url: string) => void;
+  /** Optional batch upload handler to enable multi-select on the add card. */
+  onUploadFiles?: (files: File[]) => void | Promise<void>;
+  /** In-flight upload previews (object URLs) rendered with a spinner. */
+  uploadingPreviews?: string[];
+}
+
+const InlineVideoFrames = memo<InlineVideoFramesProps>(
+  ({
+    addLabel,
+    imageUrl,
+    imageUrls,
+    endImageUrl,
+    onImageChange,
+    onEndImageChange,
+    onImageUrlsChange,
+    onRemoveImageUrl,
+    onUploadFiles,
+    isSupportEndImage = true,
+    maxCount = 5,
+    maxFileSize,
+    numberReferences = false,
+    uploadingPreviews = [],
+  }) => {
+    const { t } = useTranslation('video');
+    const [isHovered, setIsHovered] = useState(false);
+
+    // Combine imageUrl and imageUrls for display
+    const refFrameUrls = useMemo(() => {
+      const urls: string[] = [];
+      if (imageUrl) urls.push(imageUrl);
+      if (Array.isArray(imageUrls)) {
+        urls.push(...imageUrls);
+      }
+      return urls;
+    }, [imageUrl, imageUrls]);
+
+    const hasRefFrames = refFrameUrls.length > 0;
+    const totalCount = refFrameUrls.length + uploadingPreviews.length;
+    const hasItems = totalCount > 0;
+    const canAddMore = totalCount < maxCount;
+    const shouldCollapse = hasItems && !isHovered;
+    const showEndFrame = isSupportEndImage && hasRefFrames;
+
+    return (
+      <Flexbox horizontal align={'end'} className={styles.stack} gap={6}>
+        <Flexbox
+          horizontal
+          align={'end'}
+          className={styles.refGroup}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          {/* Render ref frames (from imageUrl and imageUrls) */}
+          {refFrameUrls.map((url, index) => {
+            const isFromImageUrl = url === imageUrl;
+            const label =
+              index === 0 && isFromImageUrl
+                ? t('config.imageUrl.label')
+                : t('config.referenceImage.label');
+
+            return (
+              <UploadCard
+                closeClassName="inline-ref-close"
+                imageUrl={url}
+                key={url}
+                label={label}
+                maxFileSize={maxFileSize}
+                badge={
+                  numberReferences
+                    ? t('config.referenceImage.indexedLabel', { index: String(index + 1) })
+                    : undefined
+                }
+                style={{
+                  marginInlineStart:
+                    index > 0 ? (shouldCollapse ? STACK_OFFSET : EXPAND_OFFSET) : 0,
+                  zIndex: index + 1,
+                }}
+                onRemove={() => {
+                  if (isFromImageUrl && imageUrl === url) {
+                    onImageChange(null);
+                  } else if (onRemoveImageUrl) {
+                    onRemoveImageUrl(url);
+                  }
+                }}
+                onUpload={
+                  isFromImageUrl
+                    ? (data) => onImageChange(data)
+                    : (data) => onImageUrlsChange?.(data)
+                }
+              />
+            );
+          })}
+
+          {/* In-flight upload placeholders (with spinner) */}
+          {uploadingPreviews.map((url, index) => (
+            <UploadCard
+              loading
+              imageUrl={url}
+              key={`uploading-${url}`}
+              maxFileSize={maxFileSize}
+              style={{
+                marginInlineStart:
+                  refFrameUrls.length + index > 0
+                    ? shouldCollapse
+                      ? STACK_OFFSET
+                      : EXPAND_OFFSET
+                    : 0,
+                zIndex: refFrameUrls.length + index + 1,
+              }}
+              onRemove={() => {}}
+              onUpload={() => {}}
+            />
+          ))}
+
+          {/* Add new frame button */}
+          {canAddMore &&
+            (shouldCollapse ? (
+              <UploadCard
+                className={styles.addCirclePos}
+                maxFileSize={maxFileSize}
+                multiple={!!onUploadFiles}
+                variant="circle"
+                onRemove={() => {}}
+                onUploadFiles={onUploadFiles}
+                onUpload={(data) => {
+                  if (onImageUrlsChange) {
+                    onImageUrlsChange(data);
+                  } else {
+                    onImageChange(data);
+                  }
+                }}
+              />
+            ) : (
+              <UploadCard
+                imageUrl={null}
+                maxFileSize={maxFileSize}
+                multiple={!!onUploadFiles}
+                label={
+                  numberReferences && hasItems
+                    ? t('config.referenceImage.count', { count: totalCount, max: String(maxCount) })
+                    : (addLabel ?? t('config.referenceImage.label'))
+                }
+                style={{
+                  marginInlineStart: hasItems ? EXPAND_OFFSET : 0,
+                  zIndex: totalCount + 1,
+                }}
+                onRemove={() => {}}
+                onUploadFiles={onUploadFiles}
+                onUpload={(data) => {
+                  if (hasRefFrames) {
+                    if (onImageUrlsChange) {
+                      onImageUrlsChange(data);
+                    } else {
+                      onImageChange(data);
+                    }
+                  } else {
+                    onImageChange(data);
+                  }
+                }}
+              />
+            ))}
+        </Flexbox>
+
+        {/* End frame separator and upload */}
+        {showEndFrame && (
+          <>
+            <Flexbox
+              align={'center'}
+              className={styles.swapIcon}
+              justify={'center'}
+              style={{ height: UPLOAD_CARD_SIZE }}
+            >
+              <ArrowLeftRight size={14} />
+            </Flexbox>
+
+            <UploadCard
+              imageUrl={endImageUrl}
+              label={t('config.endImageUrl.label')}
+              onRemove={() => onEndImageChange(null)}
+              onUpload={(data) => onEndImageChange(data)}
+            />
+          </>
+        )}
+      </Flexbox>
+    );
+  },
+);
+
+InlineVideoFrames.displayName = 'InlineVideoFrames';
+
+export default InlineVideoFrames;

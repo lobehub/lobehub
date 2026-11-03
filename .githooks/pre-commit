@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+set -e
+
+[ "${HUSKY-}" = "0" ] && exit 0
+
+export PATH="node_modules/.bin:$PATH"
+
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" = "dev" ] || [ "$BRANCH" = "main" ]; then
+  npm run type-check
+fi
+
+lint-staged
+
+# Runs after lint-staged autofix so it measures the final staged content.
+bun run .agents/scripts/check/size-gate.ts --staged

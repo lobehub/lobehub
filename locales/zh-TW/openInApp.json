@@ -1,0 +1,8 @@
+{
+  "dropdownLabel": "在以下位置開啟工作目錄",
+  "errors.appNotInstalled": "{{appName}} 未安裝",
+  "errors.launchFailed": "無法在 {{appName}} 中開啟: {{error}}",
+  "errors.pathNotFound": "找不到路徑: {{path}}",
+  "errors.unknown": "未知錯誤",
+  "tooltip": "在 {{appName}} 中開啟"
+}

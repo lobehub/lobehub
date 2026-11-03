@@ -1,0 +1,45 @@
+---
+title: Run Local Models Alongside Cloud AIs
+description: >-
+  LobeHub v0.127.0 adds Ollama support, letting you run local large language
+  models with the same interface you use for cloud providers.
+tags:
+  - Ollama AI
+  - LobeHub
+  - Local LLMs
+  - AI Conversations
+  - GPT-4
+---
+
+# Run Local Models Alongside Cloud AIs
+
+Cloud models are powerful, but sometimes you need data to stay local. Maybe it's a sensitive project. Maybe you want to experiment without API costs. Maybe you just like the idea of owning the entire stack. LobeHub v0.127.0 now supports Ollama, giving you the same chat experience whether your model lives in the cloud or on your machine.
+
+No separate interface to learn. No workflow fragmentation. Just point LobeHub at your local Ollama instance and start chatting.
+
+## Connect Your Local Models in One Line
+
+Getting started is straightforward. If you already have Ollama running, connect LobeHub with a single Docker command:
+
+```bash
+docker run -d -p 3210:3210 -e OLLAMA_PROXY_URL=http://host.docker.internal:11434/v1 lobehub/lobe-chat
+```
+
+That's it. LobeHub detects your local models and makes them available in the same model switcher you use for GPT-4, Claude, and others. Mix cloud and local models in the same workspace depending on what each conversation needs.
+
+## When to Use Local Models
+
+- **Privacy-first work**: Keep sensitive conversations on your machine
+- **Cost control**: No per-token charges for experimentation
+- **Offline access**: Continue working without internet connectivity
+- **Model testing**: Evaluate open-source models before production deployment
+
+## Improvements and fixes
+
+- Added automatic model discovery from Ollama endpoints
+- Fixed streaming response handling for local model compatibility
+- Improved error handling when Ollama service is unreachable
+
+## Credits
+
+Huge thanks to [the community contributor](https://github.com/lobehub/lobe-chat/pull/1265) who made Ollama integration possible, and to the Ollama team for building accessible local AI infrastructure.
