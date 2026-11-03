@@ -87,6 +87,22 @@ export const taskLabelRouter = router({
     return ctx.taskLabelModel.addTaskLabels(task.id, input.labelIds).catch(rethrowLabelError);
   }),
 
+  /** Apply an add + remove delta in one transaction (an edit that swaps labels). */
+  changeForTask: labelWriteProcedure
+    .input(
+      z.object({
+        add: labelIds.optional(),
+        remove: labelIds.optional(),
+        taskId: z.string().trim().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const task = await resolveTaskOrThrow(ctx.taskModel, input.taskId);
+      return ctx.taskLabelModel
+        .changeTaskLabels(task.id, { add: input.add, remove: input.remove })
+        .catch(rethrowLabelError);
+    }),
+
   create: labelWriteProcedure
     .input(
       z.object({

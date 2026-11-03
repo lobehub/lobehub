@@ -17,6 +17,7 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
 
 const mockCreate = vi.fn();
 const mockAddTaskLabels = vi.fn();
+const mockChangeTaskLabels = vi.fn();
 const mockUpdate = vi.fn();
 
 vi.mock('@/database/models/taskLabel', async (importOriginal) => {
@@ -24,7 +25,12 @@ vi.mock('@/database/models/taskLabel', async (importOriginal) => {
   return {
     ...actual,
     TaskLabelModel: vi.fn(function () {
-      return { addTaskLabels: mockAddTaskLabels, create: mockCreate, update: mockUpdate };
+      return {
+        addTaskLabels: mockAddTaskLabels,
+        changeTaskLabels: mockChangeTaskLabels,
+        create: mockCreate,
+        update: mockUpdate,
+      };
     }),
   };
 });
@@ -93,6 +99,24 @@ describe('taskLabelRouter', () => {
 
     mockAddTaskLabels.mockRejectedValueOnce(new TaskLabelError('LABEL_NOT_FOUND', 'missing'));
     await expect(caller.addToTask({ labelIds: ['x'], taskId: 'T-1' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('applies an add + remove delta through one model call', async () => {
+    const caller = taskLabelRouter.createCaller(ctx);
+    mockChangeTaskLabels.mockResolvedValueOnce([{ id: 'l2', name: 'Backend' }]);
+
+    await expect(
+      caller.changeForTask({ add: ['l2'], remove: ['l1'], taskId: 'T-1' }),
+    ).resolves.toEqual([{ id: 'l2', name: 'Backend' }]);
+    expect(mockChangeTaskLabels).toHaveBeenCalledWith('resolved-T-1', {
+      add: ['l2'],
+      remove: ['l1'],
+    });
+
+    mockChangeTaskLabels.mockRejectedValueOnce(new TaskLabelError('LABEL_NOT_FOUND', 'missing'));
+    await expect(caller.changeForTask({ add: ['x'], taskId: 'T-1' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });

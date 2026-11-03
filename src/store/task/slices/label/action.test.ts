@@ -1,0 +1,101 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useClientDataSWR } from '@/libs/swr';
+import { taskLabelService } from '@/services/taskLabel';
+
+import { useTaskStore } from '../../store';
+
+vi.mock('@/services/taskLabel', () => ({
+  taskLabelService: {
+    addToTask: vi.fn(),
+    changeForTask: vi.fn(),
+    list: vi.fn(),
+    removeFromTask: vi.fn(),
+  },
+}));
+
+vi.mock('@/libs/swr', () => ({
+  mutate: vi.fn(),
+  useClientDataSWR: vi.fn(),
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
+
+const label = (id: string, name: string) =>
+  ({ color: null, id, isGroup: false, name, parentId: null, usageCount: 0 }) as any;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  useTaskStore.setState({ taskLabels: [], taskLabelsInit: false, taskLabelsScope: null });
+});
+
+describe('TaskLabelSliceAction', () => {
+  describe('workspace scope', () => {
+    it('clears the registry when the scope changes', () => {
+      useTaskStore.setState({
+        taskLabels: [label('a', 'From A')],
+        taskLabelsInit: true,
+        taskLabelsScope: 'ws-a',
+      });
+
+      useTaskStore.getState().internal_resetTaskLabelsScope('ws-b');
+
+      expect(useTaskStore.getState()).toMatchObject({
+        taskLabels: [],
+        taskLabelsInit: false,
+        taskLabelsScope: 'ws-b',
+      });
+    });
+
+    it('keeps the registry when the scope is unchanged', () => {
+      useTaskStore.setState({
+        taskLabels: [label('a', 'From A')],
+        taskLabelsInit: true,
+        taskLabelsScope: 'ws-a',
+      });
+
+      useTaskStore.getState().internal_resetTaskLabelsScope('ws-a');
+
+      expect(useTaskStore.getState().taskLabels).toHaveLength(1);
+    });
+
+    it('ignores a response for a workspace the user already left', () => {
+      useTaskStore.setState({ taskLabelsScope: 'ws-b' });
+      useTaskStore.getState().useFetchTaskLabels(true, 'ws-a');
+      const { onSuccess } = vi.mocked(useClientDataSWR).mock.calls[0][2] as any;
+
+      onSuccess([label('a', 'From A')]);
+      expect(useTaskStore.getState().taskLabelsInit).toBe(false);
+
+      useTaskStore.getState().useFetchTaskLabels(true, 'ws-b');
+      const { onSuccess: onSuccessB } = vi.mocked(useClientDataSWR).mock.calls[1][2] as any;
+      onSuccessB([label('b', 'From B')]);
+      expect(useTaskStore.getState()).toMatchObject({
+        taskLabels: [expect.objectContaining({ name: 'From B' })],
+        taskLabelsInit: true,
+      });
+    });
+  });
+
+  describe('setTaskLabels', () => {
+    it('sends the add + remove delta as one request', async () => {
+      vi.mocked(taskLabelService.changeForTask).mockResolvedValue([]);
+      const frontend = label('l1', 'Frontend');
+      const backend = label('l2', 'Backend');
+
+      const ok = await useTaskStore.getState().setTaskLabels('T-1', [frontend], [backend]);
+
+      expect(ok).toBe(true);
+      expect(taskLabelService.changeForTask).toHaveBeenCalledTimes(1);
+      expect(taskLabelService.changeForTask).toHaveBeenCalledWith('T-1', {
+        add: ['l2'],
+        remove: ['l1'],
+      });
+      expect(taskLabelService.addToTask).not.toHaveBeenCalled();
+      expect(taskLabelService.removeFromTask).not.toHaveBeenCalled();
+    });
+  });
+});

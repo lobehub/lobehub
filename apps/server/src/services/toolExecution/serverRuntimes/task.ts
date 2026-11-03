@@ -522,17 +522,21 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         );
       }
 
-      // Removal first, so "swap Bug for Feature" in one call ends with Feature.
+      // One transaction; removals apply first, so "swap Bug for Feature" in one
+      // call ends with Feature, and a failure leaves the labels untouched.
       if (removeLabels.ids.length > 0 || addLabels.ids.length > 0) {
         const labelCaller = deps.taskLabelCaller!;
         ops.push(
           (async () => {
+            await labelCaller.changeForTask({
+              add: addLabels.ids,
+              remove: removeLabels.ids,
+              taskId: task.id,
+            });
             if (removeLabels.ids.length > 0) {
-              await labelCaller.removeFromTask({ labelIds: removeLabels.ids, taskId: task.id });
               changes.push(`labels removed: ${args.removeLabels!.join(', ')}`);
             }
             if (addLabels.ids.length > 0) {
-              await labelCaller.addToTask({ labelIds: addLabels.ids, taskId: task.id });
               changes.push(`labels added: ${args.addLabels!.join(', ')}`);
             }
           })(),

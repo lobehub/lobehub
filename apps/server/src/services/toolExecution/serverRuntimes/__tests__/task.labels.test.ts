@@ -22,6 +22,7 @@ const task = { id: 'task-1', identifier: 'T-1', name: 'Ship', priority: 0, statu
 const setup = () => {
   const taskLabelCaller = {
     addToTask: vi.fn().mockResolvedValue([{ id: 'bug', name: 'Bug' }]),
+    changeForTask: vi.fn().mockResolvedValue([{ id: 'feat', name: 'Feature' }]),
     list: vi.fn().mockResolvedValue(registry),
     removeFromTask: vi.fn().mockResolvedValue([]),
   };
@@ -71,7 +72,7 @@ describe('task tool labels', () => {
     expect(taskService.createTask).not.toHaveBeenCalled();
   });
 
-  it('editTask removes before adding labels', async () => {
+  it('editTask swaps labels in one atomic call', async () => {
     const { runtime, taskLabelCaller } = setup();
 
     const result = await runtime.editTask({
@@ -81,17 +82,13 @@ describe('task tool labels', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(taskLabelCaller.removeFromTask).toHaveBeenCalledWith({
-      labelIds: ['fe'],
+    expect(taskLabelCaller.changeForTask).toHaveBeenCalledWith({
+      add: ['feat'],
+      remove: ['fe'],
       taskId: 'task-1',
     });
-    expect(taskLabelCaller.addToTask).toHaveBeenCalledWith({
-      labelIds: ['feat'],
-      taskId: 'task-1',
-    });
-    expect(taskLabelCaller.removeFromTask.mock.invocationCallOrder[0]).toBeLessThan(
-      taskLabelCaller.addToTask.mock.invocationCallOrder[0],
-    );
+    expect(taskLabelCaller.addToTask).not.toHaveBeenCalled();
+    expect(taskLabelCaller.removeFromTask).not.toHaveBeenCalled();
   });
 
   it('listTasks filters by label and group names', async () => {
