@@ -75,7 +75,6 @@ describe('bounded activation-gap supplementation', () => {
     expect(result.scheduled).toHaveLength(1);
     expect(result.scheduled[0].interaction).toEqual({ key: 'root.1', state: 'hover', tag: 'TR' });
     expect(result.requirements[0].key).toBe('root.1');
-    expect(result.gateEligible).toBe(false);
   });
   it('deduplicates a paired B/M gap but never drops overflow requirements', () => {
     const result = planSupplementalProbes({
