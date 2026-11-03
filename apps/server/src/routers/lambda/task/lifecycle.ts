@@ -154,6 +154,11 @@ export const lifecycleRouter = router({
         ),
       });
       try {
+        // Labels first: their links cascade with the task on rollback, while an
+        // acceptance (no FK to its subject) would outlive a later failure here.
+        if (labelIds?.length) {
+          task.labels = await labelModel.addTaskLabels(task.id, labelIds);
+        }
         if (parsedVerify.success) {
           const { requirement, ...rawConfig } = parsedVerify.data;
           const config = Object.fromEntries(
@@ -167,9 +172,6 @@ export const lifecycleRouter = router({
             config,
             requirement: requirement ?? undefined,
           });
-        }
-        if (labelIds?.length) {
-          task.labels = await labelModel.addTaskLabels(task.id, labelIds);
         }
       } catch (error) {
         await ctx.taskModel.delete(task.id).catch(() => {});
