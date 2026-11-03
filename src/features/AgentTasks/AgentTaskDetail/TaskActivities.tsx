@@ -416,29 +416,47 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
     [activities],
   );
 
+  // A goal loop can produce many rounds; only the newest run opens by default so
+  // the latest result is not buried under older ones.
+  const firstTopicIndex = items.findIndex(({ activity }) => activity.type === 'topic');
+  const firstTopicKey = firstTopicIndex === -1 ? undefined : items[firstTopicIndex].key;
+
   // The result panel drops lifecycle bookkeeping, so page over what it shows —
-  // otherwise a page of status flips would render as an empty page.
+  // otherwise a page of status flips would render as an empty page. Its newest
+  // run is the report the panel exists for, so it is pinned outside the pager
+  // rather than paged away behind a burst of newer comments.
+  const resultReport =
+    variant === 'result' && firstTopicIndex !== -1 ? items[firstTopicIndex] : null;
   const pageableItems = useMemo(
     () =>
       variant === 'result'
-        ? items.filter(({ activity }) => RESULT_ACTIVITY_TYPES.has(activity.type))
+        ? items.filter(
+            ({ activity, key }) =>
+              RESULT_ACTIVITY_TYPES.has(activity.type) && key !== firstTopicKey,
+          )
         : items,
-    [items, variant],
+    [items, variant, firstTopicKey],
   );
   // The result panel's verdict and artifacts sit below the feed, so it pages
   // on demand only — auto-loading would push them away as the reader scrolls
   // toward them. The detail page's feed is its last section.
-  const { autoLoad, loadMore, remaining, sentinelRef, visible } = useActivityPaging(
-    pageableItems,
-    activeTaskId,
-    { autoLoad: variant !== 'result' },
-  );
+  const {
+    autoLoad,
+    loadMore,
+    remaining,
+    sentinelRef,
+    visible: page,
+  } = useActivityPaging(pageableItems, activeTaskId, { autoLoad: variant !== 'result' });
+  // Put the pinned report back in timeline order among what is loaded: after
+  // the newer entries on screen, before older ones once they are loaded.
+  const visible = useMemo(() => {
+    if (!resultReport) return page;
+    const order = new Map(items.map(({ key }, i) => [key, i]));
+    return [...page, resultReport].sort((a, b) => order.get(a.key)! - order.get(b.key)!);
+  }, [page, resultReport, items]);
 
   const commentInput = activeTaskId ? <CommentInput taskId={activeTaskId} /> : null;
 
-  // A goal loop can produce many rounds; only the newest run opens by default so
-  // the latest result is not buried under older ones.
-  const firstTopicKey = items.find(({ activity }) => activity.type === 'topic')?.key;
   // Compact lines that sit next to each other share one rail, so the marks
   // read as a timeline; a card (comment, run, brief) breaks the rail.
   const withRail = (nodes: ReactNode[]): ReactNode[] => {

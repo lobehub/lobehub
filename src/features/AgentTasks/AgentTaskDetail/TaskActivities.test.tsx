@@ -155,6 +155,39 @@ describe('TaskActivities paging', () => {
     expect(screen.getByText('taskDetail.activitiesLoadMore:5')).toBeTruthy();
   });
 
+  it('keeps the newest run report on the result panel first page under newer comments', () => {
+    const run: TaskDetailActivity = {
+      id: 'tpc-latest',
+      time: new Date(Date.UTC(2026, 0, 1, 0, 0, 0)).toISOString(),
+      title: 'latest-run',
+      type: 'topic',
+    };
+    const olderRun: TaskDetailActivity = {
+      id: 'tpc-older',
+      time: new Date(Date.UTC(2025, 11, 31)).toISOString(),
+      title: 'older-run',
+      type: 'topic',
+    };
+    // 30 comments, all newer than the latest run.
+    setActivities('T-1', [olderRun, run, ...Array.from({ length: 30 }, (_, i) => comment(i + 1))]);
+
+    render(<TaskActivities variant={'result'} />);
+
+    expect(screen.getByTestId('report').textContent).toBe('latest-run');
+    expect(screen.getAllByTestId('comment')).toHaveLength(ACTIVITY_PAGE_SIZE);
+    // 10 older comments + the older run remain; the pinned report is not counted.
+    expect(screen.getByText('taskDetail.activitiesLoadMore:11')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('taskDetail.activitiesLoadMore:11'));
+
+    // Once older entries are loaded the report sits in timeline order: after
+    // every comment (all newer), before the older run.
+    const order = screen.getAllByTestId(/^(comment|report|topic)$/).map((node) => node.textContent);
+    expect(order.at(-2)).toBe('latest-run');
+    expect(order.at(-1)).toBe('older-run');
+    expect(screen.getAllByTestId('report')).toHaveLength(1);
+  });
+
   it('auto-loads on scroll in the detail feed but not in the result panel', () => {
     const { unmount } = render(<TaskActivities />);
     expect(screen.getByTestId('activity-sentinel')).toBeTruthy();
