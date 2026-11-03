@@ -24,7 +24,8 @@ vi.mock('@/server/services/llmGenerationTracing/hook', () => ({
 }));
 vi.mock('@/server/globalConfig', () => ({ getServerAiProviderConfig: vi.fn() }));
 
-const { TTSProviderError, TTSRequestError, TTSService } = await import('./index');
+const { INLINE_TTS_MAX_INPUT_CHARACTERS, TTSProviderError, TTSRequestError, TTSService } =
+  await import('./index');
 
 const DEFAULT_VOICE = 'OZ0L6eISlOejga3XjDFt';
 const AUDIO = new Uint8Array([0x49, 0x44, 0x33, 0x04]);
@@ -189,6 +190,18 @@ describe('TTSService with provider elevenlabs', () => {
         provider: 'elevenlabs',
       }),
     ).rejects.toMatchObject({ message: 'params.speed not supported by this model' });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects input over the inline cap before calling the API', async () => {
+    await expect(
+      service.synthesize({
+        input: 'a'.repeat(INLINE_TTS_MAX_INPUT_CHARACTERS + 1),
+        model: 'eleven_flash_v2_5',
+        provider: 'elevenlabs',
+      }),
+    ).rejects.toMatchObject({ name: 'TTSRequestError', reason: 'invalid_params' });
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

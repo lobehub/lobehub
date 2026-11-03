@@ -7,6 +7,7 @@ import { getModelPricing } from '../../utils/getModelPricing';
 import {
   buildElevenLabsSpeechRequest,
   createElevenLabsSpeech,
+  ELEVENLABS_PAID_VOICE_HINT,
   type ElevenLabsSpeechOptions,
   normalizeElevenLabsBaseURL,
   resolveElevenLabsOutputFormat,
@@ -288,6 +289,24 @@ describe('createElevenLabsSpeech', () => {
 
       fetchMock.mockResolvedValueOnce(errorResponse(402, { detail: { message: 'Pay up' } }));
       await expect(call()).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.InsufficientQuota,
+      });
+    });
+
+    it('adds the paid voice hint when ElevenLabs requires a paid plan', async () => {
+      fetchMock.mockResolvedValueOnce(
+        errorResponse(402, {
+          detail: {
+            message: 'Free users cannot use library voices via the API.',
+            status: 'payment_required',
+          },
+        }),
+      );
+
+      await expect(call()).rejects.toMatchObject({
+        error: {
+          message: `ElevenLabs API error (402): Free users cannot use library voices via the API. ${ELEVENLABS_PAID_VOICE_HINT}`,
+        },
         errorType: AgentRuntimeErrorType.InsufficientQuota,
       });
     });

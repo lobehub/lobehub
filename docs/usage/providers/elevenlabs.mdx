@@ -1,8 +1,7 @@
 ---
 title: Using ElevenLabs API Key in LobeHub
 description: >-
-  Configure an ElevenLabs API key in LobeHub and generate lifelike speech with
-  Eleven v4, Eleven Multilingual v2, and Eleven Flash v2.5.
+  Configure an ElevenLabs API key in LobeHub and generate lifelike speech with Eleven v4, Eleven Multilingual v2, and Eleven Flash v2.5.
 tags:
   - ElevenLabs
   - Text to Speech
@@ -48,12 +47,20 @@ lh generate tts "Hello from LobeHub" -m elevenlabs/eleven_v4 -o hello.mp3
 ```
 
 - **Voice** — when no voice is given, the model's default voice (Talia) is used. Pass `--voice <voice id>` to use another voice from the built-in list or from your own ElevenLabs voice library.
+
+<Callout type={'warning'}>
+  The built-in voices, including the default Talia, come from the ElevenLabs Voice Library, which **free-tier API keys cannot use through the API**. On the free plan, pass a voice you own (for example one created with Voice Design or Instant Voice Cloning) with `--voice <voice id>`, or upgrade to a paid plan.
+</Callout>
+
+- **Length** — each request is limited to 4,096 characters, because the audio is returned in a single response. Split longer text into several requests.
 - **Format** — `mp3` (default) or `opus`.
 - **Speed** — Eleven Multilingual v2 and the Flash and Turbo models accept a speed from `0.7` to `1.2`. Eleven v3 and v4 do not accept a speed setting.
 
 ## Troubleshooting
 
 **"ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again."** — No key was found, or ElevenLabs rejected the key. Enter a valid key in **App Settings → AI Providers → ElevenLabs**, or ask the administrator to set `ELEVENLABS_API_KEY` on the server. When ElevenLabs rejected the key, its own message follows in parentheses, for example `ElevenLabs API error (401): Invalid API key`.
+
+**"Free-tier ElevenLabs keys cannot use Voice Library voices…"** — Your key is on the free plan and the voice comes from the Voice Library. See the voice note above.
 
 **Quota or rate-limit errors** — Your ElevenLabs plan has run out of characters or reached its concurrency limit. Check usage in the ElevenLabs dashboard.
 

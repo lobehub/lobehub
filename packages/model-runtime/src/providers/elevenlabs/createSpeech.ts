@@ -89,6 +89,14 @@ const DETAIL_STATUS_ERROR_TYPES: Record<string, ILobeAgentRuntimeErrorType> = {
   too_many_concurrent_requests: AgentRuntimeErrorType.RateLimitExceeded,
 };
 
+/**
+ * Free-tier keys cannot use Voice Library voices through the API, and the built-in voice
+ * list (including the default) comes from the Voice Library.
+ * @see https://elevenlabs.io/docs/eleven-creative/voices/voice-library
+ */
+export const ELEVENLABS_PAID_VOICE_HINT =
+  'Free-tier ElevenLabs keys cannot use Voice Library voices (including the default Talia) through the API: upgrade the plan, or pass a voice you own with --voice.';
+
 /** Thrown inside the request flow and unwrapped into a runtime error payload. */
 class ElevenLabsSpeechError extends Error {
   constructor(
@@ -246,9 +254,13 @@ export async function createElevenLabsSpeech(
     if (!response.ok) {
       const errorBody = await readErrorBody(response);
       const { message, status } = parseErrorDetail(errorBody);
+      const paymentRequired = response.status === 402 || status === 'payment_required';
+      const reason = message || response.statusText || 'request failed';
 
       throw new ElevenLabsSpeechError(
-        `ElevenLabs API error (${response.status}): ${message || response.statusText || 'request failed'}`,
+        paymentRequired
+          ? `ElevenLabs API error (${response.status}): ${reason.replace(/\.+$/, '')}. ${ELEVENLABS_PAID_VOICE_HINT}`
+          : `ElevenLabs API error (${response.status}): ${reason}`,
         (status ? DETAIL_STATUS_ERROR_TYPES[status] : undefined) ??
           HTTP_ERROR_TYPES[response.status] ??
           AgentRuntimeErrorType.ProviderBizError,

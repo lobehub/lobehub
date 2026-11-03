@@ -17,6 +17,16 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
  */
 export const INLINE_TTS_AUDIO_FORMATS = ['mp3', 'opus', 'aac'] as const;
 
+/**
+ * Input cap for providers whose models accept far more text than fits in one inline
+ * response. Audio comes back in a single base64 body, so a long ElevenLabs Flash request
+ * (up to 40,000 characters) would exceed the serverless response limit only after the
+ * synthesis was billed. Matches the OpenAPI `/audio/speech` input limit.
+ */
+export const INLINE_TTS_MAX_INPUT_CHARACTERS = 4096;
+
+const INLINE_INPUT_CAPPED_PROVIDERS = new Set<string>([ModelProvider.ElevenLabs]);
+
 export interface TTSSynthesizeParams {
   emotion?: string;
   format?: (typeof INLINE_TTS_AUDIO_FORMATS)[number];
@@ -170,6 +180,17 @@ export class TTSService {
 
   async synthesize(request: TTSSynthesizeRequest): Promise<TTSSynthesizeResult> {
     const { input, model, provider } = request;
+
+    if (
+      INLINE_INPUT_CAPPED_PROVIDERS.has(provider) &&
+      input.length > INLINE_TTS_MAX_INPUT_CHARACTERS
+    ) {
+      throw new TTSRequestError(
+        `input is ${input.length} characters; ${provider} speech is limited to ${INLINE_TTS_MAX_INPUT_CHARACTERS} characters per request. Split the text into shorter requests.`,
+        'invalid_params',
+      );
+    }
+
     const card = findTTSModelCard(provider, model);
     const params: TTSSynthesizeParams = { ...request.params };
     // Older CLIs always send the deprecated top-level `speed`; drop it for models that
