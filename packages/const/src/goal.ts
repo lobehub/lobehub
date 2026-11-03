@@ -150,7 +150,7 @@ export const VERIFICATION_ERRORED_ERROR =
  * it as a setup problem, so the gate asks for credits instead of a judgment.
  */
 export const VERIFICATION_OUT_OF_CREDITS_ERROR =
-  'Verification could not run: the verifier model was refused for lack of credits (InsufficientBudgetForModel); the delivery was not evaluated.';
+  'Verification could not run: the verifier model was refused for lack of balance (InsufficientBudgetForModel); the delivery was not evaluated.';
 /**
  * The review read the evidence and found the criterion undecidable from it — it
  * asks for an action the review layer cannot perform (re-running the delivered

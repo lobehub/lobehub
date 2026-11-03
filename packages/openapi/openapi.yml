@@ -3377,7 +3377,7 @@ paths:
                 required:
                   - error
                 type: object
-          description: Insufficient credits
+          description: Insufficient balance
         "403":
           content:
             application/json:
