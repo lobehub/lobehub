@@ -23,6 +23,7 @@ vi.mock('@/libs/swr/useCacheScope', () => ({
 vi.mock('@/services/goal', () => ({
   goalService: {
     advance: vi.fn(),
+    archive: vi.fn(),
     delete: vi.fn(),
     getGraph: vi.fn(),
     list: vi.fn(),
@@ -297,6 +298,16 @@ describe('GoalAction', () => {
       );
     });
 
+    it('asks the server for archived goals only under the Archived tab', () => {
+      renderHook(() => useGoalStore.getState().useFetchGoals('agent-1', undefined, 'archived'));
+
+      expect(syncKeyFor('goalList')?.[4]).toBe('agent-1:goals-page:archived');
+      void syncFetcherFor('goalList')?.();
+      expect(goalService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'agent-1', archived: true }),
+      );
+    });
+
     it('does not fetch without a scope', () => {
       const sync = renderHook(() => useGoalStore.getState().useFetchGoals());
 
@@ -390,6 +401,23 @@ describe('GoalAction', () => {
     const list = useGoalStore.getState().goalListByAgentId['agent-1'];
     expect(list?.goals.map((item) => item.goal.id)).toEqual(['goal-2']);
     expect(list?.total).toBe(1);
+  });
+
+  it('archives a goal and takes it off the ordinary list it was on', async () => {
+    useGoalStore.setState({
+      goalListByAgentId: {
+        'agent-1': {
+          goals: [{ goal: { id: 'goal-1' } }, { goal: { id: 'goal-2' } }] as never,
+          total: 2,
+        },
+      },
+    });
+
+    await useGoalStore.getState().archiveGoal('goal-1', true);
+
+    expect(goalService.archive).toHaveBeenCalledWith('goal-1', true);
+    const list = useGoalStore.getState().goalListByAgentId['agent-1'];
+    expect(list?.goals.map((item) => item.goal.id)).toEqual(['goal-2']);
   });
 
   it('relays the provider the goal actually plans on when advancing it', async () => {

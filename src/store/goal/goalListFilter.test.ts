@@ -1,7 +1,7 @@
 import { goalStatuses } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
-import { goalStatusesForFilter } from './goalListFilter';
+import { goalArchivedForFilter, goalStatusesForFilter } from './goalListFilter';
 
 describe('goalStatusesForFilter', () => {
   it('asks the server for every status under All', () => {
@@ -32,5 +32,18 @@ describe('goalStatusesForFilter', () => {
     first.push('achieved');
 
     expect(goalStatusesForFilter('all')).toEqual([...goalStatuses]);
+  });
+});
+
+describe('goalArchivedForFilter', () => {
+  it('lists archived goals, in any status, only under the Archived tab', () => {
+    expect(goalArchivedForFilter('archived')).toBe(true);
+    expect(goalStatusesForFilter('archived')).toEqual([...goalStatuses]);
+  });
+
+  it('leaves archived goals out of every other tab', () => {
+    for (const filter of ['all', 'review', 'running', 'achieved'] as const) {
+      expect(goalArchivedForFilter(filter)).toBeUndefined();
+    }
   });
 });

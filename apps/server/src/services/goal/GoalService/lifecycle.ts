@@ -7,6 +7,7 @@ import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { GoalRepository } from '@/database/repositories/goal';
 
+import { assertGoalNotArchived } from '../archiveGuard';
 import { GoalAssignmentService } from '../assignment';
 import { GOAL_ACCEPTANCE_TASK_TITLE, TERMINAL_NODE_STATUSES } from '../decideNextMove';
 import { GoalManagerService } from '../manager';
@@ -236,6 +237,8 @@ export const restart = async (
   options?: { agentId?: string },
 ): Promise<{ goal: GoalItem; restartedTaskIds: string[] }> => {
   const graph = await ctx.requireGraph(goalId);
+  // Restarting resets Tasks and resumes the goal; an archived one stays put.
+  assertGoalNotArchived(graph.goal);
   const assignment = new GoalAssignmentService(ctx.db, ctx.userId, ctx.workspaceId);
   if (options?.agentId) await assignment.assertUsableForGoal(graph.goal, options.agentId);
 
@@ -341,6 +344,7 @@ export const resume = async (ctx: GoalServiceContext, goalId: string) => {
     const model = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    assertGoalNotArchived(current);
     // Only `start` launches a draft: it settles the creating run's planning
     // turn and checks who may launch it, which a plain status flip skips.
     if (current.status === 'draft') throw draftNotStarted(goalId);

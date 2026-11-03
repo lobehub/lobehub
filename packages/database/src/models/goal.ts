@@ -10,7 +10,7 @@ import type {
   GoalSupervisionState,
   GoalUnderstanding,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import type { GoalItem, NewGoal } from '../schemas/goal';
@@ -492,6 +492,8 @@ export class GoalModel {
           // Only a goal parked on its questions asks them; one the user paused
           // or ended keeps its open questions without nagging about them.
           notInArray(goals.status, ['paused', 'achieved', 'failed', 'canceled']),
+          // An archived goal was put away; its open questions stay with it.
+          isNull(goals.archivedAt),
           eq(goalNodeDecisions.status, 'pending'),
           eq(goalNodes.title, GOAL_CLARIFICATION_TITLE),
         ),
@@ -549,6 +551,7 @@ export class GoalModel {
               sql`${goals.config} ->> 'pausedBy' in ('release_review', 'pattern_break')`,
             ),
           ),
+          isNull(goals.archivedAt),
           eq(goalNodeDecisions.status, 'pending'),
           eq(goalNodeDecisions.authority, 'user'),
           // In a workspace every member can see the goal, but a gate is asked
@@ -634,6 +637,11 @@ export class GoalModel {
   list = async (
     options: {
       agentId?: string;
+      /**
+       * Archived goals are put away by the user and left out of every list
+       * unless asked for: `true` lists only them (the list page's Archived tab).
+       */
+      archived?: boolean;
       limit?: number;
       offset?: number;
       projectId?: string;
@@ -642,13 +650,17 @@ export class GoalModel {
       topicId?: string;
     } = {},
   ): Promise<{ goals: GoalListItem[]; total: number }> => {
-    const { agentId, limit = 50, offset = 0, projectId, statuses, topicId } = options;
+    const { agentId, archived, limit = 50, offset = 0, projectId, statuses, topicId } = options;
 
     // Only goals that actually have a graph. Rows created by the earlier
     // task-carried flow have no `goal_nodes`, so they would render as a
     // zero-task goal page that can never advance; they stay out of the list
     // until something backfills them into graphs.
-    const conditions = [this.ownership(), GoalModel.hasGraphSql];
+    const conditions = [
+      this.ownership(),
+      GoalModel.hasGraphSql,
+      archived ? isNotNull(goals.archivedAt) : isNull(goals.archivedAt),
+    ];
     if (agentId) conditions.push(eq(goals.agentId, agentId));
     if (projectId) conditions.push(eq(goals.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(goals.status, statuses));

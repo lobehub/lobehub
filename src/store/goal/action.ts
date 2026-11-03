@@ -32,7 +32,7 @@ import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
-import { goalStatusesForFilter } from './goalListFilter';
+import { goalArchivedForFilter, goalStatusesForFilter } from './goalListFilter';
 import { buildGoalTitleMessages } from './goalTitle';
 import { useGoalStore } from './index';
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
@@ -213,6 +213,7 @@ export class GoalActionImpl {
       fetcher: ({ agentId, filter, projectId }) =>
         goalService.list({
           agentId,
+          archived: goalArchivedForFilter(filter),
           limit: GOAL_LIST_FETCH_LIMIT,
           projectId,
           statuses: goalStatusesForFilter(filter),
@@ -342,6 +343,21 @@ export class GoalActionImpl {
   pauseGoal = async (goalId: string): Promise<void> => {
     await goalService.pause(goalId);
     await this.refreshGoalGraph(goalId);
+  };
+
+  /**
+   * Archive a goal, or restore it. The row moves between every list's ordinary
+   * tabs and its Archived tab, so it leaves every list it is held in at once
+   * and each list — loaded tabs, the home rail — re-reads where it belongs now.
+   */
+  archiveGoal = async (goalId: string, archived: boolean): Promise<void> => {
+    await goalService.archive(goalId, archived);
+    this.#goalListRows.remove(goalId);
+    await Promise.all([
+      this.refreshGoalGraph(goalId),
+      revalidateReplica(goalListResource),
+      revalidateReplica(homeGoalListResource),
+    ]);
   };
 
   closeGoal = async (goalId: string, status: 'achieved' | 'canceled'): Promise<void> => {

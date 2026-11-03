@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { GoalArchiveModel } from '@/database/models/goalArchive';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { advanceGoal } from '@/server/services/goal/advanceGoal';
@@ -165,6 +166,35 @@ export const lifecycleRouter = router({
       mapGoalError(error, 'delete');
     }
   }),
+  /**
+   * Put a goal away, or bring it back. User-only, like a task's archive: no
+   * agent tool exposes it. Only a draft or an ended goal can be archived —
+   * archived goals leave every list, so one that can still move would keep
+   * working out of sight. `status` is left untouched.
+   */
+  archive: goalWriteProcedure
+    .input(idInput.extend({ archived: z.boolean() }))
+    .mutation(async ({ ctx, input: { archived, id } }) => {
+      try {
+        // Same ownership rule as close / delete: the creator or a workspace owner.
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+        const model = new GoalArchiveModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        // The status check is part of the UPDATE, so a resume racing it can't slip past.
+        const data = archived ? await model.archive(id) : await model.unarchive(id);
+        if (!data) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Only a draft or an ended goal can be archived; end it first',
+          });
+        }
+        return { data, message: archived ? 'Goal archived' : 'Goal restored', success: true };
+      } catch (error) {
+        mapGoalError(error, archived ? 'archive' : 'unarchive');
+      }
+    }),
   pause: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return { data: await ctx.goalService.pause(input.id), message: 'Goal paused', success: true };
