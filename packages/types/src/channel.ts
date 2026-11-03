@@ -116,6 +116,15 @@ export interface ChannelMemberConfig {
   workingDirectory?: string;
 }
 
+/**
+ * Channel-wide settings a member configures and the server validates, unlike `ChannelMetadata`.
+ * Agent members can override them in `ChannelMemberConfig`; NULL means every default applies.
+ */
+export interface ChannelConfig {
+  /** How Agents decide to answer unaddressed messages; parsed by the shared wake schema. */
+  wake?: Record<string, unknown>;
+}
+
 /** Free-form member state that does not need its own column. */
 export type ChannelMemberMetadata = Record<string, unknown>;
 
