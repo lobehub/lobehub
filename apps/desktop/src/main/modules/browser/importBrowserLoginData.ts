@@ -162,11 +162,10 @@ const canAccess = async (target: string, mode: number) => {
 /** Strips the leading dot Chromium uses for domain cookies. */
 export const normalizeCookieHost = (host: string) => host.replace(/^\./, '').toLowerCase();
 
-const resolveProfile = async ({
-  executables,
-  label,
-  userData,
-}: BrowserLocations): Promise<ResolvedProfile> => {
+const resolveProfile = async (
+  { executables, label, userData }: BrowserLocations,
+  profileOverride?: string,
+): Promise<ResolvedProfile> => {
   const localStatePath = path.join(userData, 'Local State');
 
   let executable: string | undefined;
@@ -192,7 +191,7 @@ const resolveProfile = async ({
     throw new BrowserLoginDataError('browser_not_installed', `${label} executable was not found`);
   }
 
-  const profile = localState.profile?.last_used || DEFAULT_PROFILE;
+  const profile = profileOverride || localState.profile?.last_used || DEFAULT_PROFILE;
   const profilePath = path.join(userData, profile);
 
   for (const cookiePath of COOKIE_PATHS) {
@@ -457,10 +456,17 @@ export const summarizeImport = ({
 
 export const importBrowserLoginData = async (
   browserSession: Session,
-  { domains, source }: { domains?: string[]; source: BrowserLoginDataSource },
+  {
+    domains,
+    profile,
+    source,
+  }: { domains?: string[]; profile?: string; source: BrowserLoginDataSource },
   locations: BrowserLocations = browserLocations(source),
 ): Promise<BrowserLoginDataImportSummary> => {
-  const resolved = await resolveProfile(locations);
+  // Pin the import to the profile the user previewed: `Local State.last_used`
+  // changes when they switch profiles in the browser, and importing from the
+  // newly active profile would copy a different account's cookies.
+  const resolved = await resolveProfile(locations, profile);
   const selectedHosts = domains ? new Set(domains.map(normalizeCookieHost)) : undefined;
   const isSelected = (host: string) => !selectedHosts || selectedHosts.has(host);
 

@@ -55,6 +55,9 @@ export const useImportLoginData = (onImported?: (result: BrowserSidebarImportRes
     try {
       const next = await electronBrowserSidebarService.importBrowserLoginData({
         domains: scope === 'selected' ? selectedDomains : undefined,
+        // Import the exact profile the dialog previewed, so a profile switch in
+        // the browser cannot swap in another account's cookies.
+        profile: preview?.profile,
         source,
       });
       setResult(next);

@@ -61,6 +61,7 @@ describe('useImportLoginData', () => {
 
     expect(mocks.importBrowserLoginData).toHaveBeenCalledWith({
       domains: undefined,
+      profile: 'Default',
       source: 'edge',
     });
     expect(result.current.result).toEqual(importResult);
@@ -82,6 +83,26 @@ describe('useImportLoginData', () => {
 
     expect(mocks.importBrowserLoginData).toHaveBeenCalledWith({
       domains: ['github.com'],
+      profile: 'Default',
+      source: 'edge',
+    });
+  });
+
+  it('imports from the profile the preview resolved, not the browser last used one', async () => {
+    mocks.previewBrowserLoginData.mockResolvedValue({
+      domains: [{ count: 2, domain: 'github.com' }],
+      profile: 'Profile 2',
+      success: true,
+    });
+    mocks.importBrowserLoginData.mockResolvedValue({ importedCount: 2, success: true });
+    const { result } = renderImport();
+    await waitFor(() => expect(result.current.canImport).toBe(true));
+
+    await act(() => result.current.runImport());
+
+    expect(mocks.importBrowserLoginData).toHaveBeenCalledWith({
+      domains: undefined,
+      profile: 'Profile 2',
       source: 'edge',
     });
   });

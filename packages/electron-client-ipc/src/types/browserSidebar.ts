@@ -110,6 +110,13 @@ export interface BrowserLoginDataPreviewResult extends BrowserSidebarResult {
 export interface BrowserLoginDataImportParams extends BrowserLoginDataSourceParams {
   /** Hosts to import (as returned by preview). Omit to import every host. */
   domains?: string[];
+  /**
+   * Profile directory the user previewed, e.g. `Default` or `Profile 1`. The
+   * import is pinned to this profile so switching browser profiles between the
+   * preview and the import cannot import a different account's cookies. Omit
+   * to fall back to the browser's last used profile.
+   */
+  profile?: string;
 }
 
 export interface BrowserSidebarImportResult extends BrowserSidebarResult {

@@ -286,11 +286,12 @@ export default class BrowserSidebarCtr extends ControllerModule {
   @IpcMethod()
   async importBrowserLoginData({
     domains,
+    profile,
     source,
   }: BrowserLoginDataImportParams): Promise<BrowserSidebarImportResult> {
     try {
       const browserSession = electronSession.fromPartition(BROWSER_PARTITION);
-      const summary = await importBrowserLoginData(browserSession, { domains, source });
+      const summary = await importBrowserLoginData(browserSession, { domains, profile, source });
       // Counts and host names only — cookie values must never reach the logs.
       logger.info(
         `Imported ${summary.importedCount} ${source} cookies for ${summary.importedDomainCount} hosts; ` +

@@ -235,6 +235,38 @@ describe('importBrowserLoginData', () => {
     ).toEqual({ failedDomains: ['b.com', 'c.com'], importedCount: 3, importedDomainCount: 2 });
   });
 
+  it('imports the profile the preview resolved, not the one marked as last used', async () => {
+    const locations = await createProfile({ hosts: ['.github.com'], profile: 'Profile 1' });
+    // A second profile holds different cookies while Local State still points at Profile 1.
+    await mkdir(path.join(locations.userData, 'Profile 2', 'Network'), { recursive: true });
+    createCookieDatabase(path.join(locations.userData, 'Profile 2', 'Network/Cookies'), [
+      '.example.com',
+    ]);
+    const set = vi.fn();
+
+    const summary = await importBrowserLoginData(
+      { cookies: { flushStore: vi.fn(), set } } as never,
+      { domains: ['github.com'], profile: 'Profile 2', source: 'edge' },
+      locations,
+    );
+
+    // Pinned to Profile 2, which has no github.com cookie, so nothing is started or written.
+    expect(summary).toEqual({ failedDomains: [], importedCount: 0, importedDomainCount: 0 });
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('reports a profile that disappeared after the preview', async () => {
+    const locations = await createProfile();
+
+    await expect(
+      importBrowserLoginData(
+        { cookies: { flushStore: vi.fn(), set: vi.fn() } } as never,
+        { profile: 'Profile 9', source: 'edge' },
+        locations,
+      ),
+    ).rejects.toMatchObject({ code: 'profile_not_found' });
+  });
+
   it('skips starting the browser when no selected host has cookies', async () => {
     const locations = await createProfile();
     const set = vi.fn();
