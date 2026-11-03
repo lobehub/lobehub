@@ -18,7 +18,7 @@ registerGoalServiceTestCleanup(serverDB, userId);
 const archived = { code: 'PRECONDITION_FAILED', message: expect.stringContaining('archived') };
 
 describe('archived goals stay put', () => {
-  it('refuses to resume or restart an archived goal until it is restored', async () => {
+  it('refuses to resume, restart or pause an archived goal until it is restored', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ tasks: ['Only'], title: 'Put away' });
     await service.close(graph.goal.id, 'achieved');
@@ -27,6 +27,7 @@ describe('archived goals stay put', () => {
 
     await expect(service.resume(graph.goal.id)).rejects.toMatchObject(archived);
     await expect(service.restart(graph.goal.id)).rejects.toMatchObject(archived);
+    await expect(service.pause(graph.goal.id)).rejects.toMatchObject(archived);
     expect((await new GoalModel(serverDB, userId).findById(graph.goal.id))?.status).toBe(
       'achieved',
     );

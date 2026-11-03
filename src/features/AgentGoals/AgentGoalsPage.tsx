@@ -193,8 +193,18 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   // while it is in flight the page holds its skeleton, and a failed probe keeps
   // the tabs (the Archived tab then reads and reports its own failure) rather
   // than a first-goal screen that would hide them.
-  const isArchivedProbePending = isScopeEmpty && archivedView === undefined && !archivedSync.error;
-  const hasNoGoals = isScopeEmpty && archivedView !== undefined && archivedView.goals.length === 0;
+  // A persisted empty projection is not an answer either: the last live goal
+  // may have been archived elsewhere since, so an empty hydrated row waits for
+  // the revalidation in flight.
+  const isArchivedProbePending =
+    isScopeEmpty &&
+    !archivedSync.error &&
+    (archivedView === undefined || (archivedView.goals.length === 0 && archivedSync.isValidating));
+  const hasNoGoals =
+    isScopeEmpty &&
+    !isArchivedProbePending &&
+    archivedView !== undefined &&
+    archivedView.goals.length === 0;
   const summary = useMemo(() => {
     const total = listView?.total ?? goals.length;
     // An aggregate that has not answered is unknown, not zero. Falling back to

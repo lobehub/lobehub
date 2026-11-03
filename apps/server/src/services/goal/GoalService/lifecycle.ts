@@ -211,6 +211,8 @@ export const transitionStatus = async (
 
 export const pause = async (ctx: GoalServiceContext, goalId: string) => {
   const graph = await ctx.requireGraph(goalId);
+  // An archived goal is a draft or has ended; pausing would reopen it out of sight.
+  assertGoalNotArchived(graph.goal);
   // A draft never ran; pausing it would let a later resume skip `start`.
   if (graph.goal.status === 'draft') throw draftNotStarted(goalId);
   // From here the pause is the person's, so no later measurement lifts it.
