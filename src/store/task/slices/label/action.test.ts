@@ -9,6 +9,7 @@ vi.mock('@/services/taskLabel', () => ({
   taskLabelService: {
     addToTask: vi.fn(),
     changeForTask: vi.fn(),
+    create: vi.fn(),
     list: vi.fn(),
     removeFromTask: vi.fn(),
   },
@@ -77,6 +78,20 @@ describe('TaskLabelSliceAction', () => {
         taskLabels: [expect.objectContaining({ name: 'From B' })],
         taskLabelsInit: true,
       });
+    });
+  });
+
+  describe('createTaskLabel', () => {
+    it('does not add a label created in a workspace the user has since left', async () => {
+      useTaskStore.setState({ taskLabels: [], taskLabelsInit: true, taskLabelsScope: 'ws-a' });
+      vi.mocked(taskLabelService.create).mockImplementation(async () => {
+        useTaskStore.getState().internal_resetTaskLabelsScope('ws-b');
+        return label('a', 'From A');
+      });
+
+      await useTaskStore.getState().createTaskLabel({ name: 'From A' });
+
+      expect(useTaskStore.getState().taskLabels).toEqual([]);
     });
   });
 
