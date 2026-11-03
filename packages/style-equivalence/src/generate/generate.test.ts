@@ -16,7 +16,8 @@ afterAll(() => rm(tmp, { force: true, recursive: true }));
 
 const prelude = `const cx = (...names) => names.filter(Boolean).join(' ');
 const Flexbox = ({ className, children }) => <div data-flex="" className={className}>{children}</div>;
-const styles = { a: 'a', b: 'b', c: 'c', item: 'item', itemDragging: 'itemDragging' };`;
+const styles = { a: 'a', b: 'b', c: 'c', item: 'item', itemDragging: 'itemDragging' };
+const PILL = { on: 'a' };`;
 
 const element = (
   id: string,
@@ -53,6 +54,9 @@ const extraction: FileExtraction = {
         ],
       },
     ),
+    element('C#0', 'span', 'cx(PILL[attrs.kind] ?? styles.b, attrs.meta.color && styles.c)', {
+      variables: [{ kind: 'unknown', name: 'attrs' }],
+    }),
     element('B#0', 'SortableList.Item', 'styles.a', {
       bindings: [
         { expr: 'styles.a', prop: 'className', spread: false },
@@ -90,6 +94,14 @@ const plan: FilePlan = {
         { kinds: { base: 'boolean', head: 'boolean' }, name: 'isDragging' },
         { kinds: { base: 'member', head: 'member' }, name: 'item' },
       ],
+    },
+    {
+      combos: [],
+      elementIds: { base: 'C#0', head: 'C#0' },
+      file: 'a.tsx',
+      flags: ['VARIABLE_UNMODELED'],
+      key: 'a.tsx|C#0',
+      variables: [],
     },
     {
       combos: [],
@@ -140,6 +152,11 @@ describe('generateModule', () => {
     ).toContain('class="a"');
   });
 
+  it('renders an unmodeled value that is read through members and indexes instead of throwing', async () => {
+    const { cases } = await load();
+    expect(render(cases['a.tsx|C#0']({}))).toContain('class="b c"');
+  });
+
   it('substitutes non-layout components with a div and renders neutral props as children', async () => {
     const { cases } = await load();
     expect(render(cases['a.tsx|B#0']({}))).toBe(
@@ -161,7 +178,7 @@ describe('CaseList', () => {
       },
     ];
     const all = render(createElement(CaseList, { modules: { 'a.tsx': mod }, plan: fullPlan }));
-    expect(all.match(/data-case=/g)).toHaveLength(4);
+    expect(all.match(/data-case=/g)).toHaveLength(5);
     expect(all).toContain('data-case="a.tsx|A#0|1"');
     const one = render(
       createElement(CaseList, {

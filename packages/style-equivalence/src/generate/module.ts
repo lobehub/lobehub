@@ -49,7 +49,12 @@ const NEUTRAL = `const __neutral = (prop: string, value: unknown): any => {
   if (typeof value === 'object') return Object.entries(value as Record<string, unknown>).map(([key, item]) => <div key={key} data-synthetic-slot={key}>{__neutral(prop + '.' + key, item)}</div>);
   return null;
 };
-const __member = (value: boolean): any => new Proxy({}, { get: () => value });`;
+const __member = (value: boolean): any => new Proxy({}, { get: () => value });
+const __opaque: any = new Proxy(function () {}, {
+  apply: () => __opaque,
+  construct: () => __opaque,
+  get: (_, key) => (key === Symbol.toPrimitive ? () => '' : key === 'then' ? undefined : __opaque),
+});`;
 
 export const generateModule = (
   extraction: FileExtraction,
@@ -79,6 +84,9 @@ export const generateModule = (
             : `const ${variable.name} = ${value};`,
       );
     }
+    const expressions = chain.flatMap((item) => item.bindings.map((binding) => binding.expr));
+    const readThrough = (name: string) =>
+      expressions.some((expr) => new RegExp(`(^|[^\\w$.])${name}\\s*(\\?\\.|\\.|\\[)`).test(expr));
     for (const item of chain)
       for (const variable of item.variables) {
         if (declared.has(variable.name)) continue;
@@ -86,7 +94,7 @@ export const generateModule = (
         lines.push(
           variable.name === 'cx' && config.cxFallback
             ? `const cx = __cx;`
-            : `const ${variable.name} = undefined;`,
+            : `const ${variable.name} = ${readThrough(variable.name) ? '__opaque' : 'undefined'};`,
         );
       }
     return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean>) => { ${lines.join(' ')} return (${renderChain(chain, layout)}); }`;
