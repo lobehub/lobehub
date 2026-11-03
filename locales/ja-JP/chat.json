@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/> が優先度を <from/> から <to/> に変更しました",
   "taskDetail.activities.status.changed": "<actor/> がステータスを <from/> から <to/> に変更しました",
   "taskDetail.activitiesEmpty": "まだアクティビティはありません",
+  "taskDetail.activitiesLoadMore": "以前のアクティビティを表示（{{count}}）",
   "taskDetail.addSubtask": "サブタスクを追加",
   "taskDetail.artifactInaccessible": "利用できないドキュメント — アクセス不可",
   "taskDetail.artifactMenu.delete": "タスクから削除",

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 
 import type { Command } from 'commander';
@@ -117,6 +117,42 @@ function runInstall(command: string, args: string[]): Promise<void> {
   });
 }
 
+function runEntry(args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // The Node binary and entry path are passed as argv, never through a shell.
+    const child = spawn(process.execPath, [process.argv[1], ...args], { stdio: 'inherit' });
+    child.on('error', reject);
+    child.on('close', (code) =>
+      code === 0 ? resolve() : reject(new Error(`exited with code ${code ?? 'null'}`)),
+    );
+  });
+}
+
+/**
+ * Let the CLI that was just installed report the connectors, so the user sees the new
+ * version's detection rather than the code running this update. Report from this process
+ * when the entry no longer runs the installed version (a versioned pnpm path, for example).
+ */
+export async function reportInstalledConnectStatus(installedVersion: string) {
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        process.execPath,
+        [process.argv[1], '--version'],
+        { encoding: 'utf8', timeout: 30_000 },
+        (error, output) => (error ? reject(error) : resolve(output)),
+      );
+    });
+    if (stdout.trim() === installedVersion) {
+      await runEntry(['connect', 'status']);
+      return;
+    }
+  } catch (error) {
+    log.debug(`Installed CLI report unavailable: ${(error as Error).message}`);
+  }
+  await printConnectStatus({ installedVersion });
+}
+
 export function registerUpdateCommand(program: Command) {
   program
     .command('update')
@@ -181,6 +217,6 @@ export function registerUpdateCommand(program: Command) {
         return;
       }
       log.info(pc.green(`Successfully installed CLI ${latest}.`));
-      await printConnectStatus({ installedVersion: latest });
+      await reportInstalledConnectStatus(latest);
     });
 }

@@ -40,10 +40,13 @@ const channelProcedure = wsCompatProcedure.use(serverDatabase).use(async ({ ctx,
 
 export const channelRouter = router({
   ...channelHistoryProcedures,
+  /** Without a Channel, the people a new Channel in this workspace can start with. */
   userCandidates: channelProcedure
-    .input(z.object({ channelId, search: z.string().max(100).optional() }))
+    .input(z.object({ channelId: channelId.optional(), search: z.string().max(100).optional() }))
     .query(async ({ ctx, input }) => ({
-      data: await ctx.channelService.repository.userCandidates(input.channelId, input.search),
+      data: input.channelId
+        ? await ctx.channelService.repository.userCandidates(input.channelId, input.search)
+        : await ctx.channelService.repository.newChannelUserCandidates(input.search),
       success: true,
     })),
   archive: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
@@ -93,9 +96,10 @@ export const channelRouter = router({
   create: channelProcedure
     .input(
       z.object({
-        agents: z.array(agentSelection).min(1).max(20),
+        agents: z.array(agentSelection).max(20).default([]),
         projectId: z.string().min(1).optional(),
         title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength),
+        userIds: z.array(z.string().min(1)).max(100).default([]),
       }),
     )
     .mutation(async ({ ctx, input }) => ({

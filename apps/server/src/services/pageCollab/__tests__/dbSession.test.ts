@@ -127,6 +127,7 @@ describe('DbPageSessions through withPageSync', () => {
       operationId: 'op_1',
       saveSource: 'llm_call',
       userId: 'u1',
+      writeSource: 'agent',
     });
     const sandbox = withPageSync(shellSandbox, { documentId: 'doc_1', pageDir, sessions });
     exec = async (command) => {
@@ -146,6 +147,7 @@ describe('DbPageSessions through withPageSync', () => {
     expect(store.updates[0]).toMatchObject({
       history: { agentId: 'agt_1', editorIds: ['u1'], operationId: 'op_1' },
       saveSource: 'llm_call',
+      writeSource: 'agent',
     });
   });
 

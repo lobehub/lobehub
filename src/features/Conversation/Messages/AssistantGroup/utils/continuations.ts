@@ -16,7 +16,7 @@ export const buildContinuationChains = (
     const blocks =
       message.role === 'assistant'
         ? [message as unknown as AssistantContentBlock]
-        : [...(message.children ?? []), ...(message.taskCompletions ?? [])];
+        : (message.children ?? []);
 
     return [
       {

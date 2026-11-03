@@ -5,7 +5,7 @@ import type {
 import { partitionAssistantGroupBlocks } from '@lobechat/conversation-flow';
 
 import { LOADING_FLAT } from '@/const/message';
-import type { AssistantContentBlock } from '@/types/index';
+import type { AssistantContentBlock, MessageSignal } from '@/types/index';
 
 import { areWorkflowToolsComplete } from '../toolDisplayNames';
 import { isImageBearingTool } from '../toolRenderRules';
@@ -193,11 +193,35 @@ const toRenderableBlock = (block: AssistantGroupSemanticBlock): RenderableAssist
   };
 };
 
-const toRenderSegments = (segments: AssistantGroupSegment[]): GroupRenderSegment[] =>
-  segments.map((segment) =>
+/**
+ * A step a finished background task woke is preceded by a notice naming that
+ * task. One step can render as several projections (answer + workflow, or one
+ * per tool run), so only the first one in render order carries the notice.
+ */
+const markTaskCompletionNotices = (segments: GroupRenderSegment[]): GroupRenderSegment[] => {
+  const noticed = new Set<string>();
+  const mark = (block: RenderableAssistantContentBlock): RenderableAssistantContentBlock => {
+    const signal = block.metadata?.signal as MessageSignal | undefined;
+    if (signal?.type !== 'task-completion' || noticed.has(block.id)) return block;
+
+    noticed.add(block.id);
+    return { ...block, showTaskCompletionNotice: true };
+  };
+
+  return segments.map((segment) =>
     segment.kind === 'answer'
-      ? { block: toRenderableBlock(segment.block), kind: 'answer' }
-      : { ...segment, blocks: segment.blocks.map(toRenderableBlock) },
+      ? { ...segment, block: mark(segment.block) }
+      : { ...segment, blocks: segment.blocks.map(mark) },
+  );
+};
+
+const toRenderSegments = (segments: AssistantGroupSegment[]): GroupRenderSegment[] =>
+  markTaskCompletionNotices(
+    segments.map((segment) =>
+      segment.kind === 'answer'
+        ? { block: toRenderableBlock(segment.block), kind: 'answer' }
+        : { ...segment, blocks: segment.blocks.map(toRenderableBlock) },
+    ),
   );
 
 export const withMarkdownStreamingState = (
