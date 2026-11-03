@@ -867,12 +867,19 @@ describe('replyTemplate', () => {
 
   describe('renderGroupRejected', () => {
     it('renders disabled and allowlist English copy', () => {
-      expect(renderGroupRejected('disabled')).toContain("doesn't respond in groups or channels");
+      const disabled = renderGroupRejected('disabled');
+      expect(disabled).toContain("don't have permission to talk to this bot");
+      // The owner can use the bot in groups, and DMs may be gated too — the
+      // notice must not claim the bot is silent in groups or redirect to DM.
+      // It also can't promise the owner can: the owner ID may be unset.
+      expect(disabled).not.toMatch(/doesn't respond|direct message/i);
       expect(renderGroupRejected('allowlist')).toContain("isn't enabled in this channel");
     });
 
     it('renders disabled and allowlist Chinese copy when locale is zh-CN', () => {
-      expect(renderGroupRejected('disabled', 'zh-CN')).toContain('不在群组或频道中响应');
+      const disabled = renderGroupRejected('disabled', 'zh-CN');
+      expect(disabled).toContain('没有在群组或频道中与该机器人对话的权限');
+      expect(disabled).not.toMatch(/不在群组|私信/);
       expect(renderGroupRejected('allowlist', 'zh-CN')).toContain('未在此频道启用');
     });
   });

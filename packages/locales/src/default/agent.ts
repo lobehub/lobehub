@@ -574,7 +574,7 @@ export default {
   'channel.quickView.dm.disabled':
     "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.",
   'channel.quickView.group.disabled':
-    "This bot doesn't respond in groups or channels. Please reach out via direct message instead.",
+    "Sorry, you don't have permission to talk to this bot in groups or channels. Please contact the bot's owner if you need access.",
   'channel.quickView.group.allowlist':
     "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
   'channel.quickView.sender.rejected':
@@ -609,8 +609,9 @@ export default {
   'channel.access.group.openDesc': 'Replies whenever it is @mentioned.',
   'channel.access.group.allowlist': 'Only chosen groups',
   'channel.access.group.allowlistDesc': 'Replies only in the groups you list below.',
-  'channel.access.group.disabled': 'Not in groups',
-  'channel.access.group.disabledDesc': 'It ignores group messages and points people to a DM.',
+  'channel.access.group.disabled': 'Only me in groups',
+  'channel.access.group.disabledDesc':
+    'In groups and channels it has joined, only you can use it (once your own ID is set above); others are told they lack permission. Telegram Guest Mode follows its own setting.',
   'channel.access.group.listNote':
     'The people list above also applies here: only people on it can use the bot in groups.',
   'channel.access.identity.desc':
