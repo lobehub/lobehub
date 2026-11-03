@@ -549,7 +549,7 @@
   "plans.limits.support": "{{value}}",
   "plans.limits.ultraWeeklySpend": "Ultra models, with a separate weekly limit",
   "plans.limits.ultraWeeklySpend.multiple": "Ultra models: {{multiple}}× the usage of {{plan}}",
-  "plans.limits.ultraWeeklySpend.tooltip": "Ultra models are the most capable and most expensive ones. They count toward your weekly usage and can use up to half of it; both reset together.",
+  "plans.limits.ultraWeeklySpend.tooltip": "Ultra models are the most capable and most expensive ones. They count toward your weekly usage and also have their own weekly limit; both reset together.",
   "plans.limits.ultraWeeklySpend.unavailable": "Ultra models",
   "plans.llm.customAPI": "Global mainstream model custom API service",
   "plans.llm.messageRequest": "Unlimited message requests",

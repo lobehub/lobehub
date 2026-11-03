@@ -578,7 +578,7 @@ export default {
   'plans.limits.ultraWeeklySpend': 'Ultra models, with a separate weekly limit',
   'plans.limits.ultraWeeklySpend.multiple': 'Ultra models: {{multiple}}× the usage of {{plan}}',
   'plans.limits.ultraWeeklySpend.tooltip':
-    'Ultra models are the most capable and most expensive ones. They count toward your weekly usage and can use up to half of it; both reset together.',
+    'Ultra models are the most capable and most expensive ones. They count toward your weekly usage and also have their own weekly limit; both reset together.',
   'plans.limits.ultraWeeklySpend.unavailable': 'Ultra models',
   'plans.plan.max.desc': 'For power users running agents at scale',
   'plans.plan.plus.desc': 'For everyday AI use',

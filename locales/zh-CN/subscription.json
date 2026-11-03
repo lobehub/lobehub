@@ -549,7 +549,7 @@
   "plans.limits.support": "{{value}}",
   "plans.limits.ultraWeeklySpend": "可使用 Ultra 模型，每周单独限额",
   "plans.limits.ultraWeeklySpend.multiple": "Ultra 模型：{{plan}} 的 {{multiple}} 倍用量",
-  "plans.limits.ultraWeeklySpend.tooltip": "Ultra 模型是能力最强、成本最高的模型。它们计入每周用量，最多可用到每周额度的一半，两者同时重置。",
+  "plans.limits.ultraWeeklySpend.tooltip": "Ultra 模型是能力最强、成本最高的模型。它们计入每周用量，另有单独的每周限额，两者同时重置。",
   "plans.limits.ultraWeeklySpend.unavailable": "Ultra 模型",
   "plans.llm.customAPI": "全球主流模型自定义 API 服务",
   "plans.llm.messageRequest": "无限消息请求",
