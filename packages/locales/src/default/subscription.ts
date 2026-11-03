@@ -942,4 +942,14 @@ export default {
   'credits.autoTopUp.descUsd': 'Make sure your balance never runs out',
   'credits.packages.titleUsd': 'My Top-ups',
   'plans.usageHero.comparedTo5h': '5-hour usage of {{plan}}',
+  'balance.hobbyQuotaDesc':
+    '{{hobby}} does not include subscription usage; configure your own model API or top up your balance',
+  'balance.subscriptionQuota': 'Subscription Usage',
+  'balance.subscriptionQuotaDesc': 'Subscription usage is spent first, then your balance',
+  'compare.hobbyQuotaTooltip': 'No monthly usage included; configure your own model API',
+  'compare.monthlyQuota': 'Monthly Usage',
+  'plans.quota.freeTip': '{{amount}} free each month',
+  'plans.quota.none': 'No built-in usage',
+  'plans.quota.title': 'Usage',
+  'plans.quota.tooltip': 'Amount available for model usage each month',
 };
