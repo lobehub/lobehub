@@ -255,6 +255,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   const hasFilter = !!filter;
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
+  // Group headers of the ordinary list offer the board's column create entry.
+  const groupCreateScope = useMemo(
+    () => (canCreateTask ? { agentId, projectId } : undefined),
+    [agentId, canCreateTask, projectId],
+  );
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
   // `queryKey` the rows are read by. Every scope splits automated work out of the ordinary tab — it is the
@@ -645,6 +650,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
             />
           )}
           <TaskList
+            createScope={groupCreateScope}
             data={isTaskListInit || undefined}
             emptyAction={filterEmptyAction}
             emptyDescription={filterEmptyDescription}

@@ -114,6 +114,21 @@ describe('mergeLinearSyncResults', () => {
       ),
     ).toMatchObject({ closed: 3, created: 100, skippedCount: 1, unchanged: 100 });
   });
+
+  it('adds up comments every round copied, resumed or not', () => {
+    expect(
+      mergeLinearSyncResults(result({ commentsImported: 4 }), result({ commentsImported: 1 }), {
+        resumed: false,
+      }).commentsImported,
+    ).toBe(5);
+    expect(
+      mergeLinearSyncResults(result({ commentsImported: 4 }), result({}), { resumed: true })
+        .commentsImported,
+    ).toBe(4);
+    expect(
+      mergeLinearSyncResults(result({}), result({}), { resumed: true }).commentsImported,
+    ).toBeUndefined();
+  });
 });
 
 describe('withinRoundCap', () => {

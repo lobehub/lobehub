@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChannelAgentEnvironment } from './agentEnvironment';
 import {
   canSubmitChannelAgents,
+  canSubmitChannelMembers,
   changeChannelAgentDevice,
   createChannelAgentSelection,
   getChannelAgentIssue,
@@ -277,5 +278,23 @@ describe('Channel Agent submission guard', () => {
     expect(toChannelAgentSelection({ ...selection, initialized: true, issue: undefined })).toEqual(
       selection,
     );
+  });
+});
+
+describe('Channel member submission guard', () => {
+  const ready = { agentId: 'native', initialized: true };
+  const pending = { agentId: 'pi', initialized: true, issue: 'deviceRequired' as const };
+
+  it('creates a Channel with only its creator, people only, or ready Agents', () => {
+    expect(canSubmitChannelMembers([], { creating: true, people: 0 })).toBe(true);
+    expect(canSubmitChannelMembers([], { creating: true, people: 2 })).toBe(true);
+    expect(canSubmitChannelMembers([ready], { creating: true, people: 0 })).toBe(true);
+    expect(canSubmitChannelMembers([ready, pending], { creating: true, people: 1 })).toBe(false);
+  });
+
+  it('requires an invitation to add someone', () => {
+    expect(canSubmitChannelMembers([], { creating: false, people: 0 })).toBe(false);
+    expect(canSubmitChannelMembers([], { creating: false, people: 1 })).toBe(true);
+    expect(canSubmitChannelMembers([pending], { creating: false, people: 1 })).toBe(false);
   });
 });

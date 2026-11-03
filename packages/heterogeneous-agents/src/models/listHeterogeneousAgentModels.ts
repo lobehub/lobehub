@@ -13,6 +13,7 @@ import { isRecord } from '@lobechat/utils/object';
 import { getHeterogeneousTypeLabel } from '../labels';
 import { AcpRpcResponseError } from '../spawn/acpStdioClient';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
+import { listCopilotAcpModels } from '../spawn/copilotAcpSession';
 import { listDroidAcpModels } from '../spawn/droidAcpSession';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
@@ -357,6 +358,17 @@ export const listHeterogeneousAgentModels = async (
     // Catalog discovery must work even when a saved project path no longer exists.
     // Keep valid project directories so project-specific provider configuration still applies.
     const cwd = resolveHeteroSpawnCwd(params.cwd ?? process.cwd());
+
+    if (params.type === 'copilot') {
+      const models = await listCopilotAcpModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
 
     if (params.type === 'droid') {
       const models = await listDroidAcpModels({

@@ -151,11 +151,14 @@ export interface MessageCRUDAction {
    * @param toolCallId - The tool call ID (stable identifier from AI response)
    * @param value - The new arguments value
    * @param replace - If true, replace arguments entirely; if false, merge with existing
+   * @param options.refresh - Set false to keep the local rows instead of loading the server's
+   *   after the write (they would carry back a decision the server has not claimed yet)
    */
   updatePluginArguments: <T = any>(
     toolCallId: string,
     value: T,
     replace?: boolean,
+    options?: { refresh?: boolean },
   ) => Promise<void>;
 
   /**
@@ -552,7 +555,7 @@ export const messageCRUDSlice: StateCreator<
     }
   },
 
-  updatePluginArguments: async (toolCallId, value, replace = false) => {
+  updatePluginArguments: async (toolCallId, value, replace = false, options) => {
     const { internal_dispatchMessage, replaceMessages, context } = get();
 
     // Find previous arguments from either tool message or parent's tools array
@@ -617,7 +620,7 @@ export const messageCRUDSlice: StateCreator<
     // Create the update promise - backend handles all cases using toolCallId
     const updatePromise = (async () => {
       const result = await messageService.updateToolArguments(toolCallId, nextValue, context);
-      if (result?.success && result.messages) {
+      if (options?.refresh !== false && result?.success && result.messages) {
         replaceMessages(result.messages, { expectedContext: context });
       }
     })();

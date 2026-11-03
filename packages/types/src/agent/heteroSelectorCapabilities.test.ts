@@ -17,6 +17,7 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('claude-code')).toBe(true);
     expect(isHeteroSelectorAvailable('codebuddy')).toBe(true);
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
+    expect(isHeteroSelectorAvailable('copilot')).toBe(true);
     expect(isHeteroSelectorAvailable('cursor')).toBe(true);
     expect(isHeteroSelectorAvailable('droid')).toBe(true);
     expect(isHeteroSelectorAvailable('devin')).toBe(true);
@@ -41,6 +42,14 @@ describe('selector availability', () => {
     expect(getHeteroSelectorCapability('amp')?.model).toBeUndefined();
     expect(getHeteroSelectorCapability('claude-code')?.speed).toBeUndefined();
     expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
+    expect(getHeteroSelectorCapability('copilot')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('copilot')?.effort?.levels()).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ]);
     expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('droid')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('devin')?.model?.source).toBe('catalog');

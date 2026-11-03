@@ -365,7 +365,7 @@ export const driveTaskFromVerify = async (
               goalReview?.status === 'rejected' ? goalReview.feedback : undefined,
             )
           : outOfCredits
-            ? 'Verification could not run because the account is out of credits for the verifier model; the delivery was not evaluated. Top up credits, then retry.'
+            ? 'Verification could not run because the account is out of balance for the verifier model; the delivery was not evaluated. Top up, then retry.'
             : outcome === 'errored' || outcome === 'review_errored'
               ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
               : outcome === 'unjudgeable'

@@ -148,6 +148,7 @@ export const gemini25ChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-flash-image',
+    isOfficial: true,
     knowledgeCutoff: '2025-06',
     maxOutput: 32_768,
     pricing: {

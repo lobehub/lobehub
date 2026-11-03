@@ -18,6 +18,7 @@ describe('heterogeneous agent config', () => {
       'claude-code',
       'codebuddy',
       'codex',
+      'copilot',
       'cursor',
       'droid',
       'devin',
@@ -44,6 +45,19 @@ describe('heterogeneous agent config', () => {
       defaultCommand: 'codex',
       title: 'Codex',
       type: 'codex',
+    });
+    expect(getHeterogeneousAgentConfig('copilot')).toMatchObject({
+      auth: { signInCommand: 'copilot login' },
+      defaultCommand: 'copilot',
+      install: {
+        commands: [
+          'curl -fsSL https://gh.io/copilot-install | bash',
+          'npm install -g @github/copilot',
+        ],
+        docsUrl: 'https://docs.github.com/en/copilot/how-tos/copilot-cli',
+      },
+      title: 'GitHub Copilot',
+      type: 'copilot',
     });
     expect(getHeterogeneousAgentConfig('codebuddy')).toMatchObject({
       defaultCommand: 'codebuddy',
@@ -182,6 +196,7 @@ describe('heterogeneous agent config', () => {
       'claude-code': 'Claude Code',
       'codebuddy': 'CodeBuddy',
       'codex': 'Codex',
+      'copilot': 'GitHub Copilot',
       'cursor': 'Cursor',
       'droid': 'Factory Droid',
       'devin': 'Devin',

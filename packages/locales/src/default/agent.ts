@@ -574,7 +574,7 @@ export default {
   'channel.quickView.dm.disabled':
     "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.",
   'channel.quickView.group.disabled':
-    "This bot doesn't respond in groups or channels. Please reach out via direct message instead.",
+    "Sorry, you don't have permission to talk to this bot in groups or channels. Please contact the bot's owner if you need access.",
   'channel.quickView.group.allowlist':
     "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
   'channel.quickView.sender.rejected':
@@ -609,8 +609,9 @@ export default {
   'channel.access.group.openDesc': 'Replies whenever it is @mentioned.',
   'channel.access.group.allowlist': 'Only chosen groups',
   'channel.access.group.allowlistDesc': 'Replies only in the groups you list below.',
-  'channel.access.group.disabled': 'Not in groups',
-  'channel.access.group.disabledDesc': 'It ignores group messages and points people to a DM.',
+  'channel.access.group.disabled': 'Only me in groups',
+  'channel.access.group.disabledDesc':
+    'In groups and channels it has joined, only you can use it (once your own ID is set above); others are told they lack permission. Telegram Guest Mode follows its own setting.',
   'channel.access.group.listNote':
     'The people list above also applies here: only people on it can use the bot in groups.',
   'channel.access.identity.desc':
@@ -838,7 +839,7 @@ export default {
   'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
-  'share.settings.limits.monthlySpendLimitUnit': 'M credits',
+  'share.settings.limits.monthlySpendLimitUnit': 'USD',
   'share.settings.limits.title': 'Limits',
   'share.settings.limits.workspaceDesc':
     'Every visitor run is billed to the Workspace budget, not to the visitor or any member quota. These per-Agent caps always apply — you can change the numbers, but not turn them off.',
@@ -914,7 +915,7 @@ export default {
   'share.settings.usage.loadFailed': 'Usage could not be loaded',
   'share.settings.usage.monthlySpend': 'This month’s spend',
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
-  'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}} credits',
+  'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}}',
   'share.settings.usage.title': 'Usage',
   'share.settings.usage.views': 'Page views',
   'share.settings.usage.viewsHint': 'Repeat views included. Your own previews are excluded.',

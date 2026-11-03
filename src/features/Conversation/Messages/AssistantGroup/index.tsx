@@ -5,7 +5,7 @@ import type { AssistantContentBlock, EmojiReaction, UISignalCallbacksBlock } fro
 import { Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { MouseEventHandler, ReactNode } from 'react';
-import { Fragment, memo, Suspense, useCallback, useMemo } from 'react';
+import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
@@ -49,10 +49,8 @@ import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
 import Group from './components/Group';
 import { resolveWorkflowExpandLevel } from './components/segments';
-import TaskCompletionNotice from './components/TaskCompletionNotice';
 import type { WorkflowExpandLevelDefault } from './components/WorkflowCollapse';
 import { buildContinuationChains, collectSignalCallbacks } from './utils/continuations';
-import { resolveTaskCompletionSource } from './utils/taskCompletionSource';
 
 const EditState = dynamic(() => import('./components/EditState'), {
   ssr: false,
@@ -102,7 +100,6 @@ const GroupMessage = memo<GroupMessageProps>(
       branch,
       metadata,
       signalCallbacks,
-      taskCompletions,
     } = item;
     const children = useMemo(
       () =>
@@ -132,23 +129,6 @@ const GroupMessage = memo<GroupMessageProps>(
       () => [...(children ?? []), ...chains.flatMap((chain) => chain.blocks)],
       [chains, children],
     );
-    // One Group per wake-up turn, each preceded by a notice naming the tool
-    // whose completion woke it. The block arrays depend on the completions
-    // only, so the main chain streaming does not re-render those Groups.
-    const completionBlocks = useMemo(
-      () =>
-        ((taskCompletions as AssistantContentBlock[] | undefined) ?? []).map((block) => [block]),
-      [taskCompletions],
-    );
-    const completionItems = useMemo(
-      () =>
-        completionBlocks.map((blocks: AssistantContentBlock[]) => ({
-          blocks,
-          source: resolveTaskCompletionSource(blocks[0]!, allChildren),
-        })),
-      [allChildren, completionBlocks],
-    );
-
     // Supervisor messages render the GROUP's identity (avatar + name + 主管 badge)
     // rather than the supervisor agent's own bare meta (whose title is literally
     // "Supervisor" with no avatar). The flag is a persisted snapshot on the
@@ -177,8 +157,8 @@ const GroupMessage = memo<GroupMessageProps>(
       [allChildren],
     );
     const workRootOperationId = useMemo(
-      () => findLatestWorkRootOperationId(metadata, allChildren, taskCompletions),
-      [allChildren, metadata, taskCompletions],
+      () => findLatestWorkRootOperationId(metadata, allChildren),
+      [allChildren, metadata],
     );
     // Codex-style aggregate of files edited this round. Purely derived from the
     // group's tool calls (entity-format files are excluded — they surface as
@@ -384,12 +364,11 @@ const GroupMessage = memo<GroupMessageProps>(
         onMouseEnter={onMouseEnter}
       >
         {/*
-          Wrap main chain + signal callbacks + post-task summary in a tight
-          flex stack so the SignalCallbacks accordion sits visually inside
-          the same "agent reply" block. The ChatItem body gap (16px) would
-          otherwise stretch them apart and the natural narrative — initial
-          reply → callbacks → summary — reads as three disconnected
-          sections ().
+          Wrap main chain + signal callbacks in a tight flex stack so the
+          SignalCallbacks accordion sits visually inside the same "agent
+          reply" block. The ChatItem body gap (16px) would otherwise stretch
+          them apart into disconnected sections. Wake-up turns are steps of
+          the main chain, each marked by its own task-completion notice.
         */}
         <Flexbox gap={4}>
           {children && children.length > 0 && (
@@ -410,19 +389,6 @@ const GroupMessage = memo<GroupMessageProps>(
           )}
           {allSignalCallbacks.map((block) => (
             <SignalCallbacks block={block} key={block.sourceToolMessageId} />
-          ))}
-          {completionItems.map(({ blocks, source }) => (
-            <Fragment key={blocks[0]!.id}>
-              {source && <TaskCompletionNotice {...source} />}
-              <Group
-                blocks={blocks}
-                contentId={blocks[0]!.id}
-                defaultWorkflowExpandLevel={workflowExpandLevel}
-                disableEditing={disableEditing}
-                id={id}
-                messageIndex={index}
-              />
-            </Fragment>
           ))}
         </Flexbox>
 

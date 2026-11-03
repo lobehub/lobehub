@@ -21,6 +21,7 @@ import {
   Cursor,
   DeepSeek,
   Devin,
+  GithubCopilot,
   Grok,
   HermesAgent,
   Kimi,
@@ -49,6 +50,7 @@ export interface ConnectableProvider {
     | typeof DeepSeek
     | typeof DroidIcon
     | typeof Devin
+    | typeof GithubCopilot
     | typeof Grok
     | typeof HermesAgent
     | typeof Kimi
@@ -82,6 +84,7 @@ const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand
   'claude-code': ClaudeCode,
   'codebuddy': CodeBuddy,
   'codex': Codex,
+  'copilot': GithubCopilot,
   'cursor': Cursor,
   'droid': DroidIcon,
   'devin': Devin,

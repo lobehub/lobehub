@@ -16,6 +16,7 @@ import { pickString } from '@lobechat/utils';
 import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import { topicService } from '@/services/topic';
 
+const COPILOT_IDENTIFIER = 'copilot';
 const CURSOR_IDENTIFIER = 'cursor';
 const DEVIN_IDENTIFIER = 'devin';
 const DROID_IDENTIFIER = 'droid';
@@ -170,6 +171,7 @@ const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string
  */
 const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
   ClaudeCodeIdentifier,
+  COPILOT_IDENTIFIER,
   CURSOR_IDENTIFIER,
   DEVIN_IDENTIFIER,
   DROID_IDENTIFIER,

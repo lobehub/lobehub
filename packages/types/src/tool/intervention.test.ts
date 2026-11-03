@@ -4,6 +4,10 @@ import { classifyToolInterventionPresentation } from './intervention';
 
 describe('classifyToolInterventionPresentation', () => {
   it('renders Devin questions and provider-specific interactions as forms', () => {
+    expect(classifyToolInterventionPresentation('copilot', 'askUserQuestion')).toEqual({
+      interactionKind: 'question',
+      surface: 'form',
+    });
     expect(classifyToolInterventionPresentation('devin', 'askUserQuestion')).toEqual({
       interactionKind: 'question',
       surface: 'form',
