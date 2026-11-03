@@ -53,7 +53,7 @@ describe('OIDC JWT key rotation', () => {
     key: (typeof keys)[keyof typeof keys],
     kid: string | null = key.kid,
   ) =>
-    new SignJWT({ client_id: 'lobehub-review' })
+    new SignJWT({ client_id: 'lobehub-acceptance' })
       .setProtectedHeader(kid === null ? { alg: 'RS256' } : { alg: 'RS256', kid })
       .setAudience(`urn:lobehub:acceptance:${acceptanceId}`)
       .setSubject('user-1')

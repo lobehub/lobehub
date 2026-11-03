@@ -24,7 +24,6 @@ type LabFeatureI18nKey =
   | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
-  | 'inputMarkdown'
   | 'messageTextSelectionActions'
   | 'oauthApps'
   | 'projects'
@@ -56,12 +55,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'agentGraphConfig',
     searchKeywords: ['agent graph', 'graph runtime'],
     stage: 'alpha',
-  },
-  {
-    flag: 'enableInputMarkdown',
-    i18nKey: 'inputMarkdown',
-    searchKeywords: ['markdown', 'input markdown'],
-    stage: 'beta',
   },
   {
     flag: 'enableMessageTextSelectionActions',

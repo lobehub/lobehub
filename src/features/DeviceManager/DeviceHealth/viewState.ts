@@ -36,6 +36,11 @@ export type LatestUsageView =
        * row is hidden rather than left as a permanent em dash.
        */
       reportsDisk: boolean;
+      /**
+       * Whether the device reports load averages at all. Windows has none, so
+       * its load row is hidden rather than left as a permanent em dash.
+       */
+      reportsLoad: boolean;
     }
   | { loading: true };
 
@@ -56,6 +61,8 @@ export const latestUsageView = (state: {
     loading: false,
     // A series cached before devices reported the disk has no such field.
     reportsDisk: !!data?.diskTotalBytes,
+    // Load reads as a share of the cores, so it needs the core count too.
+    reportsLoad: !!data?.cpuCount && data.points.some((point) => point.load1 !== null),
   };
 };
 

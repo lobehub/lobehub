@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { releaseAgentRunSlot } from '@/business/server/agent-run/runConcurrency';
 import {
   AgentOperationModel,
   type RecordOperationStartParams,
@@ -361,6 +362,11 @@ export class CompletionLifecycle {
       }
 
       if (isAsyncToolPark) return;
+
+      // The run tree no longer works, so its concurrency slot frees now rather
+      // than when the lease lapses. A run parked on a human decision frees it
+      // too; its continuation takes a slot of its own.
+      await releaseAgentRunSlot(runOrigin.userId || this.userId, operationId);
 
       // `lastAssistantContent` comes off the Redis-backed `state.messages`,
       // while the assistant message row is persisted through a separate

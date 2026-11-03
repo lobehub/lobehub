@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/> изменил приоритет с <from/> на <to/>",
   "taskDetail.activities.status.changed": "<actor/> изменил статус с <from/> на <to/>",
   "taskDetail.activitiesEmpty": "Активности пока нет",
+  "taskDetail.activitiesLoadMore": "Показать более раннюю активность ({{count}})",
   "taskDetail.addSubtask": "Добавить подзадачу",
   "taskDetail.artifactInaccessible": "Недоступный документ — нет доступа",
   "taskDetail.artifactMenu.delete": "Удалить из задачи",

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import SelectableTaskRow from './SelectableTaskRow';
@@ -28,5 +28,22 @@ describe('SelectableTaskRow', () => {
 
     expect(screen.getByRole('checkbox', { name: 'Select T-1 Fix login' })).toBeTruthy();
     expect(screen.getByRole('checkbox', { name: 'Select T-2 Ship docs' })).toBeTruthy();
+  });
+
+  it('marks the whole row selected when its checkbox is ticked', () => {
+    const { container } = render(
+      <SelectableTaskRow id="t1" label="T-1 Fix login" order={() => ['t1']}>
+        <div>row 1</div>
+      </SelectableTaskRow>,
+    );
+    const row = container.firstElementChild as HTMLElement;
+    expect(row.dataset.selected).toBeUndefined();
+
+    fireEvent.click(screen.getByTestId('task-row-checkbox'));
+
+    expect(row.dataset.selected).toBe('true');
+    expect(
+      screen.getByRole('checkbox', { name: 'Select T-1 Fix login' }).getAttribute('aria-checked'),
+    ).toBe('true');
   });
 });

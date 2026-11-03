@@ -9,17 +9,26 @@ import { TaskModel } from '@/database/models/task';
 import { TaskExternalLinkModel } from '@/database/models/taskExternalLink';
 import { tasks, users } from '@/database/schemas';
 
+import { LinearApiError } from '../client';
 import type * as IssuesModule from '../issues';
-import type { LinearIssue } from '../issues';
-import { LinearIssueSyncService, MAX_TASKS_CREATED_PER_SYNC } from '../issueSync';
+import type { LinearIssue, LinearIssueComment } from '../issues';
+import {
+  LinearIssueSyncService,
+  MAX_COMMENT_CATCH_UPS_PER_SYNC,
+  MAX_TASKS_CREATED_PER_SYNC,
+} from '../issueSync';
 
 const linear = vi.hoisted(() => ({
   getLinearIssuesByIds: vi.fn(),
+  getLinearProjectTeamIds: vi.fn(),
+  listLinearIssueComments: vi.fn(),
   listLinearIssues: vi.fn(),
 }));
 vi.mock('../issues', async (importOriginal) => ({
   ...(await importOriginal<typeof IssuesModule>()),
   getLinearIssuesByIds: linear.getLinearIssuesByIds,
+  getLinearProjectTeamIds: linear.getLinearProjectTeamIds,
+  listLinearIssueComments: linear.listLinearIssueComments,
   listLinearIssues: linear.listLinearIssues,
 }));
 
@@ -140,6 +149,45 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
 
     expect(result.closed).toBe(1);
     expect((await linkedTask('1'))?.status).toBe('completed');
+  });
+
+  it('closes the task of a project issue that lives in another team than the filter', async () => {
+    // A project linked to teams PKG and LOBE whose issues all live in LOBE,
+    // synced through a rule that names PKG.
+    const projectFilter = {
+      linearProjectId: 'project-1',
+      stateTypes: [...filter.stateTypes],
+      teamId: 'team-pkg',
+    };
+    const project = { id: 'project-1', name: 'LobeHub Model' };
+    const lobeIssue = issue({ id: '1', project, team: { id: 'team-lobe', key: 'LOBE' } });
+    linear.getLinearProjectTeamIds.mockResolvedValue(['team-pkg', 'team-lobe']);
+    serve([lobeIssue]);
+    const service = new LinearIssueSyncService(db, userId);
+    expect((await service.syncByFilter(TOKEN, projectFilter)).created).toBe(1);
+
+    // Closed in Linear, so the open-states filter no longer returns it.
+    linear.listLinearIssues.mockResolvedValue({ hasMore: false, issues: [] });
+    linear.getLinearIssuesByIds.mockResolvedValue([
+      { ...lobeIssue, state: { name: 'Done', type: 'completed' } },
+    ]);
+    const result = await service.syncByFilter(TOKEN, projectFilter);
+
+    expect(result.closed).toBe(1);
+    expect((await linkedTask('1'))?.status).toBe('completed');
+  });
+
+  it('fails a project rule whose teams cannot be read instead of narrowing the closing pass', async () => {
+    linear.getLinearProjectTeamIds.mockRejectedValue(new Error('Linear API error: timeout'));
+    serve([issue({ id: '1', team: { id: 'team-lobe', key: 'LOBE' } })]);
+
+    await expect(
+      new LinearIssueSyncService(db, userId).syncByFilter(TOKEN, {
+        linearProjectId: 'project-1',
+        stateTypes: [...filter.stateTypes],
+        teamId: 'team-pkg',
+      }),
+    ).rejects.toThrow('timeout');
   });
 
   it('does not interrupt a running task when its issue is closed', async () => {
@@ -510,5 +558,276 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
 
     expect(result).toMatchObject({ keptLocalEdits: 0, updated: 1 });
     expect((await linkedTask('1'))?.name).toBe('Renamed twice');
+  });
+});
+
+describe('LinearIssueSyncService comments (real PostgreSQL)', () => {
+  const comment = (
+    overrides: Partial<LinearIssueComment> & { id: string; issueId: string },
+  ): LinearIssueComment => ({
+    body: `Comment ${overrides.id}`,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    url: `https://linear.app/acme/issue/ENG-1#comment-${overrides.id}`,
+    user: { displayName: 'JianXu', name: 'Jian Xu' },
+    ...overrides,
+  });
+
+  /** Serve these comments for whichever issues are asked about. */
+  const serveComments = (comments: LinearIssueComment[]) =>
+    linear.listLinearIssueComments.mockImplementation(async (_token: string, ids: string[]) =>
+      comments.filter((item) => ids.includes(item.issueId!)),
+    );
+
+  const commentsOf = async (externalId: string) => {
+    const task = await linkedTask(externalId);
+    return task ? new TaskModel(db, userId).getComments(task.id) : [];
+  };
+
+  const states = [...filter.stateTypes];
+
+  it('copies an imported issue’s comments onto its task, credited and in Linear’s time', async () => {
+    serve([issue({ id: '1' })]);
+    serveComments([
+      comment({ createdAt: '2026-02-01T00:00:00.000Z', id: 'c2', issueId: '1', parentId: 'c1' }),
+      comment({ createdAt: '2026-01-01T00:00:00.000Z', id: 'c1', issueId: '1' }),
+    ]);
+
+    const result = await new LinearIssueSyncService(db, userId).importIssues(TOKEN, ['1'], {
+      syncComments: true,
+    });
+
+    expect(result).toMatchObject({ commentsImported: 2, created: 1 });
+    const comments = await commentsOf('1');
+    // Written in the order Linear returned them, each at its Linear time.
+    expect(comments.map((item) => item.createdAt.toISOString())).toEqual([
+      '2026-01-01T00:00:00.000Z',
+      '2026-02-01T00:00:00.000Z',
+    ]);
+    expect(comments[0]).toMatchObject({
+      authorUserId: userId,
+      content:
+        '> **JianXu** on [Linear](https://linear.app/acme/issue/ENG-1#comment-c1)\n\nComment c1',
+    });
+    expect(comments[1].content).toContain('**JianXu** replied on');
+  });
+
+  it('adds only new comments when synced again, even after the link is refreshed', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    serveComments([comment({ id: 'c1', issueId: '1' })]);
+    await service.syncByFilter(TOKEN, { ...filter, stateTypes: states }, { syncComments: true });
+
+    // Linear changed the issue too, so the link's display metadata is rewritten.
+    serve([issue({ id: '1', title: 'Renamed', updatedAt: '2026-10-02T00:00:00.000Z' })]);
+    serveComments([comment({ id: 'c1', issueId: '1' }), comment({ id: 'c2', issueId: '1' })]);
+    const second = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(second).toMatchObject({ commentsImported: 1, updated: 1 });
+
+    const third = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(third.commentsImported).toBeUndefined();
+    expect((await commentsOf('1')).map((item) => item.content)).toEqual([
+      expect.stringContaining('Comment c1'),
+      expect.stringContaining('Comment c2'),
+    ]);
+  });
+
+  it('fills in comments of tasks imported without them', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' }), issue({ id: '2' })]);
+    serveComments([comment({ id: 'c1', issueId: '1' }), comment({ id: 'c2', issueId: '2' })]);
+
+    const first = await service.syncByFilter(TOKEN, { ...filter, stateTypes: states });
+    expect(first.commentsImported).toBeUndefined();
+    expect(linear.listLinearIssueComments).not.toHaveBeenCalled();
+    expect(await commentsOf('1')).toHaveLength(0);
+
+    const again = await service.importIssues(TOKEN, ['1', '2'], { syncComments: true });
+
+    expect(again).toMatchObject({ commentsImported: 2, created: 0 });
+    expect(await commentsOf('1')).toHaveLength(1);
+    expect(await commentsOf('2')).toHaveLength(1);
+  });
+
+  it('copies the last comments of an issue that left the filter as it closes the task', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    serveComments([]);
+    await service.syncByFilter(TOKEN, { ...filter, stateTypes: states }, { syncComments: true });
+
+    // Commented on, then completed: the open-states filter no longer lists it.
+    const done = issue({ id: '1', state: { name: 'Done', type: 'completed' } });
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    linear.getLinearIssuesByIds.mockImplementation(async () => [done]);
+    serveComments([comment({ id: 'c-final', issueId: '1' })]);
+
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result).toMatchObject({ closed: 1, commentsImported: 1 });
+    expect((await linkedTask('1'))?.status).toBe('completed');
+    expect((await commentsOf('1')).map((item) => item.content)).toEqual([
+      expect.stringContaining('Comment c-final'),
+    ]);
+  });
+
+  it('leaves the comments of an open issue the filter no longer lists to its own rule', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    serveComments([]);
+    await service.syncByFilter(TOKEN, { ...filter, stateTypes: states }, { syncComments: true });
+
+    // Moved to a project another rule covers: still open, no longer listed.
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    linear.getLinearIssuesByIds.mockImplementation(async () => [issue({ id: '1' })]);
+    serveComments([comment({ id: 'c-elsewhere', issueId: '1' })]);
+    linear.listLinearIssueComments.mockClear();
+
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result.commentsImported).toBeUndefined();
+    expect(linear.listLinearIssueComments).not.toHaveBeenCalled();
+    expect(await commentsOf('1')).toHaveLength(0);
+    expect((await linkedTask('1'))?.status).not.toBe('completed');
+  });
+
+  it('catches up the comments of a closed task the filter no longer reaches, once', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    // Imported as completed, without comments, before comments could be synced.
+    const done = issue({ id: '1', state: { name: 'Done', type: 'completed' } });
+    serve([done]);
+    await service.importIssues(TOKEN, ['1']);
+    expect((await linkedTask('1'))?.status).toBe('completed');
+
+    // A rule over open states only never lists it again.
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    serveComments([comment({ id: 'c1', issueId: '1' })]);
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result).toMatchObject({ closed: 0, commentsImported: 1 });
+    expect(await commentsOf('1')).toHaveLength(1);
+
+    linear.listLinearIssueComments.mockClear();
+    const again = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(again.commentsImported).toBeUndefined();
+    expect(linear.listLinearIssueComments).not.toHaveBeenCalled();
+  });
+
+  it('catches up a bounded number of closed tasks per run, the rest on the next', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    const total = MAX_COMMENT_CATCH_UPS_PER_SYNC + 1;
+    const done = Array.from({ length: total }, (_, index) =>
+      issue({ id: `${index + 1}`, state: { name: 'Done', type: 'completed' } }),
+    );
+    serve(done);
+    const ids = done.map((item) => item.id);
+    for (let start = 0; start < ids.length; start += MAX_TASKS_CREATED_PER_SYNC) {
+      await service.importIssues(TOKEN, ids.slice(start, start + MAX_TASKS_CREATED_PER_SYNC));
+    }
+
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    serveComments(done.map((item) => comment({ id: `c${item.id}`, issueId: item.id })));
+    const readIds = () =>
+      linear.listLinearIssueComments.mock.calls.flatMap(([, issueIds]) => issueIds as string[]);
+
+    const first = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(first.commentsImported).toBe(MAX_COMMENT_CATCH_UPS_PER_SYNC);
+    expect(readIds()).toHaveLength(MAX_COMMENT_CATCH_UPS_PER_SYNC);
+
+    linear.listLinearIssueComments.mockClear();
+    const second = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(second.commentsImported).toBe(1);
+    expect(readIds()).toHaveLength(1);
+  });
+
+  it('retries a closed task whose comments could not be read', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1', state: { name: 'Done', type: 'completed' } })]);
+    linear.listLinearIssueComments.mockRejectedValue(new LinearApiError('rate limited', 429));
+    await service.importIssues(TOKEN, ['1'], { syncComments: true });
+    expect(await commentsOf('1')).toHaveLength(0);
+
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    serveComments([comment({ id: 'c1', issueId: '1' })]);
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result.commentsImported).toBe(1);
+    expect(await commentsOf('1')).toHaveLength(1);
+  });
+
+  it('leaves out issues it did not import and tasks the caller cannot see', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    await service.importIssues(TOKEN, ['1']);
+    const task = await linkedTask('1');
+    await db
+      .update(tasks)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(tasks.id, task!.id));
+
+    serve([issue({ id: '1' }), issue({ id: '2', state: { name: 'Done', type: 'completed' } })]);
+    serveComments([comment({ id: 'c1', issueId: '1' }), comment({ id: 'c2', issueId: '2' })]);
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result.commentsImported).toBeUndefined();
+    expect(linear.listLinearIssueComments).not.toHaveBeenCalled();
+  });
+
+  it('keeps the run when comments cannot be read, and fails it on a revoked token', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    linear.listLinearIssueComments.mockRejectedValue(new LinearApiError('rate limited', 429));
+
+    const result = await service.importIssues(TOKEN, ['1'], { syncComments: true });
+
+    expect(result).toMatchObject({
+      created: 1,
+      skipped: [{ identifier: 'ENG-1', reason: 'commentsFailed' }],
+      skippedCount: 1,
+    });
+    expect(result.commentsImported).toBeUndefined();
+
+    linear.listLinearIssueComments.mockRejectedValue(new LinearApiError('revoked', 401));
+    await expect(service.importIssues(TOKEN, ['1'], { syncComments: true })).rejects.toThrow(
+      'revoked',
+    );
   });
 });

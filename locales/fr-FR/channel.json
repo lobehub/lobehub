@@ -97,7 +97,6 @@
   "moveToTrash": "Déplacer le canal à la corbeille",
   "moveToTrashConfirm": "Déplacer « {{title}} » à la corbeille ? Les réponses s'arrêteront. Vous pouvez restaurer le canal et son historique depuis la corbeille. Les Agents et les fichiers seront conservés.",
   "moveToTrashSuccess": "Canal déplacé à la corbeille",
-  "nameAutoPlaceholder": "Laissez vide pour le nommer d'après ses membres",
   "nameOptional": "Nom du canal (optionnel)",
   "noDevice": "Aucun appareil",
   "noDevices": "Aucun appareil n'est connecté. Connectez-en un, puis choisissez-le ici.",

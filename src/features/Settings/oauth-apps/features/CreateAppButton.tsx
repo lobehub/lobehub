@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { lambdaClient } from '@/libs/trpc/client';
+import { useOAuthAppStore } from '@/store/oauthApp';
 
 import { createOAuthAppModal } from './CreateAppModal';
 import { showClientSecretModal } from './SecretModal';
@@ -20,13 +20,14 @@ const CreateAppButton = () => {
   const { allowed: canManageWorkspaceApps } = usePermission('manage_settings');
   const canEdit = hasEditPermission && (!activeWorkspaceId || canManageWorkspaceApps);
   const navigate = useWorkspaceAwareNavigate();
+  const createApp = useOAuthAppStore((s) => s.createApp);
 
   const handleCreate = () => {
     if (!canEdit) return;
     createOAuthAppModal({
       onSubmit: async (values) => {
         // The secret is generated on demand on the app page, not at creation.
-        const created = await lambdaClient.oauthApp.create.mutate({
+        const created = await createApp({
           ...values,
           issueSecret: false,
         });

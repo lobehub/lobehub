@@ -250,7 +250,7 @@ export function defineConfig() {
     '/oidc/jwks',
     '/oidc/me',
     // The review popup's last page: a code or a refusal for the opener, never a session read.
-    '/oidc/review/callback',
+    '/oidc/acceptance/callback',
     // Interaction details for the consent/login page — must be reachable
     // before the user has a session, so it cannot be session-gated.
     '/oidc/interaction/(.*)',

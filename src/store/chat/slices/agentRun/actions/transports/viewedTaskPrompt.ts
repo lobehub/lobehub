@@ -25,6 +25,7 @@ export const buildViewedTaskPrompt = (
     const tasks = viewedList?.items ?? [];
     return buildTaskListPrompt({
       defaultAssigneeAgentId,
+      filtered: taskState.activeTaskListFiltered,
       tasks,
       total: viewedList?.total || tasks.length,
     });
