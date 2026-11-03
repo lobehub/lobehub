@@ -78,6 +78,11 @@ class DeviceService {
     return lambdaClient.device.getAgentProfile.query(input);
   }
 
+  /** Newest release of an agent CLI; `latestVersion` is `null` when unknown. */
+  getAgentCliLatestVersion(agentType: string) {
+    return lambdaClient.device.getAgentCliLatestVersion.query({ agentType });
+  }
+
   /** Scan a device for every known heterogeneous agent type in one pass. */
   scanAgents(input: Parameters<DeviceClient['scanAgents']['query']>[0]) {
     return lambdaClient.device.scanAgents.query(input);

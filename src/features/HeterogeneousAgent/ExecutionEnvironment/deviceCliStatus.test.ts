@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { getDeviceInstallCommands, resolveDeviceCliState } from './deviceCliStatus';
+import {
+  getDeviceCommands,
+  getNewerAgentCliVersion,
+  resolveDeviceCliState,
+} from './deviceCliStatus';
 
 const CLAUDE_INSTALL = [
   'curl -fsSL https://claude.ai/install.sh | bash',
@@ -77,13 +81,31 @@ describe('resolveDeviceCliState', () => {
   });
 });
 
-describe('getDeviceInstallCommands', () => {
+describe('getDeviceCommands', () => {
   it('drops Homebrew for a Linux device', () => {
-    expect(getDeviceInstallCommands(CLAUDE_INSTALL, 'linux')).toEqual([CLAUDE_INSTALL[0]]);
+    expect(getDeviceCommands(CLAUDE_INSTALL, 'linux')).toEqual([CLAUDE_INSTALL[0]]);
   });
 
   it('keeps Homebrew for macOS and for an unknown platform', () => {
-    expect(getDeviceInstallCommands(CLAUDE_INSTALL, 'darwin')).toEqual(CLAUDE_INSTALL);
-    expect(getDeviceInstallCommands(CLAUDE_INSTALL, null)).toEqual(CLAUDE_INSTALL);
+    expect(getDeviceCommands(CLAUDE_INSTALL, 'darwin')).toEqual(CLAUDE_INSTALL);
+    expect(getDeviceCommands(CLAUDE_INSTALL, null)).toEqual(CLAUDE_INSTALL);
+  });
+});
+
+describe('getNewerAgentCliVersion', () => {
+  it('names the newer release when the device runs an older one', () => {
+    expect(getNewerAgentCliVersion('2.1.301', '2.1.316')).toBe('2.1.316');
+    expect(getNewerAgentCliVersion('2.1.301 (Claude Code)', '2.1.316')).toBe('2.1.316');
+  });
+
+  it('offers nothing when the device is current or ahead', () => {
+    expect(getNewerAgentCliVersion('2.1.316', '2.1.316')).toBeUndefined();
+    expect(getNewerAgentCliVersion('2.1.320', '2.1.316')).toBeUndefined();
+  });
+
+  it('offers nothing when either version is unknown', () => {
+    expect(getNewerAgentCliVersion(undefined, '2.1.316')).toBeUndefined();
+    expect(getNewerAgentCliVersion('2.1.301', null)).toBeUndefined();
+    expect(getNewerAgentCliVersion('unknown', '2.1.316')).toBeUndefined();
   });
 });

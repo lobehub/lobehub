@@ -578,6 +578,9 @@ export default {
   'heterogeneousStatus.target.fixed': 'This environment is fixed. Members can’t change it.',
   'heterogeneousStatus.target.overridden':
     'Applies only to you. Other members keep the Agent default.',
+  'heterogeneousStatus.update.available': 'Update to {{version}}',
+  'heterogeneousStatus.update.desc':
+    'Run one of these commands in a terminal on {{device}} to update:',
 
   // Connected agent profile config panel (openclaw / hermes)
   'platformAgentConfig.title': 'Connection',

@@ -17,14 +17,15 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ExternalLink, RefreshCw, XCircle } from 'lucide-react';
+import { ArrowUpCircle, ExternalLink, RefreshCw, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
 
-import { type DeviceCliState, getDeviceInstallCommands } from './deviceCliStatus';
+import { type DeviceCliState, getDeviceCommands, getNewerAgentCliVersion } from './deviceCliStatus';
+import { useAgentCliLatestVersion } from './useAgentCliLatestVersion';
 import { useDeviceCliStatus } from './useDeviceCliStatus';
 
 const styles = stylex.create({
@@ -40,6 +41,9 @@ const styles = stylex.create({
   metaText: {
     color: cssVar.colorTextSecondary,
     fontSize: 13,
+  },
+  popoverContent: {
+    maxWidth: 'min(400px, 80vw)',
   },
   reasonDetails: {
     maxHeight: 200,
@@ -82,6 +86,7 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
     providerConfig && 'install' in providerConfig ? providerConfig.install : undefined;
   const signInCommand =
     providerConfig && 'auth' in providerConfig ? providerConfig.auth.signInCommand : undefined;
+  const update = providerConfig && 'update' in providerConfig ? providerConfig.update : undefined;
 
   const { device, isRedetecting, redetect, state } = useDeviceCliStatus({
     agentType: provider.type,
@@ -90,6 +95,16 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
 
   const deviceName =
     device?.friendlyName || device?.hostname || t('chat:heteroAgent.executionTarget.unknownDevice');
+
+  const { data: latestVersion } = useAgentCliLatestVersion(
+    update && state.status === 'available' ? provider.type : undefined,
+  );
+  const newerVersion =
+    state.status === 'available'
+      ? getNewerAgentCliVersion(state.version, latestVersion)
+      : undefined;
+  const updateCommands =
+    newerVersion && update ? getDeviceCommands(update.commands, device?.platform) : [];
 
   const renderStatusTag = (current: DeviceCliState) => {
     switch (current.status) {
@@ -116,7 +131,33 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
     const params = { device: deviceName, name: displayName };
     switch (current.status) {
       case 'available': {
-        return current.version ? <Tag color="processing">{current.version}</Tag> : null;
+        return (
+          <>
+            {current.version && <Tag color="processing">{current.version}</Tag>}
+            {newerVersion && updateCommands.length > 0 && (
+              <Popover
+                placement={'bottomLeft'}
+                trigger={'click'}
+                content={
+                  <Flexbox gap={8} {...stylex.props(styles.popoverContent)}>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('heterogeneousStatus.update.desc', params)}
+                    </Text>
+                    {updateCommands.map((command) => (
+                      <Snippet key={command} language={'bash'}>
+                        {command}
+                      </Snippet>
+                    ))}
+                  </Flexbox>
+                }
+              >
+                <Button icon={<ArrowUpCircle size={14} />} size={'small'} type={'text'}>
+                  {t('heterogeneousStatus.update.available', { version: newerVersion })}
+                </Button>
+              </Popover>
+            )}
+          </>
+        );
       }
       case 'checking': {
         return (
@@ -182,7 +223,7 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
 
   const installCommands =
     state.status === 'unavailable' && install
-      ? getDeviceInstallCommands(install.commands, device?.platform)
+      ? getDeviceCommands(install.commands, device?.platform)
       : [];
 
   return (
