@@ -17,8 +17,9 @@ import { getEvalAttemptId } from '@/server/services/agentEvalRun/utils';
 import type { ToolExecutionMemoryEmbeddingRuntime } from '@/server/services/toolExecution/types';
 
 import { createEvalMemoryEmbedder, embedWithRetry } from './embedding';
-import { draftText, fixtureDrafts, toEntry } from './entries';
-import { attemptWhere, EvalMemoryRuntimeService } from './runtime';
+import { fixtureDrafts, semanticText, toEntry } from './entries';
+import { EvalMemoryRuntimeService } from './runtime';
+import { attemptWhere } from './where';
 
 type MemoryDatabase =
   LobeChatDatabase | Parameters<Parameters<LobeChatDatabase['transaction']>[0]>[0];
@@ -68,8 +69,9 @@ const assertFixture = (
  * Memory of eval attempts, kept apart from the account's own Memory: each
  * attempt (a run's topic, or one pass@k thread of it) gets its own entries,
  * seeded from the case fixture before the Agent runs. The Memory tool and
- * the persona injection of the attempt read and write only those entries;
- * the caller stays the actor for authorization; the topic's stable creator
+ * the persona injection of the attempt read and write only those entries,
+ * and the tool searches them as the account's Memory is searched; the
+ * caller stays the actor for authorization; the topic's stable creator
  * owns the Memory entries and embedding configuration across collaborators.
  * Entries are evidence: nothing is deleted when the attempt ends.
  */
@@ -183,7 +185,7 @@ export class AgentEvalMemoryService {
               userId: ownerId,
               workspaceId: this.workspaceId,
             }),
-            drafts.map(draftText),
+            drafts.map(semanticText),
           )
         : [];
 
@@ -194,11 +196,17 @@ export class AgentEvalMemoryService {
       assertFixture(seeded, fixtureHash, !!params.resume);
       if (!seeded.fixtureHash && drafts.length > 0) {
         const capturedAt = fixture.seededAt ? new Date(fixture.seededAt) : new Date();
+        // Written in fixture order, a millisecond apart, as rows the Memory tool
+        // writes one after another are: the search's recency order among seeded
+        // entries is then the fixture's, not the page order of one bulk insert.
+        const writtenAt = Date.now();
         await tx.insert(agentEvalMemories).values(
           drafts.map((draft, index) => ({
             ...draft,
             attemptId: getEvalAttemptId(reference),
             capturedAt,
+            createdAt: new Date(writtenAt + index),
+            updatedAt: new Date(writtenAt + index),
             embedding: embeddings[index] ?? null,
             fixtureHash,
             runId: params.runId,

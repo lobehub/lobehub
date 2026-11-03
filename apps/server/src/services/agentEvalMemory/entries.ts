@@ -54,36 +54,50 @@ export const fixtureDrafts = (fixture: EvalMemoryFixture): EvalMemoryDraft[] => 
   ...(fixture.identities ?? []).map((item) => draftOf('identity', item, 'withIdentity')),
 ];
 
-const text = (value: unknown): string | undefined => {
-  if (typeof value === 'string') return value.trim() || undefined;
-  if (Array.isArray(value))
-    return value.filter((v) => typeof v === 'string').join('\n') || undefined;
-  return undefined;
+const text = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value : undefined;
+
+/**
+ * The text an entry's vector is built from: the one field of its layer the
+ * account's Memory embeds and searches (a preference's directives, an
+ * activity's narrative, a context's or identity's description), so the same
+ * query ranks the entry where the account's search would. A persona has no
+ * vector; it is injected, never searched.
+ */
+export const semanticText = (
+  draft: Pick<EvalMemoryDraft, 'layer' | 'payload'>,
+): string | undefined => {
+  const p = draft.payload as Item;
+  switch (draft.layer) {
+    case 'preference': {
+      return text(p.conclusionDirectives);
+    }
+    case 'activity': {
+      return text(p.narrative);
+    }
+    case 'context':
+    case 'identity': {
+      return text(p.description);
+    }
+    case 'experience': {
+      return text(p.situation);
+    }
+    default: {
+      return undefined;
+    }
+  }
 };
 
-/** The text an entry is found by: its headline fields and the layer's own prose. */
-export const draftText = (
-  draft: Pick<EvalMemoryDraft, 'details' | 'payload' | 'summary' | 'title'>,
-) => {
-  const p = draft.payload as Item;
-  return [
-    draft.title,
-    draft.summary,
-    draft.details,
-    p.narrative,
-    p.description,
-    p.conclusionDirectives,
-    p.suggestions,
-    p.situation,
-    p.action,
-    p.keyLearning,
-    p.feedback,
-    p.notes,
-  ]
-    .map(text)
-    .filter((v): v is string => !!v)
-    .join('\n');
-};
+const stringList = (value: unknown): string[] | undefined =>
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : undefined;
+
+/**
+ * The tags an entry is filtered and ranked by. The account's Memory stores an
+ * activity's `withActivity.tags` (when given) on both its rows and drops the
+ * item's own tags; every other layer keeps the item's tags.
+ */
+export const tagsOf = (row: Pick<AgentEvalMemoryItem, 'layer' | 'payload' | 'tags'>): string[] =>
+  (row.layer === 'activity' ? stringList((row.payload as Item).tags) : undefined) ?? row.tags ?? [];
 
 export const toEntry = (row: AgentEvalMemoryItem): EvalMemoryEntry => ({
   capturedAt: row.capturedAt.toISOString(),

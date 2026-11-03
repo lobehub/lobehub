@@ -16,7 +16,6 @@ import type {
   AddIdentityMemoryResult,
   AddPreferenceMemoryResult,
   AgentEvalMemoryItem,
-  EvalMemoryLayer,
   EvalMemoryReference,
   QueryTaxonomyOptionsParams,
   QueryTaxonomyOptionsResult,
@@ -25,7 +24,7 @@ import type {
   SearchMemoryResult,
   UpdateIdentityMemoryResult,
 } from '@lobechat/types';
-import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { normalizeUserMemorySearchQueries } from '@/database/models/userMemory';
@@ -38,79 +37,29 @@ import {
 } from '@/server/services/memory/userMemory/searchParams';
 
 import type { EvalMemoryEmbedder } from './embedding';
-import { draftOf, draftText, type EvalMemoryDraft } from './entries';
+import { draftOf, type EvalMemoryDraft, semanticText } from './entries';
+import { searchEvalMemory } from './search';
+import { attemptWhere } from './where';
 
-/** Rows of one attempt owned by this caller; removed entries stay out unless asked for. */
-export const attemptWhere = (
-  userId: string,
-  reference: Pick<EvalMemoryReference, 'runId' | 'threadId' | 'topicId'>,
-  options: { includeRemoved?: boolean } = {},
-): SQL =>
-  and(
-    eq(agentEvalMemories.userId, userId),
-    eq(agentEvalMemories.runId, reference.runId),
-    eq(agentEvalMemories.topicId, reference.topicId),
-    reference.threadId
-      ? eq(agentEvalMemories.threadId, reference.threadId)
-      : isNull(agentEvalMemories.threadId),
-    options.includeRemoved ? undefined : isNull(agentEvalMemories.removedReason),
-  ) as SQL;
+export { attemptWhere } from './where';
 
 type Payload = Record<string, any>;
 
 const asList = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 
-const overlaps = (wanted: string[] | undefined, have: string[]) =>
-  !wanted?.length || wanted.some((w) => have.includes(w));
-
-const matchesOne = (wanted: string[] | undefined, value: unknown) =>
-  !wanted?.length || (typeof value === 'string' && wanted.includes(value));
-
-const toDate = (value: unknown): Date | null => {
-  if (value instanceof Date) return value;
-  if (typeof value !== 'string' || !value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const cosine = (a: number[], b: number[]) => {
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  const length = Math.min(a.length, b.length);
-  for (let i = 0; i < length; i++) {
-    dot += a[i] * b[i];
-    na += a[i] * a[i];
-    nb += b[i] * b[i];
-  }
-  return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
-};
-
-const lexical = (haystack: string, queries: string[]) => {
-  const tokens = queries
-    .flatMap((q) => q.toLowerCase().split(/[^\p{L}\p{N}]+/u))
-    .filter((t) => t.length >= 2);
-  if (tokens.length === 0) return 0;
-  const text = haystack.toLowerCase();
-  return tokens.filter((t) => text.includes(t)).length / tokens.length;
-};
-
-const LAYERS: Record<Exclude<EvalMemoryLayer, 'persona'>, keyof SearchMemoryResult> = {
-  activity: 'activities',
-  context: 'contexts',
-  experience: 'experiences',
-  identity: 'identities',
-  preference: 'preferences',
+/** The account's Memory reads an unknown effort as medium. */
+const normalizeEffort = (value: unknown, fallback: MemorySearchEffort): MemorySearchEffort => {
+  if (value === undefined || value === null) return fallback;
+  return value === 'low' || value === 'medium' || value === 'high' ? value : 'medium';
 };
 
 /**
  * The Memory tool of an eval attempt. Same surface as the account's Memory
  * runtime, backed by the attempt's own rows: the fixture it was seeded with
- * plus what the Agent writes during the attempt. Search embeds the queries
- * with the account's embedding model and ranks the attempt's entries by
- * similarity (lexically when an embedding is missing); facets and time
- * ranges filter the same way the native search does.
+ * plus what the Agent writes during the attempt. Search is the account's
+ * hybrid search run over those rows (`searchEvalMemory`), with the queries
+ * embedded by the account's embedding model and the effort's limits.
  */
 export class EvalMemoryRuntimeService implements MemoryRuntimeService {
   constructor(
@@ -136,7 +85,7 @@ export class EvalMemoryRuntimeService implements MemoryRuntimeService {
 
   private save = async (draft: EvalMemoryDraft) => {
     const { reference, userId } = this.options;
-    const [embedding] = await this.options.embed([draftText(draft)]);
+    const [embedding] = await this.options.embed([semanticText(draft)]);
     const [row] = await this.db
       .insert(agentEvalMemories)
       .values({
@@ -166,78 +115,14 @@ export class EvalMemoryRuntimeService implements MemoryRuntimeService {
       queries.length > 0
         ? (await this.options.embed(queries)).filter((e): e is number[] => !!e)
         : [];
-    const limits = resolveMemorySearchTopK(
-      (normalized.effort as MemorySearchEffort | undefined) ?? this.options.memoryEffort,
-      normalized,
-    );
-    const wantedLayers = normalized.layers?.length
-      ? new Set(normalized.layers.map(String))
-      : undefined;
-    const range = normalized.timeRange;
-
-    const rows = (await this.rows()).filter((row) => {
-      if (row.layer === 'persona') return false;
-      if (wantedLayers && !wantedLayers.has(row.layer)) return false;
-      const p = row.payload as Payload;
-      if (!matchesOne(normalized.types, row.memoryType ?? p.type)) return false;
-      if (!matchesOne(normalized.categories, row.memoryCategory)) return false;
-      if (!overlaps(normalized.tags, asList(row.tags))) return false;
-      if (!overlaps(normalized.labels, [...asList(p.extractedLabels), ...asList(p.labels)]))
-        return false;
-      if (!matchesOne(normalized.status, p.currentStatus ?? p.status)) return false;
-      if (!matchesOne(normalized.relationships, p.relationship)) return false;
-      if (range?.start && row.capturedAt < range.start) return false;
-      if (range?.end && row.capturedAt > range.end) return false;
-      return true;
+    const effort = normalizeEffort(normalized.effort, this.options.memoryEffort);
+    return searchEvalMemory({
+      db: this.db,
+      params: { ...normalized, queries, topK: resolveMemorySearchTopK(effort, normalized) },
+      queryEmbeddings,
+      reference: this.options.reference,
+      userId: this.options.userId,
     });
-
-    const scored = rows
-      .map((row) => {
-        const score =
-          queries.length === 0
-            ? 1
-            : queryEmbeddings.length > 0 && row.embedding
-              ? Math.max(...queryEmbeddings.map((q) => cosine(q, row.embedding!)))
-              : lexical(draftText(row), queries);
-        return { row, score };
-      })
-      // With embeddings every entry ranks; without them only lexical hits do.
-      .filter((item) => queryEmbeddings.length > 0 || item.score > 0)
-      .sort((a, b) => b.score - a.score || b.row.capturedAt.getTime() - a.row.capturedAt.getTime());
-
-    const take = (layer: Exclude<EvalMemoryLayer, 'persona'>, limit: number) => {
-      const all = scored.filter((item) => item.row.layer === layer);
-      const items = all.slice(0, limit).map((item) => toSearchItem(item.row));
-      return {
-        items,
-        meta: { hasMore: all.length > items.length, returned: items.length, total: all.length },
-      };
-    };
-    const activities = take('activity', limits.activities);
-    const contexts = take('context', limits.contexts);
-    const experiences = take('experience', limits.experiences);
-    const identities = take('identity', limits.identities);
-    const preferences = take('preference', limits.preferences);
-    const { effort: _effort, topK: _topK, ...appliedFilters } = normalized;
-
-    return {
-      activities: activities.items as SearchMemoryResult['activities'],
-      contexts: contexts.items as SearchMemoryResult['contexts'],
-      experiences: experiences.items as SearchMemoryResult['experiences'],
-      identities: identities.items as SearchMemoryResult['identities'],
-      meta: {
-        appliedFilters,
-        appliedQueries: queries,
-        layers: {
-          activities: activities.meta,
-          contexts: contexts.meta,
-          experiences: experiences.meta,
-          identities: identities.meta,
-          preferences: preferences.meta,
-        },
-      },
-      preferences: preferences.items as SearchMemoryResult['preferences'],
-    };
   };
 
   queryTaxonomyOptions = async (
@@ -428,7 +313,7 @@ export class EvalMemoryRuntimeService implements MemoryRuntimeService {
         tags: Array.isArray(set.tags) ? set.tags : replace ? null : row.tags,
         title: set.title ?? (replace ? null : row.title),
       };
-      const [embedding] = await this.options.embed([draftText(next)]);
+      const [embedding] = await this.options.embed([semanticText(next)]);
       await this.db
         .update(agentEvalMemories)
         .set({ ...next, embedding: embedding ?? row.embedding, updatedAt: new Date() })
@@ -460,108 +345,3 @@ export class EvalMemoryRuntimeService implements MemoryRuntimeService {
     }
   };
 }
-
-/** An attempt row in the shape the Memory tool's search result (and its formatter) expects. */
-const toSearchItem = (row: AgentEvalMemoryItem): Record<string, unknown> => {
-  const p = row.payload as Payload;
-  const stamps = {
-    accessedAt: row.capturedAt,
-    createdAt: row.capturedAt,
-    updatedAt: row.capturedAt,
-  };
-  const tags = row.tags ?? asList(p.tags);
-  switch (row.layer) {
-    case 'preference': {
-      return {
-        ...stamps,
-        conclusionDirectives: p.conclusionDirectives ?? row.summary ?? null,
-        id: row.id,
-        metadata: {
-          appContext: p.appContext ?? null,
-          extractedScopes: p.extractedScopes ?? null,
-          originContext: p.originContext ?? null,
-        },
-        scorePriority: p.scorePriority ?? null,
-        suggestions: Array.isArray(p.suggestions)
-          ? p.suggestions.join('\n')
-          : (p.suggestions ?? null),
-        tags,
-        type: p.type ?? row.memoryType ?? null,
-        userMemoryId: row.id,
-      };
-    }
-    case 'context': {
-      return {
-        ...stamps,
-        associatedObjects: p.associatedObjects ?? null,
-        associatedSubjects: p.associatedSubjects ?? null,
-        currentStatus: p.currentStatus ?? null,
-        description: p.description ?? row.summary ?? null,
-        id: row.id,
-        metadata: {},
-        scoreImpact: p.scoreImpact ?? null,
-        scoreUrgency: p.scoreUrgency ?? null,
-        tags,
-        title: p.title ?? row.title ?? null,
-        type: p.type ?? null,
-        userMemoryIds: [row.id],
-      };
-    }
-    case 'activity': {
-      return {
-        ...stamps,
-        associatedLocations: p.associatedLocations ?? null,
-        associatedObjects: p.associatedObjects ?? null,
-        associatedSubjects: p.associatedSubjects ?? null,
-        endsAt: toDate(p.endsAt),
-        feedback: p.feedback ?? null,
-        id: row.id,
-        metadata: p.metadata ?? null,
-        narrative: p.narrative ?? row.summary ?? null,
-        notes: p.notes ?? null,
-        startsAt: toDate(p.startsAt),
-        status: p.status ?? null,
-        tags,
-        timezone: p.timezone ?? null,
-        type: p.type ?? null,
-        userMemoryId: row.id,
-      };
-    }
-    case 'experience': {
-      return {
-        ...stamps,
-        action: p.action ?? null,
-        id: row.id,
-        keyLearning: p.keyLearning ?? null,
-        metadata: null,
-        possibleOutcome: p.possibleOutcome ?? null,
-        reasoning: p.reasoning ?? null,
-        scoreConfidence: p.scoreConfidence ?? null,
-        situation: p.situation ?? row.summary ?? null,
-        tags,
-        type: p.type ?? row.memoryType ?? null,
-        userMemoryId: row.id,
-      };
-    }
-    default: {
-      return {
-        ...stamps,
-        description: p.description ?? row.summary ?? null,
-        episodicDate: toDate(p.episodicDate),
-        id: row.id,
-        metadata: {
-          ...(p.extractedLabels && { extractedLabels: p.extractedLabels }),
-          ...(p.scoreConfidence !== undefined && { scoreConfidence: p.scoreConfidence }),
-          ...(p.sourceEvidence !== undefined && { sourceEvidence: p.sourceEvidence }),
-        },
-        relationship: p.relationship ?? null,
-        role: p.role ?? null,
-        tags,
-        type: p.type ?? row.memoryType ?? null,
-        userMemoryId: row.id,
-      };
-    }
-  }
-};
-
-export { LAYERS as EVAL_MEMORY_RESULT_LAYERS };
