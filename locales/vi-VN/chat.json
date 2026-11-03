@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/> đã thay đổi mức độ ưu tiên từ <from/> thành <to/>",
   "taskDetail.activities.status.changed": "<actor/> đã thay đổi trạng thái từ <from/> thành <to/>",
   "taskDetail.activitiesEmpty": "Chưa có hoạt động nào",
+  "taskDetail.activitiesLoadMore": "Hiển thị hoạt động trước đó ({{count}})",
   "taskDetail.addSubtask": "Thêm nhiệm vụ con",
   "taskDetail.artifactInaccessible": "Tài liệu không khả dụng — không có quyền truy cập",
   "taskDetail.artifactMenu.delete": "Gỡ khỏi tác vụ",

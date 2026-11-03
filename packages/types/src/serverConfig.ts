@@ -39,6 +39,12 @@ export type IFeatureFlagsState = {
   enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
+   * Rail layout trial (`im_layout`): icon rail, IM-style Messages list,
+   * Contacts, Tasks scope list and the agent profile side panel. Off keeps the
+   * current sidebar layout.
+   */
+  enableImLayout: boolean | undefined;
+  /**
    * LobeHub Mobile rollout gate for the multiplexed gateway socket and
    * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
    */

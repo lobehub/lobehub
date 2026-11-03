@@ -2,7 +2,10 @@
 
 import { type VoiceMessageRecording } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
-import { type ChatInputActionsProps } from '@lobehub/editor/react';
+import {
+  type ChatInputActionsProps,
+  type ChatInputProps as EditorChatInputProps,
+} from '@lobehub/editor/react';
 import { Alert, type DropdownItem, Flexbox, toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -112,6 +115,10 @@ export interface ChatInputProps {
    */
   feature?: ChatInputFeature;
   /**
+   * Props forwarded to the editor's input container (e.g. a smaller default height)
+   */
+  inputContainerProps?: EditorChatInputProps;
+  /**
    * Swap the action bar and send area for skeleton placeholders while
    * the underlying agent/session config is still hydrating. The editor
    * itself stays usable.
@@ -183,6 +190,7 @@ const ChatInput = memo<ChatInputProps>(
     disableQueue,
     disableSend,
     feature,
+    inputContainerProps,
     leftActions = [],
     leftContent,
     rightActions = [],
@@ -528,6 +536,7 @@ const ChatInput = memo<ChatInputProps>(
             controlBarSlot={controlBarSlot}
             extraActionItems={extraActionItems}
             hidden={hasPendingInterventions}
+            inputContainerProps={inputContainerProps}
             isConfigLoading={isConfigLoading}
             leftContent={leftContent}
             placeholderVariant={placeholderVariant}

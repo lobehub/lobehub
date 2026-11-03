@@ -190,9 +190,25 @@ export interface StreamStartAssistantMessage {
   topicId?: string | null;
 }
 
+/**
+ * A follow-up the server joined into the running turn: the user message this
+ * step's assistant row hangs off. It is created mid-run, after the
+ * `step_start` snapshot, so without it the client has no copy until the step
+ * ends and the queued message vanishes from both the tray and the chat.
+ */
+export interface StreamStartParentMessage {
+  content: string;
+  id: string;
+  metadata?: Record<string, unknown> | null;
+  parentId?: string | null;
+  role: 'user';
+}
+
 export interface StreamStartData {
   assistantMessage: StreamStartAssistantMessage;
   model?: string;
+  /** Sent only when the parent is a steer user message. */
+  parentMessage?: StreamStartParentMessage;
   provider?: string;
 }
 
