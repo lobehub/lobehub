@@ -1400,6 +1400,13 @@
       "when": 1793476771486,
       "tag": "0199_lobe_bench_environments_and_memory",
       "breakpoints": true
+    },
+    {
+      "idx": 200,
+      "version": "7",
+      "when": 1793678181061,
+      "tag": "0200_agent_eval_memories_bm25",
+      "breakpoints": true
     }
   ],
   "version": "6"

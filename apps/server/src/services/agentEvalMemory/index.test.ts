@@ -255,14 +255,16 @@ describe('AgentEvalMemoryService', () => {
     expect(state.preferences[0]).toMatchObject({
       conclusionDirectives: 'Do not recommend shellfish.',
       createdAt: new Date('2024-05-01T12:00:00.000Z'),
-      type: 'health',
+      // A preference's type is its memory type, as the account's Memory stores it.
+      type: 'preference',
     });
     expect(state.contexts[0]).toMatchObject({ currentStatus: 'ongoing', title: 'Wedding menu' });
     expect(state.activities[0]).toMatchObject({
       startsAt: new Date('2024-05-03T14:00:00Z'),
       status: 'completed',
     });
-    expect(state.experiences[0]).toMatchObject({ keyLearning: 'Always ask about sauce bases.' });
+    // Experience memory is retired: the account's search never returns it either.
+    expect(state.experiences).toEqual([]);
     expect(state.identities?.[0]).toMatchObject({ role: 'pastry chef', relationship: 'self' });
     expect(read.content).toContain('Do not recommend shellfish.');
 
@@ -602,7 +604,9 @@ describe('AgentEvalMemoryService', () => {
     const service = new AgentEvalMemoryService(db, userId);
     mocks.embed
       .mockRejectedValueOnce(new Error('connection error: ECONNRESET'))
-      .mockImplementationOnce(async ({ input }: { input: string[] }) => input.map(vectorOf));
+      .mockImplementationOnce(async ({ input }: { input: Array<string | undefined> }) =>
+        input.map((text) => (text ? vectorOf(text) : undefined)),
+      );
     await service.prepare({ ...params, fixture });
     expect(mocks.embed).toHaveBeenCalledTimes(2);
     expect((await service.snapshot(params)).entries).toHaveLength(2);
