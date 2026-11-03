@@ -73,6 +73,31 @@ describe('appNavigate existingTab target with the real tab store (T-2802)', () =
     expect(routerB.state.location.pathname).toBe('/agent/agt_c/tpc_c');
   });
 
+  it('matches the live router location of a hidden tab, not its stale stored url', async () => {
+    const { routerA, routerB } = seedTabs();
+    // A's reporter is suspended while hidden: its router moved on, the store did not.
+    await routerA.navigate('/agent/agt_a/tpc_other');
+
+    appNavigate(TAB_A_URL, { escape: true, replace: false, target: 'existingTab' });
+    await flush();
+
+    // A no longer shows the target, so this is a miss and keeps the previous behavior.
+    expect(useElectronStore.getState().activeTabId).toBe('tab-b');
+    expect(routerA.state.location.pathname).toBe('/agent/agt_a/tpc_other');
+    expect(routerB.state.location.pathname).toBe(TAB_A_URL);
+  });
+
+  it('activates a hidden tab whose live router already shows the target', async () => {
+    const { routerA, routerB } = seedTabs();
+    await routerA.navigate('/agent/agt_c/tpc_c');
+
+    appNavigate('/agent/agt_c/tpc_c', { escape: true, replace: false, target: 'existingTab' });
+    await flush();
+
+    expect(useElectronStore.getState().activeTabId).toBe('tab-a');
+    expect(routerB.state.location.pathname).toBe(TAB_B_URL);
+  });
+
   it('reproduces the A A bug on the legacy active-tab path', async () => {
     const { routerB } = seedTabs();
 
