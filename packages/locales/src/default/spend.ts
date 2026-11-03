@@ -102,4 +102,5 @@ export default {
   'usageStats.range': 'Time range',
   'usageStats.rangeSuffix': 'Last {{count}}d',
   'usageStats.title': 'Statistics',
+  'table.columns.spendUsd': 'Cost',
 };

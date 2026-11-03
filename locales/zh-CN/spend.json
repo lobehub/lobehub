@@ -13,6 +13,7 @@
   "table.columns.duration": "耗时",
   "table.columns.model": "模型",
   "table.columns.spend": "消耗积分",
+  "table.columns.spendUsd": "费用",
   "table.columns.time": "时间",
   "table.columns.totalTokens": "Token 使用量",
   "table.columns.trigger.enums.agent_meta": "助手资料生成",

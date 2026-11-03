@@ -13,6 +13,7 @@
   "table.columns.duration": "Duration",
   "table.columns.model": "Model",
   "table.columns.spend": "Credits",
+  "table.columns.spendUsd": "Cost",
   "table.columns.time": "Time",
   "table.columns.totalTokens": "Token Usage",
   "table.columns.trigger.enums.agent_meta": "Agent Profile",
