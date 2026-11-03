@@ -1,10 +1,12 @@
 import type { TaskPriority, TaskStatus } from '@lobechat/types';
 import { Block, cssVar, Icon, Text } from '@lobehub/ui';
-import { ArchiveIcon, Stamp } from 'lucide-react';
+import { ArchiveIcon, Stamp, TagIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -64,6 +66,9 @@ const TaskProperties = memo(() => {
   const memberMeta = useUserDisplayMeta(assigneeUserId);
   const activeWorkspaceId = useActiveWorkspaceId();
   const acceptanceWait = useTaskAcceptanceWait();
+  const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
+  const labels = useTaskStore(taskDetailSelectors.activeTaskLabels);
+  const setTaskLabels = useTaskStore((s) => s.setTaskLabels);
 
   if (!taskId) return null;
 
@@ -165,6 +170,35 @@ const TaskProperties = memo(() => {
           </Block>
         </AssigneeMemberSelector>
       )}
+
+      <TaskLabelPicker
+        disabled={!taskDatabaseId}
+        value={labels}
+        onChange={(next) => {
+          if (taskDatabaseId) void setTaskLabels(taskDatabaseId, labels, next);
+        }}
+      >
+        <Block
+          clickable
+          horizontal
+          align="center"
+          className={styles.propertyItem}
+          gap={8}
+          style={{ flexWrap: 'wrap' }}
+          variant={'borderless'}
+        >
+          {labels.length > 0 ? (
+            <TaskLabelChips labels={labels} max={6} />
+          ) : (
+            <>
+              <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={16} />
+              <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
+                {t('taskLabel.add')}
+              </Text>
+            </>
+          )}
+        </Block>
+      </TaskLabelPicker>
 
       {/* Where the runs go lives in the detail header's main column, next to the
           assignee it inherits from — not in this rail. See

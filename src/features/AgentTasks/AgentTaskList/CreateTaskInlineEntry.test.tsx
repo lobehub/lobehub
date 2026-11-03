@@ -171,6 +171,12 @@ vi.mock('@/store/user', () => ({
     selector({ preference: { lab: userStateMock.lab }, user: { id: 'self-user' } }),
 }));
 
+// The label picker reads the label registry; its own behavior is covered by
+// `labelPickerModel.test.ts`.
+vi.mock('@/features/TaskLabels/TaskLabelPicker', () => ({
+  default: ({ children }: { children?: ReactNode }) => <div data-testid="labels">{children}</div>,
+}));
+
 vi.mock('../features/TaskPriorityTag', () => ({
   default: ({ children }: { children?: ReactNode }) => (
     <div data-testid="priority">{children ?? 'priority'}</div>
