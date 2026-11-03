@@ -237,10 +237,11 @@ describe('createElevenLabsSpeech', () => {
         .mockResolvedValueOnce(
           errorResponse(404, { detail: { message: 'Voice not found', status: 'voice_not_found' } }),
         )
+        // cloned: none; generated: one (after the rejected default)
+        .mockResolvedValueOnce(voicesResponse([]))
         .mockResolvedValueOnce(
           voicesResponse([
-            { category: 'professional', voice_id: 'library-1' },
-            { category: 'premade', voice_id: 'premade-1' },
+            { category: 'generated', voice_id: ELEVENLABS_DEFAULT_VOICE_ID },
             { category: 'generated', voice_id: 'designed-1' },
           ]),
         )
@@ -249,10 +250,27 @@ describe('createElevenLabsSpeech', () => {
       const result = await callDefault();
 
       expect(result.audio.byteLength).toBe(AUDIO_BYTES.byteLength);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
-      expect(fetchMock.mock.calls[1][0]).toBe('https://api.elevenlabs.io/v1/voices');
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(fetchMock.mock.calls[1][0]).toBe(
+        'https://api.elevenlabs.io/v2/voices?category=cloned&page_size=2',
+      );
       expect(fetchMock.mock.calls[1][1].headers['xi-api-key']).toBe('xi-test-key');
-      expect(fetchMock.mock.calls[2][0]).toContain('/v1/text-to-speech/designed-1?');
+      expect(fetchMock.mock.calls[2][0]).toContain('category=generated');
+      expect(fetchMock.mock.calls[3][0]).toContain('/v1/text-to-speech/designed-1?');
+    });
+
+    it('falls through to premade voices when the account created none', async () => {
+      fetchMock
+        .mockResolvedValueOnce(paymentRequired())
+        .mockResolvedValueOnce(voicesResponse([]))
+        .mockResolvedValueOnce(voicesResponse([]))
+        .mockResolvedValueOnce(voicesResponse([{ category: 'premade', voice_id: 'premade-1' }]))
+        .mockResolvedValueOnce(audioResponse());
+
+      await callDefault();
+
+      expect(fetchMock.mock.calls[3][0]).toContain('category=premade');
+      expect(fetchMock.mock.calls[4][0]).toContain('/v1/text-to-speech/premade-1?');
     });
 
     it('explains how to pick a voice when the account voices cannot be listed', async () => {

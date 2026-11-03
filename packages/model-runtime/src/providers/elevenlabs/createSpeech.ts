@@ -246,8 +246,10 @@ const isVoiceUnavailable = (error: ElevenLabsSpeechError) => {
 const ACCOUNT_VOICE_CATEGORIES = ['cloned', 'generated', 'premade'];
 
 /**
- * First voice in the account that it can call, from `GET /v1/voices`. Returns undefined
- * when the key lacks `voices_read` or the account has no such voice.
+ * First voice in the account that it can call, from the paginated `GET /v2/voices`
+ * filtered by category (the legacy `GET /v1/voices` stops working past 500 voices). Two
+ * results per category are enough to skip the rejected default. Returns undefined when
+ * the key lacks `voices_read` or the account has no such voice.
  * @see https://elevenlabs.io/docs/api-reference/voices/search
  */
 export const resolveAccountVoice = async (
@@ -255,32 +257,34 @@ export const resolveAccountVoice = async (
   apiKey: string,
   options: Pick<ElevenLabsSpeechOptions, 'headers' | 'signal'>,
 ): Promise<string | undefined> => {
-  try {
-    const response = await fetch(`${baseURL}/v1/voices`, {
-      headers: { ...options.headers, 'xi-api-key': apiKey },
-      signal: options.signal,
-    });
-    if (!response.ok) {
-      log('list voices failed: %d', response.status);
-      return;
-    }
+  for (const category of ACCOUNT_VOICE_CATEGORIES) {
+    try {
+      const url = new URL(`${baseURL}/v2/voices`);
+      url.searchParams.set('category', category);
+      url.searchParams.set('page_size', '2');
 
-    const { voices = [] } = (await response.json()) as {
-      voices?: { category?: string; voice_id?: string }[];
-    };
+      const response = await fetch(url.toString(), {
+        headers: { ...options.headers, 'xi-api-key': apiKey },
+        signal: options.signal,
+      });
+      if (!response.ok) {
+        log('list %s voices failed: %d', category, response.status);
+        // A missing permission or bad key fails every category the same way.
+        return;
+      }
 
-    for (const category of ACCOUNT_VOICE_CATEGORIES) {
+      const { voices = [] } = (await response.json()) as {
+        voices?: { category?: string; voice_id?: string }[];
+      };
       const voice = voices.find(
-        (item) =>
-          item.category === category &&
-          item.voice_id &&
-          item.voice_id !== ELEVENLABS_DEFAULT_VOICE_ID,
+        (item) => item.voice_id && item.voice_id !== ELEVENLABS_DEFAULT_VOICE_ID,
       );
       if (voice?.voice_id) return voice.voice_id;
+    } catch (error) {
+      if ((error as Error)?.name === 'AbortError') throw error;
+      log('list %s voices error: %O', category, error);
+      return;
     }
-  } catch (error) {
-    if ((error as Error)?.name === 'AbortError') throw error;
-    log('list voices error: %O', error);
   }
 };
 
