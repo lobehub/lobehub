@@ -140,6 +140,16 @@ describe('meta-schema', () => {
       expect(result.seed).toBeNull(); // Schema default
     });
 
+    it('should default prompt when a stored schema omits it', () => {
+      const schema = {
+        size: { default: '1024x1024', enum: ['1024x1024', '1536x1024'] },
+      } as unknown as ModelParamsSchema;
+
+      const result = extractDefaultValues(schema);
+
+      expect(result).toEqual({ prompt: '', size: '1024x1024' });
+    });
+
     it('should handle empty schema gracefully', () => {
       const schema: ModelParamsSchema = {
         prompt: { default: '' },
