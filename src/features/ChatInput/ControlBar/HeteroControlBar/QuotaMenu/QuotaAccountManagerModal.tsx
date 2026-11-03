@@ -1,7 +1,11 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { currentUtilization, isWeeklyAllLimit } from '@lobechat/heterogeneous-agents/quota';
+import {
+  currentUtilization,
+  displayPlanTier,
+  isWeeklyAllLimit,
+} from '@lobechat/heterogeneous-agents/quota';
 import {
   ActionIcon,
   Button,
@@ -509,7 +513,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
                           </Text>
                           {a.planTier && (
                             <Text style={{ flex: 'none', fontSize: 12 }} type={'secondary'}>
-                              {a.planTier}
+                              {displayPlanTier(a)}
                             </Text>
                           )}
                         </Flexbox>
