@@ -14,14 +14,31 @@ import { getTrpcClient } from '../../api/client';
 import { confirm, outputJson, printTable } from '../../utils/format';
 import { log } from '../../utils/logger';
 
-/** Commander collector for a repeatable option: `--label a --label b,c`. */
-export const collectLabels = (value: string, previous: string[] = []) => [
-  ...previous,
-  ...value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean),
-];
+/**
+ * Commander collector for a repeatable option: `--label a --label b,c`. Values
+ * are kept whole here; {@link expandLabelRefs} splits commas once the registry
+ * is known, so a label actually named `Needs, Review` still resolves.
+ */
+export const collectLabels = (value: string, previous: string[] = []) => {
+  const trimmed = value.trim();
+  return trimmed ? [...previous, trimmed] : previous;
+};
+
+/** A value naming an existing label (or group) is one ref; otherwise split on commas. */
+export const expandLabelRefs = (labels: TaskLabelWithUsage[], values: string[]): string[] =>
+  values.flatMap((value) => {
+    if (!value.includes(',')) return [value];
+    const needle = value.toLowerCase();
+    const isWhole =
+      labels.some((label) => label.name.toLowerCase() === needle) ||
+      resolveTaskLabelRefs(labels, [value]).ids.length === 1;
+    return isWhole
+      ? [value]
+      : value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean);
+  });
 
 const HEX_COLOR = /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i;
 
@@ -37,7 +54,7 @@ export const resolveLabelIds = async (
 ): Promise<string[]> => {
   if (names.length === 0) return [];
   const labels = registry ?? (await client.taskLabel.list.query());
-  const { ids, unresolved } = resolveTaskLabelRefs(labels, names);
+  const { ids, unresolved } = resolveTaskLabelRefs(labels, expandLabelRefs(labels, names));
   if (unresolved.length > 0) {
     throw new Error(
       `${describeUnresolvedTaskLabels(unresolved)}\nRun \`lh task label list\` to see labels, or \`lh task label create <name>\` to add one.`,

@@ -8,6 +8,7 @@ const registry = [
   { id: 'bug', isGroup: false, name: 'Bug', parentId: 'g-type', sortOrder: 0, usageCount: 2 },
   { id: 'feat', isGroup: false, name: 'Feature', parentId: 'g-type', sortOrder: 0, usageCount: 0 },
   { id: 'fe', isGroup: false, name: 'Frontend', parentId: null, sortOrder: 0, usageCount: 1 },
+  { id: 'nr', isGroup: false, name: 'Needs, Review', parentId: null, sortOrder: 0, usageCount: 0 },
 ];
 
 const { client } = vi.hoisted(() => ({
@@ -70,6 +71,14 @@ describe('lh task --label', () => {
 
     expect(client.task.create.mutate).toHaveBeenCalledWith(
       expect.objectContaining({ labelIds: ['bug', 'fe'] }),
+    );
+  });
+
+  it('keeps a label whose name contains a comma whole, and still splits lists', async () => {
+    await run('create', '-i', 'do it', '--label', 'Needs, Review', '--label', 'bug,Frontend');
+
+    expect(client.task.create.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ labelIds: ['nr', 'bug', 'fe'] }),
     );
   });
 
