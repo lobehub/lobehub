@@ -57,7 +57,10 @@ export function createProgram() {
   program
     .name(CLI_PRIMARY_BIN)
     .description(`${CLI_DISPLAY_NAME} - manage and connect to ${CLI_PRODUCT_NAME} services`)
-    .version(cliVersion);
+    .version(cliVersion)
+    // `--version` belongs to the program only before a subcommand; after one
+    // it is the subcommand's own option (e.g. `widget dry-run --version <id>`).
+    .enablePositionalOptions();
 
   const internalToolWorker = program
     .command('tool-worker')
