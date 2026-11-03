@@ -2,9 +2,12 @@ import type { PluginOption } from 'vite';
 
 import type { StyleAdapter } from './extract';
 
+export type ConditionVariant = 'reduced-motion' | 'rtl';
+
 export interface ConditionConfig {
   themeAttribute: string;
   themes: string[];
+  variants?: ConditionVariant[];
   widths: number[];
 }
 

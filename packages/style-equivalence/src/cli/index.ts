@@ -3,6 +3,8 @@ import path from 'node:path';
 import { parseArgs, promisify } from 'node:util';
 
 import { runComparison } from '../run';
+import { runSelfTest } from '../selftest';
+import { formatSelfTest } from '../selftest/run';
 import { formatSummary } from './summary';
 
 const run = promisify(execFile);
@@ -11,6 +13,7 @@ const HELP = `style-equivalence — compare styled elements between two revision
 
   bun run style-eq --pr <number>
   bun run style-eq --base <ref> --head <ref>
+  bun run style-eq self-test
 
 Options:
   --config <file>     project config (default scripts/stylexMigration/style-equivalence.config.ts)
@@ -42,7 +45,8 @@ const resolvePullRequest = async (repo: string, pr: string) => {
 };
 
 const main = async () => {
-  const { values } = parseArgs({
+  const { positionals, values } = parseArgs({
+    allowPositionals: true,
     options: {
       'base': { type: 'string' },
       'config': { type: 'string' },
@@ -56,6 +60,17 @@ const main = async () => {
   });
   if (values.help) return void console.log(HELP);
   const repo = process.cwd();
+  const configFile = path.resolve(
+    values.config ?? 'scripts/stylexMigration/style-equivalence.config.ts',
+  );
+  const recordsDir = path.resolve(values.records ?? '.records/style-equivalence');
+  if (positionals[0] === 'self-test') {
+    const report = await runSelfTest({ configFile, recordsDir, repo });
+    console.log(formatSelfTest(report));
+    process.exitCode = report.passed ? 0 : 1;
+    return;
+  }
+  if (positionals.length) throw new Error(`Unknown command ${positionals[0]}`);
   const revisions = values.pr
     ? await resolvePullRequest(repo, values.pr)
     : values.base && values.head
@@ -66,12 +81,10 @@ const main = async () => {
     throw new Error('--mutations takes a non-negative integer');
   const result = await runComparison({
     ...revisions,
-    configFile: path.resolve(
-      values.config ?? 'scripts/stylexMigration/style-equivalence.config.ts',
-    ),
+    configFile,
     keepWorktrees: values['keep-worktrees'],
     mutations: values.mutations === undefined ? undefined : Number(values.mutations),
-    recordsDir: path.resolve(values.records ?? '.records/style-equivalence'),
+    recordsDir,
     repo,
   });
   console.log(formatSummary(result));

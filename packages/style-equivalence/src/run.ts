@@ -120,6 +120,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
               comboDifferences: [],
               differingConditions: [],
               errors: ['CASE_NOT_CAPTURED'],
+              gaps: [],
               key: entry.key,
               rootCauses: [],
               status: 'error',
@@ -153,6 +154,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
         runDir,
         scope,
         serverUrl: server.url,
+        states: capture.states ?? [],
         widths: capture.widths,
       });
     } finally {
@@ -184,6 +186,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       pageErrors: capture.pageErrors,
       runId,
       scope,
+      states: capture.states,
       unparsedMedia: capture.unparsedMedia,
       verifierVersion: VERIFIER_VERSION,
       widths: capture.widths,

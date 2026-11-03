@@ -1,10 +1,14 @@
 import type { Browser } from '@playwright/test';
 
-import type { ConditionConfig } from '../config';
+import type { ConditionConfig, ConditionVariant } from '../config';
 import type { Side } from '../plan/planFile';
+import { caseGapsOf } from './gaps';
+import { inspectRules } from './inspect';
 import { captureInPage, type StyleSnapshot } from './snapshot';
-import { applyState, type CaptureState, STATES } from './states';
-import { planWidths, readMediaConditions } from './widths';
+import { applyState, type CaptureState, planStates } from './states';
+import { planWidths } from './widths';
+
+export const DEFAULT_VARIANTS: ConditionVariant[] = ['rtl', 'reduced-motion'];
 
 export type SectionSnapshot = (StyleSnapshot & { targetKey?: string }) | { error: string };
 export type SectionSnapshots = Record<string, SectionSnapshot>;
@@ -16,13 +20,16 @@ export interface ConditionCapture {
   head: SectionSnapshots;
   state: CaptureState;
   theme: string;
+  variant?: ConditionVariant;
   width: number;
 }
 
 export interface RunCapture {
+  caseGaps?: Record<string, string[]>;
   conditions: ConditionCapture[];
   containerRules: number;
   pageErrors: string[];
+  states?: CaptureState[];
   unparsedMedia: number;
   widths: number[];
 }
@@ -49,29 +56,44 @@ const CAPTURE_ALL = `(() => {
         path.unshift([...node.parentElement.children].filter((child) => !skip(child)).indexOf(node));
       return ['root', ...path].join('.');
     };
-    const targets = [...section.querySelectorAll('[data-synthetic-element]')].filter((node) => !node.querySelector('[data-synthetic-element]'));
+    const marked = section.querySelector('[data-synthetic-target]');
+    const targets = marked ? [marked] : [...section.querySelectorAll('[data-synthetic-element]')].filter((node) => !node.querySelector('[data-synthetic-element]'));
     try { result[key] = { ...capture({ selector: '[data-case="' + CSS.escape(key) + '"]' }), targetKey: targets[0] ? keyOf(targets[0]) : 'root' }; }
     catch (error) { result[key] = { error: String((error && error.message) || error) }; }
   }
   return result;
 })()`;
 
-const withTheme = (url: string, theme: string) => {
+export interface PageCondition {
+  state: CaptureState;
+  theme: string;
+  variant?: ConditionVariant;
+  width: number;
+}
+
+const urlFor = (url: string, { theme, variant }: PageCondition) => {
   const target = new URL(url);
   target.searchParams.set('theme', theme);
+  if (variant === 'rtl') target.searchParams.set('dir', 'rtl');
   return target.toString();
 };
+
+export const conditionLabel = ({ state, theme, variant, width }: PageCondition) =>
+  [theme, width, state, variant].filter((part) => part !== undefined).join('/');
 
 export const capturePage = async (
   browser: Browser,
   url: string,
-  options: { state: CaptureState; theme: string; width: number },
+  options: PageCondition,
   pageErrors: string[],
 ) => {
-  const page = await browser.newPage({ viewport: { height: 900, width: options.width } });
+  const page = await browser.newPage({
+    reducedMotion: options.variant === 'reduced-motion' ? 'reduce' : 'no-preference',
+    viewport: { height: 900, width: options.width },
+  });
   page.on('pageerror', (error) => pageErrors.push(error.message));
   try {
-    await page.goto(withTheme(url, options.theme));
+    await page.goto(urlFor(url, options));
     await page.waitForSelector('[data-synthetic-ready]', { state: 'attached', timeout: 30_000 });
     await page.evaluate(() => document.fonts.ready);
     await applyState(page, options.state);
@@ -88,11 +110,13 @@ export const capturePage = async (
 export const captureRun = async ({
   browser,
   conditions,
-  states = STATES,
+  states,
   urls,
 }: CaptureOptions): Promise<RunCapture> => {
   const pageErrors: string[] = [];
   const media: string[] = [];
+  const pseudoRules: Partial<Record<Side, Record<string, string[]>>> = {};
+  const unmodeled: Partial<Record<Side, Record<string, string[]>>> = {};
   let containerRules = 0;
   for (const side of ['base', 'head'] as const) {
     const { page } = await capturePage(
@@ -101,32 +125,56 @@ export const captureRun = async ({
       { state: 'default', theme: conditions.themes[0], width: conditions.widths[0] },
       pageErrors,
     );
-    const found = await readMediaConditions(page);
+    const found = await inspectRules(page);
     media.push(...found.media);
+    pseudoRules[side] = found.pseudoRules;
+    unmodeled[side] = Object.fromEntries(
+      Object.entries(found.unmodeled).map(([section, indices]) => [
+        section,
+        indices.map((index) => found.rules[index]),
+      ]),
+    );
     containerRules += found.containers;
     await page.close();
   }
   const { unparsed, widths } = planWidths(media, conditions.widths);
-  const captures: ConditionCapture[] = [];
+  const plannedStates = states
+    ? [...states]
+    : planStates(pseudoRules.base ?? {}, pseudoRules.head ?? {});
+  const plan: PageCondition[] = [];
   for (const theme of conditions.themes)
     for (const width of widths)
-      for (const state of states) {
-        const options = { state, theme, width };
-        const loads = await Promise.all([
-          capturePage(browser, urls.base, options, pageErrors),
-          capturePage(browser, urls.base, options, pageErrors),
-          capturePage(browser, urls.head, options, pageErrors),
-        ]);
-        await Promise.all(loads.map(({ page }) => page.close()));
-        captures.push({
-          base: loads[0].snapshots,
-          baseAgain: loads[1].snapshots,
-          condition: `${theme}/${width}/${state}`,
-          head: loads[2].snapshots,
-          state,
-          theme,
-          width,
-        });
-      }
-  return { conditions: captures, containerRules, pageErrors, unparsedMedia: unparsed, widths };
+      for (const state of plannedStates) plan.push({ state, theme, width });
+  for (const variant of conditions.variants ?? DEFAULT_VARIANTS)
+    plan.push({
+      state: 'default',
+      theme: conditions.themes[0],
+      variant,
+      width: conditions.widths.at(-1)!,
+    });
+  const captures: ConditionCapture[] = [];
+  for (const options of plan) {
+    const loads = await Promise.all([
+      capturePage(browser, urls.base, options, pageErrors),
+      capturePage(browser, urls.base, options, pageErrors),
+      capturePage(browser, urls.head, options, pageErrors),
+    ]);
+    await Promise.all(loads.map(({ page }) => page.close()));
+    captures.push({
+      base: loads[0].snapshots,
+      baseAgain: loads[1].snapshots,
+      condition: conditionLabel(options),
+      head: loads[2].snapshots,
+      ...options,
+    });
+  }
+  return {
+    caseGaps: caseGapsOf(unmodeled.base ?? {}, unmodeled.head ?? {}),
+    conditions: captures,
+    containerRules,
+    pageErrors,
+    states: plannedStates,
+    unparsedMedia: unparsed,
+    widths,
+  };
 };
