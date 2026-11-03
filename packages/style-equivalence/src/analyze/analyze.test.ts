@@ -116,3 +116,47 @@ describe('mergeRetry', () => {
     ).toBe('unstable');
   });
 });
+
+describe('mergeRetry over differing conditions', () => {
+  const kept = diff('color', 'red', 'blue');
+  const flake = diff('opacity', '1', '0');
+  const at = (condition: string, cause: typeof kept) => ({
+    combo: 0,
+    condition,
+    differences: [cause],
+    rootCauses: [cause],
+  });
+  const original = result({
+    comboDifferences: [at('light/375/hover-target', kept), at('dark/796/focus-visible', flake)],
+    differingConditions: ['light/375/hover-target', 'dark/796/focus-visible'],
+    rootCauses: [kept, flake],
+    status: 'difference',
+  });
+
+  it('keeps only the differences the retry reproduces', () => {
+    const merged = mergeRetry(
+      original,
+      result({
+        comboDifferences: [at('light/375/hover-target', kept)],
+        differingConditions: ['light/375/hover-target'],
+        rootCauses: [kept],
+        status: 'difference',
+      }),
+      original.differingConditions,
+    );
+    expect(merged).toMatchObject({
+      differingConditions: ['light/375/hover-target'],
+      rootCauses: [kept],
+      status: 'difference',
+    });
+  });
+
+  it('is equal when the retry reproduces none of them', () => {
+    expect(mergeRetry(original, result({}), original.differingConditions)).toMatchObject({
+      comboDifferences: [],
+      differingConditions: [],
+      rootCauses: [],
+      status: 'equal',
+    });
+  });
+});

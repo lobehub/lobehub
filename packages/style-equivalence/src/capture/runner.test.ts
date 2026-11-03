@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { analyzeRun, createRunAnalyzer } from '../analyze/diff';
 import { launchBrowser } from './browser';
-import { capturePage, captureRun, conditionFromLabel } from './runner';
+import { capturePage, captureRun, captureSections, conditionFromLabel } from './runner';
 import type { StyleSnapshot } from './snapshot';
 import { serveDirectories } from './staticServer';
 
@@ -205,6 +205,21 @@ describe('captureRun + analyzeRun', () => {
       Object.fromEntries(Object.entries(style).filter(([name]) => !name.startsWith('--')));
     expect(transferred.styles).toEqual(direct.styles.map(standard));
     expect(transferred.nodes).toEqual(direct.nodes);
+  });
+
+  it('compares any number of pages and transfers only sections that differ among them', async () => {
+    const { identical, snapshots } = await captureSections(
+      browser,
+      [`${server.url}/base-pair/`, `${server.url}/base-pair/`, `${server.url}/head-pair/`],
+      conditionFromLabel('light/1280/default'),
+      [],
+    );
+    expect(identical).toEqual(['a.tsx|A#0|0']);
+    expect(snapshots.map((item) => Object.keys(item))).toEqual([
+      ['b.tsx|B#0|0'],
+      ['b.tsx|B#0|0'],
+      ['b.tsx|B#0|0'],
+    ]);
   });
 
   it('reports equal pages as equal', async () => {
