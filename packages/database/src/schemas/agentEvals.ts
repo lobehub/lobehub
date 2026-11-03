@@ -227,7 +227,7 @@ export const agentEvalEnvironments = pgTable(
   {
     id: text('id').$defaultFn(createNanoId(16)).primaryKey(),
 
-    // Nullable for existing system environments; imported packages belong to their owner.
+    // Nullable for system-owned rows; imported packages belong to their owner.
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
@@ -266,7 +266,7 @@ export const agentEvalTestCases = pgTable(
       .$defaultFn(() => idGenerator('evalTestCases'))
       .primaryKey(),
 
-    // Nullable to retain ownership of system cases imported by earlier deployments.
+    // Nullable for system-owned rows; imported packages belong to their owner.
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
