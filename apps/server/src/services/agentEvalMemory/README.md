@@ -10,18 +10,18 @@ ends; they go with their run.
 
 ## Files
 
-| Path                                                             | Role                                                                                                    |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `index.ts`                                                       | `AgentEvalMemoryService`: `prepare` (seed once), `getPersonaDocument`, `runtime` (the tool), `snapshot` |
-| `search.ts`                                                      | `searchEvalMemory`: the account's hybrid Memory search run over an attempt's entries                    |
-| `runtime.ts`                                                     | `EvalMemoryRuntimeService`: the Memory tool surface (search, taxonomy, add, update / remove identity)   |
-| `entries.ts`                                                     | Fixture → drafts, the text each layer's vector is built from, the tag rule, the snapshot entry          |
-| `where.ts`                                                       | `attemptWhere`: the rows of one attempt                                                                 |
-| `embedding.ts`                                                   | The account's embedding model, billed to the caller as Memory usage                                     |
-| `packages/database/src/schemas/agentEvalMemory.ts`               | `agent_eval_memories`                                                                                   |
-| `packages/database/migrations/0200_agent_eval_memories_bm25.sql` | The table's BM25 index, the account Memory's definition (0093) over the headline columns and `payload`  |
-| `apps/server/src/services/agentEvalRun/evalMemory.schema.ts`     | zod validation of `environment.memory` before seeding                                                   |
-| `packages/database/src/utils/evalTopic.ts`                       | `notEvalTopic()`: keeps eval dialogue out of background Memory extraction                               |
+| Path                                                                       | Role                                                                                                    |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `index.ts`                                                                 | `AgentEvalMemoryService`: `prepare` (seed once), `getPersonaDocument`, `runtime` (the tool), `snapshot` |
+| `search.ts`                                                                | `searchEvalMemory`: the account's hybrid Memory search run over an attempt's entries                    |
+| `runtime.ts`                                                               | `EvalMemoryRuntimeService`: the Memory tool surface (search, taxonomy, add, update / remove identity)   |
+| `entries.ts`                                                               | Fixture → drafts, the text each layer's vector is built from, the tag rule, the snapshot entry          |
+| `where.ts`                                                                 | `attemptWhere`: the rows of one attempt                                                                 |
+| `embedding.ts`                                                             | The account's embedding model, billed to the caller as Memory usage                                     |
+| `packages/database/src/schemas/agentEvalMemory.ts`                         | `agent_eval_memories`                                                                                   |
+| `packages/database/migrations/0199_lobe_bench_environments_and_memory.sql` | The table's BM25 index, the account Memory's definition (0093) over the headline columns and `payload`  |
+| `apps/server/src/services/agentEvalRun/evalMemory.schema.ts`               | zod validation of `environment.memory` before seeding                                                   |
+| `packages/database/src/utils/evalTopic.ts`                                 | `notEvalTopic()`: keeps eval dialogue out of background Memory extraction                               |
 
 ## One table, the account's search
 

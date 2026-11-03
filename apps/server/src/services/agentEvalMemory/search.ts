@@ -6,6 +6,7 @@ import type {
   SearchMemoryResult,
 } from '@lobechat/types';
 import { LayersEnum } from '@lobechat/types';
+import debug from 'debug';
 import type { SQL } from 'drizzle-orm';
 import { and, cosineDistance, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
@@ -53,6 +54,7 @@ const LAYERS: Record<Exclude<SearchLayerKey, 'experiences'>, LayerSpec> = {
 
 const HEADLINE_FIELDS = ['title', 'summary', 'details'];
 
+const log = debug('lobe-server:agentEvalMemory:search');
 const pgSearchByDb = new WeakMap<object, Promise<boolean>>();
 
 /** Whether the database can run the BM25 pass; without pg_search a queried lexical pass is skipped. */
@@ -62,7 +64,13 @@ export const hasPgSearch = (db: LobeChatDatabase): Promise<boolean> => {
     known = db
       .execute(sql`SELECT 1 FROM pg_extension WHERE extname = 'pg_search'`)
       .then((result) => result.rows.length > 0)
-      .catch(() => false);
+      .catch(() => {
+        pgSearchByDb.delete(db);
+        log(
+          'pg_search detection failed; skipping BM25 for this search and retrying on the next one',
+        );
+        return false;
+      });
     pgSearchByDb.set(db, known);
   }
   return known;
