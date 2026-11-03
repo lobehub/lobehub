@@ -300,6 +300,37 @@ table agent_documents {
   }
 }
 
+table agent_eval_memories {
+  id text [pk, not null]
+  user_id text [not null]
+  run_id text [not null]
+  topic_id text [not null]
+  thread_id text
+  attempt_id text [not null]
+  layer text [not null]
+  source text [not null]
+  fixture_hash text
+  title text
+  summary text
+  details text
+  memory_category text
+  memory_type text
+  tags jsonb
+  payload jsonb [not null]
+  embedding vector(1024)
+  captured_at "timestamp with time zone" [not null]
+  removed_reason text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    attempt_id [name: 'agent_eval_memories_attempt_id_idx']
+    run_id [name: 'agent_eval_memories_run_id_idx']
+    user_id [name: 'agent_eval_memories_user_id_idx']
+  }
+}
+
 table agent_eval_benchmarks {
   id text [pk, not null]
   identifier text [not null]
@@ -347,6 +378,27 @@ table agent_eval_datasets {
     user_id [name: 'agent_eval_datasets_user_id_idx']
     workspace_id [name: 'agent_eval_datasets_workspace_id_idx']
     (workspace_id, identifier) [name: 'agent_eval_datasets_identifier_workspace_id_unique', unique]
+  }
+}
+
+table agent_eval_environments {
+  id text [pk, not null]
+  user_id text
+  workspace_id text
+  identifier text
+  name text [not null]
+  description text
+  config jsonb [not null]
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'agent_eval_environments_user_id_idx']
+    workspace_id [name: 'agent_eval_environments_workspace_id_idx']
+    (identifier, user_id) [name: 'agent_eval_environments_identifier_user_id_unique', unique]
+    (identifier, workspace_id) [name: 'agent_eval_environments_identifier_workspace_id_unique', unique]
   }
 }
 
@@ -434,9 +486,10 @@ table agent_eval_runs {
 
 table agent_eval_test_cases {
   id text [pk, not null]
-  user_id text [not null]
+  user_id text
   workspace_id text
   dataset_id text [not null]
+  environment_id text
   content jsonb [not null]
   eval_mode text
   eval_config jsonb
@@ -449,6 +502,7 @@ table agent_eval_test_cases {
   indexes {
     user_id [name: 'agent_eval_test_cases_user_id_idx']
     dataset_id [name: 'agent_eval_test_cases_dataset_id_idx']
+    environment_id [name: 'agent_eval_test_cases_environment_id_idx']
     sort_order [name: 'agent_eval_test_cases_sort_order_idx']
     workspace_id [name: 'agent_eval_test_cases_workspace_id_idx']
   }
