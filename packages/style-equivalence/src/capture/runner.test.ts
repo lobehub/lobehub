@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { analyzeRun, createRunAnalyzer } from '../analyze/diff';
 import { launchBrowser } from './browser';
-import { captureRun } from './runner';
+import { captureRun, conditionFromLabel } from './runner';
 import { serveDirectories } from './staticServer';
 
 let root: string;
@@ -145,6 +145,19 @@ describe('captureRun + analyzeRun', () => {
       'dark/1280/hover-target',
       'dark/1280/focus-visible',
     ]);
+  });
+
+  it('captures exactly the conditions of a fixed plan', async () => {
+    const capture = await captureRun({
+      browser,
+      conditions: { themeAttribute: 'data-theme', themes: ['light'], widths: [1280] },
+      plan: [conditionFromLabel('dark/375/hover-target')],
+      urls: { base: `${server.url}/base-dark/`, head: `${server.url}/head-dark/` },
+    });
+    expect(capture.conditions.map((condition) => condition.condition)).toEqual([
+      'dark/375/hover-target',
+    ]);
+    expect(analyzeRun(capture)[0].differingConditions).toEqual(['dark/375/hover-target']);
   });
 
   it('reports equal pages as equal', async () => {

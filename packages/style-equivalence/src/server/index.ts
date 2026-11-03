@@ -12,6 +12,7 @@ import type { CaptureState } from '../capture/states';
 import { resolveInside } from '../capture/staticServer';
 import type { ConditionConfig } from '../config';
 import { ApiError, applySignoff, caseDetail, currentVerdict, loadRun } from './api';
+import { caseShot, caseSnapshot, parseCombo, parseCondition } from './inspectCase';
 
 const TYPES: Record<string, string> = {
   '.css': 'text/css',
@@ -89,7 +90,7 @@ export const startServer = async ({ port = 0, runDir, uiDir = DEFAULT_UI_DIR }: 
     return { result };
   };
   const route = async (request: IncomingMessage, response: ServerResponse) => {
-    const { pathname } = new URL(request.url ?? '/', 'http://x');
+    const { pathname, searchParams } = new URL(request.url ?? '/', 'http://x');
     const method = request.method ?? 'GET';
     if (pathname === '/api/run' && method === 'GET')
       return json(response, 200, {
@@ -99,12 +100,29 @@ export const startServer = async ({ port = 0, runDir, uiDir = DEFAULT_UI_DIR }: 
         run: stored.run,
         verdict: await currentVerdict(stored),
       });
-    const caseMatch = /^\/api\/case\/([^/]+)(\/rerun)?$/.exec(pathname);
+    const caseMatch = /^\/api\/case\/([^/]+)(?:\/(rerun|snapshot|shot))?$/.exec(pathname);
     if (caseMatch) {
       const key = decodeURIComponent(caseMatch[1]);
-      if (caseMatch[2] && method === 'POST') return json(response, 200, await rerun(key));
-      if (!caseMatch[2] && method === 'GET')
-        return json(response, 200, await caseDetail(stored, key));
+      const action = caseMatch[2];
+      if (action === 'rerun' && method === 'POST') return json(response, 200, await rerun(key));
+      if (!action && method === 'GET') return json(response, 200, await caseDetail(stored, key));
+      if ((action === 'snapshot' || action === 'shot') && method === 'GET') {
+        browser ??= await launchBrowser();
+        const inspect = {
+          browser,
+          combo: parseCombo(searchParams.get('combo')),
+          condition: parseCondition(searchParams.get('condition')),
+          key,
+          url,
+        };
+        if (action === 'snapshot') return json(response, 200, await caseSnapshot(inspect));
+        const side = searchParams.get('side');
+        if (side !== 'base' && side !== 'head') throw new ApiError(400, 'INVALID_SIDE');
+        const image = await caseShot({ ...inspect, side });
+        response.writeHead(200, { 'cache-control': 'max-age=3600', 'content-type': 'image/png' });
+        response.end(image);
+        return;
+      }
     }
     if (pathname === '/api/signoff' && method === 'POST')
       return json(response, 200, await applySignoff(stored, (await readBody(request)) as never));
