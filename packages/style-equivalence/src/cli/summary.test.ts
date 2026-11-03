@@ -6,6 +6,24 @@ describe('formatSummary', () => {
   it('prints the counts, the top root causes and where the evidence is', () => {
     const text = formatSummary({
       base: '60dee1474d670923619b9243e7863b3de82dcb3c',
+      calibration: [
+        {
+          detail: '',
+          file: 'src/Controls.tsx',
+          fixture: 'difference',
+          fixtureId: 'Controls',
+          status: 'agree',
+          synthetic: 'difference',
+        },
+        {
+          detail: 'exit 3',
+          file: 'src/A.tsx',
+          fixture: 'inconclusive',
+          fixtureId: 'A',
+          status: 'inconclusive',
+          synthetic: 'equal',
+        },
+      ],
       cases: [
         {
           category: 'difference',
@@ -57,6 +75,7 @@ describe('formatSummary', () => {
       'style-equivalence 60dee14..f0a8fd0 · 3 files · 4 cases · 96 comparisons · 82s',
       'difference 1 · needs sign-off 4 · blocking 1 · equal 1',
       'mutation 9/9 caught · 2 equivalent dropped (requested 10)',
+      'calibration 1 agree · 0 mismatch · 1 inconclusive',
       'Top root causes:',
       '  src/Controls.tsx|SectionHeader#0  font-feature-settings: "cv01", "kern", "tnum" → normal  (2 conditions)',
       'Evidence: /repo/.records/style-equivalence/run-1',
@@ -66,6 +85,16 @@ describe('formatSummary', () => {
   it('names the missed mutants when mutation testing fails', () => {
     const text = formatSummary({
       base: 'a'.repeat(40),
+      calibration: [
+        {
+          detail: '',
+          file: 'src/B.tsx',
+          fixture: 'difference',
+          fixtureId: 'B',
+          status: 'mismatch',
+          synthetic: 'equal',
+        },
+      ],
       cases: [],
       comparisons: 0,
       durationMs: 0,
@@ -85,9 +114,11 @@ describe('formatSummary', () => {
       runDir: '/r',
       unpaired: 0,
     });
-    expect(text.split('\n').slice(2, 4)).toEqual([
+    expect(text.split('\n').slice(2, 6)).toEqual([
       'mutation FAILED 1/2 caught',
       '  missed src/A.tsx|A#0  numeric: 8px → 9px',
+      'calibration 0 agree · 1 mismatch · 0 inconclusive',
+      '  mismatch B (src/B.tsx): real mount difference, synthetic equal',
     ]);
   });
 });

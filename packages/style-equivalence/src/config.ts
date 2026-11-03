@@ -1,5 +1,6 @@
 import type { PluginOption } from 'vite';
 
+import type { CalibrationAdapter } from './calibration';
 import type { StyleAdapter } from './extract';
 
 export type ConditionVariant = 'reduced-motion' | 'rtl';
@@ -21,6 +22,7 @@ export interface ViteSetup {
 export interface ProjectConfig {
   adapters: StyleAdapter[];
   aliases: Record<string, string>;
+  calibration?: CalibrationAdapter;
   conditions: ConditionConfig;
   cxFallback?: { name: string; source: string };
   hostWrapper: string;
