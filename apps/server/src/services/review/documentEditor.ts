@@ -108,7 +108,7 @@ export const replaceTextInDocument = async (params: {
       db,
       documentId,
       { newText, searchText },
-      { saveSource: 'llm_call', userId, workspaceId: workspaceId ?? undefined },
+      { saveSource: 'llm_call', userId, workspaceId: workspaceId ?? undefined, writeSource: 'user' },
     );
 
     if (inRoom) {
