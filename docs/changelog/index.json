@@ -11,13 +11,6 @@
   ],
   "community": [
     {
-      "id": "2026-11-03-elevenlabs-tts",
-      "date": "2026-11-03",
-      "versionRange": [
-        "2.3.1"
-      ]
-    },
-    {
       "image": "/blog/assets4b34a1ac19f3863cca0888d7e3284a75.webp",
       "id": "2026-08-03-home-dashboard",
       "date": "2026-08-03",
