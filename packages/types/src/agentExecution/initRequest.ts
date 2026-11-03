@@ -1,3 +1,4 @@
+import type { EvalConnectorSnapshots } from '../eval/agentEval';
 import type { EvalMemoryReference } from '../eval/evalMemory';
 import type { ChatAudioItem, ChatFileItem, ChatVideoItem, MessagePluginItem } from '../message';
 import type { RuntimeMentionedAgent } from '../stepContext';
@@ -59,6 +60,8 @@ export interface AgentRunInitRequest {
   ephemeralUserMessage?: string;
   /** The exact tool surface exposed to an isolated evaluation attempt. */
   evalAllowedTools?: string[];
+  /** Server-validated exact connector references; never credentials. */
+  evalConnectorSnapshots?: EvalConnectorSnapshots;
   /** Server-created Memory scope for one evaluation attempt. */
   evalMemory?: EvalMemoryReference;
   /** When set, the run may use ONLY these tools. */

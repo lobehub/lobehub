@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { EvalConnectorBindingError } from '@/server/services/agentEvalConnector';
 import { AgentEvalRunService, RUN_CREATE_ID_CONFLICT } from '@/server/services/agentEvalRun';
 import { CASE_AGENT_MODEL_REQUIRED } from '@/server/services/agentEvalRun/caseAgent';
 import {
@@ -236,7 +237,11 @@ export const runRouter = router({
 
       try {
         await assertRunCaseCompatibility(ctx, run);
+        await ctx.runService.assertConnectorBindings(run);
       } catch (error) {
+        if (error instanceof EvalConnectorBindingError) {
+          throw new TRPCError({ code: error.code, message: error.message });
+        }
         if (error instanceof EvalCaseCompatibilityError) {
           throw new TRPCError({ code: 'CONFLICT', message: error.message });
         }

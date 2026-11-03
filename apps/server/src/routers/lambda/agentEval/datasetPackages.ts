@@ -9,13 +9,20 @@ import {
   AgentEvalDatasetPackageRepo,
 } from '@/database/repositories/agentEvalDatasetPackage';
 import {
+  getPackageConnectionRequirements,
+  getReferencedPackageConnections,
+  validatePackageConnectionSelections,
+} from '@/database/repositories/agentEvalDatasetPackage/bindings';
+import {
   DATASET_PACKAGE_MAX_COMPRESSED_BYTES,
   readDatasetPackageArchive,
 } from '@/server/services/agentEvalDatasetPackage/archive';
 import type { FileService } from '@/server/services/file';
 
+import { validateEvalConnectorBindings } from './connectorBindings';
 import { validateDatasetPackage } from './datasetPackageSchema';
 import { agentEvalProcedureWrite } from './procedures';
+import { evalConnectorBindingsSchema } from './schemas';
 
 const log = debug('lobe-server:agentEvalDatasetPackage');
 
@@ -41,21 +48,19 @@ export const parseDatasetPackage = (content: Uint8Array) => {
 
 export const previewDatasetPackage = (content: Uint8Array) => {
   const { package: pack } = parseDatasetPackage(content);
-  const environments = [
-    ...pack.environments.map((environment) => environment.config),
-    ...pack.cases.map((testCase) => testCase.content.environment),
-  ];
+  const connectionRequirements = getPackageConnectionRequirements(pack);
   const datasetPackage: AgentEvalDatasetPackagePreview = {
     caseCount: pack.cases.length,
+    connectionRequirements,
     description: pack.dataset.description,
     environmentCount: pack.environments.length,
+    embeddedConnections: getReferencedPackageConnections(pack).map((key) => ({
+      authConfigured: !!pack.connections?.[key]?.credentials,
+      key,
+      name: pack.connections![key].name,
+    })),
     mockServices: [
-      ...new Set(
-        environments.flatMap((environment) => [
-          ...(environment?.mock?.services ?? []),
-          ...Object.keys(environment?.toolForwarding ?? {}),
-        ]),
-      ),
+      ...new Set(connectionRequirements.flatMap((requirement) => requirement.services)),
     ].sort(),
     name: pack.dataset.name,
     release: pack.dataset.metadata?.release,
@@ -80,7 +85,9 @@ export const importDatasetPackageProcedure = agentEvalProcedureWrite
       .object({
         benchmarkId: z.string().min(1).optional(),
         benchmarkName: z.string().trim().min(1).max(200).optional(),
+        caseBindings: z.record(z.string().min(1), evalConnectorBindingsSchema).optional(),
         datasetId: z.string().min(1).optional(),
+        environmentBindings: z.record(z.string().min(1), evalConnectorBindingsSchema).optional(),
         filename: z.string().optional(),
         name: z.string().trim().min(1).max(200).optional(),
         pathname: z.string().min(1),
@@ -103,14 +110,26 @@ export const importDatasetPackageProcedure = agentEvalProcedureWrite
       });
     }
     try {
+      const bindings = {
+        caseBindings: input.caseBindings,
+        environmentBindings: input.environmentBindings,
+      };
+      validatePackageConnectionSelections(parsed.package, bindings);
+      for (const selection of [
+        ...Object.values(bindings.environmentBindings ?? {}),
+        ...Object.values(bindings.caseBindings ?? {}),
+      ])
+        await validateEvalConnectorBindings(ctx.evalConnectorService, selection);
       const repo = new AgentEvalDatasetPackageRepo(
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
+        ctx.evalConnectorGateKeeper,
       );
       const result = await repo.importPackage({
         benchmarkId: input.benchmarkId,
         benchmarkName: input.benchmarkName,
+        bindings,
         datasetId: input.datasetId,
         name: input.name,
         ...parsed,

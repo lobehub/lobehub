@@ -9,7 +9,10 @@ import {
   AgentEvalRunTopicModel,
   AgentEvalTestCaseModel,
 } from '@/database/models/agentEval';
+import { AgentEvalDatasetConnectorRepo } from '@/database/repositories/agentEvalDatasetPackage/datasetConnectorBindings';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { AgentEvalConnectorService } from '@/server/services/agentEvalConnector';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { FileService } from '@/server/services/file';
 import { FileUploadService } from '@/server/services/fileUpload';
@@ -21,7 +24,13 @@ export const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(asyn
   return opts.next({
     ctx: {
       benchmarkModel: new AgentEvalBenchmarkModel(ctx.serverDB, ctx.userId, wsId),
+      evalConnectorService: new AgentEvalConnectorService(ctx.serverDB, ctx.userId, wsId),
+      evalConnectorGateKeeper: {
+        encrypt: async (plaintext: string) =>
+          (await KeyVaultsGateKeeper.initWithEnvKey()).encrypt(plaintext),
+      },
       datasetModel: new AgentEvalDatasetModel(ctx.serverDB, ctx.userId, wsId),
+      datasetConnectorRepo: new AgentEvalDatasetConnectorRepo(ctx.serverDB, ctx.userId, wsId),
       environmentModel: new AgentEvalEnvironmentModel(ctx.serverDB, ctx.userId, wsId),
       experimentModel: new AgentEvalExperimentModel(ctx.serverDB, ctx.userId, wsId),
       runModel: new AgentEvalRunModel(ctx.serverDB, ctx.userId, wsId),

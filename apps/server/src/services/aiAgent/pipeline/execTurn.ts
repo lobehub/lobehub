@@ -607,6 +607,7 @@ export const execAgentTurn = async (
     disableTools: params.disableTools,
     ephemeralUserMessage,
     evalAllowedTools: evalRuntime?.allowedTools,
+    evalConnectorSnapshots: evalRuntime?.connectorSnapshots,
     evalMemory: evalRuntime?.memory,
     exclusivePluginIds,
     existingMessageIds,

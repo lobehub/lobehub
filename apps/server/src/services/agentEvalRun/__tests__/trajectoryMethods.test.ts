@@ -172,45 +172,22 @@ describe('AgentEvalRunService', () => {
       }
     });
 
-    it('loads the environment with forwarding re-pointed at the server mock, never the stored endpoint', async () => {
-      vi.stubEnv('EVAL_TOOL_MOCK_BASE_URL', 'https://mock.test');
-      const environment = {
-        envPrompt: 'note',
-        toolForwarding: {
-          memory: { endpoint: 'https://evil.test/tool-calls', timeoutMs: 4000 },
-        },
-      };
-      const { run, testCase } = await setupTrajectoryChain({ environment });
-
-      const service = new AgentEvalRunService(serverDB, userId);
-      const data = await service.loadTrajectoryData(run.id, testCase.id);
-
-      expect('error' in data).toBe(false);
-      if (!('error' in data)) {
-        expect(data.environment).toEqual({
-          envPrompt: 'note',
-          toolForwarding: {
-            memory: {
-              endpoint: expect.stringMatching(
-                /^https:\/\/mock\.test\/tool-exec\/[^/]+\/memory\/exec$/,
-              ),
-              timeoutMs: 4000,
+    it('refuses legacy unbound forwarding', async () => {
+      const { run, testCase } = await setupTrajectoryChain();
+      await serverDB
+        .update(agentEvalTestCases)
+        .set({
+          content: {
+            input: 'test',
+            environment: {
+              toolForwarding: { memory: { endpoint: 'https://old.test/exec' } },
             },
           },
-        });
-      }
-    });
-
-    it('refuses to load a case that forwards tools when the server has no mock', async () => {
-      vi.stubEnv('EVAL_TOOL_MOCK_BASE_URL', '');
-      const environment = {
-        toolForwarding: { memory: { endpoint: 'https://mock.test/tool-calls' } },
-      };
-      const { run, testCase } = await setupTrajectoryChain({ environment });
-
+        })
+        .where(eq(agentEvalTestCases.id, testCase.id));
       const service = new AgentEvalRunService(serverDB, userId);
       await expect(service.loadTrajectoryData(run.id, testCase.id)).rejects.toThrow(
-        'EVAL_TOOL_MOCK_BASE_URL',
+        'Bind these mock services',
       );
     });
 
@@ -320,39 +297,19 @@ describe('AgentEvalRunService', () => {
       );
     });
 
-    it('should derive tool forwarding from the case environment', async () => {
+    it('rejects an unbound mock before starting an attempt', async () => {
       const { run, testCase } = await setupTrajectoryChain();
-      const environment = {
-        toolForwarding: {
-          memory: { endpoint: 'https://mock.test/tool-calls' },
-        },
-      };
-
-      mockExecAgent.mockResolvedValue({ operationId: 'op-789' });
-
       const service = new AgentEvalRunService(serverDB, userId);
-      await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'What is 6*7?' }, sortOrder: testCase.sortOrder },
-        testCaseId: testCase.id,
-        environment,
-      });
-
-      expect(mockExecAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          evalRuntime: {
-            attemptId: expect.any(String),
-            // Every attempt runs on its own isolated Memory scope.
-            memory: {
-              fixtureHash: expect.any(String),
-              runId: expect.any(String),
-              topicId: expect.any(String),
-            },
-            toolForwarding: environment.toolForwarding,
-          },
+      await expect(
+        service.executeTrajectory({
+          run: { datasetId: run.datasetId, targetAgentId: null },
+          runId: run.id,
+          testCase: { content: { input: 'Question' } },
+          testCaseId: testCase.id,
+          environment: { toolForwarding: { memory: { endpoint: 'https://old.test/exec' } } },
         }),
-      );
+      ).rejects.toThrow('Bind these mock services');
+      expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
     it('should pass the dataset case id through evalRuntime', async () => {

@@ -4,6 +4,7 @@ import type { AgentEvalRunModel } from '@/database/models/agentEval';
 
 import { evaluateAndFinalizeRun } from './aggregate';
 import { recordTrajectoryCompletion } from './completion';
+import { assertRunConnectorBindings } from './connectorBindings';
 import { createRun } from './createRun';
 import { createEvalRunDeps } from './deps';
 import { rejudgeRun } from './rejudge';
@@ -45,6 +46,10 @@ export class AgentEvalRunService {
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.deps = createEvalRunDeps(db, userId, workspaceId);
     this.runModel = this.deps.runModel;
+  }
+
+  assertConnectorBindings(...args: StageArgs<typeof assertRunConnectorBindings>) {
+    return assertRunConnectorBindings(this.deps, ...args);
   }
 
   createRun(...args: StageArgs<typeof createRun>) {

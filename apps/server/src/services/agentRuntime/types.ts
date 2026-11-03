@@ -15,6 +15,7 @@ import type {
 import type {
   AgentShareVisitorContext,
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
   EvalMemoryReference,
   EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
@@ -740,6 +741,8 @@ export interface EvalRuntimeContext {
    */
   attemptId?: string;
   caseId?: string;
+  /** Exact connection references plus target/tool fingerprints; no credentials. */
+  connectorSnapshots?: EvalConnectorSnapshots;
   /** Server-created isolated Memory scope of this trial; never taken from user input. */
   memory?: EvalMemoryReference;
   toolForwarding?: EvalToolForwardingConfig;

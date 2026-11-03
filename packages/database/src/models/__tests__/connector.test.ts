@@ -6,6 +6,7 @@ import type { ConnectorCredentials } from '../../schemas';
 import { agents, userConnectors, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ConnectorModel } from '../connector';
+import { EvalConnectorUpdateError } from '../connectorEval';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -38,6 +39,176 @@ afterEach(async () => {
 });
 
 describe('ConnectorModel', () => {
+  describe('imported evaluation connection edits', () => {
+    const marker = { datasetId: 'private-dataset', packageSha256: 'private-package' };
+    const createEval = async () => {
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      const row = await model.create({
+        credentials: JSON.stringify({ type: 'bearer', token: 'old-token' }),
+        identifier: `eval-${crypto.randomUUID()}`,
+        name: 'Private mock',
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://mock.example/mcp',
+        metadata: { agentEval: marker },
+        sourceType: 'custom',
+        status: 'connected',
+        tokenExpiresAt: new Date(123),
+      });
+      return { model, row };
+    };
+
+    it('retains the server-owned marker through metadata replacement and keeps omitted credentials', async () => {
+      const { model, row } = await createEval();
+      await model.update(row.id, {
+        metadata: { description: 'Updated', agentEval: { datasetId: 'spoofed' } },
+      });
+      const [stored] = await serverDB
+        .select()
+        .from(userConnectors)
+        .where(eq(userConnectors.id, row.id));
+      expect(stored.metadata).toEqual({ agentEval: marker, description: 'Updated' });
+      expect(stored.credentials).toBe(row.credentials);
+      expect(await model.resolveByIdentifiers([row.identifier])).toEqual([]);
+      await model.update(row.id, { metadata: null });
+      expect((await model.findById(row.id))?.metadata).toEqual({ agentEval: marker });
+    });
+
+    it('encrypts the header-only editor payload instead of persisting metadata headers', async () => {
+      const { model, row } = await createEval();
+      await model.update(row.id, {
+        credentials: null,
+        metadata: { customHeaders: { 'X-Mock-Token': 'new-header-token' }, description: 'Renamed' },
+      });
+      const [stored] = await serverDB
+        .select()
+        .from(userConnectors)
+        .where(eq(userConnectors.id, row.id));
+      expect(stored.credentials).toBe(
+        `enc:${JSON.stringify({ headers: { 'X-Mock-Token': 'new-header-token' }, type: 'header' })}`,
+      );
+      expect(stored.metadata).toEqual({ agentEval: marker, description: 'Renamed' });
+      expect(stored.tokenExpiresAt).toBeNull();
+      expect(stored.status).toBe('disconnected');
+      expect((await model.findById(row.id))?.credentials).toEqual({
+        headers: { 'X-Mock-Token': 'new-header-token' },
+        type: 'header',
+      });
+    });
+
+    it('combines bearer authentication and additional headers inside the encrypted column', async () => {
+      const { model, row } = await createEval();
+      await model.update(row.id, {
+        credentials: JSON.stringify({ type: 'bearer', token: 'replacement-token' }),
+        metadata: {
+          customHeaders: { 'X-Tenant': 'private-tenant', 'authorization': 'old-header' },
+        },
+      });
+      const stored = await model.findById(row.id);
+      expect(stored?.credentials).toEqual({
+        headers: { 'Authorization': 'Bearer replacement-token', 'X-Tenant': 'private-tenant' },
+        type: 'header',
+      });
+      expect(stored?.metadata).toEqual({ agentEval: marker });
+    });
+
+    it('honors explicit clears on the same URL and clears resubmitted headers when changing URL', async () => {
+      for (const changeUrl of [false, true]) {
+        const { model, row } = await createEval();
+        await model.update(row.id, {
+          credentials: null,
+          ...(changeUrl
+            ? {
+                mcpServerUrl: 'https://other-mock.example/mcp',
+                metadata: { customHeaders: { Authorization: 'Bearer old-token' } },
+              }
+            : {}),
+        });
+        const stored = await model.findById(row.id);
+        expect(stored?.credentials).toBeNull();
+        expect(stored?.metadata?.customHeaders).toBeUndefined();
+        expect(stored?.metadata?.agentEval).toEqual(marker);
+        expect(stored?.status).toBe('disconnected');
+        expect(stored?.tokenExpiresAt).toBeNull();
+      }
+    });
+
+    it('allows changing the address with replacement credentials but rejects implicit reuse', async () => {
+      const { model, row } = await createEval();
+      const mcpServerUrl = 'https://other-mock.example/mcp';
+      await expect(
+        model.update(row.id, {
+          mcpServerUrl: 'https://secret-token@other-mock.example/mcp',
+          credentials: null,
+        }),
+      ).rejects.toThrow('without embedded credentials');
+      await expect(model.update(row.id, { mcpServerUrl })).rejects.toBeInstanceOf(
+        EvalConnectorUpdateError,
+      );
+      expect((await model.findById(row.id))?.mcpServerUrl).toBe(row.mcpServerUrl);
+      await model.update(row.id, {
+        mcpServerUrl,
+        credentials: JSON.stringify({ type: 'bearer', token: 'new-server-token' }),
+      });
+      expect(await model.findById(row.id)).toMatchObject({
+        mcpServerUrl,
+        credentials: { type: 'bearer', token: 'new-server-token' },
+      });
+    });
+
+    it('never writes imported credentials without encryption or echoes invalid header values', async () => {
+      const { model, row } = await createEval();
+      const withoutKey = new ConnectorModel(serverDB, userId);
+      await expect(
+        withoutKey.update(row.id, { credentials: JSON.stringify(apikeyCredentials) }),
+      ).rejects.toThrow('Secure connection storage');
+      await expect(
+        model.update(row.id, { metadata: { customHeaders: { Bad: 'secret\r\ninjection' } } }),
+      ).rejects.toThrow('Invalid mock connection headers');
+      expect((await model.findById(row.id))?.credentials).toEqual({
+        type: 'bearer',
+        token: 'old-token',
+      });
+    });
+
+    it('does not change ordinary header storage or let an ordinary update spoof import provenance', async () => {
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      const row = await model.create({
+        identifier: 'ordinary',
+        name: 'Ordinary',
+        sourceType: 'custom',
+        status: 'connected',
+      });
+      await model.update(row.id, {
+        credentials: null,
+        metadata: { agentEval: marker, customHeaders: { 'X-Token': 'ordinary-header' } },
+      });
+      expect(await model.findById(row.id)).toMatchObject({
+        credentials: null,
+        metadata: { customHeaders: { 'X-Token': 'ordinary-header' } },
+        status: 'connected',
+      });
+      expect((await model.findById(row.id))?.metadata?.agentEval).toBeUndefined();
+    });
+  });
+
+  it('keeps imported Dataset mocks out of ordinary runtime resolution while allowing exact binding', async () => {
+    const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+    const imported = await model.create({
+      credentials: JSON.stringify(apikeyCredentials),
+      identifier: 'private-dataset-mock',
+      metadata: { agentEval: { datasetId: 'ds-test', packageSha256: 'private-hash' } },
+      name: 'Dataset mock',
+      sourceType: 'custom',
+      status: 'connected',
+    });
+    gateKeeper.decrypt.mockClear();
+    expect(await model.resolveByIdentifiers(['private-dataset-mock'])).toEqual([]);
+    expect(await model.resolveAll()).toEqual([]);
+    expect(gateKeeper.decrypt).not.toHaveBeenCalled();
+    expect((await model.findPublicById(imported.id))?.id).toBe(imported.id);
+    expect((await model.findById(imported.id))?.credentials).toEqual(apikeyCredentials);
+  });
+
   describe('create', () => {
     it('creates a connector without credentials', async () => {
       const model = new ConnectorModel(serverDB, userId);
@@ -207,6 +378,7 @@ describe('ConnectorModel', () => {
         metadata: {
           customHeaders: { 'X-Private': 'secret' },
           description: 'Public description',
+          mountedByAgentId: 'mounted-agent',
         },
         name: 'Public MCP',
         oidcConfig: { clientSecret: 'secret', scheme: 'pre_registration' },
@@ -226,6 +398,7 @@ describe('ConnectorModel', () => {
         description: 'Public description',
         hasCredentials: true,
         id: created.id,
+        mountedByAgentId: 'mounted-agent',
       });
       expect(found).not.toHaveProperty('credentials');
       expect(found).not.toHaveProperty('metadata');

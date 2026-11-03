@@ -2,7 +2,6 @@
 
 import {
   ActionIcon,
-  Alert,
   Button,
   type DropdownItem,
   DropdownMenu,
@@ -47,11 +46,9 @@ import {
 } from '@/features/LobeBench/useLobeBench';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useClientDataSWR } from '@/libs/swr';
 import BenchmarkTitleBar from '@/routes/(main)/eval/bench/[benchmarkId]/features/BenchmarkHeader/TitleBar';
 import { createRunEditModal } from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
 import RunCard from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunsTab/RunCard';
-import { agentEvalService } from '@/services/agentEval';
 import { useEvalStore } from '@/store/eval';
 
 const styles = stylex.create({
@@ -136,7 +133,6 @@ const LobeBenchBenchmark = memo(() => {
   });
   const library = libraryOf(datasets);
   // Every dataset forwards to the library's mock service: its benchmark says whether it answers.
-  const mockBenchmarkId = library?.benchmarkId ?? benchmarkId;
   const listed = benchmarks.find((b) => b.id === benchmarkId);
   // One the account made: it adds and removes its own datasets, and can be deleted.
   const custom = isCustomBenchmark(listed);
@@ -165,22 +161,6 @@ const LobeBenchBenchmark = memo(() => {
   );
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
-
-  // Is the mock tool service this benchmark's runs forward to answering? Tool cases
-  // fail without it, so the page says so before anyone starts an experiment.
-  const {
-    data: mock,
-    isValidating: checkingMock,
-    mutate: recheckMock,
-  } = useClientDataSWR(mockBenchmarkId ? ['lobe-bench/mock-check', mockBenchmarkId] : null, () =>
-    agentEvalService.checkBenchmarkMock(mockBenchmarkId!),
-  );
-  const mockProblem =
-    mock?.configured && !mock.ok
-      ? t('lobeBench.benchmark.mock.unreachable', { error: mock.error ?? `HTTP ${mock.status}` })
-      : mock?.configured && mock.ok && !mock.tokenConfigured
-        ? t('lobeBench.benchmark.mock.noToken')
-        : undefined;
 
   const sortedRuns = useMemo(
     () =>
@@ -267,19 +247,6 @@ const LobeBenchBenchmark = memo(() => {
         onBenchmarkUpdate={handleBenchmarkUpdate}
         onDelete={custom ? handleDelete : undefined}
       />
-
-      {mockProblem && (
-        <Alert
-          showIcon
-          title={mockProblem}
-          type={'warning'}
-          action={
-            <Button loading={checkingMock} size={'small'} onClick={() => recheckMock()}>
-              {t('lobeBench.benchmark.mock.retry')}
-            </Button>
-          }
-        />
-      )}
 
       {/* A benchmark the account made with no dataset yet has nothing to rank. */}
       {rankedSets.length > 0 && (

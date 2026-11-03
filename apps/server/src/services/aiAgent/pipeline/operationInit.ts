@@ -179,6 +179,7 @@ export const runOperationInit = async (
         disableTools: request.disableTools,
         disabledPluginIds: ctx.disabledPluginIds,
         discordContext: ctx.discordContext,
+        evalConnectorSnapshots: request.evalConnectorSnapshots,
         exclusivePluginIds: request.exclusivePluginIds,
         externalFileTypes: request.externalFileTypes,
         functionTools: request.functionTools,

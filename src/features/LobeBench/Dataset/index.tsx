@@ -8,6 +8,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import { DatasetConnections } from '@/features/AgentEval/ConnectorBindings/DatasetConnections';
 import CaseTable from '@/features/LobeBench/CaseTable';
 import { refreshLobeBenchDatasets } from '@/features/LobeBench/datasetCases';
 import {
@@ -187,6 +188,8 @@ const LobeBenchDataset = memo(() => {
           )}
         </Flexbox>
       </Flexbox>
+
+      <DatasetConnections datasetId={dataset.id} editable={own} />
 
       <CaseTable benchmarkIds={benchmarkIds} dataset={dataset} />
 

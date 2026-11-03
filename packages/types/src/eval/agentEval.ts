@@ -19,6 +19,21 @@ export interface EvalToolForwardingConfig {
   [identifier: string]: EvalToolForwardingTarget;
 }
 
+/** A local connection selected for one logical mock service; never contains credentials. */
+export interface EvalConnectorBinding {
+  connectorId: string;
+  transport?: 'mcp' | 'lobe-bench';
+}
+
+export type EvalConnectorBindings = Record<string, EvalConnectorBinding>;
+
+/** Server-captured connection identity and tool contract used by a run. */
+export interface EvalConnectorSnapshot extends EvalConnectorBinding {
+  fingerprint: string;
+}
+
+export type EvalConnectorSnapshots = Record<string, EvalConnectorSnapshot>;
+
 /** Sampling parameters a model-only run applies to every case's hidden Agent. */
 export interface EvalRunModelParams {
   frequency_penalty?: number;
@@ -77,48 +92,16 @@ export type EvalRunChatConfig = Pick<
   | 'thinkingLevel4'
 >;
 
-/**
- * Where a benchmark's mock service lives. Stored on the benchmark
- * (`metadata.mock`), optionally overridden per dataset (`metadata.mock`), and
- * turned into per-case forwarding endpoints at run time, so moving the mock
- * never means rewriting cases.
- */
-/** How a mock connector presents itself once installed; name and description reach the prompt. */
-export interface EvalMockConnectorMeta {
-  avatar?: string;
-  description?: string;
-  title?: string;
-}
-
-export interface EvalMockConfig {
-  /**
-   * Origin of the mock service. Set by the server from its deployment
-   * configuration (`EVAL_TOOL_MOCK_BASE_URL`) when the config is resolved; a
-   * value stored with a benchmark or dataset is ignored.
-   */
-  baseUrl: string;
-  /**
-   * Presentation of the connectors the mock serves, keyed by identifier. A
-   * connector without an entry is installed with the product's default
-   * description.
-   */
-  connectors?: Record<string, EvalMockConnectorMeta>;
-  /** Mock-side dataset the connectors belong to; the dataset identifier when absent. */
-  dataset?: string;
-  /** Per-call timeout for forwarded calls, in milliseconds. */
-  timeoutMs?: number;
-}
-
-/** The connectors a case runs against the benchmark's mock service. */
+/** Logical mock services required by a case, independent of deployment and credentials. */
 export interface EvalCaseMockConfig {
-  /** Plugin identifiers whose tool calls are forwarded: `<baseUrl>/tool-exec/<dataset>/<id>/exec`. */
+  /** Tool namespaces, each resolved through the environment's connector bindings. */
   services: string[];
 }
 
 export interface EvalToolForwardingTarget {
   /**
-   * Where the call goes. Filled in by the server from its trusted mock when an
-   * attempt starts; absent (and ignored when present) in stored case data.
+   * Historical endpoint retained only for reading old data. New writes reject
+   * it, and execution resolves the selected connection's address instead.
    */
   endpoint?: string;
   timeoutMs?: number;
@@ -144,6 +127,8 @@ export interface EvalCaseAgentConfig {
 /** Per-test-case runtime configuration used only by eval trajectories. */
 export interface EvalCaseEnvironment {
   agent?: EvalCaseAgentConfig;
+  /** Logical tool identifiers bound to scoped MCP connections in this installation. */
+  connectorBindings?: EvalConnectorBindings;
   /** Case-specific system context appended after the dataset eval prompt. */
   envPrompt?: string;
   /**
@@ -153,9 +138,8 @@ export interface EvalCaseEnvironment {
    */
   memory?: EvalMemoryFixture;
   /**
-   * Connectors served by the mock for this case. Endpoints are derived from
-   * the server's trusted mock when the attempt starts; `toolForwarding` can
-   * name further connectors and per-connector timeouts, never addresses.
+   * Logical mock services required by this case. Each service must be bound
+   * to an available connection before execution.
    */
   mock?: EvalCaseMockConfig;
   /**
@@ -245,6 +229,8 @@ export interface EvalRunConfig {
   caseVersion?: string;
   /** Model-specific settings of a model-only run; see {@link EvalRunChatConfig}. */
   chatConfig?: EvalRunChatConfig;
+  /** Server-owned connection snapshots, keyed by case database ID. Credentials are excluded. */
+  connectorSnapshots?: Record<string, EvalConnectorSnapshots>;
   /**
    * Immutable snapshot of how the run executes: 'internal' (QStash workflow,
    * topics pre-created) or 'external' (worker-driven, on-demand). Written at

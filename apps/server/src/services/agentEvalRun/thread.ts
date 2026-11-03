@@ -17,6 +17,7 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
 import { contenderChatConfigOf, resolveTopicAgentId } from './caseAgent';
+import { assertCaseConnectorBindings } from './connectorBindings';
 import {
   EVAL_AGENT_RUNTIME_QSTASH_RETRIES,
   EVAL_AGENT_RUNTIME_QSTASH_RETRY_DELAY,
@@ -153,6 +154,11 @@ export async function executeThreadTrajectory(
   },
 ) {
   const { envPrompt, environment, run, runId, testCaseId, threadId, topicId } = params;
+  await assertCaseConnectorBindings(
+    deps,
+    environment,
+    run.config?.connectorSnapshots?.[testCaseId],
+  );
   const current = await deps.runTopicModel.findByRunAndTestCase(runId, testCaseId);
   if (
     !current ||
@@ -253,6 +259,7 @@ export async function executeThreadTrajectory(
         caseId,
         memory,
         getEvalAttemptId({ runId, threadId, topicId }),
+        run.config?.connectorSnapshots?.[testCaseId],
       ),
       onOperationCreated: bindOperation,
       maxSteps: run.config?.maxSteps,

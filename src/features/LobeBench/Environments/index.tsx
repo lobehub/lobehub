@@ -1,6 +1,10 @@
 'use client';
 
-import type { EvalCaseEnvironment, EvalMemoryFixture } from '@lobechat/types';
+import type {
+  EvalCaseEnvironment,
+  EvalConnectorBindings,
+  EvalMemoryFixture,
+} from '@lobechat/types';
 import {
   Block,
   Button,
@@ -23,6 +27,7 @@ import { Plus } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ConnectorBindings } from '@/features/AgentEval/ConnectorBindings';
 import { isBuiltInRow } from '@/features/LobeBench/lobeBench';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
@@ -158,6 +163,7 @@ const LobeBenchEnvironments = memo(() => {
   const [sessionDate, setSessionDate] = useState('');
   const [timezone, setTimezone] = useState('');
   const [envPrompt, setEnvPrompt] = useState('');
+  const [connectorBindings, setConnectorBindings] = useState<EvalConnectorBindings>({});
   const [mockServices, setMockServices] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -178,6 +184,7 @@ const LobeBenchEnvironments = memo(() => {
     setTimezone(config.timezone ?? '');
     setEnvPrompt(config.envPrompt ?? '');
     setMockServices(joinList(config.mock?.services));
+    setConnectorBindings(config.connectorBindings ?? {});
   }, [editing]);
 
   // A rejected save names each bad field: the server answers with the
@@ -220,7 +227,15 @@ const LobeBenchEnvironments = memo(() => {
     }
     const pluginList = splitList(plugins);
     const services = splitList(mockServices);
+    const {
+      name: _name,
+      memory: _memory,
+      plugins: _plugins,
+      systemRole: _systemRole,
+      ...agentRest
+    } = editing?.row?.config?.agent ?? {};
     const agent = {
+      ...agentRest,
       ...(agentName.trim() && { name: agentName.trim() }),
       ...(memoryEnabled && {
         memory: { effort: memoryEffort, enabled: true, toolPermission: memoryPermission },
@@ -229,10 +244,18 @@ const LobeBenchEnvironments = memo(() => {
       ...(persona.trim() && { systemRole: persona.trim() }),
     };
     return {
+      ...(editing?.row?.config?.toolForwarding && {
+        toolForwarding: editing.row.config.toolForwarding,
+      }),
+      connectorBindings: Object.fromEntries(
+        services
+          .filter((service) => connectorBindings[service])
+          .map((service) => [service, connectorBindings[service]]),
+      ),
       ...(Object.keys(agent).length > 0 && { agent }),
       ...(envPrompt.trim() && { envPrompt: envPrompt.trim() }),
       ...(memory && { memory }),
-      ...(services.length > 0 && { mock: { services } }),
+      ...(services.length > 0 && { mock: { ...editing?.row?.config?.mock, services } }),
       ...(sessionDate.trim() && { sessionDate: sessionDate.trim() }),
       ...(timezone.trim() && { timezone: timezone.trim() }),
     };
@@ -445,6 +468,21 @@ const LobeBenchEnvironments = memo(() => {
                 onChange={(e) => setMockServices(e.target.value)}
               />
             </Flexbox>
+            {splitList(mockServices).length > 0 && (
+              <ConnectorBindings
+                disabled={readOnly}
+                value={{ environmentBindings: { current: connectorBindings } }}
+                requirements={[
+                  {
+                    key: 'current',
+                    name: name || t('connections.environment'),
+                    scope: 'environment',
+                    services: splitList(mockServices),
+                  },
+                ]}
+                onChange={(value) => setConnectorBindings(value.environmentBindings?.current ?? {})}
+              />
+            )}
             <Flexbox gap={10}>
               <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
                 <Flexbox gap={2}>

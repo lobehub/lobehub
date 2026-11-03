@@ -7,6 +7,7 @@ import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 import { contenderChatConfigOf, resolveTopicAgentId } from './caseAgent';
 import { withResolvedEnvironment } from './caseEnvironment';
 import { recordTrajectoryCompletion } from './completion';
+import { assertCaseConnectorBindings } from './connectorBindings';
 import {
   EVAL_AGENT_RUNTIME_QSTASH_RETRIES,
   EVAL_AGENT_RUNTIME_QSTASH_RETRY_DELAY,
@@ -16,45 +17,7 @@ import { createEvalRunDeps } from './deps';
 import { interruptEvalOperations } from './runLifecycle';
 import { prepareTrialMemory } from './trialMemory';
 import type { EvalRunDeps } from './types';
-import {
-  getCaseId,
-  getEvalAttemptId,
-  getEvalContextParams,
-  getEvalMockConfig,
-  withResolvedToolForwarding,
-} from './utils';
-
-/**
- * The environment an attempt actually runs with: the case's own environment
- * plus the tool forwarding derived from the benchmark's mock service for the
- * connectors the case declares.
- */
-async function resolveCaseEnvironment(
-  deps: EvalRunDeps,
-  dataset:
-    | {
-        benchmarkId?: string | null;
-        id: string;
-        identifier?: string | null;
-        metadata?: unknown;
-      }
-    | null
-    | undefined,
-  environment: EvalCaseEnvironment | undefined,
-) {
-  if (!dataset) return environment;
-  const benchmark = dataset.benchmarkId
-    ? await deps.benchmarkModel.findById(dataset.benchmarkId)
-    : null;
-  return withResolvedToolForwarding(
-    environment,
-    getEvalMockConfig(
-      benchmark as { metadata?: Record<string, unknown> | null } | null,
-      dataset as { metadata?: Record<string, unknown> | null },
-    ),
-    dataset.identifier ?? dataset.id,
-  );
-}
+import { getCaseId, getEvalAttemptId, getEvalContextParams } from './utils';
 
 export async function loadTrajectoryData(deps: EvalRunDeps, runId: string, testCaseId: string) {
   const run = await deps.runModel.findById(runId);
@@ -65,11 +28,15 @@ export async function loadTrajectoryData(deps: EvalRunDeps, runId: string, testC
   const testCase = await withResolvedEnvironment(deps, rawTestCase);
 
   let envPrompt: string | undefined;
-  let environment: EvalCaseEnvironment | undefined;
+  const environment = testCase.content.environment;
+  await assertCaseConnectorBindings(
+    deps,
+    environment,
+    run.config?.connectorSnapshots?.[testCaseId],
+  );
   if (run.datasetId) {
     const dataset = await deps.datasetModel.findById(run.datasetId);
     envPrompt = dataset?.evalConfig?.envPrompt;
-    environment = await resolveCaseEnvironment(deps, dataset, testCase.content.environment);
   }
 
   return { envPrompt, environment, run, testCase };
@@ -134,6 +101,11 @@ async function executeTrajectoryCore(
   const { envPrompt, environment, run, runId, testCaseId, topicId } = params;
   const caseId = getCaseId(params.testCase.metadata);
 
+  await assertCaseConnectorBindings(
+    deps,
+    environment,
+    run.config?.connectorSnapshots?.[testCaseId],
+  );
   const current = await deps.runTopicModel.findByRunAndTestCase(runId, testCaseId);
   const executionId = crypto.randomUUID();
   const claimed = await deps.executionRepo.claimExecution({
@@ -215,6 +187,7 @@ async function executeTrajectoryCore(
         caseId,
         memory,
         getEvalAttemptId({ runId, topicId }),
+        run.config?.connectorSnapshots?.[testCaseId],
       ),
       onOperationCreated: bindOperation,
       maxSteps: run.config?.maxSteps,
@@ -333,7 +306,13 @@ export async function executeTrajectoryOnDemand(
   const testCaseId = testCase.id;
   const dataset = await deps.datasetModel.findById(run.datasetId);
   const envPrompt = dataset?.evalConfig?.envPrompt;
-  const environment = await resolveCaseEnvironment(deps, dataset, testCase.content.environment);
+  const environment = testCase.content.environment;
+  await assertCaseConnectorBindings(
+    deps,
+    environment,
+    run.config?.connectorSnapshots?.[testCaseId],
+    true,
+  );
 
   // Idempotent re-run of a terminal case: drop only the old RunTopic
   // association (the old Topic is preserved) and link a fresh one.

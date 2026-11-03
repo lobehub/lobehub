@@ -1,17 +1,6 @@
 'use client';
 
-import type { BenchmarkMockStatus } from '@lobechat/types';
-import {
-  Block,
-  Button,
-  Empty,
-  Flexbox,
-  Input,
-  InputNumber,
-  Segmented,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Block, Button, Empty, Flexbox, InputNumber, Segmented, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -27,16 +16,14 @@ import {
   DEFAULT_TIMEOUT_MINUTES,
   getBenchmarkMeta,
   isBuiltInBenchmark,
-  isCustomDataset,
   K_OPTIONS,
   type LobeBenchBenchmarkMeta,
   pickPrimaryBenchmark,
   settingsBenchmarkOf,
 } from '@/features/LobeBench/lobeBench';
-import { useLobeBenchBenchmarks, useLobeBenchDatasets } from '@/features/LobeBench/useLobeBench';
+import { useLobeBenchBenchmarks } from '@/features/LobeBench/useLobeBench';
 import ModelSelect from '@/features/ModelSelect';
-import { useClientDataSWR } from '@/libs/swr';
-import { agentEvalService } from '@/services/agentEval';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
 
 const styles = stylex.create({
@@ -50,17 +37,12 @@ const styles = stylex.create({
   status: { fontFamily: cssVar.fontFamilyCode, fontSize: 12 },
 });
 
-type Section = 'defaults' | 'judge' | 'mock';
-
-type MockStatus = BenchmarkMockStatus | undefined;
+type Section = 'defaults' | 'judge';
 
 interface BuiltInSettingsProps {
   benchmark: { id: string; metadata?: Record<string, unknown> | null };
   benchmarks: { id: string; name: string }[];
-  checking: boolean;
-  mockStatus: MockStatus;
   onSelectBenchmark: (id: string) => void;
-  recheck: () => void;
 }
 
 /**
@@ -68,11 +50,23 @@ interface BuiltInSettingsProps {
  * the only thing a person sets here is what their own new experiments start
  * with. Written for someone who runs experiments, not for whoever installed it.
  */
+const MockConnectionSettings = () => {
+  const { t } = useTranslation('eval');
+  return (
+    <Block padding={16} variant="outlined">
+      <Flexbox gap={8}>
+        <Text weight={600}>{t('connections.title')}</Text>
+        <Text type="secondary">{t('connections.settingsHint')}</Text>
+        <WorkspaceLink to="/settings/connector">{t('connections.openManager')}</WorkspaceLink>
+      </Flexbox>
+    </Block>
+  );
+};
+
 const BuiltInSettings = memo<BuiltInSettingsProps>(
-  ({ benchmark, benchmarks, checking, mockStatus, onSelectBenchmark, recheck }) => {
+  ({ benchmark, benchmarks, onSelectBenchmark }) => {
     const { t } = useTranslation('eval');
     const meta = getBenchmarkMeta(benchmark);
-    const { data: datasets } = useLobeBenchDatasets(useMemo(() => [benchmark.id], [benchmark.id]));
     const stored = readExperimentDefaults(benchmark.id);
     const [k, setK] = useState(stored?.k ?? meta.defaults?.k ?? 1);
     const [maxSteps, setMaxSteps] = useState<number | null>(
@@ -80,34 +74,6 @@ const BuiltInSettings = memo<BuiltInSettingsProps>(
     );
     const [timeoutMinutes, setTimeoutMinutes] = useState<number | null>(
       stored?.timeoutMinutes ?? meta.defaults?.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES,
-    );
-
-    // One line per case set: the simulation that serves it and whether it answers. The mock at
-    // the benchmark's base URL serves its own set (`mock.dataset`); any other set must be listed
-    // under the mock's `upstreams`, otherwise its tool calls have nowhere to go.
-    const nativeDataset = (benchmark.metadata as { mock?: { dataset?: string } } | null | undefined)
-      ?.mock?.dataset;
-    const setLines = (datasets ?? [])
-      .filter((d) => !isCustomDataset(d))
-      .map((d) => {
-        const mockDataset = (d.metadata as { mock?: { dataset?: string } } | null)?.mock?.dataset;
-        const upstream =
-          mockStatus?.configured && mockDataset && mockStatus.upstreams?.[mockDataset]
-            ? mockStatus.upstreams[mockDataset]
-            : undefined;
-        const native = !mockDataset || mockDataset === nativeDataset;
-        const online = upstream
-          ? upstream.ok
-          : native && !!(mockStatus?.configured && mockStatus.ok);
-        // The cases that can run are the set's own; the engine behind it may serve more
-        // (the full Release, multi-turn cases included) without them being in the set.
-        const cases = d.testCaseCount ?? upstream?.cases ?? 0;
-        return { cases, id: d.id, name: d.name, online };
-      });
-    const simulationOnline = !!(
-      mockStatus?.configured &&
-      mockStatus.ok &&
-      mockStatus.tokenConfigured
     );
 
     const saveMine = () => {
@@ -161,45 +127,7 @@ const BuiltInSettings = memo<BuiltInSettingsProps>(
             </Flexbox>
           </Block>
 
-          <Block padding={16} variant={'outlined'}>
-            <Flexbox gap={10}>
-              <Flexbox gap={2}>
-                <Text weight={600}>{t('lobeBench.settings.sim.title')}</Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {t('lobeBench.settings.sim.hint')}
-                </Text>
-              </Flexbox>
-              <Flexbox gap={4}>
-                <Text
-                  weight={500}
-                  style={{
-                    color: simulationOnline ? cssVar.colorSuccessText : cssVar.colorWarningText,
-                  }}
-                >
-                  {!mockStatus
-                    ? '…'
-                    : simulationOnline
-                      ? t('lobeBench.settings.sim.online')
-                      : mockStatus.configured && mockStatus.ok
-                        ? t('lobeBench.settings.sim.noToken')
-                        : t('lobeBench.settings.sim.offline')}
-                </Text>
-                {mockStatus &&
-                  setLines.map((line) => (
-                    <Text fontSize={12} key={line.id} type={'secondary'}>
-                      {line.online
-                        ? t('lobeBench.settings.sim.set', { cases: line.cases, name: line.name })
-                        : t('lobeBench.settings.sim.setDown', { name: line.name })}
-                    </Text>
-                  ))}
-              </Flexbox>
-              <Flexbox horizontal>
-                <Button loading={checking} onClick={recheck}>
-                  {t('lobeBench.benchmark.mock.retry')}
-                </Button>
-              </Flexbox>
-            </Flexbox>
-          </Block>
+          <MockConnectionSettings />
 
           <Block padding={16} variant={'outlined'}>
             <Flexbox gap={12}>
@@ -282,13 +210,11 @@ const LobeBenchSettings = memo(() => {
   const [benchmarkSel, setBenchmarkSel] = useState<string>();
   const benchmark =
     benchmarks.find((b) => b.id === benchmarkSel) ?? pickPrimaryBenchmark(benchmarks);
-  const meta = getBenchmarkMeta(benchmark);
   // The built-in benchmark's settings were fixed when it was installed; the
   // page shows them and lets an experiment pick its own judge and limits.
   const builtIn = isBuiltInBenchmark(benchmark);
 
   const [judge, setJudge] = useState<{ model: string; provider: string }>();
-  const [mockDataset, setMockDataset] = useState('');
   const [k, setK] = useState(1);
   const [maxSteps, setMaxSteps] = useState<number | null>(DEFAULT_MAX_STEPS);
   const [timeoutMinutes, setTimeoutMinutes] = useState<number | null>(DEFAULT_TIMEOUT_MINUTES);
@@ -299,20 +225,11 @@ const LobeBenchSettings = memo(() => {
     if (!benchmark) return;
     const current = getBenchmarkMeta(benchmark);
     setJudge(current.judge);
-    setMockDataset(current.mock?.dataset ?? '');
     setK(current.defaults?.k ?? 1);
     setMaxSteps(current.defaults?.maxSteps ?? DEFAULT_MAX_STEPS);
     setTimeoutMinutes(current.defaults?.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [benchmark?.id]);
-
-  const {
-    data: mockStatus,
-    isValidating: checking,
-    mutate: recheck,
-  } = useClientDataSWR(benchmark ? ['lobe-bench/mock-check', benchmark.id] : null, () =>
-    agentEvalService.checkBenchmarkMock(benchmark!.id),
-  );
 
   const save = async (section: Section, patch: Partial<LobeBenchBenchmarkMeta>) => {
     if (!benchmark) return;
@@ -326,7 +243,6 @@ const LobeBenchSettings = memo(() => {
         name: benchmark.name,
       });
       toast.success(t('lobeBench.settings.saved'));
-      if ('mock' in patch) await recheck();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -334,34 +250,11 @@ const LobeBenchSettings = memo(() => {
     }
   };
 
-  const mockLine = !mockStatus
-    ? '…'
-    : !mockStatus.configured
-      ? t('lobeBench.settings.mock.status.none')
-      : mockStatus.ok
-        ? `${t('lobeBench.settings.mock.status.ok', { status: mockStatus.status })} · ${
-            mockStatus.tokenConfigured
-              ? t('lobeBench.settings.mock.status.token')
-              : t('lobeBench.settings.mock.status.noToken')
-          }`
-        : t('lobeBench.settings.mock.status.down', {
-            error: mockStatus.error ?? `HTTP ${mockStatus.status}`,
-          });
-  const mockTone =
-    mockStatus?.configured && mockStatus.ok && mockStatus.tokenConfigured
-      ? cssVar.colorSuccessText
-      : mockStatus
-        ? cssVar.colorWarningText
-        : cssVar.colorTextSecondary;
-
   if (builtIn && benchmark) {
     return (
       <BuiltInSettings
         benchmark={benchmark}
         benchmarks={benchmarks}
-        checking={checking}
-        mockStatus={mockStatus}
-        recheck={() => recheck()}
         onSelectBenchmark={setBenchmarkSel}
       />
     );
@@ -445,74 +338,7 @@ const LobeBenchSettings = memo(() => {
           </Flexbox>
         </Block>
 
-        <Block padding={16} variant={'outlined'}>
-          <Flexbox gap={12}>
-            <Flexbox gap={2}>
-              <Text weight={600}>{t('lobeBench.settings.mock')}</Text>
-              <Text fontSize={12} type={'secondary'}>
-                {t('lobeBench.settings.mock.hint')}
-              </Text>
-            </Flexbox>
-            <Flexbox gap={6}>
-              <Text fontSize={13} weight={500}>
-                {t('lobeBench.settings.mock.dataset')}
-              </Text>
-              <Input
-                disabled={builtIn}
-                placeholder={'all293'}
-                value={mockDataset}
-                variant={'filled'}
-                onChange={(e) => setMockDataset(e.target.value)}
-              />
-            </Flexbox>
-            <Flexbox horizontal align={'center'} gap={12} justify={'space-between'} wrap={'wrap'}>
-              <Flexbox gap={4}>
-                <span className={stylex.props(styles.status).className} style={{ color: mockTone }}>
-                  {mockLine}
-                </span>
-                {mockStatus?.configured &&
-                  Object.entries(mockStatus.upstreams ?? {}).map(([dataset, upstream]) => (
-                    <span
-                      className={stylex.props(styles.status).className}
-                      key={dataset}
-                      style={{
-                        color: upstream.ok ? cssVar.colorSuccessText : cssVar.colorWarningText,
-                      }}
-                    >
-                      {upstream.ok
-                        ? t('lobeBench.settings.mock.status.upstreamOk', {
-                            cases: upstream.cases ?? '?',
-                            dataset,
-                            release: upstream.release ?? '',
-                          })
-                        : t('lobeBench.settings.mock.status.upstreamDown', {
-                            dataset,
-                            error: upstream.error ?? '',
-                          })}
-                    </span>
-                  ))}
-              </Flexbox>
-              <Flexbox horizontal gap={8}>
-                <Button loading={checking} onClick={() => recheck()}>
-                  {t('lobeBench.benchmark.mock.retry')}
-                </Button>
-                {!builtIn && (
-                  <Button
-                    loading={saving === 'mock'}
-                    type={'primary'}
-                    onClick={() =>
-                      save('mock', {
-                        mock: { ...meta.mock, dataset: mockDataset.trim() || undefined },
-                      })
-                    }
-                  >
-                    {t('lobeBench.settings.save')}
-                  </Button>
-                )}
-              </Flexbox>
-            </Flexbox>
-          </Flexbox>
-        </Block>
+        <MockConnectionSettings />
 
         <Block padding={16} variant={'outlined'}>
           <Flexbox gap={12}>

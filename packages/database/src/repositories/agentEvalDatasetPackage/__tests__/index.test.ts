@@ -10,6 +10,7 @@ import {
   agentEvalEnvironments,
   agentEvalRuns,
   agentEvalTestCases,
+  userConnectors,
   users,
   workspaces,
 } from '../../../schemas';
@@ -20,6 +21,20 @@ const userId = 'package-owner';
 const otherId = 'package-other';
 const workspaceId = 'package-workspace';
 const repo = new AgentEvalDatasetPackageRepo(db, userId);
+const encryptionKey = await crypto.subtle.generateKey({ length: 256, name: 'AES-GCM' }, false, [
+  'encrypt',
+]);
+const secureRepo = new AgentEvalDatasetPackageRepo(db, userId, undefined, {
+  encrypt: async (plaintext) => {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt(
+      { iv, name: 'AES-GCM' },
+      encryptionKey,
+      new TextEncoder().encode(plaintext),
+    );
+    return Buffer.from(ciphertext).toString('base64');
+  },
+});
 const pack = (): AgentEvalDatasetPackage => ({
   cases: [
     {
@@ -49,11 +64,95 @@ afterEach(async () => {
   await db.delete(agentEvalDatasets);
   await db.delete(agentEvalEnvironments);
   await db.delete(agentEvalBenchmarks);
+  await db.delete(userConnectors);
   await db.delete(workspaces);
   await db.delete(users);
 });
 
 describe('dataset package import transaction', () => {
+  it('creates fresh encrypted per-package connections and persists only references in environments', async () => {
+    const input = params();
+    input.package.connections = {
+      private: {
+        credentials: { token: 'synthetic-private-token', type: 'bearer' },
+        name: 'Private mock',
+        url: 'https://private.example/mcp',
+      },
+      unused: { name: 'Unused', url: 'https://unused.example/mcp' },
+    };
+    input.package.environments[0].connectionBindings = { notion: { connectionKey: 'private' } };
+    const first = await secureRepo.importPackage(input);
+    const second = await secureRepo.importPackage(input);
+    const connections = await db.select().from(userConnectors);
+    expect(connections).toHaveLength(2);
+    expect(connections[0].id).not.toBe(connections[1].id);
+    for (const connection of connections) {
+      expect(connection.credentials).toBeTruthy();
+      expect(connection.credentials).not.toContain('synthetic-private-token');
+      expect(connection).toMatchObject({
+        isEnabled: true,
+        mcpConnectionType: 'http',
+        status: 'disconnected',
+        userId,
+        workspaceId: null,
+      });
+      expect(connection.metadata?.agentEval).toMatchObject({ packageSha256: input.sha256 });
+      expect([first.datasetId, second.datasetId]).toContain(
+        (connection.metadata?.agentEval as { datasetId: string }).datasetId,
+      );
+    }
+    const environments = await db.select().from(agentEvalEnvironments);
+    expect(environments).toHaveLength(2);
+    expect(environments[0].config.mock?.services).toEqual(['notion']);
+    expect(connections.map((connection) => connection.id)).toContain(
+      environments[0].config.connectorBindings?.notion.connectorId,
+    );
+    const storedContent = JSON.stringify({
+      cases: await db.select().from(agentEvalTestCases),
+      datasets: await db.select().from(agentEvalDatasets),
+      environments,
+    });
+    expect(storedContent).not.toContain('synthetic-private-token');
+    expect(storedContent).not.toContain('private.example');
+  });
+
+  it('rolls back provisioned connections together with a failed dataset import', async () => {
+    const input = params();
+    input.package.connections = {
+      private: { name: 'Private', url: 'https://private.example/mcp' },
+    };
+    input.package.environments[0].connectionBindings = { notion: { connectionKey: 'private' } };
+    input.package.cases[0].environmentKey = 'missing';
+    await expect(secureRepo.importPackage(input)).rejects.toBeInstanceOf(
+      AgentEvalDatasetPackageImportError,
+    );
+    for (const table of [
+      userConnectors,
+      agentEvalBenchmarks,
+      agentEvalDatasets,
+      agentEvalEnvironments,
+      agentEvalTestCases,
+    ]) {
+      expect(await db.select().from(table)).toHaveLength(0);
+    }
+  });
+
+  it('refuses credential imports when encrypted storage cannot be initialized', async () => {
+    const input = params();
+    input.package.connections = {
+      private: {
+        credentials: { token: 'synthetic-private-token', type: 'bearer' },
+        name: 'Private',
+        url: 'https://private.example/mcp',
+      },
+    };
+    input.package.environments[0].connectionBindings = { notion: { connectionKey: 'private' } };
+    await expect(repo.importPackage(input)).rejects.toThrow(
+      'Secure connection storage is unavailable',
+    );
+    expect(await db.select().from(userConnectors)).toHaveLength(0);
+    expect(await db.select().from(agentEvalDatasets)).toHaveLength(0);
+  });
   it('shares one environment across every case referencing the same package key', async () => {
     const shared = params();
     shared.package.cases.push({ ...shared.package.cases[0], key: 'two' });

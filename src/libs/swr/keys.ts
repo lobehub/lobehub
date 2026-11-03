@@ -386,6 +386,11 @@ export const discoverKeys = {
 
 // ---- agent eval ---------------------------------------------------------
 export const evalKeys = {
+  connectors: def('eval:connectors', () => ['eval:connectors']),
+  datasetConnectorBindings: def('eval:datasetConnectorBindings', (id: string) => [
+    'eval:datasetConnectorBindings',
+    id,
+  ]),
   benchmarkDetail: def('eval:benchmarkDetail', (id: string) => ['eval:benchmarkDetail', id]),
   benchmarks: def('eval:benchmarks', () => ['eval:benchmarks']),
   datasetRuns: def('eval:datasetRuns', (datasetId: string) => ['eval:datasetRuns', datasetId]),

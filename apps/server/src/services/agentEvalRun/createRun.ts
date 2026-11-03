@@ -2,6 +2,7 @@ import { idGenerator } from '@lobechat/database';
 import type {
   EvalCaseEnvironment,
   EvalRunAgentSnapshot,
+  EvalRunConfig,
   EvalRunInputConfig,
   ImportedMessage,
   ToolIntervention,
@@ -15,8 +16,8 @@ import { agentEvalRunTopics, messagePlugins, messages, topics } from '@/database
 import type { CaseAgentRun } from './caseAgent';
 import { ensureCaseAgents, loadCaseAgentBase } from './caseAgent';
 import { withResolvedEnvironments } from './caseEnvironment';
-import { ensureCasePlugins } from './casePlugins';
 import { selectCases } from './caseSelection';
+import { snapshotCaseConnectors } from './connectorBindings';
 import { EVAL_HISTORY_TAIL_METADATA_KEY } from './constants';
 import { createEvalRunDeps } from './deps';
 import type { EvalRunDeps } from './types';
@@ -84,7 +85,14 @@ export async function createRun(
 
     targetAgentId = parent.targetAgentId ?? undefined;
     datasetId = parent.datasetId;
-    inputConfig = (parent.config as EvalRunInputConfig | undefined) ?? undefined;
+    const {
+      connectorSnapshots: _parentBindings,
+      agentSnapshot: _parentAgent,
+      caseVersion: _parentVersion,
+      executionMode: _parentMode,
+      ...parentInput
+    } = parent.config ?? {};
+    inputConfig = parentInput;
   }
 
   // External execution is driven case-by-case through `runExecuteCase`, which
@@ -112,7 +120,7 @@ export async function createRun(
   const datasetRow = await deps.datasetModel.findById(datasetId);
   if (!datasetRow) throw new Error(RUN_DATASET_NOT_FOUND);
   const caseVersion = evalCaseVersionOf(datasetRow.metadata);
-  const config = {
+  const config: EvalRunConfig = {
     ...inputConfig,
     agentSnapshot,
     ...(caseVersion && { caseVersion }),
@@ -133,6 +141,7 @@ export async function createRun(
   }) => {
     const {
       agentSnapshot: _existingSnapshot,
+      connectorSnapshots: _existingBindings,
       caseVersion: _existingCaseVersion,
       executionMode: existingMode,
       ...existingConfig
@@ -166,7 +175,7 @@ export async function createRun(
   );
   const testCases = isExternal ? datasetCases : selectCases(datasetCases, config?.caseSelection);
   if (!isExternal && testCases.length === 0) throw new Error(RUN_EMPTY_SELECTION);
-  await ensureCasePlugins(deps, datasetId, testCases);
+  config.connectorSnapshots = await snapshotCaseConnectors(deps, testCases);
 
   const { mode: _mode, ...restParams } = params;
   try {

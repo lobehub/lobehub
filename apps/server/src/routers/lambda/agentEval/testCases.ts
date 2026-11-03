@@ -13,6 +13,7 @@ import {
 } from '@/server/services/agentEvalRun/caseFromTopic';
 import { createEvalRunDeps } from '@/server/services/agentEvalRun/deps';
 
+import { validateEvalConnectorBindings } from './connectorBindings';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 import {
   evalCaseEnvironmentSchema,
@@ -79,6 +80,10 @@ export const testCaseRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        await validateEvalConnectorBindings(
+          ctx.evalConnectorService,
+          input.content.environment?.connectorBindings,
+        );
         const result = await ctx.testCaseModel.create(input);
         if (!result) {
           throw new TRPCError({
@@ -150,6 +155,11 @@ export const testCaseRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        for (const testCase of input.cases)
+          await validateEvalConnectorBindings(
+            ctx.evalConnectorService,
+            testCase.content.environment?.connectorBindings,
+          );
         const testCases = input.cases.map((c) => ({
           ...c,
           datasetId: input.datasetId,
@@ -198,6 +208,10 @@ export const testCaseRouter = router({
       const { id, ...data } = input;
       let result;
       try {
+        await validateEvalConnectorBindings(
+          ctx.evalConnectorService,
+          data.content?.environment?.connectorBindings,
+        );
         result = await ctx.testCaseModel.update(id, data);
       } catch (error) {
         if (error instanceof AgentEvalDatasetWriteError) {

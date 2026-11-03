@@ -6,6 +6,7 @@ import { AgentEvalDatasetWriteError } from '@/database/models/agentEval/datasetA
 import type * as DatasetPackageRepository from '@/database/repositories/agentEvalDatasetPackage';
 import { AgentEvalDatasetPackageImportError } from '@/database/repositories/agentEvalDatasetPackage';
 import { createCallerFactory } from '@/libs/trpc/lambda';
+import { EvalConnectorBindingError } from '@/server/services/agentEvalConnector';
 
 import { datasetRouter } from './datasets';
 
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   getFileMetadata: vi.fn(),
   deleteFile: vi.fn(),
   releaseBestEffort: vi.fn(),
+  validateBindings: vi.fn(),
 }));
 vi.mock('@/database/repositories/agentEvalDatasetPackage', async (importOriginal) => {
   const actual = await importOriginal<typeof DatasetPackageRepository>();
@@ -31,6 +33,7 @@ vi.mock('./procedures', async () => {
   const procedure = publicProcedure.use((opts) =>
     opts.next({
       ctx: {
+        evalConnectorService: { validateBindings: mocks.validateBindings },
         fileUploadService: {
           assertActiveOrLegacy: mocks.assertActiveOrLegacy,
           releaseBestEffort: mocks.releaseBestEffort,
@@ -73,6 +76,7 @@ beforeEach(() => {
   });
   mocks.releaseBestEffort.mockResolvedValue(undefined);
   mocks.deleteFile.mockResolvedValue(undefined);
+  mocks.validateBindings.mockResolvedValue(undefined);
 });
 
 describe('dataset ZIP API', () => {
@@ -171,5 +175,49 @@ describe('dataset ZIP API', () => {
     await expect(caller.importDatasetPackage({ pathname: 'legacy-upload' })).resolves.toMatchObject(
       { count: 1 },
     );
+  });
+  it('redacts private connection URLs and credentials from the ZIP preview', async () => {
+    mocks.getFileByteArray.mockResolvedValue(
+      archive({
+        ...manifest,
+        connections: {
+          privateMock: {
+            credentials: { token: 'synthetic-private-token', type: 'bearer' },
+            name: 'Private mock',
+            url: 'https://private-mock.example/mcp',
+          },
+        },
+        environments: [
+          {
+            ...manifest.environments[0],
+            connectionBindings: { example: { connectionKey: 'privateMock' } },
+          },
+        ],
+      }),
+    );
+    const preview = await caller.parseDatasetFile({ filename: 'private.zip', pathname: 'upload' });
+    expect(preview).toMatchObject({
+      datasetPackage: {
+        connectionRequirements: [{ providedServices: ['example'], services: ['example'] }],
+        embeddedConnections: [{ authConfigured: true, key: 'privateMock', name: 'Private mock' }],
+      },
+    });
+    expect(JSON.stringify(preview)).not.toContain('synthetic-private-token');
+    expect(JSON.stringify(preview)).not.toContain('private-mock.example');
+  });
+  it('refuses inaccessible existing connections before creating an import and retains the upload', async () => {
+    mocks.validateBindings.mockRejectedValue(
+      new EvalConnectorBindingError('The selected mock connection is unavailable'),
+    );
+    await expect(
+      caller.importDatasetPackage({
+        environmentBindings: {
+          world: { example: { connectorId: 'b34a8f4d-349a-41a9-b307-3a8754e8e5a8' } },
+        },
+        pathname: 'upload',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mocks.importPackage).not.toHaveBeenCalled();
+    expect(mocks.releaseBestEffort).not.toHaveBeenCalled();
   });
 });

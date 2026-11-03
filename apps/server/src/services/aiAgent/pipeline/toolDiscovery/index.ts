@@ -34,6 +34,7 @@ import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import { AgentEvalConnectorService } from '@/server/services/agentEvalConnector';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { resolveUnsupportedMessageApis } from '@/server/services/bot/platforms/messageCapabilities';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -102,6 +103,7 @@ export const discoverTools = async (
     disableTools,
     disabledPluginIds: requestedDisabledPluginIds,
     discordContext,
+    evalConnectorSnapshots,
     exclusivePluginIds,
     externalFileTypes: rawExternalFileTypes,
     functionTools,
@@ -143,6 +145,15 @@ export const discoverTools = async (
   let hasEnabledKnowledgeBases = false;
   let operationAgentGroup: AgentGroupConfig | undefined;
   const isBotConversation = !!(botContext || discordContext);
+  const boundConnectorIds = new Set(Object.keys(evalConnectorSnapshots ?? {}));
+  const boundConnectorManifests = evalConnectorSnapshots
+    ? (
+        await new AgentEvalConnectorService(deps.db, deps.userId, deps.workspaceId).resolveBindings(
+          evalConnectorSnapshots,
+          evalConnectorSnapshots,
+        )
+      ).manifests
+    : [];
 
   // Device-tool access (`canUseDevice` / `deviceAccessReason`) was resolved
   // once before the hetero early exit; the decision flows into the
@@ -217,8 +228,11 @@ export const discoverTools = async (
     : startToolReads(deps, {
         agentConfig,
         attachedFileIds,
-        candidateIds: [...agentPlugins],
-        exclusivePluginIds,
+        candidateIds: agentPlugins.filter((identifier) => !boundConnectorIds.has(identifier)),
+        // Bound eval tools must not auto-discover unrelated credential-bearing
+        // connectors. This limits reads only; progressive activation remains enabled.
+        exclusivePluginIds:
+          exclusivePluginIds ?? (evalConnectorSnapshots ? agentPlugins : undefined),
         isGoalTurn,
         projectId: appContext?.projectId,
         requestedDeviceId,
@@ -250,6 +264,7 @@ export const discoverTools = async (
     const disabledPluginIdSet = new Set(disabledPluginIds);
     const installedPlugins = (await toolReads.installedPlugins).filter(
       (p) =>
+        !boundConnectorIds.has(p.identifier) &&
         !disabledPluginIdSet.has(p.identifier) &&
         (!shareGrantedExtensionIds || shareGrantedExtensionIds.has(p.identifier)),
     );
@@ -274,7 +289,10 @@ export const discoverTools = async (
     // borrowed tool runs on (see `buildOwnershipNote`).
     connectorOwnershipNote = await buildOwnershipNote(deps, connectors);
 
-    connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+    connectorManifests = [
+      ...buildConnectorManifests(connectorsMcp, connectorTools),
+      ...boundConnectorManifests,
+    ];
 
     scheduleConnectorRefresh(deps, {
       connectorGateKeeper,

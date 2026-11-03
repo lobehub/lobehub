@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AgentEvalDatasetWriteError } from '@/database/models/agentEval/datasetAccess';
 import { router } from '@/libs/trpc/lambda';
 
+import { validateEvalConnectorBindings } from './connectorBindings';
 import {
   importDatasetPackageProcedure,
   previewDatasetPackage,
@@ -48,6 +49,11 @@ export const datasetRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const { cases, ...dataset } = input;
+        for (const testCase of cases ?? [])
+          await validateEvalConnectorBindings(
+            ctx.evalConnectorService,
+            testCase.content.environment?.connectorBindings,
+          );
         const result = await ctx.datasetModel.create(dataset, cases);
         if (!result) {
           throw new TRPCError({

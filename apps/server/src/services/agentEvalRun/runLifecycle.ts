@@ -6,6 +6,7 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntime
 import { evaluateAndFinalizeRun } from './aggregate';
 import { deleteCaseAgents } from './caseAgent';
 import { assertRunCaseCompatibility } from './caseCompatibility';
+import { assertRunConnectorBindings } from './connectorBindings';
 import { createRunTopics } from './createRun';
 import type { EvalRunDeps } from './types';
 
@@ -78,6 +79,11 @@ export async function retryErrorCases(
   const allTopics = await deps.runTopicModel.findByRunId(runId);
   const errorTopics = allTopics.filter((t) => t.status === 'error' || t.status === 'timeout');
   await assertRunCaseCompatibility(deps, run, errorTopics);
+  await assertRunConnectorBindings(
+    deps,
+    run,
+    errorTopics.map((target) => target.testCaseId),
+  );
 
   if (errorTopics.length === 0) return { retryCount: 0 };
 
@@ -124,6 +130,7 @@ export async function retrySingleCase(deps: EvalRunDeps, runId: string, testCase
     throw new Error('Cannot retry: the attempt ran but was not judged; re-judge it instead');
   }
   await assertRunCaseCompatibility(deps, run, [runTopic]);
+  await assertRunConnectorBindings(deps, run, [testCaseId]);
 
   // 1. Delete old RunTopic association
   await deps.runTopicModel.deleteByRunAndTestCase(runId, testCaseId);

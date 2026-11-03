@@ -1,4 +1,4 @@
-import type { AgentEvalDatasetPackage } from '@lobechat/types';
+import type { AgentEvalDatasetPackage, AgentEvalDatasetPackageBindings } from '@lobechat/types';
 import { and, eq, isNotNull } from 'drizzle-orm';
 
 import {
@@ -12,11 +12,15 @@ import {
   agentEvalEnvironments,
   agentEvalRuns,
   agentEvalTestCases,
+  userConnectors,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere, normalizeWorkspaceId } from '../../utils/workspace';
+import { bindDatasetPackage } from './bindings';
+import { type EvalPackageCredentialEncryptor, preparePackageConnections } from './connections';
+import { AgentEvalDatasetPackageImportError } from './errors';
 
-export class AgentEvalDatasetPackageImportError extends Error {}
+export { AgentEvalDatasetPackageImportError } from './errors';
 
 /** Imports a complete package in one transaction, without mutating any existing cases or results. */
 export class AgentEvalDatasetPackageRepo {
@@ -26,6 +30,7 @@ export class AgentEvalDatasetPackageRepo {
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     workspaceId?: string,
+    private readonly credentialEncryptor?: EvalPackageCredentialEncryptor,
   ) {
     this.workspaceId = normalizeWorkspaceId(workspaceId) ?? undefined;
   }
@@ -33,13 +38,23 @@ export class AgentEvalDatasetPackageRepo {
   importPackage = async (params: {
     benchmarkId?: string;
     benchmarkName?: string;
+    bindings?: AgentEvalDatasetPackageBindings;
     datasetId?: string;
     name?: string;
     package: AgentEvalDatasetPackage;
     sha256: string;
-  }) =>
-    this.db.transaction(async (tx) => {
-      const pack = params.package;
+  }) => {
+    const connections = await preparePackageConnections(
+      params.package,
+      params.bindings,
+      this.credentialEncryptor,
+    );
+    const pack = bindDatasetPackage(
+      params.package,
+      params.bindings,
+      new Map(connections.map(({ key, row }) => [key, row.id])),
+    );
+    return this.db.transaction(async (tx) => {
       const scope = { userId: this.userId, workspaceId: this.workspaceId };
       const ownership = { userId: this.userId, workspaceId: this.workspaceId ?? null };
       let benchmarkId: string | null = null;
@@ -140,6 +155,15 @@ export class AgentEvalDatasetPackageRepo {
         datasetId = dataset.id;
       }
 
+      if (connections.length)
+        await tx.insert(userConnectors).values(
+          connections.map(({ row }) => ({
+            ...row,
+            ...ownership,
+            metadata: { agentEval: { datasetId, packageSha256: params.sha256 } },
+          })),
+        );
+
       // Package keys are local references, never existing database IDs or unique identifiers.
       const environments = pack.environments.length
         ? await tx
@@ -186,4 +210,5 @@ export class AgentEvalDatasetPackageRepo {
       await tx.insert(agentEvalTestCases).values(cases);
       return { benchmarkId, count: cases.length, datasetId, environmentCount: environments.length };
     });
+  };
 }

@@ -3,6 +3,7 @@ import type { EvalRunTopicResult, EvalThreadResult } from '@lobechat/types';
 import pMap from 'p-map';
 
 import type { ThreadModel } from '@/database/models/thread';
+import { EvalConnectorBindingError } from '@/server/services/agentEvalConnector';
 import {
   AgentEvalMemoryService,
   EvalMemoryFixtureConflictError,
@@ -12,6 +13,7 @@ import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 import { resolveTopicAgentId } from './caseAgent';
 import { assertRunCaseCompatibility, EvalCaseCompatibilityError } from './caseCompatibility';
 import { withResolvedEnvironment } from './caseEnvironment';
+import { assertCaseConnectorBindings } from './connectorBindings';
 import { loadTrajectoryData } from './trajectory';
 import type { EvalRunDeps } from './types';
 import { getCaseId, log } from './utils';
@@ -120,13 +122,21 @@ export async function canResumeTrajectory(
   if (!runTopic.testCase) return { canResume: false, reason: invalidResumeTargetReason };
   const testCase = await withResolvedEnvironment(deps, runTopic.testCase);
   try {
+    await assertCaseConnectorBindings(
+      deps,
+      testCase.content.environment,
+      run.config?.connectorSnapshots?.[params.testCaseId],
+    );
     await new AgentEvalMemoryService(deps.db, deps.userId, deps.workspaceId).assertResumeFixture({
       fixture: testCase.content.environment?.memory ?? {},
       ...params,
       topicId: runTopic.topicId,
     });
   } catch (error) {
-    if (error instanceof EvalMemoryFixtureConflictError)
+    if (
+      error instanceof EvalMemoryFixtureConflictError ||
+      error instanceof EvalConnectorBindingError
+    )
       return { canResume: false, reason: error.message };
     throw error;
   }

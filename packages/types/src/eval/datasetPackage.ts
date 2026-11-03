@@ -1,10 +1,49 @@
-import type { EvalCaseEnvironment, EvalTestCaseContent } from './agentEval';
+import type { EvalCaseEnvironment, EvalConnectorBindings, EvalTestCaseContent } from './agentEval';
 import type { RubricType } from './rubric';
 
-/** Portable content only: database IDs, ownership and credentials are never imported. */
+export type AgentEvalDatasetPackageEnvironment = Omit<EvalCaseEnvironment, 'connectorBindings'>;
+
+export interface AgentEvalDatasetPackageConnection {
+  credentials?:
+    { token: string; type: 'bearer' } | { headers: Record<string, string>; type: 'header' };
+  name: string;
+  url: string;
+}
+
+export type AgentEvalDatasetPackageConnectionBindings = Record<
+  string,
+  { connectionKey: string; transport?: 'mcp' | 'lobe-bench' }
+>;
+
+export interface AgentEvalDatasetPackageBindings {
+  caseBindings?: Record<string, EvalConnectorBindings>;
+  environmentBindings?: Record<string, EvalConnectorBindings>;
+}
+
+export interface AgentEvalDatasetPackageConnectionRequirement {
+  key: string;
+  name: string;
+  providedServices?: string[];
+  scope: 'environment' | 'case';
+  services: string[];
+}
+
+/** Editable installed targets. Keys are local environment/case IDs, not archive keys. */
+export interface AgentEvalDatasetConnectorRequirement {
+  bindings: EvalConnectorBindings;
+  key: string;
+  name: string;
+  scope: 'environment' | 'case';
+  services: string[];
+}
+
+/** Private packages may provision connections; installed IDs and ownership are never imported. */
 export interface AgentEvalDatasetPackage {
   cases: Array<{
-    content: EvalTestCaseContent;
+    connectionBindings?: AgentEvalDatasetPackageConnectionBindings;
+    content: Omit<EvalTestCaseContent, 'environment'> & {
+      environment?: AgentEvalDatasetPackageEnvironment;
+    };
     environmentKey?: string;
     evalConfig?: Record<string, unknown>;
     evalMode?: RubricType;
@@ -17,6 +56,7 @@ export interface AgentEvalDatasetPackage {
     };
     sortOrder?: number;
   }>;
+  connections?: Record<string, AgentEvalDatasetPackageConnection>;
   dataset: {
     description?: string;
     evalConfig?: Record<string, unknown>;
@@ -32,7 +72,8 @@ export interface AgentEvalDatasetPackage {
     name: string;
   };
   environments: Array<{
-    config: EvalCaseEnvironment;
+    connectionBindings?: AgentEvalDatasetPackageConnectionBindings;
+    config: AgentEvalDatasetPackageEnvironment;
     description?: string;
     key: string;
     name: string;
@@ -43,7 +84,9 @@ export interface AgentEvalDatasetPackage {
 
 export interface AgentEvalDatasetPackagePreview {
   caseCount: number;
+  connectionRequirements: AgentEvalDatasetPackageConnectionRequirement[];
   description?: string;
+  embeddedConnections?: Array<{ authConfigured: boolean; key: string; name: string }>;
   environmentCount: number;
   mockServices: string[];
   name: string;

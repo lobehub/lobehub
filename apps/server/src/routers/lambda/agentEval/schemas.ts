@@ -43,9 +43,22 @@ export const evalCaseAgentConfigSchema = z
   })
   .strict();
 
+export const evalConnectorBindingSchema = z
+  .object({
+    connectorId: z.uuid(),
+    transport: z.enum(['mcp', 'lobe-bench']).optional(),
+  })
+  .strict();
+
+export const evalConnectorBindingsSchema = z.record(
+  z.string().trim().min(1).max(255),
+  evalConnectorBindingSchema,
+);
+
 export const evalCaseEnvironmentSchema = z
   .object({
     agent: evalCaseAgentConfigSchema.optional(),
+    connectorBindings: evalConnectorBindingsSchema.optional(),
     envPrompt: z.string().optional(),
     memory: evalMemoryFixtureSchema.optional(),
     mock: z
@@ -69,9 +82,8 @@ export const evalCaseEnvironmentSchema = z
         }
       }, 'timezone must be a supported time zone')
       .optional(),
-    // Which connectors are forwarded and with what timeout. Where they are
-    // forwarded to is the server's trusted mock (EVAL_TOOL_MOCK_BASE_URL); an
-    // `endpoint` supplied here is rejected rather than trusted.
+    // Legacy logical service requirements and timeouts. The selected connection,
+    // never case content, supplies the endpoint and credentials.
     toolForwarding: z
       .record(
         z.string().trim().min(1),

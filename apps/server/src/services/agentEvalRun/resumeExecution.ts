@@ -9,6 +9,7 @@ import {
 
 import { contenderChatConfigOf } from './caseAgent';
 import { recordTrajectoryCompletion } from './completion';
+import { assertCaseConnectorBindings } from './connectorBindings';
 import { createEvalRunDeps } from './deps';
 import { canResumeTrajectory } from './resumeTarget';
 import { interruptEvalOperations } from './runLifecycle';
@@ -42,6 +43,14 @@ export async function executeResumedTrajectory(
   if (!resumeCheck.canResume) {
     return { reason: resumeCheck.reason, status: 'cancelled' as const, topicId };
   }
+
+  const run = await deps.runModel.findById(runId);
+  await assertCaseConnectorBindings(
+    deps,
+    environment,
+    run?.config?.connectorSnapshots?.[testCaseId],
+    true,
+  );
 
   // Validate the original fixture before the resume claim can reset prior evidence.
   const memory = await prepareTrialMemory(deps, {
@@ -101,7 +110,7 @@ export async function executeResumedTrajectory(
       agentId: targetAgentId,
       appContext: { ...appContext, suppressSignal: true },
       autoStart: true,
-      chatConfigOverride: contenderChatConfigOf(await deps.runModel.findById(runId)),
+      chatConfigOverride: contenderChatConfigOf(run),
       trigger: RequestTrigger.Eval,
       hooks: [
         {
@@ -148,6 +157,7 @@ export async function executeResumedTrajectory(
         params.caseId,
         memory,
         getEvalAttemptId({ runId, topicId }),
+        run?.config?.connectorSnapshots?.[testCaseId],
       ),
       initialLlmCalls: prevLlmCalls,
       onOperationCreated: bindOperation,
@@ -218,6 +228,14 @@ export async function executeResumedThreadTrajectory(
   }
 
   // Keep the prior attempt evidence intact if its original fixture is unknown or changed.
+  const run = await deps.runModel.findById(runId);
+  await assertCaseConnectorBindings(
+    deps,
+    environment,
+    run?.config?.connectorSnapshots?.[testCaseId],
+    true,
+  );
+
   const memory = await prepareTrialMemory(deps, {
     environment,
     resume: true,
@@ -274,7 +292,7 @@ export async function executeResumedThreadTrajectory(
       agentId: targetAgentId,
       appContext: { ...appContext, suppressSignal: true },
       autoStart: true,
-      chatConfigOverride: contenderChatConfigOf(await deps.runModel.findById(runId)),
+      chatConfigOverride: contenderChatConfigOf(run),
       trigger: RequestTrigger.Eval,
       hooks: [
         {
@@ -321,6 +339,7 @@ export async function executeResumedThreadTrajectory(
         caseId,
         memory,
         getEvalAttemptId({ runId, threadId, topicId }),
+        run?.config?.connectorSnapshots?.[testCaseId],
       ),
       initialLlmCalls: prevLlmCalls,
       onOperationCreated: bindOperation,

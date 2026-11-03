@@ -1,10 +1,14 @@
 'use client';
 
-import type { AgentEvalDatasetPackagePreview } from '@lobechat/types';
+import type {
+  AgentEvalDatasetPackageBindings,
+  AgentEvalDatasetPackagePreview,
+} from '@lobechat/types';
 import { Alert, Flexbox, toast } from '@lobehub/ui';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { hasPartialConnectorBindings } from '@/features/AgentEval/ConnectorBindings/bindings';
 import {
   type DatasetPackageBenchmark,
   DatasetPackagePreview,
@@ -62,6 +66,7 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
   const [totalCount, setTotalCount] = useState(0);
   const [format, setFormat] = useState<'csv' | 'json' | 'jsonl' | 'xlsx' | 'zip'>();
   const [datasetPackage, setDatasetPackage] = useState<AgentEvalDatasetPackagePreview>();
+  const [connectionBindings, setConnectionBindings] = useState<AgentEvalDatasetPackageBindings>({});
   const [packageName, setPackageName] = useState('');
   const [benchmarkId, setBenchmarkId] = useState(initialBenchmarkId);
   const [benchmarkName, setBenchmarkName] = useState('');
@@ -75,6 +80,7 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
   const canImport =
     format === 'zip'
       ? !!datasetPackage &&
+        !hasPartialConnectorBindings(datasetPackage.connectionRequirements, connectionBindings) &&
         (!!datasetId || (!!packageName.trim() && (!!benchmarkId || !!benchmarkName.trim())))
       : !!datasetId && hasInputMapping;
 
@@ -125,6 +131,7 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
         setFormat(result.format === 'auto' ? undefined : result.format);
         if (result.format === 'zip') {
           setDatasetPackage(result.datasetPackage);
+          setConnectionBindings({});
           setPackageName(result.datasetPackage.name);
           setBenchmarkName(result.datasetPackage.name);
         } else {
@@ -176,6 +183,7 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
     try {
       if (format === 'zip') {
         const result = await agentEvalService.importDatasetPackage({
+          ...connectionBindings,
           ...(datasetId
             ? { datasetId }
             : {
@@ -224,6 +232,7 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
     buildFieldMapping,
     canImport,
     close,
+    connectionBindings,
     datasetId,
     filename,
     format,
@@ -258,6 +267,7 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
           benchmarkId={benchmarkId}
           benchmarkName={benchmarkName}
           benchmarks={benchmarks}
+          bindings={connectionBindings}
           disabled={importing}
           existingDataset={!!datasetId}
           name={packageName}
@@ -265,6 +275,7 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
           samples={preview}
           onBenchmarkIdChange={setBenchmarkId}
           onBenchmarkNameChange={setBenchmarkName}
+          onBindingsChange={setConnectionBindings}
           onNameChange={setPackageName}
         />
       )}

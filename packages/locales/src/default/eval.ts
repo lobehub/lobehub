@@ -197,7 +197,7 @@ export default {
   'dataset.import.package.instructions':
     'Upload your dataset ZIP. The ZIP must contain dataset.json at its root.',
   'dataset.import.package.mockServices':
-    'Mock services used: {{services}}. Execution uses the service configured for this deployment.',
+    'Mock services used: {{services}}. Each service uses its bound connection.',
   'dataset.import.package.name': 'Dataset name',
   'dataset.import.package.newBenchmark': 'Create a new benchmark',
   'dataset.import.package.preserved':
@@ -869,11 +869,6 @@ export default {
   'lobeBench.case.readOnly': 'read-only',
   'lobeBench.unit.min': '{{value}} min',
   'lobeBench.benchmark.runCases': '{{selected}} of {{total}} cases',
-  'lobeBench.benchmark.mock.unreachable':
-    'The mock tool service is not answering ({{error}}). Cases that use mocked tools will fail until it is back.',
-  'lobeBench.benchmark.mock.noToken':
-    'The mock tool service answers, but this server has no forwarding token configured (EVAL_TOOL_FORWARDING_TOKEN); the mock will refuse its calls.',
-  'lobeBench.benchmark.mock.retry': 'Check again',
   'lobeBench.new.confirm.title': 'Start this experiment?',
   'lobeBench.new.confirm.line':
     '{{cases}} cases × {{contenders}} contenders × {{k}} attempts each = {{attempts}} attempts.',
@@ -903,26 +898,11 @@ export default {
     'Grades every attempt. Pick a model that is not one of the contenders; a case set or a case can still name its own judge.',
   'lobeBench.settings.judge.placeholder': 'System default (the topic model of your assistant)',
   'lobeBench.settings.judge.clear': 'Use system default',
-  'lobeBench.settings.mock': 'Mock tool service',
-  'lobeBench.settings.mock.hint':
-    'Tool calls of mocked connectors go to the mock tool service this server is deployed with. Its address and forwarding token are server configuration (EVAL_TOOL_MOCK_BASE_URL, EVAL_TOOL_FORWARDING_TOKEN), never set on this page.',
-  'lobeBench.settings.mock.dataset': 'Dataset on the mock (optional)',
-  'lobeBench.settings.mock.status.ok': 'Reachable · HTTP {{status}}',
-  'lobeBench.settings.mock.status.token': 'forwarding token configured',
   'lobeBench.settings.grading.title': 'Grading',
   'lobeBench.settings.grading.line': 'Attempts are graded by {{model}}.',
   'lobeBench.settings.grading.unset': 'Attempts are graded by the system default model.',
   'lobeBench.settings.grading.hint':
     'Comes with Lobe Bench. Any experiment can choose a different grader when you start it.',
-  'lobeBench.settings.sim.title': 'Tool simulation',
-  'lobeBench.settings.sim.hint':
-    'The simulated services the cases call (Notion, Gmail, Shopify and the rest). Nothing real is touched.',
-  'lobeBench.settings.sim.online': 'Online',
-  'lobeBench.settings.sim.offline':
-    'Offline. Experiments that use simulated tools will fail until it is back; ask the administrator.',
-  'lobeBench.settings.sim.noToken': 'Not connected on this server; ask the administrator.',
-  'lobeBench.settings.sim.set': '{{name}}: {{cases}} cases ready',
-  'lobeBench.settings.sim.setDown': '{{name}}: offline',
   'lobeBench.settings.mine.title': 'Your defaults for new experiments',
   'lobeBench.settings.mine.hint': 'Only you see these; every experiment can still change them.',
   'lobeBench.settings.mine.reset': 'Reset',
@@ -948,14 +928,6 @@ export default {
   'lobeBench.new.judge': 'Judge model',
   'lobeBench.new.judge.hint':
     'Grades every attempt of this experiment. Leave empty to use the benchmark default.',
-  'lobeBench.settings.mock.status.upstreamOk':
-    'Case set "{{dataset}}" engine: reachable · {{cases}} cases · release {{release}}',
-  'lobeBench.settings.mock.status.upstreamDown':
-    'Case set "{{dataset}}" engine: not answering ({{error}})',
-  'lobeBench.settings.mock.status.noToken': 'forwarding token missing on this server',
-  'lobeBench.settings.mock.status.down': 'Not answering: {{error}}',
-  'lobeBench.settings.mock.status.none':
-    'No mock tool service configured on this server (EVAL_TOOL_MOCK_BASE_URL); cases that declare mock connectors cannot run.',
   'lobeBench.settings.defaults': 'New experiment defaults',
   'lobeBench.settings.defaults.hint':
     'What the New experiment form starts with; every value can still be changed per experiment.',
@@ -1124,4 +1096,42 @@ export default {
   'lobeBench.overview.attention.external': '{{count}} cases awaiting external grading',
   'caseDetail.judgeError.regradeHint':
     'The original answer is retained. Return to the experiment to re-grade it without running the model again.',
+  'connections.title': 'Mock MCP connections',
+  'connections.hint':
+    'Choose a connection for each service. Each connection manages its own address and authentication. The same connection can serve several services.',
+  'connections.environment': 'Environment',
+  'connections.case': 'Case override',
+  'connections.fromPackage': 'Use the connection included in the ZIP',
+  'connections.configureLater': 'Configure later',
+  'connections.unavailable': 'Connection unavailable — choose another',
+  'connections.transport': 'Protocol for {{service}}',
+  'connections.standard': 'Standard MCP',
+  'connections.adapter': 'LobeBench mock adapter',
+  'connections.empty': 'No available HTTP connections yet. Create one here, then choose it above.',
+  'connections.create': 'Create connection',
+  'connections.refresh': 'Refresh connections',
+  'connections.included': 'Connections included in this ZIP',
+  'connections.autoImport':
+    'These connections will be created and bound automatically when you import. You do not need to enter an address or token.',
+  'connections.authIncluded': 'Access credentials included',
+  'connections.noAuth': 'No access credentials included',
+  'connections.importLater':
+    'Some services have no connection included. You can import now and configure them in the dataset before running.',
+  'connections.optional': 'Choose existing connections (optional)',
+  'connections.completeScope':
+    'Choose every service in an edited environment or case, or clear your changes to configure it later.',
+  'connections.saved': 'Connections saved',
+  'connections.cancel': 'Cancel',
+  'connections.save': 'Save connections',
+  'connections.editHint':
+    'Changing a connection affects future runs. Existing run results are retained. Edit the connection itself in Settings to change its address or authentication.',
+  'connections.checking': 'Checking connection availability…',
+  'connections.missing': '{{count}} service bindings need a connection before running.',
+  'connections.configured': 'All required services have a connection.',
+  'connections.manage': 'Configure connections',
+  'connections.datasetHint':
+    'Connections are shared by cases using the same environment. Availability here confirms the saved binding; the service is checked when a run starts.',
+  'connections.settingsHint':
+    'Mock services use the connections bound to each dataset’s environments and cases. ZIP imports can configure them automatically. Open a dataset to change its bindings.',
+  'connections.openManager': 'Manage connection addresses and authentication',
 };

@@ -4,6 +4,7 @@ import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '
 import { ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { EvalConnectorUpdateError, normalizeEvalConnectorPatch } from './connectorEval';
 
 interface GateKeeper {
   decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
@@ -31,6 +32,8 @@ export interface PublicConnectorRecord {
   isEnabled: boolean;
   mcpConnectionType: string | null;
   mcpServerUrl: string | null;
+  /** An Agent mount makes a base connection unavailable to other executors. */
+  mountedByAgentId: string | null;
   name: string;
   sourceType: string;
   status: string;
@@ -91,6 +94,7 @@ export class ConnectorModel {
     isEnabled: userConnectors.isEnabled,
     mcpConnectionType: userConnectors.mcpConnectionType,
     mcpServerUrl: userConnectors.mcpServerUrl,
+    mountedByAgentId: sql<string | null>`${userConnectors.metadata} ->> 'mountedByAgentId'`,
     name: userConnectors.name,
     sourceType: userConnectors.sourceType,
     status: userConnectors.status,
@@ -115,11 +119,20 @@ export class ConnectorModel {
     // caller down at plan time. See the note on `TopicModel`. `''` is a safe
     // sentinel — a mount reference is always a real agent id, never empty.
     const mountedBy = sql`COALESCE(${userConnectors.metadata} ->> 'mountedByAgentId', '')`;
+    // Private Dataset imports are usable only through an exact evaluation binding.
+    // Exclude them before priority selection and credential decryption in ordinary chat.
+    const notEvalOnly = sql`COALESCE(${userConnectors.metadata} ->> 'agentEval', '') = ''`;
     if (!agentId) {
-      return and(this.ownership(), isNull(userConnectors.agentId), sql`${mountedBy} = ''`);
+      return and(
+        this.ownership(),
+        notEvalOnly,
+        isNull(userConnectors.agentId),
+        sql`${mountedBy} = ''`,
+      );
     }
     return and(
       this.ownership(),
+      notEvalOnly,
       or(
         eq(userConnectors.agentId, agentId),
         and(
@@ -443,21 +456,41 @@ export class ConnectorModel {
     patch: UpdateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<void> => {
-    const credentials =
-      patch.credentials !== undefined && patch.credentials !== null
-        ? await encryptCredentials(patch.credentials, gateKeeper)
-        : undefined;
-
-    const set = {
-      ...patch,
-      ...(credentials !== undefined ? { credentials } : {}),
-      updatedAt: new Date(),
-    };
-
-    await this.db
-      .update(userConnectors)
-      .set(set)
-      .where(and(eq(userConnectors.id, id), this.ownership()));
+    await this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(userConnectors)
+        .where(and(eq(userConnectors.id, id), this.ownership()))
+        .limit(1)
+        .for('update');
+      if (!current) return;
+      const normalized = await normalizeEvalConnectorPatch(
+        current,
+        patch,
+        gateKeeper?.decrypt.bind(gateKeeper),
+      );
+      if (current.metadata?.agentEval && normalized.credentials && !gateKeeper) {
+        throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
+      }
+      let credentials: string | undefined;
+      if (normalized.credentials !== undefined && normalized.credentials !== null) {
+        try {
+          credentials = await encryptCredentials(normalized.credentials, gateKeeper);
+        } catch (error) {
+          if (current.metadata?.agentEval)
+            throw new EvalConnectorUpdateError('Could not securely store the mock connection');
+          throw error;
+        }
+      }
+      await tx
+        .update(userConnectors)
+        .set({
+          ...normalized,
+          ...(credentials !== undefined ? { credentials } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(userConnectors.id, id), this.ownership()));
+    });
   };
 
   updateStatus = async (id: string, status: ConnectorStatus): Promise<void> => {

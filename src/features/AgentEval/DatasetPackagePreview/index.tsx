@@ -1,11 +1,17 @@
 'use client';
 
-import type { AgentEvalDatasetPackagePreview } from '@lobechat/types';
-import { Flexbox, Input, Select, Tag, Text } from '@lobehub/ui';
+import type {
+  AgentEvalDatasetPackageBindings,
+  AgentEvalDatasetPackagePreview,
+} from '@lobechat/types';
+import { Accordion, Flexbox, Input, Select, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { ConnectorBindings } from '@/features/AgentEval/ConnectorBindings';
+import { hasPartialConnectorBindings } from '@/features/AgentEval/ConnectorBindings/bindings';
 
 const styles = stylex.create({
   sample: {
@@ -28,11 +34,13 @@ interface DatasetPackagePreviewProps {
   benchmarkId?: string;
   benchmarkName: string;
   benchmarks: DatasetPackageBenchmark[];
+  bindings: AgentEvalDatasetPackageBindings;
   disabled?: boolean;
   existingDataset?: boolean;
   name: string;
   onBenchmarkIdChange: (id: string | undefined) => void;
   onBenchmarkNameChange: (name: string) => void;
+  onBindingsChange: (bindings: AgentEvalDatasetPackageBindings) => void;
   onNameChange: (name: string) => void;
   preview: AgentEvalDatasetPackagePreview;
   samples: Array<{ input?: unknown }>;
@@ -40,6 +48,8 @@ interface DatasetPackagePreviewProps {
 
 /** A structured package already contains its case fields, rules and environments. */
 export const DatasetPackagePreview = ({
+  bindings,
+  onBindingsChange,
   benchmarkId,
   benchmarkName,
   benchmarks,
@@ -78,6 +88,53 @@ export const DatasetPackagePreview = ({
           </Text>
         )}
       </Flexbox>
+
+      {!!preview.embeddedConnections?.length && (
+        <Flexbox gap={8}>
+          <Text weight={500}>{t('connections.included')}</Text>
+          <Text fontSize={13} type="secondary">
+            {t('connections.autoImport')}
+          </Text>
+          {preview.embeddedConnections.map((connection) => (
+            <Flexbox horizontal gap={8} key={connection.key} wrap="wrap">
+              <Text>{connection.name}</Text>
+              <Tag>
+                {t(connection.authConfigured ? 'connections.authIncluded' : 'connections.noAuth')}
+              </Tag>
+            </Flexbox>
+          ))}
+        </Flexbox>
+      )}
+      {preview.connectionRequirements.some((requirement) =>
+        requirement.services.some((service) => !requirement.providedServices?.includes(service)),
+      ) && <Text type="secondary">{t('connections.importLater')}</Text>}
+      {preview.connectionRequirements.some(
+        (requirement) => !requirement.providedServices?.length,
+      ) && (
+        <Flexbox gap={8}>
+          {hasPartialConnectorBindings(preview.connectionRequirements, bindings) && (
+            <Text type="danger">{t('connections.completeScope')}</Text>
+          )}
+          <Accordion
+            items={[
+              {
+                key: 'connections',
+                title: t('connections.optional'),
+                children: (
+                  <ConnectorBindings
+                    disabled={disabled}
+                    value={bindings}
+                    requirements={preview.connectionRequirements.filter(
+                      (requirement) => !requirement.providedServices?.length,
+                    )}
+                    onChange={onBindingsChange}
+                  />
+                ),
+              },
+            ]}
+          />
+        </Flexbox>
+      )}
 
       {!existingDataset && (
         <>

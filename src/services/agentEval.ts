@@ -1,6 +1,6 @@
 import type {
+  AgentEvalDatasetPackageBindings,
   AgentEvalRunListItem,
-  BenchmarkMockStatus,
   EvalCaseEnvironment,
   EvalConfig,
   EvalRunInputConfig,
@@ -81,15 +81,24 @@ class AgentEvalService {
     return lambdaClient.agentEval.deleteBenchmark.mutate({ id });
   }
 
-  /** Whether the benchmark's mock tool service answers (and this server holds its token). */
-  async checkBenchmarkMock(id: string): Promise<BenchmarkMockStatus> {
-    return lambdaClient.agentEval.checkBenchmarkMock.query({ id });
-  }
-
   // ============ Dataset ============
   // ============================================
   // Environments
   // ============================================
+  async listEvalConnectors() {
+    return lambdaClient.agentEval.listEvalConnectors.query();
+  }
+
+  async getDatasetConnectorBindings(datasetId: string) {
+    return lambdaClient.agentEval.getDatasetConnectorBindings.query({ datasetId });
+  }
+
+  async updateDatasetConnectorBindings(
+    params: AgentEvalDatasetPackageBindings & { datasetId: string },
+  ) {
+    return lambdaClient.agentEval.updateDatasetConnectorBindings.mutate(params);
+  }
+
   async listEnvironments() {
     return lambdaClient.agentEval.listEnvironments.query();
   }
@@ -178,14 +187,16 @@ class AgentEvalService {
     return lambdaClient.agentEval.parseDatasetFile.mutate(params);
   }
 
-  async importDatasetPackage(params: {
-    benchmarkId?: string;
-    benchmarkName?: string;
-    datasetId?: string;
-    filename?: string;
-    name?: string;
-    pathname: string;
-  }) {
+  async importDatasetPackage(
+    params: AgentEvalDatasetPackageBindings & {
+      benchmarkId?: string;
+      benchmarkName?: string;
+      datasetId?: string;
+      filename?: string;
+      name?: string;
+      pathname: string;
+    },
+  ) {
     return lambdaClient.agentEval.importDatasetPackage.mutate(params);
   }
 

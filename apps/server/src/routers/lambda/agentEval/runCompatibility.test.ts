@@ -2,12 +2,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCallerFactory } from '@/libs/trpc/lambda';
+import { EvalConnectorBindingError } from '@/server/services/agentEvalConnector';
 import { EvalCaseCompatibilityError } from '@/server/services/agentEvalRun/caseCompatibility';
 import { EvalResumeConflictError } from '@/server/services/agentEvalRun/resumeTarget';
 
 import { runRouter } from './runs';
 
 const mocks = vi.hoisted(() => ({
+  assertConnectorBindings: vi.fn(),
   dataset: vi.fn(),
   rejudge: vi.fn(),
   rerun: vi.fn(),
@@ -34,6 +36,7 @@ vi.mock('./procedures', async () => {
           update: mocks.update,
         },
         runService: {
+          assertConnectorBindings: mocks.assertConnectorBindings,
           rejudgeRun: mocks.rejudge,
           resumeTrajectory: mocks.resume,
           rerunUnverifiedCases: mocks.rerun,
@@ -64,6 +67,16 @@ beforeEach(() => {
 });
 
 describe('run compatibility conflicts', () => {
+  it('rejects an unavailable mock binding before changing status or dispatching', async () => {
+    mocks.dataset.mockResolvedValue({ metadata: { release: 'v1' } });
+    mocks.assertConnectorBindings.mockRejectedValue(
+      new EvalConnectorBindingError('The selected mock connection is unavailable'),
+    );
+    await expect(runs.startRun({ id: 'run' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.trigger).not.toHaveBeenCalled();
+  });
+
   it('rejects starting an old-version run before changing its status or dispatching', async () => {
     await expect(runs.startRun({ id: 'run' })).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(mocks.update).not.toHaveBeenCalled();

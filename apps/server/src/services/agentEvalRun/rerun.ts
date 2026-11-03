@@ -1,4 +1,5 @@
 import { assertRunCaseCompatibility } from './caseCompatibility';
+import { assertRunConnectorBindings } from './connectorBindings';
 import { createRunTopics } from './createRun';
 import type { EvalRunDeps } from './types';
 
@@ -55,6 +56,11 @@ export async function rerunUnverifiedCases(
   const runTopics = await deps.runTopicModel.findByRunId(runId);
   const targets = runTopics.filter((runTopic) => needsRerun(runTopic));
   await assertRunCaseCompatibility(deps, run, targets);
+  await assertRunConnectorBindings(
+    deps,
+    run,
+    targets.map((target) => target.testCaseId),
+  );
   if (targets.length === 0) return { rerunCount: 0 };
 
   for (const target of targets) {

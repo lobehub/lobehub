@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { evalCaseSelectionSchema, evalRunChatConfigSchema } from '../evalRunConfig.schema';
+import {
+  evalCaseSelectionSchema,
+  evalRunChatConfigSchema,
+  evalRunInputConfigSchema,
+} from '../evalRunConfig.schema';
+
+it('does not accept client-authored mock connection snapshots', () => {
+  expect(
+    evalRunInputConfigSchema.parse({
+      connectorSnapshots: { case: { mock: { connectorId: 'foreign', fingerprint: 'forged' } } },
+      model: 'test-model',
+      provider: 'test-provider',
+    }),
+  ).toEqual({ model: 'test-model', provider: 'test-provider' });
+});
 
 describe('evalCaseSelectionSchema', () => {
   describe('canonical "all" — normalizes to omission', () => {

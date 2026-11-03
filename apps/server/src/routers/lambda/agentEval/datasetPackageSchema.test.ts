@@ -90,9 +90,9 @@ describe('dataset package schema', () => {
       ],
     };
     expect(validateDatasetPackage(mockPack).dataset.metadata?.mock?.dataset).toBe('synthetic-v1');
-    expect(() => validateDatasetPackage({ ...mockPack, dataset: example().dataset })).toThrow(
-      'must specify',
-    );
+    expect(validateDatasetPackage({ ...mockPack, dataset: example().dataset })).toMatchObject({
+      environments: mockPack.environments,
+    });
     expect(() =>
       validateDatasetPackage({
         ...mockPack,
@@ -118,5 +118,69 @@ describe('dataset package schema', () => {
         ],
       }),
     ).toThrow('Invalid dataset package');
+  });
+
+  it('rejects installation-specific connections in shared and inline package environments', () => {
+    const connectorBindings = {
+      example: { connectorId: 'b34a8f4d-349a-41a9-b307-3a8754e8e5a8' },
+    };
+    for (const value of [
+      {
+        ...example(),
+        environments: [{ config: { connectorBindings }, key: 'local', name: 'Local connection' }],
+      },
+      {
+        ...example(),
+        cases: [
+          { key: 'inline', content: { input: 'Do work', environment: { connectorBindings } } },
+        ],
+      },
+    ])
+      expect(() => validateDatasetPackage(value)).toThrow('Invalid dataset package');
+  });
+  it('accepts private portable connection definitions and rejects invalid references safely', () => {
+    const privatePack = {
+      ...example(),
+      connections: {
+        privateMock: {
+          credentials: { token: 'synthetic-private-token', type: 'bearer' },
+          name: 'Private mock',
+          url: 'https://mock.example/mcp',
+        },
+      },
+      environments: [
+        {
+          connectionBindings: { notion: { connectionKey: 'privateMock' } },
+          config: {},
+          key: 'private',
+          name: 'Private',
+        },
+      ],
+    };
+    expect(validateDatasetPackage(privatePack).connections?.privateMock.credentials).toMatchObject({
+      type: 'bearer',
+    });
+    expect(() => validateDatasetPackage({ ...privatePack, connections: {} })).toThrow(
+      'connection configuration',
+    );
+    for (const url of [
+      'invalid-url-synthetic-private-token',
+      'file:///private',
+      'https://token@mock.example',
+      'https://mock.example?token=synthetic-private-token',
+    ]) {
+      let message = '';
+      try {
+        validateDatasetPackage({
+          ...privatePack,
+          connections: { privateMock: { ...privatePack.connections.privateMock, url } },
+        });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain('connection configuration');
+      expect(message).not.toContain('synthetic-private-token');
+      expect(message).not.toContain(url);
+    }
   });
 });

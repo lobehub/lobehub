@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
 
+import { validateEvalConnectorBindings } from './connectorBindings';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 import { evalCaseEnvironmentSchema } from './schemas';
 
@@ -24,6 +25,10 @@ export const environmentRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        await validateEvalConnectorBindings(
+          ctx.evalConnectorService,
+          input.config.connectorBindings,
+        );
         return await ctx.environmentModel.create(input);
       } catch (error: any) {
         const pgError = error?.cause || error;
@@ -37,6 +42,9 @@ export const environmentRouter = router({
       }
     }),
   listEnvironments: agentEvalProcedure.query(async ({ ctx }) => ctx.environmentModel.query()),
+  listEvalConnectors: agentEvalProcedure.query(async ({ ctx }) =>
+    ctx.evalConnectorService.listAvailableConnectors(),
+  ),
   getEnvironment: agentEvalProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -58,6 +66,7 @@ export const environmentRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
+      await validateEvalConnectorBindings(ctx.evalConnectorService, data.config?.connectorBindings);
       const result = await ctx.environmentModel.update(id, data);
       if (!result) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
       return result;

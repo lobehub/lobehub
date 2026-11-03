@@ -1,14 +1,9 @@
-import type { BenchmarkMockStatus, BenchmarkMockUpstreamHealth } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
-import { getTrustedMockBaseUrl } from '@/server/services/agentEvalRun/mockService';
-import { getEvalMockConfig } from '@/server/services/agentEvalRun/utils';
 
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
-
-const MOCK_CHECK_TIMEOUT_MS = 5000;
 
 export const benchmarkRouter = router({
   // ============================================
@@ -54,63 +49,6 @@ export const benchmarkRouter = router({
     .input(z.object({ includeSystem: z.boolean().default(true) }).optional())
     .query(async ({ ctx, input }) => {
       return ctx.benchmarkModel.query(input?.includeSystem);
-    }),
-  /**
-   * Whether the benchmark's mock tool service answers. Reads `metadata.mock`
-   * and pings its health endpoint, so the UI can warn before an experiment
-   * runs tool cases against a mock that is down. Also tells whether this
-   * server holds the forwarding token the mock expects.
-   */
-  checkBenchmarkMock: agentEvalProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }): Promise<BenchmarkMockStatus> => {
-      const benchmark = await ctx.benchmarkModel.findById(input.id);
-      if (!benchmark) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Benchmark not found' });
-      }
-      // The address is deployment configuration; the benchmark only tells which
-      // dataset segment and connectors run on it.
-      const base = getTrustedMockBaseUrl();
-      const mock = base ? getEvalMockConfig(benchmark) : undefined;
-      const tokenConfigured = !!process.env.EVAL_TOOL_FORWARDING_TOKEN;
-      if (!base || !mock) {
-        const unconfigured: BenchmarkMockStatus = { configured: false, tokenConfigured };
-        return unconfigured;
-      }
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), MOCK_CHECK_TIMEOUT_MS);
-      try {
-        const response = await fetch(`${base}/healthz`, { signal: controller.signal });
-        // A mock may front other engines (one per case set); it reports them under `upstreams`.
-        let upstreams: Record<string, BenchmarkMockUpstreamHealth> | undefined;
-        try {
-          const body = (await response.json()) as {
-            upstreams?: Record<string, BenchmarkMockUpstreamHealth>;
-          };
-          if (body && typeof body.upstreams === 'object' && body.upstreams)
-            upstreams = body.upstreams;
-        } catch {
-          // Not JSON: nothing more to report.
-        }
-        const result: BenchmarkMockStatus = {
-          configured: true,
-          ok: response.ok,
-          status: response.status,
-          tokenConfigured,
-          ...(upstreams && { upstreams }),
-        };
-        return result;
-      } catch (error) {
-        const failed: BenchmarkMockStatus = {
-          configured: true,
-          error: error instanceof Error ? error.message : String(error),
-          ok: false,
-          tokenConfigured,
-        };
-        return failed;
-      } finally {
-        clearTimeout(timer);
-      }
     }),
   getBenchmark: agentEvalProcedure
     .input(z.object({ id: z.string() }))
