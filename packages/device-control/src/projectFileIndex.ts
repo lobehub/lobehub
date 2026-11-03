@@ -318,7 +318,7 @@ export const defaultGetProjectFileIndex = async (
     const rootResult = await execFileAsync(
       'git',
       ['-C', requestedScope, 'rev-parse', '--show-toplevel'],
-      { timeout: 5000 },
+      { timeout: 5000, windowsHide: true },
     ).catch((error) => error);
     const exitCode = rootResult?.code ?? rootResult?.exitCode;
     const root =
@@ -330,7 +330,7 @@ export const defaultGetProjectFileIndex = async (
           execFileAsync(
             'git',
             ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
-            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000, windowsHide: true },
           ),
           execFileAsync(
             'git',
@@ -343,7 +343,7 @@ export const defaultGetProjectFileIndex = async (
               '--others',
               '--exclude-standard',
             ],
-            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000, windowsHide: true },
           ).catch(() => ({ stdout: '' })),
           execFileAsync(
             'git',
@@ -358,7 +358,7 @@ export const defaultGetProjectFileIndex = async (
               '--exclude-standard',
               '--directory',
             ],
-            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000, windowsHide: true },
           ).catch(() => ({ stdout: '' })),
           execFileAsync(
             'git',
@@ -372,7 +372,7 @@ export const defaultGetProjectFileIndex = async (
               '--exclude-standard',
               '--directory',
             ],
-            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+            { maxBuffer: 64 * 1024 * 1024, timeout: 10_000, windowsHide: true },
           ).catch(() => ({ stdout: '' })),
         ]);
 
@@ -473,7 +473,7 @@ export const defaultSearchProjectFiles = async (
     const rootResult = await execFileAsync(
       'git',
       ['-C', requestedScope, 'rev-parse', '--show-toplevel'],
-      { timeout: 5000 },
+      { timeout: 5000, windowsHide: true },
     ).catch((error) => error);
     const exitCode = rootResult?.code ?? rootResult?.exitCode;
     const root =
@@ -487,12 +487,12 @@ export const defaultSearchProjectFiles = async (
         execFileAsync(
           'git',
           ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
-          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000, windowsHide: true },
         ),
         execFileAsync(
           'git',
           ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard'],
-          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000, windowsHide: true },
         ).catch(() => ({ stdout: '' })),
         execFileAsync(
           'git',
@@ -507,7 +507,7 @@ export const defaultSearchProjectFiles = async (
             '--exclude-standard',
             '--directory',
           ],
-          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000 },
+          { maxBuffer: 64 * 1024 * 1024, timeout: 10_000, windowsHide: true },
         ).catch(() => ({ stdout: '' })),
       ]);
 
