@@ -5,8 +5,9 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { ToolCallResponseMessage } from '@lobechat/device-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WebSocketServer } from 'ws';
+import { type WebSocket, WebSocketServer } from 'ws';
 
 interface CliResult {
   exitCode: number;
@@ -316,6 +317,74 @@ describe('connect daemon startup', () => {
       sockets.close();
     },
     30_000,
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects a restart inside its own shell without losing the daemon',
+    async () => {
+      const home = await mkdtemp(path.join(os.tmpdir(), 'lobehub-cli-self-restart-'));
+      tempHomes.push(home);
+      daemonHomes.push(home);
+      const server = createServer((_request, response) => {
+        response.setHeader('Content-Type', 'application/json');
+        response.end(JSON.stringify({ result: { data: { json: null } } }));
+      });
+      const sockets = new WebSocketServer({ server });
+      let connection: WebSocket | undefined;
+      const replies = new Map<string, ToolCallResponseMessage['result']>();
+      sockets.on('connection', (socket) => {
+        connection = socket;
+        socket.on('message', (raw) => {
+          const message = JSON.parse(String(raw));
+          if (message.type === 'auth') socket.send(JSON.stringify({ type: 'auth_success' }));
+          if (message.type === 'heartbeat') socket.send(JSON.stringify({ type: 'heartbeat_ack' }));
+          if (message.type === 'device_metrics') {
+            socket.send(JSON.stringify({ batchId: message.batchId, type: 'device_metrics_ack' }));
+          }
+          if (message.type === 'tool_call_response') replies.set(message.requestId, message.result);
+        });
+      });
+      const port = await listen(server);
+      const started = await runCli(
+        ['connect', '--daemon', '--gateway', `http://127.0.0.1:${port}`],
+        home,
+        {
+          LOBEHUB_JWT: unsignedJwt('fixture-user'),
+          LOBEHUB_SERVER: `http://127.0.0.1:${port}`,
+        },
+      );
+      expect(started.exitCode).toBe(0);
+      await vi.waitFor(() => expect(connection).toBeDefined());
+      const pidPath = path.join(home, '.lobehub', 'daemon.pid');
+      const originalPid = await readFile(pidPath, 'utf8');
+      const command = `bun ${JSON.stringify(path.resolve(import.meta.dirname, '../index.ts'))} connect restart`;
+      const invoke = (requestId: string, shellCommand: string) =>
+        connection!.send(
+          JSON.stringify({
+            requestId,
+            toolCall: {
+              apiName: 'runCommand',
+              arguments: JSON.stringify({ command: shellCommand, timeout: 5000 }),
+              identifier: 'lobe-local-system',
+            },
+            type: 'tool_call_request',
+          }),
+        );
+      invoke('restart', command);
+      await vi.waitFor(() => expect(replies.has('restart')).toBe(true), { timeout: 10_000 });
+      expect(replies.get('restart')?.content).toContain('No connector was stopped');
+      expect(replies.get('restart')?.content).toContain('local terminal or SSH');
+      expect(replies.get('restart')?.state).toEqual(expect.objectContaining({ exitCode: 1 }));
+      expect(await readFile(pidPath, 'utf8')).toBe(originalPid);
+      expect(process.kill(Number(originalPid), 0)).toBe(true);
+      invoke('still-connected', 'printf still-connected');
+      await vi.waitFor(() =>
+        expect(replies.get('still-connected')?.content).toContain('still-connected'),
+      );
+      expect(replies.get('still-connected')?.success).toBe(true);
+      sockets.close();
+    },
+    20_000,
   );
 
   it('remembers --gateway for that server and reuses it ahead of the advertised one', async () => {

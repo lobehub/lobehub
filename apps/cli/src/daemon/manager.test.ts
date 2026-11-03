@@ -330,22 +330,40 @@ describe('daemon manager', () => {
       expect(readPid()).toBeNull();
     });
 
+    it.skipIf(process.platform === 'win32')(
+      'refuses a restart from a daemon-owned shell before signaling',
+      async () => {
+        writePid(process.ppid);
+        writeStatus(statusFor(process.ppid));
+        const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+        try {
+          await expect(stopDaemonAndWait(0)).rejects.toThrow('terminal or shell');
+          expect(kill.mock.calls.every(([, signal]) => signal === 0)).toBe(true);
+          expect(readPid()).toBe(process.ppid);
+          expect(readStatus()?.pid).toBe(process.ppid);
+        } finally {
+          kill.mockRestore();
+        }
+      },
+    );
+
     it('retains metadata and refuses replacement if shutdown times out', async () => {
-      writePid(process.pid);
-      writeStatus(statusFor(process.pid));
+      writePid(999999);
+      writeStatus(statusFor(999999));
       const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
       try {
         await expect(stopDaemonAndWait(0)).rejects.toThrow('No replacement was started');
-        expect(readPid()).toBe(process.pid);
-        expect(readStatus()?.pid).toBe(process.pid);
+        expect(readPid()).toBe(999999);
+        expect(readStatus()?.pid).toBe(999999);
       } finally {
         kill.mockRestore();
       }
     });
 
     it('does not mistake an argv inspection failure for a completed shutdown', async () => {
-      writePid(process.pid);
-      writeStatus(statusFor(process.pid));
+      writePid(999999);
+      writeStatus(statusFor(999999));
+      vi.mocked(xSync).mockReturnValueOnce({ stdout: DAEMON_COMMAND } as any);
       vi.mocked(xSync).mockReturnValueOnce({ stdout: DAEMON_COMMAND } as any);
       vi.mocked(xSync).mockImplementation(() => {
         throw new Error('ps unavailable');
@@ -353,23 +371,39 @@ describe('daemon manager', () => {
       const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
       try {
         await expect(stopDaemonAndWait(0)).rejects.toThrow('No replacement was started');
-        expect(readPid()).toBe(process.pid);
+        expect(readPid()).toBe(999999);
+      } finally {
+        kill.mockRestore();
+      }
+    });
+
+    it('does not signal a PID whose identity changed during ancestry inspection', async () => {
+      writePid(999999);
+      writeStatus(statusFor(999999));
+      vi.mocked(xSync)
+        .mockReturnValueOnce({ stdout: DAEMON_COMMAND } as any)
+        .mockReturnValueOnce({ stdout: '/usr/bin/unrelated-process' } as any);
+      const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      try {
+        await expect(stopDaemonAndWait()).rejects.toThrow('Daemon identity changed');
+        expect(kill.mock.calls.every(([, signal]) => signal === 0)).toBe(true);
+        expect(readPid()).toBe(999999);
       } finally {
         kill.mockRestore();
       }
     });
 
     it('retains metadata if signaling the daemon is denied', async () => {
-      writePid(process.pid);
-      writeStatus(statusFor(process.pid));
+      writePid(999999);
+      writeStatus(statusFor(999999));
       const kill = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
         if (signal === 'SIGTERM') throw Object.assign(new Error('denied'), { code: 'EPERM' });
         return true;
       });
       try {
         await expect(stopDaemonAndWait()).rejects.toThrow('denied');
-        expect(readPid()).toBe(process.pid);
-        expect(readStatus()?.pid).toBe(process.pid);
+        expect(readPid()).toBe(999999);
+        expect(readStatus()?.pid).toBe(999999);
       } finally {
         kill.mockRestore();
       }

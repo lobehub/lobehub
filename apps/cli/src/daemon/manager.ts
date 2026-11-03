@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { x, xSync } from 'tinyexec';
 
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+import { assertExternalDaemonRestart } from './restartGuard';
 
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
 const STARTUP_TIMEOUT_MS = 30_000;
@@ -366,6 +367,13 @@ export function stopDaemon(): boolean {
 export async function stopDaemonAndWait(timeoutMs = 30_000): Promise<boolean> {
   const pid = getRunningDaemonPid();
   if (pid === null) return false;
+  await assertExternalDaemonRestart(pid);
+  // The ancestry check yielded; do not signal a PID reused during that interval.
+  if (isProcessAlive(pid) && !isDaemonProcess(pid)) {
+    throw new Error(
+      'Daemon identity changed during inspection. No connector was stopped; retry after checking lh connect status.',
+    );
+  }
   signalDaemonStop(pid);
   const deadline = Date.now() + timeoutMs;
   // Failure to inspect argv is not proof of exit. Be conservative even if the
