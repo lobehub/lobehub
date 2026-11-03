@@ -13,12 +13,27 @@ export const sliceActivityPage = <T>(items: T[], visibleCount: number) => {
   return { remaining: items.length - visible.length, visible };
 };
 
+interface ActivityPagingOptions {
+  /**
+   * Append a page when the sentinel below the list scrolls into view. Only
+   * safe when nothing follows the feed: with sections below it, scrolling
+   * toward them would keep loading pages above them until the whole history
+   * is mounted.
+   */
+  autoLoad?: boolean;
+}
+
 /**
  * Newest-first paging for the activity feed: shows `ACTIVITY_PAGE_SIZE`
  * entries, then appends another page when the sentinel below the list scrolls
- * into view (or the fallback button is pressed). Resets when the task changes.
+ * into view (`autoLoad`) or the fallback button is pressed. Resets when the
+ * task changes.
  */
-export const useActivityPaging = <T>(items: T[], resetKey: string | undefined) => {
+export const useActivityPaging = <T>(
+  items: T[],
+  resetKey: string | undefined,
+  { autoLoad = true }: ActivityPagingOptions = {},
+) => {
   const [visibleCount, setVisibleCount] = useState(ACTIVITY_PAGE_SIZE);
 
   // Reset during render (not in an effect) so a newly opened task never
@@ -35,9 +50,10 @@ export const useActivityPaging = <T>(items: T[], resetKey: string | undefined) =
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const hasMore = remaining > 0;
+  const observe = autoLoad && hasMore;
   useEffect(() => {
     const element = sentinelRef.current;
-    if (!element || !hasMore || typeof IntersectionObserver === 'undefined') return;
+    if (!element || !observe || typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) loadMore();
@@ -48,7 +64,7 @@ export const useActivityPaging = <T>(items: T[], resetKey: string | undefined) =
     return () => observer.disconnect();
     // `visibleCount` re-arms the observer after each page: if the sentinel is
     // still in view (short cards), the fresh observer fires again.
-  }, [hasMore, loadMore, visibleCount]);
+  }, [observe, loadMore, visibleCount]);
 
-  return { loadMore, remaining, sentinelRef, visible };
+  return { autoLoad, loadMore, remaining, sentinelRef, visible };
 };

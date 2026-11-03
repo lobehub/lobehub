@@ -425,9 +425,13 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
         : items,
     [items, variant],
   );
-  const { loadMore, remaining, sentinelRef, visible } = useActivityPaging(
+  // The result panel's verdict and artifacts sit below the feed, so it pages
+  // on demand only — auto-loading would push them away as the reader scrolls
+  // toward them. The detail page's feed is its last section.
+  const { autoLoad, loadMore, remaining, sentinelRef, visible } = useActivityPaging(
     pageableItems,
     activeTaskId,
+    { autoLoad: variant !== 'result' },
   );
 
   const commentInput = activeTaskId ? <CommentInput taskId={activeTaskId} /> : null;
@@ -516,7 +520,14 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   const loadMoreFooter =
     remaining > 0 ? (
       <>
-        <div aria-hidden ref={sentinelRef} style={{ height: 1 }} />
+        {autoLoad && (
+          <div
+            aria-hidden
+            data-testid={'activity-sentinel'}
+            ref={sentinelRef}
+            style={{ height: 1 }}
+          />
+        )}
         <Button size={'small'} style={{ alignSelf: 'center' }} type={'text'} onClick={loadMore}>
           {t('taskDetail.activitiesLoadMore', { count: remaining })}
         </Button>

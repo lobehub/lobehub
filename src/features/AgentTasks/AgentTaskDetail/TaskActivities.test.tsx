@@ -154,4 +154,16 @@ describe('TaskActivities paging', () => {
     expect(screen.getAllByTestId('comment')).toHaveLength(ACTIVITY_PAGE_SIZE);
     expect(screen.getByText('taskDetail.activitiesLoadMore:5')).toBeTruthy();
   });
+
+  it('auto-loads on scroll in the detail feed but not in the result panel', () => {
+    const { unmount } = render(<TaskActivities />);
+    expect(screen.getByTestId('activity-sentinel')).toBeTruthy();
+    unmount();
+
+    // Sections follow the feed in the result panel; a sentinel there would keep
+    // loading pages above them as the reader scrolls toward them.
+    render(<TaskActivities variant={'result'} />);
+    expect(screen.queryByTestId('activity-sentinel')).toBeNull();
+    expect(screen.getByText('taskDetail.activitiesLoadMore:480')).toBeTruthy();
+  });
 });
