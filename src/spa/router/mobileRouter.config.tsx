@@ -15,6 +15,7 @@ import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRout
 import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
 import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
+import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
 import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
@@ -317,6 +318,7 @@ export const mobileRoutes: RouteObject[] = [
             element: redirectElement('/settings/credential'),
             path: 'creds',
           },
+          { element: <LegacySandboxStorageRedirect />, path: 'drive' },
           // Every known tab gets a static segment: `/settings/memory` and
           // `/:workspaceSlug/memory` (or `/agent`, `/image`, …) tie on route
           // score, and the workspace tree would read `settings` as a slug.

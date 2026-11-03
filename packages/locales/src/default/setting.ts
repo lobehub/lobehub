@@ -4659,7 +4659,6 @@ When I am ___, I need ___
   'environments.files.readOnly':
     'Environment directories are read-only: only their own sessions write to them.',
   'environments.files.notFound': 'That folder doesn’t exist.',
-  'tab.drive': 'Storage',
   'drive.tabs.public': 'Public drive',
   'drive.tabs.personal': 'Personal drive',
   'drive.scope.public': 'Visible to all members',
@@ -4700,7 +4699,7 @@ When I am ___, I need ___
   'drive.retained.deleteConfirm.title': "Delete {{name}}'s personal drive?",
   'drive.retained.deleteConfirm.desc': 'Everything on it is deleted and cannot be recovered.',
   'drive.retained.deleted': 'Drive deleted',
-  'drive.usage.manage': 'Manage in Storage',
+  'drive.usage.manage': 'Manage in Sandbox Storage',
   'drive.explorer.newFolder': 'New folder',
   'drive.explorer.columns.name': 'Name',
   'drive.explorer.columns.modified': 'Date modified',

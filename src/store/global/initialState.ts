@@ -79,8 +79,6 @@ export enum SettingsTabs {
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
-  /** The cloud sandbox's network drives — labelled “Storage”; `storage` is local data. */
-  Drive = 'drive',
   Environments = 'environments',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */

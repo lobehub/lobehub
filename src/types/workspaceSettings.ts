@@ -18,7 +18,6 @@ export enum WorkspaceSettingsTabs {
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
-  Drive = 'drive',
   Environments = 'environments',
   General = 'general',
   Hotkey = 'hotkey',
