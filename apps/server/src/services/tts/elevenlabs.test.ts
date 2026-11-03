@@ -27,7 +27,7 @@ vi.mock('@/server/globalConfig', () => ({ getServerAiProviderConfig: vi.fn() }))
 const { INLINE_TTS_MAX_INPUT_CHARACTERS, TTSProviderError, TTSRequestError, TTSService } =
   await import('./index');
 
-const DEFAULT_VOICE = 'OZ0L6eISlOejga3XjDFt';
+const DEFAULT_VOICE = 'CwhRBWXzGAHq8TQ4Fs17';
 const AUDIO = new Uint8Array([0x49, 0x44, 0x33, 0x04]);
 
 const service = new TTSService({} as any, 'user-1');

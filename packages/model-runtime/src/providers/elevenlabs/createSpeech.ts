@@ -90,12 +90,12 @@ const DETAIL_STATUS_ERROR_TYPES: Record<string, ILobeAgentRuntimeErrorType> = {
 };
 
 /**
- * Free-tier keys cannot use Voice Library voices through the API, and the built-in voice
- * list (including the default) comes from the Voice Library.
+ * Free-tier keys cannot use Voice Library voices through the API, and every built-in
+ * voice except the default (Roger) comes from the Voice Library.
  * @see https://elevenlabs.io/docs/eleven-creative/voices/voice-library
  */
 export const ELEVENLABS_PAID_VOICE_HINT =
-  'Free-tier ElevenLabs keys cannot use Voice Library voices (including the default Talia) through the API: upgrade the plan, or pass a voice you own with --voice.';
+  'Free-tier ElevenLabs keys cannot use Voice Library voices (such as Talia) through the API: upgrade the plan, or pass the default voice or a voice you own with --voice.';
 
 /** Thrown inside the request flow and unwrapped into a runtime error payload. */
 class ElevenLabsSpeechError extends Error {

@@ -195,7 +195,7 @@ describe('ElevenLabs TTS model cards', () => {
     const voices = cardOf('eleven_v4').voices!;
     const ids = voices.map((voice) => voice.id);
 
-    expect(voices).toHaveLength(19);
+    expect(voices).toHaveLength(20);
     expect(voices.every((voice) => voice.language === 'multilingual')).toBe(true);
     // Replacements for Sarah, George and Daniel.
     expect(ids).toEqual(
@@ -205,7 +205,10 @@ describe('ElevenLabs TTS model cards', () => {
         'fnYMz3F5gMEDGMWcH1ex',
       ]),
     );
-    // Legacy Default voice ids (Sarah, George, Rachel) must not be offered.
+    // Roger is the free-tier-callable default and the only legacy Default voice offered.
+    expect(voices[0].id).toBe('CwhRBWXzGAHq8TQ4Fs17');
+    expect(cardOf('eleven_v4').parameters?.voice?.default).toBe('CwhRBWXzGAHq8TQ4Fs17');
+    // Other legacy Default voice ids (Sarah, George, Rachel) must not be offered.
     for (const legacyId of ['EXAVITQu4vr4xnSDxMaL', 'JBFqnCBsd6RMkjVDRZzb', '21m00Tcm4TlvDq8ikWAM'])
       expect(ids).not.toContain(legacyId);
   });

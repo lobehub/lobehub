@@ -182,6 +182,18 @@ export const minimaxSpeech02Schema = createMiniMaxTTSSchema(MINIMAX_BASE_EMOTION
  * @see https://elevenlabs.io/docs/help-center/product/voices/my-voices/what-are-default-voices
  */
 export const elevenlabsTTSVoices: TTSVoice[] = [
+  /**
+   * Default voice: a legacy Default (premade) voice, so free-tier keys can call it
+   * through the API, unlike the Voice Library replacements below. ElevenLabs expires the
+   * Default voices on 2026-12-31; switch the default to a replacement by then.
+   */
+  {
+    description: 'Laid-back, casual, resonant',
+    displayName: 'Roger',
+    gender: 'male',
+    id: 'CwhRBWXzGAHq8TQ4Fs17',
+    language: 'multilingual',
+  },
   {
     description: 'Warm, grounded storyteller',
     displayName: 'Darian',
@@ -326,7 +338,8 @@ const ELEVENLABS_TTS_FORMATS = TTS_AUDIO_FORMATS.filter(
   (format) => format !== 'aac' && format !== 'flac',
 );
 
-const ELEVENLABS_DEFAULT_VOICE = 'OZ0L6eISlOejga3XjDFt';
+/** Roger: callable on the free tier until the Default voices expire on 2026-12-31. */
+const ELEVENLABS_DEFAULT_VOICE = 'CwhRBWXzGAHq8TQ4Fs17';
 
 /** Multilingual v2 and the Flash / Turbo family take `voice_settings.speed` from 0.7 to 1.2. */
 export const elevenlabsTTSSchema: TTSModelParamsSchema = {

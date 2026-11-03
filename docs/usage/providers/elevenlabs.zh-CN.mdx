@@ -45,13 +45,13 @@ tags:
 lh generate tts "你好，LobeHub" -m elevenlabs/eleven_v4 -o hello.mp3
 ```
 
-- **音色**：未指定时使用模型的默认音色（Talia）。可用 `--voice <音色 ID>` 选择内置列表或你自己 ElevenLabs 音色库中的音色；
+- **音色**：未指定时使用默认音色 Roger，免费档 API Key 也能使用。可用 `--voice <音色 ID>` 选择内置列表或你自己 ElevenLabs 音色库中的音色；
 - **长度**：语音以单个响应返回，每次请求最多 4096 个字符，更长的文本请拆成多次请求；
 - **格式**：`mp3`（默认）或 `opus`；
 - **语速**：Eleven Multilingual v2 以及 Flash、Turbo 系列支持 `0.7` 至 `1.2` 的语速；Eleven v3 和 v4 不支持语速设置。
 
 <Callout type={'warning'}>
-  内置音色（包括默认的 Talia）来自 ElevenLabs 音色库（Voice Library），**免费档 API Key 无法通过 API 使用这些音色**。免费档请用 `--voice <音色 ID>` 指定你自己拥有的音色（例如通过 Voice Design 或即时声音克隆创建的音色），或升级到付费套餐。
+  除默认的 Roger 外，内置音色都来自 ElevenLabs 音色库（Voice Library），**免费档 API Key 无法通过 API 使用这些音色**。免费档请保留默认音色，或用 `--voice <音色 ID>` 指定你自己拥有的音色（例如通过 Voice Design 或即时声音克隆创建的音色），或升级到付费套餐。Roger 属于 ElevenLabs 的旧版默认音色，ElevenLabs 将于 2026-12-31 停用这批音色，届时默认音色会随之更换。
 </Callout>
 
 ## 常见问题

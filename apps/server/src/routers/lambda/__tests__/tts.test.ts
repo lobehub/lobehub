@@ -198,7 +198,7 @@ describe('ttsRouter.synthesize', () => {
           input: 'Hi',
           model: 'eleven_multilingual_v2',
           params: { speed: 1.1 },
-          voice: 'OZ0L6eISlOejga3XjDFt',
+          voice: 'CwhRBWXzGAHq8TQ4Fs17',
         },
         { metadata: { trigger: 'tts' }, user: 'u1' },
       );
