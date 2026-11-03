@@ -87,6 +87,7 @@ export default {
   'docs.section.drive': 'Drive',
   'docs.section.home': 'Home',
   'docs.section.library': 'Knowledge Bases',
+  'docs.section.sandboxStorage': 'Sandbox Storage',
   'docs.section.works': 'Works',
   'docs.sectionView.emptyFiltered': 'No pages match this filter',
   'docs.sectionView.filter': 'Show',

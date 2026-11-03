@@ -77,6 +77,7 @@
   "docs.section.drive": "云盘",
   "docs.section.home": "主页",
   "docs.section.library": "知识库",
+  "docs.section.sandboxStorage": "沙箱存储",
   "docs.section.works": "产物",
   "docs.sectionView.emptyFiltered": "没有符合筛选条件的文档",
   "docs.sectionView.filter": "显示",
