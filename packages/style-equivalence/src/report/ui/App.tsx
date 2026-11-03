@@ -7,7 +7,9 @@ import { useRoute } from '../route';
 import { CaseView } from './CaseView';
 import { FileTree } from './FileTree';
 import { FileView } from './FileView';
+import { MethodPage } from './MethodPage';
 import { OverviewMatrix } from './OverviewMatrix';
+import { SignoffPage } from './SignoffPage';
 import { TopBar, VerdictStrip } from './TopBar';
 
 const styles = stylex.create({
@@ -66,7 +68,14 @@ export const App = () => {
           />
         </aside>
         <main {...stylex.props(styles.main)}>
-          {route.kind === 'case' ? (
+          {route.kind === 'method' ? (
+            <MethodPage anchor={route.anchor} payload={payload} />
+          ) : route.kind === 'signoff' ? (
+            <SignoffPage
+              payload={payload}
+              onVerdict={(verdict) => setPayload({ ...payload, verdict })}
+            />
+          ) : route.kind === 'case' ? (
             <CaseView caseKey={route.key} payload={payload} />
           ) : route.kind === 'file' ? (
             <FileView

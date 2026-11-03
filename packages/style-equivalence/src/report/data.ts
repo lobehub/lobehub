@@ -25,6 +25,7 @@ export interface ReportCase {
     gaps: string[];
     rootCauses: RootCause[];
     status?: string;
+    unstableConditions?: string[];
   };
 }
 

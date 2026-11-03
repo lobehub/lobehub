@@ -6,6 +6,7 @@ import { parseArgs, promisify } from 'node:util';
 import { runComparison } from '../run';
 import { runSelfTest } from '../selftest';
 import { formatSelfTest } from '../selftest/run';
+import { saveSelfTest } from '../selftest/store';
 import { DEFAULT_UI_DIR, startServer } from '../server';
 import { runStack } from '../stack';
 import { formatStack, formatSummary } from './summary';
@@ -81,6 +82,7 @@ const main = async () => {
   const recordsDir = path.resolve(values.records ?? '.records/style-equivalence');
   if (positionals[0] === 'self-test') {
     const report = await runSelfTest({ configFile, recordsDir, repo });
+    await saveSelfTest(recordsDir, report, new Date().toISOString());
     console.log(formatSelfTest(report));
     process.exitCode = report.passed ? 0 : 1;
     return;
@@ -100,7 +102,7 @@ const main = async () => {
         maxBuffer: 64 * 1024 ** 2,
       });
     }
-    const server = await startServer({ port: Number(values.port ?? 0), runDir });
+    const server = await startServer({ port: Number(values.port ?? 0), recordsDir, runDir });
     console.log(`Report: ${server.url}`);
     await new Promise<void>((resolve) => {
       process.once('SIGINT', resolve);
