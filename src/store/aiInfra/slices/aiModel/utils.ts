@@ -10,6 +10,25 @@ interface DeduplicateRemoteModelsResult<T> {
   removedCount: number;
 }
 
+/**
+ * Enabled builtin ids that a fetched catalog did not return.
+ * An empty catalog is not treated as authoritative, so a blank response does not
+ * turn every builtin off. Models the catalog did return are left untouched.
+ */
+export const enabledBuiltinIdsMissingFromCatalog = (
+  builtinIds: readonly string[],
+  catalogIds: ReadonlySet<string>,
+  currentModels: readonly { enabled?: boolean; id: string }[],
+): string[] => {
+  if (catalogIds.size === 0) return [];
+
+  const enabledIds = new Set(
+    currentModels.filter((model) => model.enabled).map((model) => model.id),
+  );
+
+  return builtinIds.filter((id) => enabledIds.has(id) && !catalogIds.has(id));
+};
+
 export const deduplicateRemoteModels = <T extends ModelWithId>(
   models: T[],
 ): DeduplicateRemoteModelsResult<T> => {
