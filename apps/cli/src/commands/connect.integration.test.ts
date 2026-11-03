@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer } from 'ws';
 
 interface CliResult {
@@ -260,6 +260,63 @@ describe('connect daemon startup', () => {
     expect(status.stdout).toContain(`http://127.0.0.1:${gatewayPort}/edge/gw (server)`);
     sockets.close();
   }, 20_000);
+
+  it.skipIf(process.platform === 'win32')(
+    'waits for slow shutdown and recovers a missing PID without another daemon',
+    async () => {
+      const home = await mkdtemp(path.join(os.tmpdir(), 'lobehub-cli-restart-'));
+      tempHomes.push(home);
+      daemonHomes.push(home);
+      const browser = path.join(home, 'slow-agent-browser');
+      await writeFile(browser, '#!/bin/sh\nsleep 3\n');
+      await chmod(browser, 0o755);
+      let connections = 0;
+      const server = createServer((_request, response) => {
+        response.setHeader('Content-Type', 'application/json');
+        response.end(JSON.stringify({ result: { data: { json: null } } }));
+      });
+      const sockets = new WebSocketServer({ server });
+      sockets.on('connection', (socket) => {
+        socket.on('message', (raw) => {
+          const message = JSON.parse(String(raw));
+          if (message.type === 'auth') {
+            connections++;
+            socket.send(JSON.stringify({ type: 'auth_success' }));
+          } else if (message.type === 'heartbeat') {
+            socket.send(JSON.stringify({ type: 'heartbeat_ack' }));
+          } else if (message.type === 'device_metrics') {
+            socket.send(JSON.stringify({ batchId: message.batchId, type: 'device_metrics_ack' }));
+          }
+        });
+      });
+      const port = await listen(server);
+      const env = {
+        LOBEHUB_JWT: unsignedJwt('fixture-user'),
+        LOBEHUB_SERVER: `http://127.0.0.1:${port}`,
+      };
+      const options = ['--gateway', env.LOBEHUB_SERVER, '--agent-browser', browser];
+      const first = await runCli(['connect', '--daemon', ...options], home, env);
+      expect(first.exitCode).toBe(0);
+      const pidPath = path.join(home, '.lobehub', 'daemon.pid');
+      const oldPid = Number(await readFile(pidPath, 'utf8'));
+
+      const restarted = await runCli(['connect', 'restart', ...options], home, env);
+      expect(restarted.exitCode).toBe(0);
+      expect(() => process.kill(oldPid, 0)).toThrow();
+      const newPid = Number(await readFile(pidPath, 'utf8'));
+      expect(newPid).not.toBe(oldPid);
+      await vi.waitFor(() => expect(connections).toBe(2));
+      // Reproduce the missing file left by a legacy restart, not a process failure.
+      await rm(pidPath);
+      const status = await runCli(['connect', 'status', '--verbose'], home);
+      expect(status.stdout).toContain(`PID              : ${newPid}`);
+      expect(status.stdout).toContain('Connection       : connected');
+      expect(Number(await readFile(pidPath, 'utf8'))).toBe(newPid);
+      expect(connections).toBe(2);
+      sockets.close();
+    },
+    30_000,
+  );
 
   it('remembers --gateway for that server and reuses it ahead of the advertised one', async () => {
     const gatewayServer = createServer();

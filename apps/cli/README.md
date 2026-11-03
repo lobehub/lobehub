@@ -27,7 +27,15 @@ running, select one with `--manager daemon`, `--manager user`, or `--manager sys
 Service restarts preserve the unit's configuration; daemon connection flags such
 as `--token` cannot override it. `lh connect service restart` remains a user-service
 alias. With no managed connector and no inspection failures, `lh connect restart`
-retains its existing behavior of starting a daemon.
+retains its existing behavior of starting a daemon. Daemon restarts wait for the
+previous process to exit before starting its replacement, including when upgrading
+from an older CLI. If shutdown times out, no replacement is started.
+
+If an older restart lost `daemon.pid`, `lh connect status` can recover it from the
+status record only after verifying that the process is alive and is a daemon, not
+a foreground connection or systemd service. This recovery does not restart the
+connection. Cleanup checks PID ownership; normal restarts also wait for the old
+process to exit before creating new records.
 
 If the version still differs after a restart, the status report shows the command's
 CLI entry path and the connector's entry path when available. Different paths mean

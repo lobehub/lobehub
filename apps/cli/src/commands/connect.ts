@@ -45,6 +45,7 @@ import {
   reportDaemonStartupReady,
   spawnDaemon,
   stopDaemon,
+  stopDaemonAndWait,
   writeStatus,
 } from '../daemon/manager';
 import { listTasks } from '../daemon/taskRegistry';
@@ -209,7 +210,7 @@ export function registerConnectCommand(program: Command) {
     .option('-v, --verbose', 'Enable verbose logging')
     .action((options: ConnectOptions) =>
       restartConnector(options, async () => {
-        const wasStopped = stopDaemon();
+        const wasStopped = await stopDaemonAndWait();
         if (wasStopped) log.info('Stopped existing daemon.');
         await handleDaemonStart({ ...options, daemon: true });
       }),
@@ -918,9 +919,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     for (const wsId of workspaceConnections.keys()) closeWorkspaceConnection(wsId);
     void metricsSampler?.stop();
     client.disconnect();
-    removeStatus();
+    removeStatus(process.pid);
     if (isDaemonChild) {
-      removePid();
+      removePid(process.pid);
     }
   };
 

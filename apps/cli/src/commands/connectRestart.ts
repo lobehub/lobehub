@@ -87,6 +87,7 @@ export async function restartConnector(
     "After reconnecting, run 'lh connect status' to confirm the running version and connection.",
   );
   if (!target.service) {
+    log.info('Waiting for the previous daemon to exit before starting its replacement...');
     await restartDaemon();
     return;
   }
