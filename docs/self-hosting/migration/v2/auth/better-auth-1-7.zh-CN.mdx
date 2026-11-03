@@ -1,0 +1,52 @@
+---
+title: 升级 Better Auth 至 1.7
+description: 从 Better Auth 1.6.33 升级至 1.7.16 的部署检查，包括 Microsoft 账号标识迁移与 Redis 要求。
+tags:
+  - Authentication
+  - Migration
+---
+
+# 升级 Better Auth 至 1.7
+
+本文适用于 LobeHub 从 Better Auth **1.6.33 升级至 1.7.16**。部署前请阅读[上游 1.7 升级指南](https://github.com/better-auth/better-auth/blob/v1.7.16/docs/content/docs/guides/1-7-upgrade-guide.mdx)与 [1.7.16 发布说明](https://github.com/better-auth/better-auth/releases/tag/v1.7.16)。
+
+## 部署前
+
+- 备份数据库并记录当前应用版本，在私有数据库副本上演练升级。
+- 同时更新服务端与浏览器资源。旧客户端使用的通用 OAuth 端点已移除，部署后应让用户刷新已打开的页面。
+- 如果启用 Redis，应用凭据除已有权限外，还需要允许 `EVAL`、`GET`、`DEL`、`INCR` 和 `EXPIRE`。适配器现在原子消费一次性数据，并且只在计数器首次创建时设置 TTL，不延长现有计数窗口。
+- 检查重复的第三方身份，逐条核实归属，不能自动合并用户或删除账号：
+
+```sql
+SELECT provider_id, account_id, count(*)
+FROM accounts
+GROUP BY provider_id, account_id
+HAVING count(*) > 1;
+```
+
+从 1.6.33 直接升级至 1.7.16 **不需要**添加 `issuer` 列或执行通用表结构迁移。1.7.0–1.7.2 引入的 issuer 表结构已在 1.7.3 撤回；曾安装这些中间版本的部署需要另行检查。LobeHub 自己的 OIDC 服务使用 `oidc-provider`，不依赖 Better Auth 已移除的 `oidcProvider` 插件。
+
+## Microsoft：恢复登录前迁移现有身份
+
+内置 Microsoft provider 的账号标识由 ID token 的 `sub` 改为 `oid`。LobeHub 的 `microsoft-entra-id` 别名也会解析为内置 `microsoft` provider，因此同样受影响。
+
+如果 `accounts` 表中已有 Microsoft 账号，**完成标识映射前，不要在新版应用上启用 Microsoft 登录或账号绑定**。否则已有账号可能无法匹配，自动绑定或新建账号还可能掩盖这个问题。
+
+1. 盘点 `provider_id = 'microsoft'` 的记录，在私有迁移记录中保存本地 `id`、`user_id` 和原有 `account_id`。
+2. 为每个本地账号 ID 和旧 `sub` 建立经过审核的 Entra `oid` 映射，并核实 tenant 与 client/application 上下文。依据可信身份源记录或经过正确验证的 token，不能仅凭 email 或未验证的 JWT 解码结果关联身份。不要将 token 或身份映射提交到 PR。
+3. 确认映射完整且一一对应，旧值仍与数据库一致，新的 `(provider_id, account_id)` 不发生冲突。遇到缺失或歧义必须停止迁移。
+4. 切换期间停止 Microsoft 登录与绑定，包括旧应用实例。在经过审核的数据库事务中，按本地行 ID 和旧值匹配，**仅更新** `accounts.account_id`，保留 `accounts.id`、`accounts.user_id` 及其他字段。提交前核对更新行数。
+5. 所有实例一致部署新版后，用已有 Microsoft 用户验证仍命中原本的用户与账号行，且没有新增重复记录。再单独测试新用户，最后恢复正常流量。
+
+本次升级不包含自动 SQL 迁移，因为应用无法仅从旧账号标识安全推导出可信的 `sub` → `oid` 映射。回滚时必须同时恢复匹配的应用版本与账号 ID 映射。若上线后已发生新登录或绑定，应先核对新增记录，再反向迁移；直接恢复旧备份可能丢失无关数据。
+
+## 其他登录方式检查
+
+- **通用 OAuth/OIDC：** 登录与绑定改用统一的 social 端点。LobeHub 已显式设置 `/api/auth/callback/<provider>`，此次升级不要求更改已登记的回调 URL，仍应在预发布环境核对实际 URL 与 provider 配置。
+- **OIDC discovery：** 验证 discovery 可达性、issuer、JWKS、audience、nonce 和 ID token，不要通过禁用 token 校验绕过登录错误。
+- **飞书与微信：** 测试登录、绑定及现有自定义 token/profile 处理。通用 provider 回调仍返回原始 profile，不要改成内置 provider 的 `{ user, data }` 格式。
+- **邮件 OTP 与 magic link：** 分别测试已验证用户与未验证的密码账号。上游首次确立邮箱所有权时会清理未经证明的凭据 / 账号并撤销已有会话，相关用户可能需要重新登录。
+- **会话与账号设置：** 验证延迟续期、退出、账号列表、绑定和解绑。账号操作现在使用本地账号行 ID，而不是第三方 subject。
+- **Passkey 与移动端：** 验证浏览器、Android passkey 和移动端深链，保留明确的 WebAuthn origin 与自定义 scheme 信任配置。独立维护的 Expo 客户端需要先 `await getCookie()`，再把返回值用于请求头。
+
+上述检查需要部署方的预发布身份源和客户端。单元 / 集成测试不能证明某个实际部署或生产身份映射已满足上线要求。
