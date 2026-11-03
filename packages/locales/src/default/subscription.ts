@@ -573,7 +573,7 @@ export default {
     'Usage within any 5 hours is capped too. The window starts with your first request and resets 5 hours later.',
   'plans.limits.rolling5hSpend.unavailable': 'No 5-hour limit',
   'plans.limits.rolling7dSpend': 'Weekly usage allowance',
-  'plans.limits.rolling7dSpend.multiple': '{{multiple}}× the usage of {{plan}}',
+  'plans.limits.rolling7dSpend.multiple': 'Weekly usage: {{multiple}}× that of {{plan}}',
   'plans.limits.rolling7dSpend.tooltip':
     'Model usage your plan covers in any 7 days. The week starts with your first request and resets 7 days later.',
   'plans.limits.sandboxStorage': '{{value}} cloud sandbox storage',
@@ -941,4 +941,5 @@ export default {
   'credits.topUp.success.balance': '+{{amount}} balance',
   'credits.autoTopUp.descUsd': 'Make sure your balance never runs out',
   'credits.packages.titleUsd': 'My Top-ups',
+  'plans.usageHero.comparedTo5h': '5-hour usage of {{plan}}',
 };
