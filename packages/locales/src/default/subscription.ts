@@ -930,4 +930,15 @@ export default {
     '{{name}} bills AI model usage by tokens. The table below shows the price in USD per 1M tokens.',
   'creditsChip.rolling.topup': 'Top Up',
   'usage.window.referral': 'Referral Rewards',
+  'tab.balance': 'Balance',
+  'credits.topUp.titleUsd': 'Top Up Balance',
+  'credits.topUp.customHintUsd': 'Any amount from ${{min}}',
+  'credits.topUp.receipt.balance': '{{amount}} balance × ${{price}}',
+  'credits.topUp.receipt.bonusValueUsd': '+{{amount}} bonus',
+  'credits.topUp.unitPriceFormatUsd': '${{price}} per $1 of balance',
+  'credits.topUp.bestValue.titleUsd':
+    'Top up from ${{price}} per $1 of balance with {{plan}} yearly',
+  'credits.topUp.success.balance': '+{{amount}} balance',
+  'credits.autoTopUp.descUsd': 'Make sure your balance never runs out',
+  'credits.packages.titleUsd': 'My Top-ups',
 };
