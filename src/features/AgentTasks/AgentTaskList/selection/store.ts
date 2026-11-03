@@ -5,12 +5,6 @@ import { pruneSelection, selectRange, toggleSelection } from './taskSelectionMod
 interface TaskSelectionState {
   /** Last row clicked without Shift — where the next Shift+click range starts. */
   anchorId?: string;
-  /**
-   * Bumped by every `clear()` — leaving the list, switching collection, Esc.
-   * A batch that finishes after its selection was cleared must not write that
-   * selection back into whatever list is on screen now.
-   */
-  generation: number;
   panelOpen: boolean;
   /**
    * Rows a settled batch hands back for a retry that the list does not show
@@ -20,6 +14,13 @@ interface TaskSelectionState {
   pendingRestore?: readonly string[];
   /** A batch is in flight: `done` of `total` tasks sent so far. */
   progress?: { done: number; total: number };
+  /**
+   * Bumped by every selection change the user (or `clear`) makes — not by
+   * `prune`. A settled batch restores rows only when nothing changed since it
+   * started: select-then-deselect leaves an empty selection, but the user has
+   * still moved on.
+   */
+  revision: number;
   selectedIds: readonly string[];
   /**
    * Selectable rows of the list on screen, as last reported by `prune`. A batch
@@ -34,10 +35,10 @@ interface TaskSelectionActions {
   prune: (visibleIds: ReadonlySet<string>) => void;
   /**
    * Re-select a settled batch's rows that still need attention, unless the
-   * selection moved on since `generation` (cleared, or the user selected
-   * something). Rows not on screen yet wait for the next `prune`.
+   * selection changed at all since `revision`. Rows not on screen yet wait for
+   * the next `prune`.
    */
-  restore: (ids: readonly string[], generation: number) => void;
+  restore: (ids: readonly string[], revision: number) => void;
   selectAll: (order: readonly string[]) => void;
   selectRange: (order: readonly string[], id: string) => void;
   setPanelOpen: (open: boolean) => void;
@@ -58,15 +59,14 @@ export const useTaskSelectionStore = create<TaskSelectionState & TaskSelectionAc
   clear: () =>
     set((state) => ({
       anchorId: undefined,
-      generation: state.generation + 1,
       panelOpen: false,
       pendingRestore: undefined,
+      revision: state.revision + 1,
       // A batch still in flight belongs to the selection being dropped: the
       // list that comes next must not show its progress or stay frozen by it.
       progress: undefined,
       selectedIds: EMPTY,
     })),
-  generation: 0,
   panelOpen: false,
   pendingRestore: undefined,
   prune: (visibleIds) =>
@@ -87,9 +87,9 @@ export const useTaskSelectionStore = create<TaskSelectionState & TaskSelectionAc
       if (selectedIds === state.selectedIds) return { visibleIds };
       return { panelOpen: state.panelOpen && selectedIds.length > 0, selectedIds, visibleIds };
     }),
-  restore: (ids, generation) =>
+  restore: (ids, revision) =>
     set((state) => {
-      if (state.generation !== generation || state.selectedIds.length > 0) return state;
+      if (state.revision !== revision || state.selectedIds.length > 0) return state;
       const shown = ids.filter((id) => state.visibleIds.has(id));
       const later = ids.filter((id) => !state.visibleIds.has(id));
       return {
@@ -104,7 +104,12 @@ export const useTaskSelectionStore = create<TaskSelectionState & TaskSelectionAc
     set((state) =>
       state.progress
         ? state
-        : { anchorId: order[0], pendingRestore: undefined, selectedIds: [...order] },
+        : {
+            anchorId: order[0],
+            pendingRestore: undefined,
+            revision: state.revision + 1,
+            selectedIds: [...order],
+          },
     ),
   selectRange: (order, id) =>
     set((state) =>
@@ -112,9 +117,11 @@ export const useTaskSelectionStore = create<TaskSelectionState & TaskSelectionAc
         ? state
         : {
             pendingRestore: undefined,
+            revision: state.revision + 1,
             selectedIds: selectRange(order, state.selectedIds, state.anchorId, id),
           },
     ),
+  revision: 0,
   selectedIds: EMPTY,
   setPanelOpen: (panelOpen) => set((state) => ({ panelOpen: panelOpen && !state.progress })),
   setProgress: (progress) => set({ panelOpen: false, progress }),
@@ -125,6 +132,7 @@ export const useTaskSelectionStore = create<TaskSelectionState & TaskSelectionAc
         : {
             anchorId: id,
             pendingRestore: undefined,
+            revision: state.revision + 1,
             selectedIds: toggleSelection(state.selectedIds, id),
           },
     ),

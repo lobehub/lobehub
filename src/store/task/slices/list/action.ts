@@ -115,8 +115,12 @@ export interface TaskCollectionSyncResult extends ReplicaSyncResult {
 
 /** What a batch overlay needs to know about the collection it patches. */
 export interface CollectionQueryShape {
+  /** The collection is one agent's tasks (assignee filter). */
+  agentId?: string;
   /** The collection lists archived rows ("Show archived"); undefined when unknown. */
   includeArchived?: boolean;
+  /** "My tasks" narrowing. */
+  scope?: 'assigned' | 'created';
 }
 
 /** A batch overlay's patch of one task; `undefined` takes the row out of the collection. */
@@ -139,8 +143,16 @@ export interface CollectionTasksOptimistic {
 const collectionQueryShape = (queryKey?: string): CollectionQueryShape => {
   if (!queryKey) return {};
   try {
-    const query = JSON.parse(queryKey) as { includeArchived?: unknown };
-    return { includeArchived: query?.includeArchived === true };
+    const query = JSON.parse(queryKey) as {
+      agentId?: unknown;
+      includeArchived?: unknown;
+      scope?: unknown;
+    };
+    return {
+      agentId: typeof query?.agentId === 'string' ? query.agentId : undefined,
+      includeArchived: query?.includeArchived === true,
+      scope: query?.scope === 'assigned' || query?.scope === 'created' ? query.scope : undefined,
+    };
   } catch {
     return {};
   }

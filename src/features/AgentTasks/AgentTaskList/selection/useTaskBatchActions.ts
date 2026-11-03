@@ -89,7 +89,7 @@ export const useTaskBatchActions = () => {
       const overlay = beginOptimistic(ids, patch);
       // The rows already show the result: the selection is done with.
       useTaskSelectionStore.getState().clear();
-      const generation = useTaskSelectionStore.getState().generation;
+      const revision = useTaskSelectionStore.getState().revision;
 
       const outcomes: TaskBatchResponse[] = [];
       let requestError: unknown;
@@ -115,13 +115,13 @@ export const useTaskBatchActions = () => {
       }
 
       // Rows still needing attention come back selected — unless the user has
-      // moved on (selected something else, or left the list: a scope or page
-      // change clears the selection). A row the overlay hid (deleted,
+      // moved on: any selection change since the click (even one undone
+      // since), or leaving the list (a scope or page change clears it). A row the overlay hid (deleted,
       // archived, or moved to a status the view hides) is only shown again
       // once the rollback renders; the store selects it on the list's next
       // prune, if the list then shows it.
       const restoreSelection = (pending: readonly string[]) =>
-        useTaskSelectionStore.getState().restore(pending, generation);
+        useTaskSelectionStore.getState().restore(pending, revision);
 
       if (requestError && updated.length === 0) {
         toast.error(

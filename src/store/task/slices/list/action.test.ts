@@ -714,3 +714,28 @@ describe('internal_beginCollectionTasksOptimistic', () => {
     expect(useTaskStore.getState().taskListMap[listKey(true)]).toBe(untouched);
   });
 });
+
+describe('internal_beginCollectionTasksOptimistic query shape', () => {
+  it("tells the patch each collection's assignee scope", () => {
+    const row = { id: 'a', identifier: 'A', status: 'backlog' } as any;
+    const agentKey = taskListQueryKey({ agentId: 'alpha', visibility: 'all' } as any);
+    const mineKey = taskListQueryKey({ scope: 'assigned', visibility: 'all' } as any);
+    useTaskStore.setState({
+      taskListMap: {
+        [agentKey]: { items: [row], total: 1 },
+        [mineKey]: { items: [row], total: 1 },
+      },
+    });
+    const seen: unknown[] = [];
+    useTaskStore.getState().internal_beginCollectionTasksOptimistic(['a'], (t, query) => {
+      seen.push(query);
+      return t;
+    });
+    expect(seen).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ agentId: 'alpha', includeArchived: false }),
+        expect.objectContaining({ includeArchived: false, scope: 'assigned' }),
+      ]),
+    );
+  });
+});
