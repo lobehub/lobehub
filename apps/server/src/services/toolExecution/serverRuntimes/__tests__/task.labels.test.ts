@@ -110,6 +110,26 @@ describe('task tool labels', () => {
     expect(taskLabelCaller.removeFromTask).not.toHaveBeenCalled();
   });
 
+  it('editTask waits for every write before reporting a label failure', async () => {
+    const { runtime, taskCaller, taskLabelCaller } = setup();
+    let updateDone = false;
+    taskCaller.update.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => {
+            updateDone = true;
+            resolve({ data: task });
+          }, 20),
+        ),
+    );
+    taskLabelCaller.changeForTask.mockRejectedValueOnce(new Error('label deleted'));
+
+    await expect(
+      runtime.editTask({ addLabels: ['Feature'], identifier: 'T-1', name: 'Renamed' }),
+    ).rejects.toThrow('label deleted');
+    expect(updateDone).toBe(true);
+  });
+
   it('listTasks filters by label and group names', async () => {
     const { runtime, taskCaller } = setup();
 

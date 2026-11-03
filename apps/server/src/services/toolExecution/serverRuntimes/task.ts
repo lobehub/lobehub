@@ -551,7 +551,19 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         return { content: 'No fields provided; nothing to update.', success: false };
       }
 
-      const [, depErrors] = await Promise.all([Promise.all(ops), Promise.all(depResults)]);
+      // Settle every started write before reporting: fail-fast would return
+      // while a sibling write is still running and could commit afterwards.
+      const [opResults, depSettled] = await Promise.all([
+        Promise.allSettled(ops),
+        Promise.allSettled(depResults),
+      ]);
+      const failedOp = [...opResults, ...depSettled].find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      );
+      if (failedOp) throw failedOp.reason;
+      const depErrors = depSettled.map((result) =>
+        result.status === 'fulfilled' ? result.value : undefined,
+      );
       const firstDepError = depErrors.find((e) => e);
       if (firstDepError) return { content: firstDepError, success: false };
 
