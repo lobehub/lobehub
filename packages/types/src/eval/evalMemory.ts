@@ -34,6 +34,9 @@ export interface EvalMemoryReference {
 export type EvalMemoryLayer =
   'activity' | 'context' | 'experience' | 'identity' | 'persona' | 'preference';
 
+/** Whether an entry came from the initial fixture or the running Agent. */
+export type EvalMemorySource = 'agent' | 'fixture';
+
 /** One Memory entry of an attempt: seeded from the case fixture, or written by the Agent. */
 export interface EvalMemoryEntry {
   /** ISO 8601; the fixture's `seededAt` for seeded rows, the wall clock for the Agent's writes. */

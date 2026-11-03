@@ -22,7 +22,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-import { idGenerator } from '../utils/idGenerator';
+import { createNanoId, idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { topics } from './topic';
@@ -226,15 +226,13 @@ export type AgentEvalDatasetItem = typeof agentEvalDatasets.$inferSelect;
 export const agentEvalEnvironments = pgTable(
   'agent_eval_environments',
   {
-    id: text('id')
-      .$defaultFn(() => idGenerator('evalEnvironments'))
-      .primaryKey(),
+    id: text('id').$defaultFn(createNanoId(16)).primaryKey(),
 
-    // Nullable: a system row (the built-in case sets) belongs to no user.
+    // Nullable for existing system environments; imported packages belong to their owner.
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
-    /** Stable handle for scripts and imports; unique per owner when set. */
+    /** Optional stable import handle, unique within its user or workspace scope. */
     identifier: text('identifier'),
     name: text('name').notNull(),
     description: text('description'),
@@ -269,7 +267,7 @@ export const agentEvalTestCases = pgTable(
       .$defaultFn(() => idGenerator('evalTestCases'))
       .primaryKey(),
 
-    // Nullable: a system row (the built-in case sets) belongs to no user.
+    // Nullable to retain ownership of system cases imported by earlier deployments.
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
@@ -277,11 +275,7 @@ export const agentEvalTestCases = pgTable(
       .references(() => agentEvalDatasets.id, { onDelete: 'cascade' })
       .notNull(),
 
-    /**
-     * The shared environment this case runs in; `content.environment` holds
-     * only what this case changes on top of it (or everything, for a case
-     * without one).
-     */
+    /** Shared runtime configuration; case content can override individual fields. */
     environmentId: text('environment_id').references(() => agentEvalEnvironments.id, {
       onDelete: 'set null',
     }),

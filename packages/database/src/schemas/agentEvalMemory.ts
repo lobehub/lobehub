@@ -1,20 +1,11 @@
-import type { EvalMemoryLayer } from '@lobechat/types';
+import type { EvalMemoryLayer, EvalMemorySource } from '@lobechat/types';
 import { index, jsonb, pgTable, text, vector } from 'drizzle-orm/pg-core';
 
-import { idGenerator } from '../utils/idGenerator';
+import { createNanoId } from '../utils/idGenerator';
 import { timestamps, timestamptz } from './_helpers';
 import { agentEvalRuns } from './agentEvals';
 import { threads, topics } from './topic';
 import { users } from './user';
-
-export const evalMemoryLayers = [
-  'activity',
-  'context',
-  'experience',
-  'identity',
-  'persona',
-  'preference',
-] as const satisfies readonly EvalMemoryLayer[];
 
 /**
  * The Memory of one eval attempt (a run's topic, or one pass@k thread of it):
@@ -26,9 +17,7 @@ export const evalMemoryLayers = [
 export const agentEvalMemories = pgTable(
   'agent_eval_memories',
   {
-    id: text('id')
-      .$defaultFn(() => idGenerator('evalMemories'))
-      .primaryKey(),
+    id: text('id').$defaultFn(createNanoId(16)).primaryKey(),
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -42,8 +31,8 @@ export const agentEvalMemories = pgTable(
     /** `runId_topicId[_threadId]`: the key the mock service also groups by. */
     attemptId: text('attempt_id').notNull(),
 
-    layer: text('layer', { enum: evalMemoryLayers }).notNull(),
-    source: text('source', { enum: ['agent', 'fixture'] }).notNull(),
+    layer: text('layer').$type<EvalMemoryLayer>().notNull(),
+    source: text('source').$type<EvalMemorySource>().notNull(),
     /** Set on seeded rows: a resumed attempt must bring the same fixture. */
     fixtureHash: text('fixture_hash'),
 
