@@ -123,6 +123,7 @@
     "self-hosting:docker": "docker build -t lobehub:local .",
     "self-hosting:docker-cn": "docker build -t lobehub-local --build-arg USE_CN_MIRROR=true .",
     "start": "next start -p 3210",
+    "style-eq:test": "cd packages/style-equivalence && vitest run --silent=passed-only",
     "stylelint": "stylelint \"src/**/*.{css,less}\" --fix --allow-empty-input",
     "stylex:migration": "tsx scripts/stylexMigration/index.ts",
     "stylex:verify": "bun scripts/stylexMigration/verification/run.ts",
