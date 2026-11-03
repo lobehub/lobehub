@@ -6,6 +6,7 @@ import type { CaseDetail } from '../api';
 import { type ConditionColumn } from '../data';
 import { shorthandsIn } from '../declared';
 import { flagLabel } from '../labels';
+import { hrefOf } from '../route';
 import { MatrixStrip } from './MatrixStrip';
 
 const styles = stylex.create({
@@ -140,7 +141,10 @@ export const EvidenceChain = ({
               {CORPUS_FOR[name] && (
                 <>
                   ，别的规则设置了它们时的情况由边界语料{' '}
-                  <a href={`#/method#${CORPUS_FOR[name]}`}>{CORPUS_FOR[name]}</a> 覆盖
+                  <a href={hrefOf({ anchor: CORPUS_FOR[name], kind: 'method' })}>
+                    {CORPUS_FOR[name]}
+                  </a>{' '}
+                  覆盖
                 </>
               )}
               。
@@ -169,7 +173,7 @@ export const EvidenceChain = ({
             <ul {...stylex.props(styles.list)}>
               {flags.map((flag) => (
                 <li key={flag}>
-                  <a href={`#/method#${flag}`}>{flagLabel(flag)}</a>（{flag}
+                  <a href={hrefOf({ anchor: flag, kind: 'method' })}>{flagLabel(flag)}</a>（{flag}
                   ）：这一点合成环境证明不了，需要人工确认。
                 </li>
               ))}

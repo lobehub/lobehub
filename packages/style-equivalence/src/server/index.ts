@@ -11,7 +11,8 @@ import { captureRun } from '../capture/runner';
 import type { CaptureState } from '../capture/states';
 import { resolveInside } from '../capture/staticServer';
 import type { ConditionConfig } from '../config';
-import { ApiError, applySignoff, caseDetail, currentVerdict, loadRun } from './api';
+import { SELF_TEST_FILE } from '../selftest/store';
+import { ApiError, applySignoff, caseDetail, currentVerdict, loadRun, readSelfTest } from './api';
 import { caseShot, caseSnapshot, parseCombo, parseCondition } from './inspectCase';
 
 const TYPES: Record<string, string> = {
@@ -66,11 +67,18 @@ const sendFile = async (response: ServerResponse, root: string, requestPath: str
 
 export interface ServerOptions {
   port?: number;
+  recordsDir?: string;
   runDir: string;
   uiDir?: string;
 }
 
-export const startServer = async ({ port = 0, runDir, uiDir = DEFAULT_UI_DIR }: ServerOptions) => {
+export const startServer = async ({
+  port = 0,
+  recordsDir,
+  runDir,
+  uiDir = DEFAULT_UI_DIR,
+}: ServerOptions) => {
+  const selfTestFile = path.join(recordsDir ?? path.dirname(runDir), SELF_TEST_FILE);
   const stored = await loadRun(runDir);
   let browser: Browser | undefined;
   let url = '';
@@ -100,6 +108,8 @@ export const startServer = async ({ port = 0, runDir, uiDir = DEFAULT_UI_DIR }: 
         run: stored.run,
         verdict: await currentVerdict(stored),
       });
+    if (pathname === '/api/method' && method === 'GET')
+      return json(response, 200, { selfTest: await readSelfTest(selfTestFile) });
     const caseMatch = /^\/api\/case\/([^/]+)(?:\/(rerun|snapshot|shot))?$/.exec(pathname);
     if (caseMatch) {
       const key = decodeURIComponent(caseMatch[1]);

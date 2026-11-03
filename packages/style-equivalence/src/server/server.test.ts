@@ -171,6 +171,16 @@ describe('report server', () => {
     expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(100);
   }, 60_000);
 
+  it('returns the stored self-test report beside the run', async () => {
+    await writeFile(
+      path.join(root, 'self-test.json'),
+      JSON.stringify({ css: [], passed: true, ranAt: 'now', source: [], verifierVersion: '1.0.0' }),
+    );
+    expect(await (await fetch(`${server.url}/api/method`)).json()).toEqual({
+      selfTest: { css: [], passed: true, ranAt: 'now', source: [], verifierVersion: '1.0.0' },
+    });
+  });
+
   it('serves the builds and nothing outside them', async () => {
     expect(await (await fetch(`${server.url}/base/`)).text()).toContain(
       'data-case="src/A.tsx|A#1|0"',

@@ -44,6 +44,9 @@ export const loadRun = async (runDir: string): Promise<StoredRun> => {
   };
 };
 
+export const readSelfTest = async (file: string) =>
+  readJson<unknown>(path.dirname(file), path.basename(file), null);
+
 export const currentVerdict = async (stored: StoredRun) =>
   decideVerdict({
     calibration: stored.calibration,

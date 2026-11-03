@@ -115,3 +115,40 @@ export const fetchSnapshot = async (
 
 export const shotUrl = (key: string, side: 'base' | 'head', condition: string, combo: number) =>
   `${caseUrl(key, '/shot')}?side=${side}&condition=${encodeURIComponent(condition)}&combo=${combo}`;
+
+export interface CorpusEntry {
+  actual: string;
+  detail: string[];
+  expected: string;
+  feature: string;
+  id: string;
+  passed: boolean;
+}
+
+export interface SelfTestPayload {
+  css: CorpusEntry[];
+  passed: boolean;
+  ranAt: string;
+  source: CorpusEntry[];
+  verifierVersion: string;
+}
+
+export const fetchMethod = async (): Promise<{ selfTest: SelfTestPayload | null }> => {
+  const response = await fetch('/api/method');
+  if (!response.ok) throw new Error(`/api/method ${response.status}`);
+  return response.json();
+};
+
+export const postSignoff = async (body: {
+  keys: string[];
+  note: string;
+  reason: string;
+}): Promise<{ verdict: RunPayload['verdict'] }> => {
+  const response = await fetch('/api/signoff', {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error(`${response.status} ${(await response.json()).error ?? ''}`);
+  return response.json();
+};
