@@ -174,7 +174,7 @@ const RuleChecklistItem = memo<RuleChecklistItemProps>(
                     icon={RefreshCwIcon}
                     loading={pendingAction === 'recheck'}
                     size={'small'}
-                    type={'primary'}
+                    type={'default'}
                     onClick={() => result && onRecheck(result.id)}
                   >
                     {pendingAction === 'recheck'
