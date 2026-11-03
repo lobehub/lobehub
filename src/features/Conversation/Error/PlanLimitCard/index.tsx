@@ -4,7 +4,7 @@ import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatIntergerNumber, formatNumber } from '@/utils/format';
+import { formatNumber } from '@/utils/format';
 
 import { ErrorActionContainer, FormAction } from '../style';
 import {
@@ -73,10 +73,12 @@ const getBudgetDescriptionKey = (pricingBasis?: PlanLimitPricingBasis) => {
   }
 };
 
+/** Budget figures arrive as credits (1M = $1); users only ever see dollars. */
 const formatCreditAmount = (credits: number): string => {
-  if (credits >= CREDIT_UNIT) return `${formatNumber(credits / CREDIT_UNIT, 2)}M`;
+  const usd = credits / CREDIT_UNIT;
+  const digits = usd !== 0 && Math.abs(usd) < 1 ? 4 : 2;
 
-  return formatIntergerNumber(credits);
+  return `$${formatNumber(usd, digits)}`;
 };
 
 interface PlanLimitCardProps {

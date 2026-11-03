@@ -468,7 +468,7 @@ describe('replyTemplate', () => {
 
     it('returns the friendly InsufficientBudgetForModel copy instead of the generic user fallback', () => {
       const en = renderAgentError('InsufficientBudgetForModel', undefined, 'op-1');
-      expect(en).toContain('Not enough credits');
+      expect(en).toContain('Not enough balance');
       expect(en).toContain('op-1');
       const zh = renderAgentError(
         'InsufficientBudgetForModel',
@@ -477,7 +477,7 @@ describe('replyTemplate', () => {
         'zh-CN',
         'user',
       );
-      expect(zh).toContain('积分余额不足');
+      expect(zh).toContain('余额不足');
       expect(zh).not.toContain('请检查你的输入');
     });
 
@@ -487,7 +487,7 @@ describe('replyTemplate', () => {
     it('gives every budget-exhaustion code its own credits copy, not "check your input"', () => {
       const expected: Record<string, string> = {
         FreePlanLimit: 'Free plan limit reached',
-        InsufficientBudgetForModel: 'Not enough credits',
+        InsufficientBudgetForModel: 'Not enough balance',
         SubscriptionPlanLimit: 'Plan limit reached',
       };
 
@@ -538,7 +538,7 @@ describe('replyTemplate', () => {
         );
 
         expect(en).toContain('Member budget in this workspace is used up');
-        expect(en).not.toContain('Not enough credits');
+        expect(en).not.toContain('Not enough balance');
         expect(en).toContain('Operation ID: `op-1`');
 
         const zh = renderAgentError(
@@ -551,7 +551,7 @@ describe('replyTemplate', () => {
         );
 
         expect(zh).toContain('该工作区的成员预算已用尽');
-        expect(zh).not.toContain('积分余额不足');
+        expect(zh).not.toContain('余额不足');
       });
 
       // The workspace gate throws SubscriptionPlanLimit (not
@@ -577,7 +577,7 @@ describe('replyTemplate', () => {
           { ...budget, budgetTypeAtError: 'workspace' },
         );
 
-        expect(en).toContain('Workspace credits exhausted');
+        expect(en).toContain('Workspace usage exhausted');
 
         const zh = renderAgentError(
           'InsufficientBudgetForModel',
@@ -597,14 +597,14 @@ describe('replyTemplate', () => {
             ...budget,
             budgetTypeAtError: 'some_new_scope',
           }),
-        ).toContain('Not enough credits');
+        ).toContain('Not enough balance');
 
         expect(
           renderAgentError('InsufficientBudgetForModel', undefined, 'op-1', 'en-US', 'user', {
             availableCredits: 12,
             requiredCredits: 34,
           }),
-        ).toContain('Not enough credits');
+        ).toContain('Not enough balance');
       });
 
       // Runs mentioned from a shared channel are billed to the bot owner, so the

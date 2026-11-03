@@ -839,7 +839,7 @@ export default {
   'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
-  'share.settings.limits.monthlySpendLimitUnit': 'M credits',
+  'share.settings.limits.monthlySpendLimitUnit': 'USD',
   'share.settings.limits.title': 'Limits',
   'share.settings.limits.workspaceDesc':
     'Every visitor run is billed to the Workspace budget, not to the visitor or any member quota. These per-Agent caps always apply — you can change the numbers, but not turn them off.',
@@ -915,7 +915,7 @@ export default {
   'share.settings.usage.loadFailed': 'Usage could not be loaded',
   'share.settings.usage.monthlySpend': 'This month’s spend',
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
-  'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}} credits',
+  'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}}',
   'share.settings.usage.title': 'Usage',
   'share.settings.usage.views': 'Page views',
   'share.settings.usage.viewsHint': 'Repeat views included. Your own previews are excluded.',
