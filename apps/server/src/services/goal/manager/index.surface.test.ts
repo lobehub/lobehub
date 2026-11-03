@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
 
+import { withoutGoalReport } from '../report';
 import * as managerModule from './index';
 import {
   answeredProblem,
@@ -95,6 +96,28 @@ describe('goal manager public surface', () => {
         nodes: [{ ...graph.nodes[0], status: 'resolved' }],
       } as typeof graph),
     ).not.toBe(managerSnapshot(graph));
+  });
+
+  it('hashes the full graph and the coordinator view of it alike', () => {
+    // The tick hands the manager `withoutGoalReport(graph)`, while the turn claim
+    // re-reads the full graph under the lock. A Goal carrying a report node must
+    // not look changed between the two, or the claim never succeeds.
+    const graph = {
+      decisions: [],
+      edges: [{ kind: 'depends_on', sourceNodeId: 'n1', targetNodeId: 'report' }],
+      goal: {
+        config: { manager: {}, report: { nodeId: 'report' } },
+        maxRounds: 3,
+        maxTotalCost: null,
+        requirement: 'r',
+      },
+      nodes: [
+        { id: 'n1', status: 'resolved', updatedAt: new Date(1) },
+        { id: 'report', status: 'active', updatedAt: new Date(1) },
+      ],
+      workVersions: [{ nodeId: 'report', relation: 'output', workVersionId: 'w1' }],
+    } as unknown as Parameters<typeof managerSnapshot>[0];
+    expect(managerSnapshot(withoutGoalReport(graph))).toBe(managerSnapshot(graph));
   });
 
   it('parses every plan action through one schema', () => {
