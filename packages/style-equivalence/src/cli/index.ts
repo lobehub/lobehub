@@ -5,7 +5,8 @@ import { parseArgs, promisify } from 'node:util';
 import { runComparison } from '../run';
 import { runSelfTest } from '../selftest';
 import { formatSelfTest } from '../selftest/run';
-import { formatSummary } from './summary';
+import { runStack } from '../stack';
+import { formatStack, formatSummary } from './summary';
 
 const run = promisify(execFile);
 
@@ -13,6 +14,7 @@ const HELP = `style-equivalence — compare styled elements between two revision
 
   bun run style-eq --pr <number>
   bun run style-eq --base <ref> --head <ref>
+  bun run style-eq --stack [--stack-base <branch>]
   bun run style-eq self-test
 
 Options:
@@ -22,6 +24,11 @@ Options:
   --skip-calibration  do not run the project's real-mount calibration
   --mutations <n>     mutants to sample from equal cases (default 10, 0 turns it off)
 `;
+
+const DEFAULT_STACK_BASE = 'test/stylex-migration-stack';
+
+const revParse = async (repo: string, ref: string) =>
+  (await run('git', ['-C', repo, 'rev-parse', '--verify', `${ref}^{commit}`])).stdout.trim();
 
 const ensureObject = async (repo: string, sha: string) => {
   try {
@@ -58,6 +65,8 @@ const main = async () => {
       'pr': { type: 'string' },
       'records': { type: 'string' },
       'skip-calibration': { type: 'boolean' },
+      'stack': { type: 'boolean' },
+      'stack-base': { type: 'string' },
     },
   });
   if (values.help) return void console.log(HELP);
@@ -73,20 +82,56 @@ const main = async () => {
     return;
   }
   if (positionals.length) throw new Error(`Unknown command ${positionals[0]}`);
+  if (values.mutations !== undefined && !/^\d+$/.test(values.mutations))
+    throw new Error('--mutations takes a non-negative integer');
+  const mutations = values.mutations === undefined ? undefined : Number(values.mutations);
+  if (values.stack) {
+    const stackBase = values['stack-base'] ?? DEFAULT_STACK_BASE;
+    const { stdout } = await run(
+      'gh',
+      [
+        'pr',
+        'list',
+        '--base',
+        stackBase,
+        '--state',
+        'open',
+        '--limit',
+        '200',
+        '--json',
+        'number,headRefOid',
+      ],
+      { cwd: repo },
+    );
+    const heads = (JSON.parse(stdout) as Array<{ headRefOid: string; number: number }>)
+      .sort((a, b) => a.number - b.number)
+      .map((pr) => ({ id: String(pr.number), sha: pr.headRefOid }));
+    await ensureObject(repo, await revParse(repo, stackBase));
+    for (const head of heads) await ensureObject(repo, head.sha);
+    const result = await runStack({
+      base: stackBase,
+      configFile,
+      heads,
+      mutations,
+      recordsDir,
+      repo,
+    });
+    console.log(formatStack(result));
+    process.exitCode = result.mergeable ? 0 : result.conflicts.length ? 3 : 1;
+    return;
+  }
   const revisions = values.pr
     ? await resolvePullRequest(repo, values.pr)
     : values.base && values.head
       ? { base: values.base, head: values.head }
       : undefined;
-  if (!revisions) throw new Error('Specify --pr <number> or both --base and --head');
-  if (values.mutations !== undefined && !/^\d+$/.test(values.mutations))
-    throw new Error('--mutations takes a non-negative integer');
+  if (!revisions) throw new Error('Specify --pr <number>, --stack or both --base and --head');
   const result = await runComparison({
     ...revisions,
     calibrate: !values['skip-calibration'],
     configFile,
     keepWorktrees: values['keep-worktrees'],
-    mutations: values.mutations === undefined ? undefined : Number(values.mutations),
+    mutations,
     recordsDir,
     repo,
   });
