@@ -21,6 +21,7 @@ import { type ProjectListItem, useLoadedProjectList, useProjectStore } from '@/s
 
 import {
   buildCreateProjectRequest,
+  doesConflictApplyTo,
   getCreateProjectInput,
   getProjectFieldSuggestions,
   isProjectIdentifierTaken,
@@ -158,9 +159,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           // Only the identifier that was submitted is known to be taken. The
           // field stays editable while the request is in flight, so a value
           // typed meanwhile must not inherit that verdict.
-          identifierConflict:
-            Boolean(submittedIdentifier) &&
-            current.identifier.trim().toUpperCase() === submittedIdentifier,
+          identifierConflict: doesConflictApplyTo(submittedIdentifier, current.identifier),
         }));
         return;
       }

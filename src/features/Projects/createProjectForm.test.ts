@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCreateProjectRequest,
+  doesConflictApplyTo,
   getCreateProjectInput,
   getProjectFieldSuggestions,
   isProjectIdentifierTaken,
@@ -45,6 +46,19 @@ describe('createProjectForm', () => {
     // An empty field is "not yet filled in", not "taken".
     expect(isProjectIdentifierTaken('  ', projects)).toBe(false);
     expect(isProjectIdentifierTaken('LOBE', [])).toBe(false);
+  });
+
+  it('attributes a server conflict only to the identifier that was submitted', () => {
+    // Unchanged field: the conflict the server reported still describes it.
+    expect(doesConflictApplyTo('LOBE', 'LOBE')).toBe(true);
+    expect(doesConflictApplyTo('LOBE', ' lobe ')).toBe(true);
+
+    // Typed a new value while the request was in flight: the verdict is stale.
+    expect(doesConflictApplyTo('LOBE', 'MOBILE')).toBe(false);
+
+    // Nothing was submitted, so there is no identifier to blame.
+    expect(doesConflictApplyTo('', '')).toBe(false);
+    expect(doesConflictApplyTo('', 'MOBILE')).toBe(false);
   });
 
   it('normalizes and includes a user-provided slug', () => {

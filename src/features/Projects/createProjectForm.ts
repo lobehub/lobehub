@@ -48,6 +48,22 @@ export const isProjectIdentifierTaken = (
   return Boolean(normalized) && projects.some((project) => project.identifier === normalized);
 };
 
+/**
+ * Whether a `CONFLICT` answered for `submittedIdentifier` still describes the
+ * value in the field.
+ *
+ * The identifier input stays editable while the create request is in flight, so
+ * the answer can come back after the user has typed another value. The verdict
+ * belongs to what was submitted; a different value typed meanwhile must not
+ * inherit it. An empty submission carries no identifier (the server leaves the
+ * column null), so it has nothing to attribute the conflict to.
+ */
+export const doesConflictApplyTo = (submittedIdentifier: string, currentIdentifier: string) => {
+  const submitted = submittedIdentifier.trim().toUpperCase();
+
+  return Boolean(submitted) && currentIdentifier.trim().toUpperCase() === submitted;
+};
+
 export const isProjectSlugValid = (slug: string) => {
   const normalizedSlug = slug.trim().toLowerCase();
   return !normalizedSlug || PROJECT_SLUG_REGEX.test(normalizedSlug);
