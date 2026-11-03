@@ -51,7 +51,7 @@ lh generate tts "你好，LobeHub" -m elevenlabs/eleven_v4 -o hello.mp3
 - **语速**：Eleven Multilingual v2 以及 Flash、Turbo 系列支持 `0.7` 至 `1.2` 的语速；Eleven v3 和 v4 不支持语速设置。
 
 <Callout type={'warning'}>
-  除默认的 Roger 外，内置音色都来自 ElevenLabs 音色库（Voice Library），**免费档 API Key 无法通过 API 使用这些音色**。免费档请保留默认音色，或用 `--voice <音色 ID>` 指定你自己拥有的音色（例如通过 Voice Design 或即时声音克隆创建的音色），或升级到付费套餐。Roger 属于 ElevenLabs 的旧版默认音色，ElevenLabs 将于 2026-12-31 停用这批音色，届时默认音色会随之更换。
+  除默认的 Roger 外，内置音色都来自 ElevenLabs 音色库（Voice Library），**免费档 API Key 无法通过 API 使用这些音色**。免费档请保留默认音色，或用 `--voice <音色 ID>` 指定你自己拥有的音色（例如通过 Voice Design 或即时声音克隆创建的音色），或升级到付费套餐。Roger 属于 ElevenLabs 的旧版默认音色，仅 2026 年 3 月前注册的账号可用，并将于 2026-12-31 停用。账号无法使用 Roger 时，LobeHub 会改用你账号中的音色（优先你自己创建的音色，其次是预置音色），这需要密钥具备 `voices_read` 权限；找不到可用音色时，请用 `--voice` 指定。
 </Callout>
 
 ## 常见问题

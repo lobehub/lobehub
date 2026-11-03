@@ -1,7 +1,7 @@
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import createDebug from 'debug';
 import type { TTSAudioFormat } from 'model-bank';
-import { DEFAULT_TTS_AUDIO_FORMAT } from 'model-bank';
+import { DEFAULT_TTS_AUDIO_FORMAT, ELEVENLABS_DEFAULT_VOICE_ID } from 'model-bank';
 
 import { convertTextToSpeechUsage } from '../../core/usageConverters/tts';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
@@ -94,6 +94,9 @@ const DETAIL_STATUS_ERROR_TYPES: Record<string, ILobeAgentRuntimeErrorType> = {
  * voice except the default (Roger) comes from the Voice Library.
  * @see https://elevenlabs.io/docs/eleven-creative/voices/voice-library
  */
+export const ELEVENLABS_NO_ACCOUNT_VOICE_HINT =
+  'The default voice is not available to this ElevenLabs account and no usable voice was found in it (the key needs the voices_read permission to look one up): pass a voice you own with --voice.';
+
 export const ELEVENLABS_PAID_VOICE_HINT =
   'Free-tier ElevenLabs keys cannot use Voice Library voices (such as Talia) through the API: upgrade the plan, or pass the default voice or a voice you own with --voice.';
 
@@ -201,6 +204,86 @@ const parseErrorDetail = (body?: ElevenLabsErrorBody): { message?: string; statu
   return { message: detail.message, status: detail.status ?? detail.code };
 };
 
+/** Turn a failed Create speech response into a typed error with a readable message. */
+const toSpeechError = async (response: Response): Promise<ElevenLabsSpeechError> => {
+  const errorBody = await readErrorBody(response);
+  const { message, status } = parseErrorDetail(errorBody);
+  const paymentRequired = response.status === 402 || status === 'payment_required';
+  const reason = message || response.statusText || 'request failed';
+
+  return new ElevenLabsSpeechError(
+    paymentRequired
+      ? `ElevenLabs API error (${response.status}): ${reason.replace(/\.+$/, '')}. ${ELEVENLABS_PAID_VOICE_HINT}`
+      : `ElevenLabs API error (${response.status}): ${reason}`,
+    (status ? DETAIL_STATUS_ERROR_TYPES[status] : undefined) ??
+      HTTP_ERROR_TYPES[response.status] ??
+      AgentRuntimeErrorType.ProviderBizError,
+    { detail: errorBody?.detail, status: response.status, voiceStatus: status },
+  );
+};
+
+/** `detail.status` values ElevenLabs uses when the account cannot use the requested voice. */
+const VOICE_UNAVAILABLE_STATUSES = new Set([
+  'payment_required',
+  'voice_not_found',
+  'voice_does_not_exist',
+]);
+
+const isVoiceUnavailable = (error: ElevenLabsSpeechError) => {
+  const status = error.detail?.status;
+  const voiceStatus = error.detail?.voiceStatus;
+  return (
+    status === 402 ||
+    status === 404 ||
+    (typeof voiceStatus === 'string' && VOICE_UNAVAILABLE_STATUSES.has(voiceStatus))
+  );
+};
+
+/**
+ * Categories the account can always call, best first: voices it created, then premade
+ * ones it still has. Voice Library (`professional`) voices need a paid plan on the API.
+ */
+const ACCOUNT_VOICE_CATEGORIES = ['cloned', 'generated', 'premade'];
+
+/**
+ * First voice in the account that it can call, from `GET /v1/voices`. Returns undefined
+ * when the key lacks `voices_read` or the account has no such voice.
+ * @see https://elevenlabs.io/docs/api-reference/voices/search
+ */
+export const resolveAccountVoice = async (
+  baseURL: string,
+  apiKey: string,
+  options: Pick<ElevenLabsSpeechOptions, 'headers' | 'signal'>,
+): Promise<string | undefined> => {
+  try {
+    const response = await fetch(`${baseURL}/v1/voices`, {
+      headers: { ...options.headers, 'xi-api-key': apiKey },
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      log('list voices failed: %d', response.status);
+      return;
+    }
+
+    const { voices = [] } = (await response.json()) as {
+      voices?: { category?: string; voice_id?: string }[];
+    };
+
+    for (const category of ACCOUNT_VOICE_CATEGORIES) {
+      const voice = voices.find(
+        (item) =>
+          item.category === category &&
+          item.voice_id &&
+          item.voice_id !== ELEVENLABS_DEFAULT_VOICE_ID,
+      );
+      if (voice?.voice_id) return voice.voice_id;
+    }
+  } catch (error) {
+    if ((error as Error)?.name === 'AbortError') throw error;
+    log('list voices error: %O', error);
+  }
+};
+
 /** Billed characters reported by ElevenLabs, if the header is present and numeric. */
 const readCharacterCount = (response: Response): number | undefined => {
   const raw = response.headers.get('x-character-count');
@@ -229,43 +312,52 @@ export async function createElevenLabsSpeech(
     const { body, format, outputFormat } = buildElevenLabsSpeechRequest(payload, requestModel);
     const pricing = await getModelPricing(payload.model, provider, options.pricingContext);
 
-    const url = new URL(`${baseURL}/v1/text-to-speech/${encodeURIComponent(payload.voice)}`);
-    url.searchParams.set('output_format', outputFormat);
+    const send = (voice: string) => {
+      const url = new URL(`${baseURL}/v1/text-to-speech/${encodeURIComponent(voice)}`);
+      url.searchParams.set('output_format', outputFormat);
 
-    log(
-      'text-to-speech request: model=%s voice=%s output_format=%s',
-      requestModel,
-      payload.voice,
-      outputFormat,
-    );
+      log(
+        'text-to-speech request: model=%s voice=%s output_format=%s',
+        requestModel,
+        voice,
+        outputFormat,
+      );
 
-    const response = await fetch(url.toString(), {
-      body: JSON.stringify(body),
-      headers: {
-        ...options.headers,
-        'Accept': 'audio/*',
-        'Content-Type': 'application/json',
-        'xi-api-key': apiKey,
-      },
-      method: 'POST',
-      signal: options.signal,
-    });
+      return fetch(url.toString(), {
+        body: JSON.stringify(body),
+        headers: {
+          ...options.headers,
+          'Accept': 'audio/*',
+          'Content-Type': 'application/json',
+          'xi-api-key': apiKey,
+        },
+        method: 'POST',
+        signal: options.signal,
+      });
+    };
+
+    let response = await send(payload.voice);
 
     if (!response.ok) {
-      const errorBody = await readErrorBody(response);
-      const { message, status } = parseErrorDetail(errorBody);
-      const paymentRequired = response.status === 402 || status === 'payment_required';
-      const reason = message || response.statusText || 'request failed';
+      const error = await toSpeechError(response);
 
-      throw new ElevenLabsSpeechError(
-        paymentRequired
-          ? `ElevenLabs API error (${response.status}): ${reason.replace(/\.+$/, '')}. ${ELEVENLABS_PAID_VOICE_HINT}`
-          : `ElevenLabs API error (${response.status}): ${reason}`,
-        (status ? DETAIL_STATUS_ERROR_TYPES[status] : undefined) ??
-          HTTP_ERROR_TYPES[response.status] ??
-          AgentRuntimeErrorType.ProviderBizError,
-        { detail: errorBody?.detail, status: response.status },
-      );
+      // The built-in default voice is not callable on every account (free tier, or
+      // accounts created after the Default voices were withdrawn): retry once with a
+      // voice the account can use. A rejected request is not billed.
+      if (payload.voice !== ELEVENLABS_DEFAULT_VOICE_ID || !isVoiceUnavailable(error)) throw error;
+
+      const fallback = await resolveAccountVoice(baseURL, apiKey, options);
+      if (!fallback) {
+        throw new ElevenLabsSpeechError(
+          `${error.message.replace(/\.+$/, '')}. ${ELEVENLABS_NO_ACCOUNT_VOICE_HINT}`,
+          error.errorType,
+          error.detail,
+        );
+      }
+
+      log('default voice unavailable, retrying with account voice %s', fallback);
+      response = await send(fallback);
+      if (!response.ok) throw await toSpeechError(response);
     }
 
     const audio = await response.arrayBuffer();

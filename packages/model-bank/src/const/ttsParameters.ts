@@ -338,8 +338,13 @@ const ELEVENLABS_TTS_FORMATS = TTS_AUDIO_FORMATS.filter(
   (format) => format !== 'aac' && format !== 'flac',
 );
 
-/** Roger: callable on the free tier until the Default voices expire on 2026-12-31. */
-const ELEVENLABS_DEFAULT_VOICE = 'CwhRBWXzGAHq8TQ4Fs17';
+/**
+ * Roger, a Default (premade) voice: callable on every plan for accounts created before
+ * March 2026, until ElevenLabs retires the Default voices on 2026-12-31. The runtime falls
+ * back to a voice from the account when this one is unavailable.
+ */
+export const ELEVENLABS_DEFAULT_VOICE_ID = 'CwhRBWXzGAHq8TQ4Fs17';
+const ELEVENLABS_DEFAULT_VOICE = ELEVENLABS_DEFAULT_VOICE_ID;
 
 /** Multilingual v2 and the Flash / Turbo family take `voice_settings.speed` from 0.7 to 1.2. */
 export const elevenlabsTTSSchema: TTSModelParamsSchema = {

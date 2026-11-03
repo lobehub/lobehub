@@ -1,12 +1,14 @@
 // @vitest-environment node
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import type { Pricing } from 'model-bank';
+import { ELEVENLABS_DEFAULT_VOICE_ID } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getModelPricing } from '../../utils/getModelPricing';
 import {
   buildElevenLabsSpeechRequest,
   createElevenLabsSpeech,
+  ELEVENLABS_NO_ACCOUNT_VOICE_HINT,
   ELEVENLABS_PAID_VOICE_HINT,
   type ElevenLabsSpeechOptions,
   normalizeElevenLabsBaseURL,
@@ -211,6 +213,95 @@ describe('createElevenLabsSpeech', () => {
       );
 
       expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+    });
+  });
+
+  describe('default voice fallback', () => {
+    const callDefault = () =>
+      createElevenLabsSpeech(
+        { input: 'Hello', model: 'eleven_flash_v2_5', voice: ELEVENLABS_DEFAULT_VOICE_ID },
+        options,
+      );
+    const paymentRequired = () =>
+      errorResponse(402, {
+        detail: {
+          message: 'Free users cannot use library voices via the API.',
+          status: 'payment_required',
+        },
+      });
+    const voicesResponse = (voices: unknown[]) =>
+      new Response(JSON.stringify({ voices }), { headers: { 'content-type': 'application/json' } });
+
+    it('retries once with an account voice, preferring created voices over premade ones', async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          errorResponse(404, { detail: { message: 'Voice not found', status: 'voice_not_found' } }),
+        )
+        .mockResolvedValueOnce(
+          voicesResponse([
+            { category: 'professional', voice_id: 'library-1' },
+            { category: 'premade', voice_id: 'premade-1' },
+            { category: 'generated', voice_id: 'designed-1' },
+          ]),
+        )
+        .mockResolvedValueOnce(audioResponse({ 'x-character-count': '5' }));
+
+      const result = await callDefault();
+
+      expect(result.audio.byteLength).toBe(AUDIO_BYTES.byteLength);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock.mock.calls[1][0]).toBe('https://api.elevenlabs.io/v1/voices');
+      expect(fetchMock.mock.calls[1][1].headers['xi-api-key']).toBe('xi-test-key');
+      expect(fetchMock.mock.calls[2][0]).toContain('/v1/text-to-speech/designed-1?');
+    });
+
+    it('explains how to pick a voice when the account voices cannot be listed', async () => {
+      fetchMock.mockResolvedValueOnce(paymentRequired()).mockResolvedValueOnce(
+        errorResponse(401, {
+          detail: { message: 'missing voices_read', status: 'missing_permissions' },
+        }),
+      );
+
+      await expect(callDefault()).rejects.toMatchObject({
+        error: { message: expect.stringContaining(ELEVENLABS_NO_ACCOUNT_VOICE_HINT) },
+        errorType: AgentRuntimeErrorType.InsufficientQuota,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('surfaces the retry error when the account voice also fails', async () => {
+      fetchMock
+        .mockResolvedValueOnce(paymentRequired())
+        .mockResolvedValueOnce(voicesResponse([{ category: 'cloned', voice_id: 'clone-1' }]))
+        .mockResolvedValueOnce(
+          errorResponse(429, { detail: { message: 'busy', status: 'system_busy' } }),
+        );
+
+      await expect(callDefault()).rejects.toMatchObject({
+        error: { message: 'ElevenLabs API error (429): busy' },
+        errorType: AgentRuntimeErrorType.RateLimitExceeded,
+      });
+    });
+
+    it('does not fall back for an explicitly chosen voice or for other errors', async () => {
+      fetchMock.mockResolvedValueOnce(paymentRequired());
+      await expect(
+        createElevenLabsSpeech(
+          { input: 'Hello', model: 'eleven_flash_v2_5', voice: VOICE },
+          options,
+        ),
+      ).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.InsufficientQuota,
+      });
+
+      fetchMock.mockResolvedValueOnce(
+        errorResponse(401, { detail: { message: 'Invalid API key' } }),
+      );
+      await expect(callDefault()).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
   });
 
