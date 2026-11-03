@@ -173,6 +173,26 @@ describe('TaskLabelModel task assignments', () => {
     await expectCode(workspace.addTaskLabels(task.id, [foreign.id]), 'LABEL_NOT_FOUND');
   });
 
+  it('changeTaskLabels applies removals and additions together, or not at all', async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const frontend = await workspace.create({ name: 'Frontend' });
+    const backend = await workspace.create({ name: 'Backend' });
+    const foreign = await personal.create({ name: 'Personal' });
+    await workspace.addTaskLabels(task.id, [frontend.id]);
+
+    await expectCode(
+      workspace.changeTaskLabels(task.id, { add: [foreign.id], remove: [frontend.id] }),
+      'LABEL_NOT_FOUND',
+    );
+    expect((await workspace.getTaskLabels(task.id)).map((l) => l.name)).toEqual(['Frontend']);
+
+    const next = await workspace.changeTaskLabels(task.id, {
+      add: [backend.id],
+      remove: [frontend.id],
+    });
+    expect(next.map((l) => l.name)).toEqual(['Backend']);
+  });
+
   it('setTaskLabels replaces the full set', async () => {
     const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
     const a = await workspace.create({ name: 'A' });

@@ -250,18 +250,9 @@ export class TaskLabelModel {
   getTaskLabels = async (taskId: string): Promise<TaskLabelRef[]> =>
     (await this.getLabelsForTasks([taskId]))[taskId] ?? [];
 
-  private assertTaskInScope = async (taskId: string, db: LobeChatDatabase | Transaction) => {
-    const [row] = await db
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(and(eq(tasks.id, taskId), taskOwnership(this.ctx)))
-      .limit(1);
-    if (!row) throw new TaskLabelError('TASK_NOT_FOUND', `Task not found: ${taskId}`);
-  };
-
   /**
-   * Same scope check, but takes a row lock on the task for the rest of the
-   * transaction. The unique index only covers `(task_id, label_id)`, so "one
+   * Check the task is in the caller's scope and take a row lock on it for the
+   * rest of the transaction. The unique index only covers `(task_id, label_id)`, so "one
    * label per group" is a read-then-write invariant: without serializing
    * writers per task, two concurrent attaches of different siblings could
    * each delete the old one and both insert. Holding the task row lock makes
@@ -321,15 +312,30 @@ export class TaskLabelModel {
   };
 
   /**
-   * Attach labels to a task. Attaching a grouped label replaces whatever
-   * sibling from the same group the task already carried (Linear behavior).
+   * Attach and detach labels on a task in one transaction, so an edit that
+   * swaps labels never commits half-way. Attaching a grouped label replaces
+   * whatever sibling from the same group the task already carried (Linear
+   * behavior). Removals apply before additions.
    */
-  addTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> => {
-    if (labelIds.length === 0) return this.getTaskLabels(taskId);
-    const labels = await this.resolveAssignable(labelIds);
+  changeTaskLabels = async (
+    taskId: string,
+    { add = [], remove = [] }: { add?: string[]; remove?: string[] },
+  ): Promise<TaskLabelRef[]> => {
+    const labels = add.length > 0 ? await this.resolveAssignable(add) : [];
+    const removeIds = remove.filter(isUuid);
 
     await this.db.transaction(async (tx) => {
       await this.lockTaskInScope(taskId, tx);
+
+      if (removeIds.length > 0) {
+        await tx
+          .delete(taskLabelLinks)
+          .where(
+            and(eq(taskLabelLinks.taskId, taskId), inArray(taskLabelLinks.labelId, removeIds)),
+          );
+      }
+
+      if (labels.length === 0) return;
 
       const groupIds = [
         ...new Set(labels.map((l) => l.parentId).filter((id): id is string => !!id)),
@@ -360,16 +366,14 @@ export class TaskLabelModel {
     return this.getTaskLabels(taskId);
   };
 
-  removeTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> => {
-    await this.assertTaskInScope(taskId, this.db);
-    labelIds = labelIds.filter(isUuid);
-    if (labelIds.length > 0) {
-      await this.db
-        .delete(taskLabelLinks)
-        .where(and(eq(taskLabelLinks.taskId, taskId), inArray(taskLabelLinks.labelId, labelIds)));
-    }
-    return this.getTaskLabels(taskId);
+  /** Attach labels to a task; see {@link changeTaskLabels} for group handling. */
+  addTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> => {
+    if (labelIds.length === 0) return this.getTaskLabels(taskId);
+    return this.changeTaskLabels(taskId, { add: labelIds });
   };
+
+  removeTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> =>
+    this.changeTaskLabels(taskId, { remove: labelIds });
 
   /** Replace the task's full label set. */
   setTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> => {
