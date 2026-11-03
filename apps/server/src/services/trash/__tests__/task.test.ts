@@ -3,6 +3,8 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { BriefModel } from '@/database/models/brief';
+import { RecentModel } from '@/database/models/recent';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -167,5 +169,37 @@ describe('TrashService — tasks', () => {
     });
     const { items } = await trash.list({ resourceType: 'topic' });
     expect(items.some((item) => item.resourceId === topic.id)).toBe(true);
+  });
+
+  it('hides a trashed task from recents, the home brief feed and the scheduler', async () => {
+    const task = await createTask({
+      automationMode: 'schedule',
+      name: 'Nightly digest',
+      schedulePattern: '0 2 * * *',
+    });
+    await new BriefModel(db, userId).create({
+      summary: 'Ready for review',
+      taskId: task.id,
+      title: 'Digest',
+      type: 'decision',
+    });
+    const recents = () => new RecentModel(db, userId).queryRecent(20, ['task']);
+    const feed = () => new BriefModel(db, userId).listUnresolvedEnriched();
+    const scheduled = async () =>
+      (await TaskModel.getScheduledTasks(db)).filter((t) => t.id === task.id);
+    expect((await recents()).some((item) => item.id === task.id)).toBe(true);
+    expect((await feed()).some((row) => row.brief.taskId === task.id)).toBe(true);
+    expect(await scheduled()).toHaveLength(1);
+
+    await new TaskBatchService(db, userId).delete([task.id]);
+
+    expect((await recents()).some((item) => item.id === task.id)).toBe(false);
+    expect((await feed()).some((row) => row.brief.taskId === task.id)).toBe(false);
+    // Its status is untouched in the bin, so the schedule filter alone must not pick it.
+    expect(await scheduled()).toHaveLength(0);
+
+    await trash.restore([(await rootOf(task.id))!.id]);
+    expect((await recents()).some((item) => item.id === task.id)).toBe(true);
+    expect(await scheduled()).toHaveLength(1);
   });
 });
