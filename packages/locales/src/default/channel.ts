@@ -11,6 +11,7 @@ export default {
   'title': 'Channels',
   'create': 'Create channel',
   'submit': 'Create',
+  'create.onlyYou': 'Only you for now. Create it and invite members whenever you like.',
   'agents': 'Agents',
   'otherAgents': 'Other Agents',
   'projectAgents': 'Project members',

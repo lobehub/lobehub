@@ -11,7 +11,7 @@ import type { ChannelPersonOption } from '@/services/channel';
 import { channelActions } from '@/store/channel';
 
 import type { ChannelAgentDraft } from './agentEnvironment';
-import { canSubmitChannelAgents, toChannelAgentSelection } from './agentEnvironment';
+import { canSubmitChannelMembers, toChannelAgentSelection } from './agentEnvironment';
 import { defaultChannelTitle } from './channelTitle';
 import { MemberSelection } from './MemberSelection';
 import { usePersonName } from './PeopleOptions';
@@ -98,8 +98,10 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
       },
       CHANNEL_LIMITS.titleLength,
     ) || t('autoTitle.empty');
-  // A new Channel may start with only its creator; inviting needs someone to invite.
-  const canSubmit = agents.length ? canSubmitChannelAgents(agents) : !existing || people.length > 0;
+  const canSubmit = canSubmitChannelMembers(agents, {
+    creating: !existing,
+    people: people.length,
+  });
 
   const submit = async () => {
     if (busy || !canSubmit) return;
@@ -149,6 +151,7 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
       )}
       <Flexbox gap={8} inert={busy}>
         <MemberSelection
+          emptyHint={existing ? undefined : t('create.onlyYou')}
           exclude={existing?.agentIds}
           options={options}
           value={agents}

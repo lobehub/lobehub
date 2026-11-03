@@ -68,12 +68,15 @@ const AgentOptionRow = ({
  * offer people, so inviting anyone happens in one place with one search.
  */
 export const MemberSelection = ({
+  emptyHint,
   exclude = [],
   options,
   people,
   value,
   onChange,
 }: {
+  /** What an empty selection means, when submitting it is allowed. */
+  emptyHint?: string;
   /** Agents already in the Channel. */
   exclude?: string[];
   onChange: Dispatch<SetStateAction<ChannelAgentDraft[]>>;
@@ -157,7 +160,9 @@ export const MemberSelection = ({
               {t('memberSelection.selectedAgents', { ns: 'chat', count: selectedCount })}
             </Text>
             {!selectedCount &&
-              (people ? (
+              (emptyHint ? (
+                <AgentSelectionEmpty description={emptyHint} />
+              ) : people ? (
                 <Text fontSize={12} type="secondary" {...stylex.props(styles.section)}>
                   {t('invite.noSelected')}
                 </Text>
