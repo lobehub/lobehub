@@ -188,7 +188,7 @@ const TaskProperties = memo(() => {
           variant={'borderless'}
         >
           {labels.length > 0 ? (
-            <TaskLabelChips labels={labels} max={6} />
+            <TaskLabelChips wrap labels={labels} max={6} />
           ) : (
             <>
               <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={16} />

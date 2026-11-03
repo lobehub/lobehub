@@ -6,7 +6,9 @@ import type { TaskGroupItem, TaskListItem } from '@/store/task/slices/list/initi
 
 import {
   buildKanbanColumns,
+  getKanbanCreateTaskModalProps,
   getKanbanLabelPatch,
+  getTaskGroupCreateDefaults,
   normalizeKanbanGroupBy,
 } from './kanbanBoardModel';
 import {
@@ -120,5 +122,28 @@ describe('groupTaskItems by label group', () => {
       ['label:feature', ['T-1']],
       ['label:none', ['T-2']],
     ]);
+  });
+});
+
+describe('label column create entry', () => {
+  it('pins the column label on the create modal, and none for "No label"', () => {
+    const groupBy = toTaskLabelGroupBy('g');
+    const bug = getTaskGroupCreateDefaults({
+      groupBy,
+      key: 'label:bug',
+      label: 'Bug',
+      labelId: 'bug',
+    });
+    const none = getTaskGroupCreateDefaults({
+      groupBy,
+      key: 'label:none',
+      label: '-',
+      labelId: null,
+    });
+
+    expect(bug).toEqual({ labelId: 'bug' });
+    expect(none).toEqual({});
+    expect(getKanbanCreateTaskModalProps(bug!, {}).defaultLabelIds).toEqual(['bug']);
+    expect(getKanbanCreateTaskModalProps(none!, {}).defaultLabelIds).toBeUndefined();
   });
 });
