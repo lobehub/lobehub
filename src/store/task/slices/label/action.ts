@@ -33,17 +33,32 @@ export class TaskLabelSliceActionImpl {
     this.#get = get;
   }
 
-  /** The workspace (or personal) label registry; scope is part of the SWR key. */
-  useFetchTaskLabels = (enabled = true) =>
+  /**
+   * The workspace (or personal) label registry. SWR already keys the request by
+   * workspace; `scope` is the workspace the caller rendered with, so a response
+   * that lands after the user switched away is not written into the shared slot.
+   */
+  useFetchTaskLabels = (enabled: boolean, scope: string | null) =>
     useClientDataSWR<TaskLabelWithUsage[]>(
       enabled ? taskLabelKeys.list() : null,
       () => taskLabelService.list(),
       {
         onSuccess: (data: TaskLabelWithUsage[]) => {
+          if (this.#get().taskLabelsScope !== scope) return;
           this.#set({ taskLabels: data, taskLabelsInit: true }, false, 'useFetchTaskLabels');
         },
       },
     );
+
+  /** Point the registry at another workspace, dropping the previous one's labels. */
+  internal_resetTaskLabelsScope = (scope: string | null) => {
+    if (this.#get().taskLabelsScope === scope) return;
+    this.#set(
+      { taskLabels: [], taskLabelsInit: false, taskLabelsScope: scope },
+      false,
+      'resetTaskLabelsScope',
+    );
+  };
 
   refreshTaskLabels = async (): Promise<void> => {
     await mutate(taskLabelKeys.list());
@@ -76,8 +91,8 @@ export class TaskLabelSliceActionImpl {
 
   /**
    * Replace a task's labels with `next`, shown optimistically on the detail
-   * page and every loaded list/board. Only the delta goes over the wire, as
-   * add/remove calls, so a concurrent editor's change to other labels survives.
+   * page and every loaded list/board. Only the delta goes over the wire (applied
+   * atomically), so a concurrent editor's change to other labels survives.
    */
   setTaskLabels = async (
     taskId: string,
@@ -101,8 +116,9 @@ export class TaskLabelSliceActionImpl {
     }
 
     try {
-      if (removed.length > 0) await taskLabelService.removeFromTask(taskId, removed);
-      if (added.length > 0) await taskLabelService.addToTask(taskId, added);
+      // One request, one transaction: on failure nothing was written, so
+      // rolling the optimistic state back matches the server.
+      await taskLabelService.changeForTask(taskId, { add: added, remove: removed });
       collections.commit();
     } catch (error) {
       collections.rollback();

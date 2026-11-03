@@ -253,6 +253,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         config: toCreateTaskModelConfig(params),
         createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
+        labelIds, // attached in the same request; the task is rolled back on failure
         name: params.name,
         parentTaskId: parent?.id,
         priority: params.priority,
@@ -265,8 +266,6 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           success: false,
         };
       }
-      const labels = labelIds.length ? await taskLabelService.addToTask(task.id, labelIds) : [];
-      if (labels.length) void getTaskStoreState().refreshTaskList();
 
       return {
         content: formatTaskCreated({
@@ -275,7 +274,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           id: task.id,
           identifier: task.identifier,
           instruction: params.instruction,
-          labels,
+          labels: task.labels ?? [],
           name: task.name,
           parentLabel: parent?.identifier,
           parentTaskId: parent?.id,
@@ -450,7 +449,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] editTask - params:', params);
-      const [addLabelIds, removeLabelIds] = await Promise.all([
+      const [add, remove] = await Promise.all([
         this.#labelIds(params.addLabels),
         this.#labelIds(params.removeLabels),
       ]);
@@ -555,11 +554,12 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       };
       if (addDependencies?.length) await applyDependencies(addDependencies, false);
       if (removeDependencies?.length) await applyDependencies(removeDependencies, true);
-      if (removeLabelIds.length) await taskLabelService.removeFromTask(identifier, removeLabelIds);
-      if (addLabelIds.length) await taskLabelService.addToTask(identifier, addLabelIds);
-      if (removeLabelIds.length) changes.push(`labels removed: ${params.removeLabels!.join(', ')}`);
-      if (addLabelIds.length) changes.push(`labels added: ${params.addLabels!.join(', ')}`);
-      if (removeLabelIds.length || addLabelIds.length) void store.refreshTaskList();
+      if (remove.length || add.length) {
+        await taskLabelService.changeForTask(identifier, { add, remove });
+        void store.refreshTaskList();
+      }
+      if (remove.length) changes.push(`labels removed: ${params.removeLabels!.join(', ')}`);
+      if (add.length) changes.push(`labels added: ${params.addLabels!.join(', ')}`);
 
       await Promise.all(ops);
 
