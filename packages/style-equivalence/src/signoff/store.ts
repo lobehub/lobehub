@@ -8,6 +8,7 @@ export interface SignoffRecord {
   key: string;
   note: string;
   reason: string;
+  reasons?: string[];
   signedAt: string;
   signer: string;
 }

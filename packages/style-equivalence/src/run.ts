@@ -5,8 +5,8 @@ import { promisify } from 'node:util';
 
 import type { Browser } from '@playwright/test';
 
-import { type CaseResult, createRunAnalyzer, mergeRetry } from './analyze/diff';
-import { buildSide } from './build/viteBuild';
+import { type CaseResult, confirmDifferences, createRunAnalyzer, mergeRetry } from './analyze/diff';
+import { buildWithStubs } from './build/stubs';
 import { calibrate, type CalibrationResult } from './calibration';
 import { launchBrowser } from './capture/browser';
 import { captureRun, conditionFromLabel } from './capture/runner';
@@ -99,13 +99,16 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
     const dists = { base: path.join(runDir, 'dist-base'), head: path.join(runDir, 'dist-head') };
     await Promise.all(
       (['base', 'head'] as const).map((side) =>
-        buildSide({
-          configFile: options.configFile,
-          hostDir: hosts[side].host,
-          logFile: path.join(runDir, `build-${side}.log`),
-          outDir: dists[side],
-          root: roots[side],
-        }),
+        buildWithStubs(
+          {
+            configFile: options.configFile,
+            hostDir: hosts[side].host,
+            logFile: path.join(runDir, `build-${side}.log`),
+            outDir: dists[side],
+            root: roots[side],
+          },
+          hosts[side].written,
+        ),
       ),
     );
     const server = await serveDirectories(runDir);
@@ -129,6 +132,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       const retry = async (
         results: CaseResult[],
         conditionsOf: (result: CaseResult) => string[],
+        merge: (original: CaseResult, retry: CaseResult, conditions: string[]) => CaseResult,
       ): Promise<CaseResult[]> => {
         const targets = results.filter((result) => conditionsOf(result).length);
         if (!targets.length) return results;
@@ -140,24 +144,27 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
           onCondition: again.add,
           plan: [...new Set(targets.flatMap(conditionsOf))].map(conditionFromLabel),
           urls: {
-            base: `${server.url}/dist-base/?cases=${keys}`,
-            head: `${server.url}/dist-head/?cases=${keys}`,
+            base: `${server.url}/dist-base/#cases=${keys}`,
+            head: `${server.url}/dist-head/#cases=${keys}`,
           },
         });
         const retried = new Map(again.finish().map((result) => [result.key, result]));
         return results.map((result) => {
           const second = retried.get(result.key);
           const conditions = conditionsOf(result);
-          return conditions.length && second ? mergeRetry(result, second, conditions) : result;
+          return conditions.length && second ? merge(result, second, conditions) : result;
         });
       };
       const total = capture.conditions.length;
       let analyzed = await retry(
         analyzer.finish(capture.caseGaps),
         (result) => result.unstableConditions,
+        mergeRetry,
       );
-      analyzed = await retry(analyzed, (result) =>
-        result.differingConditions.length < total ? result.differingConditions : [],
+      analyzed = await retry(
+        analyzed,
+        (result) => (result.differingConditions.length < total ? result.differingConditions : []),
+        confirmDifferences,
       );
       const results = new Map(analyzed.map((result) => [result.key, result]));
       cases = synthesis.plans.flatMap((plan) =>

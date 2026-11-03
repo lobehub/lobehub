@@ -4,9 +4,15 @@ import { useState } from 'react';
 
 import { postSignoff, type RunPayload, shotUrl, type VerdictEntry } from '../api';
 import { conditionColumns } from '../data';
-import { FLAG_EXPLANATIONS, flagLabel, shortKey, SUBMIT_ERRORS } from '../labels';
+import { flagExplanation, flagLabel, shortKey, SUBMIT_ERRORS } from '../labels';
 import { hrefOf } from '../route';
-import { type SignoffGroup, signoffGroups, signoffProgress, submission } from '../signoff';
+import {
+  signedFor,
+  type SignoffGroup,
+  signoffGroups,
+  signoffProgress,
+  submission,
+} from '../signoff';
 
 const styles = stylex.create({
   button: {
@@ -103,17 +109,19 @@ const Row = ({
   condition,
   item,
   onToggle,
+  signed,
 }: {
   checked: boolean;
   condition?: string;
   item: VerdictEntry;
   onToggle: () => void;
+  signed: boolean;
 }) => (
   <div {...stylex.props(styles.row)}>
     <input
       aria-label={`选择 ${shortKey(item.key)}`}
       checked={checked}
-      disabled={item.signoff === 'valid'}
+      disabled={signed}
       type="checkbox"
       onChange={onToggle}
     />
@@ -134,8 +142,10 @@ const Row = ({
         />
       ))
     )}
-    <div {...stylex.props(styles.state, item.signoff === 'valid' && styles.valid)}>
-      {STATE_LABELS[item.signoff] ?? item.signoff}
+    <div {...stylex.props(styles.state, signed && styles.valid)}>
+      {signed && item.signoff !== 'valid'
+        ? '这一项已签，还有别的标记'
+        : (STATE_LABELS[item.signoff] ?? item.signoff)}
       {item.category !== 'unpaired' && <a href={hrefOf({ key: item.key, kind: 'case' })}>详情 ›</a>}
     </div>
   </div>
@@ -162,7 +172,7 @@ const Group = ({
           ? [...current, key]
           : [key],
     );
-  const open = group.items.filter((item) => item.signoff !== 'valid').map((item) => item.key);
+  const open = group.items.filter((item) => !signedFor(item, group.reason)).map((item) => item.key);
   const submit = async () => {
     const result = submission(group, selected, note);
     if ('error' in result) return setError(SUBMIT_ERRORS[result.error] ?? result.error);
@@ -191,7 +201,7 @@ const Group = ({
         <b>{flagLabel(group.reason)}</b>
         <span {...stylex.props(styles.muted)}>{group.items.length}</span>
         <span {...stylex.props(styles.explain)}>
-          {FLAG_EXPLANATIONS[group.reason]}{' '}
+          {flagExplanation(group.reason)}{' '}
           <a href={hrefOf({ anchor: group.reason, kind: 'method' })}>依据 ›</a>
         </span>
         <input
@@ -217,6 +227,7 @@ const Group = ({
           condition={condition}
           item={item}
           key={item.key}
+          signed={signedFor(item, group.reason)}
           onToggle={() => toggle(item.key)}
         />
       ))}

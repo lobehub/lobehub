@@ -6,6 +6,7 @@ export interface VerdictEntry {
   flags: string[];
   hash: string;
   key: string;
+  signedReasons?: string[];
   signoff: 'missing' | 'not-needed' | 'stale' | 'valid';
 }
 

@@ -11,6 +11,7 @@ import { emotionStaticAdapter } from '../../packages/style-equivalence/src/extra
 import { globalCssAdapter } from '../../packages/style-equivalence/src/extract/adapters/globalCss';
 import { stylexAdapter } from '../../packages/style-equivalence/src/extract/adapters/stylex';
 import type * as LobeUiImportsModule from '../../plugins/vite/lobeUiImports';
+import type * as MarkdownImportModule from '../../plugins/vite/markdownImport';
 import type * as StylexModule from '../../plugins/vite/stylex';
 import { fixtureCalibration } from './styleEquivalenceCalibration';
 import { workspaceExports } from './verification/build/fixtureResolvers';
@@ -52,11 +53,12 @@ const config: ProjectConfig = {
       root,
       'plugins/vite/lobeUiImports.ts',
     );
+    const { viteMarkdownImport } = await fromRevision<typeof MarkdownImportModule>(
+      root,
+      'plugins/vite/markdownImport.ts',
+    );
     return {
-      alias: [
-        { find: /^@\/const\//, replacement: path.join(root, 'packages/const/src/') },
-        { find: '@', replacement: path.join(root, 'src') },
-      ],
+      alias: [],
       dedupe: ['react', 'react-dom', '@emotion/react', '@emotion/css', '@stylexjs/stylex'],
       define: {
         '__CI__': 'false',
@@ -72,7 +74,9 @@ const config: ProjectConfig = {
         stylexPlugin({ overlaySrcDirs: [path.join(root, 'src')] }),
         react(),
         ...lobeUiImports(),
+        viteMarkdownImport(),
       ],
+      tsconfigPaths: true,
     };
   },
 };

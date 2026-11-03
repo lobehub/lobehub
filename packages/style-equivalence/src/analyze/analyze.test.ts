@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { type CaseResult, mergeRetry, ownDifferences, rootCausesOf } from './diff';
+import {
+  type CaseResult,
+  confirmDifferences,
+  DIFFERENCE_NOT_REPRODUCED,
+  mergeRetry,
+  ownDifferences,
+  rootCausesOf,
+} from './diff';
 
 const diff = (property: string, before: string, after: string, key = 'root.0') => ({
   after,
@@ -158,5 +165,29 @@ describe('mergeRetry over differing conditions', () => {
       rootCauses: [],
       status: 'equal',
     });
+  });
+});
+
+describe('confirmDifferences', () => {
+  const cause = diff('opacity', '1', '0');
+  const seen = result({
+    comboDifferences: [
+      { combo: 0, condition: 'dark/796/focus-visible', differences: [cause], rootCauses: [cause] },
+    ],
+    differingConditions: ['dark/796/focus-visible'],
+    rootCauses: [cause],
+    status: 'difference',
+  });
+
+  it('keeps a difference the retry did not reproduce as a gap, so the case needs sign-off', () => {
+    expect(confirmDifferences(seen, result({}), seen.differingConditions)).toMatchObject({
+      differingConditions: [],
+      gaps: [DIFFERENCE_NOT_REPRODUCED],
+      status: 'equal',
+    });
+  });
+
+  it('adds no gap when every difference reproduces', () => {
+    expect(confirmDifferences(seen, seen, seen.differingConditions).gaps).toEqual([]);
   });
 });

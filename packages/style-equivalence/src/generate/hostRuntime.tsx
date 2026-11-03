@@ -3,7 +3,7 @@ import { Component, type ComponentType, type ReactNode } from 'react';
 import type { FilePlan } from '../plan/planFile';
 
 type CaseRender = (combo: Record<string, boolean>) => ReactNode;
-export type CaseModules = Record<string, { cases: Record<string, CaseRender> }>;
+export type CaseModules = Record<string, { cases: Record<string, CaseRender>; error?: string }>;
 
 export type CaseSelection = { caseKey: string; combo: number } | { caseKeys: string[] };
 
@@ -25,8 +25,22 @@ class Boundary extends Component<{ children: ReactNode }, { error?: string }> {
   }
 }
 
-const CaseView = ({ combo, render }: { combo: Record<string, boolean>; render?: CaseRender }) =>
-  render ? render(combo) : <div data-synthetic-error="CASE_RENDER_MISSING" />;
+const CaseView = ({
+  combo,
+  error,
+  render,
+}: {
+  combo: Record<string, boolean>;
+  error?: string;
+  render?: CaseRender;
+}) =>
+  error ? (
+    <div data-synthetic-error={error} />
+  ) : render ? (
+    render(combo)
+  ) : (
+    <div data-synthetic-error="CASE_RENDER_MISSING" />
+  );
 
 export const SECTION_WIDTH = 360;
 
@@ -57,7 +71,11 @@ export const CaseList = ({
               }}
             >
               <Boundary>
-                <CaseView combo={combo} render={modules[file.file]?.cases[entry.key]} />
+                <CaseView
+                  combo={combo}
+                  error={modules[file.file]?.error}
+                  render={modules[file.file]?.cases[entry.key]}
+                />
               </Boundary>
             </section>
           );
@@ -67,9 +85,9 @@ export const CaseList = ({
   </main>
 );
 
-export const readSelection = (search: string): CaseSelection | undefined => {
+export const readSelection = (search: string, hash = ''): CaseSelection | undefined => {
   const params = new URLSearchParams(search);
-  const caseKeys = params.get('cases');
+  const caseKeys = new URLSearchParams(hash.replace(/^#/, '')).get('cases') ?? params.get('cases');
   if (caseKeys) return { caseKeys: JSON.parse(caseKeys) as string[] };
   const caseKey = params.get('case');
   if (!caseKey) return undefined;
@@ -88,7 +106,11 @@ export const HostApp = ({
   plan: FilePlan[];
 }) => (
   <Host>
-    <CaseList modules={modules} plan={plan} selection={readSelection(location.search)} />
+    <CaseList
+      modules={modules}
+      plan={plan}
+      selection={readSelection(location.search, location.hash)}
+    />
     <Ready onReady={onReady} />
   </Host>
 );

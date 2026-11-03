@@ -26,6 +26,6 @@ await build({
   logLevel: 'error',
   plugins: setup.plugins,
   publicDir: false,
-  resolve: { alias: setup.alias, dedupe: setup.dedupe },
+  resolve: { alias: setup.alias, dedupe: setup.dedupe, tsconfigPaths: setup.tsconfigPaths },
   root: hostDir,
 });

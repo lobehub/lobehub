@@ -194,8 +194,8 @@ export const runMutations = async (context: MutationContext): Promise<MutationRe
   }
   const keys = encodeURIComponent(JSON.stringify(context.candidates.map((item) => item.caseKey)));
   const urls = {
-    base: `${context.serverUrl}/dist-base/?cases=${keys}`,
-    head: `${context.serverUrl}/dist-head/?cases=${keys}`,
+    base: `${context.serverUrl}/dist-base/#cases=${keys}`,
+    head: `${context.serverUrl}/dist-head/#cases=${keys}`,
     mutant: `${context.serverUrl}/dist-mutants/`,
   };
   const pageErrors: string[] = [];

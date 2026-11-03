@@ -9,6 +9,7 @@ import { generateModule } from '../generate/module';
 import { type FilePlan, planFile, type Side } from '../plan/planFile';
 import { resolveSpecifier } from '../source/declarations';
 import type { ScopeFile } from '../source/scope';
+import { fileFlags } from '../verdict/fileItems';
 
 export const HOST_DIR = '.style-equivalence-host';
 export const RUNTIME = path.resolve(import.meta.dirname, '../generate/hostRuntime.tsx');
@@ -64,7 +65,7 @@ export const synthesize = async (
     };
     const pair = { base: await read('base'), head: await read('head') };
     const plan = planFile(file, pair.base, pair.head, config);
-    if (!plan.cases.length && !plan.unpaired.length && !plan.gaps.length) continue;
+    if (!plan.cases.length && !plan.unpaired.length && !fileFlags(plan, pair).length) continue;
     extractions[file] = pair;
     plans.push(plan);
   }

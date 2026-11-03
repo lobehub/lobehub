@@ -7,6 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import type { FileExtraction, StyleElement } from '../extract';
 import type { FilePlan } from '../plan/planFile';
+import { generateHost } from './host';
 import { CaseList, readSelection } from './hostRuntime';
 import { generateModule } from './module';
 
@@ -192,5 +193,38 @@ describe('CaseList', () => {
       'data-case="a.tsx|A#0|0"',
       'data-case="a.tsx|A#0|1"',
     ]);
+  });
+
+  it('reads the selected cases from the URL fragment, which never reaches the server', () => {
+    expect(
+      readSelection('?theme=dark', `#cases=${encodeURIComponent(JSON.stringify(['a.tsx|A#0']))}`),
+    ).toEqual({ caseKeys: ['a.tsx|A#0'] });
+  });
+
+  it('renders the cases of a module that failed to load as errors', () => {
+    const html = render(
+      createElement(CaseList, {
+        modules: { 'a.tsx': { cases: {}, error: 'MODULE_LOAD_FAILED: boom' } },
+        plan: [{ ...plan, cases: plan.cases.map((entry) => ({ ...entry, combos: [{}] })) }],
+      }),
+    );
+    expect(html).toContain('data-synthetic-error="MODULE_LOAD_FAILED: boom"');
+  });
+});
+
+describe('generateHost', () => {
+  it('loads each module on its own so one load-time throw does not stop the host', () => {
+    const code = generateHost({
+      hostWrapper: '/host.tsx',
+      modules: [
+        { file: 'a.tsx', specifier: './a.tsx' },
+        { file: 'b.tsx', specifier: './b.tsx' },
+      ],
+      runtime: '/runtime.tsx',
+      themeAttribute: 'data-theme',
+    });
+    expect(code).not.toMatch(/import \* as/);
+    expect(code).toContain('import("./a.tsx")');
+    expect(code).toContain('MODULE_LOAD_FAILED');
   });
 });

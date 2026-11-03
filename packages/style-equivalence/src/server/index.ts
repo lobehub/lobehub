@@ -91,7 +91,7 @@ export const startServer = async ({
       browser,
       conditions,
       states: stored.run.states as CaptureState[] | undefined,
-      urls: { base: `${url}/base/?cases=${cases}`, head: `${url}/head/?cases=${cases}` },
+      urls: { base: `${url}/base/#cases=${cases}`, head: `${url}/head/#cases=${cases}` },
     });
     const [result] = analyzeRun(capture);
     if (!result) throw new ApiError(404, `CASE_NOT_RENDERED:${key}`);

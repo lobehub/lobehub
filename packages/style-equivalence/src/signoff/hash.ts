@@ -16,8 +16,16 @@ export interface HashedElement {
 export interface CaseHashInput {
   declarations: Partial<Record<Side, Record<string, string>>>;
   elements: Partial<Record<Side, HashedElement[]>>;
+  outcome?: string[];
   plan?: Pick<PlanCase, 'combos' | 'flags' | 'variables'>;
   verifierMajor: string;
+}
+
+export interface OutcomeCause {
+  after?: string;
+  before?: string;
+  key: string;
+  property: string;
 }
 
 const sortKeys = (_key: string, value: unknown) =>
@@ -34,6 +42,7 @@ export interface CollectHashInput {
   aliases: Record<string, string>;
   elementIds?: Partial<Record<Side, string>>;
   extractions: Partial<Record<Side, FileExtraction>>;
+  outcome?: OutcomeCause[];
   plan?: PlanCase;
   roots: Record<Side, string>;
   sources: Partial<Record<Side, string>>;
@@ -44,6 +53,11 @@ export const collectCaseHashInput = (input: CollectHashInput): CaseHashInput => 
   const result: CaseHashInput = {
     declarations: {},
     elements: {},
+    outcome: input.outcome
+      ?.map((cause) =>
+        [cause.key, cause.property, cause.before ?? '', cause.after ?? ''].join('\u0000'),
+      )
+      .sort(),
     plan: input.plan && {
       combos: input.plan.combos,
       flags: input.plan.flags,
@@ -77,3 +91,18 @@ export const collectCaseHashInput = (input: CollectHashInput): CaseHashInput => 
   }
   return result;
 };
+
+export const collectFileHashInput = (
+  input: Pick<CollectHashInput, 'roots' | 'sources' | 'verifierVersion'>,
+): CaseHashInput => ({
+  declarations: Object.fromEntries(
+    (['base', 'head'] as const).flatMap((side) => {
+      const source = input.sources[side];
+      return source
+        ? [[side, { [source]: readFileSync(path.join(input.roots[side], source), 'utf8') }]]
+        : [];
+    }),
+  ),
+  elements: {},
+  verifierMajor: input.verifierVersion.split('.')[0],
+});

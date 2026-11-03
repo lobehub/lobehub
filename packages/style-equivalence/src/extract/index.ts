@@ -1,7 +1,14 @@
 import ts from 'typescript';
 
 import { parseRules } from './css';
-import { isJsxNode, mergeKinds, usageKinds, valueIdentifiers } from './identifiers';
+import {
+  declaredLocally,
+  isJsxNode,
+  mergeKinds,
+  usageKinds,
+  valueIdentifierNodes,
+  valueIdentifiers,
+} from './identifiers';
 import { classifyRules, classNamesIn, foreignClassNames } from './selectors';
 import { collectTopLevel } from './topLevel';
 import type {
@@ -179,9 +186,11 @@ export const extractFile = (
         const tag = opening.tagName.getText(ast);
         const names = new Set<string>();
         for (const expression of expressions)
-          for (const name of valueIdentifiers(expression, { skipJsx: true })) {
+          for (const node of valueIdentifierNodes(expression, { skipJsx: true })) {
+            const name = node.text;
             if (GLOBALS.has(name)) continue;
-            if (markers.has(name)) top.require(name);
+            if (declaredLocally(node)) names.add(name);
+            else if (markers.has(name)) top.require(name);
             else if (!top.styleSymbols.has(name) && !top.require(name)) names.add(name);
           }
         const kinds = new Map<string, VariableKind[]>();

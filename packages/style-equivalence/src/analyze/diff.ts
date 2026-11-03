@@ -251,3 +251,21 @@ export const mergeRetry = (
   merged.status = statusOf(merged);
   return merged;
 };
+
+export const DIFFERENCE_NOT_REPRODUCED = 'DIFFERENCE_NOT_REPRODUCED';
+
+export const confirmDifferences = (
+  original: CaseResult,
+  retry: CaseResult,
+  conditions: string[],
+): CaseResult => {
+  const merged = mergeRetry(original, retry, conditions);
+  const dropped = conditions.some(
+    (condition) =>
+      original.differingConditions.includes(condition) &&
+      !merged.differingConditions.includes(condition),
+  );
+  return dropped && !merged.gaps.includes(DIFFERENCE_NOT_REPRODUCED)
+    ? { ...merged, gaps: [...merged.gaps, DIFFERENCE_NOT_REPRODUCED] }
+    : merged;
+};

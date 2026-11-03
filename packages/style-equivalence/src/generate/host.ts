@@ -15,9 +15,18 @@ import { Host } from ${JSON.stringify(hostWrapper)};
 import { createRoot } from 'react-dom/client';
 import { HostApp } from ${JSON.stringify(runtime)};
 import plan from './plan.json';
-${modules.map((entry, index) => `import * as m${index} from ${JSON.stringify(entry.specifier)};`).join('\n')}
 
-const modules = { ${modules.map((entry, index) => `${JSON.stringify(entry.file)}: m${index}`).join(', ')} };
+const loaders: Array<[string, () => Promise<unknown>]> = [
+${modules.map((entry) => `  [${JSON.stringify(entry.file)}, () => import(${JSON.stringify(entry.specifier)})],`).join('\n')}
+];
+const modules: Record<string, any> = {};
+for (const [file, load] of loaders) {
+  try {
+    modules[file] = await load();
+  } catch (error) {
+    modules[file] = { cases: {}, error: 'MODULE_LOAD_FAILED: ' + (error instanceof Error ? error.message : String(error)) };
+  }
+}
 const params = new URLSearchParams(location.search);
 const theme = params.get('theme');
 if (theme) document.documentElement.setAttribute(${JSON.stringify(themeAttribute)}, theme);

@@ -102,6 +102,10 @@ export const applySignoff = async (
   let records;
   try {
     records = signCases({
+      existing: await readSignoffs(
+        repo,
+        stored.items.map((item) => item.file),
+      ),
       items: stored.items,
       keys: body.keys.map(String),
       note: body.note,

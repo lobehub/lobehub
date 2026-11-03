@@ -44,6 +44,11 @@ beforeAll(async () => {
   );
   await write('base-dark', page('.t { color: black; } [data-theme="dark"] .t { color: white; }'));
   await write('head-dark', page('.t { color: black; }'));
+  await write(
+    'base-ancestor-focus',
+    page('.t { color: black; } .row:focus-visible .t { color: red; }'),
+  );
+  await write('head-ancestor-focus', page('.t { color: black; }'));
   const pair = (css: string) => `<!doctype html><html><head><style>
 body { margin: 0; font: 14px Arial; }
 ${css}
@@ -113,6 +118,12 @@ describe('captureRun + analyzeRun', () => {
       urls: { base: `${server.url}/unrelated-media/`, head: `${server.url}/head-media/` },
     });
     expect(capture.widths).toEqual([1280]);
+  });
+
+  it('forces a non-hover state on the ancestor chain when only an ancestor carries it', async () => {
+    const [result] = await run('base-ancestor-focus', 'head-ancestor-focus');
+    expect(result.status).toBe('difference');
+    expect(result.differingConditions).toContain('light/1280/force-chain:focus-visible');
   });
 
   it('reports a theme-only difference only in that theme', async () => {
