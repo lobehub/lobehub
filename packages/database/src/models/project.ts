@@ -261,43 +261,30 @@ export class ProjectModel {
   }
 
   /**
-   * Insert the project row only. The coordinator agent and the `projectAgents`
-   * link that seats it span another aggregate, so `ProjectRepository.create`
-   * owns that transaction — see {@link ProjectRepository}.
+   * Insert the project row only, as a plain single-table insert. The coordinator
+   * agent and the `projectAgents` link that seats it span another aggregate, so
+   * `ProjectRepository.create` owns the transaction (and the identifier
+   * pre-check) that ties them together — see {@link ProjectRepository}.
    */
   async create(input: InsertProjectInput) {
     const identifier = normalizeProjectIdentifier(input.identifier);
 
     try {
-      return await this.db.transaction(async (tx) => {
-        // Check the identifier inline, in the scope the unique index enforces,
-        // before anything is written: a collision then surfaces as a field error
-        // instead of a mid-transaction query failure.
-        if (identifier) {
-          const [existing] = await tx
-            .select({ id: projects.id })
-            .from(projects)
-            .where(and(this.identifierScope(), eq(projects.identifier, identifier)))
-            .limit(1);
-          if (existing) throw new ProjectIdentifierTakenError(identifier);
-        }
+      const [project] = await this.db
+        .insert(projects)
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { ...input, identifier },
+          ),
+        )
+        .returning();
 
-        const [project] = await tx
-          .insert(projects)
-          .values(
-            buildWorkspacePayload(
-              { userId: this.userId, workspaceId: this.workspaceId },
-              { ...input, identifier },
-            ),
-          )
-          .returning();
-
-        return project;
-      });
+      return project;
     } catch (error) {
-      // The read above cannot see a concurrent create, so translate the unique
-      // index violation into the same field error instead of leaking the raw
-      // `insert into "projects"` failure.
+      // The unique index stays the final authority: a caller that skipped the
+      // repository's pre-check, or a concurrent create, lands here. Translate it
+      // into the field error instead of leaking the raw insert failure.
       if (error instanceof ProjectIdentifierTakenError) throw error;
       if (identifier && isProjectIdentifierConflict(error)) {
         throw new ProjectIdentifierTakenError(identifier);
