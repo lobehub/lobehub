@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import type { ModelRating } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -75,12 +75,6 @@ vi.mock('@/store/global/selectors', () => ({
 const translations: Record<string, string> = {
   'ModelSwitchPanel.detail.context': 'Context Length',
   'ModelSwitchPanel.detail.pricing': 'Pricing',
-  'ModelSwitchPanel.detail.pricing.credits.input': 'Input {{amount}} credits/M tokens',
-  'ModelSwitchPanel.detail.pricing.credits.output': 'Output {{amount}} credits/M tokens',
-  'ModelSwitchPanel.detail.pricing.credits.perImage': '~ {{amount}} credits / image',
-  'ModelSwitchPanel.detail.pricing.credits.perVideo': '~ {{amount}} credits / video',
-  'ModelSwitchPanel.detail.pricing.credits.image': 'credits/img',
-  'ModelSwitchPanel.detail.pricing.credits.millionTokens': 'credits/M tokens',
   'ModelSwitchPanel.detail.pricing.group.image': 'Image',
   'ModelSwitchPanel.detail.pricing.group.text': 'Text',
   'ModelSwitchPanel.detail.pricing.input': 'Input ${{amount}}/M',
@@ -251,7 +245,7 @@ describe('ModelDetailPanel pricing', () => {
     );
   });
 
-  it('renders branding provider token pricing in credits', () => {
+  it('renders branding provider token pricing in dollars', () => {
     const { container } = render(
       <ModelDetailPanel
         enabledList={createEnabledList('lobehub', textPricing)}
@@ -260,9 +254,9 @@ describe('ModelDetailPanel pricing', () => {
       />,
     );
 
-    expect(screen.getByText('5M credits/M tokens')).toBeInTheDocument();
-    expect(screen.getByText('25M credits/M tokens')).toBeInTheDocument();
-    expect(container).not.toHaveTextContent('$5.00');
+    expect(container).toHaveTextContent('$5.00/M tokens');
+    expect(container).toHaveTextContent('$25.00/M tokens');
+    expect(container).not.toHaveTextContent('credits');
   });
 
   it('renders the original branding price without repeating the unit suffix', () => {
@@ -276,9 +270,9 @@ describe('ModelDetailPanel pricing', () => {
 
     const originalPrice = container.querySelector('.originalPriceText');
 
-    expect(originalPrice).toHaveTextContent('5M');
-    expect(originalPrice).not.toHaveTextContent('credits/M tokens');
-    expect(container).toHaveTextContent('2.5M credits/M tokens');
+    expect(originalPrice).toHaveTextContent('5.00');
+    expect(originalPrice).not.toHaveTextContent('/M tokens');
+    expect(container).toHaveTextContent('$2.50/M tokens');
   });
 
   it('keeps dollar pricing for non-branding providers', () => {
@@ -295,7 +289,7 @@ describe('ModelDetailPanel pricing', () => {
     expect(container).not.toHaveTextContent('credits/M tokens');
   });
 
-  it('renders branding provider image and video pricing in credits', () => {
+  it('renders branding provider image and video pricing in dollars', () => {
     const imageResult = render(
       <ModelDetailPanel
         enabledList={createEnabledList('lobehub', imagePricing)}
@@ -305,9 +299,8 @@ describe('ModelDetailPanel pricing', () => {
       />,
     );
 
-    expect(imageResult.container).toHaveTextContent('~ 40.0K credits / image');
-    expect(imageResult.container).toHaveTextContent('40.0K credits/img');
-    expect(imageResult.container).not.toHaveTextContent('$0.04');
+    expect(imageResult.container).toHaveTextContent('~ $0.04 / image');
+    expect(imageResult.container).not.toHaveTextContent('credits');
 
     imageResult.unmount();
 
@@ -320,8 +313,8 @@ describe('ModelDetailPanel pricing', () => {
       />,
     );
 
-    expect(videoResult.container).toHaveTextContent('~ 800.0K credits / video');
-    expect(videoResult.container).not.toHaveTextContent('$0.80');
+    expect(videoResult.container).toHaveTextContent('~ $0.80 / video');
+    expect(videoResult.container).not.toHaveTextContent('credits');
   });
 
   it('renders a placeholder for empty lookup pricing tables', () => {
@@ -334,7 +327,7 @@ describe('ModelDetailPanel pricing', () => {
     );
 
     expect(container).toHaveTextContent('Image Generation');
-    expect(container).toHaveTextContent('- credits/img');
+    expect(container).toHaveTextContent('-');
   });
 });
 

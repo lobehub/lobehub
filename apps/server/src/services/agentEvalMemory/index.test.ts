@@ -16,6 +16,7 @@ import {
   workspaces,
 } from '@/database/schemas';
 import { cleanupDB, setupEvalChain, userId } from '@/server/services/agentEvalRun/__tests__/_setup';
+import { getEvalAttemptId } from '@/server/services/agentEvalRun/utils';
 import { memoryRuntime } from '@/server/services/toolExecution/serverRuntimes/memory';
 
 import { AgentEvalMemoryService } from './index';
@@ -362,6 +363,69 @@ describe('AgentEvalMemoryService', () => {
     expect((await subAgent.searchUserMemory({ queries: ['shellfish'] })).state).toMatchObject({
       preferences: [{ conclusionDirectives: 'Do not recommend shellfish.' }],
     });
+  });
+
+  it('keeps retained deleted-thread memories out of the parent and live sibling attempts', async () => {
+    const params = await trial();
+    const service = new AgentEvalMemoryService(db, userId);
+    const [deletedThread, liveThread] = await db
+      .insert(threads)
+      .values([
+        { title: 'Deleted attempt', topicId: params.topicId, type: 'eval', userId },
+        { title: 'Live attempt', topicId: params.topicId, type: 'eval', userId },
+      ])
+      .returning();
+    const parentRef = await service.prepare({
+      ...params,
+      fixture: { preferences: [preference('Parent tea', 'Parent tea only.')] },
+    });
+    const deletedRef = await service.prepare({
+      ...params,
+      fixture: { preferences: [preference('Deleted tea', 'Deleted tea only.')] },
+      threadId: deletedThread.id,
+    });
+    const siblingParams = { ...params, threadId: liveThread.id };
+    const siblingRef = await service.prepare({
+      ...siblingParams,
+      fixture: { preferences: [preference('Sibling tea', 'Sibling tea only.')] },
+    });
+    const stored = await db.select().from(agentEvalMemories);
+    expect(stored.map((row) => row.attemptId).sort()).toEqual(
+      [parentRef, deletedRef, siblingRef].map(getEvalAttemptId).sort(),
+    );
+    const retained = stored.find((row) => row.threadId === deletedThread.id)!;
+
+    await db.delete(threads).where(eq(threads.id, deletedThread.id));
+    expect(
+      await db.select().from(agentEvalMemories).where(eq(agentEvalMemories.id, retained.id)),
+    ).toEqual([{ ...retained, threadId: null }]);
+    await expect(service.snapshot({ ...params, threadId: deletedThread.id })).rejects.toThrow(
+      'Eval Memory thread does not belong to this trial',
+    );
+
+    const parentRuntime = await runtimeFor(parentRef, params.topicId);
+    expect
+      .soft((await service.snapshot(params)).entries.map((entry) => entry.title))
+      .toEqual(['Parent tea']);
+    expect
+      .soft((await parentRuntime.searchUserMemory({ queries: ['tea'] })).state)
+      .toMatchObject({ preferences: [{ conclusionDirectives: 'Parent tea only.' }] });
+    expect
+      .soft((await parentRuntime.queryTaxonomyOptions({ include: ['categories'] })).state)
+      .toMatchObject({ categories: [{ count: 1, layers: ['preference'], value: 'health' }] });
+
+    const siblingRuntime = await runtimeFor(siblingRef, params.topicId, {
+      threadId: liveThread.id,
+    });
+    expect((await service.snapshot(siblingParams)).entries.map((entry) => entry.title)).toEqual([
+      'Sibling tea',
+    ]);
+    expect((await siblingRuntime.searchUserMemory({ queries: ['tea'] })).state).toMatchObject({
+      preferences: [{ conclusionDirectives: 'Sibling tea only.' }],
+    });
+    expect(
+      (await siblingRuntime.queryTaxonomyOptions({ include: ['categories'] })).state,
+    ).toMatchObject({ categories: [{ count: 1, layers: ['preference'], value: 'health' }] });
   });
 
   it('honors read-only mode', async () => {

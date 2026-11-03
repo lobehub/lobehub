@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
 import { applyLiteXMLOperations, exportEditorDataSnapshot } from '../agentDocuments/headlessEditor';
-import { resolveDocumentWrite, stripTitleHeading } from './editorData';
+import { countEditorDataText, resolveDocumentWrite, stripTitleHeading } from './editorData';
 
 describe('resolveDocumentWrite', () => {
   it('keeps valid Lexical editorData untouched', async () => {
@@ -118,5 +118,38 @@ describe('stripTitleHeading', () => {
   it('keeps deeper headings and content without a title', () => {
     expect(stripTitleHeading('## Report\n\nbody', 'Report')).toBe('## Report\n\nbody');
     expect(stripTitleHeading('# Report\n\nbody', undefined)).toBe('# Report\n\nbody');
+  });
+});
+
+describe('countEditorDataText', () => {
+  it('counts the body of code blocks and math, which is not in text children', async () => {
+    const code = 'x'.repeat(500);
+    const { editorData } = await resolveDocumentWrite({
+      content: `\`\`\`ts\n${code}\n\`\`\`\n\n$$\n${'y'.repeat(40)}\n$$\n`,
+    });
+
+    expect(countEditorDataText(editorData)).toBeGreaterThanOrEqual(540);
+  });
+
+  it('sums text across nested nodes', () => {
+    const editorData = {
+      root: {
+        children: [
+          { children: [{ text: 'abc', type: 'text' }], type: 'paragraph' },
+          {
+            children: [{ children: [{ text: 'de', type: 'text' }], type: 'listitem' }],
+            type: 'list',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    expect(countEditorDataText(editorData)).toBe(5);
+  });
+
+  it('returns 0 for invalid editor data', () => {
+    expect(countEditorDataText(undefined)).toBe(0);
+    expect(countEditorDataText({ root: {} })).toBe(0);
   });
 });

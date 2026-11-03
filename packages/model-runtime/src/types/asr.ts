@@ -1,6 +1,5 @@
-import type { ModelUsage } from '@lobechat/types';
-
 import type { ModelPricingContext } from './pricing';
+import type { OnUsageCallback } from './routeAttempt';
 
 export interface ASRPayload {
   /**
@@ -42,7 +41,7 @@ export interface ASROptions {
    * Receives the provider-reported token usage (with `cost` when the model has
    * pricing) after a successful transcription.
    */
-  onUsage?: (usage: ModelUsage) => void | Promise<void>;
+  onUsage?: OnUsageCallback;
   pricingContext?: ModelPricingContext;
   signal?: AbortSignal;
   /**

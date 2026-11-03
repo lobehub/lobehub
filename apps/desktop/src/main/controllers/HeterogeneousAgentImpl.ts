@@ -69,41 +69,22 @@ import type {
   UsageData,
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
-  AcpRpcResponseError,
   AgentStreamPipeline,
   buildAgentInput,
-  buildCursorAcpArgs,
-  buildCursorAcpPrompt,
-  buildDevinAcpArgs,
-  buildDevinAcpPrompt,
-  buildDroidAcpArgs,
-  buildDroidAcpPrompt,
-  buildGrokAcpArgs,
-  buildGrokAcpPrompt,
-  buildTraeAcpArgs,
-  buildTraeAcpPrompt,
   ClaudeAgentSdkSession,
   createFileStoreImageUploader,
-  CursorAcpSession,
   detectDshCommand,
-  DevinAcpSession,
-  DroidAcpSession,
   DSH_COMMAND,
   ensureClaudeCodeResumeTranscript,
   findClaudeCodeTranscriptPath,
   getCodexAppServerUnsupportedArgs,
   getHeterogeneousAgentPresetEnv,
-  GrokAcpSession,
-  isCursorAcpSessionNotFoundError,
-  isDevinAcpSessionNotFoundError,
-  isDroidAcpSessionNotFoundError,
   prepareClaudeCodeLobeHubCli,
   readClaudeCodeSessionCost,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   spawnDshAcpSession,
-  TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   buildClaudeCodeReplayTurn,
@@ -125,7 +106,6 @@ import {
 } from '@lobechat/utils/managedProcess';
 import { sleep } from '@lobechat/utils/sleep';
 import { app as electronApp, BrowserWindow } from 'electron';
-import { isPlainObject } from 'es-toolkit';
 import semver from 'semver';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
@@ -182,7 +162,13 @@ import { createLogger } from '@/utils/logger';
 import BrowserControlCtr from './BrowserControlCtr';
 import { sendPromptWithCodexAppServer } from './codexAppServer';
 import type { AgentSession, CliTraceSession, SendPromptParams } from './heterogeneousAgentSession';
-import { claudeProfileDirOf } from './heterogeneousAgentSession';
+import {
+  claudeProfileDirOf,
+  closeActiveAcpSessions,
+  getAcpResumeError,
+  interruptActiveAcpSession,
+  sendPromptWithAcpSession,
+} from './heterogeneousAgentSession';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
@@ -215,15 +201,15 @@ export const buildInheritedSpawnEnv = (
 };
 
 const appendLoopbackNoProxy = (env: NodeJS.ProcessEnv): void => {
-  const entries = new Set(
-    [env.NO_PROXY, env.no_proxy]
+  const entries = new Set([
+    ...[env.NO_PROXY, env.no_proxy]
       .filter((value): value is string => !!value)
       .flatMap((value) => value.split(','))
       .map((value) => value.trim())
       .filter(Boolean),
-  );
-  entries.add('127.0.0.1');
-  entries.add('localhost');
+    '127.0.0.1',
+    'localhost',
+  ]);
   const noProxy = [...entries].join(',');
   env.NO_PROXY = noProxy;
   env.no_proxy = noProxy;
@@ -415,10 +401,6 @@ interface LhHeteroExecTask {
   process: ChildProcess;
 }
 
-interface InteractiveAcpSession {
-  run: () => Promise<void>;
-}
-
 /**
  * External Agent Controller — manages external agent CLI processes via Electron IPC.
  *
@@ -582,16 +564,20 @@ export default class HeterogeneousAgentCtr {
       });
       return false;
     },
+    'copilot': async (params, session) => {
+      await this.sendPromptWithAcp(params, session);
+      return true;
+    },
     'cursor': async (params, session) => {
-      await this.sendPromptWithCursorAcp(params, session);
+      await this.sendPromptWithAcp(params, session);
       return true;
     },
     'devin': async (params, session) => {
-      await this.sendPromptWithDevinAcp(params, session);
+      await this.sendPromptWithAcp(params, session);
       return true;
     },
     'droid': async (params, session) => {
-      await this.sendPromptWithDroidAcp(params, session);
+      await this.sendPromptWithAcp(params, session);
       return true;
     },
     'deepseek-harness': async (params, session) => {
@@ -599,11 +585,11 @@ export default class HeterogeneousAgentCtr {
       return true;
     },
     'grok-build': async (params, session) => {
-      await this.sendPromptWithGrokAcp(params, session);
+      await this.sendPromptWithAcp(params, session);
       return true;
     },
     'trae': async (params, session) => {
-      await this.sendPromptWithTraeAcp(params, session);
+      await this.sendPromptWithAcp(params, session);
       return true;
     },
     // Pi runs exclusively over the RPC transport — there is no json fallback.
@@ -770,119 +756,6 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
-  private getDroidResumeError(
-    error: unknown,
-    session: AgentSession,
-  ): HeterogeneousAgentSessionError | undefined {
-    if (
-      session.agentType !== 'droid' ||
-      !session.resumeSessionId ||
-      !isDroidAcpSessionNotFoundError(error)
-    ) {
-      return;
-    }
-
-    return {
-      agentType: 'droid',
-      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
-      command: session.command,
-      details: {
-        code: error.rpcError.code,
-        data: error.rpcError.data,
-      },
-      message:
-        'The saved Factory Droid session could not be found, so a new conversation will start.',
-      resumeSessionId: session.resumeSessionId,
-      stderr: error.message,
-      workingDirectory: session.cwd,
-    };
-  }
-
-  private getGrokResumeError(
-    error: unknown,
-    session: AgentSession,
-  ): HeterogeneousAgentSessionError | undefined {
-    if (
-      session.agentType !== 'grok-build' ||
-      !session.resumeSessionId ||
-      !(error instanceof AcpRpcResponseError) ||
-      error.method !== 'session/load' ||
-      !isPlainObject(error.rpcError.data) ||
-      error.rpcError.data.code !== 'FS_NOT_FOUND'
-    ) {
-      return;
-    }
-
-    return {
-      agentType: 'grok-build',
-      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
-      command: session.command,
-      details: {
-        code: error.rpcError.code,
-        data: error.rpcError.data,
-      },
-      message: 'The saved Grok Build session could not be found, so it can no longer be resumed.',
-      resumeSessionId: session.resumeSessionId,
-      stderr: error.message,
-      workingDirectory: session.cwd,
-    };
-  }
-
-  private getCursorResumeError(
-    error: unknown,
-    session: AgentSession,
-  ): HeterogeneousAgentSessionError | undefined {
-    if (
-      session.agentType !== 'cursor' ||
-      !session.resumeSessionId ||
-      !isCursorAcpSessionNotFoundError(error)
-    ) {
-      return;
-    }
-
-    return {
-      agentType: 'cursor',
-      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
-      command: session.command,
-      details: {
-        code: error.rpcError.code,
-        message: error.rpcError.message,
-      },
-      message:
-        'The saved Cursor session cannot be loaded through ACP, so a new conversation will start.',
-      resumeSessionId: session.resumeSessionId,
-      stderr: error.message,
-      workingDirectory: session.cwd,
-    };
-  }
-
-  private getDevinResumeError(
-    error: unknown,
-    session: AgentSession,
-  ): HeterogeneousAgentSessionError | undefined {
-    if (
-      session.agentType !== 'devin' ||
-      !session.resumeSessionId ||
-      !isDevinAcpSessionNotFoundError(error)
-    ) {
-      return;
-    }
-
-    return {
-      agentType: 'devin',
-      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
-      command: session.command,
-      details: {
-        code: error.rpcError.code,
-        data: error.rpcError.data,
-      },
-      message: 'The saved Devin session could not be found, so a new conversation will start.',
-      resumeSessionId: session.resumeSessionId,
-      stderr: error.message,
-      workingDirectory: session.cwd,
-    };
-  }
-
   private getCliAuthRequiredError(
     error: unknown,
     session: AgentSession,
@@ -907,11 +780,7 @@ export default class HeterogeneousAgentCtr {
     }
 
     const resumeError =
-      this.getCodexResumeError(error, session) ??
-      this.getDroidResumeError(error, session) ??
-      this.getGrokResumeError(error, session) ??
-      this.getCursorResumeError(error, session) ??
-      this.getDevinResumeError(error, session);
+      this.getCodexResumeError(error, session) ?? getAcpResumeError(error, session);
     if (resumeError) return resumeError;
 
     const authRequiredError = this.getCliAuthRequiredError(error, session);
@@ -2199,518 +2068,28 @@ export default class HeterogeneousAgentCtr {
     );
   }
 
-  private async sendPromptWithGrokAcp(
-    params: SendPromptParams,
-    session: AgentSession,
-  ): Promise<void> {
-    const cwd = session.cwd || electronApp.getPath('desktop');
-    const spawnEnv = this.buildSessionSpawnEnv(session);
-    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
-    const promptInput = buildHeterogeneousPrompt({
-      imageList: params.imageList,
-      isNewSession: this.needsSessionIntroduction(session),
-      prompt: params.prompt,
-      systemContext: params.systemContext,
-    });
-    let prompt;
-    try {
-      prompt = await buildGrokAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
-    } catch (error) {
-      logger.error('Failed to prepare Grok Build ACP input:', error);
-      throw new Error(
-        `Failed to attach image(s) to Grok Build: ${this.getErrorMessage(error) || 'Unknown error'}`,
-        { cause: error },
-      );
-    }
-
-    const traceInput = `${JSON.stringify(prompt)}\n`;
-    const traceSession = await this.createCliTraceSession({
-      cliArgs: buildGrokAcpArgs(session.args),
-      cwd,
-      imageList: params.imageList ?? [],
+  private sendPromptWithAcp(params: SendPromptParams, session: AgentSession): Promise<void> {
+    return sendPromptWithAcpSession(
+      {
+        appendCliTraceFile: this.appendCliTraceFile.bind(this),
+        broadcast: this.broadcast.bind(this),
+        buildSessionSpawnEnv: this.buildSessionSpawnEnv.bind(this),
+        completeCancelledSessionBeforeLaunch: this.completeCancelledSessionBeforeLaunch.bind(this),
+        createCliTraceSession: this.createCliTraceSession.bind(this),
+        fileCacheDir: this.fileCacheDir,
+        flushCliTrace: this.flushCliTrace.bind(this),
+        getErrorMessage: this.getErrorMessage.bind(this),
+        getSessionErrorPayload: this.getSessionErrorPayload.bind(this),
+        needsSessionIntroduction: this.needsSessionIntroduction.bind(this),
+        resolveSessionCommand: this.resolveSessionCommand.bind(this),
+        resolveSessionWorkingDirectory: this.resolveSessionWorkingDirectory.bind(this),
+        setupAcpInterventionForOp: this.setupAcpInterventionForOp.bind(this),
+        writeCliTraceFile: this.writeCliTraceFile.bind(this),
+        writeCliTraceJson: this.writeCliTraceJson.bind(this),
+      },
+      params,
       session,
-      stdinPayload: traceInput,
-    });
-    void this.writeCliTraceFile(traceSession, 'stdin.txt', traceInput);
-
-    if (session.cancelledByUs) {
-      await this.completeCancelledSessionBeforeLaunch(session);
-      return;
-    }
-
-    const acpSession = new GrokAcpSession({
-      args: session.args,
-      clientVersion: electronApp.getVersion(),
-      commandPath,
-      cwd,
-      env: spawnEnv,
-      onEvents: async (events) => {
-        for (const event of events) {
-          this.broadcast('heteroAgentEvent', {
-            event,
-            sessionId: session.sessionId,
-          });
-        }
-      },
-      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
-      onRuntimeStatus: (status) => {
-        this.broadcast('heteroAgentRuntimeStatus', status);
-      },
-      onSessionId: (agentSessionId) => {
-        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
-      },
-      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
-      operationId: params.operationId,
-      prompt,
-      resumeSessionId: session.agentSessionId,
-      sessionId: session.sessionId,
-    });
-    session.grokAcpSession = acpSession;
-
-    logger.info('Starting Grok Build ACP session:', {
-      commandPath,
-      cwd,
-      sessionId: session.sessionId,
-    });
-
-    try {
-      await acpSession.run();
-      void this.writeCliTraceJson(traceSession, 'exit.json', {
-        finishedAt: new Date().toISOString(),
-        transport: 'acp-stdio',
-      });
-      await this.flushCliTrace(traceSession);
-      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-    } catch (error) {
-      logger.error('Grok Build ACP session error:', error);
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message: error instanceof Error ? error.message : String(error),
-        name: error instanceof Error ? error.name : 'Error',
-        transport: 'acp-stdio',
-      });
-      await this.flushCliTrace(traceSession);
-
-      if (session.cancelledByUs) {
-        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-        return;
-      }
-
-      const sessionError = this.getSessionErrorPayload(error, session);
-      this.broadcast('heteroAgentSessionError', {
-        error: sessionError,
-        sessionId: session.sessionId,
-      });
-      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
-        cause: error,
-      });
-    } finally {
-      await session.hostedProviderBinding?.cleanup();
-      if (session.grokAcpSession === acpSession) session.grokAcpSession = undefined;
-    }
-  }
-
-  private async sendPromptWithCursorAcp(
-    params: SendPromptParams,
-    session: AgentSession,
-  ): Promise<void> {
-    const cwd = this.resolveSessionWorkingDirectory(session);
-    const spawnEnv = this.buildSessionSpawnEnv(session);
-    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
-    const promptInput = buildHeterogeneousPrompt({
-      imageList: params.imageList,
-      isNewSession: this.needsSessionIntroduction(session),
-      prompt: params.prompt,
-      systemContext: params.systemContext,
-    });
-    const prompt = buildCursorAcpPrompt(promptInput);
-    const tracePayload = `${JSON.stringify(prompt)}\n`;
-    const traceSession = await this.createCliTraceSession({
-      cliArgs: buildCursorAcpArgs(session.args),
-      cwd,
-      imageList: params.imageList ?? [],
-      session,
-      stdinPayload: tracePayload,
-    });
-    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
-
-    if (session.cancelledByUs) {
-      await this.completeCancelledSessionBeforeLaunch(session);
-      return;
-    }
-
-    const stderrChunks: string[] = [];
-    const intervention = this.setupAcpInterventionForOp(
-      params.operationId,
-      session.sessionId,
-      'cursor',
     );
-    const cursorAcpSession = new CursorAcpSession({
-      args: session.args,
-      askUserBridge: intervention.bridge,
-      clientVersion: electronApp.getVersion(),
-      commandPath,
-      cwd,
-      env: spawnEnv,
-      onEvents: async (events) => {
-        for (const event of events) {
-          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
-        }
-      },
-      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
-      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
-      onSessionId: (agentSessionId) => {
-        session.agentSessionId = agentSessionId;
-      },
-      onStderr: (data) => {
-        stderrChunks.push(data);
-        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
-      },
-      operationId: params.operationId,
-      prompt,
-      resumeSessionId: session.agentSessionId,
-      sessionId: session.sessionId,
-    });
-    session.cursorAcpSession = cursorAcpSession;
-
-    await this.runInteractiveAcpSession({
-      acpSession: cursorAcpSession,
-      activeSessionKey: 'cursorAcpSession',
-      cleanup: intervention.cleanup,
-      isResumeError: isCursorAcpSessionNotFoundError,
-      session,
-      stderrChunks,
-      traceSession,
-      transport: 'cursor-acp',
-    });
-  }
-
-  private async sendPromptWithDroidAcp(
-    params: SendPromptParams,
-    session: AgentSession,
-  ): Promise<void> {
-    const cwd = this.resolveSessionWorkingDirectory(session);
-    const spawnEnv = this.buildSessionSpawnEnv(session);
-    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
-    const promptInput = buildHeterogeneousPrompt({
-      imageList: params.imageList,
-      isNewSession: this.needsSessionIntroduction(session),
-      prompt: params.prompt,
-      systemContext: params.systemContext,
-    });
-    const prompt = await buildDroidAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
-    const tracePayload = `${JSON.stringify(prompt)}\n`;
-    const traceSession = await this.createCliTraceSession({
-      cliArgs: buildDroidAcpArgs(session.args),
-      cwd,
-      imageList: params.imageList ?? [],
-      session,
-      stdinPayload: tracePayload,
-    });
-    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
-
-    if (session.cancelledByUs) {
-      await this.completeCancelledSessionBeforeLaunch(session);
-      return;
-    }
-
-    const stderrChunks: string[] = [];
-    const intervention = this.setupAcpInterventionForOp(
-      params.operationId,
-      session.sessionId,
-      'droid',
-    );
-    const droidAcpSession = new DroidAcpSession({
-      args: session.args,
-      askUserBridge: intervention.bridge,
-      clientVersion: electronApp.getVersion(),
-      commandPath,
-      cwd,
-      env: spawnEnv,
-      initialModel: session.model,
-      onEvents: async (events) => {
-        for (const event of events) {
-          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
-        }
-      },
-      onModel: (model) => {
-        session.model = model;
-        session.modelSource = 'droid-acp';
-      },
-      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
-      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
-      onSessionId: (agentSessionId) => {
-        session.agentSessionId = agentSessionId;
-      },
-      onStderr: (data) => {
-        stderrChunks.push(data);
-        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
-      },
-      operationId: params.operationId,
-      prompt,
-      resumeSessionId: session.agentSessionId,
-      sessionId: session.sessionId,
-    });
-    session.droidAcpSession = droidAcpSession;
-
-    try {
-      await droidAcpSession.run();
-      void this.writeCliTraceJson(traceSession, 'exit.json', {
-        finishedAt: new Date().toISOString(),
-        transport: 'droid-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-    } catch (error) {
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message: this.getErrorMessage(error),
-        transport: 'droid-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      if (session.cancelledByUs) {
-        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-        return;
-      }
-      const stderr = stderrChunks.join('').trim();
-      const errorForClassification = isDroidAcpSessionNotFoundError(error)
-        ? error
-        : stderr
-          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
-              cause: error,
-            })
-          : error;
-      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
-      this.broadcast('heteroAgentSessionError', {
-        error: sessionError,
-        sessionId: session.sessionId,
-      });
-      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
-        cause: error,
-      });
-    } finally {
-      await intervention.cleanup();
-      if (session.droidAcpSession === droidAcpSession) session.droidAcpSession = undefined;
-    }
-  }
-
-  private async sendPromptWithDevinAcp(
-    params: SendPromptParams,
-    session: AgentSession,
-  ): Promise<void> {
-    const cwd = this.resolveSessionWorkingDirectory(session);
-    const spawnEnv = this.buildSessionSpawnEnv(session);
-    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
-    const promptInput = buildHeterogeneousPrompt({
-      imageList: params.imageList,
-      isNewSession: this.needsSessionIntroduction(session),
-      prompt: params.prompt,
-      systemContext: params.systemContext,
-    });
-    const prompt = await buildDevinAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
-    const tracePayload = `${JSON.stringify(prompt)}\n`;
-    const traceSession = await this.createCliTraceSession({
-      cliArgs: buildDevinAcpArgs(session.args),
-      cwd,
-      imageList: params.imageList ?? [],
-      session,
-      stdinPayload: tracePayload,
-    });
-    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
-
-    if (session.cancelledByUs) {
-      await this.completeCancelledSessionBeforeLaunch(session);
-      return;
-    }
-
-    const stderrChunks: string[] = [];
-    const intervention = this.setupAcpInterventionForOp(
-      params.operationId,
-      session.sessionId,
-      'devin',
-    );
-    const devinAcpSession = new DevinAcpSession({
-      args: session.args,
-      askUserBridge: intervention.bridge,
-      clientVersion: electronApp.getVersion(),
-      commandPath,
-      cwd,
-      env: spawnEnv,
-      initialModel: session.model,
-      onEvents: async (events) => {
-        for (const event of events) {
-          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
-        }
-      },
-      onModel: (model) => {
-        session.model = model;
-        session.modelSource = 'devin-acp';
-      },
-      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
-      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
-      onSessionId: (agentSessionId) => {
-        session.agentSessionId = agentSessionId;
-      },
-      onStderr: (data) => {
-        stderrChunks.push(data);
-        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
-      },
-      operationId: params.operationId,
-      prompt,
-      resumeSessionId: session.agentSessionId,
-      sessionId: session.sessionId,
-    });
-    session.devinAcpSession = devinAcpSession;
-
-    await this.runInteractiveAcpSession({
-      acpSession: devinAcpSession,
-      activeSessionKey: 'devinAcpSession',
-      cleanup: intervention.cleanup,
-      isResumeError: isDevinAcpSessionNotFoundError,
-      session,
-      stderrChunks,
-      traceSession,
-      transport: 'devin-acp',
-    });
-  }
-
-  private async runInteractiveAcpSession({
-    acpSession,
-    activeSessionKey,
-    cleanup,
-    isResumeError,
-    session,
-    stderrChunks,
-    traceSession,
-    transport,
-  }: {
-    acpSession: InteractiveAcpSession;
-    activeSessionKey: 'cursorAcpSession' | 'devinAcpSession' | 'traeAcpSession';
-    cleanup?: () => Promise<void>;
-    isResumeError?: (error: unknown) => boolean;
-    session: AgentSession;
-    stderrChunks: string[];
-    traceSession: CliTraceSession | undefined;
-    transport: 'cursor-acp' | 'devin-acp' | 'trae-acp';
-  }): Promise<void> {
-    try {
-      await acpSession.run();
-      void this.writeCliTraceJson(traceSession, 'exit.json', {
-        finishedAt: new Date().toISOString(),
-        transport,
-      });
-      await this.flushCliTrace(traceSession);
-      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-    } catch (error) {
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message: this.getErrorMessage(error),
-        transport,
-      });
-      await this.flushCliTrace(traceSession);
-      if (session.cancelledByUs) {
-        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-        return;
-      }
-      const stderr = stderrChunks.join('').trim();
-      const errorForClassification = isResumeError?.(error)
-        ? error
-        : stderr
-          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
-              cause: error,
-            })
-          : error;
-      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
-      this.broadcast('heteroAgentSessionError', {
-        error: sessionError,
-        sessionId: session.sessionId,
-      });
-      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
-        cause: error,
-      });
-    } finally {
-      await cleanup?.();
-      if (activeSessionKey === 'cursorAcpSession' && session.cursorAcpSession === acpSession) {
-        session.cursorAcpSession = undefined;
-      } else if (activeSessionKey === 'devinAcpSession' && session.devinAcpSession === acpSession) {
-        session.devinAcpSession = undefined;
-      } else if (activeSessionKey === 'traeAcpSession' && session.traeAcpSession === acpSession) {
-        session.traeAcpSession = undefined;
-      }
-    }
-  }
-
-  private async sendPromptWithTraeAcp(
-    params: SendPromptParams,
-    session: AgentSession,
-  ): Promise<void> {
-    const cwd = this.resolveSessionWorkingDirectory(session);
-    const spawnEnv = this.buildSessionSpawnEnv(session);
-    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
-    const promptInput = buildHeterogeneousPrompt({
-      imageList: params.imageList,
-      isNewSession: this.needsSessionIntroduction(session),
-      prompt: params.prompt,
-      systemContext: params.systemContext,
-    });
-    const prompt = await buildTraeAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
-    const tracePayload = `${JSON.stringify(prompt)}\n`;
-    const traceSession = await this.createCliTraceSession({
-      cliArgs: buildTraeAcpArgs(session.args),
-      cwd,
-      imageList: params.imageList ?? [],
-      session,
-      stdinPayload: tracePayload,
-    });
-    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
-
-    if (session.cancelledByUs) {
-      await this.completeCancelledSessionBeforeLaunch(session);
-      return;
-    }
-
-    const stderrChunks: string[] = [];
-
-    const traeAcpSession = new TraeAcpSession({
-      args: session.args,
-      clientVersion: electronApp.getVersion(),
-      commandPath,
-      cwd,
-      env: spawnEnv,
-      initialModel: session.model,
-      onEvents: async (events) => {
-        for (const event of events) {
-          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
-        }
-      },
-      onModel: (model) => {
-        session.model = model;
-        session.modelSource = 'trae-acp';
-      },
-      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
-      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
-      onSessionId: (agentSessionId) => {
-        session.agentSessionId = agentSessionId;
-      },
-      onStderr: (data) => {
-        stderrChunks.push(data);
-        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
-      },
-      operationId: params.operationId,
-      prompt,
-      resumeSessionId: session.agentSessionId,
-      sessionId: session.sessionId,
-    });
-    session.traeAcpSession = traeAcpSession;
-
-    await this.runInteractiveAcpSession({
-      acpSession: traeAcpSession,
-      activeSessionKey: 'traeAcpSession',
-      cleanup: async () => {
-        await session.hostedProviderBinding?.cleanup();
-      },
-      session,
-      stderrChunks,
-      traceSession,
-      transport: 'trae-acp',
-    });
   }
 
   /**
@@ -3750,20 +3129,7 @@ export default class HeterogeneousAgentCtr {
       await session.dshSession.dispose();
       return;
     }
-    if (session.devinAcpSession) {
-      session.devinAcpSession.interrupt();
-      return;
-    }
-    if (session.grokAcpSession) {
-      session.grokAcpSession.interrupt();
-      return;
-    }
-    if (session.cursorAcpSession) {
-      session.cursorAcpSession.interrupt();
-      return;
-    }
-    if (session.droidAcpSession) {
-      session.droidAcpSession.interrupt();
+    if (await interruptActiveAcpSession(session)) {
       return;
     }
     if (session.appServerSession) {
@@ -3775,10 +3141,6 @@ export default class HeterogeneousAgentCtr {
         appServerSession.close();
         if (session.appServerSession === appServerSession) session.appServerSession = undefined;
       }
-      return;
-    }
-    if (session.traeAcpSession) {
-      await session.traeAcpSession.interrupt();
       return;
     }
     if (session.piRpcSession) {
@@ -3829,25 +3191,7 @@ export default class HeterogeneousAgentCtr {
       await session.dshSession.dispose();
       session.dshSession = undefined;
     }
-    if (session.devinAcpSession) {
-      session.cancelledByUs = true;
-      session.devinAcpSession.close();
-    }
-
-    if (session.grokAcpSession) {
-      session.cancelledByUs = true;
-      session.grokAcpSession.close();
-    }
-
-    if (session.cursorAcpSession) {
-      session.cancelledByUs = true;
-      session.cursorAcpSession.close();
-    }
-
-    if (session.droidAcpSession) {
-      session.cancelledByUs = true;
-      session.droidAcpSession.close();
-    }
+    closeActiveAcpSessions(session);
 
     if (session.appServerSession) {
       session.cancelledByUs = true;
@@ -3857,11 +3201,6 @@ export default class HeterogeneousAgentCtr {
         logger.warn('Codex app-server interrupt failed while stopping the session:', error);
       }
       session.appServerSession.close();
-    }
-
-    if (session.traeAcpSession) {
-      session.cancelledByUs = true;
-      session.traeAcpSession.close();
     }
 
     if (session.piRpcSession) {
@@ -3956,29 +3295,10 @@ export default class HeterogeneousAgentCtr {
           session.cancelledByUs = true;
           piClosing.push(session.piRpcSession.close());
         }
-        if (session.devinAcpSession) {
-          session.cancelledByUs = true;
-          session.devinAcpSession.close();
-        }
-        if (session.grokAcpSession) {
-          session.cancelledByUs = true;
-          session.grokAcpSession.close();
-        }
-        if (session.cursorAcpSession) {
-          session.cancelledByUs = true;
-          session.cursorAcpSession.close();
-        }
-        if (session.droidAcpSession) {
-          session.cancelledByUs = true;
-          session.droidAcpSession.close();
-        }
+        closeActiveAcpSessions(session);
         if (session.appServerSession) {
           session.cancelledByUs = true;
           session.appServerSession.close();
-        }
-        if (session.traeAcpSession) {
-          session.cancelledByUs = true;
-          session.traeAcpSession.close();
         }
         if (session.sdkSession) {
           session.cancelledByUs = true;

@@ -2,6 +2,7 @@ import type { EvalMemoryReference } from '@lobechat/types';
 import { and, eq, isNull, type SQL } from 'drizzle-orm';
 
 import { agentEvalMemories } from '@/database/schemas';
+import { getEvalAttemptId } from '@/server/services/agentEvalRun/utils';
 
 /** Rows of one attempt owned by this caller; removed entries stay out unless asked for. */
 export const attemptWhere = (
@@ -12,6 +13,8 @@ export const attemptWhere = (
   and(
     eq(agentEvalMemories.userId, userId),
     eq(agentEvalMemories.runId, reference.runId),
+    // Deleted thread links become null; their evidence still belongs to that attempt.
+    eq(agentEvalMemories.attemptId, getEvalAttemptId(reference)),
     eq(agentEvalMemories.topicId, reference.topicId),
     reference.threadId
       ? eq(agentEvalMemories.threadId, reference.threadId)

@@ -12,7 +12,8 @@ import { users } from './user';
  * the case fixture seeded at the start plus whatever the Agent wrote. The
  * Memory tool of an attempt reads and writes only these rows, so attempts
  * never see each other and never touch the caller's own memories. Rows are
- * evidence: they stay until their run is deleted.
+ * evidence: they stay until their run or owner is deleted. Conversation deletion
+ * clears topic/thread pointers; attemptId preserves the original attempt identity.
  */
 export const agentEvalMemories = pgTable(
   'agent_eval_memories',
@@ -24,10 +25,8 @@ export const agentEvalMemories = pgTable(
     runId: text('run_id')
       .references(() => agentEvalRuns.id, { onDelete: 'cascade' })
       .notNull(),
-    topicId: text('topic_id')
-      .references(() => topics.id, { onDelete: 'cascade' })
-      .notNull(),
-    threadId: text('thread_id').references(() => threads.id, { onDelete: 'cascade' }),
+    topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),
+    threadId: text('thread_id').references(() => threads.id, { onDelete: 'set null' }),
     /** `runId_topicId[_threadId]`: the key the mock service also groups by. */
     attemptId: text('attempt_id').notNull(),
 
@@ -55,6 +54,8 @@ export const agentEvalMemories = pgTable(
   (t) => [
     index('agent_eval_memories_attempt_id_idx').on(t.attemptId),
     index('agent_eval_memories_run_id_idx').on(t.runId),
+    index('agent_eval_memories_topic_id_idx').on(t.topicId),
+    index('agent_eval_memories_thread_id_idx').on(t.threadId),
     index('agent_eval_memories_user_id_idx').on(t.userId),
   ],
 );

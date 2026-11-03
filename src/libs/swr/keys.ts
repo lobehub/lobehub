@@ -49,7 +49,8 @@ export const channelKeys = {
   ),
   userCandidates: def(
     'channel:userCandidates',
-    (channelId: string, search: string) => ['channel:userCandidates', channelId, search] as const,
+    (channelId: string | undefined, search: string) =>
+      ['channel:userCandidates', channelId ?? null, search] as const,
   ),
 };
 

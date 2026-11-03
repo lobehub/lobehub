@@ -18,7 +18,8 @@ vi.mock('../ActionBar/config', async () => {
       'data-testid': 'probe',
     });
   };
-  return { actionMap: { search: ContextProbe } };
+  const TypoProbe = () => createElement('div', { 'data-testid': 'typo' });
+  return { actionMap: { search: ContextProbe, typo: TypoProbe } };
 });
 
 vi.mock('@lobehub/editor/react', () => ({
@@ -39,21 +40,13 @@ vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: { expandInputActionbar: () => false },
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: object) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/user/slices/preference/selectors', () => ({
-  labPreferSelectors: { enableInputMarkdown: () => false },
-}));
-
 vi.mock('../hooks/useChatInputResourceAccess', () => ({
   useChatInputResourceAccess: () => ({ canConfigureResource: true, canShowControls: true }),
 }));
 
 vi.mock('../store', () => ({
   useChatInputStore: (selector: (state: object) => unknown) =>
-    selector({ leftActions: ['search'], mobile: false }),
+    selector({ leftActions: ['search', 'typo'], mobile: false }),
 }));
 
 describe('ActionToolbar', () => {
@@ -69,6 +62,12 @@ describe('ActionToolbar', () => {
     const probe = screen.getByTestId('probe');
     expect(probe.dataset.size).toBe('28/16');
     expect(probe.dataset.borderRadius).toBe('12');
+  });
+
+  it('always shows the typography action', () => {
+    render(createElement(ActionToolbar));
+
+    expect(screen.getByTestId('typo')).toBeDefined();
   });
 
   it('leaves the action size unset without an outer context', () => {

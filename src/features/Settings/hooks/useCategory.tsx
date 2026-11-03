@@ -18,7 +18,6 @@ import {
   EthernetPort,
   FlaskConical,
   Gift,
-  HardDriveIcon,
   Info,
   KeyboardIcon,
   KeyIcon,
@@ -159,14 +158,6 @@ export const useCategory = () => {
         icon: ContainerIcon,
         key: SettingsTabs.Environments,
         label: t('tab.environments'),
-      },
-      // The drives a cloud-sandbox run keeps files on, with their usage and
-      // the way to a plan. A self-hosted deployment has no drive service, so
-      // the tab would only ever lead to an empty page there.
-      enableBusinessFeatures && {
-        icon: HardDriveIcon,
-        key: SettingsTabs.Drive,
-        label: t('tab.drive'),
       },
       (enableBusinessFeatures || isDesktop) && {
         icon: BellIcon,

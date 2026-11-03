@@ -85,7 +85,7 @@ export interface AgentEvalMemoryItem {
   tags: string[] | null;
   threadId: string | null;
   title: string | null;
-  topicId: string;
+  topicId: string | null;
   updatedAt: Date;
   userId: string;
 }
