@@ -32,13 +32,31 @@ const setCharLimitError = (id: string, charLimitError: DocumentCharLimitRefusal 
  * Drafts the server refused for exceeding the plan's character limit, by
  * document. The editor unmounts when the user opens another document or closes
  * the portal, and would reopen on the persisted body, so the refused text lives
- * here until it is saved, replaced by a newer remote body, or the page unloads
- * (which `beforeunload` guards).
+ * here until it is saved, replaced by a newer remote body, or the page unloads.
+ * The unload is guarded by {@link guardRefusedDraftsOnExit}, not by the editor's own
+ * `beforeunload` listener, which goes away when the editor unmounts.
  */
 const refusedDrafts = new Map<
   string,
   { baseUpdatedAt?: number; content: string; refusal: DocumentCharLimitRefusal }
 >();
+
+let exitGuardInstalled = false;
+
+/**
+ * Warns before the page unloads while any refused draft is still kept. It lives at
+ * module level because the drafts outlive the editor: once the portal closes, the
+ * editor's listener is gone and a reload would drop the refused text silently.
+ */
+const guardRefusedDraftsOnExit = () => {
+  if (exitGuardInstalled || typeof window === 'undefined') return;
+  exitGuardInstalled = true;
+  window.addEventListener('beforeunload', (event) => {
+    if (refusedDrafts.size === 0) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+};
 
 /** Test-only: forgets every kept refused draft. */
 export const resetRefusedDraftsForTests = () => refusedDrafts.clear();
@@ -156,6 +174,7 @@ export const useHighlightSave = ({
           content: toWrite,
           refusal: charLimitError,
         });
+        guardRefusedDraftsOnExit();
         setCharLimitError(documentIdRef.current, charLimitError);
         if (source === 'manual') notifyCharLimitRefused(charLimitError);
         return;

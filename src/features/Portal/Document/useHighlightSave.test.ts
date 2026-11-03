@@ -396,6 +396,25 @@ describe('useHighlightSave', () => {
       });
     });
 
+    it('keeps warning before the page unloads after the editor unmounts', async () => {
+      await refuseDraft();
+
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('stops warning before unload once no refused draft is kept', async () => {
+      await refuseDraft();
+      resetRefusedDraftsForTests();
+
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+    });
+
     it('drops a refused draft once the document has a newer version', async () => {
       await refuseDraft();
       seedStoreDocument();
