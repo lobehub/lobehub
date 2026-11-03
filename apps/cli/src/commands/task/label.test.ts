@@ -20,6 +20,7 @@ const { client } = vi.hoisted(() => ({
     },
     taskLabel: {
       addToTask: { mutate: vi.fn() },
+      changeForTask: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
       list: { query: vi.fn() },
@@ -84,19 +85,27 @@ describe('lh task --label', () => {
     expect(vi.mocked(log.error).mock.calls[0][0]).toContain('is a label group');
   });
 
-  it('edit adds and removes labels through the label endpoints only', async () => {
-    client.taskLabel.addToTask.mutate.mockResolvedValue([{ id: 'feat', name: 'Feature' }]);
+  it('edit adds and removes labels in one label request only', async () => {
+    client.taskLabel.changeForTask.mutate.mockResolvedValue([{ id: 'feat', name: 'Feature' }]);
     await run('edit', 'T-1', '--label', 'Type/Feature', '--remove-label', 'Frontend');
 
-    expect(client.taskLabel.removeFromTask.mutate).toHaveBeenCalledWith({
-      labelIds: ['fe'],
+    expect(client.taskLabel.changeForTask.mutate).toHaveBeenCalledWith({
+      add: ['feat'],
+      remove: ['fe'],
       taskId: 'T-1',
     });
-    expect(client.taskLabel.addToTask.mutate).toHaveBeenCalledWith({
-      labelIds: ['feat'],
-      taskId: 'T-1',
-    });
+    expect(client.taskLabel.addToTask.mutate).not.toHaveBeenCalled();
+    expect(client.taskLabel.removeFromTask.mutate).not.toHaveBeenCalled();
     expect(client.task.update.mutate).not.toHaveBeenCalled();
+  });
+
+  it('edit rejects an invalid status before touching labels', async () => {
+    await run('edit', 'T-1', '--label', 'Bug', '--status', 'typo');
+
+    expect(vi.mocked(log.error).mock.calls[0][0]).toContain('Invalid status "typo"');
+    expect(client.taskLabel.changeForTask.mutate).not.toHaveBeenCalled();
+    expect(client.task.update.mutate).not.toHaveBeenCalled();
+    expect(client.task.updateStatus.mutate).not.toHaveBeenCalled();
   });
 
   it('list filters by label, by group and by "no labels"', async () => {
@@ -148,5 +157,35 @@ describe('lh task label', () => {
     await run('label', 'delete', 'frontend', '--yes');
 
     expect(client.taskLabel.delete.mutate).toHaveBeenCalledWith({ id: 'fe' });
+  });
+});
+
+describe('formatTaskLabels', () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.doUnmock('picocolors');
+  });
+
+  const load = async (isColorSupported: boolean) => {
+    vi.resetModules();
+    vi.doMock('picocolors', async (importOriginal) => {
+      const actual = (await importOriginal<{ default: object }>()).default;
+      return { default: { ...actual, isColorSupported } };
+    });
+    return (await import('./label')).formatTaskLabels;
+  };
+
+  it('writes no true-color escape when color output is off', async () => {
+    const format = await load(false);
+    expect(format([{ color: '#EB5757', id: 'bug', name: 'Bug', parentId: null }])).not.toContain(
+      '\u001B[38;2;',
+    );
+  });
+
+  it('colors the dot with the label color when supported', async () => {
+    const format = await load(true);
+    expect(format([{ color: '#EB5757', id: 'bug', name: 'Bug', parentId: null }])).toContain(
+      '\u001B[38;2;235;87;87m',
+    );
   });
 });

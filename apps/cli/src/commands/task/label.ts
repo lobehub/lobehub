@@ -57,7 +57,8 @@ const resolveOne = (labels: TaskLabelWithUsage[], ref: string): TaskLabelWithUsa
 };
 
 const colorDot = (color?: string | null) => {
-  if (!color || !HEX_COLOR.test(color)) return pc.dim('●');
+  // picocolors' detection covers NO_COLOR, FORCE_COLOR and non-TTY output.
+  if (!pc.isColorSupported || !color || !HEX_COLOR.test(color)) return pc.dim('●');
   const hex =
     color.length === 4 ? color.replaceAll(/[\da-f]/gi, (c) => c + c).slice(1) : color.slice(1, 7);
   const [r, g, b] = [0, 2, 4].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));

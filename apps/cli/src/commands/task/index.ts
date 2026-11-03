@@ -702,17 +702,24 @@ export function registerTaskCommand(program: Command) {
         if (configPatch) input.configPatch = configPatch;
         const hasFieldEdits = Object.keys(input).length > 1;
 
-        // Labels have their own endpoints; apply them before any field /
-        // status edit so a bad label fails the command before anything moves.
-        let labels: Awaited<ReturnType<typeof client.taskLabel.addToTask.mutate>> | undefined;
-        if (removeLabelIds.length > 0) {
-          labels = await client.taskLabel.removeFromTask.mutate({
-            labelIds: removeLabelIds,
+        const validStatuses = ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'];
+        if (options.status && !validStatuses.includes(options.status)) {
+          log.error(
+            `Invalid status "${options.status}". Must be one of: ${validStatuses.join(', ')}`,
+          );
+          return;
+        }
+
+        // Labels have their own endpoint; apply them (in one transaction)
+        // after input validation and before any field / status edit, so a bad
+        // label fails the command before anything moves.
+        let labels: Awaited<ReturnType<typeof client.taskLabel.changeForTask.mutate>> | undefined;
+        if (hasLabelEdits) {
+          labels = await client.taskLabel.changeForTask.mutate({
+            add: addLabelIds,
+            remove: removeLabelIds,
             taskId: id,
           });
-        }
-        if (addLabelIds.length > 0) {
-          labels = await client.taskLabel.addToTask.mutate({ labelIds: addLabelIds, taskId: id });
         }
         if (hasLabelEdits && !hasFieldEdits && !options.status) {
           if (options.json !== undefined) {
@@ -729,11 +736,6 @@ export function registerTaskCommand(program: Command) {
         // task.update so the server can apply the fields and lifecycle change
         // atomically.
         if (options.status) {
-          const valid = ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'];
-          if (!valid.includes(options.status)) {
-            log.error(`Invalid status "${options.status}". Must be one of: ${valid.join(', ')}`);
-            return;
-          }
           if (!hasFieldEdits) {
             const result = await client.task.updateStatus.mutate({ id, status: options.status });
             if (options.json !== undefined) {
