@@ -46,6 +46,7 @@ import {
 } from '@/store/chat/pendingSandboxSelection';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
+import { leaveBlankConversationBucket } from '@/store/chat/slices/agentRun/actions/clearBlankBucket';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import {
   SETTLEABLE_TOPIC_RUN_OPERATION_TYPES,
@@ -87,6 +88,7 @@ import { flagQueuedMessagesOnRunStart, syncQueuedMessagesFlag } from './queuedMe
 import { gatewayRunOperationMetadata } from './runOperationMetadata';
 import { isCompletedRuntimeEnd } from './runtimeEndReason';
 import * as serverSteerQueue from './serverSteerQueue';
+import { watchSubAgentRun, type WatchSubAgentRunParams } from './watchSubAgentRun';
 
 const getGatewayServerConfig = () =>
   (typeof window !== 'undefined'
@@ -1372,23 +1374,10 @@ export class GatewayActionImpl {
         /* non-critical */
       }
 
-      if (!messageContext.isolatedTopic) {
-        await this.#get().switchTopic(result.topicId, {
-          clearNewKey: true,
-          // The cleanup targets the blank bucket this send came from — the
-          // user may be viewing a different conversation by now.
-          clearNewKeyContext: {
-            agentId: messageContext.agentId,
-            groupId: messageContext.groupId,
-          },
-          // Guard against yanking the user back if they navigated to another
-          // topic while execAgentTask's persistence round-trip was in flight.
-          // Both ids are accepted: the optimistic-topic re-key above moves
-          // `activeTopicId` from the minted id to the persisted one.
-          onlyIfActiveTopicIn: [messageContext.topicId ?? null, result.topicId],
-          skipRefreshMessage: true,
-        });
-      }
+      await leaveBlankConversationBucket(this.#get, messageContext, {
+        isolated: messageContext.isolatedTopic,
+        topicId: result.topicId,
+      });
 
       // Refresh the topic list so the new topic appears in topicDataMap (sidebar).
       // Unlike the direct-API sendMessage path (which receives topics[] in the
@@ -1748,6 +1737,13 @@ export class GatewayActionImpl {
     }
     return resumed;
   };
+
+  /** Stream a sub-agent run this tab dispatched but does not drive; see `watchSubAgentRun`. */
+  watchSubAgentRun = (params: WatchSubAgentRunParams): (() => void) =>
+    watchSubAgentRun(this.#get, params, {
+      disconnect: this.disconnectFromGateway,
+      gatewayUrl: getGatewayServerConfig()?.agentGatewayUrl,
+    });
 
   /**
    * Reconnect to an existing Gateway operation after page reload.

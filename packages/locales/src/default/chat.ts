@@ -1,4 +1,9 @@
 export default {
+  'directMention.progress.elapsed': '{{time}}',
+  'directMention.progress.running': 'Running',
+  'directMention.progress.thinking': 'Thinking…',
+  'directMention.progress.usingTool': 'Using {{name}}…',
+  'directMention.progress.viewFullRecord': 'View full record',
   'sharePage.app.linkCopied': 'Link copied',
   'sharePage.app.open': 'Open app',
   'sharePage.app.help': 'Trouble opening the app?',
@@ -1064,6 +1069,8 @@ export default {
   'mention.category.tools': 'Tools',
   'mention.category.topics': 'Topics',
   'mention.category.workspaceAgents': 'Workspace',
+  'mention.marketInstall.failed':
+    '{{names}} isn’t available right now. The message was not sent; try again.',
   'mention.title': 'Mention Members',
   'messageAction.codexEdit.alreadySubmitting': 'This edit is already being submitted',
   'messageAction.codexEdit.branchFailed':
