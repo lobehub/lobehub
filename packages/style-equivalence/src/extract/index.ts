@@ -56,7 +56,9 @@ export const extractFile = (
   options: ExtractOptions,
 ): FileExtraction => {
   const ast = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const top = collectTopLevel(ast, options.adapters);
+  const top = collectTopLevel(ast, options.adapters, (specifier) =>
+    options.readModule?.(file, specifier),
+  );
   const markers = new Set(options.adapters.flatMap((adapter) => adapter.markerIdentifiers));
   const layout = new Set(options.layoutComponents);
   const isStyleName = (name: string) => top.styleSymbols.has(name) || markers.has(name);

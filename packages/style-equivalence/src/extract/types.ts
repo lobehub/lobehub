@@ -61,5 +61,6 @@ export interface StyleAdapter {
 export interface ExtractOptions {
   adapters: StyleAdapter[];
   layoutComponents: string[];
+  readModule?: (fromFile: string, specifier: string) => string | undefined;
   readStylesheet?: (fromFile: string, specifier: string) => string | undefined;
 }

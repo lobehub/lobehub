@@ -16,7 +16,38 @@ export interface TopLevel {
   styleSymbols: Set<string>;
 }
 
-export const collectTopLevel = (ast: ts.SourceFile, adapters: StyleAdapter[]): TopLevel => {
+const importedFactory = (
+  code: string,
+  name: string,
+  adapters: StyleAdapter[],
+): ts.CallExpression | undefined => {
+  const sf = ts.createSourceFile(
+    'module.tsx',
+    code,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const recognized = (node: ts.Expression | undefined) =>
+    node && ts.isCallExpression(node) && adapters.some((adapter) => adapter.recognizeFactory(node))
+      ? node
+      : undefined;
+  for (const statement of sf.statements) {
+    if (name === 'default' && ts.isExportAssignment(statement))
+      return recognized(statement.expression);
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations)
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === name)
+        return recognized(declaration.initializer);
+  }
+  return undefined;
+};
+
+export const collectTopLevel = (
+  ast: ts.SourceFile,
+  adapters: StyleAdapter[],
+  readModule?: (specifier: string) => string | undefined,
+): TopLevel => {
   const importOf = new Map<string, ts.ImportDeclaration>();
   const declarations = new Map<string, ts.Statement>();
   const styleSymbols = new Set<string>();
@@ -49,6 +80,21 @@ export const collectTopLevel = (ast: ts.SourceFile, adapters: StyleAdapter[]): T
       for (const adapter of adapters)
         for (const symbol of adapter.importedStyleSymbols?.(source, clause) ?? [])
           styleSymbols.add(symbol);
+      const module = readModule && !STYLESHEET.test(source) ? readModule(source) : undefined;
+      if (module) {
+        const names: Array<[string, string]> = [];
+        if (clause.name) names.push([clause.name.text, 'default']);
+        if (named && ts.isNamedImports(named))
+          for (const element of named.elements)
+            if (!element.isTypeOnly)
+              names.push([element.name.text, (element.propertyName ?? element.name).text]);
+        for (const [local, imported] of names) {
+          const factory = importedFactory(module, imported, adapters);
+          if (!factory) continue;
+          styleSymbols.add(local);
+          styleFactories.set(local, factory);
+        }
+      }
       continue;
     }
     if (ts.isVariableStatement(statement))

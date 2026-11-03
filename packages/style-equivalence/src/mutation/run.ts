@@ -17,7 +17,7 @@ import type { ProjectConfig } from '../config';
 import { extractFile, type FileExtraction } from '../extract';
 import { generateHost, HOST_HTML } from '../generate/host';
 import { generateModule } from '../generate/module';
-import { RUNTIME, stylesheetReader } from '../pipeline/synthesize';
+import { moduleReader, RUNTIME, stylesheetReader } from '../pipeline/synthesize';
 import type { FilePlan } from '../plan/planFile';
 import type { ScopeFile } from '../source/scope';
 import { applyMutation, type MutationOperator } from './operators';
@@ -112,6 +112,7 @@ const writeMutant = async (
     extraction = extractFile(applyMutation(code, candidate.mutation), source, {
       adapters: context.config.adapters,
       layoutComponents: context.config.layoutComponents,
+      readModule: moduleReader(context.headRoot, context.config.aliases),
       readStylesheet: stylesheetReader(context.headRoot),
     });
   }

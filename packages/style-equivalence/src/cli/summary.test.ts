@@ -70,8 +70,10 @@ describe('formatSummary', () => {
       },
       runDir: '/repo/.records/style-equivalence/run-1',
       unpaired: 3,
+      verdict: { mergeable: false, reasons: ['blocking 1', 'difference 1', 'needs sign-off 4'] },
     });
     expect(text.split('\n')).toEqual([
+      'verdict not mergeable: blocking 1 · difference 1 · needs sign-off 4',
       'style-equivalence 60dee14..f0a8fd0 · 3 files · 4 cases · 96 comparisons · 82s',
       'difference 1 · needs sign-off 4 · blocking 1 · equal 1',
       'mutation 9/9 caught · 2 equivalent dropped (requested 10)',
@@ -113,8 +115,10 @@ describe('formatSummary', () => {
       },
       runDir: '/r',
       unpaired: 0,
+      verdict: { mergeable: false, reasons: ['mutation not fully caught'] },
     });
-    expect(text.split('\n').slice(2, 6)).toEqual([
+    expect(text.split('\n')[0]).toBe('verdict not mergeable: mutation not fully caught');
+    expect(text.split('\n').slice(3, 7)).toEqual([
       'mutation FAILED 1/2 caught',
       '  missed src/A.tsx|A#0  numeric: 8px → 9px',
       'calibration 0 agree · 1 mismatch · 0 inconclusive',

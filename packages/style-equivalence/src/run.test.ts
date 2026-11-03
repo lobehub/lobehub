@@ -64,6 +64,7 @@ describe('runComparison', () => {
     expect(stored.cases).toHaveLength(2);
     expect(git('worktree', 'list').split('\n')).toHaveLength(1);
     expect(result.mutation).toMatchObject({ caught: 1, evaluated: 1, passed: true });
+    expect(result.verdict).toMatchObject({ mergeable: false, reasons: ['difference 1'] });
     const [mutant] = result.mutation.mutants;
     expect(mutant).toMatchObject({
       caseKey: 'src/Card.tsx|Card#1',

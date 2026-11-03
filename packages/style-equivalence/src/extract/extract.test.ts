@@ -82,6 +82,32 @@ export const A = () => <span {...stylex.props(styles.a)} />;
     );
   });
 
+  it('treats styles imported from a sibling style module as style symbols', () => {
+    const modules: Record<string, string> = {
+      './style': `import { createStaticStyles } from '@lobehub/ui';
+export const styles = createStaticStyles(({ css }) => ({ box: css\`padding: 4px; .foreign { color: red; }\` }));
+`,
+      './A.styles': `import * as stylex from '@stylexjs/stylex';
+export const atomic = stylex.create({ box: { padding: 4 } });
+`,
+    };
+    const code = `import * as stylex from '@stylexjs/stylex';
+import { atomic } from './A.styles';
+import { styles } from './style';
+export const A = () => <div className={styles.box}><span {...stylex.props(atomic.box)} /></div>;
+`;
+    const result = extractFile(code, 'src/A.tsx', {
+      ...options,
+      readModule: (_from, specifier) => modules[specifier],
+    });
+    expect(result.elements.map((element) => [element.id, element.slots])).toEqual([
+      ['A#0', ['styles.box']],
+      ['A#1', ['atomic.box']],
+    ]);
+    expect(result.prelude).toContain("import { styles } from './style';");
+    expect(result.elements[0].flags).toEqual(['CROSS_COMPONENT']);
+  });
+
   it('imports JSX tags used by a kept top-level statement', () => {
     const code = `import { Spin } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
