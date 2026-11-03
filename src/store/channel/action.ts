@@ -66,6 +66,19 @@ class ChannelActionImpl {
     return result.data.channel.id;
   };
   /**
+   * Marks the main channel read up to `sequence`. The listed unread count drops at once, so a
+   * conversation row does not keep its badge until the next list poll; a failed write restores it.
+   */
+  markRead = (channelId: string, sequence: number) =>
+    this.#private.entity.optimistic(
+      channelId,
+      (channel) => ({
+        ...channel,
+        unreadCount: Math.min(channel.unreadCount ?? 0, Math.max(0, channel.sequence - sequence)),
+      }),
+      () => channelService.markRead(channelId, sequence),
+    );
+  /**
    * The caller's direct Channel with an Agent, opening it for an Agent that predates direct
    * Channels. Undefined when the Agent cannot answer in a Channel.
    */

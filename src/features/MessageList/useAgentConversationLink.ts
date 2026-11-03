@@ -1,8 +1,11 @@
-import { type MouseEvent, useCallback, useRef } from 'react';
+import { type MouseEvent, useCallback, useEffect, useRef } from 'react';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { channelPath } from '@/features/Channels/paths';
 import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { cacheScope } from '@/libs/replica';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 
 /** A plain left click; modified clicks keep the browser's own handling of the link. */
@@ -21,6 +24,15 @@ export const useAgentConversationLink = (agentId: string, agentUrl: string) => {
   );
   const navigate = useWorkspaceAwareNavigate();
   const opening = useRef(false);
+  const { pathname, search } = useActiveLocation();
+  const slug = useActiveWorkspaceSlug();
+  // Where the person is now. Opening a missing Channel takes a request, and by the time it
+  // answers they may have picked another conversation or workspace.
+  const location = `${slug ?? ''}|${pathname}${search}`;
+  const here = useRef(location);
+  useEffect(() => {
+    here.current = location;
+  }, [location]);
 
   const onClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
@@ -28,12 +40,19 @@ export const useAgentConversationLink = (agentId: string, agentUrl: string) => {
       event.preventDefault();
       if (opening.current) return;
       opening.current = true;
+      const from = here.current;
+      const scope = cacheScope.get();
+      // Navigate only if nothing else was selected meanwhile, and never route an id from the
+      // previous workspace under a new one.
+      const go = (path: string) => {
+        if (here.current === from && cacheScope.get() === scope) navigate(path);
+      };
       void channelActions
         .openDirect(agentId)
-        .then((channelId) => navigate(channelId ? channelPath(channelId) : agentUrl))
+        .then((channelId) => go(channelId ? channelPath(channelId) : agentUrl))
         .catch((error) => {
           console.error('[channel] Failed to open the direct Channel', error);
-          navigate(agentUrl);
+          go(agentUrl);
         })
         .finally(() => {
           opening.current = false;

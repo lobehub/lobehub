@@ -12,7 +12,18 @@ const state = vi.hoisted(() => ({
   enabled: true,
   navigate: vi.fn(),
   openDirect: vi.fn(),
+  pathname: '/',
+  scope: 'personal',
+  slug: null as string | null,
 }));
+
+vi.mock('@/hooks/useActiveLocation', () => ({
+  useActiveLocation: () => ({ pathname: state.pathname, search: '' }),
+}));
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => state.slug,
+}));
+vi.mock('@/libs/replica', () => ({ cacheScope: { get: () => state.scope } }));
 
 vi.mock('@/features/Channels/useChannelsEnabled', () => ({
   useChannelsEnabled: () => state.enabled,
@@ -39,6 +50,9 @@ describe('useAgentConversationLink', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     state.directChannelId = undefined;
     state.enabled = true;
+    state.pathname = '/';
+    state.scope = 'personal';
+    state.slug = null;
   });
 
   it('links an Agent row to its direct Channel', () => {
@@ -73,6 +87,33 @@ describe('useAgentConversationLink', () => {
     await act(async () => result.current.onClick?.(click()));
 
     expect(state.navigate).toHaveBeenCalledWith('/agent/agt_nasa');
+  });
+
+  // A slow open pulled the person away from the conversation they picked meanwhile.
+  it.each([
+    [
+      'another conversation is opened meanwhile',
+      (rerender: () => void) => {
+        state.pathname = '/channels/chn_000000000009';
+        rerender();
+      },
+    ],
+    [
+      'the workspace changes meanwhile',
+      () => {
+        state.scope = 'workspace:other';
+      },
+    ],
+  ])('does not navigate when %s', async (_, change) => {
+    let resolve!: (id: string) => void;
+    state.openDirect.mockReturnValue(new Promise<string>((r) => (resolve = r)));
+    const { rerender, result } = render();
+
+    act(() => result.current.onClick?.(click()));
+    change(rerender);
+    await act(async () => resolve('chn_000000000002'));
+
+    expect(state.navigate).not.toHaveBeenCalled();
   });
 
   it('leaves a modified click to the browser', () => {

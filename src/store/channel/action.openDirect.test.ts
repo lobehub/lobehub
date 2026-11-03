@@ -5,7 +5,7 @@ import { channelActions } from './action';
 import { useChannelStore } from './store';
 
 vi.mock('@/services/channel', () => ({
-  channelService: { list: vi.fn(), openDirect: vi.fn() },
+  channelService: { list: vi.fn(), markRead: vi.fn(), openDirect: vi.fn() },
 }));
 
 const { channelService } = await import('@/services/channel');
@@ -53,5 +53,36 @@ describe('channelActions.openDirect', () => {
 
     await expect(channelActions.openDirect('agt_nasa')).resolves.toBeUndefined();
     expect(channelService.list).not.toHaveBeenCalled();
+  });
+});
+
+describe('channelActions.markRead', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    channelActions.reset();
+  });
+
+  // The row kept its badge for up to a minute after the Channel was read.
+  it('clears the listed unread count as soon as the Channel is read', async () => {
+    useChannelStore.setState({
+      listMap: { all: [direct({ sequence: 5, unreadCount: 3 } as Partial<ChannelListItem>)] },
+    });
+    vi.mocked(channelService.markRead).mockResolvedValue(5 as never);
+
+    await channelActions.markRead('chn_000000000001', 5);
+
+    expect(useChannelStore.getState().listMap.all?.[0].unreadCount).toBe(0);
+    expect(channelService.markRead).toHaveBeenCalledExactlyOnceWith('chn_000000000001', 5);
+  });
+
+  it('restores the count when the write fails', async () => {
+    useChannelStore.setState({
+      listMap: { all: [direct({ sequence: 5, unreadCount: 3 } as Partial<ChannelListItem>)] },
+    });
+    vi.mocked(channelService.markRead).mockRejectedValue(new Error('offline'));
+
+    await expect(channelActions.markRead('chn_000000000001', 5)).rejects.toThrow('offline');
+
+    expect(useChannelStore.getState().listMap.all?.[0].unreadCount).toBe(3);
   });
 });
