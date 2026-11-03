@@ -5,9 +5,14 @@ import type { Browser } from '@playwright/test';
 
 import { analyzeRun } from '../analyze/diff';
 import { buildSide } from '../build/viteBuild';
-import { capturePage, type ConditionCapture, type SectionSnapshots } from '../capture/runner';
+import {
+  capturePage,
+  type ConditionCapture,
+  conditionLabel,
+  type SectionSnapshots,
+} from '../capture/runner';
 import { compareSnapshots } from '../capture/snapshot';
-import { STATES } from '../capture/states';
+import type { CaptureState } from '../capture/states';
 import type { ProjectConfig } from '../config';
 import { extractFile, type FileExtraction } from '../extract';
 import { generateHost, HOST_HTML } from '../generate/host';
@@ -56,6 +61,7 @@ export interface MutationContext {
   runDir: string;
   scope: ScopeFile[];
   serverUrl: string;
+  states: CaptureState[];
   widths: number[];
 }
 
@@ -194,7 +200,7 @@ export const runMutations = async (context: MutationContext): Promise<MutationRe
   const conditions: Array<ConditionCapture & { original: SectionSnapshots }> = [];
   for (const theme of context.config.conditions.themes)
     for (const width of context.widths)
-      for (const state of STATES) {
+      for (const state of context.states) {
         const options = { state, theme, width };
         const loads = await Promise.all(
           [urls.base, urls.head, urls.mutant].map((url) =>
@@ -206,7 +212,7 @@ export const runMutations = async (context: MutationContext): Promise<MutationRe
         conditions.push({
           base,
           baseAgain: base,
-          condition: `${theme}/${width}/${state}`,
+          condition: conditionLabel(options),
           head: mutant,
           original: head,
           state,

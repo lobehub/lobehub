@@ -18,8 +18,10 @@ import plan from './plan.json';
 ${modules.map((entry, index) => `import * as m${index} from ${JSON.stringify(entry.specifier)};`).join('\n')}
 
 const modules = { ${modules.map((entry, index) => `${JSON.stringify(entry.file)}: m${index}`).join(', ')} };
-const theme = new URLSearchParams(location.search).get('theme');
+const params = new URLSearchParams(location.search);
+const theme = params.get('theme');
 if (theme) document.documentElement.setAttribute(${JSON.stringify(themeAttribute)}, theme);
+if (params.get('dir')) document.documentElement.setAttribute('dir', params.get('dir')!);
 document.body.style.margin = '0';
 createRoot(document.getElementById('app')!).render(
   <HostApp Host={Host} modules={modules} plan={plan} onReady={() => document.getElementById('app')!.setAttribute('data-synthetic-ready', 'true')} />,

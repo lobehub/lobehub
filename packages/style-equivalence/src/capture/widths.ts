@@ -1,51 +1,6 @@
-import type { Page } from '@playwright/test';
-
 import { parseWidthCondition, type WidthCondition } from './conditionPartitions';
 
 export const WIDTH_DOMAIN = [320, 1920] as const;
-
-export const readMediaConditions = (page: Page) =>
-  page.evaluate(() => {
-    const elements = [...document.querySelectorAll('[data-case], [data-case] *')];
-    const broaden = (selector: string) =>
-      selector.replaceAll(/::?[a-z-]+(\([^)]*\))?/gi, '').trim() || '*';
-    const touchesCase = (rules: CSSRuleList): boolean =>
-      [...rules].some((rule) => {
-        if (rule instanceof CSSStyleRule)
-          return rule.selectorText.split(',').some((selector) => {
-            try {
-              return elements.some((element) => element.matches(broaden(selector)));
-            } catch {
-              return true;
-            }
-          });
-        return 'cssRules' in rule && touchesCase((rule as CSSGroupingRule).cssRules);
-      });
-    const media: string[] = [];
-    let containers = 0;
-    const visit = (rules: CSSRuleList) => {
-      for (const rule of rules) {
-        const grouping = 'cssRules' in rule ? (rule as CSSGroupingRule).cssRules : undefined;
-        if (rule instanceof CSSMediaRule && touchesCase(rule.cssRules))
-          media.push(rule.conditionText);
-        if (
-          typeof CSSContainerRule !== 'undefined' &&
-          rule instanceof CSSContainerRule &&
-          touchesCase(rule.cssRules)
-        )
-          containers++;
-        if (grouping) visit(grouping);
-      }
-    };
-    for (const sheet of document.styleSheets) {
-      try {
-        visit(sheet.cssRules);
-      } catch {
-        continue;
-      }
-    }
-    return { containers, media };
-  });
 
 const probesAround = ({ operator, value }: WidthCondition['bounds'][number]) => {
   if (operator === '<' || operator === '>=') return [Math.ceil(value) - 1, Math.ceil(value)];

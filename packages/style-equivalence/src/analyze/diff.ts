@@ -99,6 +99,7 @@ export interface CaseResult {
   comboDifferences: ComboDifference[];
   differingConditions: string[];
   errors: string[];
+  gaps: string[];
   key: string;
   rootCauses: StyleDifference[];
   status: CaseStatus;
@@ -121,6 +122,7 @@ export const analyzeRun = (capture: RunCapture): CaseResult[] => {
       comboDifferences: [],
       differingConditions: [],
       errors: [],
+      gaps: capture.caseGaps?.[key] ?? [],
       key,
       rootCauses: [],
       status: 'equal',
