@@ -4,18 +4,14 @@ import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatNumber } from '@/utils/format';
-
 import { ErrorActionContainer, FormAction } from '../style';
 import {
+  formatCreditAmount,
   getBudgetContextFromErrorBody,
   getNextUpgradePlan,
   isKnownPlan,
   type PlanLimitPricingBasis,
 } from './budget';
-
-/** Credits are displayed in units of 1M */
-const CREDIT_UNIT = 1_000_000;
 
 /** Plans with a `plans.plan.<id>.title` locale key */
 const PLAN_TITLE_KEYS = {
@@ -71,14 +67,6 @@ const getBudgetDescriptionKey = (pricingBasis?: PlanLimitPricingBasis) => {
       return 'limitation.insufficientBudget.desc';
     }
   }
-};
-
-/** Budget figures arrive as credits (1M = $1); users only ever see dollars. */
-const formatCreditAmount = (credits: number): string => {
-  const usd = credits / CREDIT_UNIT;
-  const digits = usd !== 0 && Math.abs(usd) < 1 ? 4 : 2;
-
-  return `$${formatNumber(usd, digits)}`;
 };
 
 interface PlanLimitCardProps {

@@ -110,6 +110,7 @@
   "subscription_plan_changed_upgraded": "您的订阅已从 {{oldPlan}} 升级为 {{newPlan}},新权益现已可用。",
   "subscription_plan_changed_upgraded_title": "订阅已升级",
   "subscription_renewed": "您的 {{plan}} 订阅已续费成功,订阅额度已按新账期重置。",
+  "subscription_renewed_rolling": "您的 {{plan}} 订阅已续费成功。",
   "subscription_renewed_title": "订阅续费成功",
   "task_assigned": "{{actorLabel}} 给你指派了任务「{{taskTitle}}」。",
   "task_assigned_title": "你被指派了一个任务",

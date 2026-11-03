@@ -138,6 +138,7 @@ export default {
   'subscription_plan_changed_upgraded_title': 'Subscription upgraded',
   'subscription_renewed':
     'Your {{plan}} subscription has renewed and your subscription usage was reset for the new billing cycle.',
+  'subscription_renewed_rolling': 'Your {{plan}} subscription has renewed.',
   'subscription_renewed_title': 'Subscription renewed',
   'task_assigned': '{{actorLabel}} assigned you the task "{{taskTitle}}".',
   'task_assigned_title': "You've been assigned a task",

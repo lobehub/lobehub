@@ -521,6 +521,7 @@ export default {
   'plans.compare.documentCharacters': 'Characters per document',
   'plans.compare.earlyAccess': 'Early access to new features',
   'plans.compare.none': 'None',
+  'plans.compare.monthlySpend': 'Monthly usage',
   'plans.compare.rolling5hSpend': '5-hour usage limit',
   'plans.compare.rolling7dSpend': 'Weekly usage',
   'plans.compare.sandboxStorage': 'Cloud sandbox storage',
@@ -564,6 +565,8 @@ export default {
   'plans.limits.earlyAccess.unlimited': 'Early access to new features',
   'plans.limits.embeddingVectors': '{{value}} vector entries',
   'plans.limits.fileStorage': '{{value}} file storage',
+  'plans.limits.monthlySpend.tooltip':
+    'Usage across your billing month is capped too. It resets when your subscription renews.',
   'plans.limits.rolling5hSpend': '5-hour usage limit',
   'plans.limits.rolling5hSpend.multiple': '5-hour usage limit: {{multiple}}× that of {{plan}}',
   'plans.limits.rolling5hSpend.tooltip':
@@ -572,7 +575,7 @@ export default {
   'plans.limits.rolling7dSpend': 'Weekly usage allowance',
   'plans.limits.rolling7dSpend.multiple': 'Weekly usage: {{multiple}}× that of {{plan}}',
   'plans.limits.rolling7dSpend.tooltip':
-    'Model usage your plan covers in any 7 days. The week starts with your first request and resets 7 days later.',
+    'Model usage your plan covers in any 7 days. The week starts with your first request and resets 7 days later. Usage across your billing month is capped as well.',
   'plans.limits.sandboxStorage': '{{value}} cloud sandbox storage',
   'plans.limits.support': '{{value}}',
   'plans.limits.ultraWeeklySpend': 'Ultra models, with a separate weekly limit',
