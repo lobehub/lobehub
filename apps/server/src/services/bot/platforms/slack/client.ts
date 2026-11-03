@@ -9,6 +9,7 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { warnAttachmentFailures } from '../attachmentDelivery';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -16,6 +17,7 @@ import {
   messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
+  type ReplyTargets,
   type UsageStats,
   type ValidationResult,
 } from '../types';
@@ -43,6 +45,37 @@ function extractThreadTs(platformThreadId: string): string | undefined {
   return platformThreadId.split(':')[2];
 }
 
+/**
+ * A top-level channel message arrives keyed by the thread under it (`slack:<channel>:<ts>`: the
+ * adapter uses `thread_ts ?? ts`, and the message id is its own `ts`), so it is top-level exactly
+ * when the two match. Its reply can stay in that thread or go to the channel (`slack:<channel>`,
+ * posted without `thread_ts`). DMs and replies inside a thread answer where they are.
+ */
+function slackReplyTargets(
+  platformThreadId: string,
+  message: { id?: string },
+): ReplyTargets | undefined {
+  const channelId = extractChannelId(platformThreadId);
+  const threadTs = extractThreadTs(platformThreadId);
+  if (!channelId || !threadTs || channelId.startsWith('D')) return undefined;
+  if (message.id !== threadTs) return undefined;
+
+  return {
+    channel: `slack:${channelId}`,
+    // A Slack thread has no name, and it exists once the first reply lands in it.
+    namesThread: false,
+    openThread: async () => platformThreadId,
+  };
+}
+
+/**
+ * `slack:<channel>` is a reply posted at the top level of the channel. Subscribing it would route
+ * every later message in the channel to the bot, so only a thread is subscribed.
+ */
+function isSlackSubscribable(platformThreadId: string): boolean {
+  return platformThreadId.split(':').length !== 2;
+}
+
 // ---------- Shared runtime operations mixin ----------
 
 function createMessenger(config: BotProviderConfig, platformThreadId: string): PlatformMessenger {
@@ -56,13 +89,14 @@ function createMessenger(config: BotProviderConfig, platformThreadId: string): P
       const text = messengerContentText(content);
       const attachments = typeof content === 'string' ? undefined : content.attachments;
       if (attachments?.length) {
-        const delivered = await sendSlackAttachments(slack, {
+        const sent = await sendSlackAttachments(slack, {
           attachments,
           channelId,
           initialComment: text,
           threadTs,
         });
-        if (delivered > 0) return;
+        warnAttachmentFailures('bot-platform:slack:reply', sent.failures);
+        if (sent.delivered > 0) return;
         // All attachments failed → fall through to text-only so the reply
         // still reaches the user.
       }
@@ -226,12 +260,33 @@ class SlackWebhookClient implements PlatformClient {
     return createMessenger(this.config, platformThreadId);
   }
 
+  getReplyTargets(
+    platformThreadId: string,
+    message: { id?: string; raw?: unknown },
+  ): ReplyTargets | undefined {
+    return slackReplyTargets(platformThreadId, message);
+  }
+
+  shouldSubscribe(platformThreadId: string): boolean {
+    return isSlackSubscribable(platformThreadId);
+  }
+
   async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
     return slackExtractFiles(this.api, message);
   }
 
   extractChatId(platformThreadId: string): string {
     return extractChannelId(platformThreadId);
+  }
+
+  /**
+   * A reply thread is `slack:<channel>:<thread_ts>`, and `readMessages` only
+   * knows channels (`conversations.history`) — reading the parent channel
+   * would hand the model unrelated traffic while calling it "this
+   * conversation". Only a plain channel / DM identifies itself exactly.
+   */
+  extractConversationId(platformThreadId: string): string | undefined {
+    return extractThreadTs(platformThreadId) ? undefined : extractChannelId(platformThreadId);
   }
 
   formatMarkdown(markdown: string): string {
@@ -415,12 +470,33 @@ class SlackSocketModeClient implements PlatformClient {
     return createMessenger(this.config, platformThreadId);
   }
 
+  getReplyTargets(
+    platformThreadId: string,
+    message: { id?: string; raw?: unknown },
+  ): ReplyTargets | undefined {
+    return slackReplyTargets(platformThreadId, message);
+  }
+
+  shouldSubscribe(platformThreadId: string): boolean {
+    return isSlackSubscribable(platformThreadId);
+  }
+
   async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
     return slackExtractFiles(this.api, message);
   }
 
   extractChatId(platformThreadId: string): string {
     return extractChannelId(platformThreadId);
+  }
+
+  /**
+   * A reply thread is `slack:<channel>:<thread_ts>`, and `readMessages` only
+   * knows channels (`conversations.history`) — reading the parent channel
+   * would hand the model unrelated traffic while calling it "this
+   * conversation". Only a plain channel / DM identifies itself exactly.
+   */
+  extractConversationId(platformThreadId: string): string | undefined {
+    return extractThreadTs(platformThreadId) ? undefined : extractChannelId(platformThreadId);
   }
 
   formatMarkdown(markdown: string): string {

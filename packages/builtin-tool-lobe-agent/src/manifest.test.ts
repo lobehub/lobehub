@@ -73,7 +73,16 @@ describe('LobeAgentManifest', () => {
       'toolName',
       'evidenceRefs',
     ]);
-    expect(ventApi!.description).toContain('at most one vent per task');
+    expect(ventApi!.description).toContain('at most one vent per run');
     expect(LobeAgentManifest.systemRole).toContain('<vent>');
+  });
+
+  // A run once called vent 133 times as a way to "stop the tool loop".
+  it('tells the model that vent is not a way to stop or end a loop', () => {
+    const ventApi = LobeAgentManifest.api.find((api) => api.name === LobeAgentApiName.vent);
+
+    expect(ventApi!.description).toContain('It never stops a tool loop or ends your turn');
+    expect(LobeAgentManifest.systemRole).toContain('`vent` is never a control action');
+    expect(LobeAgentManifest.systemRole).toContain('do not call it again');
   });
 });

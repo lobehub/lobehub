@@ -45,39 +45,49 @@ vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
 }));
 
 vi.mock('@/database/models/document', () => ({
-  DocumentModel: vi.fn(() => ({ findByIds: mockDocumentModelFindByIds })),
+  DocumentModel: vi.fn(function () {
+    return { findByIds: mockDocumentModelFindByIds };
+  }),
 }));
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({ findByIds: mockFileModelFindByIds })),
+  FileModel: vi.fn(function () {
+    return { findByIds: mockFileModelFindByIds };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({ deleteFiles: vi.fn() })),
+  FileService: vi.fn(function () {
+    return { deleteFiles: vi.fn() };
+  }),
 }));
 
 const mockPermissionRemoveAll = vi.fn();
 const mockPermissionSetAccessLevel = vi.fn();
 vi.mock('@/database/models/resourcePermission', () => ({
-  ResourcePermissionModel: vi.fn(() => ({
-    removeAll: mockPermissionRemoveAll,
-    setAccessLevel: mockPermissionSetAccessLevel,
-  })),
+  ResourcePermissionModel: vi.fn(function () {
+    return {
+      removeAll: mockPermissionRemoveAll,
+      setAccessLevel: mockPermissionSetAccessLevel,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/knowledgeBase', () => ({
-  KnowledgeBaseModel: vi.fn(() => ({
-    addFilesToKnowledgeBase: mockKnowledgeBaseModelAddFiles,
-    copyToWorkspace: mockKnowledgeBaseModelCopyToWorkspace,
-    countFileUsage: mockKnowledgeBaseModelCountFileUsage,
-    deleteWithFiles: mockKnowledgeBaseModelDeleteWithFiles,
-    findById: mockKnowledgeBaseModelFindById,
-    hasForeignLinkedRows: mockKnowledgeBaseModelHasForeignLinkedRows,
-    query: mockKnowledgeBaseModelQuery,
-    removeFilesFromKnowledgeBase: mockKnowledgeBaseModelRemoveFiles,
-    transferTo: mockKnowledgeBaseModelTransferTo,
-    update: mockKnowledgeBaseModelUpdate,
-  })),
+  KnowledgeBaseModel: vi.fn(function () {
+    return {
+      addFilesToKnowledgeBase: mockKnowledgeBaseModelAddFiles,
+      copyToWorkspace: mockKnowledgeBaseModelCopyToWorkspace,
+      countFileUsage: mockKnowledgeBaseModelCountFileUsage,
+      deleteWithFiles: mockKnowledgeBaseModelDeleteWithFiles,
+      findById: mockKnowledgeBaseModelFindById,
+      hasForeignLinkedRows: mockKnowledgeBaseModelHasForeignLinkedRows,
+      query: mockKnowledgeBaseModelQuery,
+      removeFilesFromKnowledgeBase: mockKnowledgeBaseModelRemoveFiles,
+      transferTo: mockKnowledgeBaseModelTransferTo,
+      update: mockKnowledgeBaseModelUpdate,
+    };
+  }),
 }));
 
 describe('knowledgeBaseRouter', () => {
@@ -161,6 +171,38 @@ describe('knowledgeBaseRouter', () => {
       });
     });
 
+    it('merges a cover into the stored settings without dropping other settings', async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        id: 'kb-1',
+        settings: { cover: 'preset:old', topK: 5 },
+        userId: 'test-user',
+        visibility: 'public',
+        workspaceId: 'workspace-active',
+      });
+
+      await caller.updateKnowledgeBase({ id: 'kb-1', value: { cover: 'preset:aurora' } });
+
+      expect(mockKnowledgeBaseModelUpdate).toHaveBeenCalledWith('kb-1', {
+        settings: { cover: 'preset:aurora', topK: 5 },
+      });
+    });
+
+    it('clears the cover back to the generated default on null', async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        id: 'kb-1',
+        settings: { cover: 'preset:old', topK: 5 },
+        userId: 'test-user',
+        visibility: 'public',
+        workspaceId: 'workspace-active',
+      });
+
+      await caller.updateKnowledgeBase({ id: 'kb-1', value: { cover: null } });
+
+      expect(mockKnowledgeBaseModelUpdate).toHaveBeenCalledWith('kb-1', {
+        settings: { topK: 5 },
+      });
+    });
+
     it('does not update a restricted library that the member cannot browse', async () => {
       routerMocks.assertKnowledgeBaseBrowsable.mockRejectedValue(new Error('denied'));
 
@@ -183,15 +225,17 @@ describe('knowledgeBaseRouter', () => {
       expect(mockKnowledgeBaseModelAddFiles).toHaveBeenCalledWith('kb-1', ['file-1']);
     });
 
-    it('rejects assigning a resource to a library with different visibility', async () => {
+    it('files a private resource into a shared library', async () => {
+      // A library is a directory of references, so it does not force its rows
+      // to share its visibility: filing a draft now and sharing it when it is
+      // ready is the ordinary move. Who sees the row is still decided by the
+      // row's own `visibility`, which every listing filters on.
       mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1', visibility: 'private' }]);
       mockDocumentModelFindByIds.mockResolvedValue([]);
 
-      await expect(
-        caller.addFilesToKnowledgeBase({ ids: ['file-1'], knowledgeBaseId: 'kb-1' }),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      await caller.addFilesToKnowledgeBase({ ids: ['file-1'], knowledgeBaseId: 'kb-1' });
 
-      expect(mockKnowledgeBaseModelAddFiles).not.toHaveBeenCalled();
+      expect(mockKnowledgeBaseModelAddFiles).toHaveBeenCalledWith('kb-1', ['file-1']);
     });
 
     it('fails the whole batch when any resource is inaccessible', async () => {

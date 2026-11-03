@@ -8,6 +8,7 @@ export const BrowserApiName = {
   readPage: 'readPage',
   screenshot: 'screenshot',
   scroll: 'scroll',
+  setViewport: 'setViewport',
   snapshot: 'snapshot',
 } as const;
 
@@ -27,8 +28,17 @@ export interface BrowserSnapshotState extends BrowserPageState {
 export interface BrowserClickState extends BrowserPageState {}
 
 export interface BrowserScreenshotState {
-  dataUrl: string;
+  /**
+   * Inline capture, produced by the client executor. The server-proxied path
+   * stores the image instead and sets {@link BrowserScreenshotState.url}, so a
+   * consumer must accept either.
+   */
+  dataUrl?: string;
   height?: number;
+  /** Stored artifacts, `{ fileId, mediaType, url }` — the shared tool-image contract. */
+  images?: { fileId: string; mediaType: string; url: string }[];
+  /** Accessible URL of the stored capture. */
+  url?: string;
   width?: number;
 }
 
@@ -59,4 +69,9 @@ export interface BrowserPressArgs {
 export interface BrowserScrollArgs {
   dx?: number;
   dy: number;
+}
+
+export interface BrowserSetViewportArgs {
+  height?: number;
+  width?: number;
 }

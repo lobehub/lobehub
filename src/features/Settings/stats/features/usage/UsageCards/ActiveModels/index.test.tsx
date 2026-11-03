@@ -10,12 +10,12 @@ import type { UsageLog } from '@/types/usage/usageRecord';
 import { GroupBy } from '../../../../types';
 import ActiveModels from './index';
 
-vi.mock('@lobehub/icons', () => ({
+vi.mock('@/components/LobeIcons', () => ({
   ModelIcon: ({ model }: { model: string }) => <span>{model}</span>,
   ProviderIcon: ({ provider }: { provider: string }) => <span>{provider}</span>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
 
   return {

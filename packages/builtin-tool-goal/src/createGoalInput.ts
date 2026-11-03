@@ -16,7 +16,7 @@ export interface GoalCriterionInput {
  *
  * `null` is the manifest's documented "no user-specified cap" — the cleared
  * input field — and must stay distinct from a chosen number, or clearing the
- * field would quietly pin the goal to three attempts. Returning `undefined`
+ * field would quietly pin the goal to a fixed count. Returning `undefined`
  * leaves `maxAttemptsPerTask` off the config so `resolveTaskAttemptBudget`
  * applies its own default.
  */

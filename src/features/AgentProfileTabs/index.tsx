@@ -1,22 +1,19 @@
 'use client';
 
-import { Segmented } from '@lobehub/ui/base-ui';
+import { Segmented } from '@lobehub/ui';
 import { type CSSProperties, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentShareSupported } from '@/features/AgentShareSettings/useAgentShareSupported';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import {
   type AgentProfileTab,
   buildAgentProfileTabOptions,
   buildAgentProfileTabPath,
-  supportsMessageChannels,
 } from './tabOptions';
 
 export type { AgentProfileTab } from './tabOptions';
@@ -58,15 +55,16 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
   const { t } = useTranslation(['chat', 'common', 'spend']);
   const navigate = useWorkspaceAwareNavigate();
 
-  const heterogeneousProviderType = useAgentStore(
-    agentSelectors.currentAgentHeterogeneousProviderType,
-  );
   const { allowed: canEditContent } = usePermission('edit_own_content');
-  const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
+  const { canEditResource, canManageResource, isAccessResolved } = useResourceAccess(
+    'agent',
+    agentId,
+  );
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
 
   const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
-  const channelsSupported = supportsMessageChannels(heterogeneousProviderType);
+  const canManageShare =
+    !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
   const { visible: shareVisible } = useAgentShareSupported(agentId);
 
   const options = useMemo(
@@ -74,7 +72,6 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
       buildAgentProfileTabOptions({
         active,
         canConfigure,
-        channelsSupported,
         labels: {
           channel: t('tab.integration'),
           // Inside the profile group the whole surface *is* the agent profile,
@@ -84,9 +81,9 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
           share: t('share', { ns: 'common' }),
           statistics: t('usageStats.title', { ns: 'spend' }),
         },
-        shareSupported: shareVisible === true,
+        shareSupported: shareVisible === true && canManageShare,
       }),
-    [active, canConfigure, channelsSupported, shareVisible, t],
+    [active, canConfigure, canManageShare, shareVisible, t],
   );
 
   // A lone segment is a label, not a switcher.

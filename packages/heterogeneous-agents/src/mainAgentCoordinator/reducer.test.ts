@@ -381,14 +381,6 @@ describe('main agent reducer', () => {
     expect(ofKind(r.intents, 'createAssistant')[0]).toMatchObject({ parentId: 'SIG' });
   });
 
-  it('falls back to the current assistant only before any tool exists', () => {
-    const { steps } = run([textEvent('hi'), newStepEvent()]); // no tool ever seen
-    expect(ofKind(steps[1], 'createAssistant')[0]).toMatchObject({
-      messageId: 'msg_1',
-      parentId: 'A0',
-    });
-  });
-
   it('resolves a main tool_result via the global tool map', () => {
     const { steps } = run([
       toolsEvent([tool('t1')]),
@@ -433,6 +425,34 @@ describe('main agent reducer', () => {
     });
     expect(state.ended).toBe(true);
     expect(state.accContent).toBe(''); // reset → idempotent re-finalize
+  });
+
+  it('persists the open turn on visible_output_end while the run stays open', () => {
+    const { steps, state } = run([
+      initEvent('claude-opus-4-8', 'claude-code'),
+      reasoningEvent('thinking'),
+      textEvent('final answer'),
+      { data: {}, type: 'visible_output_end' },
+    ]);
+    expect(steps[3]).toEqual([
+      {
+        content: 'final answer',
+        kind: 'persistAssistant',
+        messageId: 'A0',
+        model: 'claude-opus-4-8',
+        provider: 'claude-code',
+        reasoning: 'thinking',
+      },
+    ]);
+    // Not a terminal: the accumulators stay so the later terminal flush
+    // rewrites the same content instead of blanking it.
+    expect(state.ended).toBeFalsy();
+    expect(state.accContent).toBe('final answer');
+  });
+
+  it('emits nothing on visible_output_end when the turn has no text', () => {
+    const { steps } = run([{ data: {}, type: 'visible_output_end' }]);
+    expect(steps[0]).toEqual([]);
   });
 
   it('suppresses echoed content and stamps the error on AuthRequired terminal error', () => {
@@ -599,6 +619,65 @@ describe('reduceMainAgent — heterogeneous intervention ACK boundary', () => {
     expect(state.interventionsByCallId.get('permission-1')?.transition).toBe('pending');
   });
 
+  it('keeps an existing subagent question out of the main tool batch and applies its ACK', () => {
+    const ctx = makeCtx({ toolMessageIds: new Map([['permission-1', 'child-tool']]) });
+    const ack = {
+      data: { producerAck: true, result: { answer: 'allow' }, toolCallId: 'permission-1' },
+      type: 'agent_intervention_response',
+    };
+    const { state, steps } = run([request, ack], 'A0', ctx);
+
+    expect(ofKind(steps[0], 'persistToolBatch')).toEqual([]);
+    expect(state.toolState.toolMsgIdByCallId.size).toBe(0);
+    expect(ofKind(steps[1], 'setToolIntervention')).toEqual([
+      expect.objectContaining({ intervention: { status: 'approved' }, toolCallId: 'permission-1' }),
+    ]);
+  });
+
+  it('closes a scoped child result and keeps a late unscoped request on the original tool', () => {
+    const ctx = makeCtx({ toolMessageIds: new Map([['permission-1', 'child-tool']]) });
+    const result = {
+      data: {
+        content: 'done',
+        subagent: { parentToolCallId: 'task-1', subagentMessageId: 'child-turn' },
+        toolCallId: 'permission-1',
+      },
+      type: 'tool_result',
+    };
+    const { state, steps } = run([request, result, request], 'A0', ctx);
+
+    expect(ofKind(steps[1], 'setToolIntervention')).toEqual([
+      expect.objectContaining({ toolCallId: 'permission-1', transition: 'session_ended' }),
+    ]);
+    expect(ofKind(steps[1], 'resolveToolResult')).toHaveLength(0);
+    expect(ofKind(steps[2], 'persistToolBatch')).toEqual([]);
+    expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('aborted');
+  });
+
+  it('closes a child question when its parent finishes and keeps late requests out of main', () => {
+    const ctx = makeCtx({ toolMessageIds: new Map([['permission-1', 'child-tool']]) });
+    const childTools = {
+      data: {
+        chunkType: 'tools_calling',
+        subagent: { parentToolCallId: 'task-1', subagentMessageId: 'child-turn' },
+        toolsCalling: [{ ...tool('permission-1'), apiName: 'askUserQuestion' }],
+      },
+      type: 'stream_chunk',
+    };
+    const { state, steps } = run(
+      [childTools, request, toolResultEvent('task-1', 'child finished'), request],
+      'A0',
+      ctx,
+    );
+
+    expect(state.subagents.runs.size).toBe(0);
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([
+      expect.objectContaining({ toolCallId: 'permission-1', transition: 'session_ended' }),
+    ]);
+    expect(ofKind(steps[3], 'persistToolBatch')).toEqual([]);
+    expect(ofKind(steps[3], 'setToolIntervention')[0].transition).toBe('session_ended');
+  });
+
   it('keeps the XADD publish leg non-terminal and resolves only on producer ACK', () => {
     const requestId = '018fbd8e-7baf-7c6d-8000-000000000001';
     const publishLeg = {
@@ -650,4 +729,52 @@ describe('reduceMainAgent — heterogeneous intervention ACK boundary', () => {
     });
     expect(state.interventionsByCallId.get('permission-1')?.transition).toBe('resolved');
   });
+
+  it('closes only the question whose upstream tool has returned, without a user response', () => {
+    const other = { ...request, data: { ...request.data, toolCallId: 'question-2' } };
+    const { state, steps } = run([request, other, toolResultEvent('permission-1', 'done')]);
+
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([
+      expect.objectContaining({
+        intervention: { rejectedReason: 'session_ended', resolving: false, status: 'aborted' },
+        toolCallId: 'permission-1',
+        transition: 'session_ended',
+      }),
+    ]);
+    expect(state.interventionsByCallId.get('question-2')?.transition).toBe('pending');
+  });
+
+  it.each(['agent_runtime_end', 'error'])('closes unanswered questions on %s', (type) => {
+    const { state, steps } = run([request, { data: {}, type }]);
+    expect(ofKind(steps[1], 'setToolIntervention')).toEqual([
+      expect.objectContaining({ toolCallId: 'permission-1', transition: 'session_ended' }),
+    ]);
+    expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('aborted');
+  });
+
+  it('preserves an acknowledged answer after the tool and runtime finish', () => {
+    const ack = {
+      data: { producerAck: true, result: { 'Run command?': 'allow' }, toolCallId: 'permission-1' },
+      type: 'agent_intervention_response',
+    };
+    const { state, steps } = run([
+      request,
+      ack,
+      toolResultEvent('permission-1', 'done'),
+      { type: 'agent_runtime_end' },
+    ]);
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([]);
+    expect(ofKind(steps[3], 'setToolIntervention')).toEqual([]);
+    expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('approved');
+  });
+
+  it.each(['tool_result', 'agent_runtime_end'])(
+    'does not reopen a late request after %s',
+    (type) => {
+      const end = { data: { toolCallId: 'permission-1', content: 'done' }, type };
+      const { state, steps } = run([end, request]);
+      expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('aborted');
+      expect(ofKind(steps[1], 'setToolIntervention')[0]?.transition).toBe('session_ended');
+    },
+  );
 });

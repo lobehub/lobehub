@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import {
   Activity,
   Award,
@@ -19,8 +18,9 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
-import { BenchmarkDetailLoading } from '@/features/Eval';
-import { runSelectors, useEvalStore } from '@/store/eval';
+import AsyncError from '@/components/AsyncError';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { datasetSelectors, runSelectors, useEvalStore } from '@/store/eval';
 
 import BenchmarkHeader from './features/BenchmarkHeader';
 import DatasetsTab from './features/DatasetsTab';
@@ -83,13 +83,13 @@ const BenchmarkDetail = memo(() => {
     benchmarkId ? s.benchmarkDetailMap[benchmarkId] : undefined,
   );
   const useFetchDatasets = useEvalStore((s) => s.useFetchDatasets);
-  const datasets = useEvalStore((s) => s.datasetList);
-  const isLoadingDatasets = useEvalStore((s) => s.isLoadingDatasets);
+  const datasets = useEvalStore(datasetSelectors.datasetList(benchmarkId));
+  const isLoadingDatasets = useEvalStore(datasetSelectors.isLoadingDatasetList(benchmarkId));
   const refreshDatasets = useEvalStore((s) => s.refreshDatasets);
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
-  const runList = useEvalStore(runSelectors.runList);
+  const runList = useEvalStore(runSelectors.runList(benchmarkId));
 
-  useFetchBenchmarkDetail(benchmarkId);
+  const { error, isLoading, mutate } = useFetchBenchmarkDetail(benchmarkId);
   useFetchDatasets(benchmarkId);
 
   const handleRefreshDatasets = useCallback(async () => {
@@ -111,12 +111,10 @@ const BenchmarkDetail = memo(() => {
 
   const totalCases = datasets.reduce((sum, ds) => sum + (ds.testCaseCount || 0), 0);
 
-  if (!benchmark)
-    return (
-      <Flexbox aria-busy className={styles.container} gap={24} height="100%" width="100%">
-        <BenchmarkDetailLoading />
-      </Flexbox>
-    );
+  if (!benchmark) {
+    if (isLoading || !error) return <RouteLoading />;
+    return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;
+  }
 
   return (
     <Flexbox className={styles.container} gap={24} height="100%" width="100%">

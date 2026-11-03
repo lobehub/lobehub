@@ -1,7 +1,12 @@
 import type { GoalGraphState, GoalTickSnapshot, GoalTrajectory } from '@lobechat/agent-tracing';
 import { describe, expect, it } from 'vitest';
 
-import { replayGoalAgainstCurrentCoordinator } from './replayCoordinator';
+import {
+  coordinatorDecider,
+  fromTraceGraphState,
+  replayGoalAgainstCurrentCoordinator,
+} from './replayCoordinator';
+import { toTraceGraphState } from './traceObservation';
 
 const task = (id: string, overrides: Partial<GoalGraphState['nodes'][number]> = {}) => ({
   createdAt: 1000,
@@ -169,6 +174,52 @@ describe('replayGoalAgainstCurrentCoordinator', () => {
 
     expect(replayGoalAgainstCurrentCoordinator(exhausted).divergences).toEqual([]);
   });
+
+  /**
+   * The measured gate stops in the terminal phase, exactly like the delivery
+   * contract does. If the replay could not tell the two apart, a regressed gate
+   * would be reported as a match — the one failure mode a regression harness
+   * must not have.
+   */
+  const measured = (branch: 'measured_acceptance' | 'terminal_acceptance'): GoalTrajectory => ({
+    ...trajectory,
+    advances: [
+      {
+        ...trajectory.advances[0],
+        ticks: [
+          tick(0, {
+            branch,
+            candidates: [],
+            metricCriteria: {
+              allMet: false,
+              criteria: [{ key: 'followers', met: false, op: 'gte', target: 1_000_000, value: 42 }],
+            },
+            outcome: 'no_progress',
+          }),
+        ],
+      },
+    ],
+    // No config on the replayed goal on purpose: the gate reads the recorded
+    // `metricCriteria` and nothing else, which is what makes it replayable
+    // from the trajectory alone.
+    graphBaseline: graphState({ nodes: [task('a', { status: 'resolved' })] }),
+  });
+
+  it('carries the recorded measured criteria into the decision', () => {
+    expect(
+      replayGoalAgainstCurrentCoordinator(measured('measured_acceptance')).divergences,
+    ).toEqual([]);
+  });
+
+  it('reports a gate that no longer fires instead of matching it', () => {
+    // A trajectory whose terminal tick was recorded as the plain delivery
+    // contract must not replay as an unmet gate, and vice versa.
+    expect(
+      replayGoalAgainstCurrentCoordinator(measured('terminal_acceptance')).divergences,
+    ).toMatchObject([
+      { field: 'branch', recorded: 'terminal_acceptance', replayed: 'measured_acceptance' },
+    ]);
+  });
 });
 
 describe('replaying trajectories recorded before the scheduler', () => {
@@ -204,4 +255,12 @@ describe('replaying trajectories recorded before the scheduler', () => {
 
     expect(result.divergences.filter((item) => item.replayed === 'missing_task')).toEqual([]);
   });
+});
+
+it('preserves exploration policy through trace and replay', () => {
+  const state = graphState({ nodes: [task('baseline', { status: 'resolved' })] });
+  state.goal.exploration = { instruction: 'Explore alternatives', maxExperiments: 3 };
+  const roundtrip = toTraceGraphState(fromTraceGraphState(state));
+  expect(roundtrip.goal.exploration).toEqual(state.goal.exploration);
+  expect(coordinatorDecider({ graph: roundtrip }).branch).toBe('explore_graph');
 });

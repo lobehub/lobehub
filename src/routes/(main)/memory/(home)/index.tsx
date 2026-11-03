@@ -3,6 +3,8 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import SkeletonBar from '@/components/Skeleton/Bar';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -22,8 +24,12 @@ const Home: FC = () => {
   const roles = useUserMemoryStore((s) => s.roles);
   const persona = useUserMemoryStore((s) => s.persona);
 
-  const { error: tagsError, mutate: mutateTags } = useFetchTags();
-  const { error: personaError, mutate: mutatePersona } = useFetchPersona();
+  const { error: tagsError, isLoading: tagsLoading, mutate: mutateTags } = useFetchTags();
+  const {
+    error: personaError,
+    isLoading: personaLoading,
+    mutate: mutatePersona,
+  } = useFetchPersona();
   // const { EditorModalElement, openEditor } = usePersonaEditor();
 
   // Persona / tags feed the store, so a failed fetch left the render falling
@@ -34,6 +40,8 @@ const Home: FC = () => {
   // Nothing to purge, analyse or widen when the onboarding empty state is the
   // whole page — and it already offers the analyse action inline.
   const isEmpty = !hasData && !error;
+
+  if ((tagsLoading || personaLoading) && !hasData) return <RouteLoading />;
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -72,7 +80,11 @@ const Home: FC = () => {
               mutatePersona();
             }}
           >
-            {roles?.length > 0 && <RoleTagCloud tags={roles} />}
+            {roles?.length > 0 ? (
+              <RoleTagCloud tags={roles} />
+            ) : (
+              tagsLoading && <SkeletonBar height={400} radius={12} />
+            )}
             {persona && (
               <>
                 <PersonaHeader />

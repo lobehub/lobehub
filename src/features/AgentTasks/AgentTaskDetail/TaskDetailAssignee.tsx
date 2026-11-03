@@ -1,7 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar, useThemeMode } from 'antd-style';
+import { Block, cssVar, Text, Tooltip, useThemeMode } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +20,7 @@ const TaskDetailAssignee = memo(() => {
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const visibility = useTaskStore(taskDetailSelectors.activeTaskVisibility);
+  const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
   // Same source as the home list so the runtime tag stays consistent.
   const assigneeHeterogeneousType = useHomeStore(
@@ -35,6 +34,7 @@ const TaskDetailAssignee = memo(() => {
     <AssigneeAgentSelector
       currentAgentId={assigneeAgentId}
       disabled={status === 'running'}
+      taskCreatorId={createdByUserId}
       taskIdentifier={taskId}
       taskVisibility={visibility}
     >

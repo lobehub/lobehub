@@ -1,13 +1,12 @@
-const MAX_KEYWORD_LENGTH = 32;
-
-// Arg keys checked in priority order. Query/pattern outranks path because
-// Grep/Glob-style calls carry both, and the pattern is the informative half;
-// pure file tools (Read/Edit/Write) only carry a path.
+// Arg keys checked in priority order. NAME_KEYS (model-written description /
+// title) lead because they state what the step does; then query/pattern
+// outranks path (Grep/Glob-style calls carry both, and the pattern is the
+// informative half); pure file tools (Read/Edit/Write) only carry a path.
+const NAME_KEYS = ['name', 'title', 'skill', 'description', 'prompt'];
 const COMMAND_KEYS = ['command', 'cmd', 'script'];
 const QUERY_KEYS = ['query', 'q', 'pattern', 'keywords'];
 const PATH_KEYS = ['file_path', 'filePath', 'path', 'filename', 'file'];
 const URL_KEYS = ['url', 'urls'];
-const NAME_KEYS = ['name', 'title', 'skill', 'description', 'prompt'];
 
 // Shell tokens that never identify the program being run. The ones that take
 // an argument (`source .env`, `cd dir`) consume the following token too.
@@ -34,9 +33,6 @@ const SHELL_RUNNERS = new Set([
   'yarn',
   'zsh',
 ]);
-
-const truncate = (value: string, maxLength = MAX_KEYWORD_LENGTH): string =>
-  value.length > maxLength ? value.slice(0, maxLength) + '…' : value;
 
 const basename = (path: string): string => {
   const trimmed = path.replace(/[/\\]+$/, '');
@@ -99,23 +95,27 @@ const extractUrlKeyword = (url: string): string => {
 export const extractToolKeyword = (args?: Record<string, unknown>): string | undefined => {
   if (!args) return undefined;
 
+  // The model-written description ("恢复登录态", "List files in current
+  // directory") is the clearest statement of what this step does — every
+  // command-running tool schema asks for one, so prefer it over distilling
+  // fragments (flags, session names) out of the raw command.
+  const description = pickString(args, NAME_KEYS);
+  if (description) return description;
+
   const command = pickString(args, COMMAND_KEYS);
   if (command) {
     const keyword = extractCommandKeyword(command);
-    if (keyword) return truncate(keyword);
+    if (keyword) return keyword;
   }
 
   const query = pickString(args, QUERY_KEYS);
-  if (query) return truncate(query);
+  if (query) return query;
 
   const path = pickString(args, PATH_KEYS);
-  if (path) return truncate(basename(path));
+  if (path) return basename(path);
 
   const url = pickString(args, URL_KEYS);
-  if (url) return truncate(extractUrlKeyword(url));
-
-  const name = pickString(args, NAME_KEYS);
-  if (name) return truncate(name);
+  if (url) return extractUrlKeyword(url);
 
   return undefined;
 };

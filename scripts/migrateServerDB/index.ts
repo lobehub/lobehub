@@ -2,11 +2,14 @@ import path from 'node:path';
 
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
+import { sql } from 'drizzle-orm';
 import { migrate as neonMigrate } from 'drizzle-orm/neon-serverless/migrator';
 import { migrate as nodeMigrate } from 'drizzle-orm/node-postgres/migrator';
 
 // @ts-ignore tsgo handle esm import cjs and compatibility issues
 import { DB_FAIL_INIT_HINT, DUPLICATE_EMAIL_HINT, PGVECTOR_HINT } from './errorHint';
+// @ts-ignore tsgo handle esm import cjs and compatibility issues
+import { assertPgSearchReady, PgSearchNotReadyError } from './pgSearchGuard';
 import { runWithLockRetry } from './retry';
 
 // Load environment variables in priority order:
@@ -32,6 +35,7 @@ const runMigrations = async () => {
       await neonMigrate(serverDB, { migrationsFolder });
     }
   });
+  await assertPgSearchReady((text: string) => serverDB.execute(sql.raw(text)));
 
   console.log('✅ database migration pass. use: %s ms', Date.now() - time);
 
@@ -43,6 +47,11 @@ const connectionString = process.env.DATABASE_URL;
 // only migrate database if the connection string is available
 if (connectionString) {
   runMigrations().catch((err) => {
+    if (err instanceof PgSearchNotReadyError) {
+      console.error(err.message);
+      process.exit(1);
+    }
+
     console.error('❌ Database migrate failed:', err);
 
     const errMsg = err.message as string;

@@ -65,6 +65,8 @@ export const saveDocumentHistoryInputSchema = z.object({
 });
 
 export interface DocumentHistoryListItem {
+  agentId?: string | null;
+  editorIds?: string[] | null;
   id: string;
   isCurrent: boolean;
   savedAt: string;
@@ -103,6 +105,7 @@ export interface UpdateDocumentOutput {
   historyAppended: boolean;
   id: string;
   savedAt?: string;
+  updatedAt: string;
 }
 
 export interface SaveDocumentHistoryInput {

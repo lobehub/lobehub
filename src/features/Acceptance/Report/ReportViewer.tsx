@@ -4,14 +4,24 @@ import type {
   VerifyAgentPlanConfig,
   VerifyCheckItem,
   VerifyCodingScope,
-  VerifyEvidenceType,
   VerifyRunOrigin,
   VerifySurface,
   VerifyVerdict,
 } from '@lobechat/types';
-import { Block, Center, Empty, Flexbox, Icon, Image, Markdown } from '@lobehub/ui';
-import { Button, Drawer, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Block,
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Empty,
+  Flexbox,
+  Icon,
+  Image,
+  Markdown,
+  Text,
+} from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import {
   AlertTriangle,
@@ -46,6 +56,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import AudioPlayer from '@/features/AudioPlayer';
 import type { VerifyEvidenceWithUrl } from '@/services/verify';
 
+import { AcceptanceDrawer } from '../AcceptanceDrawer';
 import { useVerifyReportBundle } from '../hooks';
 import {
   buildCheckRows,
@@ -56,22 +67,30 @@ import {
 } from '../utils';
 import {
   EvidenceComparisonCard,
-  type EvidenceComparisonMeta,
   isFilenameLike,
   meaningfulEvidenceCaption,
-  readEvidenceComparison,
 } from './EvidenceComparisonCard';
 import InteractionCostPanel, { readInteractionCost } from './InteractionCost';
 import {
   CollapsibleMarkdownEvidence,
   DocumentViewer,
-  filenameFromUrl,
   markdownTextEvidenceTypes,
+  rendersAsMarkdown,
 } from './MarkdownEvidence';
+import { originTopicHref } from './originLink';
+import {
+  type EvidenceCategory,
+  evidenceCategory,
+  evidenceComparison,
+  evidenceDisplayName,
+  imageEvidenceTypes,
+  isInlineEvidence,
+  isInlineVisualEvidence,
+  isTerminalEvidence,
+} from './ReportViewer/model';
+import { TerminalEvidenceCard } from './TerminalEvidence';
 import { readVisualizationManifest } from './visualization';
 import { VisualizationRenderer } from './VisualizationRenderer';
-
-type Filter = 'all' | CheckState;
 
 const styles = createStaticStyles(({ css }) => ({
   scroll: css`
@@ -88,6 +107,12 @@ const styles = createStaticStyles(({ css }) => ({
     /* Start-aligned with the 46px gutter a check row's body sits at, so the hero
        prose and the expanded check prose share one text edge. */
     padding-inline: 46px 32px;
+
+    @media (width <= 767px) {
+      padding-block: 16px calc(24px + env(safe-area-inset-bottom));
+      padding-inline: 16px;
+      overflow-wrap: anywhere;
+    }
   `,
 
   /* hero */
@@ -189,7 +214,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     min-width: 0;
-    max-width: 360px;
+    max-width: min(360px, 100%);
 
     color: ${cssVar.colorTextTertiary};
 
@@ -363,79 +388,16 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
 
-  /* sticky filter chips */
-  stats: css`
-    position: sticky;
-    z-index: 10;
-    inset-block-start: 0;
-
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-
-    margin-block: 20px 12px;
-    padding-block: 12px;
-
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent);
-    backdrop-filter: blur(8px);
-  `,
-  chip: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 7px;
-    align-items: center;
-
-    height: 28px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition: background 0.12s ease;
-
-    b {
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-      color: ${cssVar.colorText};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &[data-active='true'] {
-      border-color: ${cssVar.colorBorder};
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  dot: css`
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-  `,
-  score: css`
-    cursor: default;
-    margin-inline-start: auto;
-    border-color: transparent;
-    color: ${cssVar.colorTextTertiary};
-
-    b {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-
   /* checks */
   checks: css`
+    /* The filter bar used to carry this gap in its own margin; without it the
+       hero and the first row collided. */
     overflow: hidden;
+
+    margin-block-start: 24px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
+
     background: ${cssVar.colorBgContainer};
   `,
   row: css`
@@ -465,6 +427,12 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover {
       background: ${cssVar.colorFillQuaternary};
     }
+
+    @media (width <= 767px) {
+      grid-template-columns: 20px minmax(0, 1fr);
+      gap: 6px 8px;
+      padding: 12px;
+    }
   `,
   rowTitle: css`
     overflow: hidden;
@@ -477,11 +445,21 @@ const styles = createStaticStyles(({ css }) => ({
     &[data-failed='true'] {
       font-weight: 600;
     }
+
+    @media (width <= 767px) {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
   `,
   rowSide: css`
     display: flex;
     gap: 8px;
     align-items: center;
+
+    @media (width <= 767px) {
+      grid-column: 2;
+      flex-wrap: wrap;
+    }
   `,
   softTag: css`
     padding-block: 1px;
@@ -508,6 +486,10 @@ const styles = createStaticStyles(({ css }) => ({
 
     padding-block: 2px 16px;
     padding-inline: 46px 16px;
+
+    @media (width <= 767px) {
+      padding-inline: 12px;
+    }
   `,
   reasoning: css`
     font-size: 13px;
@@ -532,6 +514,12 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 13px;
     line-height: 1.6;
     color: ${cssVar.colorTextTertiary};
+
+    @media (width <= 767px) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 4px;
+      color: ${cssVar.colorTextSecondary};
+    }
   `,
   planDetailLabel: css`
     color: ${cssVar.colorTextQuaternary};
@@ -686,11 +674,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   evidenceDoc: css`
     overflow: hidden;
+    display: flex;
+    flex: 1;
 
     width: 100%;
-    height: 320px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
+    min-height: 0;
   `,
 }));
 
@@ -737,35 +725,6 @@ const SURFACE_ICON: Record<VerifySurface, typeof Check> = {
   web: Globe,
 };
 
-const imageEvidenceTypes = new Set(['gif', 'screenshot']);
-/** Player media — a `<video>`/`<audio>` element, not an image box. */
-const playerEvidenceTypes = new Set(['audio', 'video']);
-/** Media that renders/plays inline in the check body, no click-to-open. */
-const isInlineVisualEvidence = (evidence: VerifyEvidenceWithUrl) =>
-  Boolean(
-    evidence.fileUrl &&
-    (imageEvidenceTypes.has(evidence.type) || playerEvidenceTypes.has(evidence.type)),
-  );
-
-/**
- * Evidence with a directly renderable payload in the check body, no
- * click-to-open. File-backed documents stay behind the file card on purpose —
- * an uploaded artifact is long by definition, and rendering it inline drowns
- * the check list.
- */
-const isInlineEvidence = (evidence: VerifyEvidenceWithUrl) =>
-  Boolean(evidence.content) || isInlineVisualEvidence(evidence);
-
-/** Coarse attachment bucket for the type marker: image / video / audio / everything else. */
-type EvidenceCategory = 'audio' | 'file' | 'image' | 'video';
-const evidenceCategory = (type: VerifyEvidenceType): EvidenceCategory =>
-  type === 'video'
-    ? 'video'
-    : type === 'audio'
-      ? 'audio'
-      : imageEvidenceTypes.has(type)
-        ? 'image'
-        : 'file';
 const CATEGORY_ICON: Record<EvidenceCategory, typeof FileText> = {
   audio: AudioLines,
   file: FileText,
@@ -783,24 +742,6 @@ const liveStatusLabelKey = {
   verifying: 'report.status.verifying',
 } as const;
 
-const evidenceDisplayName = (
-  evidence: VerifyEvidenceWithUrl,
-  t: TFunction<'verify'>,
-  index: number,
-) =>
-  evidence.fileName ||
-  (evidence.fileUrl ? filenameFromUrl(evidence.fileUrl) : '') ||
-  evidence.description ||
-  t('report.evidence.inlineFallback', { index });
-
-type EvidenceComparison = EvidenceComparisonMeta;
-
-const evidenceComparison = (evidence: VerifyEvidenceWithUrl): EvidenceComparison | null => {
-  // Only inline media pairs — a text artifact can't sit in a visual diptych.
-  if (!isInlineVisualEvidence(evidence)) return null;
-  return readEvidenceComparison(evidence.metadata);
-};
-
 /** One evidence artifact rendered by its type: zoomable image/gif, video, doc, text. */
 const EvidenceItem = memo<{
   evidence: VerifyEvidenceWithUrl;
@@ -814,25 +755,34 @@ const EvidenceItem = memo<{
   // Inline media (image/gif/video) speaks for itself — the raw filename header
   // is visual noise, so only keep a meaningful caption (description) for it.
   const isMedia = isInlineVisualEvidence(e);
+  const isTerminal = isTerminalEvidence(e);
+  const isDocument = Boolean(e.fileUrl) && !isMedia && e.type !== 'audio' && !isTerminal;
   const isInlineProse = Boolean(e.content) && markdownTextEvidenceTypes.has(e.type);
   const hideLabel =
-    isMedia || (markdownTextEvidenceTypes.has(e.type) && isFilenameLike(label)) || isInlineProse;
+    isTerminal ||
+    isDocument ||
+    isMedia ||
+    (markdownTextEvidenceTypes.has(e.type) && isFilenameLike(label)) ||
+    isInlineProse;
 
   return (
-    <Flexbox gap={6}>
+    <Flexbox gap={6} style={isDocument ? { flex: 1, minHeight: 0 } : undefined}>
       {!hideLabel && (
         <Text strong fontSize={13}>
           {label}
         </Text>
       )}
-      {description && !flat && !isInlineProse && (
+      {description && !flat && !isInlineProse && !isTerminal && (
         // Inline prose is excluded: its authored description becomes the fold
         // row's title below, so a standalone line here would say it twice.
         <Text fontSize={13} type={'secondary'}>
           {description}
         </Text>
       )}
-      {e.fileUrl && imageEvidenceTypes.has(e.type) ? (
+      {isTerminal ? (
+        // The card titles itself with the command and shows the description under it.
+        <TerminalEvidenceCard defaultExpanded={flat} evidence={e} />
+      ) : e.fileUrl && imageEvidenceTypes.has(e.type) ? (
         <Flexbox align={flat ? undefined : 'flex-start'} style={{ maxWidth: '100%' }}>
           <Image
             preview
@@ -858,18 +808,18 @@ const EvidenceItem = memo<{
         />
       ) : e.fileUrl ? (
         <div className={styles.evidenceDoc}>
-          <DocumentViewer
-            fileName={e.fileName}
-            markdown={markdownTextEvidenceTypes.has(e.type)}
-            url={e.fileUrl}
-          />
+          <DocumentViewer fileName={e.fileName} markdown={rendersAsMarkdown(e)} url={e.fileUrl} />
         </div>
       ) : e.content && markdownTextEvidenceTypes.has(e.type) ? (
         // Same dialect as the acceptance viewer: an authored alt/description
         // becomes the fold row's title, not a supplement line below it. The
         // raw description, not the caption filter — with no fileName the label
         // IS the description, and the filter would null it out.
-        <CollapsibleMarkdownEvidence title={e.description ?? undefined}>
+        <CollapsibleMarkdownEvidence
+          fileName={e.fileName}
+          markdown={rendersAsMarkdown(e)}
+          title={e.description?.trim() || e.fileName?.trim() || undefined}
+        >
           {e.content}
         </CollapsibleMarkdownEvidence>
       ) : e.content ? (
@@ -918,7 +868,7 @@ const EvidenceDrawer = memo<{
   open: boolean;
   title: string;
 }>(({ evidence, onClose, open, title }) => (
-  <Drawer
+  <AcceptanceDrawer
     containerMaxWidth={'100%'}
     open={open}
     placement={'right'}
@@ -945,7 +895,7 @@ const EvidenceDrawer = memo<{
         <EvidenceItem evidence={e} index={index + 1} key={e.id} />
       ))}
     </Flexbox>
-  </Drawer>
+  </AcceptanceDrawer>
 ));
 
 EvidenceItem.displayName = 'EvidenceItem';
@@ -1033,6 +983,7 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
   return (
     <div className={styles.row}>
       <button
+        aria-expanded={hasBody ? open : undefined}
         className={styles.rowHead}
         type={'button'}
         onClick={() => hasBody && setOpen((o) => !o)}
@@ -1094,6 +1045,9 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
                       <span className={styles.surfaceChip} key={spec.type} title={spec.hint}>
                         <Icon icon={CATEGORY_ICON[evidenceCategory(spec.type)]} size={12} />
                         {t(`report.evidence.medium.${spec.type}`)}
+                        {/* Says why an authored example or a bare log leaves it uncovered. */}
+                        {spec.provenance === 'execution' &&
+                          ` · ${t('report.plan.requiredEvidenceExecution')}`}
                       </span>
                     ))}
                   </span>
@@ -1208,7 +1162,7 @@ const CodingScopeCard = memo<{
   );
   const date = formatScopeDate(testedAt);
   const surfaces = renderableSurfaces(context.surfaces);
-  const originTopicId = origin?.topicId;
+  const originHref = originTopicHref(origin);
   const hasScope =
     Boolean(branch) ||
     Boolean(commit) ||
@@ -1216,7 +1170,7 @@ const CodingScopeCard = memo<{
     hasPullRequest ||
     surfaces.length > 0 ||
     Boolean(date) ||
-    Boolean(originTopicId);
+    Boolean(originHref);
 
   if (!hasScope) return null;
 
@@ -1292,10 +1246,10 @@ const CodingScopeCard = memo<{
         )}
         {/* Only ever rendered for the report's author — the server redacts `origin`
             from a bundle fetched by anyone else holding the shared link. */}
-        {originTopicId && (
+        {originHref && (
           <a
             className={cx(styles.scopeMetaItem, styles.originLink)}
-            href={`/chat?topic=${originTopicId}`}
+            href={originHref}
             rel="noreferrer"
             target="_blank"
             title={t('report.scope.origin')}
@@ -1312,7 +1266,7 @@ const CodingScopeCard = memo<{
 CodingScopeCard.displayName = 'CodingScopeCard';
 
 /**
- * The report detail pane. Renders the verdict hero, a sticky verdict-filter bar,
+ * The report detail pane. Renders the verdict hero,
  * every check as a severity-ordered expandable row (failed rows open by default),
  * and the full narrative behind a collapsed disclosure. Addressed by `:runId`;
  * refreshes itself while the run is non-terminal.
@@ -1328,7 +1282,6 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
   // trailing punctuation onto the id — salvage the leading UUID.
   const verifyRunId = explicitRunId ?? extractUuid(routeRunId) ?? null;
   const { data, error, isLoading, mutate } = useVerifyReportBundle(verifyRunId);
-  const [filter, setFilter] = useState<Filter>('all');
 
   useEffect(() => {
     const status = data?.run.status;
@@ -1382,64 +1335,28 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
       ? (run.status as keyof typeof liveStatusLabelKey)
       : null;
 
-  const counts = ordered.reduce(
-    (acc, row) => {
-      acc[row.state] += 1;
-      return acc;
-    },
-    { failed: 0, not_executed: 0, passed: 0, uncertain: 0 } as Record<CheckState, number>,
-  );
-  // A chip's count is a promise about the rows behind it, so whenever there are
-  // rows they are the truth — the report's own stats count the cases it ingested
-  // and know nothing about a planned check that never produced one. Only an
-  // empty list falls back to them (a report can exist before any result does).
-  const hasRows = ordered.length > 0;
-  const total = hasRows ? ordered.length : (report?.totalChecks ?? 0);
-  const passed = hasRows ? counts.passed : (report?.passedChecks ?? 0);
-  const failed = hasRows ? counts.failed : (report?.failedChecks ?? 0);
-  const uncertain = hasRows ? counts.uncertain : (report?.uncertainChecks ?? 0);
   const verdict = (report?.verdict as VerifyVerdict | null) ?? null;
-  const visible = filter === 'all' ? ordered : ordered.filter((row) => row.state === filter);
+  // The verdict-filter bar is gone, so every row of the round renders. The
+  // per-verdict tallies went with it: they existed to label its chips, and the
+  // verdict pill above already states the round's outcome.
+  const visible = ordered;
   const isCodingReport = run.scenario === 'coding';
   const interactionCost = readInteractionCost(run.metadata);
   // The server strips `origin` for anyone but the author; `isOwner` keeps the
   // affordance off the page for a visitor even if that ever regressed.
   const origin = data.isOwner ? run.metadata?.origin : undefined;
 
-  const chips: { count: number; dot?: string; key: Filter; label: string }[] = [
-    { count: total, key: 'all', label: t('report.filter.all') },
-    { count: failed, dot: cssVar.colorError, key: 'failed', label: t('report.filter.failed') },
-    {
-      count: uncertain,
-      dot: cssVar.colorWarning,
-      key: 'uncertain',
-      label: t('report.filter.uncertain'),
-    },
-    // Only a report with a stored plan can have these, so the chip appears only
-    // when there is something to filter to.
-    ...(counts.not_executed > 0
-      ? [
-          {
-            count: counts.not_executed,
-            dot: cssVar.colorTextQuaternary,
-            key: 'not_executed' as const,
-            label: t('report.filter.notExecuted'),
-          },
-        ]
-      : []),
-    { count: passed, dot: cssVar.colorSuccess, key: 'passed', label: t('report.filter.passed') },
-  ];
-
   return (
     <div className={styles.scroll}>
       <div className={styles.page}>
         <main>
           <Flexbox gap={12}>
-            <div className={styles.heroLine}>
-              <Text as={'h1'} style={{ fontSize: 24, lineHeight: 1.3, margin: 0 }}>
-                {run.title || t('report.titleFallback')}
-              </Text>
-              {verdict && (
+            {/* Verdict above the title, not trailing it — the same order the
+                acceptance page uses. A badge parked after a long title wraps
+                to its own line anyway, and then reads as an afterthought
+                rather than as the report's headline state. */}
+            {verdict && (
+              <div className={styles.heroLine} style={{ marginBlockEnd: 2 }}>
                 <span
                   className={styles.pill}
                   style={{
@@ -1450,8 +1367,11 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
                   <Icon icon={VERDICT_META[verdict].icon} size={15} />
                   {t(`report.verdict.${verdict}`)}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
+            <Text as={'h1'} style={{ fontSize: 24, lineHeight: 1.3, margin: 0 }}>
+              {run.title || t('report.titleFallback')}
+            </Text>
 
             {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
             {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
@@ -1471,38 +1391,13 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
             )}
           </Flexbox>
 
-          <div className={styles.stats}>
-            {chips.map((c) => (
-              <button
-                className={styles.chip}
-                data-active={filter === c.key}
-                key={c.key}
-                type={'button'}
-                onClick={() => setFilter(c.key)}
-              >
-                {c.dot && <span className={styles.dot} style={{ background: c.dot }} />}
-                {c.label} <b>{c.count}</b>
-              </button>
-            ))}
-            {typeof report?.overallConfidence === 'number' && (
-              <span className={`${styles.chip} ${styles.score}`}>
-                {t('report.stats.confidence')} <b>{Math.round(report.overallConfidence * 100)}%</b>
-              </span>
-            )}
-          </div>
-
           {visible.length > 0 ? (
             <div className={styles.checks}>
               {visible.map((row) => (
-                <CheckRow
-                  key={row.id}
-                  row={row}
-                  defaultOpen={
-                    row.state === 'failed' ||
-                    row.state === 'not_executed' ||
-                    (row.result?.evidence ?? []).some(isInlineVisualEvidence)
-                  }
-                />
+                /* Every row opens. A report is read to see what was actually
+                   observed, and a page of collapsed titles makes the reader
+                   click N times to learn that. */
+                <CheckRow defaultOpen key={row.id} row={row} />
               ))}
             </div>
           ) : (

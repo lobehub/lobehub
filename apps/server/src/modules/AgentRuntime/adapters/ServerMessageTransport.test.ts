@@ -62,6 +62,20 @@ describe('ServerMessageTransport', () => {
     expect(messageModel.findByClientId).toHaveBeenCalledWith(options.idempotencyKey);
   });
 
+  it('does not allow a denied result into model context when its durable replacement failed', async () => {
+    const messageModel = {
+      updateToolMessage: vi.fn().mockResolvedValue({ success: false }),
+    } as unknown as MessageModel;
+    const transport = new ServerMessageTransport(messageModel);
+    await expect(
+      transport.updateToolMessage('tool-row', {
+        content: 'withheld',
+        replacePluginState: true,
+        pluginState: { phase: 'afterToolCall', type: 'blocked' },
+      }),
+    ).rejects.toThrow('Failed to persist tool result');
+  });
+
   it('does not swallow an unrelated unique constraint violation', async () => {
     const error = createUniqueViolation('messages_pkey');
     const messageModel = {

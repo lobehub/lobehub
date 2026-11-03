@@ -11,7 +11,9 @@ tags:
 
 # 将 LobeHub 连接到 iMessage
 
-LobeHub 通过运行在已登录 Messages 的 Mac 上的 [BlueBubbles](https://bluebubbles.app/) 连接 iMessage。LobeHub Desktop 在同一台 Mac 上运行一个本地桥接：它在 `127.0.0.1` 接收 BlueBubbles 的 webhook，转发到 LobeHub 云端，并把智能体的回复经本地 BlueBubbles REST API 发回。BlueBubbles 无需暴露到公网。
+> **当前状态：即将上线。** 渠道页面目前将 iMessage 作为预告入口展示，尚未作为常规频道正式开放。以下内容记录预览中的 Labs / BlueBubbles 方案，仅供提前了解；实际可用性以产品界面为准。
+
+LobeHub 计划通过运行在已登录 Messages 的 Mac 上的 [BlueBubbles](https://bluebubbles.app/) 连接 iMessage。预览方案由 LobeHub Desktop 在同一台 Mac 上运行本地桥接：它在 `127.0.0.1` 接收 BlueBubbles 的 webhook，转发到 LobeHub 云端，并把智能体的回复经本地 BlueBubbles REST API 发回。BlueBubbles 无需暴露到公网。
 
 ```text
 iMessage 用户 -> macOS Messages -> BlueBubbles -> LobeHub Desktop 桥接 -> LobeHub 云端

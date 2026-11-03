@@ -26,7 +26,7 @@ const createState = (): AgentState => ({
   createdAt: new Date().toISOString(),
   lastModified: new Date().toISOString(),
   messages: [],
-  metadata: {
+  origin: {
     agentId: 'agent-1',
     threadId: 'thread-1',
     topicId: 'topic-1',
@@ -137,7 +137,7 @@ const createCallTransport = ({
   trace = createTrace(),
 }: {
   policy?: LLMRetryPolicy;
-  runAttempt?: ReturnType<typeof vi.fn>;
+  runAttempt?: LLMTransport['runAttempt'];
   trace?: LLMTrace;
 } = {}) => {
   const createTraceScope = vi.fn().mockReturnValue(trace);
@@ -224,6 +224,8 @@ describe('callLlm executor', () => {
     });
     expect(transport.createTrace).toHaveBeenCalledWith({
       assistantMessageId: 'assistant-1',
+      // The built context rides along so the trace records what the request carries.
+      context: expect.objectContaining({ messages: [{ content: 'prepared hello', role: 'user' }] }),
       conversationId: 'topic-1',
       model: 'gpt-4',
       provider: 'openai',
@@ -416,6 +418,7 @@ describe('callLlm executor', () => {
     const error = new Error('temporary outage');
     const firstOutput = createAttemptOutput('partial');
     const finalOutput = createAttemptOutput('complete');
+    finalOutput.usage = { totalTokens: 10 };
     const runAttempt = vi
       .fn()
       .mockResolvedValueOnce({ error, ok: false, output: firstOutput })
@@ -487,6 +490,8 @@ describe('callLlm executor', () => {
       type: 'stream_retry',
     });
     expect(policy.waitForRetry).toHaveBeenCalledWith(1000);
+    // Both provider attempts count toward the user-facing LLM-call metric.
+    expect(result.newState.usage?.llm.apiCalls).toBe(2);
     expect(result.newState.messages.at(-1)).toMatchObject({ content: 'complete' });
     expect(transport.trace.recordResult).toHaveBeenCalledWith(finalOutput);
     expect(policy.onError).not.toHaveBeenCalled();

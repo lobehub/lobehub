@@ -1,6 +1,5 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Icon } from '@lobehub/ui';
 import type { Clock } from 'lucide-react';
 import { GitBranchIcon, GitForkIcon } from 'lucide-react';
 import type { ReactNode } from 'react';

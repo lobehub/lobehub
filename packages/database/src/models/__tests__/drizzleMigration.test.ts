@@ -110,6 +110,38 @@ const runGoalGraphMigration = async (client: PGlite) => {
   for (const statement of goalGraphMigration.sql) await client.exec(statement);
 };
 
+const agentAccountGoalSubscriptionMigration = readMigrationFiles({
+  migrationsFolder: path.join(__dirname, '../../../migrations'),
+}).find((migration) =>
+  migration.sql.some((statement) => statement.includes('goal_subscriptions_goal_id_goals_id_fk')),
+);
+
+if (!agentAccountGoalSubscriptionMigration)
+  throw new Error('Agent account / goal subscription migration not found');
+
+const setupAgentAccountGoalSubscriptionDependencies = async (client: PGlite) => {
+  await client.exec(`
+    CREATE TABLE users (id text PRIMARY KEY);
+    CREATE TABLE workspaces (id text PRIMARY KEY);
+    CREATE TABLE goals (id text PRIMARY KEY);
+    CREATE TABLE metrics (id text PRIMARY KEY);
+    CREATE TABLE widgets (id uuid PRIMARY KEY);
+    CREATE TABLE widget_versions (id uuid PRIMARY KEY);
+    CREATE TABLE agent_accounts (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      agent_id text NOT NULL,
+      kind text NOT NULL,
+      identifier text NOT NULL,
+      provider text NOT NULL,
+      status text DEFAULT 'provisioning' NOT NULL
+    );
+  `);
+};
+
+const runAgentAccountGoalSubscriptionMigration = async (client: PGlite) => {
+  for (const statement of agentAccountGoalSubscriptionMigration.sql) await client.exec(statement);
+};
+
 describe('DrizzleMigrationModel', () => {
   beforeEach(async () => {
     // Clean up database before each test if needed
@@ -302,6 +334,46 @@ describe('0148 Goal Graph migration', () => {
           );
         `),
       ).rejects.toThrow();
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+describe('0177 Agent Account / Goal Subscription migration', () => {
+  it('re-runs on a database that already applied the draft migration', async () => {
+    const client = new PGlite();
+
+    try {
+      await setupAgentAccountGoalSubscriptionDependencies(client);
+      await runAgentAccountGoalSubscriptionMigration(client);
+      // The draft shipped before this branch collapsed two drafts into this single
+      // file, so a database that already ran the draft already holds the table and
+      // its foreign keys; replaying the file must stay a no-op.
+      await runAgentAccountGoalSubscriptionMigration(client);
+
+      const foreignKeys = await client.query<{ count: number }>(`
+        SELECT count(*)::int AS count
+        FROM pg_constraint
+        WHERE contype = 'f' AND conrelid = 'goal_subscriptions'::regclass
+      `);
+      expect(foreignKeys.rows[0].count).toBe(6);
+
+      const indexes = await client.query<{ indexname: string }>(`
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = 'agent_accounts'
+          AND indexname IN (
+            'agent_accounts_agent_kind_provider_identifier_unique',
+            'agent_accounts_provider_identifier_unique'
+          )
+        ORDER BY indexname
+      `);
+      expect(indexes.rows.map(({ indexname }) => indexname)).toEqual([
+        'agent_accounts_agent_kind_provider_identifier_unique',
+        'agent_accounts_provider_identifier_unique',
+      ]);
     } finally {
       await client.close();
     }

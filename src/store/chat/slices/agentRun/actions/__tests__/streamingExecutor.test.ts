@@ -1,7 +1,8 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import * as agentRuntime from '@lobechat/agent-runtime';
-import { resolveLocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import type * as LobeChatConst from '@lobechat/const';
+import { FILE_PREVIEW_CHARS } from '@lobechat/prompts';
 import { type LobeChatPluginApi, type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { type EnabledAiModel, ModelProvider } from 'model-bank';
@@ -10,9 +11,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as toolEngineering from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
+import { messageService } from '@/services/message';
+import { workService } from '@/services/work';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -102,6 +104,10 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
 // the notification branch. The service is dynamically imported inside executeClientAgent.
 const desktopFlag = vi.hoisted(() => ({ value: false }));
 const desktopNotificationMock = vi.hoisted(() => ({ showNotification: vi.fn() }));
+const completionSoundMock = vi.hoisted(() => ({
+  getNotificationSoundFile: vi.fn(),
+  play: vi.fn(),
+}));
 vi.mock('@lobechat/const', async (importOriginal) => {
   const actual = await importOriginal<typeof LobeChatConst>();
   return {
@@ -113,6 +119,9 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 });
 vi.mock('@/services/electron/desktopNotification', () => ({
   desktopNotificationService: desktopNotificationMock,
+}));
+vi.mock('@/services/electron/completionSound', () => ({
+  completionSoundService: completionSoundMock,
 }));
 vi.mock('@/store/serverConfig', () => ({
   getServerConfigStoreState: () => ({
@@ -150,6 +159,7 @@ const spyOnClientLLMStream = (
     async (params, options) => ({
       options: options ?? {},
       params: { ...params, messages: params.messages as any } as any,
+      replayAssistantReasoning: false,
     }),
   );
 
@@ -187,7 +197,10 @@ beforeEach(() => {
   resetTestEnvironment();
   setupMockSelectors();
   spyOnMessageService();
+  vi.spyOn(workService, 'listByRootOperation').mockResolvedValue([]);
   desktopFlag.value = false;
+  completionSoundMock.getNotificationSoundFile.mockReset().mockResolvedValue(undefined);
+  completionSoundMock.play.mockReset().mockResolvedValue(undefined);
   serverConfigMock.enableMultimodalUnderstanding = false;
 
   act(() => {
@@ -209,60 +222,175 @@ afterEach(() => {
 });
 
 describe('StreamingExecutor actions', () => {
+  it('keeps the original source message when initializing and resuming a run', () => {
+    const params = {
+      agentId: TEST_IDS.SESSION_ID,
+      messages: [],
+      parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+      topicId: TEST_IDS.TOPIC_ID,
+    };
+    const { state } = useChatStore.getState().internal_createAgentState(params);
+    expect(state.metadata?.sourceMessageId).toBe(TEST_IDS.USER_MESSAGE_ID);
+    const resumed = useChatStore.getState().internal_createAgentState({
+      ...params,
+      initialState: state,
+      parentMessageId: 'intermediate-assistant',
+    });
+    expect(resumed.state.metadata?.sourceMessageId).toBe(TEST_IDS.USER_MESSAGE_ID);
+  });
+
   describe('executeClientAgent', () => {
-    it('should handle the core AI message processing', async () => {
+    it.each([false, true])(
+      'completes the reply and anchors only registered Works (hasWork=%s)',
+      async (hasWork) => {
+        if (hasWork) {
+          vi.mocked(workService.listByRootOperation).mockResolvedValue([
+            { id: 'registered-work' } as Awaited<
+              ReturnType<typeof workService.listByRootOperation>
+            >[number],
+          ]);
+        }
+        act(() => {
+          useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const userMessage = {
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+          content: TEST_CONTENT.USER_MESSAGE,
+          sessionId: TEST_IDS.SESSION_ID,
+          topicId: TEST_IDS.TOPIC_ID,
+        } as UIChatMessage;
+        const messages = [userMessage];
+        seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, messages);
+
+        const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+        await act(async () => {
+          await result.current.executeClientAgent({
+            context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+            messages,
+            parentMessageId: userMessage.id,
+            parentMessageType: 'user',
+          });
+        });
+
+        // Verify agent runtime executed successfully
+        expect(streamSpy).toHaveBeenCalled();
+        expect(result.current.refreshMessages).toHaveBeenCalledWith({
+          agentId: TEST_IDS.SESSION_ID,
+          topicId: TEST_IDS.TOPIC_ID,
+        });
+
+        // Verify operation was completed
+        const operations = Object.values(result.current.operations);
+        const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
+        expect(execOperation?.status).toBe('completed');
+        expect(workService.listByRootOperation).toHaveBeenCalledWith({
+          limit: 1,
+          rootOperationId: execOperation?.id,
+        });
+        const anchorWrites = vi
+          .mocked(messageService.updateMessageMetadata)
+          .mock.calls.filter(([, metadata]) => metadata.work);
+        expect(anchorWrites).toHaveLength(hasWork ? 1 : 0);
+        if (hasWork) {
+          expect(anchorWrites[0]).toEqual([
+            expect.any(String),
+            { work: { rootOperationId: execOperation?.id, userMessageId: userMessage.id } },
+            { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          ]);
+          expect(
+            vi.mocked(messageService.updateMessageMetadata).mock.invocationCallOrder[0],
+          ).toBeLessThan(vi.mocked(result.current.refreshMessages).mock.invocationCallOrder[0]);
+        }
+        expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              parentMessageId: userMessage.id,
+              parentMessageType: 'user',
+              triggerMessageId: userMessage.id,
+            }),
+            sourceId: `${execOperation?.id}:client:start`,
+            sourceType: 'client.runtime.start',
+          }),
+        );
+
+        streamSpy.mockRestore();
+      },
+    );
+
+    it('restores projected tool payloads before the first client LLM call', async () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
-
       const { result } = renderHook(() => useChatStore());
-      const userMessage = {
-        id: TEST_IDS.USER_MESSAGE_ID,
-        role: 'user',
-        content: TEST_CONTENT.USER_MESSAGE,
-        sessionId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      } as UIChatMessage;
-      const messages = [userMessage];
-      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, messages);
+      const context = { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID };
+      const toolCall = {
+        apiName: 'search',
+        arguments: '{}',
+        id: 'call-1',
+        identifier: 'web',
+        type: 'default',
+      } as const;
 
-      const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
-        await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
-      });
+      // The store holds a list read while Gateway mode projected tool payloads.
+      seedDbMessages(context, [
+        { content: 'find it', id: 'user-1', role: 'user' } as UIChatMessage,
+        { content: '', id: 'assistant-1', role: 'assistant', tools: [toolCall] } as UIChatMessage,
+        {
+          content: 'view-model summary',
+          id: 'tool-1',
+          payloadOmitted: 'detail',
+          role: 'tool',
+          tool_call_id: 'call-1',
+        } as UIChatMessage,
+        { content: 'and now?', id: TEST_IDS.USER_MESSAGE_ID, role: 'user' } as UIChatMessage,
+      ]);
+      const payloadSpy = vi
+        .spyOn(messageService, 'getToolResultPayloads')
+        .mockResolvedValue({ 'tool-1': { content: 'FULL STORED TOOL BODY' } });
+      const streamSpy = spyOnClientLLMStream();
 
+      // The send path hands over FOLDED display messages: the tool result sits
+      // inside the assistant group and carries no `payloadOmitted` marker.
       await act(async () => {
         await result.current.executeClientAgent({
-          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
-          messages,
-          parentMessageId: userMessage.id,
+          context,
+          messages: [
+            { content: 'find it', id: 'user-1', role: 'user' } as UIChatMessage,
+            {
+              children: [
+                {
+                  content: '',
+                  id: 'assistant-1',
+                  tools: [
+                    {
+                      ...toolCall,
+                      result: { content: 'view-model summary', id: 'tool-1' },
+                      result_msg_id: 'tool-1',
+                    },
+                  ],
+                },
+              ],
+              content: '',
+              id: 'assistant-1',
+              role: 'assistantGroup',
+            } as UIChatMessage,
+            { content: 'and now?', id: TEST_IDS.USER_MESSAGE_ID, role: 'user' } as UIChatMessage,
+          ],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
           parentMessageType: 'user',
         });
       });
 
-      // Verify agent runtime executed successfully
-      expect(streamSpy).toHaveBeenCalled();
-      expect(result.current.refreshMessages).toHaveBeenCalledWith({
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      });
-
-      // Verify operation was completed
-      const operations = Object.values(result.current.operations);
-      const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
-      expect(execOperation?.status).toBe('completed');
-      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            parentMessageId: userMessage.id,
-            parentMessageType: 'user',
-            triggerMessageId: userMessage.id,
-          }),
-          sourceId: `${execOperation?.id}:client:start`,
-          sourceType: 'client.runtime.start',
-        }),
-      );
-
-      streamSpy.mockRestore();
+      expect(payloadSpy).toHaveBeenCalledWith(['tool-1']);
+      const firstPayload = JSON.stringify(streamSpy.mock.calls[0][0].messages);
+      expect(firstPayload).toContain('FULL STORED TOOL BODY');
+      expect(firstPayload).not.toContain('view-model summary');
     });
 
     it('writes topics.status=running at run start so off-conversation surfaces see it', async () => {
@@ -574,6 +702,77 @@ describe('StreamingExecutor actions', () => {
         enabled: true,
         maxWindowToken: undefined,
       });
+
+      streamSpy.mockRestore();
+    });
+
+    // https://github.com/lobehub/lobehub/issues/17723 — Stop during a retry
+    // backoff kept the spinner until the delay elapsed, then saved the last
+    // provider error on the reply as if the run had failed.
+    it('ends at once without a provider error when stopped during a retry backoff', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+      // The branded provider is excluded from client retries; use one that retries.
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: createMockAgentConfig({ model: 'gpt-4o-mini', provider: 'openai' }),
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: [],
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, [userMessage]);
+      const updateMessageErrorSpy = vi.spyOn(messageService, 'updateMessageError');
+      const streamSpy = spyOnClientLLMStream();
+      let streamCallCount = 0;
+      streamSpy.mockImplementation(async (_params, options) => {
+        streamCallCount++;
+        options?.onErrorHandle?.({
+          message: 'tokens per minute exceeded',
+          type: 'RateLimitExceeded',
+        } as any);
+        // The first backoff is 1s; Stop lands while it is still waiting.
+        setTimeout(() => {
+          const execOperation = Object.values(result.current.operations).find(
+            (op) => op.type === 'execAgentRuntime',
+          );
+          if (execOperation) result.current.cancelOperation(execOperation.id, 'user_cancelled');
+        }, 20);
+        return new Response();
+      });
+
+      const startedAt = Date.now();
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [userMessage],
+          parentMessageId: userMessage.id,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(Date.now() - startedAt).toBeLessThan(800);
+      expect(streamCallCount).toBe(1);
+      expect(
+        Object.values(result.current.operations).find((op) => op.type === 'execAgentRuntime')
+          ?.status,
+      ).toBe('cancelled');
+      expect(updateMessageErrorSpy).not.toHaveBeenCalled();
+      const assistantMessages = Object.values(result.current.messagesMap)
+        .flat()
+        .filter((message) => message.role === 'assistant');
+      expect(assistantMessages.length).toBeGreaterThan(0);
+      for (const message of assistantMessages) expect(message.error).toBeFalsy();
 
       streamSpy.mockRestore();
     });
@@ -1040,11 +1239,7 @@ describe('StreamingExecutor actions', () => {
 
       // Mock internal_createAgentState to include initialContext
       const mockInitialContext = {
-        pageEditor: {
-          markdown: '# Test Document',
-          xml: '<root><h1>Test</h1></root>',
-          metadata: { title: 'Test Doc', charCount: 15, lineCount: 1 },
-        },
+        selectedSkills: [{ identifier: 'user_memory', name: 'User Memory' }],
       };
 
       const originalCreateAgentState = result.current.internal_createAgentState;
@@ -1121,11 +1316,7 @@ describe('StreamingExecutor actions', () => {
       });
 
       const mockInitialContext = {
-        pageEditor: {
-          markdown: '# Preserved Context',
-          xml: '<doc>preserved</doc>',
-          metadata: { title: 'Preserved', charCount: 20, lineCount: 1 },
-        },
+        selectedTools: [{ identifier: 'lobe-notebook', name: 'Notebook' }],
       };
 
       const originalCreateAgentState = result.current.internal_createAgentState;
@@ -1159,7 +1350,7 @@ describe('StreamingExecutor actions', () => {
       streamSpy.mockRestore();
     });
 
-    it('should merge provided initialContext with runtime page editor context', () => {
+    it('should not put the page document into initialContext in page scope', () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
@@ -1186,12 +1377,6 @@ describe('StreamingExecutor actions', () => {
           tools: [],
         }),
       } as any);
-      vi.spyOn(pageAgentRuntime, 'isReady').mockReturnValue(true);
-      vi.spyOn(pageAgentRuntime, 'getPageContentContext').mockReturnValue({
-        markdown: '# Test Document',
-        xml: '<root><h1>Test</h1></root>',
-        metadata: { title: 'Test Doc', charCount: 15, lineCount: 1 },
-      });
       const { operationId } = result.current.startOperation({
         context: {
           agentId: TEST_IDS.SESSION_ID,
@@ -1217,17 +1402,12 @@ describe('StreamingExecutor actions', () => {
       });
 
       expect(context.initialContext).toEqual({
-        pageEditor: {
-          markdown: '# Test Document',
-          xml: '<root><h1>Test</h1></root>',
-          metadata: { title: 'Test Doc', charCount: 15, lineCount: 1 },
-        },
         selectedSkills: [{ identifier: 'user_memory', name: 'User Memory' }],
         selectedTools: [{ identifier: 'lobe-notebook', name: 'Notebook' }],
       });
     });
 
-    it('should resolve desktop client tool manifests for the local execution environment', () => {
+    it('should attach the local system manifest for the local execution environment', () => {
       desktopFlag.value = true;
 
       const { result } = renderHook(() => useChatStore());
@@ -1240,13 +1420,11 @@ describe('StreamingExecutor actions', () => {
       } as UIChatMessage;
       const createToolsEngineSpy = vi
         .spyOn(toolEngineering, 'createAgentToolsEngine')
-        .mockImplementation((_workingModel, _pluginIds, manifestContext) => {
-          const localSystemManifest = resolveLocalSystemManifest(manifestContext ?? {});
-
+        .mockImplementation(() => {
           return {
             generateToolsDetailed: vi.fn().mockReturnValue({
-              enabledManifests: localSystemManifest ? [localSystemManifest] : [],
-              enabledToolIds: localSystemManifest ? [localSystemManifest.identifier] : [],
+              enabledManifests: [LocalSystemManifest],
+              enabledToolIds: [LocalSystemManifest.identifier],
               tools: [],
             }),
           } as any;
@@ -1263,64 +1441,13 @@ describe('StreamingExecutor actions', () => {
         expect.any(Object),
         undefined,
         expect.objectContaining({ executionEnv: 'local' }),
+        { hasOversizedFiles: false },
       );
-      const readFile = state.toolManifestMap['lobe-local-system']?.api.find(
-        (api: LobeChatPluginApi) => api.name === 'readFile',
-      );
+      const localSystem = state.operationToolSet?.manifestMap['lobe-local-system'];
+      const readFile = localSystem?.api.find((api: LobeChatPluginApi) => api.name === 'readFile');
 
       expect(readFile?.description).toContain('base64');
-      expect(state.toolManifestMap['lobe-local-system']?.systemRole).toContain(
-        'Image files are uploaded as visual tool results',
-      );
-    });
-
-    it('should not inject page editor context outside page scope', () => {
-      act(() => {
-        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-      const userMessage = {
-        id: TEST_IDS.USER_MESSAGE_ID,
-        role: 'user',
-        content: TEST_CONTENT.USER_MESSAGE,
-        sessionId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      } as UIChatMessage;
-
-      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
-        agentConfig: createMockAgentConfig(),
-        chatConfig: createMockChatConfig(),
-        isBuiltinAgent: false,
-        plugins: ['lobe-page-agent'],
-      });
-      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
-        generateToolsDetailed: vi.fn().mockReturnValue({
-          enabledManifests: [],
-          enabledToolIds: ['lobe-page-agent'],
-          tools: [],
-        }),
-      } as any);
-      const pageContextSpy = vi.spyOn(pageAgentRuntime, 'getPageContentContext');
-      const { operationId } = result.current.startOperation({
-        context: {
-          agentId: TEST_IDS.SESSION_ID,
-          scope: 'main',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        type: 'execAgentRuntime',
-      });
-
-      const { context } = result.current.internal_createAgentState({
-        messages: [userMessage],
-        parentMessageId: userMessage.id,
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-        operationId,
-      });
-
-      expect(context.initialContext?.pageEditor).toBeUndefined();
-      expect(pageContextSpy).not.toHaveBeenCalled();
+      expect(localSystem?.systemRole).toContain('Image files are uploaded as visual tool results');
     });
 
     it('should merge selectedTools into generated tools when provided', () => {
@@ -1762,6 +1889,48 @@ describe('StreamingExecutor actions', () => {
     });
   });
 
+  describe('internal_createAgentState attachment reading', () => {
+    const createState = (content: string) => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        content: TEST_CONTENT.USER_MESSAGE,
+        fileList: [{ content, fileType: 'text/plain', id: 'file-1', name: 'paper.txt', size: 1 }],
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      return result.current.internal_createAgentState({
+        agentId: TEST_IDS.SESSION_ID,
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
+    };
+
+    // Regression: The attachment budget can send any attachment longer than a
+    // preview as one, so the client must offer `readAttachment` to page it, like the server.
+    it('enables readAttachment when an attachment is longer than a preview', () => {
+      const spy = vi.spyOn(toolEngineering, 'createAgentToolsEngine');
+
+      createState('x'.repeat(FILE_PREVIEW_CHARS + 1));
+
+      expect(spy.mock.calls.at(-1)?.[3]).toEqual({ hasOversizedFiles: true });
+    });
+
+    it('does not enable readAttachment for short attachments', () => {
+      const spy = vi.spyOn(toolEngineering, 'createAgentToolsEngine');
+
+      createState('short note');
+
+      expect(spy.mock.calls.at(-1)?.[3]).toEqual({ hasOversizedFiles: false });
+    });
+  });
+
   describe('internal_createAgentState with disableTools', () => {
     it('should return empty toolManifestMap when disableTools is true', async () => {
       act(() => {
@@ -1786,8 +1955,9 @@ describe('StreamingExecutor actions', () => {
         disableTools: true,
       });
 
-      // toolManifestMap should be empty when disableTools is true
-      expect(state.toolManifestMap).toEqual({});
+      // The run's tool set lives on the operation slot, and it holds nothing.
+      expect(state.operationToolSet?.manifestMap).toEqual({});
+      expect(state.operationToolSet?.tools).toEqual([]);
     });
 
     it('should return empty tools in agentConfig when disableTools is true', async () => {

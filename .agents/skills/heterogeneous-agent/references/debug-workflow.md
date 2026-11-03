@@ -35,7 +35,7 @@ faithful trace you can get, because it captures the **exact** spawn args, env
 keys, cwd, `--resume`/`--mcp-config` flags, model, and stdin that the app used —
 things a hand-rolled `claude -p` / `codex exec` repro will not reproduce. Reach
 for this before reproducing manually. The recorder lives in
-`apps/desktop/src/main/controllers/HeterogeneousAgentCtr.ts`
+`apps/desktop/src/main/controllers/HeterogeneousAgentImpl.ts`
 (`createCliTraceSession`, `shouldTraceCliOutput`, `resolveTraceRootDir`).
 
 When it records:
@@ -160,7 +160,6 @@ If the repo already contains useful references, inspect these first:
 If you only need boundary semantics or tool persistence behavior, prefer existing adapter tests under:
 
 - `packages/heterogeneous-agents/src/adapters/claudeCode.test.ts`
-- `packages/heterogeneous-agents/src/adapters/claudeCode.e2e.test.ts`
 
 ## 3. Compare Raw And Adapted Events
 

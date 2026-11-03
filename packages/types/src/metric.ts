@@ -8,7 +8,31 @@
  * so new subject kinds are a type-only change. Goals are the first consumer;
  * the metrics layer itself never special-cases any of these.
  */
-export type MetricSubjectType = 'goal' | 'task' | 'agent' | 'project' | 'workspace';
+export const METRIC_SUBJECT_TYPES = [
+  'goal',
+  'task',
+  'agent',
+  'project',
+  'workspace',
+  'widget',
+] as const;
+export type MetricSubjectType = (typeof METRIC_SUBJECT_TYPES)[number];
+
+/**
+ * Decimal places `metric_points.value` keeps — the column is `numeric(20, 6)`.
+ *
+ * Anything compared against a stored observation has to be read at this scale:
+ * the database has already rounded its side, so a full-precision threshold
+ * would make clauses like `eq 0.1234567` unsatisfiable and could flip `gte` /
+ * `lte` right at the rounding boundary.
+ */
+export const METRIC_VALUE_SCALE = 6;
+
+/** Round to the scale observations are persisted at. */
+export const toMetricScale = (value: number): number => {
+  const factor = 10 ** METRIC_VALUE_SCALE;
+  return Math.round(value * factor) / factor;
+};
 
 /**
  * Aggregation semantics of a series — the one thing a chart renderer cannot

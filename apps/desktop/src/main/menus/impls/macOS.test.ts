@@ -8,6 +8,9 @@ import { MacOSMenu } from './macOS';
 
 // Mock Electron modules
 vi.mock('electron', () => ({
+  BrowserWindow: {
+    getFocusedWindow: vi.fn(() => null),
+  },
   Menu: {
     buildFromTemplate: vi.fn((template) => ({ template })),
     setApplicationMenu: vi.fn(),
@@ -193,6 +196,25 @@ describe('MacOSMenu', () => {
       const dockMenu = (app.dock.setMenu as any).mock.calls[0][0];
       expect(dockMenu.template.some((item: any) => item.label === 'Quick Composer')).toBe(true);
     });
+
+    it('should rebuild the dock menu with active topics and leave out system-provided items', () => {
+      macOSMenu.updateDockMenu({
+        activeTopics: [
+          { status: 'running', subtitle: 'Researcher', title: 'Refactor auth', url: '/agent/a/t1' },
+        ],
+        agents: [{ id: 'a', title: 'Researcher', url: '/agent/a' }],
+        pinned: [],
+        recent: [],
+      });
+
+      const labels = (app.dock.setMenu as any).mock.calls[0][0].template.map(
+        (item: any) => item.label,
+      );
+      expect(labels.slice(0, 2)).toEqual(['Running', 'Refactor auth']);
+      expect(labels).not.toContain('Recent Agents');
+      expect(labels).not.toContain('Quit');
+      expect(labels).not.toContain('Settings');
+    });
   });
 
   describe('refresh', () => {
@@ -240,6 +262,22 @@ describe('MacOSMenu', () => {
       expect(mainWindow.broadcast).toHaveBeenCalledWith('createNewTab', { path: '/settings' });
     });
 
+    it('should place New Window after New Tab in the File menu', () => {
+      macOSMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const labels = fileMenu.submenu.map((item: any) => item.label);
+      const newWindowItem = fileMenu.submenu.find((item: any) => item.label === 'New Window');
+
+      expect(labels.indexOf('New Window')).toBe(labels.indexOf('New Tab') + 1);
+      expect(newWindowItem.accelerator).toBe('Shift+Command+N');
+
+      newWindowItem.click(undefined, null);
+      const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results.at(-1).value;
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
+    });
+
     it('should handle visit website click', async () => {
       macOSMenu.buildAndSetAppMenu();
 
@@ -261,7 +299,7 @@ describe('MacOSMenu', () => {
 
       expect(githubItem).toBeDefined();
       await githubItem.click();
-      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobe-chat');
+      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobehub');
     });
 
     it('should handle open logs directory click', () => {

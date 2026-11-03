@@ -3,6 +3,7 @@ import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 
 import { DEFAULT_LANG } from '@/const/locale';
+import { brandPostProcessOptions, withBrandPostProcessor } from '@/locales/brandPostProcessor';
 import { normalizeLocale } from '@/locales/resources';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
@@ -36,23 +37,46 @@ export const loadShareResources = async (lang?: string) => {
   return Object.fromEntries(entries) as ShareResources;
 };
 
+const translationOptions = {
+  interpolation: { escapeValue: false },
+  keySeparator: false,
+  showSupportNotice: false,
+  ...brandPostProcessOptions,
+} as const;
+
+// Loader-side copy: a bare instance, so react-i18next's global instance stays the one rendering.
+export const createShareT = (lang: string | undefined, resources: ShareResources) => {
+  const locale = normalizeLocale(lang);
+  const instance = withBrandPostProcessor(i18next.createInstance());
+
+  void instance.init({
+    ...translationOptions,
+    initAsync: false,
+    lng: locale,
+    resources: { [locale]: resources },
+  });
+
+  return instance.getFixedT(locale, 'chat');
+};
+
+export const loadShareT = async (lang?: string) =>
+  createShareT(lang, await loadShareResources(lang));
+
 export const createShareI18n = (lang?: string, bundledResources?: ShareResources) => {
   const locale = normalizeLocale(lang);
   const resources = bundledResources ? { [locale]: bundledResources } : undefined;
 
-  const instance = i18next
-    .createInstance()
+  const instance = withBrandPostProcessor(i18next.createInstance())
     .use(initReactI18next)
     .use(resourcesToBackend(loadShareNamespace));
 
   return {
     init: (params: { initAsync?: boolean } = {}) =>
       instance.init({
+        ...translationOptions,
         defaultNS: 'chat',
         fallbackLng: DEFAULT_LANG,
         initAsync: params.initAsync ?? true,
-        interpolation: { escapeValue: false },
-        keySeparator: false,
         lng: locale,
         ns: [],
         partialBundledLanguages: true,
@@ -61,7 +85,6 @@ export const createShareI18n = (lang?: string, bundledResources?: ShareResources
           useSuspense: false,
         },
         resources,
-        showSupportNotice: false,
       }),
     instance,
   };

@@ -1,6 +1,8 @@
-import type { HeteroQuotaWindow } from '@lobechat/heterogeneous-agents/quota';
-
-import type { HeterogeneousCliAgentType } from './binary';
+import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type {
+  CodexQuotaSnapshot,
+  CodexRateLimitResetOutcome,
+} from '@lobechat/heterogeneous-agents/quota';
 
 export {
   AMP_CLI_INSTALL_COMMANDS,
@@ -59,57 +61,27 @@ export interface HeterogeneousAgentRateLimitInfo {
 // heterogeneous-agents quota entry; re-export them for existing IPC callers.
 export type {
   ClaudeCodeAccountIdentity,
+  ClaudeCodeAccountResolution,
+  ClaudeCodeLocalAccount,
   ClaudeCodeQuotaReading,
   ClaudeCodeQuotaSnapshot,
   ClaudeCodeQuotaUnavailableReason,
   ClaudeCodeScopedWeekly,
   HeteroQuotaWindow,
 } from '@lobechat/heterogeneous-agents/quota';
-
-export type CodexQuotaWindow = HeteroQuotaWindow;
-
-export interface CodexRateLimitSnapshot {
-  /** Canonical metered limit identifier, for example `codex` or `codex_other`. */
-  limitId: string;
-  limitName: string | null;
-  primary: CodexQuotaWindow | null;
-  secondary: CodexQuotaWindow | null;
-}
-
-export interface CodexRateLimitResetCredit {
-  expiresAt: number | null;
-  grantedAt: number | null;
-  /** Opaque backend identifier used only when redeeming this specific credit. */
-  id: string | null;
-  redeemedAt?: number | null;
-  redeemStartedAt?: number | null;
-  resetType: string | null;
-  status: string;
-  title: string | null;
-}
-
-export interface CodexRateLimitResetCredits {
-  availableCount: number;
-  /** Detailed rows when supported by the installed Codex CLI/backend. */
-  credits?: CodexRateLimitResetCredit[];
-  nextExpiresAt?: number | null;
-  totalEarnedCount?: number;
-}
-
-export interface CodexQuotaSnapshot {
-  error: string | null;
-  provider: 'codex';
-  rateLimitResetCredits?: CodexRateLimitResetCredits | null;
-  /** Complete multi-bucket view when supported by the installed Codex app-server. */
-  rateLimits?: CodexRateLimitSnapshot[];
-  session: CodexQuotaWindow | null;
-  status: 'error' | 'ok' | 'unavailable';
-  updatedAt: number;
-  weekly: CodexQuotaWindow | null;
-}
-
-export type CodexRateLimitResetOutcome =
-  'alreadyRedeemed' | 'noCredit' | 'nothingToReset' | 'reset';
+export type {
+  CodexQuotaSnapshot,
+  CodexQuotaWindow,
+  CodexRateLimitResetCredit,
+  CodexRateLimitResetCredits,
+  CodexRateLimitResetOutcome,
+  CodexRateLimitSnapshot,
+} from '@lobechat/heterogeneous-agents/quota';
+export type {
+  KimiCodeExtraUsage,
+  KimiCodeQuotaSnapshot,
+  KimiCodeQuotaUnavailableReason,
+} from '@lobechat/heterogeneous-agents/quota';
 
 export interface CodexRateLimitResetResult {
   outcome: CodexRateLimitResetOutcome;
@@ -117,7 +89,7 @@ export interface CodexRateLimitResetResult {
 }
 
 export interface HeterogeneousAgentSessionError {
-  agentType?: HeterogeneousCliAgentType;
+  agentType?: HeterogeneousAgentType;
   code?: HeterogeneousAgentSessionErrorCode | string;
   command?: string;
   /** Diagnostic context from the CLI's terminal event (subtype, HTTP status, turn count, …). */
@@ -158,5 +130,6 @@ export interface HeterogeneousAgentRuntimeStatus {
     | 'codex-app-server'
     | 'cursor-acp'
     | 'droid-acp'
+    | 'dsh-jsonrpc'
     | 'trae-acp';
 }

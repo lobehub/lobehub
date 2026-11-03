@@ -20,6 +20,10 @@ const activeTaskBriefs = (s: TaskStoreState): TaskDetailActivity[] =>
 const activeTaskTopics = (s: TaskStoreState): TaskDetailActivity[] =>
   activeTaskActivities(s).filter((a) => a.type === 'topic');
 
+/** The newest run of the active task — the one a result panel is about. */
+const activeTaskLatestTopic = (s: TaskStoreState): TaskDetailActivity | undefined =>
+  activeTaskTopics(s).at(-1);
+
 const activeTaskComments = (s: TaskStoreState): TaskDetailActivity[] =>
   activeTaskActivities(s).filter((a) => a.type === 'comment');
 
@@ -39,6 +43,7 @@ export const taskActivitySelectors = {
   activeTaskActivities,
   activeTaskBriefs,
   activeTaskComments,
+  activeTaskLatestTopic,
   activeTaskTopics,
   hasUnresolvedBriefs,
   unresolvedBriefCount,

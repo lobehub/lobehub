@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AiAgentService } from '../index';
 
 const {
+  mockControlToolResult,
   mockCreateOperation,
   mockFindById,
   mockFindMessagePlugin,
@@ -17,6 +18,7 @@ const {
   mockUpdatePluginState,
   mockUpdateToolMessage,
 } = vi.hoisted(() => ({
+  mockControlToolResult: vi.fn(),
   mockCreateOperation: vi.fn(),
   mockFindById: vi.fn(),
   mockFindMessagePlugin: vi.fn(),
@@ -38,96 +40,121 @@ vi.mock('@/libs/trusted-client', () => ({
 
 vi.mock('@/database/models/message', () => ({
   HumanApprovalAlreadyResolvedError: class HumanApprovalAlreadyResolvedError extends Error {},
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
-    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    findById: mockFindById,
-    findMessagePlugin: mockFindMessagePlugin,
-    query: mockMessageQuery,
-    resolveHumanApproval: mockResolveHumanApproval,
-    restoreHumanApproval: mockRestoreHumanApproval,
-    update: vi.fn().mockResolvedValue({}),
-    updateMessagePlugin: mockUpdateMessagePlugin,
-    updatePluginState: mockUpdatePluginState,
-    updateToolMessage: mockUpdateToolMessage,
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      findById: mockFindById,
+      findMessagePlugin: mockFindMessagePlugin,
+      query: mockMessageQuery,
+      resolveHumanApproval: mockResolveHumanApproval,
+      restoreHumanApproval: mockRestoreHumanApproval,
+      update: vi.fn().mockResolvedValue({}),
+      updateMessagePlugin: mockUpdateMessagePlugin,
+      updatePluginState: mockUpdatePluginState,
+      updateToolMessage: mockUpdateToolMessage,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({ queryAgents: vi.fn().mockResolvedValue([]) })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return { queryAgents: vi.fn().mockResolvedValue([]) };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({ query: vi.fn().mockResolvedValue([]) })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return { query: vi.fn().mockResolvedValue([]) };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
-    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(null),
-    updateMetadata: vi.fn(),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(null),
+      updateMetadata: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn().mockImplementation(() => ({
-    getUserSettings: vi.fn().mockResolvedValue(undefined),
-  })),
+  UserModel: vi.fn().mockImplementation(function () {
+    return {
+      getUserSettings: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/userMemory/persona', () => ({
-  UserPersonaModel: vi.fn().mockImplementation(() => ({
-    getLatestPersonaDocument: vi.fn().mockResolvedValue(undefined),
-  })),
+  UserPersonaModel: vi.fn().mockImplementation(function () {
+    return {
+      getLatestPersonaDocument: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: mockCreateOperation,
-    ensureInterventionContinuationStarted: vi.fn().mockResolvedValue('scheduled'),
-    loadInterventionContinuationState: mockLoadInterventionContinuationState,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      controlCompletedToolResult: mockControlToolResult,
+      createOperation: mockCreateOperation,
+      ensureInterventionContinuationStarted: vi.fn().mockResolvedValue('scheduled'),
+      loadInterventionContinuationState: mockLoadInterventionContinuationState,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({ uploadFromUrl: vi.fn() })),
+  FileService: vi.fn().mockImplementation(function () {
+    return { uploadFromUrl: vi.fn() };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
@@ -182,6 +209,11 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockControlToolResult.mockImplementation(async ({ result }) => ({
+      result,
+      blocked: false,
+      cancelled: false,
+    }));
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
       messageId: 'queue-msg-1',
@@ -199,7 +231,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
     mockRestoreHumanApproval.mockResolvedValue(undefined);
     mockUpdateMessagePlugin.mockResolvedValue(undefined);
     mockUpdatePluginState.mockResolvedValue(undefined);
-    mockUpdateToolMessage.mockResolvedValue(undefined);
+    mockUpdateToolMessage.mockResolvedValue({ success: true });
     service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
   });
 
@@ -222,16 +254,19 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
 
     // Content, intervention, and optional form state share one row-locking
     // first-winner boundary.
-    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
-      expect.objectContaining({
-        content: 'My favorite color is blue',
-        id: 'tool-msg-1',
-        intervention: {
-          resolutionRequestId: expect.stringMatching(/^legacy_/),
-          status: 'approved',
-        },
-      }),
-    ]);
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          content: 'My favorite color is blue',
+          id: 'tool-msg-1',
+          intervention: {
+            resolutionRequestId: expect.stringMatching(/^legacy_/),
+            status: 'approved',
+          },
+        }),
+      ],
+      { publishResult: true },
+    );
 
     // Resumes from `tool_result` — NOT `human_approved_tool` (which would
     // re-dispatch the tool and overwrite the answer).
@@ -250,6 +285,137 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
     expect(call.initialContext.phase).not.toBe('human_approved_tool');
   });
 
+  it('withholds a human tool answer before loading continuation history', async () => {
+    const secret = 'synthetic-private-answer';
+    const blocked = {
+      content: 'Tool result withheld by afterToolCall hook.',
+      error: 'hook_denied',
+      state: {
+        phase: 'afterToolCall',
+        type: 'blocked',
+        reason: 'Tool result withheld by afterToolCall hook.',
+      },
+      success: false,
+    };
+    mockControlToolResult.mockResolvedValue({
+      result: blocked,
+      blocked: true,
+      cancelled: false,
+    });
+    mockUpdateToolMessage.mockResolvedValue({ success: true });
+    await service.execAgent({
+      ...baseParams,
+      resumeToolResult: {
+        content: secret,
+        pluginState: { answer: secret },
+        parentMessageId: 'tool-msg-1',
+        toolCallId: 'call_ask',
+      },
+    });
+    expect(mockControlToolResult).toHaveBeenCalledWith({
+      operationId: undefined,
+      toolMessageId: 'tool-msg-1',
+      result: { content: secret, state: { answer: secret }, success: true },
+    });
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          content: blocked.content,
+          pluginState: blocked.state,
+          replacePluginState: true,
+        }),
+      ],
+      { publishResult: true },
+    );
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          content: blocked.content,
+          pluginError: 'hook_denied',
+          replacePluginState: true,
+        }),
+      ],
+      { publishResult: true },
+    );
+    expect(mockResolveHumanApproval.mock.invocationCallOrder[0]).toBeLessThan(
+      mockMessageQuery.mock.invocationCallOrder[0],
+    );
+    expect(JSON.stringify(mockCreateOperation.mock.calls[0][0].initialContext)).not.toContain(
+      secret,
+    );
+  });
+
+  it('does not start a continuation when withholding the persisted answer fails', async () => {
+    mockControlToolResult.mockResolvedValue({
+      blocked: true,
+      cancelled: false,
+      result: {
+        content: 'withheld',
+        state: { phase: 'afterToolCall', type: 'blocked' },
+        success: false,
+      },
+    });
+    mockResolveHumanApproval.mockRejectedValueOnce(new Error('Failed to publish tool result'));
+    await expect(
+      service.execAgent({
+        ...baseParams,
+        resumeToolResult: {
+          content: 'private answer',
+          parentMessageId: 'tool-msg-1',
+          toolCallId: 'call_ask',
+        },
+      }),
+    ).rejects.toThrow('Failed to publish tool result');
+    expect(mockCreateOperation).not.toHaveBeenCalled();
+    expect(mockMessageQuery).not.toHaveBeenCalled();
+  });
+
+  it('restores the original error on startup failure and clears it on an allowed retry', async () => {
+    const originalError = { message: 'old tool error' };
+    mockFindMessagePlugin.mockResolvedValue({ ...pendingToolPlugin, error: originalError });
+    mockControlToolResult.mockResolvedValueOnce({
+      blocked: true,
+      cancelled: false,
+      result: {
+        content: 'withheld',
+        error: 'hook_denied',
+        state: { phase: 'afterToolCall', type: 'blocked' },
+        success: false,
+      },
+    });
+    mockCreateOperation.mockRejectedValueOnce(new Error('startup failed'));
+    const params = {
+      ...baseParams,
+      resumeToolResult: {
+        content: 'answer',
+        parentMessageId: 'tool-msg-1',
+        toolCallId: 'call_ask',
+      },
+    };
+    await expect(service.execAgent(params)).resolves.toMatchObject({
+      success: false,
+      error: 'startup failed',
+    });
+    expect(mockRestoreHumanApproval).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'tool-msg-1', pluginError: originalError }),
+    ]);
+    mockControlToolResult.mockResolvedValueOnce({
+      blocked: false,
+      cancelled: false,
+      result: { content: 'answer', success: true },
+    });
+    await service.execAgent(params);
+    expect(mockResolveHumanApproval).toHaveBeenLastCalledWith(
+      [
+        expect.objectContaining({
+          content: 'answer',
+          pluginError: null,
+        }),
+      ],
+      { publishResult: true },
+    );
+  });
+
   it('persists pluginState when provided', async () => {
     await service.execAgent({
       ...baseParams,
@@ -261,11 +427,14 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       },
     });
 
-    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
-      expect.objectContaining({
-        pluginState: { askUserAnswers: { 'favorite color?': 'blue' } },
-      }),
-    ]);
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          pluginState: { askUserAnswers: { 'favorite color?': 'blue' } },
+        }),
+      ],
+      { publishResult: true },
+    );
   });
 
   it('does not persist pluginState when omitted', async () => {
@@ -278,9 +447,10 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       },
     });
 
-    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
-      expect.objectContaining({ pluginState: undefined }),
-    ]);
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [expect.objectContaining({ pluginState: undefined })],
+      { publishResult: true },
+    );
   });
 
   describe('validation guards', () => {

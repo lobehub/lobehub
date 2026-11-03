@@ -195,7 +195,10 @@ export const createAnthropicGenerateObject = async (
   try {
     log('calling Anthropic API with max_tokens: %d', finalRequestParams.max_tokens);
 
-    const response = await client.messages.create(finalRequestParams, { signal: options?.signal });
+    const response = await client.messages.create(finalRequestParams, {
+      headers: options?.headers,
+      signal: options?.signal,
+    });
 
     log('received response with %d content blocks', response.content.length);
     log('response: %O', response);

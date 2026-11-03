@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewAgent } from '../../schemas';
@@ -96,6 +96,17 @@ describe('AgentModel', () => {
       // Its actual creator passes.
       expect(await agentModel2.existsOwnedById(othersAgent)).toBe(true);
     });
+
+    it('rejects an agent owned by the caller when it is in the recycle bin', async () => {
+      const agentId = 'trashed-owned-agent-id';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB
+        .update(agents)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(agents.id, agentId));
+
+      expect(await agentModel.existsOwnedById(agentId)).toBe(false);
+    });
   });
 
   describe('getAgentConfigById', () => {
@@ -137,6 +148,96 @@ describe('AgentModel', () => {
       expect(result!.files).toHaveLength(1);
       expect(result!.files[0].content).toBe('This is document content');
       expect(result!.files[0].enabled).toBe(true);
+    });
+
+    it('should report the original size of a document cut at parse time', async () => {
+      const agentId = 'test-agent-with-cut-doc';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      await serverDB.insert(documents).values({
+        content: 'Kept head',
+        fileId: '1',
+        fileType: 'application/pdf',
+        id: 'doc-cut',
+        metadata: { originalCharCount: 9_000_000, truncated: true },
+        source: 'document.pdf',
+        sourceType: 'file',
+        totalCharCount: 9,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      expect(result!.files[0].originalCharCount).toBe(9_000_000);
+    });
+
+    it('should pick the oldest document when a file owns several', async () => {
+      const agentId = 'test-agent-with-two-docs';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      const doc = {
+        fileId: '1',
+        fileType: 'text/plain',
+        source: 'notes.txt',
+        sourceType: 'file',
+        totalCharCount: 10,
+        totalLineCount: 1,
+        userId,
+      } as const;
+      // Inserted newest first: without an explicit order, a first-wins read would take the newer copy.
+      await serverDB.insert(documents).values({
+        ...doc,
+        content: 'page-editor copy',
+        createdAt: new Date('2026-02-01'),
+        id: 'doc-new',
+      });
+      await serverDB.insert(documents).values({
+        ...doc,
+        content: 'parse cache',
+        createdAt: new Date('2026-01-01'),
+        id: 'doc-old',
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      // Same document `DocumentModel.findByFileId` returns, which `readAttachment` pages through.
+      expect(result!.files[0].content).toBe('parse cache');
+    });
+
+    it('should skip an agent-document upload placeholder in favor of the parse cache', async () => {
+      const agentId = 'test-agent-with-placeholder';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      // Older empty row written by `AgentDocumentsService.importFile`; bytes live in the file.
+      await serverDB.insert(documents).values({
+        content: '',
+        createdAt: new Date('2026-01-01'),
+        fileId: '1',
+        fileType: 'text/markdown',
+        id: 'doc-placeholder',
+        source: 'notes.md',
+        sourceType: 'file',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      });
+      await serverDB.insert(documents).values({
+        content: 'parsed notes',
+        createdAt: new Date('2026-02-01'),
+        fileId: '1',
+        fileType: 'custom/document',
+        id: 'doc-parsed',
+        source: 'notes.md',
+        sourceType: 'file',
+        totalCharCount: 12,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      expect(result!.files[0].content).toBe('parsed notes');
     });
 
     it('should not include content for disabled files', async () => {
@@ -259,6 +360,57 @@ describe('AgentModel', () => {
   });
 
   describe('getAgentSnapshotForTaskCreate', () => {
+    it('reports the native model provider without changing the Agent snapshot', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: { heterogeneousProvider: { authMode: 'subscription', type: 'codex' } },
+        id: 'native-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      expect(await agentModel.getAgentSnapshotForTaskCreate('native-task-snapshot')).toMatchObject({
+        modelOverrideProvider: 'codex',
+        snapshot: { model: 'codex', provider: 'openai' },
+      });
+    });
+
+    /** @example A Task snapshot exposes its personal binding without rewriting runtime identity. */
+    it('reports the API binding provider for model-only Task creation', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: {
+          heterogeneousProvider: {
+            authMode: 'api',
+            type: 'codex',
+            apiConfig: { model: 'gpt-5.4', providerId: 'personal-provider' },
+          },
+        },
+        id: 'api-bound-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      /** @example Provider inference and inherited runtime snapshots remain distinct. */
+      expect(
+        await agentModel.getAgentSnapshotForTaskCreate('api-bound-task-snapshot'),
+      ).toMatchObject({
+        modelOverrideProvider: 'personal-provider',
+        snapshot: { model: 'codex', provider: 'openai' },
+      });
+    });
+
+    it('does not substitute the native provider for API authentication', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: { heterogeneousProvider: { authMode: 'api', type: 'codex' } },
+        id: 'api-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      expect(await agentModel.getAgentSnapshotForTaskCreate('api-task-snapshot')).toMatchObject({
+        modelOverrideProvider: null,
+      });
+    });
+
     it('returns model/provider snapshot + visibility in one call', async () => {
       const agentId = 'snap-task-create-1';
       await serverDB.insert(agents).values({
@@ -289,6 +441,112 @@ describe('AgentModel', () => {
       const result = await agentModel.getAgentSnapshotForTaskCreate(agentId);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('queryAgents', () => {
+    it('excludes the inbox by default, so callers that never ask for it keep legacy behavior', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'default-inbox', slug: INBOX_SESSION_ID, userId, virtual: true },
+        { id: 'default-normal', userId },
+        { id: 'default-virtual', userId, virtual: true },
+      ]);
+
+      // The inbox is product-owned; a lookup that does not opt in must not
+      // inherit it, or older clients and CRUD/group surfaces start offering a
+      // row they cannot delete or add.
+      await expect(agentModel.queryAgents()).resolves.toHaveLength(1);
+      await expect(agentModel.countAgents()).resolves.toBe(1);
+    });
+
+    it('includes the inbox (Lobe AI) and flags it with isInbox when the caller opts in', async () => {
+      await serverDB.insert(agents).values([
+        {
+          id: 'inbox-agent',
+          name: 'Sienna',
+          slug: INBOX_SESSION_ID,
+          title: 'Lobe',
+          userId,
+          virtual: true,
+        },
+        { id: 'normal-agent', name: '三条', title: 'Architect', userId, virtual: false },
+        { id: 'group-built-agent', title: 'Group member', userId, virtual: true },
+      ]);
+
+      const result = await agentModel.queryAgents({ includeInbox: true });
+      const byId = new Map(result.map((agent) => [agent.id, agent] as const));
+
+      // The inbox is a real assistant the user talks to; the caller opted in.
+      expect(byId.get('inbox-agent')?.isInbox).toBe(true);
+      expect(byId.get('inbox-agent')?.name).toBe('Sienna');
+      expect(byId.get('inbox-agent')?.title).toBe('Lobe');
+      expect(byId.get('normal-agent')?.isInbox).toBe(false);
+      // Other virtual rows are infrastructure, not user content.
+      expect(byId.has('group-built-agent')).toBe(false);
+    });
+
+    it('matches the user-facing display name in a keyword search', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'sienna-agent', name: 'Sienna', title: 'Lobe', userId },
+        { id: 'coco-agent', name: 'Coco', title: 'Codex', userId },
+      ]);
+
+      const result = await agentModel.queryAgents({ keyword: 'Sienna' });
+
+      expect(result.map((agent) => agent.id)).toEqual(['sienna-agent']);
+    });
+
+    it('matches a blank-title inbox by its default display title when the caller opts in', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'blank-inbox', slug: INBOX_SESSION_ID, title: null, userId, virtual: true },
+        { id: 'normal-agent', title: 'Writer', userId },
+      ]);
+
+      const withInbox = await agentModel.queryAgents({ includeInbox: true, keyword: 'lobe' });
+      expect(withInbox.map((agent) => agent.id)).toEqual(['blank-inbox']);
+      expect(withInbox[0]?.title).toBe(DEFAULT_INBOX_TITLE);
+      await expect(agentModel.countAgents({ includeInbox: true, keyword: 'lobe' })).resolves.toBe(
+        1,
+      );
+
+      // Without the opt-in the inbox stays out even when the keyword matches.
+      await expect(agentModel.queryAgents({ keyword: 'lobe' })).resolves.toEqual([]);
+    });
+
+    it('counts the inbox in the shared total when the caller opts in, so pagination stays honest', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'inbox-agent', slug: INBOX_SESSION_ID, userId, virtual: true },
+        { id: 'normal-agent', userId },
+        { id: 'group-built-agent', userId, virtual: true },
+      ]);
+
+      await expect(agentModel.countAgents({ includeInbox: true })).resolves.toBe(2);
+    });
+
+    it('keeps the inbox out of a limited page unless the caller opts in', async () => {
+      // The addable agent is the *older* row: if the inbox were merely filtered
+      // after the page was built, `limit: 1` would return the (newer) inbox and
+      // then drop it, leaving nothing.
+      await serverDB.insert(agents).values([
+        { id: 'optin-normal', updatedAt: new Date('2024-01-01'), userId },
+        {
+          id: 'optin-inbox',
+          slug: INBOX_SESSION_ID,
+          updatedAt: new Date('2024-02-01'),
+          userId,
+          virtual: true,
+        },
+      ]);
+
+      // Default (legacy) excludes it inside the where clause, before the limit.
+      const limited = await agentModel.queryAgents({ limit: 1 });
+      expect(limited.map((agent) => agent.id)).toEqual(['optin-normal']);
+      await expect(agentModel.countAgents()).resolves.toBe(1);
+
+      // Opting in brings it back, ordering included.
+      const withInbox = await agentModel.queryAgents({ includeInbox: true, limit: 1 });
+      expect(withInbox.map((agent) => agent.id)).toEqual(['optin-inbox']);
+      await expect(agentModel.countAgents({ includeInbox: true })).resolves.toBe(2);
     });
   });
 
@@ -839,23 +1097,25 @@ describe('AgentModel', () => {
       expect(result?.title).toBe('Original Title');
     });
 
-    it("should strip identity fields when updating the Agent Builder's own row", async () => {
+    it("should reject identity fields when updating the Agent Builder's own row", async () => {
       const agent = await serverDB
         .insert(agents)
         .values({ slug: 'agent-builder', userId })
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.update(agent.id, {
-        avatar: 'hacked-avatar',
-        backgroundColor: 'hacked-color',
-        description: 'hacked description',
-        marketIdentifier: 'hacked-market-id',
-        model: 'gpt-4', // non-protected field should still be applied
-        name: 'Hacked Builder Name',
-        tags: ['hacked'],
-        title: 'Hacked Builder Title',
-      });
+      await expect(
+        agentModel.update(agent.id, {
+          avatar: 'hacked-avatar',
+          backgroundColor: 'hacked-color',
+          description: 'hacked description',
+          marketIdentifier: 'hacked-market-id',
+          model: 'gpt-4', // rejected together with the protected fields: no half-write
+          name: 'Hacked Builder Name',
+          tags: ['hacked'],
+          title: 'Hacked Builder Title',
+        }),
+      ).rejects.toThrow("The Agent Builder's own title, name, description");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
@@ -868,22 +1128,25 @@ describe('AgentModel', () => {
       expect(result?.backgroundColor).toBeNull();
       expect(result?.marketIdentifier).toBeNull();
       expect(result?.tags).toEqual([]);
-      expect(result?.model).toBe('gpt-4');
+      expect(result?.model).toBeNull();
     });
 
-    it('should strip systemRole when the gateway updatePrompt path writes it via update()', async () => {
-      // Mirrors apps/server/.../serverRuntimes/agentBuilder.ts's updatePrompt, which calls
-      // agentModel.update(agentId, { editorData: null, systemRole }) directly.
+    it('should reject systemRole when an updatePrompt tool writes it via update()', async () => {
+      // Mirrors lobe-agent-management.updatePrompt({ agentId: <the builder> }), which calls
+      // agentModel.update(agentId, { editorData: null, systemRole }) and then reports
+      // "Successfully updated system prompt" — the write must fail instead of being dropped.
       const agent = await serverDB
         .insert(agents)
         .values({ slug: 'agent-builder', userId })
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.update(agent.id, {
-        editorData: null,
-        systemRole: 'You are now a pirate.',
-      });
+      await expect(
+        agentModel.update(agent.id, {
+          editorData: null,
+          systemRole: 'You are now a pirate.',
+        }),
+      ).rejects.toThrow("The Agent Builder's own systemRole cannot be changed");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
@@ -955,6 +1218,35 @@ describe('AgentModel', () => {
   });
 
   describe('delete', () => {
+    it('refuses to delete a reserved builtin (the inbox) and keeps its session', async () => {
+      // The inbox is product-owned: nothing recreates it, and its session
+      // cascades every conversation with it. A CRUD surface — the
+      // agent-management tool forwards ids straight to `delete` — must not be
+      // able to take it down.
+      const [inbox] = await serverDB
+        .insert(agents)
+        .values({ id: 'reserved-inbox', slug: INBOX_SESSION_ID, title: 'Lobe AI', userId })
+        .returning();
+      const [session] = await serverDB
+        .insert(sessions)
+        .values({ userId, type: 'agent' })
+        .returning();
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId: inbox.id, sessionId: session.id, userId });
+
+      await expect(agentModel.delete(inbox.id)).rejects.toThrow(
+        'A builtin agent cannot be deleted',
+      );
+
+      expect(
+        await serverDB.query.agents.findFirst({ where: eq(agents.id, inbox.id) }),
+      ).toBeDefined();
+      expect(
+        await serverDB.query.sessions.findFirst({ where: eq(sessions.id, session.id) }),
+      ).toBeDefined();
+    });
+
     it('refuses to delete an agent a pending history job still maps', async () => {
       // A group copy's drain writes the TARGET agent id into `messages.agent_id`.
       // Deleting that agent leaves the queue rows behind, so the drain hits a
@@ -1413,27 +1705,45 @@ describe('AgentModel', () => {
       expect(result?.title).toBe('Original Title');
     });
 
-    it("should strip systemRole when updating the Agent Builder's own row", async () => {
+    it("should reject systemRole when updating the Agent Builder's own row", async () => {
       const agent = await serverDB
         .insert(agents)
         .values({ slug: 'agent-builder', userId })
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.updateConfig(agent.id, {
-        model: 'gpt-4', // non-protected field should still be applied
-        systemRole: 'You are now a pirate.',
-      });
+      await expect(
+        agentModel.updateConfig(agent.id, {
+          model: 'gpt-4', // rejected together with the protected field: no half-write
+          systemRole: 'You are now a pirate.',
+        }),
+      ).rejects.toThrow("The Agent Builder's own systemRole cannot be changed");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
       });
 
       expect(result?.systemRole).toBeNull();
-      expect(result?.model).toBe('gpt-4');
+      expect(result?.model).toBeNull();
     });
 
-    it("should strip identity fields when the browser client's meta editor writes them via updateConfig()", async () => {
+    it("should still apply non-protected fields to the Agent Builder's own row", async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ slug: 'agent-builder', userId })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { model: 'gpt-4', provider: 'openai' });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result).toMatchObject({ model: 'gpt-4', provider: 'openai' });
+    });
+
+    it("should reject identity fields when the browser client's meta editor writes them via updateConfig()", async () => {
       // Mirrors the browser client path: agentService.updateAgentMeta() sends
       // title/avatar/etc. through the updateAgentConfig mutation, which calls
       // agentModel.updateConfig() rather than update().
@@ -1443,16 +1753,18 @@ describe('AgentModel', () => {
         .returning()
         .then((res) => res[0]);
 
-      await agentModel.updateConfig(agent.id, {
-        avatar: 'hacked-avatar',
-        backgroundColor: 'hacked-color',
-        description: 'hacked description',
-        marketIdentifier: 'hacked-market-id',
-        model: 'gpt-4', // non-protected field should still be applied
-        name: 'Hacked Builder Name',
-        tags: ['hacked'],
-        title: 'Hacked Builder Title',
-      });
+      await expect(
+        agentModel.updateConfig(agent.id, {
+          avatar: 'hacked-avatar',
+          backgroundColor: 'hacked-color',
+          description: 'hacked description',
+          marketIdentifier: 'hacked-market-id',
+          model: 'gpt-4', // rejected together with the protected fields: no half-write
+          name: 'Hacked Builder Name',
+          tags: ['hacked'],
+          title: 'Hacked Builder Title',
+        }),
+      ).rejects.toThrow("The Agent Builder's own title, name, description");
 
       const result = await serverDB.query.agents.findFirst({
         where: eq(agents.id, agent.id),
@@ -1465,7 +1777,7 @@ describe('AgentModel', () => {
       expect(result?.backgroundColor).toBeNull();
       expect(result?.marketIdentifier).toBeNull();
       expect(result?.tags).toEqual([]);
-      expect(result?.model).toBe('gpt-4');
+      expect(result?.model).toBeNull();
     });
 
     it('should strip heterogeneousProvider when updating the inbox agent', async () => {
@@ -2971,6 +3283,34 @@ describe('AgentModel', () => {
   });
 
   describe('updateConfig edge cases', () => {
+    it('should keep a systemRole committed by a parallel update() while the config write is in flight', async () => {
+      // Same shape as a batch where the model calls updateAgent(config: openingMessage…) and
+      // updatePrompt in parallel: each tool runs on its own pooled connection, so the prompt
+      // write can commit between updateConfig's read and its write. Pin that interleaving.
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ systemRole: 'OLD PROMPT', userId })
+        .returning();
+
+      const original = (agentModel as any).ctx.assertWorkspaceDeviceBinding;
+      const spy = vi
+        .spyOn((agentModel as any).ctx, 'assertWorkspaceDeviceBinding')
+        .mockImplementationOnce(async (...args: unknown[]) => {
+          await agentModel.update(agent.id, { editorData: null, systemRole: 'NEW PROMPT' });
+          return original(...args);
+        });
+
+      await agentModel.updateConfig(agent.id, { openingMessage: 'hi', openingQuestions: ['q'] });
+      spy.mockRestore();
+
+      const dbAgent = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(dbAgent).toMatchObject({
+        openingMessage: 'hi',
+        openingQuestions: ['q'],
+        systemRole: 'NEW PROMPT',
+      });
+    });
+
     it('should return early for null data', async () => {
       const [agent] = await serverDB
         .insert(agents)
@@ -3200,6 +3540,85 @@ describe('AgentModel', () => {
       expect((result?.agencyConfig as any)?.workingDirByDevice).toEqual({ 'device-b': '/b' });
       expect((result?.agencyConfig as any)?.executionTarget).toBe('local');
     });
+
+    it('replaces a device directory selection without retaining stale repository metadata', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          agencyConfig: {
+            executionTarget: 'local',
+            workingDirByDevice: {
+              'device-a': {
+                git: { activeWorktree: '/repos/titu-worktree', branch: 'master' },
+                path: '/repos/titu',
+                repoType: 'github',
+              },
+              'device-b': '/remote/repo',
+            },
+          },
+        })
+        .returning();
+
+      await agentModel.updateConfig(
+        agent.id,
+        {
+          agencyConfig: { workingDirByDevice: { 'device-a': { path: '/repos/lobehub' } } },
+        },
+        ['device-a'],
+      );
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(result?.agencyConfig).toEqual({
+        executionTarget: 'local',
+        workingDirByDevice: {
+          'device-a': { path: '/repos/lobehub' },
+          'device-b': '/remote/repo',
+        },
+      });
+    });
+
+    it.each([undefined, ['device-a']])(
+      'preserves newer Git fields on unmarked devices in a cached complete map (%j)',
+      async (replaceWorkingDirDeviceIds) => {
+        const newerDeviceB = {
+          git: { activeWorktree: '/repos/b-worktree', branch: 'feature-b' },
+          path: '/repos/b',
+          repoType: 'github' as const,
+        };
+        const [agent] = await serverDB
+          .insert(agents)
+          .values({
+            userId,
+            agencyConfig: {
+              workingDirByDevice: {
+                'device-a': { path: '/repos/a' },
+                'device-b': newerDeviceB,
+              },
+            },
+          })
+          .returning();
+
+        await agentModel.updateConfig(
+          agent.id,
+          {
+            agencyConfig: {
+              workingDirByDevice: {
+                'device-a': { path: '/repos/a-new' },
+                'device-b': { path: '/repos/b' },
+              },
+            },
+          },
+          replaceWorkingDirDeviceIds,
+        );
+
+        const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+        expect(result?.agencyConfig?.workingDirByDevice).toEqual({
+          'device-a': { path: '/repos/a-new' },
+          'device-b': newerDeviceB,
+        });
+      },
+    );
 
     it('should still upsert a workingDirByDevice entry when value is a path', async () => {
       const [agent] = await serverDB

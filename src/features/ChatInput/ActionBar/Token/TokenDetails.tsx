@@ -1,5 +1,4 @@
-import { Center, Flexbox, Tooltip } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Center, cssVar, Flexbox, Tooltip } from '@lobehub/ui';
 import numeral from 'numeral';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

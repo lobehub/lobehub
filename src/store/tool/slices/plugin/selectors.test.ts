@@ -59,6 +59,40 @@ describe('pluginSelectors', () => {
         title: 'Plugin 1',
       });
     });
+
+    it('derives meta from a marketplace-shaped manifest without `meta`', () => {
+      // Community MCP rows installed by the server-side agent builder store the
+      // marketplace manifest verbatim: flat name/description/icon, no `meta`.
+      const state = {
+        ...mockState,
+        installedPlugins: [
+          {
+            identifier: 'alpaca-mcp',
+            manifest: {
+              description: 'Trade with Alpaca',
+              icon: 'https://example.com/alpaca.png',
+              identifier: 'alpaca-mcp',
+              name: 'Alpaca MCP',
+              tags: ['finance'],
+              tools: [],
+            } as unknown as ToolManifest,
+            type: 'plugin',
+          },
+        ],
+      } as ToolStoreState;
+
+      expect(pluginSelectors.getPluginMetaById('alpaca-mcp')(state)).toEqual({
+        avatar: 'https://example.com/alpaca.png',
+        description: 'Trade with Alpaca',
+        tags: ['finance'],
+        title: 'Alpaca MCP',
+      });
+    });
+
+    it('returns undefined when the manifest carries neither meta nor a market name', () => {
+      const result = pluginSelectors.getPluginMetaById('plugin-3')(mockState);
+      expect(result).toBeUndefined();
+    });
   });
 
   describe('getDevPluginById', () => {
@@ -170,6 +204,22 @@ describe('pluginSelectors', () => {
       expect(result).toHaveLength(mockState.installedPlugins.length);
       expect(result[0].identifier).toBe('plugin-1');
       expect(result[0].type).toBe('plugin');
+    });
+
+    it('surfaces the market name as title for a meta-less community plugin', () => {
+      const state = {
+        ...mockState,
+        installedPlugins: [
+          {
+            identifier: 'alpaca-mcp',
+            manifest: { identifier: 'alpaca-mcp', name: 'Alpaca MCP' } as unknown as ToolManifest,
+            type: 'plugin',
+          },
+        ],
+      } as ToolStoreState;
+
+      const [item] = pluginSelectors.installedPluginMetaList(state);
+      expect(item.title).toBe('Alpaca MCP');
     });
   });
 

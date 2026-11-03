@@ -1,6 +1,5 @@
-import { DropdownMenu as DropdownMenuUI } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { type ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu as DropdownMenuUI } from '@lobehub/ui';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo } from 'react';
 

@@ -7,6 +7,7 @@ import {
   CodeBuddy,
   Codex,
   Cursor,
+  Devin,
   Grok,
   Kimi,
   OpenCode,
@@ -45,6 +46,10 @@ const GUIDE_PRESENTATION_CONFIG = {
   'droid': {
     icon: DroidIcon,
     translationPrefix: 'droidInstallGuide',
+  },
+  'devin': {
+    icon: Devin,
+    translationPrefix: 'devinInstallGuide',
   },
   'grok-build': {
     icon: Grok,

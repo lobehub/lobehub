@@ -2,8 +2,8 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { WebSearchArgs, WebSearchPluginState, WebSearchResult } from '../../../types';

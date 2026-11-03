@@ -1,40 +1,42 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Skeleton, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { ArrowLeftIcon, Trash2Icon } from 'lucide-react';
+import {
+  ActionIcon,
+  Alert,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Flexbox,
+  Skeleton,
+  Tabs,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
+import dayjs from 'dayjs';
+import { ArrowLeftIcon, PowerIcon, PowerOffIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import OAuthAppStats from '@/business/client/OAuthAppStats';
+import AsyncError from '@/components/AsyncError';
 import { useClientDataSWR } from '@/libs/swr';
 import { authKeys } from '@/libs/swr/keys';
+import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { type OAuthAppItem } from '@/types/oauthApp';
 
-import ClientIdDisplay from '../ClientIdDisplay';
-import EditForm from './EditForm';
+import { confirmDisableOAuthApp } from '../confirmDisable';
+import { showClientSecretModal } from '../SecretModal';
+import BasicInfoCard from './BasicInfoCard';
+import CredentialsCard from './CredentialsCard';
+import IntegrationCard from './IntegrationCard';
+import ManualSetupCard from './ManualSetupCard';
+import RedirectUrisCard from './RedirectUrisCard';
+import SectionCard from './SectionCard';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  backButton: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
   card: css`
     padding: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
@@ -47,16 +49,45 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
-  label: css`
+  dangerDesc: css`
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
-  row: css`
+  dangerRow: css`
     display: flex;
+    gap: 16px;
     align-items: center;
     justify-content: space-between;
   `,
+  // The stats slot is a business stub that renders nothing in the open-source
+  // build; an empty bordered card must not be left behind.
+  statsCard: css`
+    padding: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorBgContainer};
+
+    &:empty {
+      display: none;
+    }
+  `,
+  meta: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
 }));
+
+/** The app page while it loads; also shown while the Labs flag resolves on a direct visit. */
+export const AppDetailSkeleton = () => (
+  <Flexbox gap={16}>
+    <Skeleton.Text rows={1} width={200} />
+    <div className={styles.card}>
+      <Skeleton.Text rows={4} />
+    </div>
+  </Flexbox>
+);
+
+const TAB_KEYS = ['overview', 'credentials', 'advanced'] as const;
 
 interface AppDetailProps {
   canEdit: boolean;
@@ -66,15 +97,31 @@ interface AppDetailProps {
 }
 
 const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
-  const { t } = useTranslation('auth');
+  const { t } = useTranslation(['auth', 'common']);
 
-  const { data, error, isLoading, mutate } = useClientDataSWR(authKeys.oauthAppById(id), () =>
-    lambdaClient.oauthApp.getById.query({ id }),
+  const { data, error, isLoading, isValidating, mutate } = useClientDataSWR(
+    authKeys.oauthAppById(id),
+    () => lambdaClient.oauthApp.getById.query({ id }),
   );
   const detail = data as OAuthAppItem | undefined;
 
+  // The active tab lives in the URL so a reload or shared link keeps it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = TAB_KEYS.find((key) => key === searchParams.get('tab')) ?? 'overview';
+  const setTab = (key: string) =>
+    setSearchParams(
+      (params) => {
+        if (key === 'overview') params.delete('tab');
+        else params.set('tab', key);
+        return params;
+      },
+      { replace: true },
+    );
+
+  // Only a settled "no such app" goes back to the list; a failed load stays here
+  // with Retry instead of silently bouncing the user away.
   useEffect(() => {
-    if (error || (!isLoading && !detail)) onBack();
+    if (!error && !isLoading && !detail) onBack();
   }, [error, isLoading, detail, onBack]);
 
   const revalidate = () => {
@@ -89,6 +136,15 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
     },
   });
   const enabledMutation = lambdaQuery.oauthApp.setEnabled.useMutation({ onSuccess: revalidate });
+  const rotateSecretMutation = lambdaQuery.oauthApp.rotateSecret.useMutation({
+    // Minting a credential must never fail silently: the user needs to know no
+    // secret is waiting for them and that they can try again.
+    onError: () => toast.error(t('oauthApp.secret.issueFailed')),
+    onSuccess: ({ clientSecret }) => {
+      revalidate();
+      showClientSecretModal({ clientSecret });
+    },
+  });
   const deleteMutation = lambdaQuery.oauthApp.delete.useMutation({
     onSuccess: () => {
       onChanged();
@@ -96,8 +152,25 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
     },
   });
 
+  const handleUpdate = async (value: Parameters<typeof updateMutation.mutateAsync>[0]['value']) => {
+    await updateMutation.mutateAsync({ id, value });
+  };
+
+  const handleRotateSecret = () =>
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('oauthApp.secret.rotateConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('oauthApp.secret.rotateConfirm.ok'),
+      onOk: async () => {
+        await rotateSecretMutation.mutateAsync({ id });
+      },
+      title: t('oauthApp.secret.rotateConfirm.title'),
+    });
+
   const handleDelete = () =>
     confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
       content: t('oauthApp.deleteConfirm.content'),
       okButtonProps: { danger: true },
       okText: t('oauthApp.deleteConfirm.ok'),
@@ -107,104 +180,180 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
       title: t('oauthApp.deleteConfirm.title'),
     });
 
-  if (!detail)
+  const handleEnable = () => enabledMutation.mutate({ enabled: true, id });
+  const handleDisable = () =>
+    confirmDisableOAuthApp(() => enabledMutation.mutateAsync({ enabled: false, id }));
+
+  if (error && !detail)
     return (
-      <Flexbox gap={16}>
-        <Skeleton.Text rows={1} width={200} />
-        <div className={styles.card}>
-          <Skeleton.Text rows={4} />
-        </div>
-      </Flexbox>
+      <AsyncError
+        error={error}
+        variant={'page'}
+        action={
+          <Flexbox horizontal gap={8}>
+            <Button onClick={onBack}>{t('oauthApp.detail.back')}</Button>
+            {normalizeAsyncError(error).retryable && (
+              <Button loading={isValidating} onClick={() => mutate()}>
+                {t('retry', { ns: 'common' })}
+              </Button>
+            )}
+          </Flexbox>
+        }
+      />
     );
 
-  return (
-    <Flexbox gap={20}>
-      <Flexbox horizontal align={'center'} gap={8}>
-        <span
-          aria-label={t('oauthApp.detail.back')}
-          className={styles.backButton}
-          role={'button'}
-          tabIndex={0}
-          onClick={onBack}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onBack();
-            }
-          }}
-        >
-          <Icon icon={ArrowLeftIcon} size={'small'} />
-        </span>
-        <Text strong style={{ fontSize: 20 }}>
-          {detail.name}
-        </Text>
-        {!detail.enabled && <Tag>{t('oauthApp.item.disabledTag')}</Tag>}
-      </Flexbox>
+  if (!detail) return <AppDetailSkeleton />;
 
-      <div className={styles.card}>
-        <EditForm
-          canEdit={canEdit}
-          detail={detail}
-          key={detail.id}
-          onSubmit={async (value) => {
-            await updateMutation.mutateAsync({ id, value });
-          }}
-        />
-      </div>
+  const isWebApp = detail.applicationType === 'web';
+  const isDisabled = !detail.enabled;
+  // Relative times, matching the list rows.
+  const meta = [
+    t('oauthApp.detail.createdRelative', { time: dayjs(detail.createdAt).fromNow() }),
+    detail.lastUsedAt
+      ? t('oauthApp.item.lastUsed', { time: dayjs(detail.lastUsedAt).fromNow() })
+      : t('oauthApp.list.neverUsed'),
+  ].join(' · ');
 
-      <Flexbox className={styles.card} gap={16}>
-        <div className={styles.row}>
-          <span className={styles.label}>{t('oauthApp.detail.clientId')}</span>
-          <ClientIdDisplay clientId={detail.id} />
-        </div>
+  const banner = isDisabled && (
+    <Alert
+      showIcon
+      message={t('oauthApp.disabled.banner')}
+      type={'warning'}
+      action={
+        canEdit && (
+          <Button loading={enabledMutation.isPending} size={'small'} onClick={handleEnable}>
+            {t('oauthApp.actions.enable')}
+          </Button>
+        )
+      }
+    />
+  );
 
-        <div className={styles.row}>
-          <span className={styles.label}>{t('oauthApp.detail.type')}</span>
-          <Tag>{t('oauthApp.type.badge')}</Tag>
-        </div>
-
-        <div className={styles.row}>
-          <span className={styles.label}>{t('oauthApp.detail.createdAt')}</span>
-          <Text type={'secondary'}>{detail.createdAt.toLocaleString()}</Text>
-        </div>
-
-        <div className={styles.row}>
-          <span className={styles.label}>{t('oauthApp.detail.lastUsedAt')}</span>
-          <Text type={'secondary'}>
-            {detail.lastUsedAt
-              ? detail.lastUsedAt.toLocaleString()
-              : t('oauthApp.detail.neverUsed')}
-          </Text>
-        </div>
-
-        <div className={styles.row}>
-          <span className={styles.label}>{t('oauthApp.detail.enabled')}</span>
-          <Switch
-            checked={!!detail.enabled}
-            disabled={!canEdit || enabledMutation.isPending}
-            onChange={(checked) => enabledMutation.mutate({ enabled: checked, id })}
-          />
-        </div>
-      </Flexbox>
-
-      <div className={styles.card}>
+  // The landing tab: what the app is and how to wire it in.
+  const overviewTab = (
+    <>
+      <BasicInfoCard
+        canEdit={canEdit}
+        detail={detail}
+        key={`basic-${detail.id}`}
+        onSubmit={handleUpdate}
+      />
+      <IntegrationCard
+        applicationType={detail.applicationType}
+        clientId={detail.id}
+        name={detail.name}
+      />
+      <div className={styles.statsCard}>
         <OAuthAppStats clientId={detail.id} />
       </div>
+    </>
+  );
 
-      <Flexbox className={styles.dangerCard} gap={12}>
+  const credentialsTab = (
+    <>
+      <CredentialsCard
+        canEdit={canEdit}
+        detail={detail}
+        secretPending={rotateSecretMutation.isPending}
+        onGenerateSecret={() => rotateSecretMutation.mutate({ id })}
+        onRotateSecret={handleRotateSecret}
+      />
+      {isWebApp && (
+        <RedirectUrisCard
+          canEdit={canEdit}
+          detail={detail}
+          key={`redirect-${detail.id}`}
+          onSubmit={handleUpdate}
+        />
+      )}
+      {/* Reference material for configuring a client by hand: last, folded. */}
+      <ManualSetupCard applicationType={detail.applicationType} />
+    </>
+  );
+
+  // Enable / disable is reversible, so it lives in its own section; only the
+  // irreversible delete sits in the danger zone.
+  const advancedTab = (
+    <>
+      <SectionCard title={t('oauthApp.detail.status')}>
+        <div className={styles.dangerRow}>
+          <Flexbox gap={2}>
+            <Text>{t(isDisabled ? 'oauthApp.actions.enable' : 'oauthApp.actions.disable')}</Text>
+            <span className={styles.dangerDesc}>
+              {t(isDisabled ? 'oauthApp.detail.enableDesc' : 'oauthApp.detail.disableDesc')}
+            </span>
+          </Flexbox>
+          <Button
+            disabled={!canEdit}
+            icon={isDisabled ? <PowerIcon size={16} /> : <PowerOffIcon size={16} />}
+            loading={enabledMutation.isPending}
+            style={{ flex: 'none' }}
+            onClick={isDisabled ? handleEnable : handleDisable}
+          >
+            {t(isDisabled ? 'oauthApp.actions.enable' : 'oauthApp.actions.disable')}
+          </Button>
+        </div>
+      </SectionCard>
+
+      <Flexbox className={styles.dangerCard} gap={16}>
         <Text weight={500}>{t('oauthApp.detail.dangerZone')}</Text>
-        <div className={styles.row}>
+        <div className={styles.dangerRow}>
+          <Flexbox gap={2}>
+            <Text>{t('oauthApp.detail.delete')}</Text>
+            <span className={styles.dangerDesc}>{t('oauthApp.detail.deleteDesc')}</span>
+          </Flexbox>
           <Button
             danger
             disabled={!canEdit}
             icon={<Trash2Icon size={16} />}
             loading={deleteMutation.isPending}
+            style={{ flex: 'none' }}
             onClick={handleDelete}
           >
             {t('oauthApp.detail.delete')}
           </Button>
         </div>
       </Flexbox>
+    </>
+  );
+
+  return (
+    <Flexbox gap={20}>
+      {/* The disabled state is about the whole app, so it heads the page. */}
+      {banner}
+
+      <Flexbox gap={4}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <ActionIcon
+            aria-label={t('oauthApp.detail.back')}
+            icon={ArrowLeftIcon}
+            size={'small'}
+            title={t('oauthApp.detail.back')}
+            onClick={onBack}
+          />
+          <Text strong style={{ fontSize: 20 }}>
+            {detail.name}
+          </Text>
+          {isDisabled && <Tag>{t('oauthApp.item.disabledTag')}</Tag>}
+        </Flexbox>
+        <span className={styles.meta} style={{ paddingInlineStart: 36 }}>
+          {meta}
+        </span>
+      </Flexbox>
+
+      <Tabs
+        activeKey={tab}
+        items={[
+          { key: 'overview', label: t('oauthApp.detail.tabs.overview') },
+          { key: 'credentials', label: t('oauthApp.detail.tabs.credentials') },
+          { key: 'advanced', label: t('oauthApp.detail.tabs.advanced') },
+        ]}
+        onChange={setTab}
+      />
+
+      {tab === 'overview' && overviewTab}
+      {tab === 'credentials' && credentialsTab}
+      {tab === 'advanced' && advancedTab}
     </Flexbox>
   );
 };

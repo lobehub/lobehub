@@ -85,6 +85,7 @@ const MaxTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defaultValu
           changeOnWheel
           min={0}
           step={4 * Kibi}
+          style={{ width: 120 }}
           value={token}
           onChange={(e) => {
             if (!e && e !== 0) return;

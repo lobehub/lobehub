@@ -1,16 +1,15 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { type ActionIconGroupItemType } from '@lobehub/ui';
-import { css, cx } from 'antd-style';
 import {
   ArrowDownFromLine,
   Copy,
   DownloadIcon,
   Edit,
+  GitFork,
   LanguagesIcon,
   ListChevronsDownUp,
   ListChevronsUpDown,
   ListRestart,
-  Play,
   RotateCcw,
   Share2,
   Split,
@@ -20,13 +19,6 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { localeOptions } from '@/locales/resources';
-
-const translateStyle = css`
-  .ant-dropdown-menu-sub {
-    overflow-y: scroll;
-    max-height: 400px;
-  }
-`;
 
 type ActionBarItem = ActionIconGroupItemType & { sfSymbol?: SFSymbol };
 
@@ -41,10 +33,10 @@ interface ChatListActionsBar {
   edit: ActionBarItem;
   expand: ActionBarItem;
   export: ActionBarItem;
+  fork: ActionBarItem;
   regenerate: ActionBarItem;
   share: ActionBarItem;
   translate: ActionBarItem;
-  tts: ActionBarItem;
 }
 
 export const useChatListActionsBar = ({
@@ -119,6 +111,11 @@ export const useChatListActionsBar = ({
         label: 'Export as PDF',
         sfSymbol: 'square.and.arrow.up',
       },
+      fork: {
+        icon: GitFork,
+        key: 'fork',
+        label: t('forkTopic'),
+      },
       regenerate: {
         disabled: isRegenerating,
         icon: RotateCcw,
@@ -141,14 +138,8 @@ export const useChatListActionsBar = ({
         icon: LanguagesIcon,
         key: 'translate',
         label: t('translate.action', { ns: 'chat' }),
-        popupClassName: cx(translateStyle),
-      },
-      tts: {
-        icon: Play,
-        key: 'tts',
-        label: t('tts.action', { ns: 'chat' }),
       },
     }),
-    [hasThread, isContinuing, isRegenerating],
+    [hasThread, isContinuing, isRegenerating, t],
   );
 };

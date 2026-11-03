@@ -22,10 +22,10 @@ export const requestHumanApprove =
     } = instruction as Extract<AgentInstruction, { type: 'request_human_approve' }>;
     const { operation, transports, lifecycle } = host;
     const { operationId, stepIndex, userId } = operation;
-    const agentId = operation.agentId ?? state.metadata?.agentId;
-    const groupId = operation.groupId ?? state.metadata?.groupId;
-    const threadId = operation.threadId ?? state.metadata?.threadId;
-    const topicId = operation.topicId ?? state.metadata?.topicId;
+    const agentId = operation.agentId ?? state.origin?.agentId;
+    const groupId = operation.groupId ?? state.origin?.groupId;
+    const threadId = operation.threadId ?? state.origin?.threadId;
+    const topicId = operation.topicId ?? state.origin?.topicId;
 
     // Publish human approval request event
     await transports.stream.publishEvent({
@@ -50,7 +50,7 @@ export const requestHumanApprove =
           stepIndex,
           userId,
         } as AnyHookEvent,
-        serializedHooks: state.metadata?._hooks,
+        serializedHooks: state.host?.hooks,
         type: 'beforeHumanIntervention',
       })
       .catch(() => {});

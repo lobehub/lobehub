@@ -11,6 +11,8 @@ export interface AvailableAgentItem {
   backgroundColor: string | null;
   description: string | null;
   id: string;
+  /** Product-owned inbox (Lobe AI). A builtin can never join a chat group. */
+  isInbox?: boolean;
   /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
   name: string | null;
   title: string | null;
@@ -73,6 +75,8 @@ const normalizeMarketAgentModel = (config?: PartialDeep<AgentItem>): PartialDeep
 export interface CreateAgentParams {
   config?: PartialDeep<AgentItem>;
   groupId?: string;
+  /** This desktop's gateway device, where the creator's direct Channel to a local Agent runs. */
+  localDeviceId?: string;
   /**
    * `private` keeps the agent visible only to its creator within the active
    * workspace; `public` (default) makes it visible to every member. The
@@ -141,6 +145,7 @@ class AgentService {
     return lambdaClient.agent.createAgent.mutate({
       config: normalizedConfig as any,
       groupId: params.groupId,
+      localDeviceId: params.localDeviceId,
       visibility: params.visibility,
     });
   };
@@ -241,9 +246,14 @@ class AgentService {
     agentId: string,
     config: PartialDeep<LobeAgentConfig>,
     signal?: AbortSignal,
+    replaceWorkingDirDeviceIds: string[] = [],
   ) => {
     return lambdaClient.agent.updateAgentConfig.mutate(
-      { agentId, value: config },
+      {
+        agentId,
+        replaceWorkingDirDeviceIds,
+        value: config,
+      },
       { context: { showNotification: false }, signal },
     );
   };
@@ -264,20 +274,12 @@ class AgentService {
   };
 
   /**
-   * Resolve what a `/agent/:slugOrId` param points at: one of the caller's own
-   * agents (by id or slug), an agent share, or nothing. See the
-   * `resolveAgentRoute` procedure for the resolution order and its privacy
-   * properties.
+   * Resolve a url slug to its agent id. Returns `null` for an unknown slug and
+   * for one the caller can't see — the two are deliberately indistinguishable.
    */
-  resolveAgentRoute = async (slugOrId: string) => {
-    // An anonymous visitor on a share URL gets UNAUTHORIZED here (the
-    // resolver is auth-gated); opt out of the global 401 handler so it does
-    // not hard-redirect them to /signin before the share surface's own
-    // sign-in prompt can render (mirrors `agentShareService.getSharedAgent`).
-    return lambdaClient.agent.resolveAgentRoute.query(
-      { slugOrId },
-      { context: { showNotification: false } },
-    );
+  resolveAgentIdBySlug = async (slug: string): Promise<string | null> => {
+    const { agentId } = await lambdaClient.agent.resolveAgentIdBySlug.query({ slug });
+    return agentId;
   };
 
   /** Rename an agent's url slug (validated server-side; see `updateAgentSlug`). */
@@ -297,6 +299,7 @@ class AgentService {
    * Returns agents with minimal info (id, title, description, avatar, backgroundColor).
    */
   queryAgents = async (params?: {
+    includeInbox?: boolean;
     keyword?: string;
     limit?: number;
     offset?: number;
@@ -310,6 +313,7 @@ class AgentService {
    */
   countAgents = async (params?: {
     endDate?: string;
+    includeInbox?: boolean;
     keyword?: string;
     range?: [string, string];
     startDate?: string;

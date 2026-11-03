@@ -1,7 +1,7 @@
-import { Tooltip } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
+
+import AgentAvatar from '@/components/AgentAvatar';
 
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { UnassignedAssigneeIcon } from './UnassignedAssigneeIcon';
@@ -22,7 +22,8 @@ const AssigneeAvatar = memo<AssigneeAvatarProps>(
     }
 
     const avatar = (
-      <Avatar
+      <AgentAvatar
+        agentId={agentId}
         avatar={displayMeta.avatar}
         background={displayMeta.backgroundColor || cssVar.colorBgContainer}
         shape={'circle'}
@@ -32,7 +33,13 @@ const AssigneeAvatar = memo<AssigneeAvatarProps>(
       />
     );
 
-    return tooltip ? <Tooltip title={displayMeta.title}>{avatar}</Tooltip> : avatar;
+    return tooltip ? (
+      <Tooltip title={displayMeta.title}>
+        <span style={{ display: 'inline-flex' }}>{avatar}</span>
+      </Tooltip>
+    ) : (
+      avatar
+    );
   },
 );
 

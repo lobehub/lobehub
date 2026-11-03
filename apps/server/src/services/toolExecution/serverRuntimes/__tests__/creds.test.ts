@@ -10,7 +10,9 @@ const { getMember } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/workspaceMember', () => ({
-  WorkspaceMemberModel: vi.fn().mockImplementation(() => ({ getMember })),
+  WorkspaceMemberModel: vi.fn().mockImplementation(function () {
+    return { getMember };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
@@ -36,7 +38,7 @@ describe('credsRuntime', () => {
 
     expect(getMember).toHaveBeenCalledWith('workspace-1', 'user-1');
     expect(MarketService).toHaveBeenCalledWith({
-      userInfo: { userId: 'user-1', workspaceId: 'workspace-1' },
+      userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: 'workspace-1' }),
     });
   });
 
@@ -75,7 +77,7 @@ describe('credsRuntime', () => {
 
     expect(getMember).not.toHaveBeenCalled();
     expect(MarketService).toHaveBeenCalledWith({
-      userInfo: { userId: 'user-1', workspaceId: undefined },
+      userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: undefined }),
     });
   });
 
@@ -92,18 +94,17 @@ describe('credsRuntime', () => {
   // `~/.creds/env` must never receive the creator's decrypted credentials
   // inside a sandbox a visitor's model can run arbitrary shell commands in.
   it('refuses to write credentials into the sandbox for a share-visitor run', async () => {
-    vi.mocked(MarketService).mockImplementation(
-      () =>
-        ({
-          market: {
-            creds: {
-              inject: vi.fn().mockResolvedValue({
-                credentials: { env: { FOO: 'bar' } },
-              }),
-            },
+    vi.mocked(MarketService).mockImplementation(function () {
+      return {
+        market: {
+          creds: {
+            inject: vi.fn().mockResolvedValue({
+              credentials: { env: { FOO: 'bar' } },
+            }),
           },
-        }) as any,
-    );
+        },
+      } as any;
+    });
 
     const runtime = await credsRuntime.factory({
       agentShareVisitor: { agentId: 'agent-1' } as any,

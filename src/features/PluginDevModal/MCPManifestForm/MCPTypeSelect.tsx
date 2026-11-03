@@ -1,13 +1,10 @@
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Center, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { CheckIcon, RouterIcon, TerminalIcon } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 
-// Define styles using antd-style (moved from MCPManifestForm)
 const styles = createStaticStyles(({ css }) => ({
   active: css`
     border-color: ${cssVar.colorPrimary};

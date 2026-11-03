@@ -9,6 +9,7 @@ import {
   TASK_INTENT_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { TaskInstructionSynthesis, TaskIntentAnalysis } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
 
@@ -79,7 +80,7 @@ export class TaskIntentService {
         thinking: { type: 'disabled' },
       },
       {
-        metadata: { trigger: 'task_intent' },
+        metadata: { trigger: RequestTrigger.Task },
         tracing: {
           promptVersion: TASK_INTENT_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.TaskIntent,
@@ -121,7 +122,7 @@ export class TaskIntentService {
         thinking: { type: 'disabled' },
       },
       {
-        metadata: { trigger: 'task_instruction' },
+        metadata: { trigger: RequestTrigger.Task },
         tracing: {
           promptVersion: TASK_INSTRUCTION_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.TaskInstruction,

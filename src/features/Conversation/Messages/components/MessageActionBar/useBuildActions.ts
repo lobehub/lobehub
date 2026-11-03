@@ -11,13 +11,13 @@ import { copyOperationIdAction } from './actions/copyOperationId';
 import { delAction } from './actions/del';
 import { delAndRegenerateAction } from './actions/delAndRegenerate';
 import { editAction } from './actions/edit';
+import { forkAction } from './actions/fork';
 import { regenerateAction } from './actions/regenerate';
 import { restoreToInputAction } from './actions/restoreToInput';
 import { saveAsEvalCaseAction } from './actions/saveAsEvalCase';
 import { selectAction } from './actions/select';
 import { shareAction } from './actions/share';
 import { translateAction } from './actions/translate';
-import { ttsAction } from './actions/tts';
 import { type MessageActionContext } from './types';
 
 /**
@@ -33,7 +33,7 @@ export const useBuildActions = (
   ctx: MessageActionContext,
 ): Record<string, MessageActionItem | null> => {
   // View-only General access on the conversation's agent/group: mutating
-  // actions (send/regenerate/edit/delete/translate/tts/branch) don't apply —
+  // actions (send/regenerate/edit/delete/translate/branch/fork) don't apply —
   // same "absent when not applicable" rule as the role checks above.
   const { canUseResource } = useConversationResourceAccess();
 
@@ -49,13 +49,13 @@ export const useBuildActions = (
     del: delAction.useBuild(ctx),
     delAndRegenerate: delAndRegenerateAction.useBuild(ctx),
     edit: editAction.useBuild(ctx),
+    fork: forkAction.useBuild(ctx),
     regenerate: regenerateAction.useBuild(ctx),
     restoreToInput: restoreToInputAction.useBuild(ctx),
     saveAsEvalCase: saveAsEvalCaseAction.useBuild(ctx),
     select: selectAction.useBuild(ctx),
     share: shareAction.useBuild(ctx),
     translate: translateAction.useBuild(ctx),
-    tts: ttsAction.useBuild(ctx),
   };
 
   if (!canUseResource) {
@@ -65,9 +65,9 @@ export const useBuildActions = (
       'del',
       'delAndRegenerate',
       'edit',
+      'fork',
       'regenerate',
       'translate',
-      'tts',
     ]) {
       actions[key] = null;
     }

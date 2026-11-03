@@ -1,11 +1,10 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { CalendarClockIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { MemoryListBoundary, useResetMemoryList } from '@/features/Memory';
+import { MemoryListBoundary } from '@/features/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -35,10 +34,7 @@ const ActivitiesArea = memo(() => {
   const activitiesPage = useUserMemoryStore((s) => s.activitiesPage);
   const activitiesInit = useUserMemoryStore((s) => s.activitiesInit);
   const activitiesTotal = useUserMemoryStore((s) => s.activitiesTotal);
-  const activitiesSearchError = useUserMemoryStore((s) => s.activitiesSearchError);
-  const activitiesSearchLoading = useUserMemoryStore((s) => s.activitiesSearchLoading);
   const useFetchActivities = useUserMemoryStore((s) => s.useFetchActivities);
-  const resetActivitiesList = useUserMemoryStore((s) => s.resetActivitiesList);
 
   const sortOptions = [
     { label: t('filter.sort.createdAt'), value: 'capturedAt' },
@@ -47,14 +43,10 @@ const ActivitiesArea = memo(() => {
 
   const apiSort = sortValue === 'capturedAt' ? undefined : (sortValue as 'startsAt');
 
-  useResetMemoryList({
-    query: searchValue,
-    resetList: resetActivitiesList,
-    sort: apiSort,
-    viewMode,
-  });
-
-  const { data, isLoading, mutate } = useFetchActivities({
+  // Each search / sort is its own replica entry: the hook selects it before
+  // paint, so the previous query's rows never show under this one. `error` is
+  // this query's failure while it has nothing painted.
+  const { data, error, isLoading, mutate } = useFetchActivities({
     page: activitiesPage,
     pageSize: 12,
     q: searchValue || undefined,
@@ -106,10 +98,9 @@ const ActivitiesArea = memo(() => {
           />
           <MemoryListBoundary
             data={data}
-            error={activitiesSearchError}
+            error={error}
             isInitialized={activitiesInit}
             isLoading={isLoading}
-            isResetting={activitiesSearchLoading}
             loading={<Loading viewMode={viewMode} />}
             onRetry={() => void mutate()}
           >

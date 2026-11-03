@@ -39,8 +39,22 @@ export const resolveInboxScopeToggleSection = ({
     preferUnread,
   });
 
-export const filterTopicsForInboxScope = <T extends { userId?: string }>(
+/**
+ * Narrow the workspace-wide inbox feed to one scope.
+ *
+ * - `team`: what the workspace is working on. A topic owned by a PRIVATE
+ *   agent/group is a personal conversation and never belongs here — not even
+ *   the viewer's own, which is how a private agent's topic used to show up
+ *   under the team tab.
+ * - `mine`: the viewer's own rows, private conversations included.
+ */
+export const filterTopicsForInboxScope = <
+  T extends { parentVisibility?: string | null; userId?: string },
+>(
   topics: readonly T[],
   myId: string | undefined,
   teamView: boolean,
-): T[] => (teamView ? [...topics] : topics.filter((topic) => topic.userId === myId));
+): T[] =>
+  teamView
+    ? topics.filter((topic) => topic.parentVisibility !== 'private')
+    : topics.filter((topic) => topic.userId === myId);

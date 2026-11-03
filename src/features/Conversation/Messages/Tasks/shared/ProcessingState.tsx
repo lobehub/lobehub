@@ -1,97 +1,84 @@
 'use client';
 
 import { type TaskDetail } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, keyframes } from 'antd-style';
-import { Footprints, Timer, Wrench } from 'lucide-react';
+import { Flexbox, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { BrainCircuit, Timer, Wrench } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useChatStore } from '@/store/chat';
+import { sx } from '@/styles/sx';
 
 import { MAX_PROGRESS, PROGRESS_INCREMENT, PROGRESS_INTERVAL } from './constants';
 import { formatElapsedTime, formatToolName } from './utils';
 
-const shimmer = keyframes`
-  0% {
-    transform: translateX(-100%);
-  }
+const shimmer = stylex.keyframes({
+  '0%': { transform: 'translateX(-100%)' },
+  '100%': { transform: 'translateX(100%)' },
+});
 
-  100% {
-    transform: translateX(100%);
-  }
-`;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  activityRow: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    padding-block: 8px;
-  `,
-  footer: css`
-    padding-block-start: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  progress: css`
-    position: relative;
-
-    overflow: hidden;
-
-    height: 3px;
-    margin-block: 12px;
-    margin-inline: 8px;
-    border-radius: 2px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progressBar: css`
-    position: absolute;
-    inset-block-start: 0;
-    inset-inline-start: 0;
-
-    height: 100%;
-    border-radius: 2px;
-
-    background: linear-gradient(90deg, ${cssVar.colorPrimary}, ${cssVar.colorPrimaryHover});
-
-    transition: width 0.5s ease-out;
-  `,
-  progressCompact: css`
-    position: relative;
-
-    overflow: hidden;
-
-    height: 3px;
-    border-radius: 2px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progressShimmer: css`
-    position: absolute;
-    inset-block-start: 0;
-    inset-inline-start: 0;
-
-    width: 100%;
-    height: 100%;
-
-    background: linear-gradient(90deg, transparent, ${cssVar.colorPrimaryBgHover}, transparent);
-
-    animation: ${shimmer} 2s infinite;
-
-    @media (prefers-reduced-motion: reduce) {
-      display: none;
-    }
-  `,
-  separator: css`
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-    background: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  activityRow: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+  },
+  footer: {
+    paddingBlockStart: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  progress: {
+    position: 'relative',
+    overflow: 'hidden',
+    height: '3px',
+    marginBlock: '12px',
+    marginInline: '8px',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  progressBar: {
+    position: 'absolute',
+    insetBlockStart: 0,
+    insetInlineStart: 0,
+    height: '100%',
+    borderRadius: '2px',
+    backgroundImage: `linear-gradient(90deg, ${cssVar.colorPrimary}, ${cssVar.colorPrimaryHover})`,
+    transition: 'width 0.5s ease-out',
+  },
+  progressCompact: {
+    position: 'relative',
+    overflow: 'hidden',
+    height: '3px',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  progressShimmer: {
+    position: 'absolute',
+    insetBlockStart: 0,
+    insetInlineStart: 0,
+    display: { 'default': null, '@media (prefers-reduced-motion: reduce)': 'none' },
+    width: '100%',
+    height: '100%',
+    backgroundImage: `linear-gradient(90deg, transparent, ${cssVar.colorPrimaryBgHover}, transparent)`,
+    animationName: shimmer,
+    animationDuration: '2s',
+    animationIterationCount: 'infinite',
+  },
+  separator: {
+    width: '3px',
+    height: '3px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 export type ProcessingStateVariant = 'detail' | 'compact';
 
@@ -205,9 +192,9 @@ const ProcessingState = memo<ProcessingStateProps>(
         <Flexbox>
           {/* Current Activity */}
           {currentActivity && (
-            <div className={styles.activityRow}>
+            <div {...stylex.props(styles.activityRow)}>
               <Flexbox horizontal align={'center'} gap={4}>
-                <NeuralNetworkLoading size={14} />
+                <Spin size="small" variant="network" />
                 <Text as={'span'} fontSize={12} type={'secondary'}>
                   {renderActivityText()}
                 </Text>
@@ -227,16 +214,16 @@ const ProcessingState = memo<ProcessingStateProps>(
           )}
 
           {/* Progress Bar */}
-          <div className={styles.progress}>
-            <div className={styles.progressBar} style={{ width: `${progress}%` }} />
-            <div className={styles.progressShimmer} />
+          <div {...stylex.props(styles.progress)}>
+            <div {...sx([styles.progressBar], undefined, { width: `${progress}%` })} />
+            <div {...stylex.props(styles.progressShimmer)} />
           </div>
 
           {/* Footer with metrics */}
           <Flexbox
             horizontal
             align="center"
-            className={styles.footer}
+            className={stylex.props(styles.footer).className}
             gap={12}
             justify={'space-between'}
             wrap="wrap"
@@ -253,21 +240,21 @@ const ProcessingState = memo<ProcessingStateProps>(
               )}
             </Flexbox>
             <Flexbox horizontal align="center" gap={12}>
-              {/* Steps */}
+              {/* LLM calls (`totalSteps` holds the LLM-call total) */}
               {totalSteps !== undefined && totalSteps > 0 && (
                 <Text as={'span'} fontSize={12} type={'secondary'}>
-                  <Footprints size={12} />
+                  <BrainCircuit size={12} />
                   <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
                     {totalSteps}
                   </Text>
-                  <span>{t('task.metrics.stepsShort')}</span>
+                  <span>{t('task.metrics.llmCallsShort')}</span>
                 </Text>
               )}
               {/* Tool Calls */}
               {totalToolCalls !== undefined && totalToolCalls > 0 && (
                 <>
                   {hasMetrics && totalSteps !== undefined && totalSteps > 0 && (
-                    <div className={styles.separator} />
+                    <div {...stylex.props(styles.separator)} />
                   )}
                   <Text as={'span'} fontSize={12} type={'secondary'}>
                     <Wrench size={12} />
@@ -290,7 +277,7 @@ const ProcessingState = memo<ProcessingStateProps>(
         {/* Current Activity */}
         {currentActivity && (
           <Flexbox horizontal align="center" gap={8}>
-            <NeuralNetworkLoading size={14} />
+            <Spin size="small" variant="network" />
             <Text
               ellipsis
               as={'span'}
@@ -304,9 +291,9 @@ const ProcessingState = memo<ProcessingStateProps>(
         )}
 
         {/* Progress Bar */}
-        <div className={styles.progressCompact}>
-          <div className={styles.progressBar} style={{ width: `${progress}%` }} />
-          <div className={styles.progressShimmer} />
+        <div {...stylex.props(styles.progressCompact)}>
+          <div {...sx([styles.progressBar], undefined, { width: `${progress}%` })} />
+          <div {...stylex.props(styles.progressShimmer)} />
         </div>
 
         {/* Footer with metrics */}
@@ -314,7 +301,7 @@ const ProcessingState = memo<ProcessingStateProps>(
           <Flexbox
             horizontal
             align="center"
-            className={styles.footer}
+            className={stylex.props(styles.footer).className}
             gap={12}
             justify="space-between"
             wrap="wrap"
@@ -335,17 +322,17 @@ const ProcessingState = memo<ProcessingStateProps>(
             <Flexbox horizontal align="center" gap={12}>
               {totalSteps !== undefined && totalSteps > 0 && (
                 <Text as={'span'} fontSize={12} type={'secondary'}>
-                  <Footprints size={12} />
+                  <BrainCircuit size={12} />
                   <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
                     {totalSteps}
                   </Text>
-                  <span>{t('task.metrics.stepsShort')}</span>
+                  <span>{t('task.metrics.llmCallsShort')}</span>
                 </Text>
               )}
               {totalToolCalls !== undefined && totalToolCalls > 0 && (
                 <>
                   {totalSteps !== undefined && totalSteps > 0 && (
-                    <div className={styles.separator} />
+                    <div {...stylex.props(styles.separator)} />
                   )}
                   <Text as={'span'} fontSize={12} type={'secondary'}>
                     <Wrench size={12} />

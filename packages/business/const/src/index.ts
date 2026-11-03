@@ -7,6 +7,14 @@ export * from './url';
 export const ENABLE_BUSINESS_FEATURES = false;
 
 /**
+ * Whether Settings → Tools (per-user search provider / crawler ordering) is
+ * exposed. The server still honors preferences already saved; this only
+ * controls the entry. Distributions can turn it off while the feature is not
+ * ready for their users.
+ */
+export const ENABLE_TOOL_CHANNEL_SETTINGS = true;
+
+/**
  * Master switch for the (now removed) conversational agent-onboarding flow.
  *
  * Soft-disabled: kept in the codebase but permanently off. No client code

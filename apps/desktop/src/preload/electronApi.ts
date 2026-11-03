@@ -34,8 +34,21 @@ export const setupElectronApi = () => {
     getDesktopBootstrapIdentity: () => ipcRenderer.sendSync('desktop:get-bootstrap-identity'),
     getRendererMemoryInfo: async (): Promise<RendererMemoryInfo> => {
       const memory = await process.getProcessMemoryInfo();
+      const heap = process.getHeapStatistics();
+      const blink = process.getBlinkMemoryInfo();
 
-      return { privateBytes: memory.private * 1024, sharedBytes: memory.shared * 1024 };
+      return {
+        blink: { allocatedBytes: blink.allocated * 1024, totalBytes: blink.total * 1024 },
+        heap: {
+          limitBytes: heap.heapSizeLimit * 1024,
+          mallocedBytes: heap.mallocedMemory * 1024,
+          physicalBytes: heap.totalPhysicalSize * 1024,
+          totalBytes: heap.totalHeapSize * 1024,
+          usedBytes: heap.usedHeapSize * 1024,
+        },
+        privateBytes: memory.private * 1024,
+        sharedBytes: memory.shared * 1024,
+      };
     },
     invoke,
     onScreenCaptureSession: (listener: (session: ScreenCaptureSession) => void) => {

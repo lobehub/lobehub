@@ -1,8 +1,6 @@
 'use client';
 
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
-import { Flex } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles, Flexbox, toast } from '@lobehub/ui';
 import { Copy } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +33,7 @@ const ClientIdDisplay: FC<ClientIdDisplayProps> = ({ clientId }) => {
   };
 
   return (
-    <Flex align="center" gap={4}>
+    <Flexbox horizontal align={'center'} gap={4}>
       <span className={styles.id}>{clientId}</span>
       <ActionIcon
         icon={Copy}
@@ -43,7 +41,7 @@ const ClientIdDisplay: FC<ClientIdDisplayProps> = ({ clientId }) => {
         title={t('oauthApp.copy.tooltip')}
         onClick={handleCopy}
       />
-    </Flex>
+    </Flexbox>
   );
 };
 

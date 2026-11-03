@@ -1,51 +1,24 @@
-import { Button, Skeleton } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NotFound from '@/components/404';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { lambdaClient } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
-import { createOAuthAppModal } from './features/CreateAppModal';
+import { AppDetailSkeleton } from './features/AppDetail';
+import AppListSkeleton from './features/AppListSkeleton';
+import CreateAppButton from './features/CreateAppButton';
 import OAuthApps from './features/OAuthApps';
-
-const CreateAppButton = () => {
-  const { t } = useTranslation('auth');
-  const { allowed: hasEditPermission, reason } = usePermission('create_content');
-  const activeWorkspaceId = useActiveWorkspaceId();
-  // Workspace OAuth apps are shared admin config — Admin-or-higher, matching
-  // the server's `requireWorkspaceRoleWhenScoped('admin')` gate.
-  const { allowed: canManageWorkspaceApps } = usePermission('manage_settings');
-  const canEdit = hasEditPermission && (!activeWorkspaceId || canManageWorkspaceApps);
-  const navigate = useWorkspaceAwareNavigate();
-
-  const handleCreate = () => {
-    if (!canEdit) return;
-    createOAuthAppModal({
-      onSubmit: async (values) => {
-        const created = await lambdaClient.oauthApp.create.mutate(values);
-        navigate(`/settings/oauth-apps/${created.id}`);
-      },
-    });
-  };
-
-  return (
-    <Button disabled={!canEdit} title={reason} type={'primary'} onClick={handleCreate}>
-      {t('oauthApp.list.actions.create')}
-    </Button>
-  );
-};
+import { useOAuthAppList } from './features/useOAuthAppList';
 
 const Page = () => {
   const { t } = useTranslation('auth');
   const { allowed: hasEditPermission } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
-  // Same Admin-or-higher rule as `CreateAppButton` above.
+  // Same Admin-or-higher rule as `CreateAppButton`.
   const { allowed: canManageWorkspaceApps } = usePermission('manage_settings');
   const params = useParams<{ sub?: string }>();
   const canEdit = hasEditPermission && (!activeWorkspaceId || canManageWorkspaceApps);
@@ -54,13 +27,25 @@ const Page = () => {
     labPreferSelectors.enableOAuthApps(s),
   ]);
 
-  if (!isPreferenceInit) return <Skeleton.Text rows={5} />;
+  // While the list is empty its empty state carries the Create button.
+  const { data: apps } = useOAuthAppList(isPreferenceInit && enableOAuthApps);
+  const listEmpty = apps?.length === 0;
+
+  // Keep the page header and the body's own skeleton while the Labs flag
+  // resolves; the Create button waits for the flag because disabled means 404.
+  if (!isPreferenceInit)
+    return (
+      <>
+        <SettingHeader title={t('tab.oauthApps')} />
+        {params.sub ? <AppDetailSkeleton /> : <AppListSkeleton />}
+      </>
+    );
   if (!enableOAuthApps) return <NotFound />;
 
   return (
     <>
       <SettingHeader
-        extra={!params.sub && canEdit && <CreateAppButton />}
+        extra={!params.sub && canEdit && !listEmpty && <CreateAppButton />}
         title={t('tab.oauthApps')}
       />
       <OAuthApps canEdit={canEdit} />

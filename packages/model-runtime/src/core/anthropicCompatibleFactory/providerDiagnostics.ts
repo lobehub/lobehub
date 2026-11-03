@@ -58,12 +58,19 @@ const appendEvent = (
   diagnostics.events.push(indexedEvent);
 };
 
+/**
+ * Provider events are recorded as received, so SDK-typed string fields can be missing.
+ * Aihubmix omits `signature` on thinking `content_block_start` events, while Anthropic
+ * sends an empty string there.
+ */
 const recordStringContent = (
   diagnostics: ProviderResponseDiagnostics,
   event: Omit<ProviderResponseEventDiagnostics, 'index'>,
-  content: string,
+  rawContent: string | null | undefined,
   kind: 'signature' | 'text' | 'thinking' | 'toolInput',
 ) => {
+  const content = rawContent ?? '';
+
   if (kind === 'signature') {
     diagnostics.signatureChars += content.length;
     event.signatureLength = content.length;
@@ -97,6 +104,18 @@ const recordError = (diagnostics: ProviderResponseDiagnostics, error: unknown) =
         : undefined,
     name: error instanceof Error ? error.name : undefined,
   };
+};
+
+/**
+ * Diagnostics only observe the provider response. A recording failure must not reject
+ * the response itself, otherwise a valid answer is reported as an empty completion.
+ */
+const recordSafely = (record: () => void) => {
+  try {
+    record();
+  } catch (error) {
+    console.error('[anthropic] Failed to record provider diagnostics:', error);
+  }
 };
 
 const finalizeResponse = async (diagnostics: ProviderResponseDiagnostics, signal?: AbortSignal) => {
@@ -266,7 +285,7 @@ const observeAsyncIterable = async function* (
 ) {
   try {
     for await (const chunk of stream) {
-      recordAnthropicStreamEvent(diagnostics, chunk);
+      recordSafely(() => recordAnthropicStreamEvent(diagnostics, chunk));
       yield chunk;
     }
   } catch (error) {
@@ -304,7 +323,7 @@ const observeReadableStream = (
           return;
         }
 
-        recordAnthropicStreamEvent(diagnostics, value);
+        recordSafely(() => recordAnthropicStreamEvent(diagnostics, value));
         controller.enqueue(value);
       } catch (error) {
         recordError(diagnostics, error);
@@ -332,17 +351,19 @@ export const recordAnthropicNonStreamingResponse = async (
 ) => {
   if (!diagnostics) return;
 
-  diagnostics.firstEventAt ??= Date.now();
-  diagnostics.messageId = message.id;
-  diagnostics.model = message.model;
-  appendRawProviderEvent(diagnostics, message);
-  diagnostics.usage = message.usage;
-  diagnostics.stopReason = message.stop_reason;
-  diagnostics.stopSequence = message.stop_sequence;
-  appendEvent(diagnostics, { type: 'message_start' });
-  message.content.forEach((block, index) => recordMessageContentBlock(diagnostics, block, index));
-  appendEvent(diagnostics, { type: 'message_delta' });
-  appendEvent(diagnostics, { type: 'message_stop' });
-  diagnostics.terminalEventReceived = true;
+  recordSafely(() => {
+    diagnostics.firstEventAt ??= Date.now();
+    diagnostics.messageId = message.id;
+    diagnostics.model = message.model;
+    appendRawProviderEvent(diagnostics, message);
+    diagnostics.usage = message.usage;
+    diagnostics.stopReason = message.stop_reason;
+    diagnostics.stopSequence = message.stop_sequence;
+    appendEvent(diagnostics, { type: 'message_start' });
+    message.content.forEach((block, index) => recordMessageContentBlock(diagnostics, block, index));
+    appendEvent(diagnostics, { type: 'message_delta' });
+    appendEvent(diagnostics, { type: 'message_stop' });
+    diagnostics.terminalEventReceived = true;
+  });
   await finalizeResponse(diagnostics, signal);
 };

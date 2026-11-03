@@ -6,8 +6,11 @@ import { ConnectorDataService } from './index';
 
 const mocks = vi.hoisted(() => ({
   composioConnectedAccountGet: vi.fn(),
+  createConfluenceClient: vi.fn(),
   createGitHubMarketClient: vi.fn(),
   createGmailClient: vi.fn(),
+  createJiraClient: vi.fn(),
+  createLinearMarketClient: vi.fn(),
   createNotionClient: vi.fn(),
   createTwitterClient: vi.fn(),
   getAccount: vi.fn(),
@@ -30,6 +33,18 @@ vi.mock('@lobechat/connector-data/gmail', () => ({
     scopes.some((scope) => scope.endsWith('gmail.readonly')),
 }));
 
+vi.mock('@lobechat/connector-data/jira', () => ({
+  createJiraConnectorClient: mocks.createJiraClient,
+}));
+
+vi.mock('@lobechat/connector-data/confluence', () => ({
+  createConfluenceConnectorClient: mocks.createConfluenceClient,
+}));
+
+vi.mock('@lobechat/connector-data/linear', () => ({
+  createLinearMarketConnectorClient: mocks.createLinearMarketClient,
+}));
+
 vi.mock('@lobechat/connector-data/notion', () => ({
   createNotionConnectorClient: mocks.createNotionClient,
 }));
@@ -39,10 +54,12 @@ vi.mock('@lobechat/connector-data/twitter', () => ({
 }));
 
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn(() => ({
-    markComposioConnectionUnavailable: mocks.markComposioUnavailable,
-    queryComposioReferencesByIdentifiers: mocks.queryComposioReferences,
-  })),
+  ConnectorModel: vi.fn(function () {
+    return {
+      markComposioConnectionUnavailable: mocks.markComposioUnavailable,
+      queryComposioReferencesByIdentifiers: mocks.queryComposioReferences,
+    };
+  }),
 }));
 
 vi.mock('@/libs/composio', () => ({
@@ -50,28 +67,34 @@ vi.mock('@/libs/composio', () => ({
   isComposioConnectedAccountLookupNotFoundError: mocks.isComposioLookupNotFound,
 }));
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn(() => ({
-    market: {
-      skills: {
-        callTool: mocks.marketCallTool,
-        getStatus: mocks.marketGetStatus,
+  MarketService: vi.fn(function () {
+    return {
+      market: {
+        skills: {
+          callTool: mocks.marketCallTool,
+          getStatus: mocks.marketGetStatus,
+        },
       },
-    },
-    proxyOAuthRequest: mocks.marketProxyOAuthRequest,
-  })),
+      proxyOAuthRequest: mocks.marketProxyOAuthRequest,
+    };
+  }),
 }));
 
 const authDb = (
   rows: Array<{ accessToken: string | null; accessTokenExpiresAt?: Date | null; id: string }>,
 ) =>
   ({
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue(rows) })),
-        })),
-      })),
-    })),
+    select: vi.fn(function () {
+      return {
+        from: vi.fn(function () {
+          return {
+            where: vi.fn(() => ({
+              orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue(rows) })),
+            })),
+          };
+        }),
+      };
+    }),
   }) as unknown as LobeChatDatabase;
 
 describe('ConnectorDataService', () => {
@@ -82,17 +105,21 @@ describe('ConnectorDataService', () => {
       connectedAccounts: { get: mocks.composioConnectedAccountGet },
       kind: 'composio',
     });
-    mocks.isComposioLookupNotFound.mockImplementation(
-      (error: unknown) =>
-        typeof error === 'object' && error !== null && 'status' in error && error.status === 404,
-    );
+    mocks.isComposioLookupNotFound.mockImplementation(function (error: unknown) {
+      return (
+        typeof error === 'object' && error !== null && 'status' in error && error.status === 404
+      );
+    });
     mocks.createGitHubMarketClient.mockReturnValue({ kind: 'github-market-client' });
+    mocks.createLinearMarketClient.mockReturnValue({ kind: 'linear-market-client' });
     mocks.markComposioUnavailable.mockResolvedValue(false);
     mocks.marketCallTool.mockResolvedValue({ data: { data: [] }, success: true });
     mocks.marketGetStatus.mockResolvedValue({ connected: true, success: true });
     mocks.getAccount.mockResolvedValue({ externalAccountId: 'gmail-account', scopes: [] });
     mocks.createGmailClient.mockReturnValue({ getAccount: mocks.getAccount, kind: 'gmail-client' });
     mocks.createNotionClient.mockReturnValue({ kind: 'notion-client' });
+    mocks.createJiraClient.mockReturnValue({ kind: 'jira-client' });
+    mocks.createConfluenceClient.mockReturnValue({ kind: 'confluence-client' });
     mocks.createTwitterClient.mockReturnValue({ kind: 'twitter-client' });
     mocks.queryComposioReferences.mockResolvedValue([]);
   });
@@ -116,6 +143,29 @@ describe('ConnectorDataService', () => {
       new ConnectorDataService(authDb([]), 'user-1').getGitHubClient(),
     ).rejects.toMatchObject({ code: 'github_authorization_unavailable' });
     expect(mocks.createGitHubMarketClient).not.toHaveBeenCalled();
+  });
+
+  /** @example A connected Market Linear provider resolves through the OAuth proxy adapter. */
+  it('creates Linear from the active Market connector', async () => {
+    const client = await new ConnectorDataService(authDb([]), 'user-1', 'ws-1').getLinearClient();
+
+    expect(client).toEqual({ kind: 'linear-market-client' });
+    expect(mocks.marketGetStatus).toHaveBeenCalledWith('linear');
+    expect(mocks.createLinearMarketClient).toHaveBeenCalledWith({
+      market: expect.objectContaining({ proxyOAuthRequest: mocks.marketProxyOAuthRequest }),
+    });
+  });
+
+  it('leaves a disconnected Linear out of the available sources', async () => {
+    mocks.marketGetStatus.mockImplementation(async (provider: string) => ({
+      connected: provider !== 'linear',
+      success: true,
+    }));
+
+    await expect(
+      new ConnectorDataService(authDb([]), 'user-1').listAvailableProviderIds(['github', 'linear']),
+    ).resolves.toEqual(['github']);
+    expect(mocks.createLinearMarketClient).not.toHaveBeenCalled();
   });
 
   it('creates Gmail from the first active connector and validates account ownership', async () => {
@@ -225,6 +275,51 @@ describe('ConnectorDataService', () => {
       connectedAccountId: 'notion-account',
       userId: 'notion-owner',
     });
+  });
+
+  it.each([
+    ['jira', 'getJiraClient', mocks.createJiraClient, 'jira-client'],
+    ['confluence', 'getConfluenceClient', mocks.createConfluenceClient, 'confluence-client'],
+  ] as const)(
+    'creates %s from its first active Composio connector',
+    async (provider, method, create, kind) => {
+      mocks.queryComposioReferences.mockResolvedValue([
+        {
+          composio: {
+            appSlug: provider.toUpperCase(),
+            connectedAccountId: `${provider}-account`,
+            ownerUserId: `${provider}-owner`,
+            status: 'ACTIVE',
+          },
+          id: `${provider}-a`,
+          isEnabled: true,
+          status: 'connected',
+        },
+      ]);
+
+      await expect(
+        new ConnectorDataService(authDb([]), 'user-1', 'ws-1')[method](),
+      ).resolves.toEqual({
+        kind,
+      });
+      expect(mocks.queryComposioReferences).toHaveBeenCalledWith([provider]);
+      expect(create).toHaveBeenCalledWith({
+        composio: expect.objectContaining({ kind: 'composio' }),
+        connectedAccountId: `${provider}-account`,
+        userId: `${provider}-owner`,
+      });
+    },
+  );
+
+  it('leaves Jira out of the available sources when it has no live connection', async () => {
+    mocks.queryComposioReferences.mockResolvedValue([]);
+
+    await expect(
+      new ConnectorDataService(authDb([]), 'user-1').listAvailableProviderIds([
+        'jira',
+        'confluence',
+      ]),
+    ).resolves.toEqual([]);
   });
 
   /** @example A connected Market X skill resolves through the registry-backed read-only client. */

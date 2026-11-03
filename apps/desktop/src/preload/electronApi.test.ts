@@ -8,8 +8,12 @@ const mockContextBridgeExposeInMainWorld = vi.fn();
 const mockIpcRendererOn = vi.fn();
 const mockIpcRendererSendSync = vi.fn();
 const mockGetProcessMemoryInfo = vi.fn();
+const mockGetHeapStatistics = vi.fn();
+const mockGetBlinkMemoryInfo = vi.fn();
 
 const originalGetProcessMemoryInfo = process.getProcessMemoryInfo;
+const originalGetHeapStatistics = process.getHeapStatistics;
+const originalGetBlinkMemoryInfo = process.getBlinkMemoryInfo;
 
 vi.mock('electron', () => ({
   contextBridge: {
@@ -45,7 +49,13 @@ describe('setupElectronApi', () => {
     vi.clearAllMocks();
     vi.resetModules();
     mockGetProcessMemoryInfo.mockReset();
-    Object.assign(process, { getProcessMemoryInfo: mockGetProcessMemoryInfo });
+    mockGetHeapStatistics.mockReset();
+    mockGetBlinkMemoryInfo.mockReset();
+    Object.assign(process, {
+      getBlinkMemoryInfo: mockGetBlinkMemoryInfo,
+      getHeapStatistics: mockGetHeapStatistics,
+      getProcessMemoryInfo: mockGetProcessMemoryInfo,
+    });
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     ({ setupElectronApi } = await import('./electronApi'));
   });
@@ -53,6 +63,10 @@ describe('setupElectronApi', () => {
   afterAll(() => {
     if (originalGetProcessMemoryInfo) process.getProcessMemoryInfo = originalGetProcessMemoryInfo;
     else Reflect.deleteProperty(process, 'getProcessMemoryInfo');
+    if (originalGetHeapStatistics) process.getHeapStatistics = originalGetHeapStatistics;
+    else Reflect.deleteProperty(process, 'getHeapStatistics');
+    if (originalGetBlinkMemoryInfo) process.getBlinkMemoryInfo = originalGetBlinkMemoryInfo;
+    else Reflect.deleteProperty(process, 'getBlinkMemoryInfo');
   });
 
   it('should expose electron API to main world', () => {
@@ -88,11 +102,27 @@ describe('setupElectronApi', () => {
 
   it('reads precise renderer process memory', async () => {
     mockGetProcessMemoryInfo.mockResolvedValue({ private: 2_621_440, shared: 1024 });
+    mockGetHeapStatistics.mockReturnValue({
+      heapSizeLimit: 4_194_304,
+      mallocedMemory: 512,
+      totalHeapSize: 2048,
+      totalPhysicalSize: 1536,
+      usedHeapSize: 1024,
+    });
+    mockGetBlinkMemoryInfo.mockReturnValue({ allocated: 256, total: 320 });
     setupElectronApi();
 
     const exposedAPI = mockContextBridgeExposeInMainWorld.mock.calls[1][1];
 
     await expect(exposedAPI.getRendererMemoryInfo()).resolves.toEqual({
+      blink: { allocatedBytes: 262_144, totalBytes: 327_680 },
+      heap: {
+        limitBytes: 4_294_967_296,
+        mallocedBytes: 524_288,
+        physicalBytes: 1_572_864,
+        totalBytes: 2_097_152,
+        usedBytes: 1_048_576,
+      },
       privateBytes: 2_684_354_560,
       sharedBytes: 1_048_576,
     });

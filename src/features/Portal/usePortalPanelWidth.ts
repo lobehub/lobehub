@@ -1,9 +1,13 @@
-import { CHAT_PORTAL_MAX_WIDTH } from '@/const/layoutTokens';
 import type { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { getPortalViewMinWidth, getPortalViewWidth, portalWidthStorageKey } from './portalWidth';
+import {
+  getPortalViewMaxWidth,
+  getPortalViewMinWidth,
+  getPortalViewWidth,
+  portalWidthStorageKey,
+} from './portalWidth';
 
 /**
  * Shared width state for every surface that hosts the Portal in a right-hand
@@ -33,7 +37,10 @@ export const usePortalPanelWidth = (viewType?: PortalViewType | null, scope?: st
   };
 
   return {
-    maxWidth: CHAT_PORTAL_MAX_WIDTH,
+    // The ceiling follows the view: a side conversation caps at the
+    // conversation width, work views (tool UI, task detail, documents) keep
+    // the full portal range.
+    maxWidth: getPortalViewMaxWidth(viewType),
     minWidth: getPortalViewMinWidth(viewType),
     updateWidth,
     width,

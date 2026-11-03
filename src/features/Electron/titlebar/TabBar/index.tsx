@@ -1,57 +1,42 @@
 'use client';
 
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  type Modifier,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import { horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { ActionIcon, cx, type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ChevronDown, Plus } from 'lucide-react';
 import { useMotionValue, useSpring } from 'motion/react';
 import * as m from 'motion/react-m';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { captureVisibleTabPreviews } from '@/features/Electron/TabHost';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope';
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
+import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { electronStylish } from '@/styles/electron';
 
 import { useResolvedTabs } from './hooks/useResolvedTabs';
 import { useStripWidth } from './hooks/useStripWidth';
+import { useTabDrag } from './hooks/useTabDrag';
 import { TAB_SPRING } from './motion';
+import { resolveCloseShortcut } from './resolveCloseShortcut';
 import { resolveTabScope } from './scope';
 import { useStyles } from './styles';
 import TabItem from './TabItem';
 import {
-  allocateTabWidths,
+  layoutStrip,
   OVERFLOW_CONTROL_WIDTH,
-  PINNED_DIVIDER_WIDTH,
-  PINNED_TAB_WIDTH,
-  resolvePlacements,
   resolveTabTier,
+  type StripTab,
   TAB_GAP,
 } from './tabLayout';
 
 const NEW_TAB_URL = '/';
-const NEW_TAB_BUTTON_WIDTH = 26 + TAB_GAP;
-
-// Tabs only reorder along the horizontal axis, so lock the drag transform to X.
-const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
 const TabBar = () => {
   const styles = useStyles;
@@ -61,6 +46,7 @@ const TabBar = () => {
   const { allowed: canCreate, reason } = usePermission('create_content');
   const [stripWidth, stripRef] = useStripWidth();
   const { tabs, activeTabId } = useResolvedTabs();
+  const navPanelResizing = useGlobalStore((s) => !!s.isNavPanelResizing);
   const splitView = useElectronStore((s) => s.splitView);
   const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
   const switchTab = useElectronStore((s) => s.switchTab);
@@ -69,44 +55,43 @@ const TabBar = () => {
   const closeOtherTabs = useElectronStore((s) => s.closeOtherTabs);
   const closeLeftTabs = useElectronStore((s) => s.closeLeftTabs);
   const closeRightTabs = useElectronStore((s) => s.closeRightTabs);
-  const reorderTabs = useElectronStore((s) => s.reorderTabs);
+  const moveTab = useElectronStore((s) => s.moveTab);
   const pinTab = useElectronStore((s) => s.pinTab);
   const unpinTab = useElectronStore((s) => s.unpinTab);
   const closeSplitView = useElectronStore((s) => s.closeSplitView);
   const openTabInSplitView = useElectronStore((s) => s.openTabInSplitView);
 
-  const sensors = useSensors(
-    // Require a small drag distance so a plain click still activates the tab.
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor),
-  );
-
   const tabIds = useMemo(() => tabs.map((tab) => tab.tab.id), [tabs]);
-  const pinnedTabs = useMemo(() => tabs.filter((tab) => tab.tab.pinned), [tabs]);
-  const flowTabs = useMemo(() => tabs.filter((tab) => !tab.tab.pinned), [tabs]);
-
-  const layout = useMemo(() => {
-    const pinnedWidth = pinnedTabs.length
-      ? pinnedTabs.length * (PINNED_TAB_WIDTH + TAB_GAP) + PINNED_DIVIDER_WIDTH
-      : 0;
-
-    return allocateTabWidths({
-      activeIndex: flowTabs.findIndex((tab) => tab.tab.id === activeTabId),
-      count: flowTabs.length,
-      usableWidth: Math.max(0, stripWidth - pinnedWidth - NEW_TAB_BUTTON_WIDTH),
-    });
-  }, [flowTabs, pinnedTabs.length, activeTabId, stripWidth]);
-
-  const { dividerX, placements, total } = useMemo(
-    () =>
-      resolvePlacements({
-        flowIds: flowTabs.map((tab) => tab.tab.id),
-        pinnedIds: pinnedTabs.map((tab) => tab.tab.id),
-        visibleIndices: layout.visibleIndices,
-        widths: layout.widths,
-      }),
-    [flowTabs, pinnedTabs, layout],
+  const pinnedCount = useMemo(() => tabs.filter((tab) => tab.tab.pinned).length, [tabs]);
+  const storeOrder = useMemo<StripTab[]>(
+    () => tabs.map((tab) => ({ id: tab.tab.id, pinned: !!tab.tab.pinned })),
+    [tabs],
   );
+
+  const innerStripRef = useRef<HTMLDivElement>(null);
+  const drag = useTabDrag({
+    activeTabId,
+    onDrop: moveTab,
+    stripRef: innerStripRef,
+    stripWidth,
+    tabs: storeOrder,
+  });
+
+  const stripOrder = useMemo(() => {
+    if (!drag.session) return storeOrder;
+
+    const { id, pinned, toIndex } = drag.session;
+    const rest = storeOrder.filter((tab) => tab.id !== id);
+    if (rest.length === storeOrder.length) return storeOrder;
+
+    return [...rest.slice(0, toIndex), { id, pinned }, ...rest.slice(toIndex)];
+  }, [storeOrder, drag.session]);
+
+  const { dividerX, hiddenCount, placements, total, visibleIndices } = useMemo(
+    () => layoutStrip({ activeId: activeTabId, stripWidth, tabs: stripOrder }),
+    [activeTabId, stripWidth, stripOrder],
+  );
+  const stripPinnedCount = stripOrder.filter((tab) => tab.pinned).length;
 
   const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.tab.id, tab])), [tabs]);
 
@@ -118,12 +103,35 @@ const TabBar = () => {
   // Read during render, so it still holds the width the strip had on the previous commit
   // — which is exactly where a tab appended this commit should enter from.
   const previousTotal = useRef(0);
+  // Tabs restored at boot land in the strip's first populated commit; they should sit at
+  // their final geometry rather than spring in from nothing like a tab the user opened.
+  const hasPopulated = useRef(false);
+  const settleInstantly = !hasPopulated.current;
+  const followInstantly = settleInstantly || navPanelResizing;
 
   useEffect(() => {
-    targetTotal.set(total);
-    targetDividerX.set(dividerX);
+    if (followInstantly) {
+      targetTotal.jump(total);
+      springTotal.jump(total);
+      targetDividerX.jump(dividerX);
+      springDividerX.jump(dividerX);
+    } else {
+      targetTotal.set(total);
+      targetDividerX.set(dividerX);
+    }
     previousTotal.current = total;
-  }, [total, dividerX, targetTotal, targetDividerX]);
+    if (tabs.length > 0 && stripWidth > 0) hasPopulated.current = true;
+  }, [
+    total,
+    dividerX,
+    targetTotal,
+    springTotal,
+    targetDividerX,
+    springDividerX,
+    tabs.length,
+    stripWidth,
+    followInstantly,
+  ]);
 
   const newTabUrl = useMemo(() => {
     const scope = resolveTabScope(location.pathname + location.search);
@@ -132,19 +140,27 @@ const TabBar = () => {
     return buildWorkspaceAwarePath(NEW_TAB_URL, activeSlug);
   }, [location.pathname, location.search]);
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
+  const handleMoveBy = useCallback(
+    (id: string, delta: -1 | 1) => {
+      const index = storeOrder.findIndex((tab) => tab.id === id);
+      const neighbour = storeOrder[index + delta];
+      if (index < 0 || !neighbour || neighbour.pinned !== storeOrder[index].pinned) return;
 
-      const fromIndex = tabIds.indexOf(active.id as string);
-      const toIndex = tabIds.indexOf(over.id as string);
-      if (fromIndex < 0 || toIndex < 0) return;
-
-      reorderTabs(fromIndex, toIndex);
+      moveTab(id, index + delta, neighbour.pinned);
     },
-    [tabIds, reorderTabs],
+    [storeOrder, moveTab],
   );
+
+  const dragFollow = useMemo(() => {
+    const placement = placements.find((item) => item.id === drag.session?.id);
+    if (!drag.session || !placement) return undefined;
+
+    return {
+      grabFraction: drag.session.grabFraction,
+      maxX: total - placement.width,
+      pointerX: drag.pointerX,
+    };
+  }, [drag.session, drag.pointerX, placements, total]);
 
   const handleActivate = useCallback(
     (id: string) => {
@@ -193,11 +209,11 @@ const TabBar = () => {
   );
 
   useWatchBroadcast('closeCurrentTabOrWindow', () => {
-    if (tabs.length > 1 && activeTabId) {
-      handleClose(activeTabId);
-    } else {
-      void electronSystemService.closeWindow();
-    }
+    const state = useElectronStore.getState();
+    const action = resolveCloseShortcut(state.tabs, state.activeTabId, state.activeTabScope);
+
+    if (action.type === 'closeTab') handleClose(action.id);
+    else void electronSystemService.closeWindow();
   });
 
   const handleNewTab = useCallback(
@@ -215,46 +231,58 @@ const TabBar = () => {
   });
 
   const overflowItems = useCallback((): DropdownItem[] => {
-    const visible = new Set(layout.visibleIndices);
+    const visible = new Set(visibleIndices);
 
-    return flowTabs
-      .map((tab, index) => ({ index, tab }))
-      .filter(({ index }) => !visible.has(index))
-      .map(({ tab }) => ({
-        key: tab.tab.id,
-        label: tab.meta.title,
-        onClick: () => handleActivate(tab.tab.id),
-      }));
-  }, [flowTabs, layout.visibleIndices, handleActivate]);
+    return stripOrder
+      .filter((tab) => !tab.pinned)
+      .filter((_, index) => !visible.has(index))
+      .flatMap(({ id }) => {
+        const tab = tabsById.get(id);
+        return tab ? [{ key: id, label: tab.meta.title, onClick: () => handleActivate(id) }] : [];
+      });
+  }, [stripOrder, visibleIndices, tabsById, handleActivate]);
 
   if (tabs.length === 0) return null;
 
+  // The strip's width is only known after it is in the DOM. Mounting the tabs before that
+  // would seed every width spring at the minimum a zero-width strip allows, so the whole
+  // row would visibly widen from compact to full once the measurement lands.
+  const measured = stripWidth > 0;
+
+  // The strip is flex: 1, so it owns the empty titlebar space after the last tab. It
+  // declares the drag region itself instead of relying on the TitleBar's — only the tabs
+  // and controls inside opt out with nodrag.
   return (
-    <Flexbox horizontal align={'center'} className={styles.container} gap={TAB_GAP} ref={stripRef}>
-      <DndContext
-        collisionDetection={closestCenter}
-        modifiers={[restrictToHorizontalAxis]}
-        sensors={sensors}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={cx(electronStylish.draggable, styles.container)}
+      gap={TAB_GAP}
+      ref={stripRef}
+      onPointerEnter={captureVisibleTabPreviews}
+    >
+      {measured && (
+        <>
           {/* One keyed list for pinned and flowing tabs alike. Rendering them as two
-              sibling arrays scoped their keys separately, so pinning unmounted the tab
-              from one and mounted a fresh one in the other — losing its springs, which
-              is why the tab used to pop rather than travel. */}
-          <m.div className={styles.strip} style={{ width: springTotal }}>
+          sibling arrays scoped their keys separately, so pinning unmounted the tab
+          from one and mounted a fresh one in the other — losing its springs, which
+          is why the tab used to pop rather than travel. */}
+          <m.div className={styles.strip} ref={innerStripRef} style={{ width: springTotal }}>
             {placements.map((placement) => {
               const tab = tabsById.get(placement.id);
               if (!tab) return null;
 
               return (
                 <TabItem
-                  enterX={previousTotal.current}
+                  drag={drag.session?.id === placement.id ? dragFollow : undefined}
+                  enterWidth={settleInstantly ? placement.width : 0}
+                  enterX={settleInstantly ? placement.x : previousTotal.current}
                   index={tabIds.indexOf(placement.id)}
+                  instant={navPanelResizing}
                   isActive={placement.id === activeTabId}
                   item={tab}
                   key={placement.id}
-                  pinnedCount={pinnedTabs.length}
+                  pinnedCount={pinnedCount}
                   splitViewEnabled={splitViewEnabled}
                   tier={resolveTabTier(placement.width)}
                   totalCount={tabs.length}
@@ -270,6 +298,8 @@ const TabBar = () => {
                   onCloseOthers={handleCloseOthers}
                   onCloseRight={handleCloseRight}
                   onCloseSplitView={closeSplitView}
+                  onDragStart={drag.startDrag}
+                  onMoveBy={handleMoveBy}
                   onOpenInSplitView={openTabInSplitView}
                   onTogglePin={handleTogglePin}
                 />
@@ -277,33 +307,33 @@ const TabBar = () => {
             })}
             <m.span
               className={styles.pinnedDivider}
-              style={{ opacity: pinnedTabs.length > 0 ? 1 : 0, x: springDividerX }}
+              style={{ opacity: stripPinnedCount > 0 ? 1 : 0, x: springDividerX }}
             />
           </m.div>
-        </SortableContext>
-      </DndContext>
-      <ActionIcon
-        className={cx(electronStylish.nodrag, styles.newTabButton)}
-        disabled={!canCreate}
-        icon={Plus}
-        size="small"
-        title={canCreate ? t('tab.newTab') : reason}
-        onClick={canCreate ? () => handleNewTab() : undefined}
-      />
-      {layout.hiddenCount > 0 && (
-        <DropdownMenu items={overflowItems} placement={'bottomRight'}>
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={cx(electronStylish.nodrag, styles.overflowButton)}
-            gap={2}
-            style={{ width: OVERFLOW_CONTROL_WIDTH }}
-            title={t('tab.overflow', { count: layout.hiddenCount })}
-          >
-            <ChevronDown size={12} />
-            {layout.hiddenCount}
-          </Flexbox>
-        </DropdownMenu>
+          <ActionIcon
+            className={cx(electronStylish.nodrag, styles.newTabButton)}
+            disabled={!canCreate}
+            icon={Plus}
+            size="small"
+            title={canCreate ? t('tab.newTab') : reason}
+            onClick={canCreate ? () => handleNewTab() : undefined}
+          />
+          {hiddenCount > 0 && (
+            <DropdownMenu items={overflowItems} placement={'bottomRight'}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={cx(electronStylish.nodrag, styles.overflowButton)}
+                gap={2}
+                style={{ width: OVERFLOW_CONTROL_WIDTH }}
+                title={t('tab.overflow', { count: hiddenCount })}
+              >
+                <ChevronDown size={12} />
+                {hiddenCount}
+              </Flexbox>
+            </DropdownMenu>
+          )}
+        </>
       )}
     </Flexbox>
   );

@@ -1,4 +1,9 @@
-import type { ChatTopicBotContext, TaskContext, TaskTopicHandoff } from '@lobechat/types';
+import type {
+  ChatTopicBotContext,
+  TaskContext,
+  TaskTopicHandoff,
+  UserInterventionConfig,
+} from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { sql } from 'drizzle-orm';
@@ -13,6 +18,7 @@ import type { BotCallbackBody } from '@/server/services/bot/BotCallbackService';
 import { BotCallbackService } from '@/server/services/bot/BotCallbackService';
 
 import { AiAgentService } from '../aiAgent';
+import { resolveForegroundInterventionConfig } from '../aiAgent/foregroundIntervention';
 import { acquireTopicStartReservation } from '../aiAgent/topicStartReservation';
 import { TaskResultCallbackRedisStore } from './redisStore';
 
@@ -29,7 +35,8 @@ const FALLBACK_MAX_LENGTH = 2000;
 const normalizeReason = (reason: string): CallbackReason => {
   if (reason === 'interrupted') return 'interrupted';
   if (reason === 'error') return 'error';
-  // 'done' | 'max_steps' | 'cost_limit' | … → treat as a normal completion.
+  // 'done' | 'max_steps' | 'cost_limit' | 'tool_call_repeat_limit' | … →
+  // treat as a normal completion.
   return 'done';
 };
 
@@ -234,6 +241,13 @@ export class TaskResultBridgeService {
         this.workspaceId,
       ).getLastMainThreadSpineMessageId(originTopicId);
 
+      // A creator wakeup continues a user-facing conversation. Preserve the
+      // same approval preferences as a foreground send, including its allow
+      // list. Bot channels still lack this UI/resume contract and stay headless.
+      const userInterventionConfig: UserInterventionConfig = botContext
+        ? { approvalMode: 'headless' }
+        : await resolveForegroundInterventionConfig(this.db, this.userId);
+
       const result = await new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       }).execAgent({
@@ -247,7 +261,7 @@ export class TaskResultBridgeService {
         suppressUserMessage: true,
         topicStartReservationId: reservationId,
         trigger: RequestTrigger.AgentSignal,
-        userInterventionConfig: { approvalMode: 'headless' },
+        userInterventionConfig,
       });
       await callbackStore.attachCreatorOperation(receiptIds, result.operationId);
     } catch (error) {

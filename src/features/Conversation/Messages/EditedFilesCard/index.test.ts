@@ -1,7 +1,9 @@
 import { getFilePathDisplayInfo } from '@lobechat/shared-tool-ui/components';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { useChatStore } from '@/store/chat';
 
 import EditedFilesCard, {
   AGGREGATE_EDITED_FILE_ICON_SIZE,
@@ -16,6 +18,17 @@ vi.mock('react-i18next', () => ({
       options?.path ? `${key}:${options.path}` : key,
   }),
 }));
+
+const conversationState = { context: { agentShareId: undefined as string | undefined } };
+
+vi.mock('../../store', () => ({
+  useConversationStore: (selector: (s: unknown) => unknown) => selector(conversationState),
+}));
+
+afterEach(() => {
+  conversationState.context.agentShareId = undefined;
+  useChatStore.setState({ activeTopicId: undefined });
+});
 
 const singleEntry = {
   diffTexts: [
@@ -92,5 +105,48 @@ describe('SingleEditedFileCard', () => {
     fireEvent.click(action);
     expect(action).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: 'editedFiles.hideChanges' })).toBeInTheDocument();
+  });
+});
+
+describe('EditedFilesCard open action', () => {
+  const sandboxEntry = {
+    ...singleEntry,
+    path: '/home/user/price_history.html',
+    sandboxBacked: true,
+  };
+  const singleTitle = 'editedFiles.singleTitle:user/price_history.html';
+
+  it('opens a sandbox file preview from the header for the topic owner', () => {
+    useChatStore.setState({ activeTopicId: 'tpc_1' });
+    render(createElement(EditedFilesCard, { entries: [sandboxEntry] }));
+
+    expect(screen.getByText(singleTitle).closest('[role="button"]')).not.toBeNull();
+  });
+
+  // Regression: the share visitor page's portal hosts no LocalFile
+  // view, so the header click used to push an invisible view and do nothing.
+  // Without a preview it falls back to the diff snapshot instead.
+  it('expands the diff from the header on the agent-share visitor page', () => {
+    conversationState.context.agentShareId = 'share_1';
+    useChatStore.setState({ activeTopicId: 'tpc_1' });
+    render(createElement(EditedFilesCard, { entries: [sandboxEntry] }));
+
+    const header = screen.getByText(singleTitle).closest('[role="button"]')!;
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(header);
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  // Regression (T-965): a Claude Code edit outside the working directory had
+  // neither a preview nor a diff, so its card silently ignored clicks.
+  it('states that a file with no preview and no diff cannot be opened', () => {
+    render(
+      createElement(EditedFilesCard, {
+        entries: [{ ...singleEntry, diffTexts: [], path: '/tmp/spec-20322/spec.md' }],
+      }),
+    );
+
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('editedFiles.previewUnavailable')).toBeInTheDocument();
   });
 });

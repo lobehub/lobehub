@@ -2,8 +2,7 @@
 
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
 import { Center, type DropdownItem, DropdownMenu, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles, Spin } from '@lobehub/ui';
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -24,7 +23,6 @@ import path from 'path-browserify-esm';
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useFetchGitBranch } from '@/store/device';
 
@@ -32,8 +30,9 @@ import type { ComposerTarget } from '../../types';
 import FileRow from './FileRow';
 import FileTreeNav from './FileTreeNav';
 import GroupHeader from './GroupHeader';
-import { itemKey } from './reviewTreeNodes';
+import { getDefaultExpandedKeys, itemKey } from './reviewTreeNodes';
 import {
+  getReviewSummaryState,
   invalidateGitReviewCaches,
   type ReviewMode,
   useGitRemoteBranches,
@@ -69,11 +68,6 @@ interface ReviewProps {
   showTree: boolean;
   workingDirectory: string;
 }
-
-// Empirically: ~100KB of patch ≈ 50 small-diff files OR ~2 big refactors;
-// either way keeps Shiki tokenization under ~250ms on first paint.
-const DEFAULT_EXPAND_BYTE_BUDGET = 100 * 1024;
-const DEFAULT_EXPAND_MAX_COUNT = 50;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   caret: css`
@@ -248,13 +242,16 @@ const Review = memo<ReviewProps>(
       });
     };
 
-    const { data, isLoading, isValidating } = useReviewPatches(
+    // Stale-first: after a reload the replica paints the last persisted summary
+    // (paths + counts, no diff text); expanded rows wait for the live diff.
+    const { data, error, isLoading, isValidating } = useReviewPatches(
       workingDirectory,
       mode,
       baseOverride,
       deviceId,
       active,
     );
+    const { diffPending, isSummary } = getReviewSummaryState(data, error);
     const invalidateReviewData = useCallback(
       async () =>
         invalidateGitReviewCaches({
@@ -355,14 +352,8 @@ const Review = memo<ReviewProps>(
       });
     };
 
-    // Default-expand by patch-size budget: take entries (across all groups in
-    // order) until cumulative patch bytes exceed DEFAULT_EXPAND_BYTE_BUDGET,
-    // capped at DEFAULT_EXPAND_MAX_COUNT. Every PatchDiff mounts a Shiki
-    // tokenizer synchronously, so expanding too much at once locks the renderer;
-    // size-based budget keeps small-diff cases generous while clamping repos
-    // with a few large refactors. Re-syncing on signature change auto-expands
-    // new entries within the cap; panels the user manually closed earlier stay
-    // closed because their key is already absent.
+    // A PatchDiff materialises a large Shiki-backed DOM tree. Keep the initial
+    // expansion to a viewport-sized batch; users can still open any other file.
     const signature = useMemo(
       () => allEntries.map(({ group, patch }) => itemKey(group.absolutePath, patch)).join('|'),
       [allEntries],
@@ -371,16 +362,7 @@ const Review = memo<ReviewProps>(
     const [activeKeys, setActiveKeys] = useState<string[]>([]);
     if (signature !== seenSignature) {
       setSeenSignature(signature);
-      const initialKeys: string[] = [];
-      let budget = DEFAULT_EXPAND_BYTE_BUDGET;
-      for (const { group, patch } of allEntries) {
-        if (initialKeys.length >= DEFAULT_EXPAND_MAX_COUNT) break;
-        const cost = patch.patch?.length ?? 0;
-        if (initialKeys.length > 0 && cost > budget) break;
-        initialKeys.push(itemKey(group.absolutePath, patch));
-        budget -= cost;
-      }
-      setActiveKeys(initialKeys);
+      setActiveKeys(getDefaultExpandedKeys(groups));
     }
 
     // The file whose diff the tree-nav last scrolled to — highlighted in the rail.
@@ -413,7 +395,7 @@ const Review = memo<ReviewProps>(
     if (!data && isLoading) {
       return (
         <Center flex={1}>
-          <NeuralNetworkLoading size={48} />
+          <Spin size="large" />
         </Center>
       );
     }
@@ -680,7 +662,9 @@ const Review = memo<ReviewProps>(
                             expanded={expanded}
                             key={key}
                             mode={mode}
+                            pending={diffPending}
                             repoAbsolutePath={group.absolutePath}
+                            stale={isSummary}
                             textDiff={textDiff}
                             viewMode={viewMode}
                             wordWrap={wordWrap}

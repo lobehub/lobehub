@@ -1,28 +1,18 @@
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
-import { XIcon } from 'lucide-react';
 import { memo } from 'react';
 
-import NavHeader from '@/features/NavHeader';
+import PortalHeader from '@/features/Portal/components/Header';
 import { useChatStore } from '@/store/chat';
 
 import Title from './Title';
 
-const Header = memo(() => {
+const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
   const closeTopicPortal = useChatStore((s) => s.closeTopicPortal);
 
-  return (
-    <NavHeader
-      left={<Title />}
-      paddingBlock={6}
-      paddingInline={8}
-      right={<ActionIcon icon={XIcon} size={'small'} onClick={closeTopicPortal} />}
-      showTogglePanelButton={false}
-      style={{
-        borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
-      }}
-    />
-  );
+  // Closing pops only this topic view; a host-provided close (e.g. a drawer)
+  // still wins so the host can tear itself down.
+  return <PortalHeader title={<Title />} onClose={onClose ?? closeTopicPortal} />;
 });
+
+Header.displayName = 'PortalTopicHeader';
 
 export default Header;

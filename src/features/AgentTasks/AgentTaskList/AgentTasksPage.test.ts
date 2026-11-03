@@ -8,13 +8,17 @@ import {
   getScheduledTaskViewOptions,
   getTaskCreateActionBehavior,
   getTaskPageHeaderVisibility,
+  PAGINATED_COLLECTION_PINNED_OPTIONS,
+  resolveHeaderEmptyHero,
   resolveMyTaskScope,
   resolveTaskCollection,
+  resolveTaskCollectionView,
 } from './AgentTasksPage';
 import {
   collapseSubTasks,
   compareTaskItems,
   DEFAULT_TASK_LIST_VIEW_OPTIONS,
+  isTaskHiddenByCompletedFilter,
 } from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 
@@ -22,6 +26,38 @@ const taskUpdatedAt = (id: string, updatedAt: string): TaskListItem =>
   ({ id, identifier: id, status: 'backlog', updatedAt: new Date(updatedAt) }) as TaskListItem;
 
 describe('AgentTasksPage', () => {
+  describe('resolveHeaderEmptyHero', () => {
+    it('keeps the view options reachable when only archived tasks remain', () => {
+      expect(
+        resolveHeaderEmptyHero({
+          hasOnlyArchivedTasks: true,
+          isEmptyHero: true,
+          isOrdinaryCollection: true,
+        }),
+      ).toBe(false);
+    });
+
+    it('treats a truly empty ordinary list as empty', () => {
+      expect(
+        resolveHeaderEmptyHero({
+          hasOnlyArchivedTasks: false,
+          isEmptyHero: true,
+          isOrdinaryCollection: true,
+        }),
+      ).toBe(true);
+    });
+
+    it('never treats the other collections as empty', () => {
+      expect(
+        resolveHeaderEmptyHero({
+          hasOnlyArchivedTasks: false,
+          isEmptyHero: true,
+          isOrdinaryCollection: false,
+        }),
+      ).toBe(false);
+    });
+  });
+
   describe('clampCollectionPage', () => {
     it('moves a stale last page back into range when the result total shrinks', () => {
       expect(clampCollectionPage(2, 50)).toBe(1);
@@ -45,7 +81,7 @@ describe('AgentTasksPage', () => {
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
         groupBy: 'automationMode',
-        hideCompleted: false,
+        completedTasks: 'all',
         orderBy: 'updatedAt',
         orderDirection: 'asc',
         showSubTasks: true,
@@ -66,7 +102,7 @@ describe('AgentTasksPage', () => {
         getMyTaskViewOptions({
           ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
           groupBy: 'priority',
-          hideCompleted: false,
+          completedTasks: 'week',
           orderBy: 'title',
           orderDirection: 'asc',
           showSubTasks: false,
@@ -74,7 +110,7 @@ describe('AgentTasksPage', () => {
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
         groupBy: 'priority',
-        hideCompleted: false,
+        completedTasks: 'all',
         orderBy: 'updatedAt',
         orderDirection: 'asc',
         showSubTasks: true,
@@ -94,11 +130,70 @@ describe('AgentTasksPage', () => {
       expect(collapseSubTasks([parent, child]).map((t) => t.id)).toEqual(['p']);
     });
 
+    it('never re-applies the completed window to a page the server already cut', () => {
+      // The server counted this row inside the window; a browser clock that is
+      // ahead (or a cutoff crossed since the fetch) must not drop it again.
+      const options = getMyTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        completedTasks: 'day',
+      });
+      const justOutside = {
+        ...taskUpdatedAt('done', '2026-01-01'),
+        completedAt: new Date('2026-01-01T00:00:00Z'),
+        status: 'completed',
+      } as TaskListItem;
+      const now = new Date('2026-01-02T00:00:01Z').getTime();
+      expect(isTaskHiddenByCompletedFilter(justOutside, options.completedTasks, now)).toBe(false);
+    });
+
     it('renders a page newest-first, like the server paginates it', () => {
       const options = getMyTaskViewOptions(DEFAULT_TASK_LIST_VIEW_OPTIONS);
       const newer = taskUpdatedAt('a', '2026-02-01');
       const older = taskUpdatedAt('b', '2026-01-01');
       expect(compareTaskItems(newer, older, options)).toBeLessThan(0);
+    });
+  });
+
+  describe('resolveTaskCollectionView', () => {
+    it('renders the board in every collection that offers the switch', () => {
+      // The reported bug: "My tasks" showed the list/board switch but rendered
+      // its list unconditionally, so picking Board changed nothing.
+      expect(resolveTaskCollectionView('mine', 'kanban')).toBe('board');
+      expect(resolveTaskCollectionView('tasks', 'kanban')).toBe('board');
+    });
+
+    it('renders the list whenever the list mode is selected', () => {
+      expect(resolveTaskCollectionView('mine', 'list')).toBe('list');
+      expect(resolveTaskCollectionView('tasks', 'list')).toBe('list');
+    });
+
+    it('keeps the scheduled roll-up a list — it is offered no switch', () => {
+      expect(resolveTaskCollectionView('scheduled', 'kanban')).toBe('list');
+      expect(resolveTaskCollectionView('scheduled', 'list')).toBe('list');
+    });
+  });
+
+  describe('PAGINATED_COLLECTION_PINNED_OPTIONS', () => {
+    it('names exactly the controls a paginated collection overrides', () => {
+      // Each pinned name must be a control the view options actually fix, or
+      // the panel would hide a switch that still works.
+      const pinned = getMyTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        orderBy: 'title',
+        orderDirection: 'desc',
+        showSubTasks: false,
+      });
+      expect(PAGINATED_COLLECTION_PINNED_OPTIONS).toEqual(['ordering', 'showSubTasks']);
+      expect(pinned.orderBy).toBe('updatedAt');
+      expect(pinned.orderDirection).toBe('asc');
+      expect(pinned.showSubTasks).toBe(true);
+      // `completedTasks` stays offered: it takes effect server-side
+      // (`getVisibleTaskStatuses` / `getCompletedWithin`), so only the
+      // rendered page is told not to cut again.
+      expect(pinned.completedTasks).toBe('all');
+      // Not pinned: the panel keeps offering these, and they still take effect.
+      expect(pinned.groupBy).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy);
+      expect(pinned.nestedSubTasks).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.nestedSubTasks);
     });
   });
 
@@ -184,6 +279,32 @@ describe('AgentTasksPage', () => {
         showTaskAgentPanelToggle: true,
         showViewOptions: true,
       });
+    });
+
+    it('drops the scoped breadcrumb on the mobile surface, where back and the drawer lead to the scope', () => {
+      expect(
+        getTaskPageHeaderVisibility({
+          agentId: 'agent-1',
+          isEmptyHero: false,
+          isMobile: true,
+          mobileSurface: true,
+        }).showBreadcrumb,
+      ).toBe(false);
+      expect(
+        getTaskPageHeaderVisibility({
+          isEmptyHero: false,
+          isMobile: true,
+          mobileSurface: true,
+          projectId: 'p-1',
+        }).showBreadcrumb,
+      ).toBe(false);
+    });
+
+    it('keeps the scoped breadcrumb in a narrow desktop window, which has no mobile back button', () => {
+      expect(
+        getTaskPageHeaderVisibility({ agentId: 'agent-1', isEmptyHero: false, isMobile: true })
+          .showBreadcrumb,
+      ).toBe(true);
     });
 
     it('keeps the breadcrumb for a project scope and drops it for the global list', () => {

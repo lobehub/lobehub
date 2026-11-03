@@ -1,10 +1,18 @@
 'use client';
 
-import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
-import { DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
+import { type BuiltinSkillManifest, type SkillListItem } from '@lobechat/types';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  createModal,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  stopPropagation,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { cssVar } from 'antd-style';
 import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,13 +30,14 @@ import { styles } from './style';
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 const AgentSkillEdit = lazy(() => import('@/features/AgentSkillEdit'));
 
-const isBuiltinSkill = (skill: BuiltinSkill | SkillListItem): skill is BuiltinSkill =>
-  !('id' in skill);
+const isBuiltinSkill = (
+  skill: BuiltinSkillManifest | SkillListItem,
+): skill is BuiltinSkillManifest => !('id' in skill);
 
 interface AgentSkillItemProps {
   isSelected?: boolean;
   onSelect?: () => void;
-  skill: BuiltinSkill | SkillListItem;
+  skill: BuiltinSkillManifest | SkillListItem;
 }
 
 const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect }) => {
@@ -86,7 +95,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
           }
         }
       },
-      title: tp('store.actions.confirmUninstall'),
+      content: tp('store.actions.confirmUninstall'),
+      okText: tp('store.actions.uninstall'),
+      title: tp('store.actions.uninstall'),
     });
   };
 
@@ -224,7 +235,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
         gap={16}
         justify="space-between"
         style={{
-          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 6 } : {}),
+          ...(isSelected ? { background: 'var(--lobe-color-primary-bg)', borderRadius: 6 } : {}),
           ...(onSelect ? { cursor: 'pointer' } : {}),
         }}
         onClick={onSelect}

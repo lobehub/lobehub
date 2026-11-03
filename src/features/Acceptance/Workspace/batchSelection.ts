@@ -2,12 +2,36 @@ import type { AcceptanceStatus } from '@lobechat/types';
 
 import type { AcceptanceListItem } from '@/services/verify';
 
+import { acceptanceListPath } from '../Viewer/routes';
 import { type AcceptanceStatusAction, getAcceptanceStatusActions } from '../Viewer/statusActions';
 
 export type AcceptanceSelectAllState = 'all' | 'none' | 'partial';
 
 export const toggleAcceptanceSelection = (selected: string[], id: string): string[] =>
   selected.includes(id) ? selected.filter((entry) => entry !== id) : [...selected, id];
+
+/**
+ * Shift-click: every row between the anchor and the target in VISUAL order,
+ * collapsed groups included — the batch bar count shows what was swept. An
+ * anchor that has scrolled out of the visible order degrades to a single pick.
+ */
+export const rangeAcceptanceSelection = (
+  orderedIds: string[],
+  anchor: string | null,
+  target: string,
+  selected: string[],
+): string[] => {
+  const from = anchor ? orderedIds.indexOf(anchor) : -1;
+  const to = orderedIds.indexOf(target);
+  const range =
+    from === -1 || to === -1
+      ? [target]
+      : orderedIds.slice(Math.min(from, to), Math.max(from, to) + 1);
+
+  const merged = new Set(selected);
+  for (const id of range) merged.add(id);
+  return [...merged];
+};
 
 /**
  * The selection as the user can currently SEE it.
@@ -69,7 +93,9 @@ export const acceptanceBatchTargets = (
     .filter(
       (item) =>
         selectedSet.has(item.id) &&
-        getAcceptanceStatusActions(item.status as AcceptanceStatus).includes(action),
+        getAcceptanceStatusActions(item.status as AcceptanceStatus, item.subjectType).includes(
+          action,
+        ),
     )
     .map((item) => item.id);
 };
@@ -110,3 +136,13 @@ export const chunkAcceptanceBatch = (ids: string[], size = ACCEPTANCE_BATCH_CHUN
   }
   return chunks;
 };
+
+export const acceptanceRedirectAfterDelete = (
+  openId: string | undefined,
+  targets: string[],
+  failedIds: string[],
+  routeBase?: string,
+): string | undefined =>
+  openId && targets.includes(openId) && !failedIds.includes(openId)
+    ? acceptanceListPath(routeBase)
+    : undefined;

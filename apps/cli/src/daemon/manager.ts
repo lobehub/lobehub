@@ -28,9 +28,14 @@ function getLogFilePath() {
 }
 
 export interface DaemonStatus {
+  /** Captured by the running process, never inferred from the installed package. */
+  cliVersion?: string;
   connectionStatus: string;
   deviceId?: string;
+  /** Where `gatewayUrl` came from: `server`, `manual`, `official` or `override`. */
+  gatewaySource?: string;
   gatewayUrl: string;
+  lastRequestAt?: string;
   pid: number;
   startedAt: string;
 }
@@ -119,7 +124,8 @@ export function getRunningDaemonPid(): number | null {
 
   // Stale PID file — process is dead or the PID now belongs to someone else.
   removePid();
-  removeStatus();
+  // Services share the status file; an old daemon pid must not erase their report.
+  if (readStatus()?.pid === pid) removeStatus();
   return null;
 }
 
@@ -127,7 +133,10 @@ export function getRunningDaemonPid(): number | null {
 
 export function writeStatus(status: DaemonStatus): void {
   ensureDir();
-  fs.writeFileSync(getStatusPath(), JSON.stringify(status, null, 2), { mode: 0o600 });
+  const statusPath = getStatusPath();
+  const tempPath = `${statusPath}.${process.pid}.tmp`;
+  fs.writeFileSync(tempPath, JSON.stringify(status, null, 2), { mode: 0o600 });
+  fs.renameSync(tempPath, statusPath);
 }
 
 export function readStatus(): DaemonStatus | null {

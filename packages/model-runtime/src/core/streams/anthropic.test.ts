@@ -623,7 +623,7 @@ describe('AnthropicStream', () => {
           'data: "end_turn"\n',
           'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
           'event: usage',
-          'data: {"inputCacheMissTokens":46,"totalInputTokens":46,"totalOutputTokens":365,"totalTokens":411}\n',
+          'data: {"inputCacheMissTokens":46,"inputCachedTokens":0,"totalInputTokens":46,"totalOutputTokens":365,"totalTokens":411}\n',
           'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
           'event: stop',
           'data: "message_stop"\n',
@@ -783,7 +783,7 @@ describe('AnthropicStream', () => {
           'data: "end_turn"\n',
           'id: msg_019q32esPvu3TftzZnL6JPys',
           'event: usage',
-          'data: {"inputCacheMissTokens":92,"totalInputTokens":92,"totalOutputTokens":263,"totalTokens":355}\n',
+          'data: {"inputCacheMissTokens":92,"inputCachedTokens":0,"totalInputTokens":92,"totalOutputTokens":263,"totalTokens":355}\n',
           'id: msg_019q32esPvu3TftzZnL6JPys',
           'event: stop',
           'data: "message_stop"\n',
@@ -873,6 +873,7 @@ describe('AnthropicStream', () => {
         index: 0,
         delta: { type: 'abc', abc: '123' },
       },
+      { type: 'message_stop' },
     ];
 
     const mockReadableStream = new ReadableStream({
@@ -914,6 +915,9 @@ describe('AnthropicStream', () => {
         'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
         'event: data',
         'data: {"type":"content_block_delta","index":0,"delta":{"type":"abc","abc":"123"}}\n',
+        'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
+        'event: stop',
+        'data: "message_stop"\n',
       ].map((item) => `${item}\n`),
     );
   });

@@ -5,8 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { findNewComponentTestAdvisories } from './advisories';
+import { alintScopeArgs, keepSelectedFiles, parseAlintJson } from './alint';
 import { diffStat, renderDiffsForStdout } from './autofix';
-import { hostRootFromGitdir } from './delegate';
+import { parseRenames } from './base';
+import { checkFileSizes, countLines } from './fileSize';
 import { lobehubPipelines } from './pipelines';
 import {
   findVitestConfigDir,
@@ -14,6 +16,7 @@ import {
   pipelineFor,
   relatedTestCandidates,
   resolveMount,
+  scenarioTestLookup,
   stylelintApplies,
 } from './routing';
 import type { RepoMount } from './types';
@@ -127,6 +130,21 @@ describe('relatedTestCandidates', () => {
     ]);
   });
 
+  it('matches scenario suites split from the source test', () => {
+    const lookup = scenarioTestLookup('src/Foo/index.tsx');
+    expect(lookup?.dirs).toEqual(['src/Foo', 'src/Foo/__tests__']);
+    expect(
+      [
+        'index.cta.test.ts',
+        'index.render.test.tsx',
+        'index.test.ts',
+        'indexer.cta.test.ts',
+        'index.a.b.test.ts',
+      ].filter((name) => lookup?.matches(name)),
+    ).toEqual(['index.cta.test.ts', 'index.render.test.tsx']);
+    expect(scenarioTestLookup('src/Foo/index.test.ts')).toBeNull();
+  });
+
   it('returns nothing for non-source files', () => {
     expect(relatedTestCandidates('AGENTS.md')).toEqual([]);
     expect(relatedTestCandidates('image.png')).toEqual([]);
@@ -158,6 +176,85 @@ describe('findNewComponentTestAdvisories', () => {
   });
 });
 
+describe('parseRenames', () => {
+  it('maps each renamed path to its source path', () => {
+    expect(parseRenames('R098\0src/Foo.tsx\0src/Foo/index.tsx\0R100\0a.ts\0b/a.ts\0')).toEqual(
+      new Map([
+        ['src/Foo/index.tsx', 'src/Foo.tsx'],
+        ['b/a.ts', 'a.ts'],
+      ]),
+    );
+    expect(parseRenames('')).toEqual(new Map());
+  });
+});
+
+describe('countLines', () => {
+  it.each([
+    ['', 0],
+    ['a\n', 1],
+    ['a\nb', 2],
+    ['a\nb\n', 2],
+  ])('counts %j as %i lines', (content, expected) => {
+    expect(countLines(content)).toBe(expected);
+  });
+});
+
+describe('checkFileSizes', () => {
+  const current: Record<string, number> = {
+    'src/Big.ts': 1201,
+    'src/Crossed.ts': 1300,
+    'src/Grown.tsx': 1600,
+    'src/Shrunk.ts': 1400,
+    'src/Small.ts': 1200,
+    'packages/locales/src/default/setting.ts': 5000,
+    'packages/locales/src/create.ts': 1300,
+    'src/types.d.ts': 2000,
+    'packages/sdk/src/generated/types.gen.ts': 12000,
+    'packages/sdk/src/generated/core/client.ts': 1300,
+    'README.md': 5000,
+  };
+  const base: Record<string, number | null> = {
+    'src/Big.ts': null,
+    'packages/locales/src/create.ts': null,
+    'packages/locales/src/default/setting.ts': 4000,
+    'src/types.d.ts': 1000,
+    'packages/sdk/src/generated/types.gen.ts': null,
+    'packages/sdk/src/generated/core/client.ts': null,
+    'src/Crossed.ts': 1190,
+    'src/Grown.tsx': 1500,
+    'src/Shrunk.ts': 1500,
+  };
+  const run = (files: string[]) =>
+    checkFileSizes(
+      files,
+      async (file) => current[file],
+      async (file) => ({ baseRef: 'origin/canary', lines: base[file] }),
+    );
+
+  it('fails new and newly oversized files and only advises on grown legacy files', async () => {
+    const findings = await run(Object.keys(current));
+
+    expect(findings.errors).toEqual([
+      expect.stringContaining('src/Big.ts: new file has 1201 lines'),
+      expect.stringContaining('src/Crossed.ts: grew from 1190 to 1300 lines'),
+      expect.stringContaining('packages/locales/src/create.ts: new file has 1300 lines'),
+    ]);
+    expect(findings.advisories).toEqual([
+      expect.stringContaining('src/Grown.tsx: already over 1200 lines and grew from 1500 to 1600'),
+    ]);
+  });
+
+  it('skips oversized files when the base cannot be inspected', async () => {
+    await expect(
+      checkFileSizes(
+        ['src/Big.ts'],
+        async () => 1201,
+        async () => undefined,
+      ),
+    ).resolves.toEqual({ advisories: [], errors: [] });
+  });
+});
+
 describe('findVitestConfigDir', () => {
   const configs = new Set([
     'vitest.config.mts',
@@ -180,17 +277,6 @@ describe('findVitestConfigDir', () => {
     await expect(
       findVitestConfigDir('somewhere/deep/file.test.ts', async () => false),
     ).resolves.toBe('.');
-  });
-});
-
-describe('hostRootFromGitdir', () => {
-  it('extracts the superproject root from a submodule gitdir', () => {
-    expect(hostRootFromGitdir('/work/host/.git/modules/vendor/sub')).toBe('/work/host');
-  });
-
-  it('returns null for standalone clones and linked worktrees', () => {
-    expect(hostRootFromGitdir('/work/repo/.git')).toBeNull();
-    expect(hostRootFromGitdir('/work/repo/.git/worktrees/feature')).toBeNull();
   });
 });
 
@@ -240,5 +326,64 @@ describe('compactVitestOutput', () => {
   it('falls back to filtering noise when no failed-tests section exists', () => {
     const raw = [' RUN  v3.2.4 /repo', 'Error: config not found', '   Duration  1ms'].join('\n');
     expect(compactVitestOutput(raw)).toBe('Error: config not found');
+  });
+});
+
+describe('parseAlintJson', () => {
+  it('maps alint diagnostics to root-relative lint problems', () => {
+    const stdout = JSON.stringify({
+      diagnostics: [
+        {
+          evidence: { confidence: 'high' },
+          filePath: '/repo/apps/server/src/services/x.ts',
+          loc: { start: { column: 0, line: 12 } },
+          message: 'Promise.all fans out over rows\nSuggestion: use pMap',
+          ruleId: 'lobehub/pmap-over-promise-all',
+          severity: 'warn',
+        },
+      ],
+      execution: {},
+      usage: {},
+    });
+    expect(parseAlintJson(stdout, '/repo')).toEqual([
+      {
+        file: 'apps/server/src/services/x.ts',
+        line: 12,
+        message: 'Promise.all fans out over rows',
+        rule: 'lobehub/pmap-over-promise-all',
+        severity: 'warning',
+      },
+    ]);
+  });
+
+  it('returns null when stdout is not alint JSON', () => {
+    expect(parseAlintJson('alint: no .alint config', '/repo')).toBeNull();
+  });
+});
+
+describe('alint scope', () => {
+  const files = ['packages/database/src/models/goalGraph.ts'];
+  const problem = (file: string) => ({
+    file,
+    line: 383,
+    message: 'transaction writes two tables',
+    rule: 'lobehub/no-transactions-in-models',
+    severity: 'error' as const,
+  });
+
+  it('lints changed lines only for the default git scope, like CI', () => {
+    expect(alintScopeArgs(files, { changedLinesOnly: true })).toEqual(['--dirty']);
+  });
+
+  it('lints explicit paths whole', () => {
+    expect(alintScopeArgs(files, { changedLinesOnly: false })).toEqual(files);
+  });
+
+  it('drops dirty findings outside the selected files (e.g. --staged)', () => {
+    const problems = [problem(files[0]), problem('src/unstaged.tsx')];
+    expect(keepSelectedFiles(problems, files, { changedLinesOnly: true })).toEqual([
+      problem(files[0]),
+    ]);
+    expect(keepSelectedFiles(problems, files, { changedLinesOnly: false })).toEqual(problems);
   });
 });

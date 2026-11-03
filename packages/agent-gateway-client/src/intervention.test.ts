@@ -28,6 +28,14 @@ const request = (overrides: Partial<AgentInterventionRequestData> = {}) => ({
 });
 
 describe('sanitizeAgentInterventionRequestForReview', () => {
+  it('accepts an OpenCode question while retaining its producer identity', () => {
+    expect(
+      sanitizeAgentInterventionRequestForReview(
+        request({ identifier: 'opencode', interactionKind: 'question', provider: 'opencode' }),
+      ),
+    ).toMatchObject({ identifier: 'opencode', interactionKind: 'question', provider: 'opencode' });
+  });
+
   it('keeps only canonical review fields and exact provider option ids', () => {
     const sanitized = sanitizeAgentInterventionRequestForReview(request());
 
@@ -209,5 +217,13 @@ describe('sanitizeAgentInterventionRequestForReview', () => {
     expect(
       sanitizeAgentInterventionRequestForReview(request({ interactionKind: undefined })),
     ).toBeUndefined();
+  });
+
+  it('accepts Devin as a durable intervention provider', () => {
+    const sanitized = sanitizeAgentInterventionRequestForReview(
+      request({ identifier: 'devin', provider: 'devin' }),
+    );
+
+    expect(sanitized).toMatchObject({ identifier: 'devin', provider: 'devin' });
   });
 });

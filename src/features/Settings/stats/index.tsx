@@ -1,15 +1,12 @@
 'use client';
 
-import { FormGroup, Grid, Icon } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { DayjsDatePicker as DatePicker, Divider, Grid, Icon, Tabs } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/form';
 import { ProviderIcon } from '@lobehub/ui/icons';
-import { type DatePickerProps } from 'antd';
-import { DatePicker, Divider } from 'antd';
 import dayjs from 'dayjs';
 import { Brain, UserIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SWRConfig } from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
@@ -51,7 +48,7 @@ interface StatsSettingProps {
   showSettingHeader?: boolean;
 }
 
-const StatsContent = memo<StatsSettingProps>(
+const StatsSetting = memo<StatsSettingProps>(
   ({ mobile, headerNode, enableUserDimension, resolveUser, showSettingHeader = true }) => {
     const { t, i18n } = useTranslation('auth');
     dayjs.locale(i18n.language);
@@ -70,25 +67,19 @@ const StatsContent = memo<StatsSettingProps>(
       }
     }, [dateStrings]);
 
-    const handleDateChange: DatePickerProps['onChange'] = (dates, dateStrings) => {
-      // Handle both single date and array
-      const actualDate = Array.isArray(dates) ? dates[0] : dates;
-      if (actualDate) {
-        setDateRange(actualDate);
-      }
-      if (typeof dateStrings === 'string') {
-        setDateStrings(dateStrings);
-      }
+    const handleDateChange = (month: dayjs.Dayjs | null) => {
+      if (!month) return;
+      setDateRange(month);
+      setDateStrings(month.format('YYYY-MM'));
     };
 
     return (
       <>
         {showSettingHeader && <SettingHeader title={t('tab.stats')} />}
         {/* ========== Header Section ========== */}
-        <FormGroup
+        <Form.Group
           collapsible={false}
           extra={headerNode === undefined ? <ShareButton /> : undefined}
-          gap={16}
           variant={'filled'}
           title={
             headerNode === undefined ? (
@@ -104,23 +95,27 @@ const StatsContent = memo<StatsSettingProps>(
             <TotalMessages mobile={mobile} />
             <TotalTokens />
           </Grid>
-          <Divider dashed />
+          <Divider dashed style={{ marginBlock: 24 }} />
           <AiHeatmaps mobile={mobile} />
-          <Divider dashed />
+          <Divider dashed style={{ marginBlock: 24 }} />
           <Grid gap={16} rows={3} style={{ paddingBottom: 12 }}>
             <ModelsRank />
             <AssistantsRank mobile={mobile} />
             <TopicsRank mobile={mobile} />
           </Grid>
-        </FormGroup>
-        <FormGroup
+        </Form.Group>
+        <Form.Group
           collapsible={false}
-          gap={16}
-          title={t('tab.usage')}
+          title={<span style={{ lineHeight: '35px' }}>{t('tab.usage')}</span>}
           variant={'filled'}
           extra={
             <>
-              <DatePicker picker="month" value={dateRange} onChange={handleDateChange} />
+              <DatePicker
+                format="YYYY-MM"
+                picker="month"
+                value={dateRange}
+                onChange={handleDateChange}
+              />
               <Tabs
                 activeKey={groupBy}
                 style={{ marginLeft: 8 }}
@@ -149,9 +144,6 @@ const StatsContent = memo<StatsSettingProps>(
               />
             </>
           }
-          styles={{
-            title: { lineHeight: '35px' },
-          }}
         >
           <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
             <UsageCards
@@ -160,7 +152,7 @@ const StatsContent = memo<StatsSettingProps>(
               isLoading={isLoading}
               resolveUser={resolveUser}
             />
-            <Divider />
+            <Divider style={{ marginBlock: 24 }} />
             <UsageTrends
               data={data}
               groupBy={groupBy}
@@ -170,25 +162,10 @@ const StatsContent = memo<StatsSettingProps>(
           </AsyncBoundary>
           <div style={{ height: 24 }} />
           <UsageTable dateStrings={dateStrings} />
-        </FormGroup>
+        </Form.Group>
       </>
     );
   },
 );
-
-/**
- * Every metric on this page fetches independently and gates itself with its own
- * `AsyncBoundary` + Retry — a failed token count must not take the healthy
- * message count down with it, and `errorVariant='metric'` exists so a failure
- * never reads as a confident zero. Route-wide `suspense` would turn all of that
- * into dead code by throwing to the route boundary instead, so the page opts
- * out. The opt-out has to sit *above* the hooks it covers, hence the wrapper
- * rather than an `SWRConfig` inside `StatsContent`.
- */
-const StatsSetting = memo<StatsSettingProps>((props) => (
-  <SWRConfig value={{ suspense: false }}>
-    <StatsContent {...props} />
-  </SWRConfig>
-));
 
 export default StatsSetting;

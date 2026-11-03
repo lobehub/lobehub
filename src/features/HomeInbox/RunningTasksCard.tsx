@@ -1,11 +1,10 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { homeType } from '@/features/Home/components/homeType';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
@@ -87,7 +86,8 @@ const StackedAgentAvatar = memo<{ agentId: string }>(({ agentId }) => {
   if (!agent) return null;
 
   return (
-    <Avatar
+    <AgentAvatar
+      agentId={agentId}
       avatar={agent.avatar}
       background={agent.backgroundColor}
       className={styles.stackedAvatar}

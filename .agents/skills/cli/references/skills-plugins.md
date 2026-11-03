@@ -9,7 +9,7 @@ Manage agent skills (custom instructions and capabilities).
 ### `lh skill list`
 
 ```bash
-lh skill list [--source [--json [fields]] < source > ]
+lh skill list [--source <source>] [--json [fields]]
 ```
 
 | Option              | Description                         |
@@ -21,7 +21,7 @@ lh skill list [--source [--json [fields]] < source > ]
 ### `lh skill view <id>`
 
 ```bash
-lh skill view [fields]] < id > [--json
+lh skill view <id> [--json [fields]]
 ```
 
 **Displays**: Name, description, source, identifier, content.
@@ -29,7 +29,7 @@ lh skill view [fields]] < id > [--json
 ### `lh skill create`
 
 ```bash
-lh skill create -n < name > -d < desc > -c < content > [-i < identifier > ]
+lh skill create -n <name> -d <desc> -c <content> [-i <id>]
 ```
 
 | Option                     | Description                         | Required |
@@ -41,20 +41,22 @@ lh skill create -n < name > -d < desc > -c < content > [-i < identifier > ]
 
 ### `lh skill edit <id>`
 
+Requires at least one of `-c`/`-n`/`-d`; errors if none specified.
+
 ```bash
-lh skill edit [-n [-d < id > [-c < content > ] < name > ] < desc > ]
+lh skill edit <id> [-n <name>] [-d <desc>] [-c <content>]
 ```
 
 ### `lh skill delete <id>`
 
 ```bash
-lh skill delete < id > [--yes]
+lh skill delete <id> [--yes]
 ```
 
 ### `lh skill search <query>`
 
 ```bash
-lh skill search [fields]] < query > [--json
+lh skill search <query> [--json [fields]]
 ```
 
 ### `lh skill install <source>` (alias: `lh skill i`)
@@ -92,7 +94,7 @@ lh skill i my-cool-skill
 List files/resources within a skill.
 
 ```bash
-lh skill resources [fields]] < id > [--json
+lh skill resources <id> [--json [fields]]
 ```
 
 **Displays**: Path, type, size.
@@ -102,7 +104,7 @@ lh skill resources [fields]] < id > [--json
 Read a specific resource file from a skill.
 
 ```bash
-lh skill read-resource <skillId> <path>
+lh skill read-resource <id> <path>
 ```
 
 **Output**: File content or JSON metadata.
@@ -126,7 +128,7 @@ lh plugin list [--json [fields]]
 ### `lh plugin install`
 
 ```bash
-lh plugin install -i [--settings < identifier > --manifest < json > [--type < type > ] < json > ]
+lh plugin install -i <id> --manifest <json> [--type <type>] [--settings <json>]
 ```
 
 | Option                  | Description                | Required               |
@@ -139,11 +141,13 @@ lh plugin install -i [--settings < identifier > --manifest < json > [--type < ty
 ### `lh plugin uninstall <id>`
 
 ```bash
-lh plugin uninstall < id > [--yes]
+lh plugin uninstall <id> [--yes]
 ```
 
 ### `lh plugin update <id>`
 
+Requires `--manifest` or `--settings` (at least one); errors if neither is specified.
+
 ```bash
-lh plugin update [--settings < id > [--manifest < json > ] < json > ]
+lh plugin update <id> [--manifest <json>] [--settings <json>]
 ```

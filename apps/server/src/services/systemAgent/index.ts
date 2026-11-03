@@ -17,7 +17,7 @@ import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
 
 import { resolveSystemAgentModelConfig } from './modelConfig';
 
@@ -50,9 +50,10 @@ export class SystemAgentService {
    */
   async generateTopicTitle(params: {
     lastAssistantContent: string;
+    topicId: string;
     userPrompt: string;
   }): Promise<string | null> {
-    const { userPrompt, lastAssistantContent } = params;
+    const { userPrompt, lastAssistantContent, topicId } = params;
 
     try {
       const { model, provider } = await this.getTaskModelConfig('topic');
@@ -67,12 +68,11 @@ export class SystemAgentService {
 
       const payload = chainSummaryTitle(messages, locale);
 
-      const modelRuntime = await initModelRuntimeFromDB(
-        this.db,
-        this.userId,
-        provider,
-        this.workspaceId,
-      );
+      // Relayed to the requesting tab for a device-only provider; a bot's
+      // topic title has no tab and falls back to the default title.
+      const modelRuntime = await initModelRuntimeForRequest(this.db, this.userId, provider, {
+        workspaceId: this.workspaceId,
+      });
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages,
@@ -80,11 +80,12 @@ export class SystemAgentService {
           schema: TOPIC_TITLE_JSON_SCHEMA,
         },
         {
-          metadata: { trigger: RequestTrigger.Topic },
+          metadata: { topicId, trigger: RequestTrigger.TopicTitle },
           tracing: {
             promptVersion: TOPIC_TITLE_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TopicTitle,
             schemaName: TOPIC_TITLE_JSON_SCHEMA.name,
+            topicId,
           } satisfies TracingOptions,
         },
       );
@@ -129,12 +130,11 @@ export class SystemAgentService {
       const payload = chainGenerateSkillMeta({ content, responseLanguage: locale });
       const tracingId = randomUUID();
 
-      const modelRuntime = await initModelRuntimeFromDB(
-        this.db,
-        this.userId,
-        provider,
-        this.workspaceId,
-      );
+      // Relayed to the requesting tab for a device-only provider; a bot's
+      // topic title has no tab and falls back to the default title.
+      const modelRuntime = await initModelRuntimeForRequest(this.db, this.userId, provider, {
+        workspaceId: this.workspaceId,
+      });
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages as any[],

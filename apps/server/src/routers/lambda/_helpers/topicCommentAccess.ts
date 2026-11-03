@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
 
 import { assertCanViewTopicTargets } from './conversationResourceGuard';
@@ -32,7 +33,13 @@ export const assertTopicCommentReadAccess = async (params: {
   const [topic] = await params.db
     .select({ id: topics.id })
     .from(topics)
-    .where(and(eq(topics.id, params.topicId), eq(topics.workspaceId, params.workspaceId)))
+    .where(
+      and(
+        eq(topics.id, params.topicId),
+        eq(topics.workspaceId, params.workspaceId),
+        notTrashed(topics.isDeleted),
+      ),
+    )
     .limit(1);
   if (!topic) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic comment resource not found' });

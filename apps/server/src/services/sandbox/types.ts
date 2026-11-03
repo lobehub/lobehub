@@ -1,20 +1,97 @@
 import type {
   ISandboxService,
   SandboxExportFileResult,
+  SandboxMode,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { AgentShareVisitorContext } from '@lobechat/types';
 
 import type { FileService } from '@/server/services/file';
 import type { MarketService } from '@/server/services/market';
 
+import type { SandboxInitialization } from './environmentInit';
+
 export type SandboxProviderKind = 'market' | 'onlyboxes';
 
+/**
+ * The part of an environment's definition the execution plane acts on while a
+ * session runs, as opposed to while it is being built.
+ *
+ * A deliberate pick rather than the stored object passed through. Two reasons,
+ * and the first is the one that matters: `EnvironmentConfiguration` is typed
+ * without credentials, but it is `jsonb` — the column accepts whatever was
+ * written to it, and this object now travels to the execution plane on every
+ * tool call. Naming the fields means a key that appears in the database later
+ * cannot start leaving the server just because someone added it upstream.
+ *
+ * The second is that `bootstrapCommand` and `sources` are here even though a
+ * session never runs either: they are two of the three keys the execution
+ * plane digests to decide which build a snapshot belongs to. Dropping them
+ * would make every session disagree with the build it restored.
+ */
+export interface SandboxSessionSpecification {
+  bootstrapCommand?: string;
+  env?: Record<string, string>;
+  excludePaths?: string[];
+  internetAccess?: boolean;
+  maintenanceCommand?: string;
+  sources?: { kind: string; path?: string; ref?: string; uri?: string; url?: string }[];
+}
+
 export interface SandboxSessionContext {
+  /**
+   * Working directory inside the persistent workspace, relative to its root.
+   * Forwarded with every call; the execution plane composes it onto the
+   * directory the entitlement names and fences the result. Only meaningful
+   * alongside a persistent `sandboxMode` — a drive folder, or an instance's
+   * directory; a drive without one works at the drive's root.
+   */
+  sandboxCwd?: string;
+  /**
+   * The environment to initialize the working directory from before the first
+   * call — clone and setup, guarded by a marker the run leaves behind. Absent
+   * when the topic picked none, and on a legacy instance run, whose build
+   * already did this.
+   */
+  sandboxInitialization?: SandboxInitialization;
+  /**
+   * Named environment to restore for this run; absent means the caller's
+   * default. Like `sandboxMode`, every call for a topic must carry the same
+   * value — the session binds to one environment on its first call.
+   */
+  sandboxInstanceId?: string;
+  /**
+   * Whether this run wants its working directory to survive the session, and
+   * how: `drive` keeps the folder only, `persistent` an instance with its
+   * installed packages. Absent means ephemeral. Half the decision — the execution plane also
+   * requires an entitlement on the trust token, which is minted upstream of
+   * this service.
+   */
+  sandboxMode?: SandboxMode;
+  /**
+   * The instance's definition, so the execution plane can act on the half of
+   * it that belongs to a run rather than to a build: exporting the declared
+   * variables, running the maintenance command once, cutting the network when
+   * the environment asks for it, and routing the regenerable paths on capture.
+   *
+   * Carried on every call for the same reason {@link sandboxInstanceId} is —
+   * the runtime adopts it per invocation and a call that omitted it would run
+   * with whatever the previous one happened to set.
+   */
+  sandboxSpecification?: SandboxSessionSpecification;
+  /**
+   * Where commands run, on the sandbox's local disk, for an instance whose
+   * checkout lives there. Sent alongside {@link sandboxCwd}, which keeps
+   * naming the instance the call belongs to on the volume.
+   */
+  sandboxWorkingDir?: string;
   topicId: string;
   userId: string;
 }
 
 export interface SandboxServiceOptions extends SandboxSessionContext {
+  /** Set for Agent Share visitor runs; image previews get the same `metadata.agentShare` provenance as other visitor file writes. */
+  agentShareVisitor?: Pick<AgentShareVisitorContext, 'shareId' | 'visitorUserId'>;
   fileService?: FileService;
   marketService: MarketService;
   /** Used to look up topic/session files when bootstrapping the sandbox. */
@@ -62,7 +139,7 @@ export interface SandboxProviderFileExportRequest {
 }
 
 export interface SandboxProviderFileExportResult {
-  error?: { message: string; name?: string };
+  error?: SandboxExportFileResult['error'];
   mimeType?: string;
   result?: Record<string, unknown>;
   size?: number;
@@ -72,6 +149,8 @@ export interface SandboxProviderFileExportResult {
 export interface SandboxCommandResult {
   exitCode: number;
   output: string;
+  /** The provider recreated the workspace before executing this command. */
+  sessionExpiredAndRecreated?: boolean;
   stderr?: string;
   success: boolean;
 }

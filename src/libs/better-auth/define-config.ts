@@ -1,5 +1,6 @@
 import { expo } from '@better-auth/expo';
 import { passkey } from '@better-auth/passkey';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { createNanoId, idGenerator, serverDB } from '@lobechat/database';
 import * as schema from '@lobechat/database/schemas';
 import bcrypt from 'bcryptjs';
@@ -20,9 +21,15 @@ import {
   getVerificationEmailTemplate,
   getVerificationOTPEmailTemplate,
 } from '@/libs/better-auth/email-templates';
+import { deferredSessionRefresh } from '@/libs/better-auth/plugins/deferred-session-refresh';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
+import { sessionOptions } from '@/libs/better-auth/session-options';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
-import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
+import {
+  createSecondaryStorage,
+  getPasskeyOrigins,
+  getTrustedOrigins,
+} from '@/libs/better-auth/utils/config';
 import { expireLegacyHostOnlyCookies } from '@/libs/better-auth/utils/host-only-cookies';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { clearMismatchedOIDCSession } from '@/libs/oidc-provider/session-cleanup';
@@ -83,18 +90,6 @@ const getPasskeyRpID = (): string | undefined => {
   }
 };
 
-/**
- * Get passkey origins array.
- * Returns undefined if APP_URL is not set (e.g., in e2e tests).
- */
-const getPasskeyOrigins = (): string[] | undefined => {
-  if (!appEnv.APP_URL) return undefined;
-  try {
-    return [new URL(appEnv.APP_URL).origin];
-  } catch {
-    return undefined;
-  }
-};
 /**
  * Browsers silently drop a cookie whose `Domain` the current host is not a member of.
  * Applying a production domain on a preview deployment (`*.vercel.app`) or localhost would
@@ -218,14 +213,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     onAPIError: {
       errorURL: '/auth-error',
     },
-    session: {
-      cookieCache: {
-        enabled: true,
-        maxAge: 2 * 60, // Cache duration in seconds
-      },
-      // Keep a DB-backed fallback when Redis secondary storage entries are unexpectedly missing.
-      storeSessionInDatabase: true,
-    },
+    session: sessionOptions,
     database: drizzleAdapter(serverDB, {
       provider: 'pg',
       // experimental joins feature needs schema to pass full relation
@@ -324,6 +312,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     },
     plugins: [
       ...customOptions.plugins,
+      deferredSessionRefresh(),
       emailWhitelist(),
       expo(),
       admin(),
@@ -352,13 +341,14 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         },
       }),
       passkey({
-        rpName: 'LobeHub',
+        // Surfaced by the browser/OS passkey prompt ("Create a passkey for …"),
+        // so a hardcoded value leaks the upstream brand into native UI that no
+        // amount of in-app theming can reach.
+        rpName: BRANDING_NAME,
         // Extract rpID from auth URL (e.g., 'lobehub.com' from 'https://lobehub.com')
         // Returns undefined if AUTH_URL is not set (e.g., in e2e tests)
         rpID: getPasskeyRpID(),
-        // Support multiple origins: web + Android APK key hashes
-        // Android origin format: android:apk-key-hash:<base64url-sha256-fingerprint>
-        // Returns undefined if AUTH_URL is not set (e.g., in e2e tests)
+        // Keep Android APK origins aligned with the public Digital Asset Links declaration.
         origin: getPasskeyOrigins(),
       }),
       ...(genericOAuthProviders.length > 0

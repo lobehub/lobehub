@@ -11,30 +11,24 @@ import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
 import { hasActiveWorkspaceMembership } from '@/database/models/workspace';
+import { normalizeWorkspaceId } from '@/database/utils/workspace';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import {
+  type LlmRelayRequest,
+  readLlmRelayRequest,
+} from '@/server/modules/AgentRuntime/llmRelay/requestScope';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
+import { getRequestClientIP } from '@/utils/requestClientIP';
 
+import { describeOIDCAuthFailure, setAuthFailureHeader } from '../utils/authFailure';
 import { HETERO_OPERATION_JWT_PURPOSE } from '../utils/internalJwt';
 
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');
 const LOBE_CHAT_API_KEY_HEADER = 'X-API-Key';
-
-const extractClientIp = (request: NextRequest): string | undefined => {
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    const ip = forwardedFor.split(',')[0]?.trim();
-    if (ip) return ip;
-  }
-
-  const realIp = request.headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-
-  return undefined;
-};
 
 interface ValidatedApiKey {
   scopes: string[] | null;
@@ -85,6 +79,18 @@ export interface OIDCAuth {
 }
 
 export interface AuthContext {
+  // Add OIDC authentication information
+  /**
+   * The agent on whose behalf this call runs, used for attribution in durable
+   * records (e.g. who reassigned a task).
+   *
+   * SECURITY: same contract as {@link AuthContext.spendOrigin} — never derived
+   * from request input, because it decides whose name a persisted action is
+   * recorded under. Populated ONLY by a server-side `createCaller` from an
+   * already-authorized run context; a client-supplied value would let a caller
+   * pin its own action on somebody else's agent.
+   */
+  actingAgentId?: string | null;
   /**
    * Set only when the request authenticated via an API key: the key's
    * capability scopes (`null` = full-access key). `undefined` means the
@@ -93,9 +99,21 @@ export interface AuthContext {
   apiKeyScopes?: string[] | null;
   clientIp?: string | null;
   clientMetadata?: ClientMetadata;
+  /**
+   * Set only when a `hetero-operation` token was let through to an acceptance
+   * evidence route: the operation it was minted for. Those routes must keep
+   * their writes and reads on this operation's verification round — see
+   * `authorizeHeteroOperationEvidence`.
+   */
+  heteroOperationScope?: string;
   jwtPayload?: ClientSecretPayload | null;
+  /**
+   * The browser tab this request came from, when it subscribed a one-shot
+   * relay channel for the request's LLM calls (provider only reachable from
+   * the user's device). See `runWithLlmRelayRequest`.
+   */
+  llmRelay?: LlmRelayRequest;
   marketAccessToken?: string;
-  // Add OIDC authentication information
   oidcAuth?: OIDCAuth | null;
   oidcClientId?: string;
   resHeaders?: Headers;
@@ -121,9 +139,13 @@ export interface AuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createContextInner = async (params?: {
+  /** See {@link AuthContext.actingAgentId} — server-side callers only. */
+  actingAgentId?: string | null;
   apiKeyScopes?: string[] | null;
+  authFailure?: string;
   clientMetadata?: ClientMetadata;
   clientIp?: string | null;
+  llmRelay?: LlmRelayRequest;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
   oidcClientId?: string;
@@ -136,11 +158,16 @@ export const createContextInner = async (params?: {
 }): Promise<AuthContext> => {
   log('createContextInner called with params: %O', params);
   const responseHeaders = new Headers();
+  if (params?.authFailure && !params.userId) {
+    setAuthFailureHeader(responseHeaders, params.authFailure);
+  }
 
   return {
+    actingAgentId: params?.actingAgentId,
     apiKeyScopes: params?.apiKeyScopes,
     clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
+    llmRelay: params?.llmRelay,
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
     oidcClientId: params?.oidcClientId,
@@ -149,7 +176,12 @@ export const createContextInner = async (params?: {
     traceContext: params?.traceContext,
     userAgent: params?.userAgent,
     userId: params?.userId,
-    workspaceId: params?.workspaceId,
+    // A blank scope is not a workspace. Callers that "resolve" one (an empty
+    // header, a blank env var, a `?? ''` on the way through) would otherwise
+    // hand `''` to every model, and each write would fail on the `workspaces`
+    // foreign key instead of landing in personal data. `undefined` is how the
+    // rest of the context already spells "no workspace".
+    workspaceId: normalizeWorkspaceId(params?.workspaceId) ?? undefined,
   };
 };
 
@@ -178,7 +210,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   // for API-response caching see https://trpc.io/docs/v11/caching
 
   const userAgent = request.headers.get('user-agent') || undefined;
-  const clientIp = extractClientIp(request);
+  const clientIp = getRequestClientIP(request.headers);
 
   // get marketAccessToken from cookies
   const cookieHeader = request.headers.get('cookie');
@@ -190,9 +222,15 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   log('marketAccessToken from cookie:', marketAccessToken ? '[HIDDEN]' : 'undefined');
   const workspaceId = request.headers.get('X-Workspace-Id')?.trim() || undefined;
 
+  // One-shot relay headers name one channel for one procedure: procedures of a
+  // batch would share it (and its call ids). The browser sends relayed calls
+  // unbatched, so a batch is never relayed.
+  const isBatch = request.nextUrl.searchParams.get('batch') === '1';
+
   const commonContext = {
     clientMetadata,
     clientIp,
+    llmRelay: isBatch ? undefined : readLlmRelayRequest(request.headers),
     marketAccessToken,
     userAgent,
     workspaceId,
@@ -287,12 +325,14 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
   let userId;
   let oidcAuth;
+  let authFailure: string | undefined;
 
   // Prioritize checking for OIDC authentication (both standard Authorization and custom Oidc-Auth headers)
   if (authEnv.ENABLE_OIDC) {
     log('OIDC enabled, attempting OIDC authentication');
     const oidcAuthToken = request.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
     log('Oidc-Auth header: %s', oidcAuthToken ? 'exists' : 'not found');
+    if (!oidcAuthToken) authFailure = 'no_token';
 
     try {
       if (oidcAuthToken) {
@@ -341,6 +381,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
         console.error('OIDC authentication failed for inactive user:', error);
         return createContextInner({
           ...commonContext,
+          authFailure: 'user_inactive',
           traceContext,
           userId: null,
         });
@@ -348,7 +389,8 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
       // If OIDC authentication fails, log error and continue with other authentication methods
       if (oidcAuthToken) {
-        log('OIDC authentication failed, error: %O', error);
+        authFailure = describeOIDCAuthFailure(error);
+        log('OIDC authentication failed (%s), error: %O', authFailure, error);
         console.error('OIDC authentication failed, trying other methods:', error);
       }
     }
@@ -370,6 +412,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
     return createContextInner({
       ...commonContext,
+      authFailure,
       traceContext,
       userId,
     });
@@ -383,5 +426,5 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     'All authentication methods attempted, returning final context, userId: %s',
     userId || 'not authenticated',
   );
-  return createContextInner({ ...commonContext, traceContext, userId });
+  return createContextInner({ ...commonContext, authFailure, traceContext, userId });
 };

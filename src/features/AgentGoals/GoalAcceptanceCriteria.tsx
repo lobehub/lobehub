@@ -1,12 +1,21 @@
 'use client';
 
-import { Block, Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import { PencilIcon, PlusIcon, XIcon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openCriterionEditModal } from '@/features/Acceptance';
 import { usePermission } from '@/hooks/usePermission';
 import { useClientDataSWR } from '@/libs/swr';
 import { goalService } from '@/services/goal';
@@ -30,14 +39,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface CriterionFormValue {
-  description: string;
-  instruction: string;
-  title: string;
-}
-
-const emptyForm: CriterionFormValue = { description: '', instruction: '', title: '' };
-
 /**
  * The goal's structured acceptance standard: the persisted verify criteria the
  * terminal Goal-acceptance Task is gated on. Rendered as its own section so the
@@ -59,21 +60,6 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
       () => verifyService.getCriteria(criteriaIds),
     );
 
-    const [editingId, setEditingId] = useState<string | 'new' | null>(null);
-    const [form, setForm] = useState<CriterionFormValue>(emptyForm);
-    // The judge instruction the editor opened with — an unchanged instruction
-    // means the row can update in place; a changed one persists a replacement
-    // criterion (the rule body lives in an immutable linked document).
-    const [initialInstruction, setInitialInstruction] = useState('');
-    const [saving, setSaving] = useState(false);
-
-    const openEdit = (item: GoalCriterionWithInstruction) => {
-      const instruction = item.instruction ?? '';
-      setForm({ description: item.description ?? '', instruction, title: item.title });
-      setInitialInstruction(instruction);
-      setEditingId(item.id);
-    };
-
     const rebind = useCallback(
       async (nextIds: string[]) => {
         await goalService.setAcceptanceCriteria(goalId, nextIds);
@@ -83,43 +69,44 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
       [goalId, mutate, refreshGoalGraph],
     );
 
-    const handleSave = useCallback(async () => {
-      const title = form.title.trim();
-      if (!title || saving) return;
-      setSaving(true);
-      try {
-        const instruction = form.instruction.trim();
-        if (editingId !== 'new' && editingId && instruction === initialInstruction.trim()) {
-          await verifyService.updateCriterion(editingId, {
-            description: form.description.trim() || null,
-            title,
-          });
-          await mutate();
-        } else {
-          const [createdId] = await verifyService.createCriteria([
-            {
-              description: form.description.trim() || undefined,
-              instruction: instruction || undefined,
-              onFail: 'manual',
-              required: true,
-              title,
-              verifierType: 'agent',
-            },
-          ]);
-          if (createdId) {
-            await rebind(
-              editingId === 'new'
-                ? [...criteriaIds, createdId]
-                : criteriaIds.map((id) => (id === editingId ? createdId : id)),
-            );
+    const openEdit = (item?: GoalCriterionWithInstruction) => {
+      openCriterionEditModal({
+        criterion: item
+          ? {
+              description: item.description ?? undefined,
+              instruction: item.instruction,
+              onFail: item.onFail,
+              required: item.required,
+              title: item.title,
+              verifierConfig: item.verifierConfig ?? undefined,
+              verifierType: item.verifierType,
+            }
+          : { onFail: 'manual', required: true, title: '', verifierType: 'agent' },
+        isNew: !item,
+        onSubmit: async (draft) => {
+          if (item && (draft.instruction ?? '').trim() === (item.instruction ?? '').trim()) {
+            await verifyService.updateCriterion(item.id, {
+              description: draft.description || null,
+              onFail: draft.onFail,
+              required: draft.required,
+              title: draft.title,
+              verifierConfig: draft.verifierConfig,
+              verifierType: draft.verifierType,
+            });
+            await mutate();
+          } else {
+            const [createdId] = await verifyService.createCriteria([draft]);
+            if (createdId) {
+              await rebind(
+                item
+                  ? criteriaIds.map((id) => (id === item.id ? createdId : id))
+                  : [...criteriaIds, createdId],
+              );
+            }
           }
-        }
-        setEditingId(null);
-        setForm(emptyForm);
-      } finally {
-        setSaving(false);
-      }
-    }, [criteriaIds, editingId, form, initialInstruction, mutate, rebind, saving]);
+        },
+      });
+    };
 
     const handleRemove = (item: GoalCriterionWithInstruction) => {
       confirmModal({
@@ -132,53 +119,11 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
       });
     };
 
-    const editorForm = (
-      <Flexbox gap={8} paddingBlock={8}>
-        <Input
-          placeholder={t('goalAcceptance.form.titlePlaceholder')}
-          value={form.title}
-          onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-        />
-        <TextArea
-          autoSize={{ maxRows: 4, minRows: 1 }}
-          placeholder={t('goalAcceptance.form.descriptionPlaceholder')}
-          value={form.description}
-          onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-        />
-        <TextArea
-          autoSize={{ maxRows: 6, minRows: 2 }}
-          placeholder={t('goalAcceptance.form.instructionPlaceholder')}
-          value={form.instruction}
-          onChange={(event) => setForm((prev) => ({ ...prev, instruction: event.target.value }))}
-        />
-        <Flexbox horizontal gap={8}>
-          <Button
-            disabled={!form.title.trim()}
-            loading={saving}
-            size={'small'}
-            type={'primary'}
-            onClick={handleSave}
-          >
-            {t('save', { ns: 'common' })}
-          </Button>
-          <Button
-            size={'small'}
-            onClick={() => {
-              setEditingId(null);
-              setForm(emptyForm);
-            }}
-          >
-            {t('cancel', { ns: 'common' })}
-          </Button>
-        </Flexbox>
-      </Flexbox>
-    );
-
     // The section header (title + count + gate hint) belongs to the hosting
     // accordion row in ProcessControl — this renders the list body only.
     return (
       <Block paddingBlock={4} paddingInline={16} variant={'outlined'}>
-        {criteriaIds.length === 0 && editingId !== 'new' && (
+        {criteriaIds.length === 0 && (
           <Flexbox className={styles.row}>
             <Text fontSize={13} type={'secondary'}>
               {t('goalAcceptance.empty')}
@@ -187,68 +132,41 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
         )}
         {(criteria ?? []).map((item, index) => (
           <Flexbox className={styles.row} gap={4} key={item.id}>
-            {editingId === item.id ? (
-              editorForm
-            ) : (
-              <>
-                <Flexbox horizontal align={'center'} gap={10}>
-                  <span className={styles.seq}>C{index + 1}</span>
-                  <Text style={{ flex: 1, minWidth: 0 }} weight={500}>
-                    {item.title}
-                  </Text>
-                  {canEdit && (
-                    <Flexbox horizontal gap={2} style={{ flex: 'none' }}>
-                      <ActionIcon
-                        icon={PencilIcon}
-                        size={'small'}
-                        title={t('goalAcceptance.edit')}
-                        onClick={() => openEdit(item)}
-                      />
-                      <ActionIcon
-                        icon={XIcon}
-                        size={'small'}
-                        title={t('goalAcceptance.remove')}
-                        onClick={() => handleRemove(item)}
-                      />
-                    </Flexbox>
-                  )}
+            <Flexbox horizontal align={'center'} gap={10}>
+              <span className={styles.seq}>C{index + 1}</span>
+              <Text style={{ flex: 1, minWidth: 0 }} weight={500}>
+                {item.title}
+              </Text>
+              {canEdit && (
+                <Flexbox horizontal gap={2} style={{ flex: 'none' }}>
+                  <ActionIcon
+                    icon={PencilIcon}
+                    size={'small'}
+                    title={t('goalAcceptance.edit')}
+                    onClick={() => openEdit(item)}
+                  />
+                  <ActionIcon
+                    icon={XIcon}
+                    size={'small'}
+                    title={t('goalAcceptance.remove')}
+                    onClick={() => handleRemove(item)}
+                  />
                 </Flexbox>
-                {item.description && (
-                  <Text fontSize={13} style={{ paddingInlineStart: 30 }} type={'secondary'}>
-                    {item.description}
-                  </Text>
-                )}
-                {item.instruction && (
-                  <Text
-                    fontSize={12}
-                    style={{ color: cssVar.colorTextTertiary, paddingInlineStart: 30 }}
-                  >
-                    {t('goalAcceptance.judgePrefix')}
-                    {item.instruction}
-                  </Text>
-                )}
-              </>
-            )}
+              )}
+            </Flexbox>
           </Flexbox>
         ))}
-        {editingId === 'new' ? (
-          <Flexbox className={styles.row}>{editorForm}</Flexbox>
-        ) : (
-          canEdit && (
-            <Flexbox horizontal className={styles.row}>
-              <Button
-                icon={<Icon icon={PlusIcon} />}
-                size={'small'}
-                type={'text'}
-                onClick={() => {
-                  setForm(emptyForm);
-                  setEditingId('new');
-                }}
-              >
-                {t('goalAcceptance.add')}
-              </Button>
-            </Flexbox>
-          )
+        {canEdit && (
+          <Flexbox horizontal className={styles.row}>
+            <Button
+              icon={<Icon icon={PlusIcon} />}
+              size={'small'}
+              type={'text'}
+              onClick={() => openEdit()}
+            >
+              {t('goalAcceptance.add')}
+            </Button>
+          </Flexbox>
         )}
       </Block>
     );

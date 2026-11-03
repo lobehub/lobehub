@@ -5,6 +5,7 @@ import { claudeCodeDriver } from './drivers/claudeCode';
 import { codeBuddyDriver } from './drivers/codeBuddy';
 import { codexDriver } from './drivers/codex';
 import { cursorDriver } from './drivers/cursor';
+import { devinDriver } from './drivers/devin';
 import { droidDriver } from './drivers/droid';
 import { grokBuildDriver } from './drivers/grokBuild';
 import { kimiCodeDriver } from './drivers/kimiCode';
@@ -21,6 +22,7 @@ const heterogeneousAgentDrivers = {
   'codex': codexDriver,
   'cursor': cursorDriver,
   'droid': droidDriver,
+  'devin': devinDriver,
   'grok-build': grokBuildDriver,
   'kimi-code': kimiCodeDriver,
   'opencode': opencodeDriver,
@@ -39,5 +41,4 @@ export const getHeterogeneousAgentDriver = (agentType: string): HeterogeneousAge
   return driver;
 };
 
-export const listHeterogeneousAgentDriverTypes = (): LocalHeterogeneousAgentType[] =>
-  Object.keys(heterogeneousAgentDrivers) as LocalHeterogeneousAgentType[];
+export { withCodexContextArgs } from './drivers/codex';

@@ -20,8 +20,10 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { GenerationService } from '@/server/services/generation';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
+import { measureVideoOutputUsage } from '@/server/services/generation/videoOutputUsage';
 import { FileSource } from '@/types/files';
 
 const log = debug('lobe-video:async');
@@ -65,10 +67,11 @@ const checkAbortSignal = (signal: AbortSignal) => {
 async function pollUntilCompletion(
   modelRuntime: any,
   inferenceId: string,
+  model: string,
   signal: AbortSignal,
 ): Promise<{ headers?: Record<string, string>; videoUrl: string } | null> {
-  const maxRetries = 120;
   const pollingInterval = 5000;
+  const maxRetries = Math.ceil(ASYNC_TASK_TIMEOUT / pollingInterval);
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     checkAbortSignal(signal);
@@ -76,7 +79,7 @@ async function pollUntilCompletion(
     try {
       log('Polling attempt %d/%d for inferenceId: %s', attempt + 1, maxRetries, inferenceId);
 
-      const result = await modelRuntime.handlePollVideoStatus(inferenceId);
+      const result = await modelRuntime.handlePollVideoStatus(inferenceId, model);
 
       if (result.status === 'success') {
         log('Video generation succeeded for inferenceId: %s', inferenceId);
@@ -172,7 +175,7 @@ export const videoRouter = router({
 
         checkAbortSignal(signal);
 
-        const pollResult = await pollUntilCompletion(modelRuntime, inferenceId, signal);
+        const pollResult = await pollUntilCompletion(modelRuntime, inferenceId, model, signal);
 
         if (!pollResult) {
           log('Polling completed but no video URL returned for inferenceId: %s', inferenceId);
@@ -213,6 +216,12 @@ export const videoRouter = router({
 
         log('Asset and file created successfully for generation: %s', generationId);
 
+        // Before marking Success so the client's post-success topic refresh sees it
+        await new GenerationService(ctx.serverDB, ctx.userId, workspaceId).ensureTopicCover(
+          generationTopicId,
+          processResult.thumbnailKey,
+        );
+
         const duration = Date.now() - asyncTaskCreatedAt.getTime();
 
         log('Updating task status to Success: %s, duration: %dms', asyncTaskId, duration);
@@ -225,6 +234,7 @@ export const videoRouter = router({
           try {
             await chargeAfterGenerate({
               computePriceParams: {
+                duration: (batch?.config as any)?.duration,
                 generateAudio: (batch?.config as any)?.generateAudio,
                 resolution: (batch?.config as any)?.resolution,
               },
@@ -243,7 +253,7 @@ export const videoRouter = router({
               model: resolvedModelId,
               prechargeResult,
               provider,
-              usage: undefined,
+              usage: measureVideoOutputUsage(resolvedModelId, processResult),
               userId: ctx.userId,
               workspaceId,
             });

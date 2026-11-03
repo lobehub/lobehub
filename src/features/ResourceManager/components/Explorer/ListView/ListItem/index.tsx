@@ -1,18 +1,27 @@
-import { Center, ContextMenuTrigger, Flexbox, Tooltip } from '@lobehub/ui';
-import { Avatar, Checkbox } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Center,
+  Checkbox,
+  ContextMenuTrigger,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Tooltip,
+} from '@lobehub/ui';
 import { isEqual } from 'es-toolkit';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import UserAvatar from '@/components/UserAvatar';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
 import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
-import { useFileItemClick } from '../../hooks/useFileItemClick';
+import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
@@ -145,6 +154,7 @@ const FileListItem = ({
   finishEmbedding,
   id,
   index,
+  knowledgeBaseIds,
   metadata,
   name,
   onSelectedChange,
@@ -152,14 +162,13 @@ const FileListItem = ({
   selected,
   showUploader = true,
   size,
-  slug,
   sourceType,
   uploader,
   url,
   userId,
   visibility,
 }: FileListItemProps) => {
-  const { t } = useTranslation(['components', 'file']);
+  const { t } = useTranslation(['components', 'file', 'chat']);
   const uploaderName =
     uploader?.fullName || uploader?.username || (uploader?.id ? uploader.id.slice(0, 8) : '');
   const chunkTargetId = getChunkTargetId({ fileId, id });
@@ -194,6 +203,11 @@ const FileListItem = ({
     name,
     sourceType,
   });
+
+  // Personal mode has no second audience, so `visibility` carries no meaning
+  // there and every row would wear a lock for nothing.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const isPrivate = Boolean(activeWorkspaceId) && visibility === 'private';
   const {
     handleDragEnd,
     handleDragLeave,
@@ -234,7 +248,12 @@ const FileListItem = ({
     isFolder,
     isPage,
     libraryId: resourceManagerState.libraryId,
-    slug,
+    openInPanel: true,
+  });
+  const handleItemDoubleClick = useFileItemDoubleClick({
+    id,
+    isPage,
+    libraryId: resourceManagerState.libraryId,
   });
   const { menuItems } = useFileItemDropdown({
     fileId,
@@ -291,6 +310,7 @@ const FileListItem = ({
           userSelect: 'none',
         }}
         onClick={handleItemClick}
+        onDoubleClick={handleItemDoubleClick}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -326,8 +346,11 @@ const FileListItem = ({
             inputRef={inputRef}
             isFolder={isFolder}
             isPage={isPage}
+            isPrivate={isPrivate}
             isRenaming={isRenaming}
+            knowledgeBaseIds={resourceManagerState.libraryId ? undefined : knowledgeBaseIds}
             name={name}
+            privateTooltip={t('resources.visibility.privateTooltip', { ns: 'chat' })}
             renamingValue={renamingValue}
             onRenameCancel={handleRenameCancel}
             onRenameConfirm={handleRenameConfirm}
@@ -375,9 +398,9 @@ const FileListItem = ({
                 {uploaderName ? (
                   <Tooltip title={t('file:listView.uploadedBy', { name: uploaderName })}>
                     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-                      <Avatar
-                        alt={uploaderName}
-                        avatar={uploader?.avatar || uploaderName}
+                      <UserAvatar
+                        avatar={uploader?.avatar}
+                        name={uploaderName}
                         shape={'circle'}
                         size={20}
                         style={{ flexShrink: 0 }}

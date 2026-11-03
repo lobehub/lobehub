@@ -35,6 +35,7 @@ import {
   CODEX_COMMAND_OUTPUT_MAX_LENGTH,
   truncateCodexCommandOutput,
 } from '../utils/codexCommandOutput';
+import { isCodexCapacityError } from '../utils/codexErrors';
 import { toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
@@ -323,7 +324,10 @@ const toUsage = (usage: TokenUsageBreakdown): UsageData | undefined => {
   };
 };
 
-const classifyCodexError = (info: CodexErrorInfo | null): CodexErrorClassification => {
+const classifyCodexError = (
+  info: CodexErrorInfo | null,
+  message: string,
+): CodexErrorClassification => {
   if (typeof info === 'object' && info) {
     if ('activeTurnNotSteerable' in info) return { kind: 'agent_failed' };
     const connection =
@@ -359,6 +363,9 @@ const classifyCodexError = (info: CodexErrorInfo | null): CodexErrorClassificati
       return { kind: 'invalid_request' };
     }
     default: {
+      if (isCodexCapacityError(message)) {
+        return { code: 'overloaded', kind: 'server_overloaded' };
+      }
       return { kind: 'agent_failed' };
     }
   }
@@ -368,6 +375,8 @@ const classifyCodexError = (info: CodexErrorInfo | null): CodexErrorClassificati
 export class CodexAppServerAdapter {
   private currentAgentMessageItemId?: string;
   private currentModel?: string;
+  private currentTurnId?: string;
+  private readonly sessionId?: string;
   private hasTextInCurrentStep = false;
   private hasToolActivity = false;
   private lastCumulativeUsage?: UsageData;
@@ -383,9 +392,12 @@ export class CodexAppServerAdapter {
   private stepIndex = 0;
   private terminal = false;
 
-  constructor(options: { initialCumulativeUsage?: UsageData; initialModel?: string } = {}) {
+  constructor(
+    options: { initialCumulativeUsage?: UsageData; initialModel?: string; sessionId?: string } = {},
+  ) {
     this.currentModel = options.initialModel;
     this.lastCumulativeUsage = options.initialCumulativeUsage;
+    this.sessionId = options.sessionId;
   }
 
   get cumulativeUsage(): UsageData | undefined {
@@ -433,9 +445,18 @@ export class CodexAppServerAdapter {
         return this.handlePlanUpdated(rawParams as TurnPlanUpdatedNotification);
       }
       case 'thread/tokenUsage/updated': {
-        this.latestCumulativeUsage = toUsage(
-          (rawParams as ThreadTokenUsageUpdatedNotification).tokenUsage.total,
-        );
+        const { tokenUsage } = rawParams as ThreadTokenUsageUpdatedNotification;
+        const cumulativeUsage = toUsage(tokenUsage.total);
+        if (!this.lastCumulativeUsage && !this.latestCumulativeUsage && tokenUsage.last) {
+          // A resumed thread without saved cumulative usage (connected devices
+          // have no local rollout to read) would otherwise report its whole
+          // history as this turn. Reconstruct the baseline from the first request.
+          this.lastCumulativeUsage = toTurnUsageFromCumulative(
+            cumulativeUsage,
+            toUsage(tokenUsage.last),
+          );
+        }
+        this.latestCumulativeUsage = cumulativeUsage;
         return [];
       }
       case 'error': {
@@ -459,10 +480,11 @@ export class CodexAppServerAdapter {
     return this.completeTurn('interrupted');
   }
 
-  private handleTurnStarted(_params: TurnStartedNotification): HeterogeneousAgentEvent[] {
+  private handleTurnStarted(params: TurnStartedNotification): HeterogeneousAgentEvent[] {
     if (this.started) return [];
     this.started = true;
-    return [this.makeEvent('stream_start', this.streamStartData())];
+    this.currentTurnId = params.turn.id;
+    return [this.makeEvent('stream_start', this.streamStartData({ messageId: params.turn.id }))];
   }
 
   private handleItemStarted({ item }: ItemStartedNotification): HeterogeneousAgentEvent[] {
@@ -744,7 +766,7 @@ export class CodexAppServerAdapter {
   private terminalError(error: TurnError): HeterogeneousAgentEvent[] {
     if (this.terminal) return [];
     this.terminal = true;
-    const classification = classifyCodexError(error.codexErrorInfo);
+    const classification = classifyCodexError(error.codexErrorInfo, error.message);
     const details = {
       ...(error.additionalDetails ? { additionalDetails: error.additionalDetails } : {}),
       ...(error.codexErrorInfo ? { codexErrorInfo: error.codexErrorInfo } : {}),
@@ -794,8 +816,10 @@ export class CodexAppServerAdapter {
 
   private streamStartData(extra: Record<string, unknown> = {}): StreamStartData {
     return {
+      ...(this.currentTurnId ? { codexTurnId: this.currentTurnId } : {}),
       ...(this.currentModel ? { model: this.currentModel } : {}),
       provider: CODEX_IDENTIFIER,
+      ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...extra,
     };
   }

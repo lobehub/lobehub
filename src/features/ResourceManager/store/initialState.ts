@@ -1,5 +1,8 @@
 import { type ResourceManagerMode } from '@/features/ResourceManager';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import { FilesTabs, type ResourceSourceFilter, SortType } from '@/types/files';
+
+import { type ExplorerSearchValue, type HierarchySearchValue } from './projection';
 
 export type ViewMode = 'list' | 'masonry';
 export type SelectAllState = 'all' | 'loaded' | 'none';
@@ -26,7 +29,32 @@ export type ResourceListVisibilityFilter = 'private' | 'workspace';
  */
 export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'workspace';
 
-export interface State {
+/**
+ * The ResourceManager's two search surfaces as `local-replica` views.
+ *
+ * Both were bare `useClientDataSWR` entries before: the rows only lived in the
+ * SWR cache, so re-opening a search (or coming back to the surface) had to wait
+ * for a network round-trip before anything was on screen. The replica paints the
+ * persisted head page first and lets the network confirm it.
+ */
+export interface ResourceSearchState {
+  /**
+   * Replica views of the explorer's search overlay (`SearchResultsOverlay`),
+   * one entry per query so revisiting a keyword restores its own rows.
+   */
+  explorerSearchEntries: Record<string, ExplorerSearchValue>;
+  /** Replica bookkeeping of `explorerSearchEntries`. */
+  explorerSearchReplica: ReplicaState<ExplorerSearchValue>;
+  /**
+   * Replica views of the library sidebar's flat search list, one entry per
+   * (library, keyword).
+   */
+  hierarchySearchEntries: Record<string, HierarchySearchValue>;
+  /** Replica bookkeeping of `hierarchySearchEntries`. */
+  hierarchySearchReplica: ReplicaState<HierarchySearchValue>;
+}
+
+export interface State extends ResourceSearchState {
   /**
    * Current file category filter
    */
@@ -35,6 +63,18 @@ export interface State {
    * Current view item ID (document ID or file ID)
    */
   currentViewItemId?: string;
+  /**
+   * Resource shown in the explorer's inline right detail panel (list click).
+   * Kept apart from `currentViewItemId`/`mode`: the panel is an in-context
+   * preview dock, not a view mode, so opening it must not kick the user out
+   * of the list or fight the `?file=` deep-link restoration.
+   */
+  detailPanelId?: string;
+  /**
+   * Whether the detail panel item is a page (文稿). Pages have no file URL, so
+   * the panel previews their document content instead of the file viewer.
+   */
+  detailPanelIsPage: boolean;
   /**
    * Current library ID
    */
@@ -110,6 +150,12 @@ export interface State {
 export const initialState: State = {
   category: FilesTabs.All,
   currentViewItemId: undefined,
+  detailPanelId: undefined,
+  detailPanelIsPage: false,
+  explorerSearchEntries: {},
+  explorerSearchReplica: createReplicaState(),
+  hierarchySearchEntries: {},
+  hierarchySearchReplica: createReplicaState(),
   libraryId: undefined,
   librarySearchQuery: '',
   // Personal mode keeps the historical neutral value; workspace mode hydrates

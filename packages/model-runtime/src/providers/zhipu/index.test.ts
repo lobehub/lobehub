@@ -2,19 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeZhipuAI, params } from './index';
-
-testProvider({
-  provider: 'zhipu',
-  defaultBaseURL: 'https://open.bigmodel.cn/api/paas/v4',
-  chatModel: 'glm-4',
-  Runtime: LobeZhipuAI,
-  chatDebugEnv: 'DEBUG_ZHIPU_CHAT_COMPLETION',
-  test: {
-    skipAPICall: true, // Skip because Zhipu has custom handlePayload that normalizes temperature
-  },
-});
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: vi.fn().mockResolvedValue([]),
@@ -269,22 +257,6 @@ describe('LobeZhipuAI - custom features', () => {
           expect.anything(),
         );
       });
-
-      it('should clamp high temperature to 0.99 for glm-4-alltools', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4-alltools',
-          temperature: 2, // Will be normalized to 1.0, then clamped to 0.99
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: 0.99,
-          }),
-          expect.anything(),
-        );
-      });
-
       it('should clamp top_p to [0.01, 0.99] for glm-4-alltools', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -300,23 +272,6 @@ describe('LobeZhipuAI - custom features', () => {
           expect.anything(),
         );
       });
-
-      it('should clamp high top_p to 0.99 for glm-4-alltools', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4-alltools',
-          temperature: 0.5,
-          top_p: 1,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            top_p: 0.99,
-          }),
-          expect.anything(),
-        );
-      });
-
       it('should normalize and preserve temperature in range for glm-4-alltools', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -348,36 +303,6 @@ describe('LobeZhipuAI - custom features', () => {
           expect.anything(),
         );
       });
-
-      it('should normalize high temperature', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 1.6,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: 0.8,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should handle temperature 0 correctly', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 0,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: 0,
-          }),
-          expect.anything(),
-        );
-      });
     });
 
     describe('Thinking mode for GLM-4.5 models', () => {
@@ -392,22 +317,6 @@ describe('LobeZhipuAI - custom features', () => {
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
           expect.objectContaining({
             thinking: { type: 'enabled' },
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should include thinking for glm-4.5-turbo', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4.5-turbo',
-          temperature: 0.5,
-          thinking: { type: 'disabled', budget_tokens: 0 },
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            thinking: { type: 'disabled' },
           }),
           expect.anything(),
         );

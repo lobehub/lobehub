@@ -270,6 +270,9 @@ export const imageRouter = router({
             },
           );
 
+          // Before marking Success so the client's post-success topic refresh sees it
+          await generationService.ensureTopicCover(generationTopicId, thumbnailImageUrl);
+
           const duration = Date.now() - generationBatch.createdAt.getTime();
 
           log('Updating task status to Success: %s, duration: %dms', taskId, duration);

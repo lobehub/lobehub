@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasShareToolGrant, isShareToolApiGranted, resolveShareToolGrants } from './agentShare';
+import {
+  hasShareToolGrant,
+  isShareToolApiGranted,
+  resolveShareAllowedSkillIds,
+  resolveShareToolGrants,
+} from './agentShare';
 
 describe('resolveShareToolGrants', () => {
   it('grants every API for a grant without `apis`', () => {
@@ -75,5 +80,33 @@ describe('hasShareToolGrant / isShareToolApiGranted', () => {
   it('an ungranted identifier grants nothing', () => {
     const grants = resolveShareToolGrants([]);
     expect(isShareToolApiGranted(grants, 'lobe-agent', 'analyzeMedia')).toBe(false);
+  });
+});
+
+describe('resolveShareAllowedSkillIds', () => {
+  it('keeps only the candidates the creator named, in candidate order', () => {
+    expect(
+      resolveShareAllowedSkillIds(['brand-voice', 'pdf-report', 'internal-audit'], {
+        skillGrants: ['pdf-report', 'brand-voice'],
+      }),
+    ).toEqual(['brand-voice', 'pdf-report']);
+  });
+
+  it('ignores a granted id the run has no candidate for', () => {
+    // A skill the creator deleted after granting it, for instance: the grant
+    // survives in the stored config but must not conjure a skill into the pool.
+    expect(resolveShareAllowedSkillIds(['pdf-report'], { skillGrants: ['deleted-skill'] })).toEqual(
+      [],
+    );
+  });
+
+  it('grants nothing when skillGrants is empty', () => {
+    expect(resolveShareAllowedSkillIds(['pdf-report'], { skillGrants: [] })).toEqual([]);
+  });
+
+  it('grants nothing when skillGrants was never configured', () => {
+    // Default-closed: no grant means no skill, and `toolGrants` is never read
+    // as a skill list even though the two share one identifier namespace.
+    expect(resolveShareAllowedSkillIds(['pdf-report'], {})).toEqual([]);
   });
 });

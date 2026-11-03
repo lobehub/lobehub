@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/envs/app', () => ({ appEnv: mocks.appEnv }));
 vi.mock('@/envs/auth', () => ({ authEnv: mocks.authEnv }));
 vi.mock('@/envs/redis', () => ({ getRedisConfig: vi.fn() }));
-vi.mock('@/libs/redis', () => ({
+vi.mock('@/server/modules/Redis', () => ({
   initializeRedis: vi.fn(),
   isRedisEnabled: vi.fn(() => false),
 }));
@@ -57,5 +57,30 @@ describe('getTrustedOrigins', () => {
       'https://override.example.com',
       'https://gateway.example.com',
     ]);
+  });
+});
+
+describe('getPasskeyOrigins', () => {
+  beforeEach(() => {
+    mocks.appEnv.APP_URL = 'https://app.example.com';
+  });
+
+  it('should trust the web app and Android certificates authorized for login credentials', async () => {
+    const { getPasskeyOrigins } = await import('./config');
+
+    expect(getPasskeyOrigins()).toEqual([
+      'https://app.example.com',
+      'android:apk-key-hash:11Tbo3jVi48gAe17mxjTsFvRIqqXK1nhpo4xJCFEDSs',
+      'android:apk-key-hash:-sYXRdwJA3hvue3mKpYrOZ9zSPC7b4mbgzJmdZEDO5w',
+      'android:apk-key-hash:GyE4XXJAZfUWIB3J0msEY8Mz8ZeragZmDj7wfmCCfuc',
+      'android:apk-key-hash:G77UoK5DVuVYAXTEuaALDlq5Xg-pwGUYaM8fqj6PT9s',
+    ]);
+  });
+
+  it('should preserve inferred origins when the web app URL is unavailable', async () => {
+    mocks.appEnv.APP_URL = '';
+    const { getPasskeyOrigins } = await import('./config');
+
+    expect(getPasskeyOrigins()).toBeUndefined();
   });
 });

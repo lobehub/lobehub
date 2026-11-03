@@ -1,7 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
 import debug from 'debug';
-import { importJWK, jwtVerify, SignJWT } from 'jose';
+import type { JSONWebKeySet, JWK, JWK_RSA_Public, JWTVerifyOptions } from 'jose';
+import {
+  calculateJwkThumbprint,
+  createLocalJWKSet,
+  decodeProtectedHeader,
+  importJWK,
+  jwtVerify,
+  SignJWT,
+} from 'jose';
 
 import { authEnv } from '@/envs/auth';
 
@@ -13,7 +21,13 @@ export const HETERO_OPERATION_JWT_AUDIENCE = 'urn:lobehub:hetero-operation';
 export const HETERO_OPERATION_JWT_PURPOSE = 'hetero-operation';
 
 export type HeteroOperationCapability =
-  'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read' | 'model:invoke';
+  | 'acceptance:evidence'
+  | 'channel:read'
+  | 'goal:manage'
+  | 'hetero:finish'
+  | 'hetero:ingest'
+  | 'hetero:intervention:read'
+  | 'model:invoke';
 
 export interface HeteroOperationJwtClaims {
   aud: typeof HETERO_OPERATION_JWT_AUDIENCE;
@@ -33,58 +47,82 @@ export interface HeteroOperationJwtClaims {
 /**
  * Get RSA key pair from JWKS_KEY environment variable
  */
-const getJwksKey = () => {
+const isRsaSigningKey = (key: JWK): key is JWK_RSA_Public =>
+  key.alg === 'RS256' &&
+  key.kty === 'RSA' &&
+  typeof key.e === 'string' &&
+  typeof key.n === 'string';
+
+const getKeyId = (key: JWK_RSA_Public) => key.kid ?? calculateJwkThumbprint(key);
+
+const toPublicRsaKey = async (key: JWK_RSA_Public): Promise<JWK_RSA_Public> => ({
+  alg: 'RS256',
+  e: key.e,
+  kid: await getKeyId(key),
+  kty: 'RSA',
+  n: key.n,
+  ...(key.use ? { use: key.use } : {}),
+});
+
+const getJwksKeys = () => {
   const jwksString = authEnv.JWKS_KEY;
 
   if (!jwksString) {
     throw new Error('JWKS_KEY environment variable is not set');
   }
 
-  const jwks = JSON.parse(jwksString);
-  const rsaKey = jwks.keys.find((key: any) => key.alg === 'RS256' && key.kty === 'RSA');
+  const jwks = JSON.parse(jwksString) as JSONWebKeySet;
+  const rsaKeys = jwks.keys.filter(isRsaSigningKey);
 
-  if (!rsaKey) {
+  if (rsaKeys.length === 0) {
     throw new Error('No RS256 RSA key found in JWKS');
   }
 
-  return rsaKey;
+  return rsaKeys;
 };
 
 /**
  * Get RSA private key for signing
  */
 const getSigningKey = async () => {
-  const rsaKey = getJwksKey();
+  const rsaKey = getJwksKeys()[0];
 
   return {
     key: await importJWK(rsaKey, 'RS256'),
-    kid: rsaKey.kid as string,
+    kid: await getKeyId(rsaKey),
   };
 };
 
 /**
  * Get RSA public key for verification
  */
-const getVerificationKey = async () => {
-  const privateRsaKey = getJwksKey();
+const isSignatureVerificationError = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  error.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED';
 
-  // Create a "clean" JWK object containing only public key components
-  // The essential fields for RSA public key are: kty, n, e
-  const publicKeyJwk = {
-    alg: privateRsaKey.alg,
-    e: privateRsaKey.e,
-    kid: privateRsaKey.kid,
-    kty: privateRsaKey.kty,
-    n: privateRsaKey.n,
-    use: privateRsaKey.use,
-  };
+const verifyJwt = async (token: string, options: JWTVerifyOptions) => {
+  const publicKeys = await Promise.all(getJwksKeys().map(toPublicRsaKey));
 
-  // Remove any undefined fields to keep the object clean
-  Object.keys(publicKeyJwk).forEach(
-    (key) => (publicKeyJwk as any)[key] === undefined && delete (publicKeyJwk as any)[key],
-  );
+  if (decodeProtectedHeader(token).kid) {
+    return jwtVerify(token, createLocalJWKSet({ keys: publicKeys }), options);
+  }
 
-  return await importJWK(publicKeyJwk, 'RS256');
+  // Tokens issued before this rotation support landed did not include `kid`.
+  // Try each retained key only for those in-flight tokens; newly issued tokens
+  // keep the exact-key lookup above and avoid ambiguous JWKS selection.
+  let signatureError: unknown;
+  for (const publicKey of publicKeys) {
+    try {
+      return await jwtVerify(token, await importJWK(publicKey, 'RS256'), options);
+    } catch (error) {
+      if (!isSignatureVerificationError(error)) throw error;
+      signatureError = error;
+    }
+  }
+
+  throw signatureError ?? new Error('No RSA key available for JWT verification');
 };
 
 /**
@@ -185,9 +223,15 @@ export const validateHeteroOperationClaims = (
     typeof payload.exp !== 'number' ||
     !Array.isArray(capabilities) ||
     !capabilities.every((capability) =>
-      ['model:invoke', 'hetero:ingest', 'hetero:finish', 'hetero:intervention:read'].includes(
-        capability as string,
-      ),
+      [
+        'acceptance:evidence',
+        'channel:read',
+        'goal:manage',
+        'model:invoke',
+        'hetero:ingest',
+        'hetero:finish',
+        'hetero:intervention:read',
+      ].includes(capability as string),
     ) ||
     (payload.model !== undefined && typeof payload.model !== 'string') ||
     (payload.provider_id !== undefined && typeof payload.provider_id !== 'string') ||
@@ -203,8 +247,7 @@ export const validateHeteroOperationJWT = async (
   token: string,
 ): Promise<HeteroOperationJwtClaims | null> => {
   try {
-    const publicKey = await getVerificationKey();
-    const { payload } = await jwtVerify(token, publicKey, {
+    const { payload } = await verifyJwt(token, {
       algorithms: ['RS256'],
       audience: HETERO_OPERATION_JWT_AUDIENCE,
       issuer: HETERO_OPERATION_JWT_ISSUER,
@@ -243,6 +286,33 @@ export const signWorkspaceDeviceToken = async (workspaceId: string): Promise<str
 };
 
 /**
+ * Sign the one-shot token that opens a tunnel link.
+ *
+ * The device gateway verifies the signature and reads `sub` (plus an optional
+ * `workspace_id`) to decide whether the caller owns the tunnel. The token is
+ * only the *entry ticket*: the gateway immediately exchanges it for a session
+ * cookie scoped to that tunnel hostname, so it is minted at click time and
+ * expires quickly. A tunnel link is not a public share link — opening it from
+ * elsewhere requires an authenticated LobeHub session to mint a fresh token.
+ */
+export const signTunnelAccessToken = async (params: {
+  userId: string;
+  workspaceId?: string;
+}): Promise<string> => {
+  const { key, kid } = await getSigningKey();
+
+  return new SignJWT({
+    purpose: 'tunnel-access',
+    ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
+  })
+    .setProtectedHeader({ alg: 'RS256', kid })
+    .setSubject(params.userId)
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(key);
+};
+
+/**
  * Long-lived operation token for an agent run dispatched to a WORKSPACE device.
  * Mirrors {@link signOperationJwt} but carries `workspace_id` so the device's
  * gateway callbacks resolve to the workspace principal.
@@ -267,9 +337,7 @@ export const validateInternalJWT = async (token: string): Promise<boolean> => {
   try {
     log('Validating internal JWT token');
 
-    const publicKey = await getVerificationKey();
-
-    const { payload } = await jwtVerify(token, publicKey, {
+    const { payload } = await verifyJwt(token, {
       algorithms: ['RS256'],
     });
 

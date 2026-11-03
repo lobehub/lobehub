@@ -32,4 +32,18 @@ describe('resolveRejectedCopyKey', () => {
       'tool.intervention.rejectedWithReason',
     );
   });
+
+  it('states a producer timeout as its own outcome, not as a user decision', () => {
+    // A timeout is nobody's choice. Falling through to the skip or rejection
+    // copy would tell the user they declined a question they never saw in time.
+    expect(resolveRejectedCopyKey({ apiName: 'askUserQuestion', timedOut: true })).toBe(
+      'tool.intervention.questionTimedOut',
+    );
+    expect(
+      resolveRejectedCopyKey({ apiName: 'askUserQuestion', skipped: true, timedOut: true }),
+    ).toBe('tool.intervention.questionTimedOut');
+    expect(resolveRejectedCopyKey({ reason: 'not safe', timedOut: true })).toBe(
+      'tool.intervention.questionTimedOut',
+    );
+  });
 });

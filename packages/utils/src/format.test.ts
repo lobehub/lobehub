@@ -105,11 +105,6 @@ describe('format', () => {
       expect(formatTime(59.99)).toBe('60.0 s');
       expect(formatTime(3599.99)).toBe('60.0 min');
     });
-    it('should handle edge cases', () => {
-      expect(formatTime(0)).toBe('0.0 s');
-      expect(formatTime(59.99)).toBe('60.0 s');
-      expect(formatTime(3599.99)).toBe('60.0 min');
-    });
     it('should handle non-number inputs', () => {
       expect(formatTime('not a number' as any)).toBe('not a number');
       expect(formatTime(undefined as any)).toBe('--');

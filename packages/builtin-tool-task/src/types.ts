@@ -59,9 +59,13 @@ export interface CreateTaskParams {
   /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
   assigneeUserId?: string;
   instruction: string;
+  /** Model the task runs with; omitted pins the assignee agent's current model. */
+  model?: string;
   name: string;
   parentIdentifier?: string;
   priority?: number;
+  /** Provider for `model`; omitted is resolved from the assignee agent. */
+  provider?: string;
   sortOrder?: number;
 }
 
@@ -78,6 +82,7 @@ export interface CreateTaskState {
   /** Lifecycle status the task was created in (usually `backlog`). */
   status?: TaskStatus;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== createGoal ====================
@@ -124,6 +129,7 @@ export interface CreateTasksItemResult {
   identifier?: string;
   name: string;
   success: boolean;
+  taskId?: string;
 }
 
 export interface CreateTasksState {
@@ -178,6 +184,7 @@ export interface ViewTaskParams {
 export interface ViewTaskState {
   identifier?: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== task comments ====================
@@ -191,6 +198,7 @@ export interface AddTaskCommentState {
   commentId?: string;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 export interface UpdateTaskCommentParams {
@@ -222,15 +230,20 @@ export interface EditTaskParams {
   description?: string;
   identifier: string;
   instruction?: string;
+  /** Task model override; `null` clears it so the task follows the assignee agent again. */
+  model?: string | null;
   name?: string;
   parentIdentifier?: string | null;
   priority?: number;
+  /** Provider for the task model; `null` clears it. */
+  provider?: string | null;
   removeDependencies?: string[];
 }
 
 export interface EditTaskState {
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== runTask / runTasks ====================
@@ -239,27 +252,38 @@ export interface RunTaskParams {
   /** Optional existing topic to continue (rather than creating a new topic). */
   continueTopicId?: string;
   identifier: string;
+  /** Replaces the task's pinned model, for this run and later ones. */
+  model?: string;
   /** Optional extra prompt prepended to the task instruction for this run. */
   prompt?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTaskState {
   identifier: string;
   operationId?: string;
   success: boolean;
+  taskId?: string;
   topicId?: string;
 }
 
 export interface RunTasksParams {
   /** Identifiers of tasks to run, in execution order. */
   identifiers: string[];
+  /** Replaces the pinned model of every task in the batch, for this run and later ones. */
+  model?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTasksItemResult {
   error?: string;
   identifier: string;
   operationId?: string;
+  refs?: string[];
   success: boolean;
+  taskId?: string;
   topicId?: string;
 }
 
@@ -289,6 +313,7 @@ export interface SetTaskScheduleState {
   automationMode?: TaskAutomationMode | null;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== setTaskVerify ====================
@@ -313,6 +338,7 @@ export interface SetTaskVerifyState {
   enabled?: boolean | null;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== updateTaskStatus ====================
@@ -324,8 +350,10 @@ export interface UpdateTaskStatusParams {
 }
 
 export interface UpdateTaskStatusState {
+  identifier?: string;
   status: TaskStatus;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== deleteTask ====================
@@ -337,4 +365,5 @@ export interface DeleteTaskParams {
 export interface DeleteTaskState {
   identifier: string;
   success: boolean;
+  taskId?: string;
 }

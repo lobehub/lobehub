@@ -31,7 +31,11 @@ export const fromTraceGraphState = (state: GoalGraphState): GoalGraphSnapshot =>
     })),
     edges: state.edges,
     events: [],
-    goal: { ...state.goal, config: null, projectId: null },
+    goal: {
+      ...state.goal,
+      config: state.goal.exploration ? { exploration: state.goal.exploration } : null,
+      projectId: null,
+    },
     nodes: state.nodes.map((node) => ({
       ...node,
       createdAt: new Date(node.createdAt),
@@ -65,6 +69,7 @@ export const coordinatorDecider: GoalDecider = (input): GoalDecision => {
     concurrency: input.concurrency ?? DEFAULT_REPLAY_CONCURRENCY,
     frontier,
     graph,
+    metricCriteria: input.metricCriteria,
     tasksById: toTasksById(input),
   });
 

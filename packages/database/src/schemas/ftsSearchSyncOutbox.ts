@@ -17,6 +17,12 @@ import { createdAt, timestamptz, updatedAt } from './_helpers';
 /** Monotonic version source shared by capture triggers, reindex fences, and Outbox work. */
 export const ftsSearchSyncRevisionSequence = pgSequence('fts_search_sync_revision_seq');
 
+/** The opt-in capture installer advances this singleton only after validating live definitions. */
+export const ftsSearchSyncCaptureVersion = pgTable('fts_search_sync_capture_version', {
+  id: text('id').primaryKey(),
+  version: integer('version').notNull(),
+});
+
 /** Durable, coalescing queue for asynchronously refreshing search projections. */
 export const ftsSearchSyncOutbox = pgTable(
   'fts_search_sync_outbox',

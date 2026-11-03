@@ -37,8 +37,11 @@ const normalizeOption = (value: unknown): AskUserQuestionOption | undefined => {
   const strippedLabel = stripRecommendedSuffix(rawLabel);
   // Only treat the suffix as a marker when something remains — a label that IS
   // "(Recommended)" stays verbatim rather than collapsing to an empty option.
-  const recommended = strippedLabel.length > 0 && strippedLabel !== rawLabel;
-  const label = recommended ? strippedLabel : rawLabel;
+  const suffixed = strippedLabel.length > 0 && strippedLabel !== rawLabel;
+  const label = suffixed ? strippedLabel : rawLabel;
+  // Hosts that ask their own questions (a goal gate) know their pick and say
+  // so directly; only tool calls need the label convention.
+  const recommended = suffixed || option?.recommended === true;
   const description = pickString(option?.description);
   const id = pickString(option?.id);
 
@@ -65,9 +68,11 @@ const normalizeQuestion = (value: unknown): AskUserQuestionItem | undefined => {
     ? rawOptions.map(normalizeOption).filter(isQuestionOption)
     : [];
   const header = pickString(item?.header) ?? '';
+  const description = pickString(item?.description);
   const multiSelect = typeof item?.multiSelect === 'boolean' ? item.multiSelect : undefined;
 
   return {
+    ...(description ? { description } : {}),
     header,
     ...(multiSelect === undefined ? {} : { multiSelect }),
     options,

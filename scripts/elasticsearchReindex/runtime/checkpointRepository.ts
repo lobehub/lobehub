@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, rename, stat, unlink } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
 import type {
@@ -11,7 +11,11 @@ import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { z } from 'zod';
 
-import { getFtsSearchPhysicalIndexName } from '../../../packages/database/src/repositories/ftsSearchDocument';
+import {
+  getFtsSearchIndexAlias,
+  getFtsSearchPhysicalIndexName,
+  parseFtsSearchPhysicalIndexName,
+} from '../../../packages/database/src/repositories/ftsSearchDocument';
 
 export interface FtsSearchReindexBatchFailure {
   documentId: string;
@@ -75,7 +79,7 @@ export interface FtsSearchReindexRunState {
 export interface FtsSearchReindexFileRepositoryOptions {
   readCaptureFingerprint: () => Promise<string>;
   readHighWaterRevision: () => Promise<number>;
-  reserveRevisionWithWriteFence: () => Promise<number>;
+  reserveRevisionWithWriteFence: (entities: readonly FtsSearchDocumentEntity[]) => Promise<number>;
   stateDirectory: string;
 }
 
@@ -128,28 +132,43 @@ const checkpointSchema = z
   .object({
     failures: z.array(failureSchema),
     formatVersion: z.literal(CHECKPOINT_FORMAT_VERSION),
-    progress: z.array(progressSchema).length(FTS_SEARCH_DOCUMENT_ENTITIES.length),
+    /**
+     * One checkpoint tracks one schema generation. The first generation covers every entity; an
+     * upgrade generation only covers the entities whose declared version was bumped, so the list
+     * is a non-empty subset rather than a fixed length.
+     */
+    progress: z.array(progressSchema).min(1),
     run: runSchema,
   })
   .superRefine((checkpoint, context) => {
     const entities = new Set(checkpoint.progress.map(({ entity }) => entity));
-    if (entities.size !== FTS_SEARCH_DOCUMENT_ENTITIES.length) {
+    if (entities.size !== checkpoint.progress.length) {
       context.addIssue({
         code: 'custom',
-        message: 'FTS reindex checkpoint must contain each entity exactly once',
+        message: 'FTS reindex checkpoint must contain each entity at most once',
         path: ['progress'],
       });
     }
     for (const progress of checkpoint.progress) {
-      const expectedIndex = getFtsSearchPhysicalIndexName(
-        checkpoint.run.namespace,
-        progress.entity,
-        checkpoint.run.schemaVersion,
-      );
-      if (progress.physicalIndex !== expectedIndex) {
+      /**
+       * A rebuilt generation lives in `<alias>-v<schemaVersion>`. An in-place upgrade keeps the
+       * older physical index and only advances its `_meta`, so any older generation name of the
+       * same alias is also a valid target; a newer one or a foreign index never is.
+       */
+      const alias = getFtsSearchIndexAlias(checkpoint.run.namespace, progress.entity);
+      const identity = parseFtsSearchPhysicalIndexName(alias, progress.physicalIndex);
+      const validVersion =
+        identity &&
+        identity.builtSchemaVersion >= 1 &&
+        identity.builtSchemaVersion <= checkpoint.run.schemaVersion;
+      const validRunIdentity =
+        !identity?.reindexRunId ||
+        identity.builtSchemaVersion < checkpoint.run.schemaVersion ||
+        identity.reindexRunId === checkpoint.run.id;
+      if (!validVersion || !validRunIdentity) {
         context.addIssue({
           code: 'custom',
-          message: `Expected physical index ${expectedIndex}`,
+          message: `Expected physical index ${alias}-v<n>[-r<run-id>] with n <= ${checkpoint.run.schemaVersion} and the checkpoint run ID on same-version rebuilds`,
           path: ['progress', progress.entity, 'physicalIndex'],
         });
       }
@@ -163,10 +182,10 @@ const errorMessage = (error: unknown) =>
 
 const now = () => new Date().toISOString();
 
-const checkpointFileName = (namespace: string, schemaVersion: number) => {
+const checkpointFileName = (namespace: string, schemaVersion: number, runId?: string) => {
   const safeNamespace = namespace.replaceAll(/[^\w-]/g, '_').slice(0, 80) || 'search';
   const namespaceHash = createHash('sha256').update(namespace).digest('hex').slice(0, 12);
-  return `${CHECKPOINT_FILE_PREFIX}${safeNamespace}-${namespaceHash}-v${schemaVersion}.json`;
+  return `${CHECKPOINT_FILE_PREFIX}${safeNamespace}-${namespaceHash}-v${schemaVersion}${runId ? `-r${runId}` : ''}.json`;
 };
 
 const stateOf = ({ progress, run }: FtsSearchReindexCheckpointFile): FtsSearchReindexRunState => ({
@@ -180,6 +199,22 @@ const unresolvedFailureCount = (
 ) =>
   checkpoint.failures.filter((failure) => failure.entity === entity && !failure.resolvedAt).length;
 
+const pendingProgress = (
+  namespace: string,
+  schemaVersion: number,
+  entity: FtsSearchDocumentEntity,
+  physicalIndex = getFtsSearchPhysicalIndexName(namespace, entity, schemaVersion),
+): FtsSearchReindexEntityProgress => ({
+  completedAt: null,
+  cursor: null,
+  entity,
+  failedCount: 0,
+  indexedCount: 0,
+  physicalIndex,
+  processedCount: 0,
+  status: 'pending',
+});
+
 const isMissingFileError = (error: unknown) => isRecord(error) && error.code === 'ENOENT';
 const isExistingFileError = (error: unknown) => isRecord(error) && error.code === 'EEXIST';
 
@@ -192,18 +227,39 @@ export class FtsSearchReindexFileRepository {
     this.stateDirectory = path.resolve(options.stateDirectory);
   }
 
-  private checkpointPath(namespace: string, schemaVersion: number) {
-    return path.join(this.stateDirectory, checkpointFileName(namespace, schemaVersion));
+  private checkpointPath(namespace: string, schemaVersion: number, runId?: string) {
+    return path.join(this.stateDirectory, checkpointFileName(namespace, schemaVersion, runId));
   }
 
   private async findCheckpointPath(runId: string): Promise<string | undefined> {
     const checkpointPath = this.runPaths.get(runId);
-    if (!checkpointPath) return;
-    const checkpoint = await this.readCheckpoint(checkpointPath);
-    if (checkpoint.run.id !== runId) {
-      throw new Error(`FTS reindex checkpoint run ID changed unexpectedly: ${checkpointPath}`);
+    if (checkpointPath) {
+      const checkpoint = await this.readCheckpoint(checkpointPath);
+      if (checkpoint.run.id !== runId) {
+        throw new Error(`FTS reindex checkpoint run ID changed unexpectedly: ${checkpointPath}`);
+      }
+      return checkpointPath;
     }
-    return checkpointPath;
+    const files = await readdir(this.stateDirectory).catch((error) => {
+      if (isMissingFileError(error)) return [];
+      throw error;
+    });
+    const matching = files.filter(
+      (file) => file.startsWith(CHECKPOINT_FILE_PREFIX) && file.endsWith(`-r${runId}.json`),
+    );
+    if (matching.length > 1) {
+      throw new Error(`Multiple FTS reindex checkpoints claim run ${runId}`);
+    }
+    if (matching.length === 0) return;
+    const discoveredPath = path.join(this.stateDirectory, matching[0]);
+    const checkpoint = await this.readCheckpoint(discoveredPath);
+    if (checkpoint.run.id !== runId) {
+      throw new Error(
+        `FTS reindex checkpoint run ID does not match its filename: ${discoveredPath}`,
+      );
+    }
+    this.runPaths.set(runId, discoveredPath);
+    return discoveredPath;
   }
 
   private stateOf(
@@ -419,19 +475,82 @@ export class FtsSearchReindexFileRepository {
     });
   }
 
+  /**
+   * Creates the checkpoint for one schema generation or resumes it. `entities` is the set the
+   * generation covers; when a later code change moves more entities onto an existing generation,
+   * they are appended as pending so the same checkpoint keeps tracking that generation.
+   * `physicalIndexes` pins an entity to an existing older index for an in-place upgrade instead of
+   * the generation's own `<alias>-v<schemaVersion>`; a resumed entity must keep the same target.
+   */
   async createOrResume(
     namespace: string,
     schemaVersion: number,
+    entities: readonly FtsSearchDocumentEntity[] = FTS_SEARCH_DOCUMENT_ENTITIES,
+    physicalIndexes: Partial<Record<FtsSearchDocumentEntity, string>> = {},
+    runId?: string,
   ): Promise<FtsSearchReindexRunState> {
-    const checkpointPath = this.checkpointPath(namespace, schemaVersion);
+    if (entities.length === 0)
+      throw new Error('A reindex generation must cover at least one entity');
+    const progressFor = (entity: FtsSearchDocumentEntity) =>
+      pendingProgress(namespace, schemaVersion, entity, physicalIndexes[entity]);
+    const assertTargets = (checkpoint: FtsSearchReindexCheckpointFile) => {
+      for (const progress of checkpoint.progress) {
+        const pinned = physicalIndexes[progress.entity];
+        if (pinned !== undefined && pinned !== progress.physicalIndex) {
+          throw new Error(
+            `Checkpoint ${checkpoint.run.id} already backfills ${progress.entity} into ${progress.physicalIndex}; it cannot switch to ${pinned}`,
+          );
+        }
+      }
+    };
+    const needsBackfill = (checkpoint: FtsSearchReindexCheckpointFile) => {
+      const generationEntitySet = new Set(entities);
+      return (
+        checkpoint.progress.some(
+          (progress) => generationEntitySet.has(progress.entity) && progress.status !== 'completed',
+        ) ||
+        checkpoint.failures.some(
+          (failure) => generationEntitySet.has(failure.entity) && !failure.resolvedAt,
+        )
+      );
+    };
+    const reconcileGeneration = (checkpoint: FtsSearchReindexCheckpointFile) => {
+      let changed = false;
+      for (const entity of entities) {
+        if (checkpoint.progress.some((progress) => progress.entity === entity)) continue;
+        checkpoint.progress.push(progressFor(entity));
+        changed = true;
+      }
+      if (checkpoint.run.status === 'ready_for_incremental_sync' && needsBackfill(checkpoint)) {
+        checkpoint.run.status = 'backfilling';
+        changed = true;
+      }
+      return changed;
+    };
+    const checkpointPath = this.checkpointPath(namespace, schemaVersion, runId);
     const existing = await this.readCheckpointIfExists(checkpointPath);
     if (existing) {
       this.assertCaptureFingerprint(existing, await this.readCaptureFingerprint());
-      return this.stateOf(checkpointPath, existing);
+      assertTargets(existing);
+      const missing = entities.filter(
+        (entity) => !existing.progress.some((progress) => progress.entity === entity),
+      );
+      const needsReopen =
+        existing.run.status === 'ready_for_incremental_sync' && needsBackfill(existing);
+      if (missing.length === 0 && !needsReopen) return this.stateOf(checkpointPath, existing);
+      return this.withCheckpointLock(checkpointPath, async () => {
+        const checkpoint = await this.readCheckpoint(checkpointPath);
+        assertTargets(checkpoint);
+        // Recheck under the lock in case another process completed or appended work meanwhile.
+        if (!reconcileGeneration(checkpoint)) return this.stateOf(checkpointPath, checkpoint);
+        checkpoint.run.updatedAt = now();
+        await this.writeCheckpoint(checkpointPath, checkpoint);
+        return this.stateOf(checkpointPath, checkpoint);
+      });
     }
 
     /** Reserve outside the file lock so a slow database connection cannot stale the local lock. */
-    const baseRevision = await this.options.reserveRevisionWithWriteFence();
+    const baseRevision = await this.options.reserveRevisionWithWriteFence(entities);
     if (!Number.isSafeInteger(baseRevision) || baseRevision < 1) {
       throw new Error('Failed to reserve a valid search reindex base revision');
     }
@@ -440,6 +559,11 @@ export class FtsSearchReindexFileRepository {
       const captureFingerprint = await this.readCaptureFingerprint();
       if (concurrentlyCreated) {
         this.assertCaptureFingerprint(concurrentlyCreated, captureFingerprint);
+        assertTargets(concurrentlyCreated);
+        if (reconcileGeneration(concurrentlyCreated)) {
+          concurrentlyCreated.run.updatedAt = now();
+          await this.writeCheckpoint(checkpointPath, concurrentlyCreated);
+        }
         return this.stateOf(checkpointPath, concurrentlyCreated);
       }
 
@@ -447,23 +571,14 @@ export class FtsSearchReindexFileRepository {
       const checkpoint: FtsSearchReindexCheckpointFile = {
         failures: [],
         formatVersion: CHECKPOINT_FORMAT_VERSION,
-        progress: FTS_SEARCH_DOCUMENT_ENTITIES.map((entity) => ({
-          completedAt: null,
-          cursor: null,
-          entity,
-          failedCount: 0,
-          indexedCount: 0,
-          physicalIndex: getFtsSearchPhysicalIndexName(namespace, entity, schemaVersion),
-          processedCount: 0,
-          status: 'pending',
-        })),
+        progress: entities.map(progressFor),
         run: {
           aliasesCreatedAt: null,
           backfillHighWaterRevision: null,
           baseRevision,
           captureFingerprint,
           createdAt: timestamp,
-          id: randomUUID(),
+          id: runId ?? randomUUID(),
           namespace,
           schemaVersion,
           status: 'backfilling',
@@ -478,16 +593,55 @@ export class FtsSearchReindexFileRepository {
   async getTargetRun(
     namespace: string,
     schemaVersion: number,
+    runId?: string,
   ): Promise<FtsSearchReindexRunState | undefined> {
-    const checkpointPath = this.checkpointPath(namespace, schemaVersion);
+    const checkpointPath = this.checkpointPath(namespace, schemaVersion, runId);
     const checkpoint = await this.readCheckpointIfExists(checkpointPath);
     return checkpoint ? this.stateOf(checkpointPath, checkpoint) : undefined;
+  }
+
+  async getGenerationRun(
+    namespace: string,
+    schemaVersion: number,
+    runId: string | null,
+  ): Promise<FtsSearchReindexRunState | undefined> {
+    if (!runId) return this.getTargetRun(namespace, schemaVersion);
+    const rebuilt = await this.getTargetRun(namespace, schemaVersion, runId);
+    if (rebuilt) return rebuilt;
+    const canonical = await this.getTargetRun(namespace, schemaVersion);
+    return canonical?.run.id === runId ? canonical : undefined;
+  }
+
+  async listRuns(namespace?: string): Promise<FtsSearchReindexRunState[]> {
+    const files = await readdir(this.stateDirectory).catch((error) => {
+      if (isMissingFileError(error)) return [];
+      throw error;
+    });
+    const runs: FtsSearchReindexRunState[] = [];
+    for (const file of files.filter(
+      (item) => item.startsWith(CHECKPOINT_FILE_PREFIX) && item.endsWith('.json'),
+    )) {
+      const checkpointPath = path.join(this.stateDirectory, file);
+      const checkpoint = await this.readCheckpoint(checkpointPath);
+      if (namespace && checkpoint.run.namespace !== namespace) continue;
+      runs.push(this.stateOf(checkpointPath, checkpoint));
+    }
+    return runs.sort((left, right) => left.run.createdAt.localeCompare(right.run.createdAt));
   }
 
   async getRun(runId: string): Promise<FtsSearchReindexRunState | undefined> {
     const checkpointPath = await this.findCheckpointPath(runId);
     if (!checkpointPath) return;
     return this.stateOf(checkpointPath, await this.readCheckpoint(checkpointPath));
+  }
+
+  async assertRunCaptureFingerprint(runId: string): Promise<void> {
+    const checkpointPath = await this.findCheckpointPath(runId);
+    if (!checkpointPath) throw new Error(`Missing reindex run ${runId}`);
+    this.assertCaptureFingerprint(
+      await this.readCheckpoint(checkpointPath),
+      await this.readCaptureFingerprint(),
+    );
   }
 
   async listUnresolvedFailures(runId: string, entity?: FtsSearchDocumentEntity) {
@@ -499,15 +653,34 @@ export class FtsSearchReindexFileRepository {
     );
   }
 
-  async markReadyForIncrementalSync(runId: string): Promise<void> {
+  /**
+   * Marks the current generation ready without discarding progress or failures retained for an
+   * entity that has since moved to another declared schema version.
+   */
+  async markReadyForIncrementalSync(
+    runId: string,
+    generationEntities: readonly FtsSearchDocumentEntity[],
+  ): Promise<void> {
+    if (generationEntities.length === 0) {
+      throw new Error('A reindex generation must cover at least one entity');
+    }
     /** Read outside the file lock so a slow database connection cannot stale the local lock. */
     const highWaterRevision = await this.options.readHighWaterRevision();
     if (!Number.isSafeInteger(highWaterRevision) || highWaterRevision < 0) {
       throw new Error('Failed to read a valid search reindex high-water revision');
     }
     await this.updateCheckpoint(runId, (checkpoint) => {
-      const incomplete = checkpoint.progress.find((progress) => progress.status !== 'completed');
-      const unresolved = checkpoint.failures.find((failure) => !failure.resolvedAt);
+      const generationEntitySet = new Set(generationEntities);
+      const missing = generationEntities.find(
+        (entity) => !checkpoint.progress.some((progress) => progress.entity === entity),
+      );
+      if (missing) throw new Error(`Missing reindex progress for ${missing}`);
+      const incomplete = checkpoint.progress.find(
+        (progress) => generationEntitySet.has(progress.entity) && progress.status !== 'completed',
+      );
+      const unresolved = checkpoint.failures.find(
+        (failure) => generationEntitySet.has(failure.entity) && !failure.resolvedAt,
+      );
       if (incomplete || unresolved) {
         throw new Error(
           'Cannot create aliases before every reindex entity and failure is complete',

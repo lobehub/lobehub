@@ -30,6 +30,8 @@ export const lobeHubOnlineModelDescriptions = {
     "Claude Sonnet 5 is Anthropic's most agentic Sonnet model, built for sustained coding, tool use, and long-context workflows with Sonnet-tier speed and efficiency.",
   'lobehub.dall-e-3.description':
     'The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.',
+  'lobehub.deepseek-flash.description':
+    'Native vision and stronger agent performance than V4 Pro, with lower input and cache costs for long-running workflows.',
   'lobehub.deepseek-v4-flash-vision-exp.description':
     'DeepSeek V4 Flash Vision Exp is an experimental multimodal model that matches V4 Flash on text capabilities and adds image understanding for visual agent workflows.',
   'lobehub.deepseek-v4-flash.description':
@@ -64,6 +66,10 @@ export const lobeHubOnlineModelDescriptions = {
     'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
   'lobehub.gemini-3.1-flash-image.description':
     'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
+  'lobehub.gemini-nano-banana-2.1.description':
+    'Successor to Nano Banana 2 at roughly half the per-image price, with sharper text rendering and steadier multi-turn character consistency.',
+  'lobehub.gemini-nano-banana-2.1:image.description':
+    'Successor to Nano Banana 2 at roughly half the per-image price, with sharper text rendering and steadier multi-turn character consistency.',
   'lobehub.gemini-3.1-flash-lite-image:image.description':
     "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) is Google's fastest and most cost-efficient image generation model, built for high-volume generation and editing.",
   'lobehub.gemini-3.1-flash-lite-image.description':
@@ -129,6 +135,8 @@ export const lobeHubOnlineModelDescriptions = {
     'GPT-5.6 Terra balances intelligence and cost for everyday professional work, competitive with GPT-5.5 at about half the price.',
   'lobehub.gpt-5.description':
     'The best model for cross-domain coding and agent tasks, with strong accuracy, speed, reasoning, and problem-solving capabilities.',
+  'lobehub.gpt-6-astra.description':
+    "OpenAI's most intelligent and aligned model, state of the art on computer use and 3D work.",
   'lobehub.gpt-image-1.5.description':
     'An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.',
   'lobehub.gpt-image-1.description': 'ChatGPT native multimodal image generation model.',
@@ -143,6 +151,8 @@ export const lobeHubOnlineModelDescriptions = {
     'Grok 4.5 delivers performance close to Claude Opus 4.8 with exceptionally fast responses.',
   'lobehub.grok-4.6.description':
     'Grok 4.6 builds on Grok 4.5 with a particular focus on long-running agents and more ambitious interactive and visual work.',
+  'lobehub.grok-4.7.description':
+    'Grok 4.7 is more reliable on long coding and knowledge work than Grok 4.6, at the same price and speed.',
   'lobehub.imagen-4.0-fast-generate-001.description':
     'Imagen 4th generation text-to-image model series',
   'lobehub.imagen-4.0-generate-001.description': 'Imagen 4th generation text-to-image model series',
@@ -164,6 +174,12 @@ export const lobeHubOnlineModelDescriptions = {
     'Xiaomi MiMo-V2.5-Pro is the flagship of the MiMo-V2.5 series, delivering major gains in general agentic capabilities, complex software engineering, and long-horizon tasks. Its performance on demanding agentic benchmarks is comparable to Claude Opus 4.6.',
   'lobehub.mimo-v2.5.description':
     'Xiaomi MiMo-V2.5 is a multimodal agent model that understands images, video, audio, and text. It delivers Pro-level agentic performance at roughly half the inference cost, with faster responses and stronger multimodal perception than MiMo-V2-Omni.',
+  'lobehub.mimo-v2.6-flash.description':
+    'A low-cost multimodal agent model that exceeds MiMo-V2.5-Pro on agent benchmarks at the previous MiMo-V2.5 price.',
+  'lobehub.mimo-v2.6-pro-ultraspeed.description':
+    'MiMo-V2.6-Pro quality at up to 20 times the output speed for latency-sensitive agents.',
+  'lobehub.mimo-v2.6-pro.description':
+    'An open-source multimodal flagship for long-horizon coding and computer use, with 1M context at the previous Pro price.',
   'lobehub.MiniMax-M2.5-highspeed.description':
     'Same performance as M2.5 with significantly faster inference.',
   'lobehub.MiniMax-M2.5.description':

@@ -93,4 +93,39 @@ describe('TelegramMessageService.sendMessage', () => {
     expect(api.sendPhoto).toHaveBeenCalled();
     expect(api.sendMessage).toHaveBeenCalledWith('chat-1', 'still send');
   });
+
+  it('carries the failed attachments in the state alongside the text fallback', async () => {
+    const api = makeApi();
+    api.sendPhoto.mockRejectedValueOnce(new Error('429'));
+    api.sendDocument.mockRejectedValueOnce(new Error('413'));
+    const service = new TelegramMessageService(api as any);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const result = await service.sendMessage({
+        attachments: [{ data: Buffer.from('x').toString('base64'), name: 'a.png', type: 'image' }],
+        channelId: 'chat-1',
+        content: 'still send',
+        platform: 'telegram',
+      });
+
+      expect(result).toEqual({
+        attachmentFailures: [
+          {
+            detail: 'sendPhoto: 429; sendDocument: 413',
+            name: 'a.png',
+            reason: 'upload-failed',
+            type: 'image',
+          },
+        ],
+        attachmentsDelivered: 0,
+        channelId: 'chat-1',
+        messageId: '10',
+        platform: 'telegram',
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });

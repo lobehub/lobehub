@@ -1,14 +1,14 @@
 'use client';
 
 import { HotkeyGroupEnum } from '@lobechat/const/hotkeys';
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, HotkeyInput } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { HotkeyInput } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -16,23 +16,39 @@ import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type HotkeyItem } from '@/types/hotkey';
-
-import { hotkeyFormStyles } from './styles';
+import { type UserHotkeyConfig } from '@/types/user/settings';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
-  const [form] = Form.useForm();
-
   const { hotkey } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+  const form = useForm({
+    initialValues: hotkey,
+    values: hotkey,
+    onValuesChange: (values) => save(() => setSettings({ hotkey: values })),
+  });
 
-  if (!isUserStateInit) return <Skeleton.Text rows={5} />;
+  if (!isUserStateInit)
+    return (
+      <SettingsSectionSkeleton
+        groups={[
+          {
+            // Hotkey recorder inputs settle at 335x36.
+            control: { height: 36, width: 335 },
+            rows: HOTKEYS_REGISTRATION.filter((item) => item.group === HotkeyGroupEnum.Essential)
+              .length,
+            titleWidth: 96,
+            withDesc: false,
+          },
+        ]}
+      />
+    );
 
   const clearHotkeyBinding = (id: HotkeyItem['id']) => {
     if (!hotkey[id]) return;
 
-    form.setFieldValue(id, '');
+    form.setValue(id, '');
     save(() => setSettings({ hotkey: { [id]: '' } }));
   };
 
@@ -61,7 +77,7 @@ const HotkeySetting = memo(() => {
     };
   };
 
-  const essential: FormGroupItemType = {
+  const essential: FormGroupItem<UserHotkeyConfig> = {
     children: HOTKEYS_REGISTRATION.filter((item) => item.group === HotkeyGroupEnum.Essential).map(
       (item) => mapHotkeyItem(item),
     ),
@@ -78,14 +94,11 @@ const HotkeySetting = memo(() => {
 
   return (
     <Form
-      classNames={{ item: hotkeyFormStyles.item }}
       collapsible={false}
       form={form}
-      initialValues={hotkey}
       items={[essential]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={(values) => save(() => setSettings({ hotkey: values }))}
       {...FORM_STYLE}
     />
   );

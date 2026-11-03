@@ -2,18 +2,36 @@ import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
-import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import {
+  applyTopicDeviceBinding,
+  getTopicBoundDeviceId,
+  isTopicDeviceUnknown,
+  resolveWorkspaceScoped,
+} from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
+import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
 export interface UseEffectiveAgencyConfigResult {
-  /** Shared `agents.agencyConfig` merged with the caller's per-agent override. */
+  /**
+   * Shared `agents.agencyConfig` merged with the caller's per-agent override,
+   * then pinned to the topic's machine when that conversation already ran on
+   * one (see `applyTopicDeviceBinding`).
+   */
   agencyConfig: LobeAgentAgencyConfig | undefined;
   /** Whether the execution target is ready to be shown as an effective runtime summary. */
   canDisplayExecutionTarget: boolean;
   /** Whether this caller may open the execution-target selector. */
   canSelectExecutionTarget: boolean;
+  /**
+   * The caller's own per-agent execution target applies instead of the shared
+   * default: a member's pick under the member-selection policy, or a manager's
+   * this-machine pick (always kept per user). Ignores the topic binding.
+   */
+  executionTargetOverridden: boolean;
   /**
    * The workspace preference fetch is still in flight. Until it settles, a
    * workspace agent's `agencyConfig` may reflect only the shared row — callers
@@ -22,12 +40,26 @@ export interface UseEffectiveAgencyConfigResult {
    */
   isPreferenceLoading: boolean;
   /**
+   * The conversation holds a cwd but no recorded machine, so `agencyConfig`
+   * fell back to the agent default — which may not be where that cwd lives.
+   */
+  topicDeviceUnknown: boolean;
+  /**
    * The effective config still comes from the workspace-shared fallback because
    * this member has not explicitly selected an execution target. Callers must
    * preserve workspace coercion so a legacy shared `local` value cannot execute
    * on whichever member happens to open the agent.
    */
   workspaceScoped: boolean;
+}
+
+export interface UseEffectiveAgencyConfigOptions {
+  /**
+   * The conversation whose machine binding applies. Defaults to the active
+   * topic; pass `null` for agent-level surfaces (e.g. the profile editor) that
+   * must show the default for new conversations.
+   */
+  topicId?: string | null;
 }
 
 /**
@@ -50,7 +82,10 @@ export interface UseEffectiveAgencyConfigResult {
  * Self-populates the workspace preference cache (SWR dedupes across callers;
  * personal mode short-circuits without a network call).
  */
-export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyConfigResult => {
+export const useEffectiveAgencyConfig = (
+  agentId?: string,
+  { topicId }: UseEffectiveAgencyConfigOptions = {},
+): UseEffectiveAgencyConfigResult => {
   const sharedAgencyConfig = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
   );
@@ -75,11 +110,50 @@ export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyCo
   const storePreference = useUserStore((s) => s.workspaceUserPreference);
   const preference = fetchedPreference === undefined ? storePreference : (fetchedPreference ?? {});
   const override = agentId ? preference.agentDeviceOverrides?.[agentId] : undefined;
-  const agencyConfig = resolveAgentAgencyConfig(sharedAgencyConfig, override, {
+  const agentAgencyConfig = resolveAgentAgencyConfig(sharedAgencyConfig, override, {
     canManage: canManageAgent,
     visibility: agent?.visibility,
     workspaceId: agent?.workspaceId,
   });
+  // Mirrors `resolveAgentAgencyConfig`: a fixed policy shelves a member's
+  // override, while managers and private-agent owners keep theirs.
+  const executionTargetOverridden =
+    !!agent?.workspaceId &&
+    override?.executionTarget !== undefined &&
+    !(
+      usesWorkspaceMemberSelection && sharedAgencyConfig?.executionTargetSelectionPolicy === 'fixed'
+    );
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const bindingTopicId = topicId === undefined ? activeTopicId : topicId;
+  const topicDeviceId = useChatStore((s) =>
+    getTopicBoundDeviceId(
+      bindingTopicId ? topicSelectors.getTopicById(bindingTopicId)(s) : undefined,
+      agentId,
+    ),
+  );
+  // A project-directory topic runs in its bound directory, so its execution
+  // target is owned by the binding rather than the picker.
+  const isProjectDirectoryTopic = useChatStore(
+    (s) =>
+      !!bindingTopicId &&
+      !!topicSelectors.getTopicById(bindingTopicId)(s)?.projectWorkingDirectoryId,
+  );
+  const topicDeviceUnknown = useChatStore((s) =>
+    isTopicDeviceUnknown(
+      bindingTopicId ? topicSelectors.getTopicById(bindingTopicId)(s) : undefined,
+      agentId,
+      agentAgencyConfig,
+    ),
+  );
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
+  const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
+    {
+      agencyConfig: agentAgencyConfig,
+      workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, override),
+    },
+    topicDeviceId,
+    currentDeviceId,
+  );
   // Managers and private-agent owners also keep their `local` pick in the
   // per-user override, so any workspace agent must wait for the preference
   // fetch — not just the member-selection case.
@@ -89,8 +163,13 @@ export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyCo
     agencyConfig,
     canDisplayExecutionTarget: !!agentId && !isPreferenceLoading,
     canSelectExecutionTarget:
-      !!agentId && !isPreferenceLoading && agencyConfig?.executionTargetSelectionPolicy !== 'fixed',
+      !!agentId &&
+      !isProjectDirectoryTopic &&
+      !isPreferenceLoading &&
+      agencyConfig?.executionTargetSelectionPolicy !== 'fixed',
+    executionTargetOverridden,
     isPreferenceLoading,
-    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, override),
+    topicDeviceUnknown,
+    workspaceScoped,
   };
 };

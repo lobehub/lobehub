@@ -60,9 +60,13 @@ vi.mock('@/libs/oidc-provider/jwt', () => ({
   validateOIDCJWT: mockValidateOIDCJWT,
 }));
 
-vi.mock('@/utils/apiKey', () => ({
-  validateApiKeyFormat: mockValidateApiKeyFormat,
-}));
+vi.mock('@/utils/apiKey', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    validateApiKeyFormat: mockValidateApiKeyFormat,
+  };
+});
 
 vi.mock('@/utils/server/auth', () => ({
   extractBearerToken: mockExtractBearerToken,

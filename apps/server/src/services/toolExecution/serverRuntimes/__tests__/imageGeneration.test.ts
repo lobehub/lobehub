@@ -13,11 +13,21 @@ interface ImageCallerContext {
 }
 
 const callerMocks = vi.hoisted(() => ({
-  aiModel: vi.fn(() => ({})),
-  aiProvider: vi.fn(() => ({})),
-  generation: vi.fn(() => ({})),
-  generationTopic: vi.fn(() => ({})),
-  image: vi.fn((_ctx: ImageCallerContext) => ({})),
+  aiModel: vi.fn(function () {
+    return {};
+  }),
+  aiProvider: vi.fn(function () {
+    return {};
+  }),
+  generation: vi.fn(function () {
+    return {};
+  }),
+  generationTopic: vi.fn(function () {
+    return {};
+  }),
+  image: vi.fn(function (_ctx: ImageCallerContext) {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/routers/lambda/aiModel', () => ({

@@ -1,16 +1,24 @@
 'use client';
 
-import type { WorkSummaryItem } from '@lobechat/types';
-import { formatTokenNumber } from '@lobechat/utils/format';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Trash2Icon } from 'lucide-react';
-import { memo } from 'react';
+import type { CanvasStorageItem, WorkSummaryItem } from '@lobechat/types';
+import { formatSize, formatTokenNumber } from '@lobechat/utils/format';
+import {
+  ActionIcon,
+  Avatar,
+  createStaticStyles,
+  cssVar,
+  cx,
+  DropdownMenu,
+  Flexbox,
+  Tag,
+} from '@lobehub/ui';
+import { MoreHorizontalIcon } from 'lucide-react';
+import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useCanvasCardMenu } from '@/features/CanvasStorage/useCanvasCardMenu';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
@@ -80,6 +88,10 @@ const styles = createStaticStyles(({ css }) => ({
   metaRow: css`
     min-width: 0;
   `,
+  more: css`
+    flex: none;
+    margin-inline-start: auto;
+  `,
   meta: css`
     flex: none;
     font-size: 10px;
@@ -124,10 +136,17 @@ const styles = createStaticStyles(({ css }) => ({
 interface WorkPreviewCardProps {
   item: WorkSummaryItem;
   onOpen: (item: WorkSummaryItem) => void;
+  /** File storage a canvas Work holds, when it is the caller's own canvas. */
+  storage?: CanvasStorageItem;
 }
+
+const stopPropagation = (event: MouseEvent) => event.stopPropagation();
 
 const workTypeKey = (item: WorkSummaryItem) => {
   switch (item.resourceType) {
+    case 'canvas': {
+      return 'work.type.canvas';
+    }
     case 'document': {
       return 'work.type.document';
     }
@@ -152,7 +171,12 @@ const workTypeKey = (item: WorkSummaryItem) => {
   }
 };
 
-const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
+/**
+ * Gallery card for a live Work. Orphans (backing resource deleted or trashed)
+ * never reach it: `listByWorkspace` filters them out server-side, so the card
+ * has no "resource deleted" state.
+ */
+const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) => {
   const { t, i18n } = useTranslation(['chat', 'common', 'file']);
   const agent = useAgentDisplayMeta(item.originAgentId);
   const descriptor = getWorkTypeDescriptor(item);
@@ -166,10 +190,8 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
     item.resourceType.startsWith('github_') && identifier?.includes('#')
       ? `#${identifier.split('#').at(-1)}`
       : identifier;
-  const taskDeleted = item.resourceType === 'task' && item.taskDeleted;
   const openTarget = descriptor.getOpenTarget(item);
-  const actionable = !!openTarget && (openTarget.kind !== 'filePreview' || !!openTarget.url);
-  const clickable = actionable && !taskDeleted;
+  const clickable = !!openTarget && (openTarget.kind !== 'filePreview' || !!openTarget.url);
   const eventDate = item.event.changeType === 'created' ? item.createdAt : item.updatedAt;
   const eventAt = formatTaskItemDate(eventDate, {
     formatOtherYear: t('time.formatOtherYear', { ns: 'common' }),
@@ -182,10 +204,12 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
   });
   const totalTokens = getWorkVersionTotalTokens(item.event.cumulativeUsage);
   const cost = formatWorkVersionCost(item.totalCost);
+  const size = storage ? formatSize(storage.totalSize) : null;
+  const menuItems = useCanvasCardMenu(item, storage);
 
   return (
     <Flexbox
-      className={cx(styles.card, clickable && styles.clickable)}
+      className={cx('work-preview-card', styles.card, clickable && styles.clickable)}
       onClick={clickable ? () => onOpen(item) : undefined}
     >
       <WorkPreview item={item} title={title} />
@@ -205,10 +229,17 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
               {item.status}
             </Tag>
           )}
-          {taskDeleted && (
-            <Tag color={'warning'} icon={<Trash2Icon size={12} />} size={'small'}>
-              {t('workingPanel.works.taskDeleted', { ns: 'chat' })}
-            </Tag>
+          {menuItems.length > 0 && (
+            <div className={styles.more} onClick={stopPropagation}>
+              <DropdownMenu items={menuItems} placement={'bottomRight'}>
+                <ActionIcon
+                  icon={MoreHorizontalIcon}
+                  size={'small'}
+                  title={t('more', { ns: 'common' })}
+                  onClick={stopPropagation}
+                />
+              </DropdownMenu>
+            </div>
           )}
         </Flexbox>
         <div className={styles.title}>{title}</div>
@@ -246,9 +277,9 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
               )}
             </Flexbox>
           )}
-          {(totalTokens || cost) && (
+          {(size || totalTokens || cost) && (
             <span className={styles.usage}>
-              {[totalTokens ? `${formatTokenNumber(totalTokens)} tokens` : null, cost]
+              {[size, totalTokens ? `${formatTokenNumber(totalTokens)} tokens` : null, cost]
                 .filter(Boolean)
                 .join(' · ')}
             </span>

@@ -1,19 +1,20 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  createStaticStyles,
+  cssVar,
   DropdownMenu,
+  Flexbox,
   ModalClose,
   ModalHeader,
   ModalTitle,
   Tabs,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArchiveIcon,
@@ -67,11 +68,18 @@ const styles = createStaticStyles(({ css }) => ({
     overscroll-behavior: contain;
     flex: 1;
   `,
+  // Dividers inside this modal use colorFillSecondary, not colorBorderSecondary.
+  // In the dark palette colorBorderSecondary and colorBgElevated are the same
+  // step of the neutral scale, so every border drawn on the modal's own surface
+  // resolves to the surface colour and disappears — the panel reads as one
+  // undifferentiated block. colorFillSecondary is alpha-based, so it lands on
+  // #f0f0f0 over the light surface (identical to what the border token gave)
+  // and stays visible over the dark one.
   header: css`
     flex: none;
     gap: 0;
     padding: 0;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorFillSecondary};
   `,
   headerMain: css`
     min-width: 0;
@@ -101,7 +109,7 @@ const styles = createStaticStyles(({ css }) => ({
     box-sizing: border-box;
     width: clamp(160px, 22vw, 220px);
     padding: 8px;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+    border-inline-end: 1px solid ${cssVar.colorFillSecondary};
   `,
 }));
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { DropdownMenu, type DropdownMenuProps, Icon } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
 import { memo, useMemo } from 'react';

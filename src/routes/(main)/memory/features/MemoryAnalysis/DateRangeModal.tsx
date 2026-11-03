@@ -4,14 +4,14 @@ import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  DayjsDateRangePicker as DateRangePicker,
+  type DayjsDateRangeValue,
   type ModalInstance,
   Text,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { DatePicker } from 'antd';
-import { type RangePickerProps } from 'antd/es/date-picker';
-import dayjs from 'dayjs';
+} from '@lobehub/ui';
+import dayjs, { type Dayjs } from 'dayjs';
 import { t as i18nT } from 'i18next';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,23 +24,17 @@ const DateRangeContent = memo(() => {
   const { close } = useModalContext();
 
   const { refresh } = useMemoryAnalysisAsyncTask();
-  const [range, setRange] = useState<[Date | null, Date | null]>([null, null]);
+  const [range, setRange] = useState<DayjsDateRangeValue | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const disabledDate = useCallback<NonNullable<RangePickerProps['disabledDate']>>(
-    (current) => current.isAfter(dayjs(), 'day'),
-    [],
-  );
+  const disabledDate = useCallback((current: Dayjs) => current.isAfter(dayjs(), 'day'), []);
 
   const footerNote = useMemo(
     () =>
-      range[0] || range[1]
+      range?.[0] || range?.[1]
         ? t('analysis.modal.rangeSelected', {
-            end:
-              range[1]?.toISOString().slice(0, 10)?.replaceAll('-', '/') || t('analysis.range.end'),
-            start:
-              range[0]?.toISOString().slice(0, 10)?.replaceAll('-', '/') ||
-              t('analysis.range.start'),
+            end: range[1] ? range[1].format('YYYY/MM/DD') : t('analysis.range.end'),
+            start: range[0] ? range[0].format('YYYY/MM/DD') : t('analysis.range.start'),
           })
         : t('analysis.modal.rangePlaceholder'),
     [range, t],
@@ -49,10 +43,10 @@ const DateRangeContent = memo(() => {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      const [from, to] = range;
+      const [from, to] = range ?? [null, null];
       const result = await memoryExtractionService.requestFromChatTopics({
-        fromDate: from ?? undefined,
-        toDate: to ?? undefined,
+        fromDate: from?.toDate(),
+        toDate: to?.endOf('day').toDate(),
       });
 
       await refresh();
@@ -70,15 +64,13 @@ const DateRangeContent = memo(() => {
     <Flexbox gap={16}>
       <Flexbox gap={12}>
         <Text type={'secondary'}>{t('analysis.modal.helper')}</Text>
-        <DatePicker.RangePicker
+        <DateRangePicker
           allowClear
           disabledDate={disabledDate}
           format={'YYYY/MM/DD'}
           style={{ width: '100%' }}
-          value={[range[0] ? dayjs(range[0]) : null, range[1] ? dayjs(range[1]) : null]}
-          onChange={(values) =>
-            setRange([values?.[0]?.toDate() ?? null, values?.[1]?.toDate() ?? null])
-          }
+          value={range}
+          onChange={setRange}
         />
         <Text fontSize={12} type={'secondary'}>
           {footerNote}

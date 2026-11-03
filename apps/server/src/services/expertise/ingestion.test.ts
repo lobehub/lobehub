@@ -10,8 +10,17 @@ const { resolveExpertiseModelConfig } = vi.hoisted(() => ({
   resolveExpertiseModelConfig: vi.fn(),
 }));
 const generateObject = vi.fn();
+const dueForConsolidation = vi.fn();
+const consolidate = vi.fn();
 const listDomainsForAgent = vi.fn();
 const listLessons = vi.fn();
+const listTopicActivity = vi.fn();
+
+vi.mock('@/database/models/agentSignal/reviewContext', () => ({
+  AgentSignalReviewContextModel: class {
+    listTopicActivity = listTopicActivity;
+  },
+}));
 
 vi.mock('@/database/models/expertise', () => ({
   ExpertiseModel: class {
@@ -25,6 +34,12 @@ vi.mock('@/server/services/aiGeneration', () => ({
   },
 }));
 vi.mock('./modelConfig', () => ({ resolveExpertiseModelConfig }));
+vi.mock('./consolidation', () => ({
+  ExpertiseConsolidationService: class {
+    consolidate = consolidate;
+    dueForConsolidation = dueForConsolidation;
+  },
+}));
 
 const completion = (selfIteration: SelfIterationCompletionPayload) => ({
   agentId: 'agent-signal-reflection',
@@ -80,6 +95,70 @@ describe('ExpertiseIngestionService.ingestSelfReview', () => {
   });
 });
 
+describe('ExpertiseIngestionService.ingestSelfReview nightly topic quota', () => {
+  const nightlyCompletion = () =>
+    completion({
+      artifacts: [],
+      marker: {
+        agentId: 'agent_1',
+        kind: 'nightly-review',
+        localDate: '2026-10-11',
+        reviewWindowEnd: '2026-10-12T00:00:00.000Z',
+        reviewWindowStart: '2026-10-11T00:00:00.000Z',
+        sourceId: 'nightly_1',
+      },
+      mutations: [],
+      userId: 'user_1',
+    });
+
+  /**
+   * The nightly expertise pass shares the user's 50-topics-per-night quota with the review:
+   * only admitted topics are ingested.
+   */
+  it('ingests only the topics the nightly topic quota admits', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    const ingestCompletion = vi
+      .spyOn(service, 'ingestCompletion')
+      .mockResolvedValue({ ingested: 1, reason: 'matched' } as never);
+    listTopicActivity.mockResolvedValue([
+      { topicId: 'topic_1' },
+      { topicId: 'topic_2' },
+      { topicId: 'topic_3' },
+    ]);
+    const claimNightlyTopics = vi
+      .fn()
+      .mockResolvedValue({ admitted: ['topic_1'], reason: 'exhausted' });
+
+    await service.ingestSelfReview(nightlyCompletion(), { claimNightlyTopics });
+
+    expect(claimNightlyTopics).toHaveBeenCalledWith({
+      localDate: '2026-10-11',
+      topicIds: ['topic_1', 'topic_2', 'topic_3'],
+      userId: 'user_1',
+    });
+    expect(ingestCompletion.mock.calls.map(([input]) => input.topicId)).toEqual(['topic_1']);
+  });
+
+  it('does not meter self-reflection ingestion', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    vi.spyOn(service, 'ingestCompletion').mockResolvedValue({ ingested: 1 } as never);
+    const claimNightlyTopics = vi.fn();
+
+    await service.ingestSelfReview(
+      completion({
+        artifacts: [],
+        marker: { agentId: 'agent_1', kind: 'self-reflection', sourceId: 'r', topicId: 'topic_1' },
+        mutations: [],
+        userId: 'user_1',
+      }),
+      { claimNightlyTopics },
+    );
+
+    expect(claimNightlyTopics).not.toHaveBeenCalled();
+    expect(service.ingestCompletion).toHaveBeenCalledOnce();
+  });
+});
+
 describe('ExpertiseIngestionService historical ingestion', () => {
   it('uses a stable topic key instead of inventing an operation id', async () => {
     const service = new ExpertiseIngestionService({} as never, 'user_1');
@@ -112,6 +191,54 @@ describe('ExpertiseIngestionService historical ingestion', () => {
       ['agent_1', 'topic_1'],
       ['agent_1', 'topic_2'],
     ]);
+  });
+
+  it('finishes a topic as a skip when the provider account refuses', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    // The raw OpenAI SDK error xAI throws when the account has no credits: no runtime errorType.
+    const outOfCredits = Object.assign(
+      new Error('403 "You have run out of credits or need a Grok subscription."'),
+      { status: 403 },
+    );
+    vi.spyOn(service, 'ingestCompletion').mockRejectedValue(outOfCredits);
+
+    await expect(service.ingestHistoricalTopic('agent_1', 'topic_1')).resolves.toEqual({
+      ingested: 0,
+      reason: 'provider-account-error',
+    });
+  });
+
+  it('treats a wrapped runtime quota error as a provider account refusal', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    vi.spyOn(service, 'ingestCompletion').mockRejectedValue({ errorType: 'InsufficientQuota' });
+
+    await expect(service.ingestHistoricalTopic('agent_1', 'topic_1')).resolves.toEqual({
+      ingested: 0,
+      reason: 'provider-account-error',
+    });
+  });
+
+  it('still throws transient provider failures so the workflow retries them', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    const overloaded = Object.assign(new Error('503 overloaded'), { status: 503 });
+    vi.spyOn(service, 'ingestCompletion').mockRejectedValue(overloaded);
+
+    await expect(service.ingestHistoricalTopic('agent_1', 'topic_1')).rejects.toBe(overloaded);
+  });
+
+  it('stops the local backfill once the provider account refuses', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    vi.spyOn(service, 'listHistoricalTopics').mockResolvedValue([
+      { topicId: 'topic_1' },
+      { topicId: 'topic_2' },
+      { topicId: 'topic_3' },
+    ] as never);
+    const ingest = vi
+      .spyOn(service, 'ingestHistoricalTopic')
+      .mockResolvedValue({ ingested: 0, reason: 'provider-account-error' });
+
+    await expect(service.ingestHistory('agent_1')).resolves.toEqual({ ingested: 0, scanned: 1 });
+    expect(ingest).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -149,7 +276,7 @@ describe('ExpertiseIngestionService.ingestCompletion', () => {
       }),
       expect.objectContaining({
         tracing: expect.objectContaining({
-          promptVersion: 'v2',
+          promptVersion: 'v3',
           scenario: 'expertise_topic_ingestion',
         }),
       }),
@@ -199,8 +326,10 @@ const createTx = (persistedLessons: Record<string, unknown>[]): TxFake => {
     inserted,
     tx: {
       insert: (table: unknown) => ({
-        values: async (value: Record<string, unknown>) => {
-          inserted.set(table, [...(inserted.get(table) ?? []), value]);
+        // Drizzle accepts one row or many; hit writes fan out, so flatten both into one list.
+        values: async (value: Record<string, unknown> | Record<string, unknown>[]) => {
+          const rows = Array.isArray(value) ? value : [value];
+          inserted.set(table, [...(inserted.get(table) ?? []), ...rows]);
         },
       }),
       select: selectChain,
@@ -229,19 +358,25 @@ const observation = (overrides: Record<string, unknown> = {}) => ({
 const persistRun = async (
   fake: TxFake,
   observations: ReturnType<typeof observation>[],
-): Promise<void> => {
+): Promise<string[]> => {
   const service = new ExpertiseIngestionService(
     {
       transaction: async (callback: (value: unknown) => Promise<void>) => callback(fake.tx),
     } as never,
     'user_1',
   );
-  await service['persistDomainRun']({
-    agentId: 'agent_1',
+  return service['persistDomainRun']({
     domain: { id: 'domain_1' },
     observations: observations as never,
-    operationId: 'operation_1',
-    topicId: 'topic_1',
+    run: {
+      actorId: 'agent_1',
+      actorType: 'agent',
+      hadHumanInLoop: false,
+      operationId: 'operation_1',
+      reflectionKey: 'topic:topic_1:operation:operation_1',
+      subjectId: 'topic_1',
+      subjectType: 'topic',
+    },
   });
 };
 
@@ -268,6 +403,76 @@ describe('ExpertiseIngestionService.persistDomainRun', () => {
     const hit = fake.inserted.get(expertiseHits)?.[0];
     expect(run?.id).toMatch(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i);
     expect(hit?.runId).toBe(run?.id);
+  });
+
+  it('writes one hit per rejection a standard was distilled from', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [
+      observation({
+        outcome: 'violation',
+        sourceCheckResultIds: ['check_a', 'check_b', 'check_c'],
+      }),
+    ]);
+
+    // hitCount has to read as "violated three times", not "analysed once", or the frequency
+    // the standards list ranks by is a count of analysis passes.
+    const hits = fake.inserted.get(expertiseHits) ?? [];
+    expect(hits).toHaveLength(3);
+    expect(hits.map((hit) => hit.sourceCheckResultId)).toEqual(['check_a', 'check_b', 'check_c']);
+    expect(fake.inserted.get(expertiseLessons)?.[0].hitCount).toBe(3);
+    expect(fake.inserted.get(expertiseLessons)?.[0].exampleCount).toBe(1);
+  });
+
+  it('counts a rejection once when the model cites its label twice', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [
+      observation({
+        outcome: 'violation',
+        sourceCheckResultIds: ['check_a', 'check_a', 'check_b'],
+      }),
+    ]);
+
+    // hitCount ranks the standards list and decides core-versus-niche, so a label the model
+    // repeated must not make one rejection look like two.
+    const hits = fake.inserted.get(expertiseHits) ?? [];
+    expect(hits.map((hit) => hit.sourceCheckResultId)).toEqual(['check_a', 'check_b']);
+    expect(fake.inserted.get(expertiseLessons)?.[0].hitCount).toBe(2);
+  });
+
+  it('stores what a standard rests on as columns, not as prose in its body', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [
+      observation({
+        reasonKind: 'taste',
+        reasonSource: 'inferred',
+        reasoning: '属主不接受多余分割线',
+      }),
+    ]);
+
+    const lesson = fake.inserted.get(expertiseLessons)?.[0];
+    // The compile step refuses to compile taste, and it cannot do that by matching a phrase: the
+    // body is written in whatever language the reviewer used.
+    expect(lesson).toMatchObject({ reasonKind: 'taste', reasonSource: 'inferred' });
+    expect(
+      (lesson?.sections as { body: string; key: string }[]).find((s) => s.key === 'why'),
+    ).toEqual({ body: '属主不接受多余分割线', key: 'why' });
+  });
+
+  it('keeps the limits section only when the model stated one', async () => {
+    const withLimits = createTx([]);
+    await persistRun(withLimits, [observation({ limits: 'Not inside chart internals' })]);
+    expect(withLimits.inserted.get(expertiseLessons)?.[0].sections).toContainEqual({
+      body: 'Not inside chart internals',
+      key: 'limits',
+    });
+
+    const withoutLimits = createTx([]);
+    await persistRun(withoutLimits, [observation({ limits: '   ' })]);
+    expect(
+      (withoutLimits.inserted.get(expertiseLessons)?.[0].sections as { key: string }[]).map(
+        (section) => section.key,
+      ),
+    ).toEqual(['rule', 'why', 'how']);
   });
 
   it('attaches by code when the model returns a real lesson code', async () => {
@@ -309,6 +514,31 @@ describe('ExpertiseIngestionService.persistDomainRun', () => {
     expect(lesson?.code).toBe('P-08');
   });
 
+  it('links a conversation hit to the message it was read from', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [observation({ sourceMessageId: 'msg_2' })]);
+
+    expect(fake.inserted.get(expertiseHits)?.[0].sourceMessageId).toBe('msg_2');
+  });
+
+  it('marks a new standard the model could not lift above one delivery as a one-off', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [observation({ specificity: 'one-off' })]);
+
+    expect(fake.inserted.get(expertiseLessons)?.[0].specificity).toBe('one-off');
+  });
+
+  it('lifts the one-off mark once another round attaches to the standard', async () => {
+    const fake = createTx([
+      { code: 'P-07', id: 'lesson_7', status: 'active', title: 'Separate the runtime plane' },
+    ]);
+    await persistRun(fake, [observation({ existingLessonCode: 'P-07' })]);
+
+    // Recurring in a second round is exactly what a one-off does not do.
+    const lessonUpdate = fake.updates.find((update) => 'hitCount' in update);
+    expect(lessonUpdate).toHaveProperty('specificity');
+  });
+
   it('collapses observations that restate the same rule inside one run', async () => {
     const fake = createTx([]);
     await persistRun(fake, [
@@ -320,5 +550,45 @@ describe('ExpertiseIngestionService.persistDomainRun', () => {
     expect(fake.inserted.get(expertiseHits)).toHaveLength(2);
     const runUpdate = fake.updates.find((update) => 'newCount' in update);
     expect(runUpdate).toMatchObject({ instanceCount: 1, newCount: 1 });
+  });
+});
+
+describe('ExpertiseIngestionService.consolidateTouched', () => {
+  it('reports every standard a round touched, whether it was created or attached to', async () => {
+    const fake = createTx([
+      { code: 'P-01', id: 'lesson_existing', status: 'active', title: '既有标准' },
+    ]);
+
+    const touched = await persistRun(fake, [
+      observation({ existingLessonCode: 'P-01' }),
+      observation({ title: '一条新的标准' }),
+    ]);
+
+    // The attached lesson is the one consolidation exists for, so it must survive the round even
+    // though nothing about it was inserted.
+    expect(touched).toContain('lesson_existing');
+    expect(touched).toHaveLength(2);
+  });
+
+  it('keeps a recorded round when restating one of its standards fails', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    dueForConsolidation.mockResolvedValue(['lesson_1', 'lesson_2']);
+    consolidate
+      .mockRejectedValueOnce(new Error('provider down'))
+      .mockResolvedValueOnce({ generalized: true, lessonId: 'lesson_2', note: '' });
+
+    const results = await service['consolidateTouched']('domain_1', ['lesson_1', 'lesson_2']);
+
+    // The rejections are already committed; a failed rewrite leaves that standard worded as it
+    // was, which is exactly the state before this pass existed.
+    expect(consolidate).toHaveBeenCalledTimes(2);
+    expect(results).toEqual([{ generalized: true, lessonId: 'lesson_2', note: '' }]);
+  });
+
+  it('does not reach for the model when a round touched nothing', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+
+    await expect(service['consolidateTouched']('domain_1', [])).resolves.toEqual([]);
+    expect(dueForConsolidation).not.toHaveBeenCalled();
   });
 });

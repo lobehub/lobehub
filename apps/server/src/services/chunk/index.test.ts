@@ -31,23 +31,29 @@ const {
 }));
 
 vi.mock('@/database/models/asyncTask', () => ({
-  AsyncTaskModel: vi.fn(() => ({
-    create: mockAsyncTaskModelCreate,
-    update: mockAsyncTaskModelUpdate,
-  })),
+  AsyncTaskModel: vi.fn(function () {
+    return {
+      create: mockAsyncTaskModelCreate,
+      update: mockAsyncTaskModelUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({
-    findById: mockFileModelFindById,
-    update: mockFileModelUpdate,
-  })),
+  FileModel: vi.fn(function () {
+    return {
+      findById: mockFileModelFindById,
+      update: mockFileModelUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/ContentChunk', () => ({
-  ContentChunk: vi.fn(() => ({
-    chunkContent: mockChunkContent,
-  })),
+  ContentChunk: vi.fn(function () {
+    return {
+      chunkContent: mockChunkContent,
+    };
+  }),
 }));
 
 vi.mock('@/server/routers/async', () => ({
@@ -73,11 +79,11 @@ describe('ChunkService', () => {
       },
     });
     mockEmbeddingChunks.mockResolvedValue(undefined);
-    mockFileModelFindById.mockResolvedValue({ id: 'file-1' });
+    mockFileModelFindById.mockResolvedValue({ id: 'file-1', name: 'file-1.pdf' });
     mockFileModelUpdate.mockResolvedValue(undefined);
     mockParseFileToChunks.mockResolvedValue(undefined);
 
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
     service = new ChunkService(mockDb, userId);
   });
 
@@ -158,6 +164,7 @@ describe('ChunkService', () => {
     it('should create an error task for files larger than the in-memory parser limit', async () => {
       mockFileModelFindById.mockResolvedValue({
         id: 'large-file',
+        name: 'large-file.pdf',
         size: 64 * 1024 * 1024 + 1,
       });
 
@@ -175,6 +182,21 @@ describe('ChunkService', () => {
         ),
         status: AsyncTaskStatus.Error,
       });
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
+    // https://github.com/lobehub/lobehub/issues/19620
+    it('should not create a chunking task for a format no chunking loader can parse', async () => {
+      mockFileModelFindById.mockResolvedValue({
+        id: 'dwg-file',
+        name: 'floor-plan.dwg',
+        size: 1024,
+      });
+
+      await expect(service.asyncParseFileToChunks('dwg-file')).resolves.toBeUndefined();
+
+      expect(mockAsyncTaskModelCreate).not.toHaveBeenCalled();
+      expect(mockFileModelUpdate).not.toHaveBeenCalled();
       expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 

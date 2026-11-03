@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Tabs } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import {
   AudioLines,
@@ -11,6 +9,7 @@ import {
   ImageIcon,
   MessageSquareTextIcon,
   MicIcon,
+  SplitIcon,
   VideoIcon,
 } from 'lucide-react';
 import { memo, Suspense, useMemo, useState } from 'react';
@@ -46,7 +45,7 @@ const Content = memo<ContentProps>(({ id }) => {
 
   const allModels = useAiInfraStore(aiModelSelectors.filteredAiProviderModelList, isEqual);
 
-  const { error, mutate } = useFetchAiProviderModels(id);
+  const { isLoading, error, mutate } = useFetchAiProviderModels(id);
 
   // Count models by type (for all models, not just enabled)
   const modelCounts = useMemo(() => {
@@ -54,6 +53,7 @@ const Content = memo<ContentProps>(({ id }) => {
       all: allModels.length,
       asr: 0,
       chat: 0,
+      decision: 0,
       embedding: 0,
       image: 0,
       tts: 0,
@@ -118,6 +118,12 @@ const Content = memo<ContentProps>(({ id }) => {
         key: 'tts',
         label: formatTabLabel(t('providerModels.tabs.tts'), modelCounts.tts),
       },
+      {
+        count: modelCounts.decision,
+        icon: <Icon icon={SplitIcon} size={16} />,
+        key: 'decision',
+        label: formatTabLabel(t('providerModels.tabs.decision'), modelCounts.decision),
+      },
     ];
 
     // Only show tabs that have models (count > 0), but always show 'all' tab
@@ -127,6 +133,8 @@ const Content = memo<ContentProps>(({ id }) => {
   // Ensure active tab is available, fallback to 'all' if current tab is hidden
   const availableTabKeys = tabs.map((tab) => tab.key);
   const currentActiveTab = availableTabKeys.includes(activeTab) ? activeTab : 'all';
+
+  if (isLoading && isEmpty) return <SkeletonList />;
 
   // Error before empty: a failed model-list fetch must not render as
   // "no models yet" (EmptyModels) — surface the reason + Retry (ux Read §1.1).

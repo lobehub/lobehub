@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildGoalCreateInput, deriveInitialGoalCriterionTitle } from './goalConfig';
+import {
+  buildGoalAgents,
+  buildGoalCreateInput,
+  buildReviewedGoalContent,
+  deriveInitialGoalCriterionTitle,
+} from './goalConfig';
 
 describe('deriveInitialGoalCriterionTitle', () => {
   it('uses the instruction when a free-form goal has no dedicated requirement', () => {
@@ -42,5 +47,34 @@ describe('buildGoalCreateInput', () => {
       buildGoalCreateInput({ instruction: 'ship it', requirement: '  all links resolve  ' })
         .requirement,
     ).toBe('all links resolve');
+  });
+});
+
+describe('buildReviewedGoalContent', () => {
+  it('uses the reviewed instruction verbatim as the goal document and planning context', () => {
+    const instruction =
+      '创建、读取、修改并导出可继续编辑的 PPT、XLSX 和 Word；保留中文和原有格式。';
+
+    expect(buildReviewedGoalContent(instruction)).toEqual({
+      problemDescription: instruction,
+      requirement: instruction,
+    });
+  });
+});
+
+describe('buildGoalAgents', () => {
+  it('routes Tasks to a dedicated executor', () => {
+    expect(buildGoalAgents('agt_plan', 'agt_exec')).toEqual({
+      agentId: 'agt_plan',
+      taskAgentId: 'agt_exec',
+    });
+  });
+
+  it('leaves Tasks with the main agent when no other executor is picked', () => {
+    expect(buildGoalAgents('agt_plan')).toEqual({ agentId: 'agt_plan', taskAgentId: undefined });
+    expect(buildGoalAgents('agt_plan', 'agt_plan')).toEqual({
+      agentId: 'agt_plan',
+      taskAgentId: undefined,
+    });
   });
 });

@@ -1,11 +1,12 @@
+import type * as lobechatConstModule from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
-import type * as modelRuntimeModule from '@lobechat/model-runtime';
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type * as lobechatTypesModule from '@lobechat/types';
-import { ChatErrorType } from '@lobechat/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useChatStore } from '@/store/chat';
 
 import ErrorMessageExtra, { useErrorContent } from './index';
 
@@ -14,13 +15,27 @@ const updateMessageErrorMock = vi.fn();
 const dynamicComponentPropsMock = vi.hoisted(() => vi.fn());
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
+const shareContextMock = vi.hoisted(() => ({ topicShareId: '' }));
+const transcriptSourceMock = vi.hoisted(() => ({ value: 'chat' as 'chat' | 'static' }));
 const delAndRegenerateMessageMock = vi.hoisted(() => vi.fn());
+const detectHeterogeneousAgentCommandMock = vi.hoisted(() => vi.fn());
+const cancelHeteroContinuationMock = vi.hoisted(() => vi.fn());
 // Keyed by message id so a test can decide whether `data.id` is a top-level
 // displayMessage hanging off a user turn — the condition that decides whether a
 // self-contained retry can actually do anything.
 const displayMessageMock = vi.hoisted(() => new Map<string, { parentId?: string }>());
+const conversationContextMock = vi.hoisted(
+  () =>
+    ({ agentId: undefined, topicId: undefined }) as {
+      agentId?: string;
+      topicId?: string;
+    },
+);
+const createTopicForwardModalMock = vi.hoisted(() => vi.fn());
+const commitWorkingDirectoryMock = vi.hoisted(() => vi.fn());
 // Stands in for whatever card a downstream build installs into the business slot.
 const businessSlot = vi.hoisted(() => ({ render: false }));
+const resourceAccessMock = vi.hoisted(() => ({ canUseResource: true }));
 const missingTranslationKeys = vi.hoisted(() => new Set<string>());
 const businessErrorContentMock = vi.hoisted(() =>
   vi.fn(() => ({
@@ -30,16 +45,10 @@ const businessErrorContentMock = vi.hoisted(() =>
   })),
 );
 
-vi.mock('@lobechat/model-runtime', async (importOriginal) => {
-  const actual = (await importOriginal()) as typeof modelRuntimeModule;
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof lobechatConstModule;
 
-  return {
-    ...actual,
-    AgentRuntimeErrorType: {
-      ...actual.AgentRuntimeErrorType,
-      AgentRuntimeError: 'AgentRuntimeError',
-    },
-  };
+  return { ...actual, isDesktop: true };
 });
 
 vi.mock('@lobechat/types', async (importOriginal) => {
@@ -101,16 +110,47 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
     agentType,
     error,
     onDismiss,
+    onRetry,
+    onHandoff,
+    workingDirectoryReset,
   }: {
     agentType?: string;
     error?: { code?: string };
     onDismiss?: () => void;
+    onRetry?: () => void;
+    onHandoff?: () => void;
+    workingDirectoryReset?: { name?: string; onReset: () => Promise<void> };
   }) => (
     <div>
       {`guide:${agentType}:${error?.code}`}
       {onDismiss && <button onClick={onDismiss}>dismiss</button>}
+      {onRetry && <button onClick={onRetry}>guide-retry</button>}
+      {onHandoff && <button onClick={onHandoff}>handoff</button>}
+      {workingDirectoryReset && (
+        <button onClick={() => void workingDirectoryReset.onReset()}>
+          {`reset-to:${workingDirectoryReset.name}`}
+        </button>
+      )}
     </div>
   ),
+}));
+
+vi.mock('@/features/ChatInput/ControlBar/useCommitWorkingDirectory', () => ({
+  useCommitWorkingDirectory: () => ({ commit: commitWorkingDirectoryMock }),
+}));
+
+vi.mock('@/services/electron/binary', () => ({
+  binaryService: {
+    detectHeterogeneousAgentCommand: detectHeterogeneousAgentCommandMock,
+  },
+}));
+
+vi.mock('@/features/Conversation/MessageForward/TopicForwardModal', () => ({
+  createTopicForwardModal: createTopicForwardModalMock,
+}));
+
+vi.mock('@/features/Conversation/hooks/useConversationResourceAccess', () => ({
+  useConversationResourceAccess: () => resourceAccessMock,
 }));
 
 vi.mock('@/hooks/useProviderName', () => ({
@@ -138,11 +178,18 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 
 vi.mock('@/features/Conversation/store', () => ({
+  contextSelectors: {
+    agentId: (state: { context: typeof conversationContextMock }) => state.context.agentId,
+    topicId: (state: { context: typeof conversationContextMock }) => state.context.topicId,
+  },
   dataSelectors: {
     getDisplayMessageById: (id: string) => () => displayMessageMock.get(id),
   },
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
+      context: { ...conversationContextMock, ...shareContextMock },
+      transcriptSource: transcriptSourceMock.value,
+      cancelHeteroContinuation: cancelHeteroContinuationMock,
       delAndRegenerateMessage: delAndRegenerateMessageMock,
       deleteMessage: vi.fn(),
       heteroOverloadRetryAttempts: {},
@@ -162,12 +209,23 @@ const ErrorMessageWithContent = ({ data }: { data: any }) => {
   return <ErrorMessageExtra data={data} error={error} />;
 };
 
+// Highlighter renders the JSON as token spans once its engine has loaded, so match the whole block.
+const getErrorDetails = (pattern: RegExp) =>
+  screen.getByText(
+    (_, element) => element?.tagName === 'PRE' && pattern.test(element.textContent ?? ''),
+  );
+
 describe('ErrorMessageExtra', () => {
   beforeEach(() => {
     dynamicComponentPropsMock.mockClear();
+    detectHeterogeneousAgentCommandMock.mockReset();
+    detectHeterogeneousAgentCommandMock.mockResolvedValue({ available: true });
     missingTranslationKeys.clear();
     businessSlot.render = false;
+    resourceAccessMock.canUseResource = true;
     serverConfigMock.enableBusinessFeatures = false;
+    shareContextMock.topicShareId = '';
+    transcriptSourceMock.value = 'chat';
     businessErrorContentMock.mockReturnValue({
       errorType: undefined,
       hideMessage: false,
@@ -175,7 +233,14 @@ describe('ErrorMessageExtra', () => {
     });
     updateMessageErrorMock.mockClear();
     delAndRegenerateMessageMock.mockClear();
+    cancelHeteroContinuationMock.mockClear();
     displayMessageMock.clear();
+    conversationContextMock.agentId = undefined;
+    conversationContextMock.topicId = undefined;
+    createTopicForwardModalMock.mockClear();
+    commitWorkingDirectoryMock.mockReset();
+    commitWorkingDirectoryMock.mockResolvedValue(undefined);
+    useChatStore.setState({ activeTopicId: null as any, topicDetailMap: {} });
   });
 
   // Regression: the standalone surfaces (Assistant / Task / AgentCouncil) render
@@ -213,6 +278,23 @@ describe('ErrorMessageExtra', () => {
           data={{
             error: { body: { provider: 'openai' }, type: 'ProviderBizError' } as any,
             id: 'msg-orphan-block',
+          }}
+        />,
+      );
+
+      expect(screen.queryByText('card-retry')).toBeNull();
+    });
+
+    it('offers no retry on a static transcript, which nothing could regenerate', () => {
+      transcriptSourceMock.value = 'static';
+      displayMessageMock.set('msg-static', { parentId: 'user-1' });
+
+      render(
+        <ErrorMessageExtra
+          error={{ message: 'provider exploded' }}
+          data={{
+            error: { body: { provider: 'openai' }, type: 'ProviderBizError' } as any,
+            id: 'msg-static',
           }}
         />,
       );
@@ -299,6 +381,28 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.getByText('dynamic')).toBeInTheDocument();
     expect(screen.queryByText('Sensitive internal configuration error')).not.toBeInTheDocument();
+  });
+
+  it('shows the copyable trace ID card without a retry on a shared topic', () => {
+    shareContextMock.topicShareId = 'share-1';
+
+    render(
+      <ErrorMessageWithContent
+        data={{
+          error: {
+            body: { traceId: 'trace-fixture-1' },
+            type: ChatErrorType.InternalServerError,
+          },
+          id: 'msg-shared-internal-error',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ showRetry: false, traceId: 'trace-fixture-1' }),
+    );
+    expect(screen.queryByText('dynamic-retry')).not.toBeInTheDocument();
   });
 
   it('keeps the group retry callback on the internal server error UI', () => {
@@ -419,6 +523,64 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('dynamic')).toBeInTheDocument();
   });
 
+  it('offers context compaction for an oversized request body', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RequestBodyTooLarge' }}
+        data={{
+          error: { type: AgentRuntimeErrorType.RequestBodyTooLarge } as any,
+          id: 'msg-request-too-large',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith({
+      canCompact: true,
+      id: 'msg-request-too-large',
+      reason: 'requestBodyTooLarge',
+    });
+  });
+
+  it('withholds context compaction from members who can only view the conversation', () => {
+    resourceAccessMock.canUseResource = false;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RequestBodyTooLarge' }}
+        data={{
+          error: { type: AgentRuntimeErrorType.RequestBodyTooLarge } as any,
+          id: 'msg-request-too-large',
+        }}
+      />,
+    );
+
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ canCompact: false, reason: 'requestBodyTooLarge' }),
+    );
+  });
+
+  it('lets context compaction retry the group parent when the error is a nested block', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RequestBodyTooLarge' }}
+        retryScopeId="group-parent"
+        data={{
+          error: { type: AgentRuntimeErrorType.RequestBodyTooLarge } as any,
+          id: 'group-child-block',
+        }}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith({
+      canCompact: true,
+      id: 'group-child-block',
+      parentId: 'group-parent',
+      reason: 'requestBodyTooLarge',
+    });
+  });
+
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {
     render(
       <ErrorMessageExtra
@@ -440,7 +602,67 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('guide:claude-code:auth_required')).toBeInTheDocument();
   });
 
+  it('renders the CLI detection timeout guide instead of the generic JSON error', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.AgentRuntimeError' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.CliDetectionTimeout,
+              command: 'codex',
+              message: 'Timed out looking for `codex` while reading PATH from your login shell.',
+            },
+            type: AgentRuntimeErrorType.AgentRuntimeError,
+          } as any,
+          id: 'msg-cli-detection-timeout',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('guide:codex:cli_detection_timeout')).toBeInTheDocument();
+    expect(screen.queryByText(/Timed out looking for/)).not.toBeInTheDocument();
+  });
+
+  it('forces fresh CLI detection before retrying a detection timeout', async () => {
+    displayMessageMock.set('msg-cli-detection-timeout', { parentId: 'user-1' });
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.AgentRuntimeError' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.CliDetectionTimeout,
+              command: 'codex',
+              message: 'Timed out looking for `codex` while reading PATH from your login shell.',
+            },
+            type: AgentRuntimeErrorType.AgentRuntimeError,
+          } as any,
+          id: 'msg-cli-detection-timeout',
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('guide-retry'));
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommandMock).toHaveBeenCalledWith({
+        agentType: 'codex',
+        command: 'codex',
+      });
+      expect(delAndRegenerateMessageMock).toHaveBeenCalledWith('msg-cli-detection-timeout');
+    });
+    expect(detectHeterogeneousAgentCommandMock.mock.invocationCallOrder[0]).toBeLessThan(
+      delAndRegenerateMessageMock.mock.invocationCallOrder[0],
+    );
+  });
+
   it('renders the rate-limit guide when the refreshed error carries rate_limit code', () => {
+    conversationContextMock.agentId = 'source-agent';
+    conversationContextMock.topicId = 'source-topic';
     render(
       <ErrorMessageExtra
         error={{ message: 'response.undefined' }}
@@ -459,6 +681,77 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('handoff'));
+    expect(createTopicForwardModalMock).toHaveBeenCalledWith({
+      cancelSourceContinuation: true,
+      sourceAgentId: 'source-agent',
+      topicId: 'source-topic',
+      topicTitle: '',
+    });
+  });
+
+  it('restores handoff after cancelling the source wait even when another topic is active', () => {
+    useChatStore.setState({
+      activeTopicId: 'main-topic',
+      topicDetailMap: {
+        'main-topic': {
+          id: 'main-topic',
+          status: 'active',
+          title: 'Main topic',
+        } as any,
+        'source-topic': {
+          id: 'source-topic',
+          metadata: { scheduledRun: { kind: 'resume_after_rate_limit' } },
+          status: 'scheduled',
+          title: 'Review task',
+        } as any,
+      },
+    });
+    conversationContextMock.agentId = 'source-agent';
+    conversationContextMock.topicId = 'source-topic';
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.undefined' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+              message: 'rate limited',
+            },
+            message: 'rate limited',
+          } as any,
+          id: 'msg-rate-limit',
+        }}
+      />,
+    );
+
+    expect(screen.queryByText('handoff')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'dismiss' })).not.toBeInTheDocument();
+
+    act(() => {
+      useChatStore.setState((state) => ({
+        topicDetailMap: {
+          ...state.topicDetailMap,
+          'source-topic': {
+            ...state.topicDetailMap['source-topic'],
+            metadata: { scheduledRun: null },
+            status: 'failed',
+          } as any,
+        },
+      }));
+    });
+
+    fireEvent.click(screen.getByText('handoff'));
+    // Opening the picker does not resolve the quota error or consume the entry.
+    fireEvent.click(screen.getByText('handoff'));
+    expect(createTopicForwardModalMock).toHaveBeenCalledTimes(2);
+    expect(cancelHeteroContinuationMock).not.toHaveBeenCalled();
+
+    const props = createTopicForwardModalMock.mock.calls[0][0];
+    expect(props.cancelSourceContinuation).toBe(true);
+    expect(props.topicId).toBe('source-topic');
   });
 
   it('renders the working-directory guide instead of the CLI install guide', () => {
@@ -483,7 +776,90 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('guide:codex:working_directory_not_found')).toBeInTheDocument();
   });
 
-  it('dismisses only the current heterogeneous error field', () => {
+  // Regression: a project conversation hides its directory picker, so when the
+  // run's `git worktree add` checkout was later removed, the topic kept spawning
+  // in the dead worktree and the card's only advice pointed at a hidden picker.
+  describe('deleted worktree recovery', () => {
+    const renderWorktreeError = () =>
+      render(
+        <ErrorMessageExtra
+          error={{ message: 'response.undefined' }}
+          data={{
+            error: {
+              body: {
+                agentType: 'claude-code',
+                code: HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
+                message: 'Working directory does not exist: /tmp/ibench-push',
+              },
+            } as any,
+            id: 'msg-dead-worktree',
+          }}
+        />,
+      );
+
+    beforeEach(() => {
+      conversationContextMock.agentId = 'agent-1';
+      conversationContextMock.topicId = 'topic-1';
+      displayMessageMock.set('msg-dead-worktree', { parentId: 'user-1' });
+      useChatStore.setState({
+        topicDetailMap: {
+          'topic-1': {
+            id: 'topic-1',
+            metadata: {
+              workingDirectoryConfig: {
+                git: { activeWorktree: '/tmp/ibench-push', isWorktree: true },
+                path: '/Users/me/ibench/landing',
+              },
+            },
+            projectWorkingDirectoryId: 'dir-1',
+            title: 'Topic',
+          } as any,
+        },
+      });
+    });
+
+    it('switches back to the source repo, then retries', async () => {
+      renderWorktreeError();
+
+      fireEvent.click(screen.getByText('reset-to:landing'));
+
+      await waitFor(() =>
+        expect(delAndRegenerateMessageMock).toHaveBeenCalledWith('msg-dead-worktree'),
+      );
+      expect(commitWorkingDirectoryMock).toHaveBeenCalledWith({ path: '/Users/me/ibench/landing' });
+      expect(commitWorkingDirectoryMock.mock.invocationCallOrder[0]).toBeLessThan(
+        delAndRegenerateMessageMock.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('does not retry into the dead worktree when the switch fails', async () => {
+      commitWorkingDirectoryMock.mockRejectedValue(new Error('offline'));
+      renderWorktreeError();
+
+      fireEvent.click(screen.getByText('reset-to:landing'));
+
+      await waitFor(() => expect(commitWorkingDirectoryMock).toHaveBeenCalled());
+      expect(delAndRegenerateMessageMock).not.toHaveBeenCalled();
+    });
+
+    it('offers no reset when the topic records no worktree', () => {
+      useChatStore.setState({
+        topicDetailMap: {
+          'topic-1': {
+            id: 'topic-1',
+            metadata: { workingDirectoryConfig: { path: '/Users/me/ibench/landing' } },
+            title: 'Topic',
+          } as any,
+        },
+      });
+      renderWorktreeError();
+
+      expect(screen.queryByText(/reset-to:/)).not.toBeInTheDocument();
+      expect(screen.getByText('guide-retry')).toBeInTheDocument();
+    });
+  });
+
+  it('dismisses only the current non-quota heterogeneous error field', () => {
     render(
       <ErrorMessageExtra
         error={{ message: 'response.undefined' }}
@@ -491,7 +867,7 @@ describe('ErrorMessageExtra', () => {
           error: {
             body: {
               agentType: 'claude-code',
-              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+              code: HeterogeneousAgentSessionErrorCode.Overloaded,
             },
           } as any,
           id: 'failed-step-2',
@@ -551,7 +927,48 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('Raw runtime error')).toBeInTheDocument();
-    expect(screen.getByText(/"detail": "raw detail"/)).toBeInTheDocument();
+    expect(getErrorDetails(/"detail": "raw detail"/)).toBeInTheDocument();
+  });
+
+  it('shows a JSON gateway detail as an object instead of a twice-escaped string', () => {
+    const raw = '{"error":"TIMEOUT","success":false}';
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.DeviceResponseTimeout' }}
+        data={{
+          error: {
+            body: { detail: raw },
+            message: raw,
+            type: ChatErrorType.DeviceResponseTimeout,
+          } as any,
+          id: 'msg-device-timeout',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('response.DeviceResponseTimeout')).toBeInTheDocument();
+    const details = getErrorDetails(/"error": "TIMEOUT"/).textContent ?? '';
+    expect(details).not.toContain('\\"');
+    expect(details).not.toContain('"message"');
+  });
+
+  it('keeps a truncated JSON gateway detail as the raw string', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.DeviceResponseTimeout' }}
+        data={{
+          error: {
+            body: { detail: '{"error":"TIMEOUT"' },
+            message: 'The device did not answer in time.',
+            type: ChatErrorType.DeviceResponseTimeout,
+          } as any,
+          id: 'msg-device-timeout-truncated',
+        }}
+      />,
+    );
+
+    expect(getErrorDetails(/"detail": "\{\\"error\\":\\"TIMEOUT\\""/)).toBeInTheDocument();
+    expect(getErrorDetails(/"message": "The device did not answer in time\."/)).toBeInTheDocument();
   });
 
   it('shows the localized empty-completion message while retaining the raw error in details', () => {
@@ -571,7 +988,7 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.getByText('response.ModelEmptyCompletion')).toBeInTheDocument();
     expect(
-      screen.getByText(/"message": "The model provider returned an empty completion\."/),
+      getErrorDetails(/"message": "The model provider returned an empty completion\."/),
     ).toBeInTheDocument();
   });
 
@@ -597,7 +1014,7 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.getByText('This request cost 5.98M credits.')).toBeInTheDocument();
     expect(
-      screen.getByText(/"message": "The model provider returned an empty completion\."/),
+      getErrorDetails(/"message": "The model provider returned an empty completion\."/),
     ).toBeInTheDocument();
   });
 

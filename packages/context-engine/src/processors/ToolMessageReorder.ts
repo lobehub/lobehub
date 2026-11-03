@@ -116,59 +116,30 @@ export class ToolMessageReorder extends BaseProcessor {
 
   /**
    * Reorder tool messages
+   *
+   * `tool_call_id` is provider-supplied and NOT unique across a conversation:
+   * Kimi (via zeabur / nvidia / moonshot) numbers calls per response, so every
+   * step calls `<tool>:0` (`<tool>_0` via giteeai), and OpenRouter DeepSeek
+   * reuses `call_0`. Results are therefore paired with the call they answer by
+   * position — the nearest preceding assistant that made that call — not by a
+   * conversation-wide id map, which handed step 1's result to step 1 only and
+   * replaced every later step's real result with `tool_result_missing`. Reused
+   * ids are then made unique in the request, since strict providers reject a
+   * conversation that repeats a tool call id.
    */
   private reorderToolMessages(messages: any[]): {
     removedInvalidTools: number;
     reorderedMessages: any[];
   } {
     let removedInvalidTools = 0;
-    const validToolCallIds = new Set<string>();
-    const toolMessages = new Map<string, any>();
+    // assistant message index → its tool calls with in-message duplicates removed
+    const callsByAssistant = new Map<number, any[]>();
+    // tool_call_id → indexes of the assistant messages that made that call
+    const callersById = new Map<string, number[]>();
 
-    // 1. First collect all valid tool_call_ids from assistant messages
-    for (const message of messages) {
-      if (message.role !== 'assistant' || !Array.isArray(message.tool_calls)) continue;
-
-      const seenToolCallIds = new Set<string>();
-      for (const toolCall of message.tool_calls) {
-        if (!toolCall?.id) continue;
-
-        if (seenToolCallIds.has(toolCall.id)) continue;
-
-        seenToolCallIds.add(toolCall.id);
-        validToolCallIds.add(toolCall.id);
-      }
-    }
-
-    // 2. Collect all valid tool messages
-    for (const message of messages) {
-      if (message.role !== 'tool') continue;
-
-      // Skip invalid tool messages
-      if (!message.tool_call_id || !validToolCallIds.has(message.tool_call_id)) {
-        removedInvalidTools++;
-        continue;
-      }
-
-      if (toolMessages.has(message.tool_call_id)) {
-        // Check if this tool message has already been added
-        removedInvalidTools++;
-        continue;
-      }
-
-      toolMessages.set(message.tool_call_id, message);
-    }
-
-    // 3. Reorder messages
-    const reorderedMessages: any[] = [];
-
+    // 1. Collect the tool calls of every assistant message
     for (const [index, message] of messages.entries()) {
-      if (message.role === 'tool') continue;
-
-      if (message.role !== 'assistant' || !Array.isArray(message.tool_calls)) {
-        reorderedMessages.push(message);
-        continue;
-      }
+      if (message.role !== 'assistant' || !Array.isArray(message.tool_calls)) continue;
 
       const seenToolCallIds = new Set<string>();
       const normalizedToolCalls = [];
@@ -180,17 +151,105 @@ export class ToolMessageReorder extends BaseProcessor {
 
         seenToolCallIds.add(toolCall.id);
         normalizedToolCalls.push(toolCall);
+
+        const callers = callersById.get(toolCall.id) ?? [];
+        callers.push(index);
+        callersById.set(toolCall.id, callers);
       }
 
+      callsByAssistant.set(index, normalizedToolCalls);
+    }
+
+    // 2. Attach each tool message to the call it answers
+    const resultKey = (assistantIndex: number, toolCallId: string) =>
+      `${assistantIndex}:${toolCallId}`;
+    const toolMessages = new Map<string, any>();
+
+    for (const [index, message] of messages.entries()) {
+      if (message.role !== 'tool') continue;
+
+      const callers = message.tool_call_id ? callersById.get(message.tool_call_id) : undefined;
+
+      // Skip invalid tool messages
+      if (!callers) {
+        removedInvalidTools++;
+        continue;
+      }
+
+      const isAnswered = (callerIndex: number) =>
+        toolMessages.has(resultKey(callerIndex, message.tool_call_id));
+      // A row's parentId names the assistant it answers when it is that raw
+      // row; otherwise a result answers the nearest call before it, and once
+      // that call has one this row is a duplicate. Only a result stored ahead
+      // of every call (out-of-order rows) falls forward to the first
+      // unanswered one.
+      const linkedCaller = message.parentId
+        ? callers.find((callerIndex) => messages[callerIndex].id === message.parentId)
+        : undefined;
+      const precedingCaller = callers.findLast((callerIndex) => callerIndex < index);
+      const expectedCaller = linkedCaller ?? precedingCaller;
+      const callerIndex =
+        expectedCaller === undefined
+          ? callers.find((callerIndex) => !isAnswered(callerIndex))
+          : isAnswered(expectedCaller)
+            ? undefined
+            : expectedCaller;
+
+      if (callerIndex === undefined) {
+        // Duplicate of a result the call already has
+        removedInvalidTools++;
+        continue;
+      }
+
+      toolMessages.set(resultKey(callerIndex, message.tool_call_id), message);
+    }
+
+    // 3. Reorder messages
+    const reorderedMessages: any[] = [];
+    const emittedToolCallIds = new Set<string>();
+
+    // Deterministic, so a request prefix stays byte-stable across steps
+    const uniqueToolCallId = (toolCallId: string) => {
+      if (!emittedToolCallIds.has(toolCallId)) return toolCallId;
+
+      let occurrence = 2;
+      let candidate = `${toolCallId}_${occurrence}`;
+      while (callersById.has(candidate) || emittedToolCallIds.has(candidate)) {
+        occurrence++;
+        candidate = `${toolCallId}_${occurrence}`;
+      }
+
+      return candidate;
+    };
+
+    for (const [index, message] of messages.entries()) {
+      if (message.role === 'tool') continue;
+
+      const normalizedToolCalls = callsByAssistant.get(index);
+
+      if (!normalizedToolCalls) {
+        reorderedMessages.push(message);
+        continue;
+      }
+
+      const requestToolCalls = normalizedToolCalls.map((toolCall) => {
+        const id = uniqueToolCallId(toolCall.id);
+        emittedToolCallIds.add(id);
+
+        return id === toolCall.id ? toolCall : { ...toolCall, id };
+      });
+
       reorderedMessages.push(
-        normalizedToolCalls.length === message.tool_calls.length
+        requestToolCalls.length === message.tool_calls.length &&
+          requestToolCalls.every((toolCall, i) => toolCall === message.tool_calls[i])
           ? message
-          : { ...message, tool_calls: normalizedToolCalls },
+          : { ...message, tool_calls: requestToolCalls },
       );
 
       // If assistant message with tool_calls, add corresponding tool messages
-      for (const toolCall of normalizedToolCalls) {
-        const matchedToolMessage = toolMessages.get(toolCall.id);
+      for (const [i, toolCall] of normalizedToolCalls.entries()) {
+        const requestToolCallId = requestToolCalls[i].id;
+        const matchedToolMessage = toolMessages.get(resultKey(index, toolCall.id));
 
         if (matchedToolMessage) {
           const pluginErrorMessage =
@@ -205,8 +264,8 @@ export class ToolMessageReorder extends BaseProcessor {
             content: hasUsableToolContent(matchedToolMessage.content, pluginErrorMessage)
               ? matchedToolMessage.content
               : pluginErrorMessage || syntheticToolFailureContent('tool_result_unusable', toolName),
+            tool_call_id: requestToolCallId,
           });
-          toolMessages.delete(toolCall.id);
           continue;
         }
 
@@ -218,7 +277,7 @@ export class ToolMessageReorder extends BaseProcessor {
           content: syntheticToolFailureContent('tool_result_missing', toolCall.function?.name),
           ...(toolCall.function?.name && { name: toolCall.function.name }),
           role: 'tool',
-          tool_call_id: toolCall.id,
+          tool_call_id: requestToolCallId,
         });
       }
     }

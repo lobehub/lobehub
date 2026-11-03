@@ -16,6 +16,9 @@ export const agentBrowserBinary: BinarySpec = defineCommandBinary('agent-browser
   description: 'Vercel agent-browser - headless browser automation for AI agents',
   manage: {
     githubRepo: 'vercel-labs/agent-browser',
+    // Keep in sync with AGENT_BROWSER_PINNED_VERSION in
+    // packages/builtin-skills/src/agent-browser/content.ts (the skill's npx fallback);
+    // its content.test.ts fails when they drift.
     pinnedVersion: '0.31.1',
     postInstall: [['install']],
     release: ({ arch, platform, version }) => {

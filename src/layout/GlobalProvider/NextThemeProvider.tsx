@@ -5,16 +5,17 @@ import { type ReactNode } from 'react';
 
 interface NextThemeProviderProps {
   children: ReactNode;
+  forcedTheme?: 'dark' | 'light';
 }
 
-export default function NextThemeProvider({ children }: NextThemeProviderProps) {
+export default function NextThemeProvider({ children, forcedTheme }: NextThemeProviderProps) {
   return (
     <NextThemesProvider
       disableTransitionOnChange
       enableSystem
       attribute="data-theme"
       defaultTheme="system"
-      forcedTheme={undefined}
+      forcedTheme={forcedTheme}
     >
       {children}
     </NextThemesProvider>

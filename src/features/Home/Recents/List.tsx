@@ -19,15 +19,13 @@ interface RecentsListProps {
   /** Thrown error from the recents SWR — surfaced as a failure state. */
   error?: unknown;
   onRetry?: () => void;
-  scope: string;
 }
 
-const RecentsList = memo<RecentsListProps>(({ error, onRetry, scope }) => {
+const RecentsList = memo<RecentsListProps>(({ error, onRetry }) => {
   const { t } = useTranslation('chat');
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
   const queryKey = createRecentQueryKey(recentPageSize + 1);
-  const query = useHomeStore(homeRecentSelectors.query(scope, queryKey));
-  const items = query?.items;
+  const items = useHomeStore(homeRecentSelectors.query(queryKey));
   const [drawerOpen, openDrawer, closeDrawer] = useHomeStore((s) => [
     s.allRecentsDrawerOpen,
     s.openAllRecentsDrawer,
@@ -46,18 +44,16 @@ const RecentsList = memo<RecentsListProps>(({ error, onRetry, scope }) => {
   return (
     <AsyncBoundary
       data={items}
-      error={query ? undefined : error}
+      error={items ? undefined : error}
       errorVariant={'inline'}
-      isLoading={!query && !error}
+      isLoading={!items && !error}
       loading={<SkeletonList rows={3} />}
       onRetry={onRetry}
     >
       <Flexbox gap={1}>
         {displayItems.map((item) => {
           const itemRef = `${item.type}:${item.id}` as const;
-          return (
-            <ConnectedItem itemRef={itemRef} key={itemRef} queryKey={queryKey} scope={scope} />
-          );
+          return <ConnectedItem itemRef={itemRef} key={itemRef} queryKey={queryKey} />;
         })}
         {hasMore && (
           <NavItem icon={MoreHorizontalIcon} title={t('input.more')} onClick={openDrawer} />

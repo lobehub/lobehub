@@ -2,10 +2,7 @@
 
 import { type AuthorizationPhase, type AuthorizationProgress } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Center, Flexbox, Icon, Input } from '@lobehub/ui';
-import { Alert, Button, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { cssVar } from 'antd-style';
+import { Alert, Button, Center, cssVar, Divider, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Cloud, LogOutIcon, Server, Undo2Icon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -577,7 +574,7 @@ const LoginStep = memo<LoginStepProps>(({ mode = 'onboarding', onBack, onNext })
           </Center>
         ) : (
           <>
-            <Divider>
+            <Divider style={{ marginBlock: 16 }}>
               <Text fontSize={12} type={'secondary'}>
                 OR
               </Text>

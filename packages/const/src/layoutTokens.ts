@@ -1,4 +1,5 @@
-import type { ActionIconProps, FormProps } from '@lobehub/ui';
+import type { ActionIconProps } from '@lobehub/ui';
+import type { FormProps } from '@lobehub/ui/form';
 
 export const HEADER_HEIGHT = 64;
 export const MOBILE_NABBAR_HEIGHT = 44;
@@ -17,6 +18,12 @@ export const CHAT_PORTAL_TASK_WIDTH = 640;
 /** For portal views that read as a document (acceptance report, evidence, screenshots) */
 export const CHAT_PORTAL_WIDE_WIDTH = 840;
 /**
+ * Drag ceiling for a side conversation hosted in the portal panel (e.g. the
+ * goal page's "ask about progress" chat). A conversation column must never
+ * grow into a work surface, so it caps far below the work-view 1280.
+ */
+export const CHAT_PORTAL_CONVERSATION_MAX_WIDTH = 560;
+/**
  * Width the conversation column needs to stay usable next to an open portal.
  * Below this the working sidebar yields, leaving conversation + portal.
  */
@@ -25,7 +32,7 @@ export const CONVERSATION_KEEP_WIDTH = 420;
 export const MARKET_SIDEBAR_WIDTH = 400;
 export const FOLDER_WIDTH = 270;
 export const MAX_WIDTH = 1024;
-export const FORM_STYLE: FormProps = {
+export const FORM_STYLE: Pick<FormProps, 'itemMinWidth' | 'style'> = {
   itemMinWidth: 'max(34%, 240px)',
   style: { maxWidth: MAX_WIDTH, width: '100%' },
 };

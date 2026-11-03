@@ -9,37 +9,40 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Center, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
 import { ClipboardCheckIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import { saveToast } from '@/store/utils/saveToast';
 
-import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
-import { taskDetailPath } from '../shared/taskDetailPath';
+import { useTaskStatusChange } from '../features/useTaskStatusChange';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
 import {
   buildKanbanColumns,
+  buildKanbanGroupQuery,
   canDropTaskIntoKanbanColumn,
+  findKanbanTask,
   getKanbanAssigneeUpdate,
+  getKanbanColumnCreateDefaults,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
 } from './kanbanBoardModel';
 import KanbanColumn, { COLUMN_I18N_KEYS, COLUMN_STATUS_ICON, COLUMN_WIDTH } from './KanbanColumn';
 import type { TaskListViewOptions } from './listViewOptions';
-import { HIDDEN_WHEN_COMPLETED_STATUSES } from './listViewOptions';
+import { getCompletedWithin, HIDDEN_WHEN_COMPLETED_STATUSES } from './listViewOptions';
 
 const styles = createStaticStyles(({ css }) => ({
   board: css`
@@ -56,43 +59,44 @@ const styles = createStaticStyles(({ css }) => ({
 interface KanbanBoardProps {
   /** When set, scopes the board (and task creation) to a single agent. */
   agentId?: string;
+  /** Overrides the generic "no tasks" copy with the collection's own line. */
+  emptyDescription?: string;
+  /**
+   * "My tasks" board: narrows the server groups to the caller's own slice of
+   * the workspace, matching what that tab's list view fetches — including its
+   * lack of an automation filter.
+   */
+  myTaskScope?: 'assigned' | 'created';
   options: TaskListViewOptions;
   projectId?: string;
   routeScope?: TaskItemRouteScope;
 }
 
-const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, routeScope }) => {
+const KanbanBoard = memo<KanbanBoardProps>((props) => {
+  const { agentId, emptyDescription, myTaskScope, options, projectId, routeScope } = props;
   const { t } = useTranslation('chat');
-  const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask } = usePermission('create_content');
   const groupBy = normalizeKanbanGroupBy(options.groupBy);
-  const excludeStatuses = options.hideCompleted ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
+  const excludeStatuses =
+    options.completedTasks === 'none' ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
-  const { error, isLoading, isQueryScopeCurrent, mutate } = useFetchTaskGroupList(
-    projectId
-      ? { automated: false, excludeStatuses, groupBy, projectId }
-      : agentId
-        ? { agentId, automated: false, excludeStatuses, groupBy }
-        : { allAgents: true, automated: false, excludeStatuses, groupBy },
-  );
-  // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
-  // per-key `data`. On a scope or visibility switch the store resets
-  // `taskGroups` + `isTaskGroupListInit` together (`scopeChangeResetState`)
-  // while SWR still holds cached `data` for the target key — keying `hasSettled`
-  // off SWR `data` flashed the "no tasks" empty board during the refetch.
-  // `isTaskGroupListInit` resets in lockstep with `taskGroups`, so the settled
-  // signal never disagrees with the emptiness signal.
-  const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
-
-  const taskGroups = useTaskStore(taskListSelectors.taskGroups);
-  const currentTaskGroups = useMemo(
-    () => (isQueryScopeCurrent ? taskGroups : []),
-    [isQueryScopeCurrent, taskGroups],
-  );
+  // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
+  // `queryKey` the groups are read by.
+  const { error, isLoading, mutate, queryKey } = useFetchTaskGroupList({
+    ...buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
+    completedWithin: getCompletedWithin(options),
+    includeArchived: options.showArchived,
+  });
+  // Each board query (scope, dimension, filters) is its own store entry, so the
+  // settled signal and the groups always describe the same board.
+  const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit(queryKey));
+  const currentTaskGroups = useTaskStore(taskListSelectors.taskGroups(queryKey));
   const updateTask = useTaskStore((s) => s.updateTask);
-  const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
+  const runTask = useTaskStore((s) => s.runTask);
+  const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const changeTaskStatus = useTaskStatusChange();
 
   const hiddenColumns = useGlobalStore(systemStatusSelectors.taskKanbanHiddenColumns);
   const hiddenPanelCollapsed = useGlobalStore(systemStatusSelectors.taskKanbanHiddenPanelCollapsed);
@@ -116,6 +120,37 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       setActiveTask(task ?? null);
     },
     [canEditTask],
+  );
+
+  /**
+   * Assign-then-run as one action: a failure toast's Retry repeats both steps,
+   * so retrying a failed assignment still starts the task.
+   */
+  const startTask = useCallback(
+    (task: TaskListItem, onAssigned?: () => void): Promise<void> => {
+      const start = async (afterAssign?: () => void): Promise<void> => {
+        const retry = () => {
+          start().catch(() => {});
+        };
+        const current =
+          findKanbanTask(
+            taskListSelectors.taskGroups(queryKey)(useTaskStore.getState()),
+            task.identifier,
+          ) ?? task;
+        if (!current.assigneeAgentId && !current.assigneeUserId && inboxAgentId) {
+          await updateTask(current.identifier, { assigneeAgentId: inboxAgentId }, { retry });
+          afterAssign?.();
+        }
+        try {
+          await runTask(current.identifier, undefined, { throwOnError: true });
+        } catch (error) {
+          saveToast(error, { retry, title: t('taskList.kanban.runFailed') });
+          throw error;
+        }
+      };
+      return start(onAssigned);
+    },
+    [inboxAgentId, queryKey, runTask, t, updateTask],
   );
 
   const handleDragEnd = useCallback(
@@ -143,41 +178,54 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       if ((groupBy === 'assignee' || groupBy === 'member') && !assigneeUpdate) return;
       if (groupBy === 'priority' && (task.priority ?? 0) === (patch.priority ?? 0)) return;
 
-      const prevGroups = useTaskStore.getState().taskGroups;
-      const nextGroups = moveTaskBetweenKanbanGroups(prevGroups, task, targetColumnKey, patch);
-      useTaskStore.setState({ taskGroups: nextGroups }, false, 'kanban/optimisticMove');
+      if (!queryKey) return;
+      // The move is idempotent, so the overlay stays correct when the status
+      // change also patches the card underneath it.
+      const move = useTaskStore.getState().internal_beginTaskGroupOptimistic(queryKey, (value) => ({
+        ...value,
+        groups: moveTaskBetweenKanbanGroups(value.groups, task, targetColumnKey, patch),
+      }));
 
       try {
-        if (groupBy === 'status' && column.targetStatus) {
-          await updateTaskStatus(task.identifier, column.targetStatus);
+        if (groupBy === 'status' && column.targetStatus === 'running') {
+          // Dropping into "In progress" starts the task, same as "Run now". The
+          // assignment refetches the groups (still backlog until the run
+          // starts); the overlay is rebased onto that refetch, so the card
+          // stays in "In progress".
+          await startTask(task);
+        } else if (groupBy === 'status' && column.targetStatus) {
+          const changed = await changeTaskStatus(task.identifier, column.targetStatus);
+          if (!changed) {
+            move.rollback();
+            return;
+          }
         } else if ((groupBy === 'assignee' || groupBy === 'member') && assigneeUpdate) {
           await updateTask(task.identifier, assigneeUpdate);
         } else if (groupBy === 'priority') {
           await updateTask(task.identifier, { priority: patch.priority ?? 0 });
         }
+        move.commit();
       } catch {
-        useTaskStore.setState({ taskGroups: prevGroups }, false, 'kanban/revertMove');
+        move.rollback();
+        // A failed start may already have persisted the fallback assignee.
+        if (column.targetStatus === 'running') void refreshTaskList();
       }
     },
-    [canEditTask, columns, groupBy, updateTask, updateTaskStatus],
+    [
+      canEditTask,
+      changeTaskStatus,
+      columns,
+      groupBy,
+      queryKey,
+      refreshTaskList,
+      startTask,
+      updateTask,
+    ],
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveTask(null);
   }, []);
-
-  const handleCreateTask = useCallback(() => {
-    if (!canEditTask) return;
-    createTaskModal({
-      agentId,
-      lockAssignee: !!agentId,
-      projectId,
-      onCreated: (task) => {
-        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined));
-      },
-      showInlineToggle: false,
-    });
-  }, [agentId, canEditTask, navigate, projectId]);
 
   const handleHideColumn = useCallback(
     (columnKey: string) => {
@@ -253,7 +301,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
 
   const emptyState = (
     <Center height={'80vh'} width={'100%'}>
-      <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
+      <Empty description={emptyDescription ?? t('taskList.empty')} icon={ClipboardCheckIcon} />
     </Center>
   );
 
@@ -268,24 +316,31 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       <Flexbox horizontal className={styles.board}>
         {visibleColumns.map((col) => {
           const group = currentTaskGroups.find((item) => item.key === col.key);
+          // "My tasks" offers no create entry (its list view has none either):
+          // a task created there carries neither the member assignment nor —
+          // under `created` — any guarantee it lands in the column it was
+          // started from.
+          const createDefaults = myTaskScope
+            ? undefined
+            : getKanbanColumnCreateDefaults(groupBy, col);
           const droppable =
             canEditTask &&
             col.droppable &&
             (!activeTask || canDropTaskIntoKanbanColumn(activeTask, groupBy, col));
           return (
             <KanbanColumn
+              agentId={agentId}
               columnKey={col.key}
+              createDefaults={canEditTask ? createDefaults : undefined}
               droppable={droppable}
               groupBy={groupBy}
               groupMeta={col.groupMeta}
               key={col.key}
+              projectId={projectId}
               routeScope={routeScope}
               tasks={(group?.tasks ?? []) as TaskListItem[]}
               total={group?.total ?? 0}
               onHide={groupBy === 'status' ? () => handleHideColumn(col.key) : undefined}
-              onCreate={
-                groupBy === 'status' && col.key === 'backlog' ? handleCreateTask : undefined
-              }
             />
           );
         })}
@@ -322,12 +377,12 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
   // undefined until the first fetch settles.
   return (
     <AsyncBoundary
-      data={(isQueryScopeCurrent && isTaskGroupListInit) || undefined}
+      data={isTaskGroupListInit || undefined}
       empty={emptyState}
       error={error}
       errorVariant={'block'}
       isEmpty={totalTasks === 0}
-      isLoading={isLoading || (!isQueryScopeCurrent && !error) || (!isTaskGroupListInit && !error)}
+      isLoading={isLoading || (!isTaskGroupListInit && !error)}
       loading={skeletonBoard}
       onRetry={() => mutate()}
     >

@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { PipelineContext } from '../../types';
 import { DiscordContextProvider } from '../DiscordContextProvider';
 
+const MENTION_SYNTAX =
+  '  <mention_syntax>To @-mention (notify) someone, write <@USER_ID> with their numeric Discord user id. A plain "@Name" is only text and notifies nobody. Mentions in incoming messages appear as "@Name (<@USER_ID>)": copy the <@USER_ID> part; the id of whoever wrote a message is the `id` on their <speaker> tag. Never invent an id; if you do not know it, write the name without "@".</mention_syntax>';
+
 describe('DiscordContextProvider', () => {
   const createContext = (messages: any[]): PipelineContext => ({
     initialState: { messages: [] },
@@ -38,6 +41,7 @@ describe('DiscordContextProvider', () => {
       expect(getInjectedContent(result, 1)).toBe(`<discord_context>
   <guild id="123456" />
   <channel id="789" name="general" type="0" topic="General discussion" />
+${MENTION_SYNTAX}
 </discord_context>`);
       expect(result.messages[2].content).toBe('Hello');
     });
@@ -57,6 +61,7 @@ describe('DiscordContextProvider', () => {
       expect(getInjectedContent(result)).toBe(`<discord_context>
   <guild id="123" name="My Server" />
   <channel id="789" name="dev" />
+${MENTION_SYNTAX}
 </discord_context>`);
     });
 
@@ -111,6 +116,7 @@ describe('DiscordContextProvider', () => {
       expect(result.messages).toHaveLength(2);
       expect(getInjectedContent(result)).toBe(`<discord_context>
   <guild id="123" name="Server" />
+${MENTION_SYNTAX}
 </discord_context>`);
     });
 
@@ -126,6 +132,7 @@ describe('DiscordContextProvider', () => {
       expect(result.messages).toHaveLength(2);
       expect(getInjectedContent(result)).toBe(`<discord_context>
   <channel id="789" name="general" type="0" />
+${MENTION_SYNTAX}
 </discord_context>`);
     });
 
@@ -144,6 +151,7 @@ describe('DiscordContextProvider', () => {
       expect(getInjectedContent(result)).toBe(`<discord_context>
   <guild id="123" />
   <channel id="789" />
+${MENTION_SYNTAX}
 </discord_context>`);
     });
   });
@@ -164,6 +172,7 @@ describe('DiscordContextProvider', () => {
       expect(getInjectedContent(result)).toBe(`<discord_context>
   <guild id="123" />
   <channel id="789" topic="Bug reports only" />
+${MENTION_SYNTAX}
 </discord_context>`);
     });
 
@@ -182,6 +191,7 @@ describe('DiscordContextProvider', () => {
       expect(getInjectedContent(result)).toBe(`<discord_context>
   <guild id="123" />
   <channel id="789" type="0" />
+${MENTION_SYNTAX}
 </discord_context>`);
     });
   });
@@ -215,6 +225,7 @@ describe('DiscordContextProvider', () => {
 <discord_context>
   <guild id="123" />
   <channel id="789" name="general" />
+${MENTION_SYNTAX}
 </discord_context>`);
     });
 

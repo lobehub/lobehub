@@ -85,6 +85,19 @@ describe('isCurrentReviewPrediction', () => {
     ).toBe(true);
   });
 
+  it('includes the exact configured-model prediction used by a Goal review', () => {
+    const prediction = {
+      id: 'goal-prediction',
+      model: 'gpt-4o',
+      provider: 'openai',
+      promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
+    };
+    expect(isCurrentReviewPrediction(prediction, current, new Set(['goal-prediction']))).toBe(true);
+    expect(isCurrentReviewPrediction(prediction, current, new Set(['another-prediction']))).toBe(
+      false,
+    );
+  });
+
   it('rejects rows from another model, provider, or prompt version', () => {
     expect(
       isCurrentReviewPrediction(

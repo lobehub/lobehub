@@ -40,6 +40,24 @@ describe('getFtsSearchConfig', () => {
     });
   });
 
+  it('accepts the lightweight pg_like provider', () => {
+    vi.stubEnv('FTS_SEARCH_PROVIDER', 'pg_like');
+
+    expect(getFtsSearchConfig().FTS_SEARCH_PROVIDER).toBe('pg_like');
+  });
+
+  it('lets distributions override the default provider without overriding an explicit value', () => {
+    vi.stubEnv('FTS_SEARCH_PROVIDER', undefined);
+    expect(getFtsSearchConfig({ defaultProvider: 'elasticsearch' }).FTS_SEARCH_PROVIDER).toBe(
+      'elasticsearch',
+    );
+
+    vi.stubEnv('FTS_SEARCH_PROVIDER', 'pg_like');
+    expect(getFtsSearchConfig({ defaultProvider: 'elasticsearch' }).FTS_SEARCH_PROVIDER).toBe(
+      'pg_like',
+    );
+  });
+
   it('rejects unsupported search backends', () => {
     vi.stubEnv('FTS_SEARCH_PROVIDER', 'opensearch');
 

@@ -131,7 +131,7 @@ export class ServerMessageTransport implements MessageTransport {
 
     if (!options?.flatten) return messages;
 
-    const { flatList } = parse(messages);
+    const { flatList } = parse(messages, undefined, { threadId: params?.threadId });
     return flatList;
   }
 
@@ -148,6 +148,9 @@ export class ServerMessageTransport implements MessageTransport {
   }
 
   async updateToolMessage(id: string, params: UpdateToolMessageInput): Promise<void> {
-    await this.messageModel.updateToolMessage(id, params);
+    const result = await this.messageModel.updateToolMessage(id, params);
+    if (!result.success) {
+      throw new Error('Failed to persist tool result');
+    }
   }
 }

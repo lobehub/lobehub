@@ -4,9 +4,6 @@ export default {
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
-  'features.agentProviderBinding.desc':
-    'Let supported local agents run on API instead of their subscription — through the LobeHub default provider or a configured API provider and model. Available for select agents on Desktop local execution.',
-  'features.agentProviderBinding.title': 'Agent Provider Binding',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
@@ -30,7 +27,13 @@ export default {
   'features.evalCapture.desc':
     'Adds a message action that captures a conversation turn — its prior context, input and the answer it produced — as an evaluation test case.',
   'features.evalCapture.title': 'Save a turn as an eval case',
+  'features.deviceTunnel.desc':
+    'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
+  'features.deviceTunnel.title': 'Remote Port Links',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
+  'features.goals.desc':
+    'Hand the agent a goal: it breaks the goal into tasks, tracks progress, and delivers the result for you to review.',
+  'features.goals.title': 'Goals',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
@@ -41,6 +44,9 @@ export default {
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.inputMarkdown.desc':
     'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
+  'features.integrations.desc':
+    'Show the Integrations settings page: connect the GitHub App so merged pull requests accept deliveries and failing checks or reviews reach the agent that opened them. Hidden by default.',
+  'features.integrations.title': 'Integrations',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
@@ -52,16 +58,17 @@ export default {
     'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
   'features.projects.title': 'Project Workspaces',
   'features.taskVerify.desc':
-    'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
-  'features.taskVerify.title': 'Task Delivery Acceptance',
+    'Add an Acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
+  'features.taskVerify.title': 'Acceptance',
   'features.selfLearning.desc':
-    'Show what each agent has learned from real practice — its rule base, which rules actually get used, and which layers are still blank.',
+    'Let every agent learn from your conversations in the background: it remembers facts, refines skills, collects lessons, and reviews its day each night. Rounds you send back become rules. Each nightly review covers at most 50 conversations. See it all under Memory → Self-evolving.',
   'features.selfLearning.title': 'Self-evolving',
-  'features.topicAcceptance.desc':
-    'Author a delivery checklist for the current topic right above the composer, so the conversation is held to standards you can edit any time.',
-  'features.topicAcceptance.title': 'Topic Acceptance',
+  'features.topicBugReport.desc':
+    'Adds Report Bug to the topic menu. Send the topic’s IDs, your app environment, and optional attachments to the LobeHub support team.',
+  'features.topicBugReport.title': 'Report Bug',
   'group.desktop': 'Desktop',
   'group.general': 'General',
+  'group.workspace': 'Workspace',
   'stage.alpha.desc':
     'Internal testing only. Not recommended for daily use yet — it may change or break at any time.',
   'stage.alpha.label': 'Alpha',

@@ -4,6 +4,7 @@ import type {
   ModelTokensUsage,
   ModelUsage,
 } from '@lobechat/types';
+import type OpenAI from 'openai';
 
 import type { ModelPricingContext } from './pricing';
 import type { ModelRuntimeDiagnostics } from './providerDiagnostics';
@@ -73,6 +74,10 @@ export interface OpenAIChatMessage {
   provider?: string;
   reasoning?: ModelReasoning;
   reasoning_content?: string;
+  /** Native tool output parts, including images and files, for Responses replay. */
+  responsesOutput?: OpenAI.Responses.ResponseCustomToolCallOutput['output'];
+  /** Tools introduced at this position in a Responses conversation. */
+  responsesTools?: OpenAI.Responses.Tool[];
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];
@@ -155,6 +160,8 @@ export interface ChatStreamPayload {
   reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   response_format?: ChatResponseFormat;
   responseMode?: 'stream' | 'json';
+  /** Native Responses tools, including namespaces and free-form custom tools. */
+  responsesTools?: OpenAI.Responses.Tool[];
   /**
    * @title Whether to enable streaming requests
    * @default true
@@ -274,6 +281,12 @@ export interface OnFinishData {
   finishReason?: string;
   grounding?: any;
   reasoning?: ModelReasoning;
+  /** Stable identities and terminal outcome for the provider attempt producing this result. */
+  routeAttempt?: {
+    attemptId: string;
+    outcome?: 'completed' | 'empty' | 'interrupted' | 'cancelled' | 'failed';
+    requestId: string;
+  };
   speed?: ModelPerformance;
   text: string;
   thinking?: string;

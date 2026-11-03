@@ -1,19 +1,16 @@
 import type { BuiltinSkill } from '@lobechat/types';
 
 import { toResourceMeta } from '../lobehub/helpers';
+import { TaskIdentifier, TaskManifest } from './manifest';
 import commands from './references/commands.md';
 import content from './SKILL.md';
 
-export const TaskIdentifier = 'task';
+export { TaskIdentifier };
 
 export const TaskSkill: BuiltinSkill = {
-  avatar: '📋',
+  ...TaskManifest,
   content,
-  description: 'Task management and execution — create, track, review, and complete tasks via CLI.',
-  identifier: TaskIdentifier,
-  name: 'task',
   resources: toResourceMeta({
     'references/commands': commands,
   }),
-  source: 'builtin',
 };

@@ -13,54 +13,60 @@ const messengerServiceMocks = vi.hoisted(() => ({
 }));
 const useSWRMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Select: ({
-    onChange,
-    options,
-    value,
-  }: {
-    onChange?: (value: string) => void;
-    options?: { label: string; value: string }[];
-    value?: string;
-  }) => (
-    <select value={value} onChange={(event) => onChange?.(event.target.value)}>
-      {options?.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  ),
-}));
-
-vi.mock('antd', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  QRCode: ({
-    'aria-label': ariaLabel,
-    bgColor,
-    color,
-    value,
-  }: {
-    'aria-label'?: string;
-    'bgColor'?: string;
-    'color'?: string;
-    'value': string;
-  }) => (
-    <span
-      aria-label={ariaLabel}
-      data-bg-color={bgColor}
-      data-color={color}
-      data-value={value}
-      role="img"
-    />
-  ),
-}));
-
-vi.mock('antd-style', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  createStaticStyles: () => ({ error: 'error', qrSlot: 'qrSlot', setup: 'setup' }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      QRCode: ({
+        'aria-label': ariaLabel,
+        bgColor,
+        color,
+        value,
+      }: {
+        'aria-label'?: string;
+        'bgColor'?: string;
+        'color'?: string;
+        'value': string;
+      }) => (
+        <span
+          aria-label={ariaLabel}
+          data-bg-color={bgColor}
+          data-color={color}
+          data-value={value}
+          role="img"
+        />
+      ),
+      Select: ({
+        onChange,
+        options,
+        value,
+      }: {
+        onChange?: (value: string) => void;
+        options?: { label: string; value: string }[];
+        value?: string;
+      }) => (
+        <select value={value} onChange={(event) => onChange?.(event.target.value)}>
+          {options?.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ),
+    }),
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      createStaticStyles: () => ({ error: 'error', qrSlot: 'qrSlot', setup: 'setup' }),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -98,7 +104,6 @@ vi.mock('react-i18next', () => ({
 vi.mock('swr', () => ({ default: useSWRMock }));
 
 vi.mock('@/components/AsyncError', () => ({ default: () => null }));
-vi.mock('@/components/NeuralNetworkLoading', () => ({ default: () => <span>Loading</span> }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
 }));

@@ -1,12 +1,13 @@
 'use client';
 
 import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
-import { Flexbox, Icon, Markdown, ScrollShadow } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Tabs, type TabsItem } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { cx, Divider, Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Tabs, type TabsItem } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp, History, Sparkles, Undo2 } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import StreamingMarkdown from '@/components/StreamingMarkdown';
@@ -16,42 +17,33 @@ import { shinyTextStyles } from '@/styles/loading';
 
 import { dataSelectors, useConversationStore } from '../../store';
 import CompressedMessageItem from './CompressedMessageItem';
-import { isCompressionSummaryGenerating, shouldShowCompressedGroupPanel } from './logic';
+import {
+  getCompressedTurnCount,
+  isCompressionSummaryGenerating,
+  shouldShowCompressedGroupPanel,
+} from './logic';
+import { useGroupPreferences } from './useGroupPreferences';
 
-const STORAGE_KEY_PREFIX = 'compressed-group-tab:';
-
-const getStoredTab = (id: string): string => {
-  if (typeof window === 'undefined') return 'summary';
-  return localStorage.getItem(`${STORAGE_KEY_PREFIX}${id}`) || 'summary';
-};
-
-const setStoredTab = (id: string, tab: string) => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(`${STORAGE_KEY_PREFIX}${id}`, tab);
-};
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    margin-block-end: 8px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  contentScroll: css`
-    max-height: min(40vh, 400px);
-  `,
-  header: css`
-    .ant-tabs-nav {
-      margin-block-end: 0;
-    }
-  `,
-  messagesContainer: css`
-    padding-block: 8px;
-  `,
-}));
+const styles = stylex.create({
+  collapsedButton: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderStyle: 'none',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorText },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: 'color 0.2s ease',
+  },
+  container: { marginBlockEnd: '8px' },
+  divider: { margin: '0' },
+  messagesContainer: { paddingBlock: '8px' },
+});
 
 export interface CompressedGroupMessageProps {
   id: string;
@@ -60,20 +52,9 @@ export interface CompressedGroupMessageProps {
 
 const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
-  const [activeTab, setActiveTab] = useState<string>(() => getStoredTab(id));
-
-  const handleTabChange = useCallback(
-    (tab: string) => {
-      setActiveTab(tab);
-      setStoredTab(id, tab);
-    },
-    [id],
-  );
+  const { activeTab, expanded, setActiveTab, toggleExpanded } = useGroupPreferences(id);
 
   const message = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
-  const toggleCompressedGroupExpanded = useConversationStore(
-    (s) => s.toggleCompressedGroupExpanded,
-  );
   const cancelCompression = useConversationStore((s) => s.cancelCompression);
 
   const handleCancelCompression = useCallback(() => {
@@ -86,7 +67,6 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
 
   const content = message?.content;
   const rawCompressedMessages = (message as UIChatMessage)?.compressedMessages;
-  const expanded = (message?.metadata as CompressionGroupMetadata)?.expanded ?? true;
 
   // Filter out placeholder assistant message (content === '...' without tools)
   const compressedMessages = useMemo(() => {
@@ -112,6 +92,19 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
     isGeneratingSummary,
   });
 
+  // How much history this group folded away, phrased as conversation turns.
+  const compressedTurnCount = useMemo(
+    () =>
+      getCompressedTurnCount({
+        compressedMessages,
+        compressedTurnCount: (message as UIChatMessage | undefined)?.compressedTurnCount,
+        originalMessageCount: (
+          (message as UIChatMessage | undefined)?.metadata as CompressionGroupMetadata | undefined
+        )?.originalMessageCount,
+      }),
+    [compressedMessages, message],
+  );
+
   const tabItems: TabsItem[] = useMemo(
     () => [
       {
@@ -125,59 +118,67 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
         label: t('compression.history'),
       },
     ],
-    [],
+    [t],
   );
 
+  if (isGeneratingSummary) {
+    return (
+      <Flexbox className={stylex.props(styles.container).className} gap={8}>
+        <Flexbox horizontal>
+          <span className={cx(shinyTextStyles.shinyText)}>{t('compressedHistory')}</span>
+        </Flexbox>
+        <StreamingMarkdown>{content}</StreamingMarkdown>
+      </Flexbox>
+    );
+  }
+
   return (
-    <Flexbox className={styles.container} gap={8}>
-      {isGeneratingSummary ? (
+    <Flexbox className={stylex.props(styles.container).className} gap={8}>
+      {expanded ? (
         <>
-          <Flexbox horizontal>
-            {/*<Icon icon={FolderArchive} size={14} />*/}
-            <span className={cx(isGeneratingSummary ? shinyTextStyles.shinyText : '')}>
-              {t('compressedHistory')}
-            </span>
+          <Flexbox horizontal align={'center'} distribution={'space-between'} width={'100%'}>
+            <Tabs
+              activeKey={activeTab}
+              items={tabItems}
+              variant={'rounded'}
+              onChange={setActiveTab}
+            />
+            <Flexbox horizontal gap={4}>
+              <ActionIcon
+                icon={Undo2}
+                size={'small'}
+                title={t('compression.cancel')}
+                onClick={handleCancelCompression}
+              />
+              <ActionIcon icon={ChevronUp} size={'small'} onClick={toggleExpanded} />
+            </Flexbox>
           </Flexbox>
-          <StreamingMarkdown>{content}</StreamingMarkdown>
+          {!showPanelContent ? null : activeTab === 'summary' ? (
+            <Markdown variant={'chat'}>{content}</Markdown>
+          ) : (
+            <Flexbox className={stylex.props(styles.messagesContainer).className} gap={4}>
+              {compressedMessages?.map((msg) => (
+                <CompressedMessageItem key={msg.id} message={msg} />
+              ))}
+            </Flexbox>
+          )}
         </>
       ) : (
-        <Flexbox horizontal align={'center'} distribution={'space-between'} width={'100%'}>
-          <Tabs
-            activeKey={isGeneratingSummary ? 'summary' : activeTab}
-            className={styles.header}
-            items={tabItems}
-            variant={'rounded'}
-            onChange={handleTabChange}
-          />
-          <Flexbox horizontal gap={4}>
-            <ActionIcon
-              icon={Undo2}
-              size={'small'}
-              title={t('compression.cancel')}
-              onClick={handleCancelCompression}
-            />
-            <ActionIcon
-              icon={expanded ? ChevronUp : ChevronDown}
-              size={'small'}
-              onClick={() => toggleCompressedGroupExpanded(id)}
-            />
-          </Flexbox>
-        </Flexbox>
-      )}
-      {!showPanelContent ? null : activeTab === 'summary' ? (
-        <ScrollShadow className={styles.contentScroll} offset={12} size={12}>
-          <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
-            {content}
-          </Markdown>
-        </ScrollShadow>
-      ) : (
-        <ScrollShadow className={styles.contentScroll} offset={12} size={12}>
-          <Flexbox className={styles.messagesContainer} gap={4}>
-            {compressedMessages?.map((msg) => (
-              <CompressedMessageItem key={msg.id} message={msg} />
-            ))}
-          </Flexbox>
-        </ScrollShadow>
+        <Divider className={stylex.props(styles.divider).className}>
+          <button
+            {...stylex.props(styles.collapsedButton)}
+            type={'button'}
+            onClick={toggleExpanded}
+          >
+            <Icon icon={History} size={14} />
+            <span>
+              {compressedTurnCount > 0
+                ? t('compression.collapsed', { turns: compressedTurnCount })
+                : t('compression.collapsedUnknown')}
+            </span>
+            <Icon icon={ChevronDown} size={14} />
+          </button>
+        </Divider>
       )}
     </Flexbox>
   );

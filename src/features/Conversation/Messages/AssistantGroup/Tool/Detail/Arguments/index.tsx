@@ -1,7 +1,4 @@
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { cssVar, cx } from 'antd-style';
+import { ActionIcon, cssVar, cx, Divider, Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { WrapText } from 'lucide-react';
 import { parse } from 'partial-json';
 import type { ReactNode } from 'react';

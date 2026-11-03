@@ -1,7 +1,7 @@
 'use client';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import { LayoutDashboardIcon, PanelRightOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +22,7 @@ const WorkingPanelToggle = memo(() => {
     isStatusInit,
   ] = useGlobalStore((s) => [
     systemStatusSelectors.showRightPanel(s),
-    s.status.showWorkingOverview ?? !s.status.showRightPanel,
+    systemStatusSelectors.showWorkingOverview(s),
     s.toggleRightPanel,
     s.openWorkingSidebar,
     s.updateSystemStatus,
@@ -39,18 +39,21 @@ const WorkingPanelToggle = memo(() => {
 
   return (
     <>
-      {!showWorkingOverview && (
-        <ActionIcon
-          aria-label={t('workingPanel.overview.title')}
-          icon={LayoutDashboardIcon}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-          title={t('workingPanel.overview.title')}
-          onClick={() => {
-            toggleRightPanel(false);
-            updateSystemStatus({ showWorkingOverview: true });
-          }}
-        />
-      )}
+      <ActionIcon
+        active={showWorkingOverview}
+        aria-label={t('workingPanel.overview.title')}
+        icon={LayoutDashboardIcon}
+        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        title={t('workingPanel.overview.title')}
+        onClick={() => {
+          if (showWorkingOverview) {
+            updateSystemStatus({ showWorkingOverview: false });
+            return;
+          }
+          toggleRightPanel(false);
+          updateSystemStatus({ showWorkingOverview: true });
+        }}
+      />
       {!showRightPanel && (
         <ActionIcon
           aria-label={t('workingPanel.title')}

@@ -1,5 +1,5 @@
 import type { MetricConfig, MetricKind, MetricSubjectType } from '@lobechat/types';
-import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
 import type { MetricItem, MetricPointItem, NewMetricPoint } from '../schemas/metric';
 import { metricPoints, metrics } from '../schemas/metric';
@@ -92,7 +92,14 @@ export class MetricModel {
       .returning();
     if (inserted) return inserted;
 
-    return this.findByKey(params.subjectType, params.subjectId, params.key);
+    const existing = await this.findByKey(params.subjectType, params.subjectId, params.key);
+    if (
+      existing?.subjectType === 'widget' &&
+      (existing.kind !== (params.kind ?? 'gauge') || existing.unit !== (params.unit ?? null))
+    ) {
+      throw new Error('Metric semantics changed: publish a new metric key');
+    }
+    return existing;
   };
 
   findById = async (id: string): Promise<MetricItem | undefined> => {
@@ -124,6 +131,33 @@ export class MetricModel {
     return row;
   };
 
+  /**
+   * The named series of one subject. Distinct from {@link findBySubject}: a
+   * caller that already knows which keys it needs — an acceptance contract
+   * naming a handful — must not materialize every series the subject has ever
+   * sampled, which nothing bounds.
+   */
+  findByKeys = async (
+    subjectType: MetricSubjectType,
+    subjectId: string,
+    keys: string[],
+  ): Promise<MetricItem[]> => {
+    if (keys.length === 0) return [];
+
+    return this.db
+      .select()
+      .from(metrics)
+      .where(
+        and(
+          eq(metrics.subjectType, subjectType),
+          eq(metrics.subjectId, subjectId),
+          inArray(metrics.key, keys),
+          this.seriesOwnership(),
+        ),
+      )
+      .orderBy(asc(metrics.key));
+  };
+
   findBySubject = async (
     subjectType: MetricSubjectType,
     subjectId: string,
@@ -142,6 +176,14 @@ export class MetricModel {
   };
 
   update = async (id: string, patch: MetricPatch): Promise<MetricItem | undefined> => {
+    const current = await this.findById(id);
+    if (
+      current?.subjectType === 'widget' &&
+      ((patch.kind !== undefined && patch.kind !== current.kind) ||
+        (patch.unit !== undefined && patch.unit !== current.unit) ||
+        patch.metadata !== undefined)
+    )
+      throw new Error('Widget metric semantics are immutable: publish a new metric key');
     const [row] = await this.db
       .update(metrics)
       .set(patch)
@@ -188,6 +230,70 @@ export class MetricModel {
     return row;
   };
 
+  /**
+   * Append many observations to one series in a single insert — for samplers
+   * that report a batch (e.g. a widget's time series). Same
+   * ownership rule as {@link addPoint}; returns the inserted count, 0 when the
+   * series is not the caller's.
+   */
+  addPoints = async (metricId: string, points: AddMetricPointParams[]): Promise<number> => {
+    if (points.length === 0) return 0;
+    const series = await this.findById(metricId);
+    if (!series) return 0;
+
+    const rows = await this.db
+      .insert(metricPoints)
+      .values(
+        points.map((point) =>
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { ...point, metricId },
+          ),
+        ),
+      )
+      .returning({ id: metricPoints.id });
+    return rows.length;
+  };
+
+  /**
+   * Append only the points newer than the series' latest stored point — for
+   * samplers that re-report a sliding window. The read and the insert run
+   * under a row lock on the series, so two writers reporting the same window
+   * at once serialize and the second one finds nothing new (no unique key on
+   * `(metric_id, observed_at)` to lean on). A timestamp repeated inside the
+   * batch is written once, keeping the value reported last. Returns the
+   * inserted count, 0 when the series is not the caller's.
+   */
+  appendNewerPoints = async (
+    metricId: string,
+    points: (AddMetricPointParams & { observedAt: Date })[],
+  ): Promise<number> => {
+    if (points.length === 0) return 0;
+
+    return this.db.transaction(async (tx) => {
+      const [series] = await tx
+        .select({ id: metrics.id })
+        .from(metrics)
+        .where(and(eq(metrics.id, metricId), this.seriesOwnership()))
+        .limit(1)
+        .for('update');
+      if (!series) return 0;
+
+      const scoped = new MetricModel(
+        tx as unknown as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      );
+      const latest = await scoped.latestPoint(metricId);
+      // Last value wins for a timestamp the batch reports more than once.
+      const byTime = new Map(points.map((p) => [p.observedAt.getTime(), p]));
+      const fresh = [...byTime.values()].filter(
+        (p) => !latest || p.observedAt.getTime() > latest.observedAt.getTime(),
+      );
+      return scoped.addPoints(metricId, fresh);
+    });
+  };
+
   /** The most recent observation — what numeric acceptance criteria read. */
   latestPoint = async (metricId: string): Promise<MetricPointItem | undefined> => {
     const [row] = await this.db
@@ -197,6 +303,61 @@ export class MetricModel {
       .orderBy(desc(metricPoints.observedAt))
       .limit(1);
     return row;
+  };
+
+  /**
+   * The latest observation of many series at once, keyed by metric id.
+   *
+   * `DISTINCT ON` keeps this one query however many series are asked for —
+   * the per-series `latestPoint` is fine for a single read, but a caller
+   * evaluating a whole acceptance contract would otherwise issue one query per
+   * clause and pace the connection pool with it.
+   */
+  /**
+   * The earliest observation of many series at once, keyed by metric id.
+   *
+   * The counterpart of {@link latestPointsByMetricIds}: progress baselines
+   * read "where the series started", and a windowed recent read silently
+   * rebases once history outgrows the window — the true first point has to
+   * travel separately.
+   */
+  firstPointsByMetricIds = async (metricIds: string[]): Promise<Map<string, MetricPointItem>> => {
+    if (metricIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([metricPoints.metricId])
+      .from(metricPoints)
+      .where(and(inArray(metricPoints.metricId, metricIds), this.pointOwnership()))
+      .orderBy(metricPoints.metricId, asc(metricPoints.observedAt));
+
+    return new Map(rows.map((row) => [row.metricId, row]));
+  };
+
+  /**
+   * The newest `limit` raw points of one series, ascending, without resolving
+   * the series row — for callers that already hold it and must not pay the
+   * per-series double read of {@link listPoints}.
+   */
+  recentPoints = async (metricId: string, limit: number): Promise<MetricPointItem[]> => {
+    const rows = await this.db
+      .select()
+      .from(metricPoints)
+      .where(and(eq(metricPoints.metricId, metricId), this.pointOwnership()))
+      .orderBy(desc(metricPoints.observedAt))
+      .limit(limit);
+    return rows.reverse();
+  };
+
+  latestPointsByMetricIds = async (metricIds: string[]): Promise<Map<string, MetricPointItem>> => {
+    if (metricIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([metricPoints.metricId])
+      .from(metricPoints)
+      .where(and(inArray(metricPoints.metricId, metricIds), this.pointOwnership()))
+      .orderBy(metricPoints.metricId, desc(metricPoints.observedAt));
+
+    return new Map(rows.map((row) => [row.metricId, row]));
   };
 
   /**

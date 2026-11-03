@@ -1,8 +1,7 @@
 'use client';
 
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,8 +28,9 @@ const APP_ENVIRONMENT_ITEMS = [
 const AppEnvironmentSection = memo(() => {
   const { t } = useTranslation('setting');
   const lobeEnv = window.lobeEnv;
+  const form = useForm();
 
-  const formItems: FormGroupItemType[] = [
+  const formItems: FormGroupItem[] = [
     {
       children: APP_ENVIRONMENT_ITEMS.map((item) => {
         const version = lobeEnv?.[item.versionKey];
@@ -58,6 +58,7 @@ const AppEnvironmentSection = memo(() => {
   return (
     <Form
       collapsible={false}
+      form={form}
       items={formItems}
       itemsType={'group'}
       variant={'filled'}

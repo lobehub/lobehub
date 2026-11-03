@@ -1,6 +1,8 @@
 import { ModelEmptyError } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { chatService } from '@/services/chat';
+
 import type { ChatStore } from '../../store';
 import { ClientLLMTransport } from './ClientLLMTransport';
 
@@ -104,6 +106,23 @@ const input = {
   provider: 'lobehub',
   state: {},
 } as any;
+
+describe('ClientLLMTransport.stream · conversation affinity', () => {
+  it('keeps compression requests scoped to the operation when the active topic changes', async () => {
+    const { store, transport } = createTransport();
+    store.activeTopicId = 'other-topic';
+    vi.mocked(chatService.getChatCompletion).mockClear();
+
+    for (let i = 0; i < 2; i++) {
+      await transport.stream({ messages: [], model: 'glm-5', provider: 'opencodecodingplan' });
+    }
+
+    expect(chatService.getChatCompletion).toHaveBeenCalledTimes(2);
+    for (const [, options] of vi.mocked(chatService.getChatCompletion).mock.calls) {
+      expect(options?.topicId).toBe('topic-1');
+    }
+  });
+});
 
 describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', () => {
   beforeEach(() => {

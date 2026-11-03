@@ -1,10 +1,9 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form } from '@lobehub/ui';
-import { Select, Skeleton } from '@lobehub/ui/base-ui';
-import { memo } from 'react';
+import { Flexbox, Select, Skeleton, Switch } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
@@ -15,14 +14,9 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { APPLICATION_DEFAULT_FONT, useSystemFontOptions } from '../useSystemFontOptions';
+import FallbackFontList from './FallbackFontList';
 import { FontSizeControl } from './FontSize';
-
-const wrapperCol = {
-  style: {
-    maxWidth: '100%',
-    width: '100%',
-  },
-};
+import { joinFontStack, parseFontStack } from './fontStack';
 
 const loadingTextStyle = { marginBlock: 1.5 };
 
@@ -33,27 +27,37 @@ const FontSettings = memo(() => {
     preferenceSelectors.terminalFontFamily(s),
   ]);
   const fontSize = useUserStore(userGeneralSettingsSelectors.fontSize);
+  const fontAntialiasing = useUserStore(userGeneralSettingsSelectors.fontAntialiasing);
   const updatePreference = useUserStore((s) => s.updatePreference);
   const setSettings = useUserStore((s) => s.setSettings);
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+  const form = useForm();
+
+  const interfaceStack = useMemo(() => parseFontStack(fontFamily), [fontFamily]);
+  const monospaceStack = useMemo(() => parseFontStack(monospaceFontFamily), [monospaceFontFamily]);
 
   const interfaceFonts = useSystemFontOptions({
     defaultLabel: t('settingAppearance.font.fontFamily.default'),
     enabled: isDesktop,
     unavailableLabel: (font) => t('settingAppearance.font.fontFamily.unavailable', { font }),
-    value: fontFamily,
+    values: interfaceStack,
   });
   const monospaceFonts = useSystemFontOptions({
     defaultLabel: t('settingAppearance.font.monospace.default'),
     enabled: isDesktop,
     monospaceOnly: true,
     unavailableLabel: (font) => t('settingAppearance.font.monospace.unavailable', { font }),
-    value: monospaceFontFamily,
+    values: monospaceStack,
   });
 
+  const saveInterfaceStack = (stack: string[]) =>
+    save(() => updatePreference({ fontFamily: joinFontStack(stack) }));
+  const saveMonospaceStack = (stack: string[]) =>
+    save(() => updatePreference({ terminalFontFamily: joinFontStack(stack) }));
+
   if (!isUserStateInit) {
-    const loadingFont: FormGroupItemType = {
+    const loadingFont: FormGroupItem = {
       children: [
         ...(isDesktop
           ? [
@@ -91,7 +95,6 @@ const FontSettings = memo(() => {
           label: <Skeleton height={16} style={loadingTextStyle} width={72} />,
           layout: 'vertical',
           minWidth: '100%',
-          wrapperCol,
         },
       ],
       extra: <Skeleton height={16} width={136} />,
@@ -102,6 +105,7 @@ const FontSettings = memo(() => {
       <Form
         aria-busy
         collapsible={false}
+        form={form}
         items={[loadingFont]}
         itemsType={'group'}
         variant={'filled'}
@@ -110,7 +114,7 @@ const FontSettings = memo(() => {
     );
   }
 
-  const font: FormGroupItemType = {
+  const font: FormGroupItem = {
     children: [
       ...(isDesktop
         ? [
@@ -122,12 +126,10 @@ const FontSettings = memo(() => {
                   loading={interfaceFonts.isLoading}
                   options={interfaceFonts.options}
                   style={{ width: 320 }}
-                  value={fontFamily || APPLICATION_DEFAULT_FONT}
+                  value={interfaceStack[0] || APPLICATION_DEFAULT_FONT}
                   onChange={(value: string) =>
-                    save(() =>
-                      updatePreference({
-                        fontFamily: value === APPLICATION_DEFAULT_FONT ? '' : value,
-                      }),
+                    saveInterfaceStack(
+                      value === APPLICATION_DEFAULT_FONT ? [] : [value, ...interfaceStack.slice(1)],
                     )
                   }
                 />
@@ -144,18 +146,35 @@ const FontSettings = memo(() => {
             },
             {
               children: (
+                <FallbackFontList
+                  ariaLabel={t('settingAppearance.font.fallback.title')}
+                  loading={interfaceFonts.isLoading}
+                  needPrimaryHint={t('settingAppearance.font.fallback.needPrimary')}
+                  options={interfaceFonts.options}
+                  stack={interfaceStack}
+                  onChange={saveInterfaceStack}
+                />
+              ),
+              desc: t('settingAppearance.font.fallback.desc'),
+              label: (
+                <SettingsSearchAnchor id={'appearance-font-fallback'}>
+                  {t('settingAppearance.font.fallback.title')}
+                </SettingsSearchAnchor>
+              ),
+              minWidth: undefined,
+            },
+            {
+              children: (
                 <Select
                   showSearch
                   aria-label={t('settingAppearance.font.monospace.title')}
                   loading={monospaceFonts.isLoading}
                   options={monospaceFonts.options}
                   style={{ width: 320 }}
-                  value={monospaceFontFamily || APPLICATION_DEFAULT_FONT}
+                  value={monospaceStack[0] || APPLICATION_DEFAULT_FONT}
                   onChange={(value: string) =>
-                    save(() =>
-                      updatePreference({
-                        terminalFontFamily: value === APPLICATION_DEFAULT_FONT ? '' : value,
-                      }),
+                    saveMonospaceStack(
+                      value === APPLICATION_DEFAULT_FONT ? [] : [value, ...monospaceStack.slice(1)],
                     )
                   }
                 />
@@ -170,8 +189,44 @@ const FontSettings = memo(() => {
               ),
               minWidth: undefined,
             },
+            {
+              children: (
+                <FallbackFontList
+                  ariaLabel={t('settingAppearance.font.monospaceFallback.title')}
+                  loading={monospaceFonts.isLoading}
+                  needPrimaryHint={t('settingAppearance.font.monospaceFallback.needPrimary')}
+                  options={monospaceFonts.options}
+                  stack={monospaceStack}
+                  onChange={saveMonospaceStack}
+                />
+              ),
+              desc: t('settingAppearance.font.monospaceFallback.desc'),
+              label: (
+                <SettingsSearchAnchor id={'appearance-monospace-font-fallback'}>
+                  {t('settingAppearance.font.monospaceFallback.title')}
+                </SettingsSearchAnchor>
+              ),
+              minWidth: undefined,
+            },
           ]
         : []),
+      {
+        children: (
+          <Switch
+            checked={fontAntialiasing}
+            onChange={(checked) =>
+              save(() => setSettings({ general: { fontAntialiasing: checked } }))
+            }
+          />
+        ),
+        desc: t('settingAppearance.font.antialiasing.desc'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-font-antialiasing'}>
+            {t('settingAppearance.font.antialiasing.title')}
+          </SettingsSearchAnchor>
+        ),
+        minWidth: undefined,
+      },
       {
         children: (
           <FontSizeControl
@@ -187,7 +242,6 @@ const FontSettings = memo(() => {
         ),
         layout: 'vertical',
         minWidth: '100%',
-        wrapperCol,
       },
     ],
     extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
@@ -197,6 +251,7 @@ const FontSettings = memo(() => {
   return (
     <Form
       collapsible={false}
+      form={form}
       items={[font]}
       itemsType={'group'}
       variant={'filled'}

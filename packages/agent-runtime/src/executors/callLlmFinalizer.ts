@@ -6,8 +6,8 @@ import type {
   ModelReasoning,
   ModelUsage,
 } from '@lobechat/types';
-import { serializePartsForStorage } from '@lobechat/utils/multimodalContent';
-import { sanitizeToolCallArguments } from '@lobechat/utils/sanitizeToolCallArguments';
+import { serializePartsForStorage } from '../utils/multimodalContent';
+import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 
 import { UsageCounter } from '../core/UsageCounter';
 import type { AgentRuntimeHost, LLMAttemptOutput } from '../transport';
@@ -44,6 +44,8 @@ interface CallLlmMessageMetadata extends MessageMetadata {
 
 interface FinalizeCallLlmTurnInput {
   assistantMessageId: string;
+  /** Provider attempts spent on this call, including retries. */
+  attempts?: number;
   events: AgentEvent[];
   host: AgentRuntimeHost;
   model: string;
@@ -65,16 +67,20 @@ const buildMessageMetadata = ({
   answerSalvagedFromReasoning,
   currentStepSpeed,
   currentStepUsage,
+  executionSite,
   finishType,
   hasContentImages,
   interruptedMidStream,
+  usageEstimated,
 }: {
   answerSalvagedFromReasoning?: boolean;
   currentStepSpeed?: ModelPerformance;
   currentStepUsage?: ModelUsage;
+  executionSite?: LLMAttemptOutput['executionSite'];
   finishType?: string;
   hasContentImages?: boolean;
   interruptedMidStream?: boolean;
+  usageEstimated?: boolean;
 }): CallLlmMessageMetadata | undefined => {
   const metadata: CallLlmMessageMetadata = {
     ...(currentStepUsage && { ...currentStepUsage, usage: currentStepUsage }),
@@ -83,6 +89,8 @@ const buildMessageMetadata = ({
     ...(hasContentImages && { isMultimodal: true }),
     ...(answerSalvagedFromReasoning && { answerSalvagedFromReasoning: true }),
     ...(interruptedMidStream && { interruptedMidStream: true }),
+    ...(executionSite && { executionSite }),
+    ...(usageEstimated && currentStepUsage && { usageEstimated: true }),
   };
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -148,7 +156,7 @@ const buildWorkAnchor = ({
 }): MessageMetadata['work'] => {
   if (output.toolsCalling.length > 0 || output.toolCalls.length > 0) return undefined;
 
-  const sourceMessageId = state.metadata?.sourceMessageId;
+  const sourceMessageId = state.origin?.sourceMessageId;
   const sourceMessageIndex =
     typeof sourceMessageId === 'string'
       ? state.messages.findIndex((message) => message.id === sourceMessageId)
@@ -182,8 +190,10 @@ const persistFinalMessage = async ({
     answerSalvagedFromReasoning: output.answerSalvagedFromReasoning,
     currentStepSpeed: output.speed,
     currentStepUsage: output.usage,
+    executionSite: output.executionSite,
     finishType: output.finishReason,
     hasContentImages: output.hasContentImages,
+    usageEstimated: output.usageEstimated,
   });
   const workAnchor = buildWorkAnchor({
     operationId: host.operation.operationId,
@@ -211,6 +221,7 @@ const persistFinalMessage = async ({
 
 const buildFinalState = ({
   assistantMessageId,
+  attempts,
   model,
   output,
   provider,
@@ -226,6 +237,9 @@ const buildFinalState = ({
   visibleOutputEndPublishedStepIndex?: number;
 }): AgentState => {
   const newState = structuredClone(state);
+  // Completion must retain the persisted assistant identity even when messages
+  // are rehydrated into display groups before the next runtime step.
+  newState.metadata = { ...newState.metadata, workAssistantMessageId: assistantMessageId };
   newState.toolCallRepeatGuard = toolCallRepeatGuard;
   newState.messages.push({
     content: output.content,
@@ -239,6 +253,7 @@ const buildFinalState = ({
 
   if (output.usage) {
     const { usage, cost } = UsageCounter.accumulateLLM({
+      apiCallsDelta: attempts ?? 1,
       cost: newState.cost,
       model,
       modelUsage: output.usage,
@@ -248,6 +263,11 @@ const buildFinalState = ({
 
     newState.usage = usage;
     if (cost) newState.cost = cost;
+  } else {
+    // A successful response may omit usage. The provider attempt still
+    // happened, so record it independently of token accumulation instead of
+    // dropping it from the LLM-call metric.
+    newState.usage = UsageCounter.accumulateAttempts(newState.usage, Math.max(attempts ?? 1, 1));
   }
 
   if (stepLabel || visibleOutputEndPublishedStepIndex !== undefined) {
@@ -265,6 +285,7 @@ const buildFinalState = ({
 
 export const finalizeCallLlmTurn = async ({
   assistantMessageId,
+  attempts,
   events,
   host,
   model,
@@ -276,20 +297,27 @@ export const finalizeCallLlmTurn = async ({
   stepLabel,
 }: FinalizeCallLlmTurnInput): Promise<InstructionExecutionResult> => {
   const { operation, transports } = host;
-  const toolCallRepeatGuard = updateToolCallRepeatGuard(
-    state.toolCallRepeatGuard,
-    output.toolsCalling,
-  );
-  const finalizedOutput =
-    output.finishReason !== 'abort' && hasRepeatedToolCall(toolCallRepeatGuard)
-      ? {
-          ...output,
-          content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
-          finishReason: 'tool_call_repeat_limit',
-          toolCalls: [],
-          toolsCalling: [],
-        }
-      : output;
+  const repeatCounts = updateToolCallRepeatGuard(state.toolCallRepeatGuard, output.toolsCalling);
+  const stoppedByRepeatLimit = output.finishReason !== 'abort' && hasRepeatedToolCall(repeatCounts);
+  // Carried on the state so the terminal reason can name this stop. Sticky once
+  // set: later turns emit no tool calls, and `updateToolCallRepeatGuard` resets
+  // its counts on those, which would otherwise erase the only trace of why the
+  // run ended.
+  const toolCallRepeatGuard = {
+    ...repeatCounts,
+    ...((stoppedByRepeatLimit || state.toolCallRepeatGuard?.stoppedByRepeatLimit) && {
+      stoppedByRepeatLimit: true,
+    }),
+  };
+  const finalizedOutput = stoppedByRepeatLimit
+    ? {
+        ...output,
+        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+        finishReason: 'tool_call_repeat_limit',
+        toolCalls: [],
+        toolsCalling: [],
+      }
+    : output;
 
   events.push({
     result: {
@@ -345,6 +373,7 @@ export const finalizeCallLlmTurn = async ({
   });
   const newState = buildFinalState({
     assistantMessageId,
+    attempts,
     finalReasoning,
     model,
     output: finalizedOutput,
@@ -419,7 +448,9 @@ export const persistInterruptedCallLlmResult = async ({
       metadata: buildMessageMetadata({
         currentStepSpeed: output.speed,
         currentStepUsage: output.usage,
+        executionSite: output.executionSite,
         interruptedMidStream: true,
+        usageEstimated: output.usageEstimated,
       }),
       reasoning: output.thinkingContent ? { content: output.thinkingContent } : undefined,
       tools: sanitizePersistedTools(output.toolsCalling),

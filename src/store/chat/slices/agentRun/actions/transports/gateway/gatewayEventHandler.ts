@@ -2,6 +2,9 @@ import type {
   AgentInterventionRequestData,
   AgentInterventionResponseData,
   AgentStreamEvent,
+  LlmCancelData,
+  LlmExecuteData,
+  MessagePatchData,
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
@@ -11,15 +14,16 @@ import type {
   ToolStartData,
   ToolStateChunkData,
 } from '@lobechat/agent-gateway-client';
-import type {
-  BuiltinToolResult,
-  ChatMessageError,
-  ConversationContext,
-  UIChatMessage,
-} from '@lobechat/types';
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { isSessionTerminalEvent } from '@lobechat/agent-gateway-client';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
+import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
+import type { BuiltinToolResult, ConversationContext, UIChatMessage } from '@lobechat/types';
+import { isClientLlmWaitableError } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
+import { readConversationMessages } from '@/helpers/conversationMessageRead';
+import { llmRelayExecutor } from '@/services/llmRelay';
+import type { RelayProtocolChunk } from '@/services/llmRelay/protocolChunks';
 import { messageService } from '@/services/message';
 import { didToolMutateWorkView, workService } from '@/services/work';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
@@ -33,19 +37,13 @@ import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-// `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
-// cancel and a deferred-tool park. These must NOT mark the topic unread, and
-// must take the non-success branch in `onSessionComplete` so the run clears
-// back to 'active' rather than persisting as an unread completion.
-const NON_COMPLETION_RUNTIME_END_REASONS = new Set(['interrupted', 'waiting_for_async_tool']);
-
-/**
- * Whether an `agent_runtime_end` event represents a clean completion (vs. a
- * cancel / park). A clean completion is the only ending that should surface an
- * unread badge.
- */
-export const isCompletedRuntimeEnd = (reason?: string | null): boolean =>
-  !NON_COMPLETION_RUNTIME_END_REASONS.has(reason ?? '');
+import { applyMessagePatch } from './messagePatch';
+import {
+  findTerminalAssistantError,
+  isCompletedRuntimeEnd,
+  resolveRuntimeEndStatus,
+} from './runtimeEndReason';
+import { applyStepMetrics } from './stepMetrics';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
@@ -62,6 +60,14 @@ const loadGetExecutor = async () => {
  * Fetch messages from DB and replace them in the chat store's dbMessagesMap.
  * This updates the ConversationArea component via React subscription:
  *   dbMessagesMap → ConversationArea (messages prop) → ConversationStore → UI
+ *
+ * `snapshotGeneration` drops a fetch that lost the race against a newer
+ * snapshot on the same handler (unqueued `step_start` vs in-flight `tool_end`).
+ * Last-write-wins would otherwise paint the older list over the next step.
+ *
+ * A dropped fetch returns `undefined` so callers that resolve an assistant id
+ * from the result (hetero / old-server `stream_start`) keep the current id
+ * instead of steering later chunks onto a row the store no longer has.
  */
 const fetchAndReplaceMessages = async (
   get: () => ChatStore,
@@ -75,12 +81,15 @@ const fetchAndReplaceMessages = async (
      * agent_runtime_end refetch recomputes them for real.
      */
     skipWorks?: boolean;
+    snapshotGeneration?: { current: number };
   },
-) => {
+): Promise<UIChatMessage[] | undefined> => {
   const skipWorks = options?.skipWorks;
-  const messages = await messageService.getMessages(
-    skipWorks ? { ...context, skipWorks } : context,
-  );
+  const snapshotGeneration = options?.snapshotGeneration;
+  const started = snapshotGeneration?.current;
+  const messages = await readConversationMessages(skipWorks ? { ...context, skipWorks } : context);
+  if (snapshotGeneration && snapshotGeneration.current !== started) return undefined;
+  if (snapshotGeneration) snapshotGeneration.current += 1;
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
   return messages;
 };
@@ -263,111 +272,6 @@ const findNextAssistantMessageId = (
   }
 };
 
-const isErrorType = (value: unknown): value is ChatMessageError['type'] =>
-  typeof value === 'string' || typeof value === 'number';
-
-const getMessageFromErrorData = (data: unknown): string | undefined => {
-  if (!isRecord(data)) return undefined;
-
-  const message = pickNonEmptyString(data.message);
-  if (message) return message;
-
-  const error = data.error;
-  const errorString = pickNonEmptyString(error);
-  if (errorString) return errorString;
-  if (isRecord(error)) {
-    const errorMessage = pickNonEmptyString(error.message);
-    if (errorMessage) return errorMessage;
-
-    const nestedError = error.error;
-    if (isRecord(nestedError)) {
-      const nestedMessage = pickNonEmptyString(nestedError.message);
-      if (nestedMessage) return nestedMessage;
-    }
-  }
-
-  const responseBody = data._responseBody;
-  const responseBodyMessage = getMessageFromErrorData(responseBody);
-  if (responseBodyMessage) return responseBodyMessage;
-
-  const body = data.body;
-  if (isRecord(body)) {
-    const bodyMessage = pickNonEmptyString(body.message);
-    if (bodyMessage) return bodyMessage;
-  }
-};
-
-const mergeGatewayPayloadError = (
-  sourceBody: Record<string, unknown>,
-  payloadError: unknown,
-): Record<string, unknown> => {
-  if (payloadError === undefined) return sourceBody;
-  if (!('error' in sourceBody)) return { ...sourceBody, error: payloadError };
-  if (isRecord(sourceBody.error) && isRecord(payloadError)) {
-    return { ...sourceBody, error: { ...payloadError, ...sourceBody.error } };
-  }
-  return sourceBody;
-};
-
-const buildGatewayRuntimeErrorBody = (
-  data: Record<string, unknown>,
-  message: string,
-): Record<string, unknown> => {
-  const body = toRecord(data.body);
-  const responseBody = toRecord(data._responseBody);
-  const errorBody = toRecord(data.error);
-  const sourceBody = body ?? responseBody ?? errorBody ?? {};
-  const shouldMergePayloadError = body === undefined && data._responseBody !== undefined;
-  const mergedBody = shouldMergePayloadError
-    ? mergeGatewayPayloadError(sourceBody, data.error)
-    : sourceBody;
-
-  return {
-    ...mergedBody,
-    ...(data.budget === undefined || 'budget' in mergedBody ? {} : { budget: data.budget }),
-    ...(typeof data.provider === 'string' && !('provider' in mergedBody)
-      ? { provider: data.provider }
-      : {}),
-    ...('message' in mergedBody ? {} : { message }),
-  };
-};
-
-const toChatMessageError = (data: unknown): ChatMessageError => {
-  if (isRecord(data) && isErrorType(data.type)) {
-    const message =
-      typeof data.message === 'string' && data.message
-        ? data.message
-        : getMessageFromErrorData({ body: data.body });
-
-    return {
-      ...data,
-      ...(message ? { message } : {}),
-      type: data.type,
-    };
-  }
-
-  // Gateway realtime error events can carry the model-runtime payload shape
-  // (`errorType` + `error`) before the terminal DB message is refreshed. Treat
-  // it as the same semantic error instead of falling back to AgentRuntimeError.
-  if (isRecord(data) && isErrorType(data.errorType)) {
-    const message = getMessageFromErrorData(data) || String(data.errorType);
-
-    return {
-      body: buildGatewayRuntimeErrorBody(data, message),
-      message,
-      type: data.errorType,
-    };
-  }
-
-  const message = getMessageFromErrorData(data) || 'Unknown error';
-
-  return {
-    body: { message },
-    message,
-    type: AgentRuntimeErrorType.AgentRuntimeError,
-  };
-};
-
 /**
  * Creates a handler function that processes Agent Gateway events
  * and maps them to the chat store's message update actions.
@@ -453,6 +357,7 @@ export const createGatewayEventHandler = (
   // NOT reset on stream boundaries — a seq ≤ these is a redelivered duplicate.
   let lastTextSnapshotSeq = 0;
   let lastReasoningSnapshotSeq = 0;
+  let lastMessagePatchRevision = 0;
   const latestToolStateByCallId = new Map<string, ToolStateChunkData & { operationId: string }>();
   const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
@@ -492,12 +397,34 @@ export const createGatewayEventHandler = (
     reasoningOperationId = undefined;
   };
 
+  // Reply of the relayed LLM attempt this tab is executing (`llm_execute`),
+  // rendered from the local model output instead of the server's echo. Reset
+  // per call id: a re-dispatched attempt starts its reply over.
+  let relayRender:
+    { callId: string; content: string; messageId: string; reasoning: string } | undefined;
+
   // Sequential processing queue — ensures stream_chunk waits for stream_start's fetch
   let processingChain: Promise<void> = Promise.resolve();
 
   const enqueue = (fn: () => Promise<void> | void): Promise<void> => {
     processingChain = processingChain.then(fn, fn);
     return processingChain;
+  };
+
+  // Bumped on every snapshot this handler applies. `step_start` is not queued,
+  // so an earlier `tool_end` getMessages can still resolve after it and would
+  // otherwise last-write-wins the older list over the next step.
+  const snapshotGeneration = { current: 0 };
+
+  const refreshMessagesFromDb = (options?: { skipWorks?: boolean }) =>
+    fetchAndReplaceMessages(get, context, { ...options, snapshotGeneration });
+
+  const applyPushedSnapshot = (
+    messages: UIChatMessage[],
+    params: { action?: string; preserveWorks?: boolean },
+  ) => {
+    snapshotGeneration.current += 1;
+    get().replaceMessages(messages, { context, ...params });
   };
 
   const writeTopicStatus = (status: 'running' | 'waitingForHuman') => {
@@ -602,7 +529,7 @@ export const createGatewayEventHandler = (
     const bootstrapPromise = enqueue(async () => {
       // A preceding queued tools_calling handler may have brought the row in.
       if (!getToolMessageByCallId(data.toolCallId)) {
-        await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+        await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
       }
       reconciled = applyLatestToolState(data.toolCallId, true);
     });
@@ -625,6 +552,55 @@ export const createGatewayEventHandler = (
     toolStateBootstrapPromiseByCallId.set(data.toolCallId, trackedBootstrapPromise);
   };
 
+  /**
+   * Optimistic render of a relayed attempt this tab executes: the local model's
+   * text and reasoning land on the step's assistant message as they are
+   * produced, and the server's echo of the same output (`relayCallId`) is
+   * skipped. Tool calls, `stream_end` and the step's message patch still come
+   * from the server, so its final state overrides what was rendered here.
+   */
+  const applyLocalRelayOutput = (call: LlmExecuteData, chunk: RelayProtocolChunk) => {
+    const messageId = call.assistantMessageId;
+    if (!messageId || terminalState) return;
+    if (chunk.type !== 'text' && chunk.type !== 'reasoning') return;
+    if (typeof chunk.data !== 'string' || !chunk.data) return;
+
+    if (relayRender?.callId !== call.callId) {
+      relayRender = { callId: call.callId, content: '', messageId, reasoning: '' };
+    }
+    const isCurrent = messageId === currentAssistantMessageId;
+    hasStreamedContent = true;
+
+    if (chunk.type === 'text') {
+      relayRender.content += chunk.data;
+      if (isCurrent) {
+        endReasoningIfNeeded();
+        accumulatedContent = relayRender.content;
+      }
+      // The whole reply so far, not the delta: a chunk that raced ahead of
+      // `stream_start` (the message shell not in the store yet) is not lost.
+      get().internal_dispatchMessage(
+        { id: messageId, type: 'updateMessage', value: { content: relayRender.content } },
+        dispatchContext,
+      );
+      return;
+    }
+
+    relayRender.reasoning += chunk.data;
+    if (isCurrent) {
+      startReasoningIfNeeded();
+      accumulatedReasoning = relayRender.reasoning;
+    }
+    get().internal_dispatchMessage(
+      {
+        id: messageId,
+        type: 'updateMessage',
+        value: { reasoning: { content: relayRender.reasoning } },
+      },
+      dispatchContext,
+    );
+  };
+
   return (event: AgentStreamEvent) => {
     if (terminalState) return;
 
@@ -640,8 +616,12 @@ export const createGatewayEventHandler = (
       return;
     }
 
-    if (event.type === 'agent_runtime_end' || event.type === 'error') {
+    // A parked LLM call's error is not terminal: the run streams on in this
+    // same session once a client resumes it.
+    if (isSessionTerminalEvent(event)) {
       terminalState = event.type === 'error' ? 'error' : 'completed';
+      // A relayed attempt this tab still runs for the run is moot now.
+      llmRelayExecutor.cancelOperation(event.operationId || gatewayOperationId);
     }
 
     switch (event.type) {
@@ -695,9 +675,7 @@ export const createGatewayEventHandler = (
                 // Older servers send only `{ id }` — fall back to a DB read.
                 // The row is inserted before stream_start is published, so the
                 // fetch is guaranteed to bring it into the store.
-                await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(
-                  console.error,
-                );
+                await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
               }
             }
           }
@@ -708,9 +686,37 @@ export const createGatewayEventHandler = (
           // current id.
           endReasoningIfNeeded();
 
-          // Reset accumulators for the new stream
-          accumulatedContent = '';
-          accumulatedReasoning = '';
+          // Reset accumulators for the new stream — unless this tab already
+          // rendered the step's relayed reply locally ahead of `stream_start`.
+          const localRelay =
+            relayRender && relayRender.messageId === currentAssistantMessageId
+              ? relayRender
+              : undefined;
+          accumulatedContent = localRelay?.content ?? '';
+          accumulatedReasoning = localRelay?.reasoning ?? '';
+          // Output that raced ahead of the shell inserted above was dispatched
+          // to a missing id (a no-op), and the server echo of it is skipped:
+          // put it on the message now.
+          if (localRelay?.content) {
+            get().internal_dispatchMessage(
+              {
+                id: localRelay.messageId,
+                type: 'updateMessage',
+                value: { content: localRelay.content },
+              },
+              dispatchContext,
+            );
+          }
+          if (localRelay?.reasoning) {
+            get().internal_dispatchMessage(
+              {
+                id: localRelay.messageId,
+                type: 'updateMessage',
+                value: { reasoning: { content: localRelay.reasoning } },
+              },
+              dispatchContext,
+            );
+          }
           get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
 
           // Native gateway streams carry `assistantMessage.id` directly on
@@ -719,14 +725,14 @@ export const createGatewayEventHandler = (
           // is what un-blocks the enqueue chain so live chunks can land
           // mid-stream.
           //
-          // Hetero CLI adapters (Claude Code / Codex) never set
-          // `assistantMessage.id` on stream_start, so the DB read stays
-          // mandatory for them — it (a) pulls the executor-created
-          // placeholder into `dbMessagesMap` so subsequent chunks can
-          // dispatch to it, and (b) resolves the next-step assistant id for
-          // the `newStep` fallback.
+          // Server-ingested hetero runs get `assistantMessage.id` stamped at
+          // publish; desktop-local hetero steps and older servers send none,
+          // so the DB read stays mandatory for them — it (a) pulls the
+          // executor-created placeholder into `dbMessagesMap` for later
+          // chunks, and (b) resolves the `newStep` fallback, which only knows
+          // "the assistant after the current one" (wrong for a replay).
           if (!newAssistantMessageId) {
-            const messages = await fetchAndReplaceMessages(get, context, {
+            const messages = await refreshMessagesFromDb({
               skipWorks: true,
             }).catch((error) => {
               console.error(error);
@@ -770,6 +776,14 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const data = event.data as StreamChunkData | undefined;
           if (!data) return;
+
+          // Echo of a relayed attempt this tab ran: already rendered locally.
+          if (
+            (data.chunkType === 'text' || data.chunkType === 'reasoning') &&
+            llmRelayExecutor.ownsCall(data.relayCallId)
+          ) {
+            return;
+          }
 
           if (data.chunkType === 'text' && data.content) {
             // `lh hetero exec` coalesces main-agent text into full-text
@@ -870,7 +884,7 @@ export const createGatewayEventHandler = (
             // lands — a fire-and-forget fetch would let the next event overtake
             // it and dispatch onto a message the store doesn't have yet.
             if ((data as any).toolMessageIds) {
-              await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+              await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
             }
           }
         });
@@ -959,7 +973,7 @@ export const createGatewayEventHandler = (
         // both the inline tool and global InterventionBar see `pending`, even
         // when this request raced ahead of the provider's tools_calling event.
         enqueue(async () => {
-          await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+          await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
           hasStreamedContent = true;
         });
         break;
@@ -1018,7 +1032,7 @@ export const createGatewayEventHandler = (
           // Successful Web submits, explicit cancellation, producer timeout,
           // and session teardown all converge on the durable tool row before
           // this refresh. Do not infer the terminal state from identifier.
-          await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+          await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
           if (pendingInterventionToolCallIds.size === 0) writeTopicStatus('running');
         });
         break;
@@ -1026,18 +1040,29 @@ export const createGatewayEventHandler = (
 
       case 'step_start': {
         const data = event.data as {
+          messageRevision?: number;
           pendingToolsCalling?: unknown[];
           phase?: string;
           requiresApproval?: boolean;
           uiMessages?: UIChatMessage[];
         };
 
-        // The server's stepIndex is the authoritative step counter — mirror it
-        // onto the operation so step-based UI (OpStatusTray) stays correct
-        // even across page-refresh reconnects.
-        if (typeof event.stepIndex === 'number') {
-          get().updateOperationMetadata(operationId, { stepCount: event.stepIndex + 1 });
+        if (
+          typeof data?.messageRevision === 'number' &&
+          data.messageRevision !== lastMessagePatchRevision
+        ) {
+          enqueue(async () => {
+            const messages = await refreshMessagesFromDb({ skipWorks: true }).catch((error) => {
+              console.error(error);
+              return undefined;
+            });
+            if (messages) lastMessagePatchRevision = data.messageRevision!;
+          });
         }
+
+        // `stepIndex` is the execution counter; `llmCalls` is the user-facing metric.
+        const update = get().updateOperationMetadata;
+        applyStepMetrics(update, operationId, event.stepIndex, (event.data as any)?.llmCalls);
 
         // Server attaches the canonical UIChatMessage[] snapshot at every
         // step boundary (agent-runtime #15152). Use it as Source of Truth
@@ -1047,9 +1072,8 @@ export const createGatewayEventHandler = (
         if (Array.isArray(data?.uiMessages)) {
           // step_start snapshots are fetched with `skipWorks` server-side —
           // graft the already-rendered works back so chips don't flicker.
-          get().replaceMessages(data.uiMessages, {
+          applyPushedSnapshot(data.uiMessages, {
             action: 'gateway/step_start',
-            context,
             preserveWorks: true,
           });
         }
@@ -1061,6 +1085,32 @@ export const createGatewayEventHandler = (
           writeTopicStatus('waitingForHuman');
         }
 
+        break;
+      }
+
+      case 'message_patch': {
+        const patch = event.data as MessagePatchData;
+        if (patch.revision <= lastMessagePatchRevision) break;
+
+        const current = get().dbMessagesMap[messageMapKey(context)] ?? [];
+        const next =
+          patch.revision === lastMessagePatchRevision + 1
+            ? applyMessagePatch(current, patch)
+            : undefined;
+
+        if (next) {
+          applyPushedSnapshot(next, { action: 'gateway/message_patch', preserveWorks: true });
+          lastMessagePatchRevision = patch.revision;
+          hasStreamedContent = true;
+        } else {
+          enqueue(async () => {
+            const messages = await refreshMessagesFromDb({ skipWorks: true }).catch((error) => {
+              console.error(error);
+              return undefined;
+            });
+            if (messages) lastMessagePatchRevision = patch.revision;
+          });
+        }
         break;
       }
 
@@ -1082,6 +1132,29 @@ export const createGatewayEventHandler = (
         break;
       }
 
+      case 'llm_execute': {
+        // The server hands this tab one LLM attempt for a provider only this
+        // device can reach. Started right away, not queued: the queue may be
+        // waiting on a DB read, and the claim deadline is 15 s. Its output is
+        // rendered through the queue so it keeps its order with stream_start.
+        const data = event.data as LlmExecuteData | undefined;
+        if (!data?.callId || context.agentShareId) break;
+        void llmRelayExecutor.execute(data, {
+          // A sub-agent's call rides this run's channel: this run ending ends it.
+          channelOperationId: event.operationId || gatewayOperationId,
+          onOutput: (chunk) => {
+            enqueue(() => applyLocalRelayOutput(data, chunk));
+          },
+        });
+        break;
+      }
+
+      case 'llm_cancel': {
+        const data = event.data as LlmCancelData | undefined;
+        if (data?.callId) llmRelayExecutor.cancel(data);
+        break;
+      }
+
       case 'tool_end': {
         const data = event.data as ToolEndData | undefined;
         const completedToolCallId =
@@ -1094,7 +1167,7 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const maybeRefresh = shouldSkipMessageFetch(event, runtimeType)
             ? Promise.resolve()
-            : fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+            : refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
           const payload = unwrapToolPayload(data?.payload);
           const result = data?.result as
             { state?: unknown; workRegistration?: unknown } | undefined;
@@ -1161,6 +1234,8 @@ export const createGatewayEventHandler = (
           break;
         }
 
+        applyStepMetrics(get().updateOperationMetadata, operationId, undefined, data?.llmCalls);
+
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {
           enqueue(async () => {
@@ -1175,7 +1250,7 @@ export const createGatewayEventHandler = (
               sourceType: 'client.gateway.step_complete',
             });
             if (!shouldSkipMessageFetch(event, runtimeType)) {
-              await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+              await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
             }
           });
         }
@@ -1184,7 +1259,14 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
+          const data = event.data as
+            | {
+                messagePatchMode?: boolean;
+                messageRevision?: number;
+                reason?: string;
+                uiMessages?: UIChatMessage[];
+              }
+            | undefined;
 
           void emitAgentSignal({
             payload: {
@@ -1227,10 +1309,19 @@ export const createGatewayEventHandler = (
             // turn's optimistic rows until refresh. Keep terminalMessages for
             // this run's notification, but do not mutate its successor's store.
             if (!isSuperseded) {
-              get().replaceMessages(data.uiMessages, {
+              applyPushedSnapshot(data.uiMessages, {
                 action: 'gateway/agent_runtime_end',
-                context,
               });
+            }
+          } else if (data?.messagePatchMode) {
+            if (
+              typeof data.messageRevision === 'number' &&
+              data.messageRevision !== lastMessagePatchRevision
+            ) {
+              terminalMessages = await refreshMessagesFromDb();
+              if (terminalMessages) lastMessagePatchRevision = data.messageRevision;
+            } else {
+              terminalMessages = get().dbMessagesMap[messageMapKey(context)] ?? [];
             }
           } else if (
             (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&
@@ -1255,7 +1346,7 @@ export const createGatewayEventHandler = (
             // messages are the only in-memory state and they need the
             // refetch to be reconciled with the server-side rows.
           } else if (!isSuperseded) {
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+            await refreshMessagesFromDb().catch(console.error);
           }
 
           if (runtimeType === 'gateway' && shouldRefreshWorkViews) {
@@ -1270,15 +1361,24 @@ export const createGatewayEventHandler = (
           //   • completed → completeRun completes the op, marks the topic unread,
           //     drains the input queue, then afterRunComplete fires the desktop
           //     notification (skipped if a queued follow-up was scheduled).
+          //   • failed → completeRun lands the op in `failed`; afterRunComplete
+          //     fires the failure notification.
           //   • cancelled → completeRun only completes the op (no unread badge,
           //     no queue drain, no notification) — same as the old inline path.
           if (runtimeType === 'gateway' && runLifecycle) {
-            const status = isCompletedRuntimeEnd(data?.reason) ? 'completed' : 'cancelled';
+            const status = resolveRuntimeEndStatus(data?.reason);
             const { requeued } = await runLifecycle.completeRun({
               ...lifecycleEventBase,
               status,
             });
-            if (!requeued && status === 'completed') {
+            if (status === 'failed') {
+              // The failed row's content is the loading placeholder: announce the error.
+              await runLifecycle.afterRunComplete({
+                ...lifecycleEventBase,
+                notification: { error: findTerminalAssistantError(terminalMessages) },
+                status,
+              });
+            } else if (!requeued && status === 'completed') {
               // Notification body, resolved most-authoritative first:
               //
               // 1. the terminal snapshot's final assistant text — server-
@@ -1325,14 +1425,30 @@ export const createGatewayEventHandler = (
         // Remote hetero agent (openclaw / hermes) wrote a message to DB via
         // `lh notify`. DB is the source of truth — just refresh the message list.
         enqueue(async () => {
-          await fetchAndReplaceMessages(get, context).catch(console.error);
+          await refreshMessagesFromDb().catch(console.error);
         });
         break;
       }
 
       case 'error': {
         enqueue(async () => {
-          const messageError = toChatMessageError(event.data);
+          const messageError = normalizeHeterogeneousMessageError(
+            normalizeChatMessageError(event.data),
+          );
+
+          // A relayed LLM call no client took: the server parks the run in
+          // `waiting_for_client` (or, if it cannot, fails it and writes the
+          // error itself), so this is not the run's end and the row is not ours
+          // to write — persisting it here would replace the waiting notice, and
+          // a stream replay on reconnect would do so long after the park. Show
+          // what the server wrote instead.
+          if (isClientLlmWaitableError(messageError)) {
+            get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+            endReasoningIfNeeded();
+            await refreshMessagesFromDb().catch(console.error);
+            return;
+          }
+
           const errorMessage = messageError.message;
 
           void emitAgentSignal({
@@ -1349,15 +1465,10 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
 
-          // An errored run is a FAILED run, not a completed one — failed runs
-          // receive no unread badge, no queue drain, and no notification.
-          // For gateway, drive the terminal disposition through the
-          // shared lifecycle so the op lands in `failed` (no unread badge, no queue
-          // drain, no notification). hetero never forwards `error` to this handler
-          // (its executor routes errors through persistTerminalError), but keep the
-          // legacy completeOperation for any other caller for safety.
+          // Failed run: no unread badge or queue drain. hetero never forwards `error`.
+          const failedEvent = { ...lifecycleEventBase, status: 'failed' as const };
           if (runtimeType === 'gateway' && runLifecycle) {
-            await runLifecycle.completeRun({ ...lifecycleEventBase, status: 'failed' });
+            await runLifecycle.completeRun(failedEvent);
           } else {
             get().completeOperation(operationId);
           }
@@ -1384,7 +1495,7 @@ export const createGatewayEventHandler = (
             get().replaceMessages(updateResult.messages, { context });
           } else {
             // Fallback when the mutation response doesn't include messages.
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+            await refreshMessagesFromDb().catch(console.error);
           }
 
           // Then overlay the inline error. This ensures the UI always shows the
@@ -1400,6 +1511,11 @@ export const createGatewayEventHandler = (
             },
             dispatchContext,
           );
+
+          // Notify after the error shows; this event ends the session (end is dropped).
+          const notification = { error: messageError };
+          if (runtimeType === 'gateway')
+            await runLifecycle?.afterRunComplete({ ...failedEvent, notification });
         });
         break;
       }

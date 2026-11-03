@@ -1,7 +1,29 @@
-import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
+import { AGENT_ARTIFACT_SOURCE_TYPES } from '@lobechat/const';
+import type { DocumentAccessScope, FileAccessScope } from '@lobechat/types';
+import {
+  ordinaryDocumentAccessScope,
+  ordinaryFileAccessScope,
+  stripAgentShareDocumentProvenance,
+} from '@lobechat/types';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  notInArray,
+  or,
+  sum,
+} from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import {
+  agentDocuments,
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
@@ -9,12 +31,27 @@ import {
   documents,
   files,
   knowledgeBaseFiles,
+  messages,
+  messagesFiles,
+  nextDocumentUpdatedAt,
   works,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { documentMatchesAccessScope } from '../utils/documentVisibility';
+import { notFileBackedPlaceholder } from '../utils/fileBackedPlaceholder';
+import {
+  fileReferenceMatchesAccessScope,
+  notAgentShareFileReference,
+} from '../utils/fileVisibility';
+import { documentOriginalCharCount } from '../utils/originalCharCount';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
+  /**
+   * Narrow by creator: `self` keeps the caller's own documents, `others` keeps
+   * documents other workspace members created (still subject to visibility).
+   */
+  creator?: 'others' | 'self';
   current?: number;
   /**
    * Knowledge-base ids whose documents must be dropped from the listing —
@@ -24,8 +61,17 @@ export interface QueryDocumentParams {
   excludeKnowledgeBaseIds?: string[];
   fileTypes?: string[];
   pageSize?: number;
+  /**
+   * Row order: `updatedAt` (default) and `createdAt` list the newest first,
+   * `title` lists A→Z. Ties fall back to the id so offset pages never overlap.
+   */
+  sortBy?: DocumentQuerySortBy;
   sourceTypes?: string[];
+  /** Keep only documents that live outside every knowledge base. */
+  standaloneOnly?: boolean;
 }
+
+export type DocumentQuerySortBy = 'createdAt' | 'title' | 'updatedAt';
 
 export const DOCUMENT_TRANSFER_FOREIGN_ROWS =
   'Document subtree contains content created by other users';
@@ -34,6 +80,7 @@ export class DocumentModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private documentAccessScope: DocumentAccessScope;
   /**
    * Visibility of the agent that owns the calling tool execution, when this
    * model is instantiated inside a tool runtime. `'public'` tightens
@@ -50,11 +97,13 @@ export class DocumentModel {
     userId: string,
     workspaceId?: string,
     callerAgentVisibility?: 'private' | 'public' | null,
+    documentAccessScope: DocumentAccessScope = ordinaryDocumentAccessScope,
   ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
     this.callerAgentVisibility = callerAgentVisibility;
+    this.documentAccessScope = documentAccessScope;
   }
 
   private ownership = () =>
@@ -67,10 +116,31 @@ export class DocumentModel {
       documents,
     );
 
+  private readScope = () =>
+    and(
+      this.ownership(),
+      documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
+      notAgentShareFileReference(this.db, documents.fileId),
+    );
+
+  private scopeMetadata = (metadata?: Record<string, any> | null) => {
+    const sanitizedMetadata = stripAgentShareDocumentProvenance(metadata);
+    if (this.documentAccessScope.type !== 'agentShare') return sanitizedMetadata;
+
+    return {
+      ...sanitizedMetadata,
+      agentShare: {
+        shareId: this.documentAccessScope.shareId,
+        topicId: this.documentAccessScope.topicId,
+        visitorUserId: this.documentAccessScope.visitorUserId,
+      },
+    };
+  };
+
   findOrCreateFolder = async (name: string, parentId?: string): Promise<DocumentItem> => {
     const existing = await this.db.query.documents.findFirst({
       where: and(
-        this.ownership(),
+        this.readScope(),
         eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
         eq(documents.filename, name),
         parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
@@ -93,27 +163,19 @@ export class DocumentModel {
   };
 
   create = async (params: Omit<NewDocument, 'userId'>): Promise<DocumentItem> => {
-    // Workspace-mode default for visibility:
-    //   - explicit visibility wins
-    //   - user-authored Pages (`sourceType: 'api'`) default to
-    //     `'private'` so workspace members start drafts in their own space and
-    //     publish when ready
-    //   - all other top-level rows (web crawls, file ingests, topic snapshots,
-    //     agent-signal artifacts, …): leave the schema default (`'public'`) so
-    //     existing behavior is preserved — these don't have a Pages-style
-    //     draft / publish lifecycle and were workspace-shared from day one
-    // Personal mode leaves it to the schema default; the filter ignores it.
-    let visibility = params.visibility;
-    if (!visibility && this.workspaceId && params.sourceType === 'api') {
-      visibility = 'private';
-    }
-
+    // Workspace documents default to the schema's `'public'`: a workspace is a
+    // collaborative space, so whatever a member (or an agent acting for them)
+    // writes there is shared unless the caller explicitly asks for `'private'`.
+    // Personal mode ignores the column.
     const result = (await this.db
       .insert(documents)
       .values(
         buildWorkspacePayload(
           { userId: this.userId, workspaceId: this.workspaceId },
-          { ...params, ...(visibility ? { visibility } : {}) },
+          {
+            ...params,
+            metadata: this.scopeMetadata(params.metadata),
+          },
         ),
       )
       .returning()) as DocumentItem[];
@@ -122,28 +184,50 @@ export class DocumentModel {
   };
 
   delete = async (id: string) => {
-    return this.db.delete(documents).where(and(eq(documents.id, id), this.ownership()));
+    return this.db.delete(documents).where(and(eq(documents.id, id), this.readScope()));
   };
 
   deleteAll = async () => {
-    return this.db.delete(documents).where(this.ownership());
+    return this.db.delete(documents).where(this.readScope());
   };
 
   query = async ({
+    creator,
     current = 0,
     pageSize = 9999,
     excludeKnowledgeBaseIds,
     fileTypes,
+    sortBy = 'updatedAt',
     sourceTypes,
+    standaloneOnly,
   }: QueryDocumentParams = {}): Promise<{
     items: DocumentItem[];
     total: number;
   }> => {
     const offset = current * pageSize;
-    const conditions = [this.ownership()];
+    const conditions = [this.readScope()];
 
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
+    }
+
+    if (creator === 'self') conditions.push(eq(documents.userId, this.userId));
+    if (creator === 'others') conditions.push(ne(documents.userId, this.userId));
+
+    if (standaloneOnly) {
+      conditions.push(
+        isNull(documents.knowledgeBaseId),
+        // Parsed files taken from a library keep `knowledgeBaseId` null, so the
+        // `knowledgeBaseId` check alone still lets them through. A document that
+        // is backed by a file living in a library is not standalone either.
+        or(
+          isNull(documents.fileId),
+          notInArray(
+            documents.fileId,
+            this.db.select({ fileId: knowledgeBaseFiles.fileId }).from(knowledgeBaseFiles),
+          ),
+        )!,
+      );
     }
 
     if (excludeKnowledgeBaseIds?.length) {
@@ -175,10 +259,17 @@ export class DocumentModel {
         ),
       );
     } else {
-      conditions.push(notInArray(documents.sourceType, ['agent', 'agent-signal']));
+      conditions.push(notInArray(documents.sourceType, [...AGENT_ARTIFACT_SOURCE_TYPES]));
     }
 
     const whereCondition = and(...conditions);
+    const orderBy =
+      sortBy === 'title'
+        ? [asc(documents.title), desc(documents.updatedAt), asc(documents.id)]
+        : [
+            desc(sortBy === 'createdAt' ? documents.createdAt : documents.updatedAt),
+            asc(documents.id),
+          ];
 
     // Fetch items and total count in parallel
     // Optimize: Exclude large JSONB fields (content, pages, editorData) for better performance
@@ -211,7 +302,7 @@ export class DocumentModel {
         })
         .from(documents)
         .where(whereCondition)
-        .orderBy(desc(documents.updatedAt))
+        .orderBy(...orderBy)
         .limit(pageSize)
         .offset(offset),
       this.db
@@ -232,34 +323,102 @@ export class DocumentModel {
   };
 
   findById = async (id: string): Promise<DocumentItem | undefined> => {
-    return this.db.query.documents.findFirst({
-      where: and(this.ownership(), eq(documents.id, id)),
-    });
+    const [document] = await this.db
+      .select()
+      .from(documents)
+      .where(and(this.readScope(), eq(documents.id, id)))
+      .limit(1);
+    return document;
   };
 
   findByIds = async (ids: string[]): Promise<DocumentItem[]> => {
     if (ids.length === 0) return [];
-    return this.db.query.documents.findMany({
-      where: and(this.ownership(), inArray(documents.id, ids)),
-    });
+    return this.db
+      .select()
+      .from(documents)
+      .where(and(this.readScope(), inArray(documents.id, ids)));
   };
 
-  findByFileId = async (fileId: string) => {
-    return this.db.query.documents.findFirst({
+  /**
+   * Whether a parsed document that prompts preview instead of inline exists for the given files or
+   * for any file attached to a message in `topicId`: longer than `minChars`, or cut at parse time
+   * (`metadata.originalCharCount` above the stored length). Mirrors `isOversizedFileContent` in
+   * `@lobechat/prompts`, so the run gets a tool that can read those previews in windows.
+   */
+  hasFileDocumentsOverChars = async ({
+    fileIds = [],
+    minChars,
+    topicId,
+  }: {
+    fileIds?: string[];
+    minChars: number;
+    topicId?: string | null;
+  }): Promise<boolean> => {
+    const fileConditions = [];
+    if (fileIds.length > 0) fileConditions.push(inArray(documents.fileId, fileIds));
+    if (topicId) {
+      fileConditions.push(
+        inArray(
+          documents.fileId,
+          this.db
+            .select({ fileId: messagesFiles.fileId })
+            .from(messagesFiles)
+            .innerJoin(messages, eq(messages.id, messagesFiles.messageId))
+            .where(eq(messages.topicId, topicId)),
+        ),
+      );
+    }
+    if (fileConditions.length === 0) return false;
+
+    const [row] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          this.ownership(),
+          or(
+            gt(documents.totalCharCount, minChars),
+            gt(documentOriginalCharCount(), documents.totalCharCount),
+          ),
+          or(...fileConditions),
+        ),
+      )
+      .limit(1);
+
+    return !!row;
+  };
+
+  findByFileId = async (fileId: string, accessScope: FileAccessScope = ordinaryFileAccessScope) => {
+    const [document] = await this.db
+      .select()
+      .from(documents)
       // A file can legitimately own more than one document: `parseDocument`
       // writes a page-editor copy next to the parse cache `parseFile` writes.
       // Pick the oldest one explicitly instead of leaving the choice to the
       // query plan, so repeated lookups keep returning the same content.
       // `created_at` carries no uniqueness guarantee, so `id` breaks ties.
-      orderBy: [asc(documents.createdAt), asc(documents.id)],
-      where: and(this.ownership(), eq(documents.fileId, fileId)),
-    });
+      // An agent-document upload's empty placeholder row holds no text, so it is
+      // never the file's parse result; skipping it lets `parseFile` run.
+      .where(
+        and(
+          this.ownership(),
+          eq(documents.fileId, fileId),
+          notFileBackedPlaceholder(),
+          fileReferenceMatchesAccessScope(this.db, documents.fileId, accessScope),
+        ),
+      )
+      .orderBy(asc(documents.createdAt), asc(documents.id))
+      .limit(1);
+    return document;
   };
 
   findBySlug = async (slug: string): Promise<DocumentItem | undefined> => {
-    return this.db.query.documents.findFirst({
-      where: and(this.ownership(), eq(documents.slug, slug)),
-    });
+    const [document] = await this.db
+      .select()
+      .from(documents)
+      .where(and(this.readScope(), eq(documents.slug, slug)))
+      .limit(1);
+    return document;
   };
 
   /**
@@ -273,25 +432,78 @@ export class DocumentModel {
     source: string,
     sourceType: NonNullable<NewDocument['sourceType']>,
   ): Promise<DocumentItem | undefined> => {
-    return this.db.query.documents.findFirst({
-      where: and(
-        this.ownership(),
-        eq(documents.source, source),
-        eq(documents.sourceType, sourceType),
-      ),
-    });
+    const [document] = await this.db
+      .select()
+      .from(documents)
+      .where(
+        and(this.readScope(), eq(documents.source, source), eq(documents.sourceType, sourceType)),
+      )
+      .limit(1);
+    return document;
   };
 
   update = async (id: string, value: Partial<DocumentItem>) => {
     // visibility is intentionally not updatable via this path. The only legal
     // transition is `private → public` via `publishToWorkspace`; strip any
     // incoming value so callers can't sneak around the one-way rule.
-    const { visibility: _ignored, ...patch } = value;
+    const { metadata, updatedAt: _updatedAt, visibility: _ignored, ...patch } = value;
+
+    const [row] = await this.db
+      .update(documents)
+      .set({
+        ...patch,
+        ...(metadata !== undefined && { metadata: this.scopeMetadata(metadata) }),
+        updatedAt: nextDocumentUpdatedAt(),
+      })
+      .where(and(this.readScope(), eq(documents.id, id)))
+      .returning({ updatedAt: documents.updatedAt });
+
+    return row?.updatedAt;
+  };
+
+  /**
+   * Mirror a file's placement / name onto the document row(s) backed by it
+   * (`documents.file_id = fileId`). The knowledge-base tree is rendered from
+   * `documents.parent_id`, so moving only the `files` row leaves the item under
+   * its old folder. Counterpart of the document → file sync in
+   * `DocumentService.updateDocument`.
+   */
+  syncFromFile = async (fileId: string, value: { name?: string; parentId?: string | null }) => {
+    const patch: Partial<DocumentItem> = {};
+    if (value.name !== undefined) {
+      patch.title = value.name;
+      patch.filename = value.name;
+    }
+    if (value.parentId !== undefined) patch.parentId = value.parentId;
+    if (Object.keys(patch).length === 0) return [];
 
     return this.db
       .update(documents)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(and(this.ownership(), eq(documents.id, id)));
+      .set({ ...patch, updatedAt: nextDocumentUpdatedAt() })
+      .where(
+        and(
+          this.readScope(),
+          eq(documents.fileId, fileId),
+          // Skip documents that are an agent's own copy of the file
+          // (AgentDocumentsService.importFile): they keep their collision-safe VFS filename and
+          // agent-folder parent. Such a copy is created together with its agent_documents
+          // binding in one transaction, so both rows share `created_at` (defaultNow() is fixed
+          // per transaction). `associateDocument` binds a document that already existed, so an
+          // associated knowledge-base mirror or page keeps following the file.
+          notExists(
+            this.db
+              .select({ id: agentDocuments.id })
+              .from(agentDocuments)
+              .where(
+                and(
+                  eq(agentDocuments.documentId, documents.id),
+                  eq(agentDocuments.createdAt, documents.createdAt),
+                ),
+              ),
+          ),
+        ),
+      )
+      .returning({ id: documents.id });
   };
 
   /**
@@ -316,11 +528,44 @@ export class DocumentModel {
     return this.db.transaction(async (trx) => {
       const result = await (trx as LobeChatDatabase)
         .update(documents)
-        .set({ updatedAt: new Date(), visibility })
+        .set({ visibility })
         .where(and(eq(documents.id, rootId), this.ownership(), eq(documents.userId, this.userId)))
-        .returning({ id: documents.id });
+        .returning({ fileId: documents.fileId, id: documents.id });
 
       if (result.length === 0) throw new Error('Document not found');
+
+      // A page filed into a library owns a paired `files` row, stamped with the
+      // library's visibility when the page was created. The library lists rows
+      // through THAT column while the page opens through the document's, so
+      // leaving it behind splits the two: the row keeps announcing a private
+      // page's title to every member, and the page behind it refuses to open.
+      // Same transaction, and scoped without `files.visibility` for the same
+      // reason as `works` below — a promotion has to reach rows that are still
+      // private.
+      //
+      // `files.userId` is required on top of the workspace scope: `fileId` is a
+      // plain foreign key, and a document can point at a file somebody else
+      // uploaded (parsing another member's shared file yields a caller-owned
+      // document that keeps the original `fileId`). Without the owner check the
+      // workspace scope alone matches every member's file, so taking such a
+      // derived page private would hide the uploader's original from everyone.
+      // The paired row this mirrors is always the caller's own.
+      const fileId = result[0].fileId;
+      if (fileId) {
+        await (trx as LobeChatDatabase)
+          .update(files)
+          .set({ visibility })
+          .where(
+            and(
+              eq(files.id, fileId),
+              eq(files.userId, this.userId),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                { userId: files.userId, workspaceId: files.workspaceId },
+              ),
+            ),
+          );
+      }
 
       // Mirror visibility onto existing Work projections in the same
       // transaction. Scope without works.visibility so a promotion can
@@ -334,7 +579,7 @@ export class DocumentModel {
             eq(works.resourceId, rootId),
             buildWorkspaceWhere(
               { userId: this.userId, workspaceId: this.workspaceId },
-              { userId: works.userId, workspaceId: works.workspaceId },
+              { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
             ),
           ),
         );
@@ -515,7 +760,7 @@ export class DocumentModel {
 
       await (trx as LobeChatDatabase)
         .update(documents)
-        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(documents.id, ids));
 
       if (targetWorkspaceId) {
@@ -598,6 +843,7 @@ export class DocumentModel {
         if (seen.has(currentId)) continue;
         seen.add(currentId);
         const original = byId.get(currentId);
+        /* v8 ignore next -- unreachable: the queue only holds documentId (the subtree root collectSubtree fetched by that id) and ids pushed from subtree rows, so byId always has it */
         if (!original) continue;
 
         const newParentId =

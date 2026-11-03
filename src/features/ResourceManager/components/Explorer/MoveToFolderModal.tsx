@@ -1,6 +1,13 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, createModal, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
+import {
+  Button,
+  createModal,
+  Flexbox,
+  Icon,
+  ModalFooter,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { t as translate } from 'i18next';
 import { FolderIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';

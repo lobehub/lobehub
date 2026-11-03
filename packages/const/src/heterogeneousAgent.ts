@@ -3,6 +3,15 @@ export const HETERO_CONTINUE_PROMPT =
   'Continue the task from where it stopped. The transcript above shows the work already completed — do not redo it.';
 
 /**
+ * Model instruction for a run cut off by a desktop restart. The transcript on
+ * disk already holds every step up to the cut, and the interrupted tool call
+ * is answered with the CLI's own "[Request interrupted]" marker, so the model
+ * only needs to be told why it stopped and to pick up rather than start over.
+ */
+export const HETERO_RESTART_CONTINUE_PROMPT =
+  'The LobeHub desktop app hosting this session was restarted while you were working, which interrupted your previous turn. Continue the task from where it stopped — the transcript above shows the work already completed, do not redo it. If the task was already finished, briefly report the final result instead.';
+
+/**
  * Legacy heterogeneous-agent model IDs. Before `agencyConfig.heterogeneousProvider`
  * existed, an agent was routed to the external-CLI / device execution path purely
  * by its `model` matching one of these. `AiAgentService` still honors this fallback,

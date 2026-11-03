@@ -25,6 +25,7 @@ import type {
   ListThreadsParams,
   PinMessageParams,
   ReactToMessageParams,
+  ReadDocumentParams,
   ReadMessagesParams,
   ReplyToThreadParams,
   SearchMessagesParams,
@@ -65,6 +66,13 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     return this.runtime.readMessages(params);
+  };
+
+  readDocument = async (
+    params: ReadDocumentParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.readDocument(params);
   };
 
   editMessage = async (

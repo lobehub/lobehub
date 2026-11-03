@@ -8,9 +8,9 @@ import {
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { memo, useCallback } from 'react';
+import { Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { CircleAlert } from 'lucide-react';
+import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
@@ -41,6 +41,9 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     return (msg?.pluginState as { [DRAFT_PLUGIN_STATE_KEY]?: unknown })?.[DRAFT_PLUGIN_STATE_KEY];
   });
   const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
+  const submissionPhase = useChatStore((s) => s.questionSubmissions[messageId]);
+  const checkQuestionSubmission = useChatStore((s) => s.checkQuestionSubmission);
+  const context = useConversationStore((s) => s.context);
   const writeDraft = useCallback(
     (draft: AskUserDraft) => setInterventionDraft(messageId, draft),
     [messageId, setInterventionDraft],
@@ -53,6 +56,13 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     persistedDraft,
     writeDraft,
   });
+
+  useEffect(() => {
+    if (submissionPhase !== 'uncertain') return;
+    const reconcile = () => void checkQuestionSubmission(messageId, context);
+    window.addEventListener('online', reconcile);
+    return () => window.removeEventListener('online', reconcile);
+  }, [checkQuestionSubmission, context, messageId, submissionPhase]);
 
   // Read-only surfaces (resolved / historical messages) show a compact summary
   // of what was asked instead of the interactive form.
@@ -74,6 +84,21 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     );
   }
 
+  if (submissionPhase === 'submitting' || submissionPhase === 'checking') {
+    return (
+      <Flexbox horizontal align="center" gap={8} padding={8} role="status">
+        <Spin size="small" variant="network" />
+        <Text type="secondary">
+          {t(
+            submissionPhase === 'submitting'
+              ? 'askUserQuestion.submitting'
+              : 'askUserQuestion.checking',
+          )}
+        </Text>
+      </Flexbox>
+    );
+  }
+
   const labels = {
     customPlaceholder: t('askUserQuestion.customOption.placeholder'),
     escapeBack: t('askUserQuestion.escape.back'),
@@ -86,16 +111,24 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     supplementEnter: t('askUserQuestion.supplement.enter'),
     supplementPlaceholder: t('askUserQuestion.supplement.placeholder'),
     timeExpired: '',
+    timeExpiredNoAnswer: '',
     timeRemaining: () => '',
   };
 
   return (
-    <AskUserQuestionView
-      {...form}
-      actionsPortalTarget={actionsPortalTarget}
-      labels={labels}
-      showCountdown={false}
-    />
+    <Flexbox gap={8}>
+      {(submissionPhase === 'failed' || submissionPhase === 'uncertain') && (
+        <Text fontSize={12} role="alert" type="danger">
+          <Icon icon={CircleAlert} size={14} /> {t('askUserQuestion.submitFailed')}
+        </Text>
+      )}
+      <AskUserQuestionView
+        {...form}
+        actionsPortalTarget={actionsPortalTarget}
+        labels={labels}
+        showCountdown={false}
+      />
+    </Flexbox>
   );
 });
 

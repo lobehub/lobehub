@@ -1,25 +1,19 @@
 import { type HomeStore } from '@/store/home/store';
 
-import type { RecentEntityRef } from './initialState';
+import { type RecentEntityRef, toRecentEntityRef } from './initialState';
+import type { DocsHomeTab } from './projection';
 
-const query = (scope: string, queryKey: string) => (s: HomeStore) =>
-  s.recentsByScope[scope]?.queries[queryKey];
-const syncStatus = (scope: string, queryKey: string) => (s: HomeStore) =>
-  s.recentsByScope[scope]?.syncStatusByQuery[queryKey];
-const item = (scope: string, queryKey: string, ref: RecentEntityRef) => (s: HomeStore) => {
-  const scopedState = s.recentsByScope[scope];
-  const recentItem = scopedState?.queries[queryKey]?.items.find(
-    (item) => `${item.type}:${item.id}` === ref,
-  );
-  const optimisticTitle = scopedState?.optimisticTitles[ref]?.title;
+/** Items of one recents query; `undefined` until it is hydrated or fetched. */
+const query = (queryKey: string) => (s: HomeStore) => s.recentListMap[queryKey];
 
-  return recentItem && optimisticTitle !== undefined
-    ? { ...recentItem, title: optimisticTitle }
-    : recentItem;
-};
+const item = (queryKey: string, ref: RecentEntityRef) => (s: HomeStore) =>
+  s.recentListMap[queryKey]?.find((recent) => toRecentEntityRef(recent) === ref);
+
+/** One Docs home tab; `undefined` until hydrated or fetched. */
+const docsHome = (tab: DocsHomeTab) => (s: HomeStore) => s.docsHomeMap[tab];
 
 export const homeRecentSelectors = {
+  docsHome,
   item,
   query,
-  syncStatus,
 };

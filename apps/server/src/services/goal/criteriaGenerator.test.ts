@@ -8,7 +8,9 @@ const { generateObject, resolveGoalModelConfig } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/aiGeneration', () => ({
-  AiGenerationService: vi.fn(() => ({ generateObject })),
+  AiGenerationService: vi.fn(function () {
+    return { generateObject };
+  }),
 }));
 
 vi.mock('./modelConfig', () => ({ resolveGoalModelConfig }));
@@ -43,6 +45,38 @@ describe('GoalCriteriaGeneratorService', () => {
           schemaName: 'goal_criteria_draft',
         },
       }),
+    );
+  });
+
+  it('traces executable decomposition with its updated prompt cohort and validates the output', async () => {
+    const service = new GoalCriteriaGeneratorService({} as never, 'user-1');
+    const draft = {
+      problemStatement: 'Deliver editable office documents.',
+      tasks: [
+        { dependsOn: [], instruction: 'Document current gaps.', title: 'Investigate' },
+        { dependsOn: [0], instruction: 'Implement editing and persistence.', title: 'Implement' },
+      ],
+    };
+    generateObject.mockResolvedValueOnce(draft);
+    // An answer without the understanding fields still plans, as a clear goal.
+    await expect(service.decompose({ requirement: 'Upgrade office editing' })).resolves.toEqual({
+      ...draft,
+      assumptions: [],
+      questions: [],
+    });
+    expect(generateObject).toHaveBeenLastCalledWith(
+      expect.objectContaining({ schema: expect.objectContaining({ name: 'goal_decomposition' }) }),
+      expect.objectContaining({
+        tracing: {
+          promptVersion: 'v9',
+          scenario: 'goal_decompose',
+          schemaName: 'goal_decomposition',
+        },
+      }),
+    );
+    generateObject.mockResolvedValueOnce({ ...draft, tasks: [{ title: 'Missing instruction' }] });
+    await expect(service.decompose({ requirement: 'Upgrade office editing' })).rejects.toThrow(
+      'did not match the decomposition schema: tasks.0.instruction',
     );
   });
 
@@ -86,5 +120,16 @@ describe('GoalCriteriaGeneratorService', () => {
       instruction: 'Publish the benchmark paper.',
       title: 'Publish benchmark paper',
     });
+  });
+
+  it("plans a goal's decomposition on the goal's own planning model", async () => {
+    const goalConfig = { model: 'gemini-3.8-flash', provider: 'google' };
+    generateObject.mockResolvedValueOnce({ problemStatement: 'p', tasks: [] });
+
+    await new GoalCriteriaGeneratorService({} as never, 'user-1')
+      .decompose({ goalConfig, requirement: 'Upgrade office editing' })
+      .catch(() => undefined);
+
+    expect(resolveGoalModelConfig).toHaveBeenCalledWith({}, 'user-1', goalConfig);
   });
 });

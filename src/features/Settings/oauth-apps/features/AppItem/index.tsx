@@ -1,32 +1,32 @@
 'use client';
 
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Avatar, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import dayjs from 'dayjs';
 import {
-  ChevronRightIcon,
-  MoreVerticalIcon,
-  PowerIcon,
-  PowerOffIcon,
-  Trash2Icon,
-} from 'lucide-react';
+  ActionIcon,
+  confirmModal,
+  createStaticStyles,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
+import dayjs from 'dayjs';
+import { MoreVerticalIcon, PowerIcon, PowerOffIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
 import { type OAuthAppItem } from '@/types/oauthApp';
 
-import ClientIdDisplay from '../ClientIdDisplay';
+import { appTypeLabelKey } from '../../appList';
+import AppLogo from '../AppLogo';
+import { confirmDisableOAuthApp } from '../confirmDisable';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  chevron: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-  `,
   meta: css`
+    flex: none;
     font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextTertiary};
   `,
   row: css`
     cursor: pointer;
@@ -57,13 +57,14 @@ interface AppItemProps {
 }
 
 const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen }) => {
-  const { t } = useTranslation('auth');
+  const { t } = useTranslation(['auth', 'common']);
 
   const setEnabled = lambdaQuery.oauthApp.setEnabled.useMutation({ onSuccess: onChanged });
   const deleteApp = lambdaQuery.oauthApp.delete.useMutation({ onSuccess: onDeleted });
 
   const handleDelete = () =>
     confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
       content: t('oauthApp.deleteConfirm.content'),
       okButtonProps: { danger: true },
       okText: t('oauthApp.deleteConfirm.ok'),
@@ -93,8 +94,9 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
         }
       }}
     >
-      <Avatar avatar={app.logoUri || app.name} shape={'square'} size={36} title={app.name} />
+      <AppLogo logoUri={app.logoUri} name={app.name} size={36} />
 
+      {/* The client ID lives on the app page; the row only identifies the app. */}
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Flexbox horizontal align={'center'} gap={8}>
           <Text ellipsis weight={500}>
@@ -102,13 +104,16 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
           </Text>
           {!app.enabled && <Tag>{t('oauthApp.item.disabledTag')}</Tag>}
         </Flexbox>
-        <span style={{ alignSelf: 'flex-start' }} onClick={(e) => e.stopPropagation()}>
-          <ClientIdDisplay clientId={app.id} />
-        </span>
-        <span className={styles.meta}>
-          {t('oauthApp.type.deviceFlow')} · {lastUsed}
-        </span>
+        {app.description && (
+          <Text ellipsis style={{ fontSize: 12 }} type={'secondary'}>
+            {app.description}
+          </Text>
+        )}
       </Flexbox>
+
+      <span className={styles.meta}>
+        {t(appTypeLabelKey(app.applicationType))} · {lastUsed}
+      </span>
 
       {canEdit && (
         <span style={{ flex: 'none' }} onClick={(e) => e.stopPropagation()}>
@@ -119,7 +124,10 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
                     icon: <Icon icon={PowerOffIcon} />,
                     key: 'disable',
                     label: t('oauthApp.actions.disable'),
-                    onClick: () => setEnabled.mutate({ enabled: false, id: app.id }),
+                    onClick: () =>
+                      confirmDisableOAuthApp(() =>
+                        setEnabled.mutateAsync({ enabled: false, id: app.id }),
+                      ),
                   }
                 : {
                     icon: <Icon icon={PowerIcon} />,
@@ -140,8 +148,6 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
           </DropdownMenu>
         </span>
       )}
-
-      <Icon className={styles.chevron} icon={ChevronRightIcon} size={'small'} />
     </Flexbox>
   );
 });

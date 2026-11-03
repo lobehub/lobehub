@@ -23,7 +23,7 @@ export const useAgentManagementAccess = (agentId?: string) => {
   const isAgentLoading = !!agentId && !agent;
   const isPublicWorkspaceAgent = !!agent?.workspaceId && agent.visibility !== 'private';
   const { allowed: canEditContent } = usePermission('edit_own_content');
-  const { canManageResource, isAccessResolved, isLoading } = useResourceAccess(
+  const { canManageResource, isAccessConfirmed, isAccessResolved } = useResourceAccess(
     'agent',
     isPublicWorkspaceAgent ? agentId : undefined,
   );
@@ -31,8 +31,10 @@ export const useAgentManagementAccess = (agentId?: string) => {
   const canManageAgent =
     !isAgentLoading &&
     (!isPublicWorkspaceAgent || (isAccessResolved && canEditContent && canManageResource));
+  // A persisted record may predate a downgrade: the manager-vs-member answer
+  // published below waits for this session's server answer.
   const isAccessLoading =
-    isAgentLoading || (isPublicWorkspaceAgent && (isLoading || !isAccessResolved));
+    isAgentLoading || (isPublicWorkspaceAgent && (!isAccessResolved || !isAccessConfirmed));
 
   // Publish every resolved answer for the runtime resolvers (store actions
   // can't run this hook) so send/regenerate route with the same

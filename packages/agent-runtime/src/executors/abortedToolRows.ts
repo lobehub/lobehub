@@ -86,10 +86,10 @@ export const settleAbortedToolRows = async ({
   messages: Array<{ content: string; id: string; role: 'tool'; tool_call_id: string }>;
 }> => {
   const { operation, transports } = host;
-  const agentId = operation.agentId ?? state.metadata?.agentId;
-  const groupId = operation.groupId ?? state.metadata?.groupId;
-  const threadId = operation.threadId ?? state.metadata?.threadId;
-  const topicId = operation.topicId ?? state.metadata?.topicId;
+  const agentId = operation.agentId ?? state.origin?.agentId;
+  const groupId = operation.groupId ?? state.origin?.groupId;
+  const threadId = operation.threadId ?? state.origin?.threadId;
+  const topicId = operation.topicId ?? state.origin?.topicId;
 
   if (!agentId) {
     throw new Error(

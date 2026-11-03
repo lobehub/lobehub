@@ -11,23 +11,29 @@ import {
 import type { SwitcherItem } from '@/features/NavPanel/switcher/switcherItems';
 import SwitcherMenu from '@/features/NavPanel/switcher/SwitcherMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import type { ProjectDetail } from '@/store/project';
-import { useCurrentProjectList, useProjectStore } from '@/store/project';
+import type { ProjectListItem } from '@/store/project';
+import { useLoadedProjectList, useProjectStore } from '@/store/project';
+
+import { resolveProjectListState } from '../projectListState';
 
 interface ProjectHeaderProps {
-  project?: ProjectDetail['project'];
+  project?: ProjectListItem;
 }
 
 const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
   const { t } = useTranslation(['project', 'common']);
   const navigate = useWorkspaceAwareNavigate();
-  const projects = useCurrentProjectList();
-  const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectList)(true);
+  const projects = useLoadedProjectList();
+  const { error, isHydrated, isValidating, revalidate } = useProjectStore(
+    (s) => s.useFetchProjectList,
+  )(true);
+  const listState = resolveProjectListState({ error, isHydrated, isValidating, projects });
 
   const items = useMemo<SwitcherItem[]>(
     () =>
-      projects.map((item) => ({
-        avatar: item.avatar || item.name,
+      (projects ?? []).map((item) => ({
+        // No logo: the row's Avatar generates one from the project name.
+        avatar: item.avatar || undefined,
         id: item.slug ?? item.id,
         private: item.visibility === 'private',
         title: item.name,
@@ -48,18 +54,18 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
           content={
             <SwitcherMenu
               activeId={project?.slug ?? project?.id}
-              error={error}
-              isLoading={isLoading && items.length === 0}
+              error={listState === 'error' ? error : undefined}
+              isLoading={listState === 'loading'}
               items={items}
               kind={'project'}
               searchPlaceholder={t('navPanel.searchProject', { ns: 'common' })}
-              onRetry={() => mutate()}
+              onRetry={() => revalidate()}
               onSelect={handleSelect}
             />
           }
         >
           <SidebarHeaderSelectTrigger
-            avatar={project?.avatar || project?.name || t('sidebar.title')}
+            avatar={project?.avatar || undefined}
             name={project?.name || t('sidebar.title')}
             title={project?.name || t('sidebar.title')}
           />

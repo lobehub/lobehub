@@ -4,7 +4,7 @@ import { type StateCreator } from 'zustand';
 
 import { messageService } from '@/services/message';
 import { useChatStore } from '@/store/chat';
-import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
+import { cleanBotPromptTags } from '@/store/chat/utils/parseReferencedMessage';
 
 import { type Store as ConversationStore } from '../../../action';
 import { isSameConversationContext } from '../../../utils/contextGuard';
@@ -39,11 +39,6 @@ export interface MessageStateAction {
     content: string,
     editorData?: Record<string, any> | null,
   ) => Promise<void>;
-
-  /**
-   * Toggle compressed group expanded state
-   */
-  toggleCompressedGroupExpanded: (id: string, expanded?: boolean) => Promise<void>;
 
   /**
    * Toggle tool inspect expanded state
@@ -89,7 +84,7 @@ export const messageStateSlice: StateCreator<
   copyMessage: async (id, content) => {
     const { hooks } = get();
 
-    await copyToClipboard(cleanSpeakerTag(content));
+    await copyToClipboard(cleanBotPromptTags(content));
 
     // ===== Hook: onMessageCopied =====
     if (hooks.onMessageCopied) {
@@ -129,40 +124,6 @@ export const messageStateSlice: StateCreator<
     if (hooks.onMessageModified) {
       hooks.onMessageModified(id, content, originalContent);
     }
-  },
-
-  toggleCompressedGroupExpanded: async (id, expanded) => {
-    const message = dataSelectors.getDisplayMessageById(id)(get());
-    if (!message || message.role !== 'compressedGroup') return;
-
-    const { context, internal_dispatchMessage, replaceMessages } = get();
-    if (!context.agentId || !context.topicId) return;
-
-    // If expanded is not provided, toggle current state
-    const currentExpanded = (message.metadata as any)?.expanded ?? false;
-    const nextExpanded = expanded ?? !currentExpanded;
-
-    // Optimistic update
-    internal_dispatchMessage({
-      id,
-      type: 'updateMessageGroupMetadata',
-      value: { expanded: nextExpanded },
-    });
-
-    // Persist to server and get updated messages
-    const { messages } = await messageService.updateMessageGroupMetadata({
-      context: {
-        agentId: context.agentId,
-        groupId: context.groupId,
-        threadId: context.threadId,
-        topicId: context.topicId,
-      },
-      expanded: nextExpanded,
-      messageGroupId: id,
-    });
-
-    // Sync with server data
-    replaceMessages(messages, { expectedContext: context });
   },
 
   toggleInspectExpanded: async (id, expanded) => {

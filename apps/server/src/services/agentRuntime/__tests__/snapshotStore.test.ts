@@ -5,8 +5,12 @@ import { createDefaultSnapshotStore, shouldUseAgentS3Tracing } from '../snapshot
 
 const s3Store = { kind: 's3' } as any;
 const fileStore = { kind: 'file' } as any;
-const createS3 = vi.fn(() => s3Store);
-const createFile = vi.fn(() => fileStore);
+const createS3 = vi.fn(function () {
+  return s3Store;
+});
+const createFile = vi.fn(function () {
+  return fileStore;
+});
 const factories = { createFile, createS3 };
 
 const setEnv = (nodeEnv: string, agentS3Tracing?: string) => {
@@ -59,8 +63,8 @@ describe('agent runtime snapshot store defaults', () => {
 
   it('degrades to null (never throws) when S3 store construction fails', () => {
     setEnv('production');
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const boom = vi.fn(() => {
+    vi.spyOn(console, 'error').mockImplementation(function () {});
+    const boom = vi.fn(function () {
       throw new Error('missing S3 creds');
     });
 

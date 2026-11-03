@@ -36,6 +36,8 @@ export type {
   GoalGraphDelta,
   GoalGraphShape,
   GoalGraphState,
+  GoalMetricCriteriaState,
+  GoalMetricCriterionState,
   GoalTickBranch,
   GoalTickOutcome,
   GoalTickSnapshot,

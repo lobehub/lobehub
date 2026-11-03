@@ -2,9 +2,9 @@ import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import {
   type ActionIconGroupEvent,
   type ActionIconGroupItemType,
-  type GenericItemType,
+  type DropdownItem,
 } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
@@ -15,6 +15,7 @@ import { resolveHeteroErroredStepId } from '@/features/Conversation/Error/hetero
 import { usePermission } from '@/hooks/usePermission';
 import { showContextMenu } from '@/libs/contextMenu';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { useChatStore } from '@/store/chat';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
@@ -68,6 +69,7 @@ export const useChatItemContextMenu = ({
   const selectedTextRef = useRef<string | undefined>(undefined);
 
   const storeApi = useConversationStoreApi();
+  const forkTopic = useChatStore((s) => s.forkTopic);
 
   const [role, error, isCollapsed, hasThread, isRegenerating] = useConversationStore((s) => {
     const item = dataSelectors.getDisplayMessageById(id)(s);
@@ -92,7 +94,6 @@ export const useChatItemContextMenu = ({
     regenerateUserMessage,
     regenerateAssistantMessage,
     translateMessage,
-    startMessageTTS,
     delAndRegenerateMessage,
     copyMessage,
     openThreadCreator,
@@ -106,7 +107,6 @@ export const useChatItemContextMenu = ({
     s.regenerateUserMessage,
     s.regenerateAssistantMessage,
     s.translateMessage,
-    s.startMessageTTS,
     s.delAndRegenerateMessage,
     s.copyMessage,
     s.openThreadCreator,
@@ -133,10 +133,10 @@ export const useChatItemContextMenu = ({
       divider,
       edit,
       expand,
+      fork,
       regenerate,
       share,
       translate,
-      tts,
     } = actionsBar;
 
     const withPermission = (items: MenuItem[]) =>
@@ -146,7 +146,7 @@ export const useChatItemContextMenu = ({
             if ('type' in item && item.type === 'divider') return item;
             if (['edit', 'del'].includes(String(item.key))) return { ...item, disabled: !canEdit };
             if (
-              ['branching', 'delAndRegenerate', 'regenerate', 'translate', 'tts'].includes(
+              ['branching', 'delAndRegenerate', 'fork', 'regenerate', 'translate'].includes(
                 String(item.key),
               )
             ) {
@@ -165,19 +165,12 @@ export const useChatItemContextMenu = ({
       const collapseAction = isCollapsed ? expand : collapse;
       const list: MenuItem[] = [edit, copy, collapseAction];
 
+      // Forking a message into a standalone topic is GA; the in-topic thread
+      // creator (`branching`) is still gated behind dev mode.
+      if (!inThread && !isGroupSession) list.push(fork);
       if (!inThread && !isGroupSession && isDevMode) list.push(branching);
 
-      list.push(
-        divider,
-        tts,
-        translate,
-        divider,
-        share,
-        divider,
-        regenerate,
-        delAndRegenerate,
-        del,
-      );
+      list.push(divider, translate, divider, share, divider, regenerate, delAndRegenerate, del);
 
       return withPermission(list.filter(Boolean) as MenuItem[]);
     }
@@ -209,7 +202,7 @@ export const useChatItemContextMenu = ({
 
       if (!inThread && isDevMode) list.push(branching);
 
-      list.push(divider, tts, translate, divider, regenerate, del);
+      list.push(divider, translate, divider, regenerate, del);
 
       return withPermission(list.filter(Boolean) as MenuItem[]);
     }
@@ -263,6 +256,15 @@ export const useChatItemContextMenu = ({
           toggleMessageCollapsed(id);
           break;
         }
+        case 'fork': {
+          if (!canCreate) break;
+          if (!topic) {
+            toast.warning(t('forkRequiresSavedTopic'));
+            break;
+          }
+          await forkTopic(id);
+          break;
+        }
         case 'branching': {
           if (!canCreate) break;
           if (!topic) {
@@ -303,11 +305,6 @@ export const useChatItemContextMenu = ({
           }
           break;
         }
-        case 'tts': {
-          if (!canCreate) break;
-          startMessageTTS(id);
-          break;
-        }
         case 'share': {
           if (!canEdit) break;
           handleShare();
@@ -329,6 +326,7 @@ export const useChatItemContextMenu = ({
       deleteMessage,
       delAndRegenerateMessage,
       delAndResendThreadMessage,
+      forkTopic,
       getMessage,
       handleShare,
       id,
@@ -343,7 +341,6 @@ export const useChatItemContextMenu = ({
       toggleMessageEditing,
       topic,
       translateMessage,
-      startMessageTTS,
     ],
   );
 
@@ -357,7 +354,7 @@ export const useChatItemContextMenu = ({
     [handleAction],
   );
 
-  const contextMenuItems = useMemo<GenericItemType[]>(() => {
+  const contextMenuItems = useMemo<DropdownItem[]>(() => {
     if (!menuItems) return [];
     return menuItems.filter(Boolean).map((item) => {
       if ('type' in item && item.type === 'divider') return { type: 'divider' as const };

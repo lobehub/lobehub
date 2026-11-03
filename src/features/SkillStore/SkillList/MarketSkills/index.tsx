@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { uniqBy } from 'es-toolkit/compat';
 import { ServerCrash } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -119,9 +118,7 @@ const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
       <Center gap={12} padding={40}>
         <Icon icon={ServerCrash} size={80} />
         <Text type={'secondary'}>{errorMessage}</Text>
-        <Button size={'small'} onClick={retry}>
-          {t('retry', { ns: 'common' })}
-        </Button>
+        <Button onClick={retry}>{t('retry', { ns: 'common' })}</Button>
       </Center>
     );
   }

@@ -33,7 +33,7 @@ Reuse operates at three levels, and AI-authored diffs most often fail at the upp
 - `.agents/skills/project-overview/SKILL.md` — layer map: what belongs in apps/packages/src
 - `.agents/skills/spa-routes/SKILL.md` — roots vs features split
 - `.agents/skills/data-fetching-architecture/SKILL.md` — the canonical cross-layer route for server data (component → store SWR hook → service → `lambdaClient`)
-- `.agents/skills/store-data-structures/SKILL.md`, `.agents/skills/zustand/SKILL.md` — store shape and action patterns when the diff touches stores
+- `.agents/skills/zustand/SKILL.md` and its `references/data-structures.md` — store shape and action patterns when the diff touches stores
 - Category pattern skills when the diff's category has one (`modal`, `trpc-router`, `builtin-tool`, `drizzle`, ...) — check `.agents/skills/` for a skill matching the touched domain; when one exists it is the yardstick, cite it in `rule_source`
 
 ## How to check

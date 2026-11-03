@@ -2,9 +2,8 @@
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { Input, InputNumber } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Avatar, InputNumber, TextArea } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Clock } from 'lucide-react';
 import type { ChangeEvent } from 'react';
@@ -157,7 +156,7 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
         </Flexbox>
 
         {/* Instruction input */}
-        <Input.TextArea
+        <TextArea
           autoSize={{ maxRows: 10, minRows: 6 }}
           placeholder={t('agentGroupManagement.executeTask.intervention.taskPlaceholder')}
           value={instruction}

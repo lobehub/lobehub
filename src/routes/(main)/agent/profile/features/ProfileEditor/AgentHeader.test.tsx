@@ -56,7 +56,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: (props: Record<string, unknown>) => {
     mocks.actionIconProps.all.push(props);
@@ -221,6 +221,19 @@ describe('AgentHeader', () => {
     const view = render(<AgentHeader />);
 
     expect(view.container.textContent).toContain('@brave-otter-lamp');
+  });
+
+  it('shows the description other agents read', () => {
+    mocks.agentStoreState.agentMap = {
+      'agent-a': {
+        description: 'Reviews pull requests and runs the test suite',
+        name: 'Alice',
+        title: 'Code Reviewer',
+      },
+    };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('Reviews pull requests and runs the test suite');
   });
 
   // Regression: the headline used to fall back to the name field's PLACEHOLDER,

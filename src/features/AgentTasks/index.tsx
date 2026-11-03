@@ -1,5 +1,6 @@
 export {
   AgentScopedTaskDetailPage,
+  RoutedTaskDetailPage,
   TaskDetailPage,
   TaskDetailSections,
   TaskDetailSkeleton,

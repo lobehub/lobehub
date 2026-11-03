@@ -21,9 +21,16 @@ export const recentRouter = router({
     .input(
       z
         .object({
+          excludeArchived: z.boolean().optional(),
           limit: z.number().optional(),
           /** Restrict a workspace feed to the viewer's own items (mine/team toggle). */
           mineOnly: z.boolean().optional(),
+          /**
+           * Restrict a workspace feed to conversations the whole team can see —
+           * topics owned by a private agent/group are dropped even for their
+           * own creator. Set by the home "team" tab.
+           */
+          sharedOnly: z.boolean().optional(),
           types: z.array(z.enum(['topic', 'document', 'task'])).optional(),
           withTopicPreview: z.boolean().optional(),
         })
@@ -37,6 +44,8 @@ export const recentRouter = router({
         input?.types,
         input?.withTopicPreview,
         input?.mineOnly,
+        input?.sharedOnly,
+        input?.excludeArchived,
       );
 
       return items.map((item) => {
@@ -54,13 +63,13 @@ export const recentRouter = router({
             break;
           }
           case 'document': {
-            routePath = `/page/${item.id}`;
+            routePath = `/resource/page/${item.id}`;
             break;
           }
           case 'task': {
             routePath = item.routeId
-              ? `/agent/${item.routeId}/task/${item.id}`
-              : `/task/${item.id}`;
+              ? `/agent/${item.routeId}/task/${item.taskIdentifier ?? item.id}`
+              : `/task/${item.taskIdentifier ?? item.id}`;
             break;
           }
         }
@@ -70,9 +79,11 @@ export const recentRouter = router({
           description: item.description,
           icon: item.type,
           id: item.id,
+          taskIdentifier: item.taskIdentifier,
           lastAssistantMessage: item.lastAssistantMessage,
           metadata: item.metadata as ChatTopicMetadata | undefined,
           routePath,
+          slugTitle: item.slugTitle,
           status: item.status,
           title: item.title,
           type: item.type,

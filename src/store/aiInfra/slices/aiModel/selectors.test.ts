@@ -1,39 +1,46 @@
 import { AiModelSourceEnum } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
+import { createReplicaState } from '@/libs/replica';
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 
 import { aiModelSelectors } from './selectors';
 
 describe('aiModelSelectors', () => {
+  const models = [
+    {
+      id: 'model1',
+      type: 'chat',
+      enabled: true,
+      displayName: 'Model One',
+    },
+    {
+      id: 'model2',
+      type: 'chat',
+      enabled: false,
+      displayName: 'Model Two',
+    },
+    {
+      id: 'model3',
+      type: 'embedding',
+      enabled: true,
+      displayName: 'Model Three',
+    },
+    {
+      id: 'model4',
+      type: 'chat',
+      enabled: true,
+      source: AiModelSourceEnum.Remote,
+      displayName: 'Remote Model',
+    },
+  ];
+
   const mockState: AIProviderStoreState = {
-    aiProviderModelList: [
-      {
-        id: 'model1',
-        type: 'chat',
-        enabled: true,
-        displayName: 'Model One',
-      },
-      {
-        id: 'model2',
-        type: 'chat',
-        enabled: false,
-        displayName: 'Model Two',
-      },
-      {
-        id: 'model3',
-        type: 'embedding',
-        enabled: true,
-        displayName: 'Model Three',
-      },
-      {
-        id: 'model4',
-        type: 'chat',
-        enabled: true,
-        source: AiModelSourceEnum.Remote,
-        displayName: 'Remote Model',
-      },
-    ],
+    // The model list is a replica keyed by provider; the selectors read the
+    // active provider's entry.
+    activeAiProvider: 'provider1',
+    aiModelListMap: { provider1: models },
+    aiModelListReplica: createReplicaState(),
     builtinAiModelList: [],
     modelSearchKeyword: '',
     aiModelLoadingIds: ['model2'],
@@ -118,7 +125,7 @@ describe('aiModelSelectors', () => {
 
     it('should handle empty keyword', () => {
       const result = aiModelSelectors.filteredAiProviderModelList(mockState);
-      expect(result).toHaveLength(mockState.aiProviderModelList.length);
+      expect(result).toHaveLength(models.length);
     });
   });
 
@@ -131,7 +138,7 @@ describe('aiModelSelectors', () => {
 
   describe('isEmptyAiProviderModelList', () => {
     it('should return true when list is empty', () => {
-      const state = { ...mockState, aiProviderModelList: [] };
+      const state = { ...mockState, aiModelListMap: {} };
       const result = aiModelSelectors.isEmptyAiProviderModelList(state);
       expect(result).toBe(true);
     });
@@ -151,9 +158,11 @@ describe('aiModelSelectors', () => {
     it('should return false when no remote models exist', () => {
       const state = {
         ...mockState,
-        aiProviderModelList: mockState.aiProviderModelList.filter(
-          (m) => !('source' in m) || m.source !== AiModelSourceEnum.Remote,
-        ),
+        aiModelListMap: {
+          provider1: models.filter(
+            (m) => !('source' in m) || m.source !== AiModelSourceEnum.Remote,
+          ),
+        },
       };
       const result = aiModelSelectors.hasRemoteModels(state);
       expect(result).toBe(false);

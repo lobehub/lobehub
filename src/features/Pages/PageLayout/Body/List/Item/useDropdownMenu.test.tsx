@@ -67,21 +67,13 @@ vi.mock('@/store/page', () => ({
     getDocumentById: (_id: string) => (_s: unknown) => storeMock.document,
     getFilteredDocuments: (_s: unknown) => (storeMock.document ? [storeMock.document] : []),
   },
-  usePageStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) =>
-      selector({
-        duplicatePage: vi.fn(),
-        publishPageToWorkspace: vi.fn(),
-        removePage: vi.fn(),
-      }),
-    {
-      getState: () => ({
-        duplicatePage: vi.fn(),
-        publishPageToWorkspace: vi.fn(),
-        removePage: vi.fn(),
-      }),
-    },
-  ),
+  pageActions: {
+    duplicatePage: vi.fn(),
+    publishPageToWorkspace: vi.fn(),
+    removePage: vi.fn(),
+    setPageVisibility: vi.fn(),
+  },
+  usePageStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -127,6 +119,55 @@ describe('Page list item dropdown menu', () => {
     expect(useDocumentTransferMenuItemMock).toHaveBeenCalledWith('page-1', {
       transferLabel: 'pageEditor.menu.move',
     });
+  });
+
+  it('stops a menu click from reaching the row that opened it', () => {
+    // A page row is a link. If the menu click keeps bubbling the row navigates,
+    // which unmounts the inline rename field before it can be typed into.
+    const toggleEditing = vi.fn();
+    const { result } = renderHook(() => useDropdownMenu({ pageId: 'page-1', toggleEditing }));
+    const rename = getMenuItem(result.current(), 'rename');
+
+    const domEvent = { stopPropagation: vi.fn() };
+    (rename?.onClick as unknown as (info: { domEvent: typeof domEvent }) => void)({ domEvent });
+
+    expect(domEvent.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(toggleEditing).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps the row click from firing for destructive menu actions too', () => {
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+
+    for (const key of ['duplicate', 'delete']) {
+      const domEvent = { stopPropagation: vi.fn() };
+      const item = getMenuItem(result.current(), key);
+
+      (item?.onClick as unknown as (info: { domEvent: typeof domEvent }) => void)({ domEvent });
+
+      expect(domEvent.stopPropagation).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('keeps the row click from firing for injected transfer actions', () => {
+    // Business builds hand these entries over with a plain `onClick`; they run
+    // through the same wrapper so "Move" cannot navigate the row either.
+    const transfer = vi.fn();
+    useDocumentTransferMenuItemMock.mockReturnValueOnce([
+      { key: 'move', label: 'Move', onClick: transfer },
+    ] as never);
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+    const move = getMenuItem(result.current(), 'move');
+    const domEvent = { stopPropagation: vi.fn() };
+
+    (move?.onClick as unknown as (info: { domEvent: typeof domEvent }) => void)({ domEvent });
+
+    expect(domEvent.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(transfer).toHaveBeenCalledTimes(1);
   });
 
   it('disables page management actions for workspace viewers', () => {

@@ -6,6 +6,7 @@ import type {
   TaskListItem,
 } from '@/store/task/slices/list/initialState';
 
+import type { CreateTaskContentProps } from '../CreateTaskModal/CreateTaskContent';
 import type { TaskGroupBy, TaskGroupMeta } from './listViewOptions';
 import {
   getTaskAssigneeGroupMeta,
@@ -18,8 +19,23 @@ export interface KanbanColumnDefinition {
   droppable: boolean;
   groupMeta?: TaskGroupMeta;
   key: string;
-  targetStatus: 'backlog' | 'canceled' | 'completed' | null;
+  /**
+   * `running` is not a plain status write: dropping a task there starts a run,
+   * and the server moves it to `running` once the run is dispatched.
+   */
+  targetStatus: 'backlog' | 'canceled' | 'completed' | 'running' | null;
 }
+
+/**
+ * Statuses a task can be started from — mirrors the detail page's Run button.
+ * `scheduled` is excluded because automation owns its next run.
+ */
+export const KANBAN_RUNNABLE_STATUSES = new Set<TaskStatus>([
+  'backlog',
+  'completed',
+  'failed',
+  'paused',
+]);
 
 export interface KanbanAssigneeUpdate {
   assigneeAgentId?: string | null;
@@ -41,7 +57,7 @@ export const getKanbanColumnHeaderVariant = ({
 
 export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
   { droppable: true, key: 'backlog', targetStatus: 'backlog' },
-  { droppable: false, key: 'running', targetStatus: null },
+  { droppable: true, key: 'running', targetStatus: 'running' },
   { droppable: false, key: 'needsInput', targetStatus: null },
   { droppable: true, key: 'done', targetStatus: 'completed' },
   { droppable: true, key: 'canceled', targetStatus: 'canceled' },
@@ -49,6 +65,49 @@ export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
 
 export const normalizeKanbanGroupBy = (groupBy: TaskGroupBy): TaskKanbanGroupBy =>
   groupBy === 'assignee' || groupBy === 'member' || groupBy === 'priority' ? groupBy : 'status';
+
+export interface KanbanGroupQueryInput {
+  agentId?: string;
+  excludeStatuses?: readonly TaskStatus[];
+  groupBy: TaskKanbanGroupBy;
+  /** Set on the "My tasks" board; mutually exclusive with the other scopes. */
+  myTaskScope?: 'assigned' | 'created';
+  projectId?: string;
+}
+
+export interface KanbanGroupQuery {
+  agentId?: string;
+  allAgents?: boolean;
+  automated?: boolean;
+  excludeStatuses?: readonly TaskStatus[];
+  groupBy: TaskKanbanGroupBy;
+  projectId?: string;
+  scope?: 'assigned' | 'created';
+}
+
+/**
+ * The grouped query one board runs, picked from the scope it was mounted with.
+ *
+ * Every board except "My tasks" pins `automated: false`, keeping the tasks that
+ * still fire on their own out of the columns — they belong to the scheduled
+ * roll-up. "My tasks" deliberately sends no automation filter, because its list
+ * view sends none either: filtering only on the board side would make the
+ * caller's scheduled and heartbeat tasks vanish on the list -> board switch of
+ * one and the same collection.
+ */
+export const buildKanbanGroupQuery = ({
+  agentId,
+  excludeStatuses,
+  groupBy,
+  myTaskScope,
+  projectId,
+}: KanbanGroupQueryInput): KanbanGroupQuery => {
+  if (myTaskScope) return { excludeStatuses, groupBy, scope: myTaskScope };
+  if (projectId) return { automated: false, excludeStatuses, groupBy, projectId };
+  if (agentId) return { agentId, automated: false, excludeStatuses, groupBy };
+
+  return { allAgents: true, automated: false, excludeStatuses, groupBy };
+};
 
 export const buildKanbanColumns = (
   taskGroups: TaskGroupItem[],
@@ -111,12 +170,58 @@ export const getKanbanTaskPatch = (
   }
 };
 
+/** Pinned on the new task, so it lands in the column it was created from. */
+export interface KanbanColumnCreateDefaults {
+  assigneeAgentId?: string;
+  priority?: number;
+}
+
+/**
+ * Whether a column offers a create entry, and what the new task is pinned to.
+ * `undefined` means no entry: a task created there could not be guaranteed to
+ * land in that column.
+ */
+export const getKanbanColumnCreateDefaults = (
+  groupBy: TaskKanbanGroupBy,
+  column: KanbanColumnDefinition,
+): KanbanColumnCreateDefaults | undefined => {
+  if (groupBy === 'status' && column.key === 'backlog') return {};
+  if (groupBy === 'priority' && column.groupMeta?.groupBy === 'priority') {
+    return { priority: column.groupMeta.priority ?? 0 };
+  }
+  // The unassigned column has no entry: the modal cannot pin "no agent".
+  if (groupBy === 'assignee' && column.groupMeta?.groupBy === 'assignee') {
+    const { assigneeId } = column.groupMeta;
+    return assigneeId ? { assigneeAgentId: assigneeId } : undefined;
+  }
+};
+
+/**
+ * Props for the create task modal opened from a column. The column's pinned
+ * fields are prefilled, so an untouched modal creates the task in this column.
+ */
+export const getKanbanCreateTaskModalProps = (
+  defaults: KanbanColumnCreateDefaults,
+  scope: { agentId?: string; projectId?: string },
+): CreateTaskContentProps => ({
+  agentId: defaults.assigneeAgentId ?? scope.agentId,
+  defaultPriority: defaults.priority,
+  // An agent-scoped board only holds that agent's tasks.
+  lockAssignee: !!scope.agentId,
+  projectId: scope.projectId,
+  // The board has no inline entry to minimize into.
+  showInlineToggle: false,
+});
+
 export const canDropTaskIntoKanbanColumn = (
   task: TaskListItem,
   groupBy: TaskKanbanGroupBy,
   column: KanbanColumnDefinition,
 ): boolean => {
   if (!column.droppable) return false;
+  if (groupBy === 'status' && column.targetStatus === 'running') {
+    return KANBAN_RUNNABLE_STATUSES.has(task.status as TaskStatus);
+  }
   if (groupBy !== 'member' || column.groupMeta?.groupBy !== 'member') return true;
 
   const targetAssigneeUserId = column.groupMeta.assigneeUserId;
@@ -124,6 +229,14 @@ export const canDropTaskIntoKanbanColumn = (
 
   return task.visibility !== 'private' || task.createdByUserId === targetAssigneeUserId;
 };
+
+export const findKanbanTask = (
+  taskGroups: TaskGroupItem[],
+  identifier: string,
+): TaskListItem | undefined =>
+  taskGroups
+    .flatMap((group) => group.tasks as TaskListItem[])
+    .find((item) => item.identifier === identifier);
 
 export const moveTaskBetweenKanbanGroups = (
   taskGroups: TaskGroupItem[],

@@ -1,4 +1,5 @@
 import type { MetricSubjectType } from '@lobechat/types';
+import { METRIC_SUBJECT_TYPES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -9,9 +10,11 @@ import { GoalModel } from '@/database/models/goal';
 import { MetricModel } from '@/database/models/metric';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
+import { WidgetModel } from '@/database/models/widget';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { GoalSubscriptionService } from '@/server/services/goal/subscriptions';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -31,7 +34,7 @@ const metricWriteProcedure = metricProcedure.use(withScopedPermission('agent:upd
 const idInput = z.object({ id: z.string() });
 const subjectInput = z.object({
   subjectId: z.string(),
-  subjectType: z.enum(['goal', 'task', 'agent', 'project', 'workspace']),
+  subjectType: z.enum(METRIC_SUBJECT_TYPES),
 });
 const configSchema = z.object({
   direction: z.enum(['higher_is_better', 'lower_is_better']).optional(),
@@ -103,6 +106,9 @@ const assertSubjectVisible = async (
       case 'task': {
         return new TaskModel(db, ctx.userId, workspaceId).findById(subjectId);
       }
+      case 'widget': {
+        return new WidgetModel(db, ctx.userId, workspaceId).findById(subjectId);
+      }
       case 'workspace': {
         return workspaceId === subjectId;
       }
@@ -118,6 +124,21 @@ const assertSubjectVisible = async (
  * measures. Doubles as orphan protection — a series whose subject was deleted
  * stops resolving instead of lingering as readable, writable telemetry.
  */
+/**
+ * Widget series are written only by the widget's own runs (see
+ * `services/widget/metrics`), which own the fixed `value` / `series:<name>`
+ * keys. Letting the generic API create, append to, edit or delete them would
+ * let any workspace member pre-claim those keys or rewrite a coworker's trend,
+ * since series ownership here widens to the whole workspace. Reads stay open.
+ */
+const assertSubjectWritable = (subjectType: MetricSubjectType) => {
+  if (subjectType === 'widget')
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: "Widget metrics are written by the widget's runs, not through the metric API",
+    });
+};
+
 const requireVisibleSeries = async (
   db: LobeChatDatabase,
   ctx: { metricModel: MetricModel; userId: string; workspaceId?: string | null },
@@ -146,7 +167,8 @@ export const metricRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        await requireVisibleSeries(ctx.serverDB, ctx, input.id);
+        const series = await requireVisibleSeries(ctx.serverDB, ctx, input.id);
+        assertSubjectWritable(series.subjectType);
         const point = await ctx.metricModel.addPoint(input.id, {
           actorId: ctx.userId,
           actorType: 'user',
@@ -165,6 +187,7 @@ export const metricRouter = router({
   deleteSeries: metricWriteProcedure.input(idInput).mutation(async ({ input, ctx }) => {
     try {
       const series = await requireVisibleSeries(ctx.serverDB, ctx, input.id);
+      assertSubjectWritable(series.subjectType);
       // Workspace visibility lets any member read the series; deleting it (and
       // cascading every observation) stays with the creator or an owner.
       assertWorkspaceRowManageable(ctx, series.userId, 'metric series');
@@ -226,6 +249,70 @@ export const metricRouter = router({
       }
     }),
 
+  /**
+   * The chart bundle for a tracking surface, in one RPC: the named series of a
+   * subject, each with its recent point window and its true first observation.
+   *
+   * Exists because the per-series alternative amplifies: a polled surface
+   * calling listSeries + N x listPoints costs 1+N requests and ~3N queries
+   * for series that cannot even affect the view. Here the caller names its
+   * keys (a declared acceptance contract is capped), and the whole read is
+   * one request over K+2 bounded queries. `firstPoint` travels separately
+   * because the recent window silently rebases a progress baseline once
+   * history outgrows it.
+   */
+  listSeriesWithPoints: metricProcedure
+    .input(
+      subjectInput.extend({
+        keys: z.array(z.string().min(1).max(255)).min(1).max(50),
+        limit: z.number().int().min(2).max(1000).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      try {
+        await assertSubjectVisible(ctx.serverDB, ctx, input.subjectType, input.subjectId);
+        const series = await ctx.metricModel.findByKeys(
+          input.subjectType,
+          input.subjectId,
+          input.keys,
+        );
+        // Tracking Goals use the exact Widget series and history read by boards.
+        // Alias only the contract key; identity and values remain authoritative.
+        const bindings =
+          input.subjectType === 'goal'
+            ? await new GoalSubscriptionService(
+                ctx.serverDB,
+                ctx.userId,
+                ctx.workspaceId ?? undefined,
+              ).list(input.subjectId)
+            : [];
+        const mapped = input.keys.flatMap((key) => {
+          const binding = bindings.find((item) => item.subscription.binding.criterionKey === key);
+          if (binding) return binding.metric ? [{ ...binding.metric, key }] : [];
+          const own = series.find((item) => item.key === key);
+          return own ? [own] : [];
+        });
+        const firstPoints = await ctx.metricModel.firstPointsByMetricIds(
+          mapped.map((item) => item.id),
+        );
+        const data = await Promise.all(
+          mapped.map(async (item) => ({
+            config: item.config,
+            firstPoint: firstPoints.get(item.id) ?? null,
+            id: item.id,
+            key: item.key,
+            kind: item.kind,
+            points: await ctx.metricModel.recentPoints(item.id, input.limit ?? 200),
+            title: item.title,
+            unit: item.unit,
+          })),
+        );
+        return { data, success: true };
+      } catch (error) {
+        mapMetricError(error, 'listSeriesWithPoints');
+      }
+    }),
+
   listSeries: metricProcedure.input(subjectInput).query(async ({ input, ctx }) => {
     try {
       await assertSubjectVisible(ctx.serverDB, ctx, input.subjectType, input.subjectId);
@@ -247,6 +334,7 @@ export const metricRouter = router({
       try {
         const { id, ...patch } = input;
         const existing = await requireVisibleSeries(ctx.serverDB, ctx, id);
+        assertSubjectWritable(existing.subjectType);
         // Definition edits rewrite the render/evaluation contract for everyone
         // reading the series — creator or workspace owner only.
         assertWorkspaceRowManageable(ctx, existing.userId, 'metric series');
@@ -269,6 +357,7 @@ export const metricRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        assertSubjectWritable(input.subjectType);
         await assertSubjectVisible(ctx.serverDB, ctx, input.subjectType, input.subjectId);
         const series = await ctx.metricModel.ensure(input);
         if (!series)

@@ -11,7 +11,14 @@ const INTERACTION_KINDS = new Set<AgentInterventionInteractionKind>([
   'plan',
   'question',
 ]);
-const PROVIDERS = new Set<AgentInterventionProvider>(['claude-code', 'cursor', 'droid', 'qoder']);
+const PROVIDERS = new Set<AgentInterventionProvider>([
+  'claude-code',
+  'cursor',
+  'devin',
+  'droid',
+  'opencode',
+  'qoder',
+]);
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === 'object' && !Array.isArray(value)

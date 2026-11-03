@@ -1,7 +1,7 @@
 'use client';
 
 import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
-import { type MenuProps } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 import { Flexbox, Hotkey, Icon } from '@lobehub/ui';
 import { BotMessageSquare, LucideCheck, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -19,7 +19,7 @@ import { preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
  * - Add AI Message
  * - Add User Message
  */
-export const useSendMenuItems = (): MenuProps['items'] => {
+export const useSendMenuItems = (): DropdownItem[] => {
   const { t } = useTranslation('chat');
 
   const storeApi = useConversationStoreApi();

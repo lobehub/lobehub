@@ -1,8 +1,7 @@
 'use client';
 
 import { type UIChatMessage } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,6 +39,7 @@ const TasksMessage = memo<TasksMessageProps>(({ id }) => {
       showTitle
       aboveMessage={null}
       actions={<AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} />}
+      agentId={firstTaskAgentId ?? null}
       avatar={avatar}
       customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       id={id}

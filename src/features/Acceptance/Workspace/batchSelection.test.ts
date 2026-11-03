@@ -6,9 +6,11 @@ import {
   ACCEPTANCE_BATCH_CHUNK,
   acceptanceBatchTargets,
   acceptanceProjectTargets,
+  acceptanceRedirectAfterDelete,
   acceptanceSelectAllState,
   chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
+  rangeAcceptanceSelection,
   toggleAcceptanceSelection,
   visibleAcceptanceSelection,
 } from './batchSelection';
@@ -26,6 +28,20 @@ describe('toggleAcceptanceSelection', () => {
   it('adds an unselected row and removes a selected one', () => {
     expect(toggleAcceptanceSelection(['a'], 'b')).toEqual(['a', 'b']);
     expect(toggleAcceptanceSelection(['a', 'b'], 'a')).toEqual(['b']);
+  });
+});
+
+describe('rangeAcceptanceSelection', () => {
+  const order = ['a', 'b', 'c', 'd', 'e'];
+
+  it('selects everything between anchor and target in either direction', () => {
+    expect(rangeAcceptanceSelection(order, 'b', 'd', [])).toEqual(['b', 'c', 'd']);
+    expect(rangeAcceptanceSelection(order, 'd', 'b', ['e'])).toEqual(['e', 'b', 'c', 'd']);
+  });
+
+  it('falls back to a single pick when the anchor is missing or out of order', () => {
+    expect(rangeAcceptanceSelection(order, null, 'c', ['a'])).toEqual(['a', 'c']);
+    expect(rangeAcceptanceSelection(order, 'gone', 'c', [])).toEqual(['c']);
   });
 });
 
@@ -130,5 +146,17 @@ describe('chunkAcceptanceBatch', () => {
 
   it('has nothing to send for an empty selection', () => {
     expect(chunkAcceptanceBatch([])).toEqual([]);
+  });
+});
+
+describe('acceptanceRedirectAfterDelete', () => {
+  it('returns to the acceptance list, not the app home, when the open row is deleted', () => {
+    expect(acceptanceRedirectAfterDelete('a', ['a', 'b'], [])).toBe('/acceptance');
+  });
+
+  it('stays put when the open row survived or was not targeted', () => {
+    expect(acceptanceRedirectAfterDelete('a', ['a'], ['a'])).toBeUndefined();
+    expect(acceptanceRedirectAfterDelete('a', ['b'], [])).toBeUndefined();
+    expect(acceptanceRedirectAfterDelete(undefined, ['a'], [])).toBeUndefined();
   });
 });

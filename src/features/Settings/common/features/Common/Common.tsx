@@ -1,8 +1,7 @@
 'use client';
 
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Icon, ImageSelect } from '@lobehub/ui';
-import { Select, Skeleton, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, ImageSelect, Select, Tabs } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
@@ -10,6 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { imageUrl } from '@/const/url';
 import { isDesktop } from '@/const/version';
@@ -21,6 +21,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type LocaleMode } from '@/types/locale';
+import { type UserGeneralConfig } from '@/types/user/settings';
 import { preloadLang } from '@/utils/client/preloadLang';
 
 const Common = memo(() => {
@@ -32,6 +33,11 @@ const Common = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [switchLocale, isStatusInit] = useGlobalStore((s) => [s.switchLocale, s.isStatusInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+  const form = useForm({
+    initialValues: general,
+    values: general,
+    onValuesChange: (v) => save(() => setSettings({ general: v })),
+  });
 
   // Use the theme value from next-themes, default to 'system'
   const currentTheme = theme || 'system';
@@ -40,9 +46,31 @@ const Common = memo(() => {
     switchLocale(value);
   };
 
-  if (!(isStatusInit && isUserStateInit)) return <Skeleton.Text rows={5} />;
+  // One filled group: theme, language, animation, context menu, response language.
+  // The theme row is the 332×86 `ImageSelect`, so it reserves that size instead of an input.
+  if (!(isStatusInit && isUserStateInit))
+    return (
+      <SettingsSectionSkeleton
+        groups={[
+          {
+            // Settled sizes: theme ImageSelect, language Select, motion and
+            // context-menu Segmented controls, reply-language Select.
+            controls: {
+              0: { height: 86, width: 332 },
+              1: { height: 32, width: 167 },
+              2: { height: 38, width: 230 },
+              3: { height: 38, width: 165 },
+              4: { height: 32, width: 167 },
+            },
+            rows: 5,
+            titleWidth: 96,
+            withDesc: false,
+          },
+        ]}
+      />
+    );
 
-  const themeFormGroup: FormGroupItemType = {
+  const themeFormGroup: FormGroupItem<UserGeneralConfig> = {
     children: [
       {
         children: (
@@ -145,7 +173,7 @@ const Common = memo(() => {
         ),
         minWidth: undefined,
         name: 'animationMode',
-        valuePropName: 'activeKey',
+        valueProp: 'activeKey',
       },
       {
         children: (
@@ -171,7 +199,7 @@ const Common = memo(() => {
         ),
         minWidth: undefined,
         name: 'contextMenuMode',
-        valuePropName: 'activeKey',
+        valueProp: 'activeKey',
       },
 
       {
@@ -205,11 +233,10 @@ const Common = memo(() => {
   return (
     <Form
       collapsible={false}
-      initialValues={general}
+      form={form}
       items={[themeFormGroup]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={(v) => save(() => setSettings({ general: v }))}
       {...FORM_STYLE}
     />
   );

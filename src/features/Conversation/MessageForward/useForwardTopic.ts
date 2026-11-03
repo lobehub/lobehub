@@ -1,18 +1,34 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
-import type { ForwardTarget } from '@/store/chat/slices/forward/action';
+import type { ForwardResult, ForwardTarget } from '@/store/chat/slices/forward/action';
 
 interface ForwardTopicSource {
   agentId: string;
+  cancelSourceContinuation?: boolean;
   topicId: string;
 }
 
-export const useForwardTopic = ({ agentId, topicId }: ForwardTopicSource) => {
+const getHandoffFailureKey = (result: ForwardResult) => {
+  // No target confirmed and the source run is paused: inspect before re-arming.
+  if (result.sourceSchedulePaused) return 'messageForward.topic.handoff.sourceSchedulePaused';
+  // A target topic exists although its send failed; a retry would hand off twice.
+  if (result.failed.some((item) => item.topicId)) return 'messageForward.topic.handoff.unconfirmed';
+  // "Some Agents" only fits when at least one target took the handoff.
+  return result.succeeded.length > 0
+    ? 'messageForward.topic.handoff.partialFailed'
+    : 'messageForward.topic.handoff.failed';
+};
+
+export const useForwardTopic = ({
+  agentId,
+  cancelSourceContinuation,
+  topicId,
+}: ForwardTopicSource) => {
   const { t } = useTranslation('chat');
 
   const navigate = useWorkspaceAwareNavigate();
@@ -25,7 +41,12 @@ export const useForwardTopic = ({ agentId, topicId }: ForwardTopicSource) => {
 
       const primaryTarget = targets[0];
       void forwardTopic({
-        header: t('messageForward.topic.header'),
+        cancelSourceContinuation,
+        header: t(
+          cancelSourceContinuation
+            ? 'messageForward.topic.handoff.header'
+            : 'messageForward.topic.header',
+        ),
         note,
         onTopicCreated: (target, createdTopicId) => {
           if (target.id !== primaryTarget.id) return;
@@ -42,14 +63,36 @@ export const useForwardTopic = ({ agentId, topicId }: ForwardTopicSource) => {
           if (result.succeeded.length > 0) {
             toast.success(
               targets.length === 1
-                ? t('messageForward.success', { title: primaryTarget.title || '' })
-                : t('messageForward.successMulti', { count: result.succeeded.length }),
+                ? t(
+                    cancelSourceContinuation
+                      ? 'messageForward.topic.handoff.success'
+                      : 'messageForward.success',
+                    { title: primaryTarget.title || '' },
+                  )
+                : t(
+                    cancelSourceContinuation
+                      ? 'messageForward.topic.handoff.successMulti'
+                      : 'messageForward.successMulti',
+                    { count: result.succeeded.length },
+                  ),
             );
           }
-          if (result.failed.length > 0) toast.error(t('messageForward.failed'));
+          if (result.failed.length > 0)
+            toast.error(
+              t(cancelSourceContinuation ? getHandoffFailureKey(result) : 'messageForward.failed'),
+            );
         })
-        .catch(() => toast.error(t('messageForward.topic.loadFailed')));
+        .catch((error) => {
+          console.error('[useForwardTopic] Forwarding failed:', error);
+          toast.error(
+            t(
+              cancelSourceContinuation
+                ? 'messageForward.topic.handoff.notStarted'
+                : 'messageForward.topic.loadFailed',
+            ),
+          );
+        });
     },
-    [agentId, clearPortalStack, forwardTopic, navigate, t, topicId],
+    [agentId, cancelSourceContinuation, clearPortalStack, forwardTopic, navigate, t, topicId],
   );
 };

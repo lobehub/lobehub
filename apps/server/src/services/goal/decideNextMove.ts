@@ -1,19 +1,53 @@
 import type {
   FrontierCandidate,
   GoalBudgetState,
+  GoalMetricCriteriaState,
   GoalTickBranch,
   GoalTickOutcome,
 } from '@lobechat/agent-tracing';
-import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
-import type { GoalGraphNode, GoalGraphSnapshot, TaskItem } from '@lobechat/types';
+import {
+  ABANDONED_OPERATION_ERROR_PREFIX,
+  GOAL_ACCEPTANCE_TASK_TITLE,
+  LEASE_EXPIRED_ERROR,
+  VERIFICATION_ERRORED_ERROR,
+  VERIFICATION_FAILED_ERROR,
+} from '@lobechat/const/goal';
+import type {
+  GoalGraphNode,
+  GoalGraphSnapshot,
+  GoalMetricComparison,
+  TaskItem,
+} from '@lobechat/types';
+import { toMetricScale } from '@lobechat/types';
+
+import { isGoalReportNode } from './report';
+import type { RolloutGateResult } from './rolloutGate';
 
 export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 
 /** Reason strings the recovery paths key off, written by the settle path. */
-export const LEASE_EXPIRED_ERROR = 'Goal Task operation lease expired.';
-export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
+export { LEASE_EXPIRED_ERROR, VERIFICATION_ERRORED_ERROR, VERIFICATION_FAILED_ERROR };
 
 export const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
+
+/**
+ * A Task node the coordinator decides on. The wrap-up report node is a Task too,
+ * but it runs after the Goal-level acceptance has ended and never takes part in
+ * the Goal's status: its failure or timeout must not open a gate, occupy a slot
+ * or keep a Goal from being judged.
+ */
+export const isCoordinatedTask = (
+  graph: Pick<GoalGraphSnapshot, 'goal'>,
+  node: Pick<GoalGraphNode, 'id' | 'kind'>,
+) => node.kind === 'task' && !isGoalReportNode(graph, node);
+
+/**
+ * Whether a paused Task lost its run rather than failed it: the coordinator
+ * reclaimed an expired lease, or the gateway watchdog abandoned a silent run.
+ * Either way nothing judged the work, so another attempt is the recovery.
+ */
+export const isLostRunError = (error?: string | null): boolean =>
+  error === LEASE_EXPIRED_ERROR || !!error?.startsWith(ABANDONED_OPERATION_ERROR_PREFIX);
 
 export interface FrontierSelection {
   /** Every eligible task node, best first — the trace-shaped view. */
@@ -31,13 +65,47 @@ export interface FrontierSelection {
  * before deciding, and exported so a trace keeps the whole ranking rather than
  * only the winner — "why not that node" is unanswerable from the winner alone.
  */
+/**
+ * Every unfinished Task that would wait forever once `rootIds` stop short of
+ * `resolved` — directly or through another such Task. A prerequisite only
+ * counts as met when it resolves, so these have to leave with the roots or
+ * the goal parks on `no_frontier`. The Goal acceptance is never among them:
+ * ending it ends the Goal, which belongs to its own gate.
+ */
+export const collectStrandedDependents = (
+  graph: GoalGraphSnapshot,
+  rootIds: Iterable<string>,
+): GoalGraphNode[] => {
+  const closed = new Set(rootIds);
+  const stranded: GoalGraphNode[] = [];
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const edge of graph.edges) {
+      if (edge.kind !== 'depends_on' || !closed.has(edge.targetNodeId)) continue;
+      if (closed.has(edge.sourceNodeId)) continue;
+      const node = graph.nodes.find((candidate) => candidate.id === edge.sourceNodeId);
+      if (
+        !node ||
+        node.kind !== 'task' ||
+        node.title === GOAL_ACCEPTANCE_TASK_TITLE ||
+        TERMINAL_NODE_STATUSES.has(node.status)
+      )
+        continue;
+      closed.add(node.id);
+      stranded.push(node);
+      grew = true;
+    }
+  }
+  return stranded;
+};
+
 export const selectFrontier = (graph: GoalGraphSnapshot): FrontierSelection => {
   const resolvedNodeIds = new Set(
     graph.nodes.filter((node) => node.status === 'resolved').map((node) => node.id),
   );
 
   const eligible = graph.nodes
-    .filter((node) => node.kind === 'task' && !TERMINAL_NODE_STATUSES.has(node.status))
+    .filter((node) => isCoordinatedTask(graph, node) && !TERMINAL_NODE_STATUSES.has(node.status))
     .map((node) => ({
       blockedBy: graph.edges
         .filter(
@@ -82,7 +150,11 @@ export const needsBudget = (task?: TaskItem | null): boolean => {
   if (task === null) return false;
   // A failure the coordinator can retry spends money too.
   if (task.status === 'paused') {
-    return task.error === LEASE_EXPIRED_ERROR || task.error === VERIFICATION_FAILED_ERROR;
+    return (
+      isLostRunError(task.error) ||
+      task.error === VERIFICATION_FAILED_ERROR ||
+      task.error === VERIFICATION_ERRORED_ERROR
+    );
   }
   return !['completed', 'failed', 'canceled', 'running', 'scheduled'].includes(task.status);
 };
@@ -106,6 +178,62 @@ export const frontierNeedsBudget = (
     return needsBudget(tasksById.get(node.taskId) ?? null);
   });
 
+/**
+ * Opening of the message the gate parks a goal with, and therefore of the
+ * reason recorded on its status trail. Shared so the recovery path that reads
+ * historical parks back cannot drift from the wording that wrote them.
+ */
+export const MEASURED_ACCEPTANCE_PAUSE_REASON = 'Measured acceptance not met';
+
+/**
+ * Reason recorded when the coordinator parks a goal because nothing on the
+ * frontier can run. Shared so a graph edit that removes the blocker (node
+ * retirement) can recognise this park and lift it.
+ */
+export const NO_FRONTIER_PAUSE_REASON = 'no eligible task to advance';
+
+/** Evaluate one numeric clause. Kept beside the gate that consumes it. */
+export const compareMetric = (
+  rawValue: number,
+  op: GoalMetricComparison,
+  rawTarget: number,
+): boolean => {
+  // Both operands are read at the storage scale: the observation was already
+  // rounded on its way into `numeric(20, 6)`, so comparing it against a
+  // full-precision target would judge two different numbers — `eq 0.1234567`
+  // could never hold, and `gte` / `lte` could flip at the rounding boundary.
+  const value = toMetricScale(rawValue);
+  const target = toMetricScale(rawTarget);
+  switch (op) {
+    case 'eq': {
+      return value === target;
+    }
+    case 'gt': {
+      return value > target;
+    }
+    case 'gte': {
+      return value >= target;
+    }
+    case 'lt': {
+      return value < target;
+    }
+    case 'lte': {
+      return value <= target;
+    }
+  }
+};
+
+/**
+ * Whether this tick could read numeric acceptance criteria: the goal declares
+ * some, and every Task node is terminal so the coordinator is in its terminal
+ * phase. Keeps the extra reads off every dispatch tick.
+ */
+export const needsMetricCriteria = (graph: GoalGraphSnapshot): boolean => {
+  if (!graph.goal.config?.acceptance?.metrics?.length) return false;
+  const taskNodes = graph.nodes.filter((node) => isCoordinatedTask(graph, node));
+  return taskNodes.length > 0 && taskNodes.every((node) => TERMINAL_NODE_STATUSES.has(node.status));
+};
+
 export interface GoalMoveInput {
   /** Required only when {@link needsBudget} says the branch could dispatch or recover. */
   budget?: GoalBudgetState;
@@ -113,6 +241,19 @@ export interface GoalMoveInput {
   concurrency: number;
   frontier: FrontierSelection;
   graph: GoalGraphSnapshot;
+  /**
+   * Required only when {@link needsMetricCriteria} holds — the terminal phase
+   * of a goal that declares numeric acceptance clauses. Evaluating them is a
+   * database read, so it happens in `tick` and travels in, the same way the
+   * budget does.
+   */
+  metricCriteria?: GoalMetricCriteriaState;
+  /**
+   * The repeated batch's gate verdict, present only once the wave it released
+   * has fully settled. Absent while a wave is running — the ordinary frontier
+   * owns that tick.
+   */
+  rolloutGate?: RolloutGateResult;
   /**
    * The responsible Task of every candidate that has one, keyed by task id.
    * A candidate whose task id is absent from the map has lost its row.
@@ -161,6 +302,8 @@ export const decideNextMove = ({
   concurrency,
   frontier,
   graph,
+  metricCriteria,
+  rolloutGate,
   tasksById,
 }: GoalMoveInput): GoalMove => {
   const { candidates, chosen } = frontier;
@@ -197,13 +340,34 @@ export const decideNextMove = ({
     };
   }
 
+  // A repeated batch settles its own gate before the terminal phase: a passed
+  // gate releases the next wave, a blocked one hands the stall to a person
+  // rather than letting the goal look finished while units remain undelivered.
+  if (rolloutGate) {
+    if (rolloutGate.met) {
+      return {
+        ...base,
+        branch: 'rollout_gate',
+        message: 'Batch gate passed; release the next wave',
+        outcome: 'advanced',
+      };
+    }
+    return {
+      ...base,
+      branch: 'pattern_break',
+      focusNodeId: graph.goal.config?.rolloutState?.assayNodeId,
+      message: rolloutGate.blockers.join('; ') || 'Batch gate is blocked',
+      outcome: 'waiting_human',
+    };
+  }
+
   // Walk the whole ranked frontier rather than stopping at its head. Four bug
   // fixes that share no code have no reason to run one after another, and the
   // old single-node frontier made them: the running node stayed eligible, was
   // re-picked every tick, and reported `waiting_external`, which ends the
   // advance before anything behind it is even considered.
   const inFlight = graph.nodes.filter(
-    (node) => node.kind === 'task' && isInFlight(tasksById.get(node.taskId ?? '')),
+    (node) => isCoordinatedTask(graph, node) && isInFlight(tasksById.get(node.taskId ?? '')),
   ).length;
 
   let parked = false;
@@ -239,7 +403,7 @@ export const decideNextMove = ({
     return move;
   }
 
-  if (!chosen) return decideWithoutFrontier(graph, candidates);
+  if (!chosen) return decideWithoutFrontier(graph, candidates, metricCriteria);
 
   // Everything eligible is either running, parked on a person, or waiting for a
   // slot. Report which, so the row does not read as stalled when it is simply
@@ -265,7 +429,7 @@ export const decideNextMove = ({
     };
   }
 
-  return decideWithoutFrontier(graph, candidates);
+  return decideWithoutFrontier(graph, candidates, metricCriteria);
 };
 
 /** What one candidate wants, or why it cannot be acted on right now. */
@@ -313,9 +477,10 @@ const decideForCandidate = ({
 const decideWithoutFrontier = (
   graph: GoalGraphSnapshot,
   candidates: FrontierCandidate[],
+  metricCriteria?: GoalMetricCriteriaState,
 ): GoalMove => {
   const base = { candidates };
-  const taskNodes = graph.nodes.filter((node) => node.kind === 'task');
+  const taskNodes = graph.nodes.filter((node) => isCoordinatedTask(graph, node));
 
   // A goal with no tasks at all has not been planned yet — decompose it into
   // explorable directions before anything runs, instead of parking it.
@@ -337,6 +502,57 @@ const decideWithoutFrontier = (
       ...base,
       branch: 'no_frontier',
       message: 'No task node is ready; resolve its dependencies first',
+      outcome: 'no_progress',
+    };
+  }
+
+  if (
+    graph.nodes.some(
+      (node) => node.kind === 'experiment' && !TERMINAL_NODE_STATUSES.has(node.status),
+    )
+  ) {
+    return {
+      ...base,
+      branch: 'no_frontier',
+      outcome: 'no_progress',
+      message: 'An experiment still has unfinished work or an empty branch',
+    };
+  }
+
+  // Exploration consumes real completed results before deciding whether to
+  // extend the graph or hand the deliverable to the ordinary acceptance gate.
+  if (
+    graph.goal.config?.exploration &&
+    !(
+      graph.goal.config.exploration.checkpoint?.readyForAcceptance &&
+      taskNodes.every(
+        (node) =>
+          node.title === GOAL_ACCEPTANCE_TASK_TITLE ||
+          graph.goal.config!.exploration!.checkpoint!.reviewedNodeIds?.includes(node.id),
+      )
+    )
+  ) {
+    return {
+      ...base,
+      branch: 'explore_graph',
+      message: 'Evaluate completed experiments and choose the next graph expansion',
+      outcome: 'advanced',
+    };
+  }
+
+  // Measured clauses gate the delivery contract, and are checked before it:
+  // an unmet number is not something a verifier can talk its way past, so
+  // creating (or re-running) the acceptance Task against it would only spend
+  // tokens to restate the gap. `no_progress` leaves the goal running — the
+  // next observation is what moves it, not another attempt.
+  if (metricCriteria && !metricCriteria.allMet) {
+    const unmet = metricCriteria.criteria.filter((criterion) => !criterion.met);
+    return {
+      ...base,
+      branch: 'measured_acceptance',
+      message: `${MEASURED_ACCEPTANCE_PAUSE_REASON}: ${unmet
+        .map((c) => `${c.key} ${c.op} ${c.target} (${c.value ?? 'no observation'})`)
+        .join(', ')}`,
       outcome: 'no_progress',
     };
   }
@@ -392,7 +608,9 @@ const decideForTask = (
     if (
       budget?.deadlinePassed &&
       task.status === 'paused' &&
-      (task.error === LEASE_EXPIRED_ERROR || task.error === VERIFICATION_FAILED_ERROR)
+      (isLostRunError(task.error) ||
+        task.error === VERIFICATION_FAILED_ERROR ||
+        task.error === VERIFICATION_ERRORED_ERROR)
     ) {
       return {
         ...base,
@@ -401,7 +619,7 @@ const decideForTask = (
         outcome: 'no_progress',
       };
     }
-    if (task.status === 'paused' && task.error === LEASE_EXPIRED_ERROR) {
+    if (task.status === 'paused' && isLostRunError(task.error)) {
       if (!capacity) return 'needs-capacity';
       return {
         ...base,
@@ -410,12 +628,22 @@ const decideForTask = (
         outcome: 'waiting_external',
       };
     }
-    if (task.status === 'paused' && task.error === VERIFICATION_FAILED_ERROR) {
+    // A verifier that could not run never evaluated the delivery, so it is an
+    // infrastructure failure rather than a verdict. It recovers the same way a
+    // rejection does; without a branch it fell through to the human gate, which
+    // stopped the goal on a failure nobody needed to judge.
+    if (
+      task.status === 'paused' &&
+      (task.error === VERIFICATION_FAILED_ERROR || task.error === VERIFICATION_ERRORED_ERROR)
+    ) {
       if (!capacity) return 'needs-capacity';
       return {
         ...base,
         branch: 'recover_verification',
-        message: `Task ${task.identifier} did not pass verification`,
+        message:
+          task.error === VERIFICATION_ERRORED_ERROR
+            ? `Verification could not run for Task ${task.identifier}`
+            : `Task ${task.identifier} did not pass verification`,
         outcome: 'waiting_external',
       };
     }
