@@ -26,6 +26,18 @@ HAVING count(*) > 1;
 
 This direct upgrade does **not** require an `issuer` column or a generic schema migration. The issuer schema introduced in Better Auth 1.7.0–1.7.2 was reverted in 1.7.3. Deployments that installed those intermediate versions need a separate schema review. LobeHub's own OIDC server uses `oidc-provider`, not Better Auth's removed `oidcProvider` plugin.
 
+## Password accounts imported outside LobeHub
+
+Better Auth 1.7 requires a password account's `account_id` to equal its local `user_id`. Normal registration and LobeHub's Clerk migration already follow this contract. Audit custom imports or manually seeded accounts before deployment:
+
+```sql
+SELECT id, user_id, account_id
+FROM accounts
+WHERE provider_id = 'credential' AND account_id IS DISTINCT FROM user_id;
+```
+
+If this returns rows, verify their ownership and duplicates before a reviewed repair. An email in `account_id` is no longer accepted for password sign-in. Do not change OAuth provider subjects or bypass this ownership check.
+
 ## Microsoft: migrate existing identities before sign-in
 
 The built-in Microsoft provider changes its account identifier from the ID token's `sub` claim to `oid`. This also applies when `AUTH_SSO_PROVIDERS` uses LobeHub's `microsoft-entra-id` alias, which resolves to the built-in `microsoft` provider.

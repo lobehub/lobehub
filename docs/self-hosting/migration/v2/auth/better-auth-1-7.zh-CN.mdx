@@ -26,6 +26,18 @@ HAVING count(*) > 1;
 
 从 1.6.33 直接升级至 1.7.16 **不需要**添加 `issuer` 列或执行通用表结构迁移。1.7.0–1.7.2 引入的 issuer 表结构已在 1.7.3 撤回；曾安装这些中间版本的部署需要另行检查。LobeHub 自己的 OIDC 服务使用 `oidc-provider`，不依赖 Better Auth 已移除的 `oidcProvider` 插件。
 
+## 自定义导入的密码账号
+
+Better Auth 1.7 要求密码账号的 `account_id` 等于本地 `user_id`。正常注册和 LobeHub 的 Clerk 迁移脚本已遵循这一约定。部署前应检查自定义导入或手动填充的账号：
+
+```sql
+SELECT id, user_id, account_id
+FROM accounts
+WHERE provider_id = 'credential' AND account_id IS DISTINCT FROM user_id;
+```
+
+如果查询返回记录，应先核实账号归属和重复情况，再经审核修复。密码登录不再接受以邮箱作为 `account_id` 的记录。不要修改 OAuth 第三方身份标识，也不要绕过此归属检查。
+
 ## Microsoft：恢复登录前迁移现有身份
 
 内置 Microsoft provider 的账号标识由 ID token 的 `sub` 改为 `oid`。LobeHub 的 `microsoft-entra-id` 别名也会解析为内置 `microsoft` provider，因此同样受影响。
