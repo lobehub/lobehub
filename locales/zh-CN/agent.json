@@ -20,7 +20,7 @@
   "channel.access.group.allowlist": "仅指定的群聊",
   "channel.access.group.allowlistDesc": "只在你列在下面的群聊里回复。",
   "channel.access.group.disabled": "群聊里仅自己可用",
-  "channel.access.group.disabledDesc": "在机器人已加入的群聊和频道里只有你能使用，其他人会收到无权限提示；Telegram 访客模式按其单独设置。",
+  "channel.access.group.disabledDesc": "在机器人已加入的群聊和频道里只有你能使用（需先在上方填写你自己的 ID），其他人会收到无权限提示；Telegram 访客模式按其单独设置。",
   "channel.access.group.label": "在群聊和频道里怎么响应",
   "channel.access.group.listNote": "上面的名单在群聊里也生效：只有名单里的人能在群聊里使用它。",
   "channel.access.group.open": "所有群聊和频道",

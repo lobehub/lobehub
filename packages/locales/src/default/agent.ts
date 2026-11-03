@@ -611,7 +611,7 @@ export default {
   'channel.access.group.allowlistDesc': 'Replies only in the groups you list below.',
   'channel.access.group.disabled': 'Only me in groups',
   'channel.access.group.disabledDesc':
-    'In groups and channels it has joined, only you can use it; others are told they lack permission. Telegram Guest Mode follows its own setting.',
+    'In groups and channels it has joined, only you can use it (once your own ID is set above); others are told they lack permission. Telegram Guest Mode follows its own setting.',
   'channel.access.group.listNote':
     'The people list above also applies here: only people on it can use the bot in groups.',
   'channel.access.identity.desc':
