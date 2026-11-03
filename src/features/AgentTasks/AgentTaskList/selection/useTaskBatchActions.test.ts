@@ -121,7 +121,9 @@ describe('useTaskBatchActions', () => {
     expect(overlay.commit).not.toHaveBeenCalled();
     expect(refreshTaskList).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith('offline');
-    // Back in the list after the rollback, so selected again for a retry.
+    // Selected again for a retry once the rolled-back rows render again.
+    expect(useTaskSelectionStore.getState().selectedIds).toEqual([]);
+    act(() => useTaskSelectionStore.getState().prune(new Set(['a', 'b'])));
     expect(useTaskSelectionStore.getState().selectedIds).toEqual(['a', 'b']);
   });
 

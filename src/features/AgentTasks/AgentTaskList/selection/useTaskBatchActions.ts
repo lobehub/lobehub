@@ -82,8 +82,7 @@ export const useTaskBatchActions = () => {
 
   const run = useCallback(
     async (action: TaskBatchAction) => {
-      const { selectedIds, visibleIds: shownAtStart } = useTaskSelectionStore.getState();
-      const ids = [...selectedIds];
+      const ids = [...useTaskSelectionStore.getState().selectedIds];
       if (ids.length === 0) return;
 
       const patch = optimisticTaskPatch(action);
@@ -117,18 +116,12 @@ export const useTaskBatchActions = () => {
 
       // Rows still needing attention come back selected — unless the user has
       // moved on (selected something else, or left the list: a scope or page
-      // change clears the selection), and only rows the list on screen shows.
-      // A row the overlay took out (delete, archive) is back in the list now
-      // but not yet in `visibleIds`; the list's next prune checks it again.
-      const removesRows = action.kind === 'delete' || action.kind === 'archive';
-      const restoreSelection = (pending: readonly string[]) => {
-        const selection = useTaskSelectionStore.getState();
-        if (selection.generation !== generation || selection.selectedIds.length > 0) return;
-        const restored = pending.filter(
-          (id) => selection.visibleIds.has(id) || (removesRows && shownAtStart.has(id)),
-        );
-        if (restored.length > 0) useTaskSelectionStore.setState({ selectedIds: restored });
-      };
+      // change clears the selection). A row the overlay hid (deleted,
+      // archived, or moved to a status the view hides) is only shown again
+      // once the rollback renders; the store selects it on the list's next
+      // prune, if the list then shows it.
+      const restoreSelection = (pending: readonly string[]) =>
+        useTaskSelectionStore.getState().restore(pending, generation);
 
       if (requestError && updated.length === 0) {
         toast.error(
