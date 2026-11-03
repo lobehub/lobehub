@@ -10,6 +10,8 @@ import {
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
+  AntigravityQuotaParams,
+  AntigravityQuotaSnapshot,
   ClaudeCodeAccountRouting,
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
@@ -19,6 +21,7 @@ import type {
   DeviceClient,
   DeviceUnavailableErrorData,
   HeterogeneousAgentModelCatalog,
+  ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -68,6 +71,27 @@ export function codexQuota(
   });
 }
 
+/** Native agy quota; relay only, without quota-history ingestion. */
+export function antigravityQuota(
+  getClient: DeviceClientGetter,
+  params: AntigravityQuotaParams & {
+    deviceId: string;
+    userId: string;
+    workspaceId?: string;
+  },
+) {
+  return invokeDeviceRead<AntigravityQuotaSnapshot>(
+    getClient,
+    'getAntigravityQuota',
+    { ...params, timeout: 30_000 },
+    {
+      command: params.command,
+      env: params.env,
+      force: params.force,
+    },
+  );
+}
+
 /** Kimi Code subscription quota sampled from the login on a remote device. */
 export function kimiCodeQuota(
   getClient: DeviceClientGetter,
@@ -95,18 +119,7 @@ export async function listHeterogeneousAgentModels(
     deviceId: string;
     env?: Record<string, string>;
     timeout?: number;
-    type:
-      | 'codebuddy'
-      | 'codex'
-      | 'cursor'
-      | 'devin'
-      | 'droid'
-      | 'grok-build'
-      | 'kimi-code'
-      | 'opencode'
-      | 'pi'
-      | 'qoder'
-      | 'trae';
+    type: ListHeterogeneousAgentModelsParams['type'];
     userId: string;
     workspaceId?: string;
   },

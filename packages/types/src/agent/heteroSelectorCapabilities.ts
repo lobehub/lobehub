@@ -352,6 +352,13 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  * user-authored args already cover a dimension.
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
+  'antigravity': {
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
   'amp': {
     mode: {
       encodings: [{ flags: ['--mode'], kind: 'flag' }],

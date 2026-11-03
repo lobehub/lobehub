@@ -103,6 +103,23 @@ export const agentsRouter = router({
         }
       },
     ),
+  getAntigravityQuota: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        command: z.string().optional(),
+        env: z.record(z.string(), z.string()).optional(),
+        force: z.boolean().optional(),
+      }),
+    )
+    .query(
+      async ({ ctx, input }) =>
+        (await deviceGateway.antigravityQuota({
+          ...input,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })) ?? null,
+    ),
   /**
    * Claude Code subscription quota sampled by the device with its own local
    * credentials, so web clients can show live quota for a bound-device run.
@@ -136,6 +153,7 @@ export const agentsRouter = router({
         deviceId: z.string(),
         env: z.record(z.string(), z.string()).optional(),
         type: z.enum([
+          'antigravity',
           'codebuddy',
           'codex',
           'cursor',

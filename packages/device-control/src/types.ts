@@ -434,6 +434,7 @@ export interface ListHeterogeneousAgentModelsParams {
   cwd?: string;
   env?: Record<string, string>;
   type:
+    | 'antigravity'
     | 'codebuddy'
     | 'codex'
     | 'cursor'
