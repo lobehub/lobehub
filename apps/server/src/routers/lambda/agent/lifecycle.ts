@@ -51,7 +51,8 @@ export const lifecycleRouter = router({
       return ctx.agentModel.countAgents(input);
     }),
   /**
-   * Create a standalone agent, with the creator's direct Channel to it while Channels are on.
+   * Create a standalone agent, with the creator's direct Channel to it while Channels are on
+   * (none for a hidden `virtual` agent).
    * Returns the created agent ID.
    */
   createAgent: agentProcedure
@@ -68,6 +69,9 @@ export const lifecycleRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { localDeviceId, ...params } = input;
       const result = await ctx.agentService.createAgent(params);
+      // A hidden (virtual) copy, such as a Market agent run from an @ mention, is
+      // never a conversation of its own, so it gets no direct Channel.
+      if (params.config?.virtual) return result;
       await createAgentDirectChannel({
         agentId: result.agentId,
         db: ctx.serverDB,
