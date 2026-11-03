@@ -30,9 +30,12 @@ export const taskLabels = pgTable(
   'task_labels',
   {
     id: uuid('id').defaultRandom().notNull().primaryKey(),
-    userId: text('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
+    /**
+     * Creator. Workspace labels outlive their creator (the user delete only
+     * clears this, like workspace channels); personal labels are deleted
+     * explicitly in `UserModel.deleteUser`.
+     */
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /** Group this label belongs to; deleting the group deletes its labels. */

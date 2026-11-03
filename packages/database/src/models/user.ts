@@ -27,6 +27,7 @@ import {
   messages,
   nextauthAccounts,
   sessions,
+  taskLabels,
   topics,
   users,
   userSettings,
@@ -636,6 +637,12 @@ export class UserModel {
             or(isNull(channels.workspaceId), isNotNull(channels.agentId)),
           ),
         );
+      await applyRemainingTimeout();
+      // Personal task labels go with their owner; workspace labels stay and the
+      // user cascade only clears their `user_id`.
+      await tx
+        .delete(taskLabels)
+        .where(and(eq(taskLabels.userId, id), isNull(taskLabels.workspaceId)));
       await applyRemainingTimeout();
       const result = await tx.delete(users).where(eq(users.id, id));
       if (deadline !== undefined && Date.now() >= deadline)

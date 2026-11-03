@@ -3,10 +3,11 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { taskLabelLinks, users, workspaces } from '../../schemas';
+import { taskLabelLinks, taskLabels, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
 import { TaskLabelError, TaskLabelModel } from '../taskLabel';
+import { UserModel } from '../user';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -114,6 +115,28 @@ describe('TaskLabelModel registry', () => {
     await expect(workspace.update(other.id, { parentId: group.id })).resolves.toMatchObject({
       parentId: group.id,
     });
+  });
+});
+
+describe('TaskLabelModel account deletion', () => {
+  it("keeps a workspace label and its links when the label's creator is deleted", async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const label = await member.create({ name: 'Frontend' });
+    await workspace.addTaskLabels(task.id, [label.id]);
+
+    await UserModel.deleteUser(serverDB, otherUserId);
+
+    expect(await workspace.findById(label.id)).toMatchObject({ name: 'Frontend', userId: null });
+    expect((await workspace.getTaskLabels(task.id)).map((l) => l.name)).toEqual(['Frontend']);
+  });
+
+  it('deletes personal labels with their owner', async () => {
+    const own = await new TaskLabelModel(serverDB, otherUserId).create({ name: 'Mine' });
+
+    await UserModel.deleteUser(serverDB, otherUserId);
+
+    const rows = await serverDB.select().from(taskLabels).where(eq(taskLabels.id, own.id));
+    expect(rows).toEqual([]);
   });
 });
 
