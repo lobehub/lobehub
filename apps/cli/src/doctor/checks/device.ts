@@ -4,6 +4,7 @@ import { CLI_PRIMARY_BIN } from '../../constants/identity';
 import { readConnectRuntimes } from '../../daemon/connectStatus';
 import { readStatus, removePid, removeStatus } from '../../daemon/manager';
 import { describeDeviceGateway, describeDeviceGatewayFailure } from '../../device/gatewayEndpoint';
+import { cliVersion } from '../../pkg';
 import { resolveLocalDeviceId } from '../../utils/device';
 import { probeCredential, probeDeviceGateway, probeDevices } from '../probes';
 import { redactUrlCredentials, redactUrlsInMessage } from '../redact';
@@ -43,6 +44,7 @@ const daemon: DoctorCheck = {
       gatewaySource: status?.gatewaySource,
       gatewayUrl: redactUrlCredentials(status?.gatewayUrl),
       pid,
+      runningVersion: status?.cliVersion,
       service,
       unavailableScopes,
     };
@@ -95,6 +97,17 @@ const daemon: DoctorCheck = {
         detail: `${label} ${pid} is running but its last known state is "${status.connectionStatus}".`,
         evidence,
         fix: `Check the daemon log: ${CLI_PRIMARY_BIN} connect logs`,
+        status: 'warn',
+      };
+
+    // Connected on old code is the state an update leaves until the connector restarts.
+    if (status.cliVersion !== cliVersion)
+      return {
+        detail: status.cliVersion
+          ? `${label} ${pid} is connected but running CLI ${status.cliVersion}; installed CLI is ${cliVersion}.`
+          : `${label} ${pid} is connected but did not report its CLI version; installed CLI is ${cliVersion}.`,
+        evidence,
+        fix: `After active tasks finish, run: ${runtime.restartCommand}`,
         status: 'warn',
       };
 

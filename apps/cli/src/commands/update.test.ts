@@ -1,6 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import type * as ChildProcessModule from 'node:child_process';
+import { EventEmitter } from 'node:events';
 
-import { buildInstallCommand, isNewerVersion } from './update';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { printConnectStatus } from './connectStatus';
+import { buildInstallCommand, isNewerVersion, reportInstalledConnectStatus } from './update';
+
+const { execFile, spawn } = vi.hoisted(() => ({ execFile: vi.fn(), spawn: vi.fn() }));
+vi.mock('node:child_process', async (original) => ({
+  ...(await original<typeof ChildProcessModule>()),
+  execFile,
+  spawn,
+}));
+vi.mock('./connectStatus', () => ({ printConnectStatus: vi.fn() }));
 
 describe('isNewerVersion', () => {
   it('compares core versions', () => {
@@ -53,5 +65,65 @@ describe('buildInstallCommand', () => {
       args: ['global', 'add', '@lobehub/cli@1.0.0'],
       command: 'yarn',
     });
+  });
+});
+
+describe('reportInstalledConnectStatus', () => {
+  let originalArgv: string[];
+  const entry = '/global/node_modules/@lobehub/cli/dist/index.js';
+  const installedReports = (version: string) =>
+    execFile.mockImplementation((_command, _args, _options, callback) =>
+      callback(null, `${version}\n`),
+    );
+  const statusExits = (code: number) =>
+    spawn.mockImplementation(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit('close', code));
+      return child;
+    });
+
+  beforeEach(() => {
+    originalArgv = process.argv;
+    process.argv = [process.execPath, entry];
+  });
+  afterEach(() => {
+    process.argv = originalArgv;
+    vi.clearAllMocks();
+  });
+
+  it('lets the newly installed CLI report connectors instead of the updating process', async () => {
+    installedReports('2.0.0');
+    statusExits(0);
+
+    await reportInstalledConnectStatus('2.0.0');
+
+    expect(execFile).toHaveBeenCalledWith(
+      process.execPath,
+      [entry, '--version'],
+      expect.anything(),
+      expect.any(Function),
+    );
+    expect(spawn).toHaveBeenCalledWith(process.execPath, [entry, 'connect', 'status'], {
+      stdio: 'inherit',
+    });
+    expect(printConnectStatus).not.toHaveBeenCalled();
+  });
+
+  it('reports from this process when the entry does not run the installed version', async () => {
+    installedReports('1.0.0');
+
+    await reportInstalledConnectStatus('2.0.0');
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(printConnectStatus).toHaveBeenCalledWith({ installedVersion: '2.0.0' });
+  });
+
+  it('reports from this process when the installed CLI cannot report', async () => {
+    installedReports('2.0.0');
+    statusExits(1);
+
+    await reportInstalledConnectStatus('2.0.0');
+
+    expect(printConnectStatus).toHaveBeenCalledWith({ installedVersion: '2.0.0' });
   });
 });
