@@ -57,6 +57,12 @@ export interface SidebarAgentItem {
   backgroundColor?: string | null;
   description?: string | null;
   /**
+   * Market identifier of the community agent this agent was installed from
+   * (`params.forkedFromIdentifier`). Lets pickers tell which market agents
+   * the caller already has. Absent for chat groups and agents created locally.
+   */
+  forkedFromIdentifier?: string | null;
+  /**
    * Group's own avatar (emoji or uploaded image URL)
    * Only present for chat groups (type === 'group')
    */

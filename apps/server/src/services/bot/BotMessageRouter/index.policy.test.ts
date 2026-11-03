@@ -269,7 +269,7 @@ describe('BotMessageRouter', () => {
 
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
       expect(thread.post).toHaveBeenCalledTimes(1);
-      expect(thread.post.mock.calls[0][0]).toContain("doesn't respond in groups or channels");
+      expect(thread.post.mock.calls[0][0]).toContain("don't have permission to talk to this bot");
     });
 
     it('blocks @-mentions on the new-mention path when group policy is disabled', async () => {
@@ -280,7 +280,23 @@ describe('BotMessageRouter', () => {
 
       expect(mockHandleMention).not.toHaveBeenCalled();
       expect(thread.post).toHaveBeenCalledTimes(1);
-      expect(thread.post.mock.calls[0][0]).toContain("doesn't respond in groups or channels");
+      expect(thread.post.mock.calls[0][0]).toContain("don't have permission to talk to this bot");
+    });
+
+    it('still lets the owner @-mention the bot in groups when group policy is disabled', async () => {
+      // `disabled` means "only the owner here", not "the bot can't talk in
+      // groups" — which is why the rejection copy names the missing permission.
+      const { mention } = await loadHandlers({ groupPolicy: 'disabled', userId: 'owner-id' });
+      const thread = makeGroupThread('channel-1');
+
+      await mention(thread, {
+        author: { isBot: false, userId: 'owner-id', userName: 'owner' },
+        isMention: true,
+        text: '@bot hi',
+      });
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
     });
 
     it('allows open Telegram Guest Mode summons even when group policy is disabled', async () => {

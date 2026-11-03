@@ -73,8 +73,12 @@ import {
   operationSelectors,
   topicSelectors,
 } from '@/store/chat/selectors';
+import { leaveBlankConversationBucket } from '@/store/chat/slices/agentRun/actions/clearBlankBucket';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
-import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
+import {
+  executeDirectMention,
+  toDirectMentionThreadTitle,
+} from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import {
@@ -138,6 +142,7 @@ import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../p
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { resolveProjectDirectoryRun } from '../resolveProjectDirectoryRun';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
+import { showSendErrorInContext } from './sendErrorNotice';
 
 /**
  * Extended params for sendMessage with context
@@ -1356,18 +1361,15 @@ export class ConversationLifecycleActionImpl {
         messageMapKey({ ...operationContext, topicId: null }),
       );
       if (this.#get().activeTopicId === optimisticTopic.id) {
-        // Cancelling restores the editor before the optimistic topic rolls back.
-        // Read the live editor: the user may have edited or cleared the restored draft
-        // while the cancelled request was unwinding. Preserve it across the topic switch.
-        if (
-          !hasNotifiedMessageAccepted &&
-          this.#get().operations[operationId]?.status === 'cancelled' &&
-          jsonState
-        ) {
-          saveDraft(
-            messageMapKey({ ...operationContext, topicId: null }),
-            targetInputEditor?.getJSONState() ?? jsonState,
-          );
+        const op = this.#get().operations[operationId];
+        // A cancel or a refused send restores the editor before the topic rolls back. Read the
+        // live editor (the user may have edited it meanwhile) and carry it, plus the refusal
+        // notice, to the blank conversation: both are keyed by the topic being discarded.
+        const sendError = op?.status === 'failed' ? op.metadata.inputSendErrorMsg : undefined;
+        if (!hasNotifiedMessageAccepted && (op?.status === 'cancelled' || sendError) && jsonState) {
+          const blankContext = { ...operationContext, topicId: null };
+          saveDraft(messageMapKey(blankContext), targetInputEditor?.getJSONState() ?? jsonState);
+          if (sendError) showSendErrorInContext(this.#get(), blankContext, sendError);
         }
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
         // Adopting the minted topic consumed the staging; the topic never came
@@ -1553,25 +1555,11 @@ export class ConversationLifecycleActionImpl {
           resolveOptimisticTopic(heteroData.topicId, newTopicTitle);
           void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
         }
-        if (context.isolatedTopic) {
-          await onTopicCreated?.(heteroData.topicId);
-        } else {
-          await this.#get().switchTopic(heteroData.topicId, {
-            clearNewKey: true,
-            // The cleanup targets the blank bucket this send came from — the
-            // user may be viewing a different conversation by now.
-            clearNewKeyContext: {
-              agentId: operationContext.agentId,
-              groupId: operationContext.groupId,
-            },
-            // Guard against yanking the user back if they navigated to another
-            // topic while the persistence round-trip was in flight. Accept both
-            // the minted id and the persisted one: `resolveOptimisticTopic`
-            // above re-keys `activeTopicId` from the former to the latter.
-            onlyIfActiveTopicIn: [operationContext.topicId ?? null, heteroData.topicId],
-            skipRefreshMessage: true,
-          });
-        }
+        if (context.isolatedTopic) await onTopicCreated?.(heteroData.topicId);
+        await leaveBlankConversationBucket(this.#get, operationContext, {
+          isolated: context.isolatedTopic,
+          topicId: heteroData.topicId,
+        });
       }
 
       let directMentionThreadId: string | undefined;
@@ -1586,7 +1574,7 @@ export class ConversationLifecycleActionImpl {
           assistantMessage: { provider: heterogeneousProvider.type },
           instruction: message,
           parentMessageId: heteroData.assistantMessageId,
-          title: message.slice(0, 50),
+          title: toDirectMentionThreadTitle(message),
           topicId: heteroTopicId,
         });
         if (!task.assistantMessageId) {
@@ -2105,30 +2093,13 @@ export class ConversationLifecycleActionImpl {
       });
 
       if (isCreateNewTopic && data.topicId) {
-        if (context.isolatedTopic) {
-          // Notify the isolated caller immediately so its UI re-subscribes to
-          // the new topic key and picks up the streaming AI response.
-          await onTopicCreated?.(data.topicId);
-        } else {
-          // clearNewKey: true ensures the _new key data is cleared after topic creation
-          await this.#get().switchTopic(data.topicId, {
-            clearNewKey: true,
-            // The cleanup targets the blank bucket this send came from — the
-            // user may be viewing a different conversation by now.
-            clearNewKeyContext: {
-              agentId: operationContext.agentId,
-              groupId: operationContext.groupId,
-            },
-            // The send pivoted to the minted topic bucket at send time. If the
-            // user navigated to another topic while the persistence round-trip
-            // was in flight, leave them where they are — the new topic's unread
-            // badge surfaces the completed reply instead of yanking the view back.
-            // Both ids are accepted: `resolveOptimisticTopic` above re-keys
-            // `activeTopicId` from the minted id to the persisted one.
-            onlyIfActiveTopicIn: [operationContext.topicId ?? null, data.topicId],
-            skipRefreshMessage: true,
-          });
-        }
+        // Notify the isolated caller immediately so its UI re-subscribes to
+        // the new topic key and picks up the streaming AI response.
+        if (context.isolatedTopic) await onTopicCreated?.(data.topicId);
+        await leaveBlankConversationBucket(this.#get, operationContext, {
+          isolated: context.isolatedTopic,
+          topicId: data.topicId,
+        });
       }
     } catch (e) {
       console.error(e);

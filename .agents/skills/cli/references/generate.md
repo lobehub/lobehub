@@ -137,28 +137,31 @@ lh gen image <prompt> [-m <model>] [-p <provider>] [-n <n>] [--param <key=value>
 ```
 
 ```bash
-lh gen image "A cute cat" --model dall-e-3 --provider openai --json
+lh gen image "A cute cat" --json
 lh gen image "A cute cat" -m gpt-image-2.5 -p lobehub --param size=1536x1024 --param quality=high
 ```
 
+Without `-m`, the server picks the same default image model as the web image page from the user's enabled image models (`gemini-3.1-flash-image:image`, preferring the `google` provider, otherwise any enabled provider serving it, otherwise the first enabled image model; rule in `src/utils/defaultImageModel.ts`). With only `-m`, the server uses the first enabled provider serving that model. The non-JSON output prints the model that was used.
+
 Parameters are model-specific: list them with `lh gen image-params -m <model> -p <provider>`. The server rejects parameters the model does not declare (for example `width`/`height` on gpt-image models, which take `size`) and empty prompts, before the task is queued or charged.
 
-| Option                      | Description                                                    | Default    |
-| --------------------------- | -------------------------------------------------------------- | ---------- |
-| `-m, --model <model>`       | Model ID                                                       | `dall-e-3` |
-| `-p, --provider <provider>` | Provider name                                                  | `openai`   |
-| `-n, --num <n>`             | Number of images                                               | `1`        |
-| `--param <key=value>`       | Model parameter, repeatable; values parse as JSON, else string | -          |
-| `--width <px>`              | Shortcut for `--param width=<px>`                              | -          |
-| `--height <px>`             | Shortcut for `--param height=<px>`                             | -          |
-| `--steps <n>`               | Shortcut for `--param steps=<n>`                               | -          |
-| `--seed <n>`                | Shortcut for `--param seed=<n>`                                | -          |
-| `--json`                    | Output raw JSON                                                | `false`    |
+| Option                      | Description                                                    | Default                              |
+| --------------------------- | -------------------------------------------------------------- | ------------------------------------ |
+| `-m, --model <model>`       | Model ID                                                       | Web image page default (server-side) |
+| `-p, --provider <provider>` | Provider name                                                  | First enabled provider for the model |
+| `-n, --num <n>`             | Number of images                                               | `1`                                  |
+| `--param <key=value>`       | Model parameter, repeatable; values parse as JSON, else string | -                                    |
+| `--width <px>`              | Shortcut for `--param width=<px>`                              | -                                    |
+| `--height <px>`             | Shortcut for `--param height=<px>`                             | -                                    |
+| `--steps <n>`               | Shortcut for `--param steps=<n>`                               | -                                    |
+| `--seed <n>`                | Shortcut for `--param seed=<n>`                                | -                                    |
+| `--json`                    | Output raw JSON                                                | `false`                              |
 
 **Output** (non-JSON):
 
 ```
 ✓ Image generation started
+  Model: lobehub/gemini-3.1-flash-image:image
   Batch ID: gb_xxx
   1 image(s) queued
   Generation gen_xxx → Task 7ad0eb13-xxxx-xxxx-xxxx-xxxxxxxxxxxx

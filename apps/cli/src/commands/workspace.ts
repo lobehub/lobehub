@@ -426,7 +426,7 @@ export function registerWorkspaceCommand(program: Command) {
 
   workspace
     .command('usage')
-    .description('Show workspace credit usage for the current billing window')
+    .description('Show workspace usage for the current billing window')
     .option('-w, --workspace <id|slug>', 'Workspace to read (defaults to the active scope)')
     .option('--since <date>', 'Window start (ISO date)')
     .option('--until <date>', 'Window end (ISO date)')

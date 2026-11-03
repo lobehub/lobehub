@@ -1,4 +1,9 @@
 export default {
+  'directMention.progress.elapsed': '{{time}}',
+  'directMention.progress.running': 'Running',
+  'directMention.progress.thinking': 'Thinking…',
+  'directMention.progress.usingTool': 'Using {{name}}…',
+  'directMention.progress.viewFullRecord': 'View full record',
   'sharePage.app.linkCopied': 'Link copied',
   'sharePage.app.open': 'Open app',
   'sharePage.app.help': 'Trouble opening the app?',
@@ -970,8 +975,12 @@ export default {
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
   'input.agentSlugUnconfirmed':
     'Couldn’t confirm which agent this link opens. Check your connection, then try again.',
-  'input.costEstimate.creditsPerMillionTokens': '{{credits}} credits/M tokens',
-  'input.costEstimate.hint': 'Estimated cost: ~{{credits}} credits',
+  'input.concurrencyLimit':
+    'You have too many agent tasks running at once. Send again when one finishes.',
+  'input.concurrencyLimitWithCount':
+    'Your plan runs up to {{count}} agent tasks at once. Send again when one finishes.',
+  'input.costEstimate.creditsPerMillionTokens': '${{credits}}/M tokens',
+  'input.costEstimate.hint': 'Estimated cost: ~${{credits}}',
   'input.costEstimate.inputLabel': 'Input',
   'input.costEstimate.outputLabel': 'Output',
   'input.costEstimate.settingsLink': 'Adjust warning threshold',
@@ -1060,6 +1069,8 @@ export default {
   'mention.category.tools': 'Tools',
   'mention.category.topics': 'Topics',
   'mention.category.workspaceAgents': 'Workspace',
+  'mention.marketInstall.failed':
+    '{{names}} isn’t available right now. The message was not sent; try again.',
   'mention.title': 'Mention Members',
   'messageAction.codexEdit.alreadySubmitting': 'This edit is already being submitted',
   'messageAction.codexEdit.branchFailed':
@@ -1158,21 +1169,20 @@ export default {
   'messageLongCollapse.expand': 'Show more',
   'messages.dm.sentTo': 'Visible only to {{name}}',
   'messages.dm.title': 'DM',
-  'messages.modelCard.credit': 'Credits',
+  'messages.modelCard.credit': 'Cost',
   'messages.modelCard.creditPricing': 'Pricing',
   'messages.modelCard.creditTooltip':
-    'For counting, we treat $1 as 1M credits. Example: $3/M tokens → 3 credits per token.',
-  'messages.modelCard.pricing.inputCachedTokens': 'Cached input {{amount}} credits · ${{amount}}/M',
+    'Prices are shown in US dollars. Example: $3/M tokens means $3 per million tokens.',
+  'messages.modelCard.pricing.inputCachedTokens': 'Cached input ${{amount}}/M',
   'messages.modelCard.pricing.inputCharts': '${{amount}}/M characters',
   'messages.modelCard.pricing.inputMinutes': '${{amount}}/minute',
-  'messages.modelCard.pricing.inputTokens': 'Input {{amount}} credits · ${{amount}}/M',
-  'messages.modelCard.pricing.outputTokens': 'Output {{amount}} credits · ${{amount}}/M',
-  'messages.modelCard.pricing.writeCacheInputTokens':
-    'Cache write {{amount}} credits · ${{amount}}/M',
+  'messages.modelCard.pricing.inputTokens': 'Input ${{amount}}/M',
+  'messages.modelCard.pricing.outputTokens': 'Output ${{amount}}/M',
+  'messages.modelCard.pricing.writeCacheInputTokens': 'Cache write ${{amount}}/M',
   'messages.tokenDetails.average': 'Average unit price',
   'messages.tokenDetails.cliCredits.title': '{{value}} Credits',
   'messages.tokenDetails.cliCredits.tooltip':
-    'Subscription credits reported by the agent CLI for this turn. The CLI bills in credits instead of reporting tokens; these are not LobeHub credits.',
+    'Subscription credits reported by the agent CLI for this turn. The CLI bills in credits instead of reporting tokens; this is separate from your LobeHub usage.',
   'messages.tokenDetails.cacheRate': 'Cache rate',
   'messages.tokenDetails.input': 'Input',
   'messages.tokenDetails.inputAudio': 'Audio Input',
@@ -1331,6 +1341,17 @@ export default {
   'codexInstallGuide.menuNotification.title': 'Codex CLI not found',
   'codexInstallGuide.reason': 'LobeHub could not start Codex: {{message}}',
   'codexInstallGuide.title': 'Install Codex CLI',
+  'copilotInstallGuide.actions.openDocs': 'Open Install Guide',
+  'copilotInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'copilotInstallGuide.afterInstall':
+    'After installing, run `copilot login`, then retry your message or click Re-detect in System Tools.',
+  'copilotInstallGuide.desc':
+    'GitHub Copilot needs the GitHub Copilot CLI to run locally. Install it and make sure the `copilot` command is available in your PATH.',
+  'copilotInstallGuide.installWithBrew': 'Homebrew (macOS / Linux)',
+  'copilotInstallGuide.installWithNpm': 'Recommended install',
+  'copilotInstallGuide.menuNotification.title': 'GitHub Copilot CLI not found',
+  'copilotInstallGuide.reason': 'LobeHub could not start GitHub Copilot: {{message}}',
+  'copilotInstallGuide.title': 'Install GitHub Copilot CLI',
   'cursorInstallGuide.actions.openDocs': 'Open Install Guide',
   'cursorInstallGuide.actions.openSystemTools': 'Open System Tools',
   'cursorInstallGuide.afterInstall':
@@ -1447,6 +1468,7 @@ export default {
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodeBuddyAgent': 'Add CodeBuddy',
   'newCodexAgent': 'Add Codex',
+  'newCopilotAgent': 'Add GitHub Copilot',
   'newCursorAgent': 'Add Cursor',
   'newDroidAgent': 'Add Factory Droid',
   'newDevinAgent': 'Add Devin',
@@ -1544,6 +1566,7 @@ export default {
     'DeepSeek Harness agent (dsh CLI) with tools and subagents',
   'connectAgent.providerDesc.codebuddy': 'Tencent coding agent CLI',
   'connectAgent.providerDesc.codex': 'OpenAI coding agent CLI',
+  'connectAgent.providerDesc.copilot': 'GitHub Copilot coding agent CLI',
   'connectAgent.providerDesc.cursor': 'Cursor coding agent CLI',
   'connectAgent.providerDesc.droid': 'Factory coding agent CLI',
   'connectAgent.providerDesc.devin': 'Cognition coding agent CLI',
@@ -2079,6 +2102,7 @@ export default {
   'taskDetail.goalTimeline.title': 'Round progress',
   'taskDetail.activities': 'Activities',
   'taskDetail.activitiesEmpty': 'No activity yet',
+  'taskDetail.activitiesLoadMore': 'Show earlier activity ({{count}})',
   'taskDetail.artifacts': 'Artifacts',
   'taskDetail.untitled': 'Untitled',
   'taskDetail.artifactMenu.delete': 'Remove from task',
@@ -4321,4 +4345,6 @@ export default {
     'This private environment directory is still on the public drive and needs to be rebuilt on your personal drive. This run will use a temporary sandbox.',
   'sandboxDrive.fallbackChip.instanceRebuildRequired': 'Rebuild on personal drive',
   'sandboxDrive.folderOnDriveDesc': '{{drive}} · {{path}}',
+  'input.costEstimate.hintUsd': 'Estimated cost: about {{amount}}',
+  'input.costEstimate.usdPerMillionTokens': '{{amount}} / 1M tokens',
 };

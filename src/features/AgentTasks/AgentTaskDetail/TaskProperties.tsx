@@ -135,7 +135,6 @@ const TaskProperties = memo(() => {
       {shouldShowMemberAssignee(activeWorkspaceId, assigneeUserId) && (
         <AssigneeMemberSelector
           currentUserId={assigneeUserId}
-          disabled={status === 'running'}
           taskCreatorId={createdByUserId}
           taskIdentifier={taskId}
           taskVisibility={visibility}

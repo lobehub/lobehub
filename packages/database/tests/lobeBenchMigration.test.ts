@@ -15,7 +15,7 @@ import { agentEvalMemories } from '../src/schemas/agentEvalMemory';
 import { agentEvalEnvironments } from '../src/schemas/agentEvals';
 
 const migrationsFolder = path.join(__dirname, '../migrations');
-const migrationTag = '0199_lobe_bench_environments_and_memory';
+const migrationTag = '0201_lobe_bench_environments_and_memory';
 const temporaryFolders: string[] = [];
 
 async function canaryMigrationsFolder() {
@@ -127,7 +127,9 @@ describe('LobeBench migration integration', () => {
       `);
       const before = await evidence(client);
       // SQL replay exercises idempotency independently of Drizzle's journal skip.
-      for (const statement of readMigrationFiles({ migrationsFolder }).at(-1)!.sql) {
+      const migrationIndex = journal.entries.findIndex(({ tag }) => tag === migrationTag);
+      expect(migrationIndex).toBeGreaterThanOrEqual(0);
+      for (const statement of readMigrationFiles({ migrationsFolder })[migrationIndex].sql) {
         await client.query(statement);
       }
       expect(await evidence(client)).toEqual(before);
@@ -139,6 +141,121 @@ describe('LobeBench migration integration', () => {
       expect((await client.query('SELECT * FROM agent_eval_run_topics')).rows).toHaveLength(1);
       await client.query("DELETE FROM agent_eval_runs WHERE id = 'migration-run'");
       expect((await client.query('SELECT * FROM agent_eval_memories')).rows).toHaveLength(0);
+    } finally {
+      await client.close();
+    }
+  }, 60_000);
+
+  it('retains Memory evidence after thread and topic deletion until its run is deleted', async () => {
+    const client = new PGlite({ extensions: { vector } });
+    const db = drizzle({ client });
+    try {
+      await migrate(db, { migrationsFolder });
+      expect
+        .soft(
+          (
+            await client.query(`
+            SELECT is_nullable FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'agent_eval_memories'
+              AND column_name = 'topic_id'
+          `)
+          ).rows,
+        )
+        .toEqual([{ is_nullable: 'YES' }]);
+      const indexedColumns = await client.query<{ column_name: string }>(`
+        SELECT attribute.attname AS column_name
+        FROM pg_index AS index
+        JOIN pg_class AS table_class ON table_class.oid = index.indrelid
+        JOIN pg_class AS index_class ON index_class.oid = index.indexrelid
+        JOIN pg_am AS method ON method.oid = index_class.relam
+        JOIN pg_attribute AS attribute
+          ON attribute.attrelid = table_class.oid AND attribute.attnum = index.indkey[0]
+        WHERE table_class.oid = 'public.agent_eval_memories'::regclass
+          AND method.amname = 'btree' AND index.indisvalid AND index.indisready
+          AND index.indpred IS NULL
+      `);
+      expect
+        .soft(indexedColumns.rows.map(({ column_name }) => column_name))
+        .toEqual(expect.arrayContaining(['topic_id', 'thread_id']));
+
+      await client.exec(`
+        INSERT INTO users (id) VALUES ('retention-user');
+        INSERT INTO agent_eval_datasets (id, identifier, name)
+          VALUES ('retention-dataset', 'retention-cases', 'Retention cases');
+        INSERT INTO agent_eval_runs (id, dataset_id, user_id, status)
+          VALUES ('retention-run', 'retention-dataset', 'retention-user', 'completed'),
+                 ('unrelated-run', 'retention-dataset', 'retention-user', 'completed');
+        INSERT INTO topics (id, user_id)
+          VALUES ('retention-topic', 'retention-user'), ('unrelated-topic', 'retention-user');
+        INSERT INTO threads (id, topic_id, user_id, type)
+          VALUES ('deleted-thread', 'retention-topic', 'retention-user', 'eval'),
+                 ('cascaded-thread', 'retention-topic', 'retention-user', 'eval'),
+                 ('unrelated-thread', 'unrelated-topic', 'retention-user', 'eval');
+      `);
+      const embedding = Array.from({ length: 1024 }, (_, index) => (index % 4) / 4);
+      const retainedMemories = await db
+        .insert(agentEvalMemories)
+        .values(
+          [null, 'deleted-thread', 'cascaded-thread'].map((threadId, index) => ({
+            attemptId: `retention-run_retention-topic${threadId ? `_${threadId}` : ''}`,
+            capturedAt: new Date('2026-10-20T00:00:00Z'),
+            embedding,
+            id: `retained-memory-${index}`,
+            layer: 'identity' as const,
+            payload: { description: 'Saved evidence', nested: { index, values: [1, 2, 3] } },
+            runId: 'retention-run',
+            source: 'agent' as const,
+            threadId,
+            topicId: 'retention-topic',
+            userId: 'retention-user',
+          })),
+        )
+        .returning();
+      const [unrelatedMemory] = await db
+        .insert(agentEvalMemories)
+        .values({
+          attemptId: 'unrelated-run_unrelated-topic_unrelated-thread',
+          capturedAt: new Date('2026-10-21T00:00:00Z'),
+          embedding,
+          id: 'unrelated-memory',
+          layer: 'identity',
+          payload: { description: 'Other attempt evidence' },
+          runId: 'unrelated-run',
+          source: 'fixture',
+          threadId: 'unrelated-thread',
+          topicId: 'unrelated-topic',
+          userId: 'retention-user',
+        })
+        .returning();
+      const memories = () => db.select().from(agentEvalMemories).orderBy(agentEvalMemories.id);
+
+      await client.query("DELETE FROM threads WHERE id = 'deleted-thread'");
+      expect.soft(await memories()).toEqual([
+        ...retainedMemories.map((memory) => ({
+          ...memory,
+          threadId: memory.threadId === 'deleted-thread' ? null : memory.threadId,
+        })),
+        unrelatedMemory,
+      ]);
+
+      await client.query("DELETE FROM topics WHERE id = 'retention-topic'");
+      expect
+        .soft(
+          (await client.query("SELECT id FROM threads WHERE topic_id = 'retention-topic'")).rows,
+        )
+        .toEqual([]);
+      expect
+        .soft(await memories())
+        .toEqual([
+          ...retainedMemories.map((memory) => ({ ...memory, threadId: null, topicId: null })),
+          unrelatedMemory,
+        ]);
+
+      await client.query("DELETE FROM agent_eval_runs WHERE id = 'retention-run'");
+      expect(await memories()).toEqual([unrelatedMemory]);
+      expect((await client.query('SELECT id FROM agent_eval_runs ORDER BY id')).rows).toEqual([
+        { id: 'unrelated-run' },
+      ]);
     } finally {
       await client.close();
     }

@@ -290,3 +290,28 @@ describe('PlatformDetail saving', () => {
     expect(sensitivity).toHaveValue('0.9');
   });
 });
+
+describe('PlatformDetail status reactions', () => {
+  beforeEach(() => {
+    mocks.heterogeneous = false;
+    vi.clearAllMocks();
+  });
+
+  it('starts a new bot with status reactions off', () => {
+    render(<PlatformDetail agentId="agt" platformDef={platformDef} />, { wrapper: MemoryRouter });
+
+    openTab(en['channel.tab.reply']);
+    expect(screen.getByText(en['channel.reactionModeNoneHint'])).toBeInTheDocument();
+    expect(screen.queryByText(en['channel.reactionModeMinimalHint'])).toBeNull();
+  });
+
+  it('shows a bot saved before the field existed with reactions on, as the runtime reads it', () => {
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
+
+    openTab(en['channel.tab.reply']);
+    expect(screen.getByText(en['channel.reactionModeMinimalHint'])).toBeInTheDocument();
+    expect(screen.queryByText(en['channel.reactionModeNoneHint'])).toBeNull();
+  });
+});
