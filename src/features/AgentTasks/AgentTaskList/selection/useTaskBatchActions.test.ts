@@ -2,10 +2,14 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useTaskSelectionStore } from './store';
+import { resetUndoStack } from './undo/stack';
+import { useTaskBatchUndo } from './undo/useTaskBatchUndo';
 import { useTaskBatchActions } from './useTaskBatchActions';
 
 const batchUpdate = vi.fn();
 const batchDelete = vi.fn();
+const batchRevert = vi.fn();
+const batchRestoreDeleted = vi.fn();
 const refreshTaskList = vi.fn(async () => {});
 const toastWarning = vi.fn();
 const toastError = vi.fn();
@@ -16,6 +20,8 @@ const beginOptimistic = vi.fn((..._args: unknown[]) => overlay);
 vi.mock('@/services/task', () => ({
   taskService: {
     batchDelete: (...args: unknown[]) => batchDelete(...args),
+    batchRestoreDeleted: (...args: unknown[]) => batchRestoreDeleted(...args),
+    batchRevert: (...args: unknown[]) => batchRevert(...args),
     batchUpdate: (...args: unknown[]) => batchUpdate(...args),
   },
 }));
@@ -37,6 +43,9 @@ const partialFailure = { failed: [{ error: 'boom', id: 'b' }], skipped: [], upda
 beforeEach(() => {
   batchUpdate.mockReset();
   batchDelete.mockReset();
+  batchRevert.mockReset();
+  batchRestoreDeleted.mockReset();
+  resetUndoStack();
   beginOptimistic.mockClear();
   overlay.commit.mockReset();
   overlay.rollback.mockReset();
@@ -274,5 +283,78 @@ describe('useTaskBatchActions', () => {
         ([arg]) => typeof arg === 'object' && arg?.title === 'taskList.bulk.followUpFailed.title',
       ),
     ).toBe(true);
+  });
+
+  describe('undo', () => {
+    const undoAction = () => {
+      const [options] = toastSuccess.mock.calls.at(-1)!;
+      return (options as { actions?: { label: string; onClick: () => void }[] }).actions?.[0];
+    };
+
+    it('offers an undo that writes back what the batch replaced', async () => {
+      const reverts = [{ after: { priority: 1 }, before: { priority: 3 }, id: 'a' }];
+      batchUpdate.mockResolvedValue({ failed: [], reverts, skipped: [], updated: ['a'] });
+      batchRevert.mockResolvedValue({ failed: [], skipped: [], updated: ['a'] });
+      useTaskSelectionStore.getState().selectAll(['a']);
+      const { result } = renderHook(() => useTaskBatchActions());
+
+      await act(() => result.current.run({ kind: 'update', patch: { priority: 1 } }));
+      const action = undoAction();
+      expect(action?.label).toBe('taskList.bulk.undo.action');
+
+      await act(async () => {
+        action!.onClick();
+      });
+      await act(async () => {});
+
+      expect(batchRevert).toHaveBeenCalledWith(reverts);
+      // Optimistic like the batch: one overlay for the undo, committed on success.
+      expect(beginOptimistic).toHaveBeenCalledTimes(2);
+      expect(overlay.commit).toHaveBeenCalledTimes(2);
+      expect(toastSuccess).toHaveBeenLastCalledWith('taskList.bulk.undo.done');
+    });
+
+    it('undoes a delete through the recycle bin, once', async () => {
+      batchDelete.mockResolvedValue({ failed: [], skipped: [], updated: ['a', 'b'] });
+      batchRestoreDeleted.mockResolvedValue({ failed: [], skipped: [], updated: ['a', 'b'] });
+      useTaskSelectionStore.getState().selectAll(['a', 'b']);
+      const { result } = renderHook(() => useTaskBatchActions());
+      const { result: undo } = renderHook(() => useTaskBatchUndo());
+
+      await act(() => result.current.run({ kind: 'delete' }));
+      // ⌘Z and the toast button reach the same entry: only one restore runs.
+      await act(async () => {
+        expect(undo.current.undoLast()).toBe(true);
+        undoAction()!.onClick();
+      });
+      await act(async () => {});
+
+      expect(batchRestoreDeleted).toHaveBeenCalledTimes(1);
+      expect(batchRestoreDeleted).toHaveBeenCalledWith(['a', 'b']);
+      expect(undo.current.undoLast()).toBe(false);
+    });
+
+    it('says how many tasks someone changed again since the batch', async () => {
+      const reverts = [
+        { after: { status: 'completed' }, before: { status: 'backlog' }, id: 'a' },
+        { after: { status: 'completed' }, before: { status: 'backlog' }, id: 'b' },
+      ];
+      batchUpdate.mockResolvedValue({ failed: [], reverts, skipped: [], updated: ['a', 'b'] });
+      batchRevert.mockResolvedValue({
+        failed: [],
+        skipped: [{ id: 'b', reason: 'conflict' }],
+        updated: ['a'],
+      });
+      useTaskSelectionStore.getState().selectAll(['a', 'b']);
+      const { result } = renderHook(() => useTaskBatchActions());
+
+      await act(() => result.current.run({ kind: 'update', patch: { priority: 1 } }));
+      await act(async () => undoAction()!.onClick());
+      await act(async () => {});
+
+      expect(toastWarning).toHaveBeenLastCalledWith(
+        'taskList.bulk.undo.done · taskList.bulk.undo.conflict',
+      );
+    });
   });
 });

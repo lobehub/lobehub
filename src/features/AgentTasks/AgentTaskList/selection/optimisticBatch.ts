@@ -17,7 +17,62 @@ export type TaskBatchAction =
 /** A changed row as `batchUpdate` / `batchUpdateStatus` return it (list-visible columns). */
 export type TaskBatchChangedRow = Partial<CollectionTask> & { id: string };
 
-export type TaskBatchResponse = TaskBatchOutcome & { tasks?: TaskBatchChangedRow[] };
+/** Values one batch write replaced on a task, and what it wrote (server `TaskBatchRevertValues`). */
+export interface TaskBatchRevertValues {
+  archived?: boolean;
+  assigneeAgentId?: string | null;
+  assigneeUserId?: string | null;
+  priority?: number | null;
+  status?: string;
+}
+
+/** How to undo a batch on one task (server `TaskBatchRevert`). */
+export interface TaskBatchRevert {
+  after: TaskBatchRevertValues;
+  before: TaskBatchRevertValues;
+  id: string;
+}
+
+export type TaskBatchResponse = TaskBatchOutcome & {
+  reverts?: TaskBatchRevert[];
+  tasks?: TaskBatchChangedRow[];
+};
+
+/**
+ * The status an undo puts back, as the server will (`TaskBatchRevertService`):
+ * a task the batch stopped mid-run comes back paused; statuses a person
+ * cannot set (failed, scheduled) are not restored.
+ */
+export const undoStatus = (before: string): string | undefined => {
+  if (['backlog', 'paused', 'completed', 'canceled'].includes(before)) return before;
+  if (before === 'running') return 'paused';
+  return undefined;
+};
+
+/**
+ * How the list shows an undo before the server answers: each task gets its
+ * own `before` values back (not one shared value). Archive state is put back
+ * too — out of a list that hides archived rows, or unmarked where it shows
+ * them; a task re-appearing in a list that hides archived rows waits for the
+ * refresh, since that list never held it.
+ */
+export const optimisticUndoPatch = (reverts: readonly TaskBatchRevert[]): CollectionTasksPatch => {
+  const byId = new Map(reverts.map((revert) => [revert.id, revert.before]));
+  return (task, query) => {
+    const before = byId.get(task.id);
+    if (!before) return task;
+    if (before.archived === true && query.includeArchived === false) return undefined;
+    const status = before.status === undefined ? undefined : undoStatus(before.status);
+    return {
+      ...task,
+      ...(status !== undefined && { status }),
+      ...(before.archived !== undefined && { archivedAt: before.archived ? new Date() : null }),
+      ...(before.priority !== undefined && { priority: before.priority ?? 0 }),
+      ...(before.assigneeAgentId !== undefined && { assigneeAgentId: before.assigneeAgentId }),
+      ...(before.assigneeUserId !== undefined && { assigneeUserId: before.assigneeUserId }),
+    } as CollectionTask;
+  };
+};
 
 /** Statuses the server stamps `completedAt` on (`TaskBatchService.updateStatus`). */
 const TERMINAL_STATUSES = new Set<TaskBatchStatus>(['canceled', 'completed']);

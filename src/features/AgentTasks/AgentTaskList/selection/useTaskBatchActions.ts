@@ -12,8 +12,12 @@ import {
   type TaskBatchChangedRow,
   type TaskBatchResponse,
 } from './optimisticBatch';
+import { enqueueBatchRequest } from './serverQueue';
 import { useTaskSelectionStore } from './store';
 import { chunkIds, mergeOutcomes } from './taskSelectionModel';
+import { pushUndoEntry } from './undo/stack';
+import { useTaskBatchUndo } from './undo/useTaskBatchUndo';
+import { useBackgroundTaskListRefresh } from './useBackgroundTaskListRefresh';
 
 export type { TaskBatchAction, TaskBatchStatus } from './optimisticBatch';
 
@@ -35,19 +39,6 @@ const runChunk = (action: TaskBatchAction, ids: string[]): Promise<TaskBatchResp
 };
 
 /**
- * Batches reach the server in click order. The list already shows each one,
- * so a second action never waits on screen — but two writes to the same rows
- * must land in the order the user made them, or the list would settle on the
- * earlier one.
- */
-let serverQueue: Promise<unknown> = Promise.resolve();
-const enqueue = <T>(job: () => Promise<T>): Promise<T> => {
-  const next = serverQueue.then(job, job);
-  serverQueue = next.catch(() => undefined);
-  return next;
-};
-
-/**
  * Apply one action to the current selection, optimistically: every loaded
  * list and board shows the result and the selection clears the moment the
  * action is picked. The requests (one per 500 tasks, the server's batch
@@ -58,27 +49,11 @@ const enqueue = <T>(job: () => Promise<T>): Promise<T> => {
  */
 export const useTaskBatchActions = () => {
   const { t } = useTranslation('chat');
-  const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
   const beginOptimistic = useTaskStore((s) => s.internal_beginCollectionTasksOptimistic);
   const running = useTaskSelectionStore((s) => !!s.progress);
 
-  const refreshInBackground = useCallback(() => {
-    // The batch is committed whatever happens here; a failed refresh only
-    // means the list on screen may be stale, so say that (with a retry).
-    void refreshTaskList().catch((error: unknown) => {
-      console.error('[task batch] list refresh failed after a committed batch', error);
-      const retry = () => {
-        void refreshTaskList().catch((retryError: unknown) => {
-          console.error('[task batch] list refresh retry failed', retryError);
-        });
-      };
-      toast.warning({
-        actions: [{ label: t('taskList.bulk.refreshFailed.retry'), onClick: retry }],
-        description: t('taskList.bulk.refreshFailed.desc'),
-        title: t('taskList.bulk.refreshFailed.title'),
-      });
-    });
-  }, [refreshTaskList, t]);
+  const refreshInBackground = useBackgroundTaskListRefresh();
+  const { undo } = useTaskBatchUndo();
 
   const run = useCallback(
     async (action: TaskBatchAction) => {
@@ -93,7 +68,7 @@ export const useTaskBatchActions = () => {
 
       const outcomes: TaskBatchResponse[] = [];
       let requestError: unknown;
-      await enqueue(async () => {
+      await enqueueBatchRequest(async () => {
         try {
           // Sequential: each chunk is already a set-based write on the server,
           // and ordering keeps a later chunk from racing an earlier one.
@@ -150,16 +125,41 @@ export const useTaskBatchActions = () => {
           title: t('taskList.bulk.followUpFailed.title'),
         });
       }
+      // Whatever the batch changed can be undone — from the toast, or with
+      // ⌘/Ctrl+Z while the list is on screen (also after the toast is gone).
+      const reverts = outcomes.flatMap((outcome) => outcome.reverts ?? []);
+      const undoEntry =
+        updated.length === 0
+          ? undefined
+          : action.kind === 'delete'
+            ? pushUndoEntry({ kind: 'restore', taskIds: updated })
+            : reverts.length > 0
+              ? pushUndoEntry({ kind: 'revert', reverts })
+              : undefined;
       const message = parts.join(' · ');
-      if (failedCount > 0) toast.warning(message);
-      else toast.success(message);
+      const options = {
+        ...(undoEntry && {
+          actions: [
+            {
+              label: t('taskList.bulk.undo.action'),
+              onClick: () => void undo(undoEntry),
+              variant: 'text' as const,
+            },
+          ],
+          // Long enough to read the result and reach the button.
+          duration: 8000,
+        }),
+        title: message,
+      };
+      if (failedCount > 0) toast.warning(options);
+      else toast.success(options);
 
       if (failedCount > 0) {
         const done = new Set([...updated, ...skipped.map((item) => item.id)]);
         restoreSelection(ids.filter((id) => !done.has(id)));
       }
     },
-    [beginOptimistic, refreshInBackground, t],
+    [beginOptimistic, refreshInBackground, t, undo],
   );
 
   return { run, running };

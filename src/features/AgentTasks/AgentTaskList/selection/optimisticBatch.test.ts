@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { confirmedTaskPatches, optimisticTaskPatch } from './optimisticBatch';
+import {
+  confirmedTaskPatches,
+  optimisticTaskPatch,
+  optimisticUndoPatch,
+  undoStatus,
+} from './optimisticBatch';
 
 const task = { archivedAt: null, id: 'a', priority: 0, status: 'backlog' } as any;
 const hidesArchived = { includeArchived: false };
@@ -78,5 +83,45 @@ describe('confirmedTaskPatches', () => {
     const remove = optimisticTaskPatch({ kind: 'delete' });
     const keep = confirmedTaskPatches(remove, ['a'], [{ id: 'a' } as any]);
     expect(keep.get('a')!(task, {})).toBeUndefined();
+  });
+});
+
+describe('optimisticUndoPatch', () => {
+  const reverts = [
+    { after: { status: 'completed' }, before: { status: 'backlog' }, id: 'a' },
+    { after: { status: 'completed' }, before: { status: 'running' }, id: 'b' },
+    { after: { priority: 4 }, before: { priority: 1 }, id: 'c' },
+    { after: { archived: false }, before: { archived: true }, id: 'd' },
+  ];
+  const patch = optimisticUndoPatch(reverts);
+
+  it('gives each task its own previous values', () => {
+    expect(patch({ ...task, id: 'a', status: 'completed' }, {})).toMatchObject({
+      status: 'backlog',
+    });
+    // A stopped run cannot resume: the task comes back paused.
+    expect(patch({ ...task, id: 'b', status: 'completed' }, {})).toMatchObject({
+      status: 'paused',
+    });
+    expect(patch({ ...task, id: 'c', priority: 4 }, {})).toMatchObject({ priority: 1 });
+  });
+
+  it('re-archives out of lists that hide archived rows', () => {
+    expect(patch({ ...task, id: 'd' }, hidesArchived)).toBeUndefined();
+    expect(patch({ ...task, id: 'd' }, showsArchived)?.archivedAt).toBeInstanceOf(Date);
+  });
+
+  it('leaves tasks outside the batch untouched', () => {
+    const other = { ...task, id: 'z' };
+    expect(patch(other, {})).toBe(other);
+  });
+});
+
+describe('undoStatus', () => {
+  it('maps statuses a person cannot set back to nothing', () => {
+    expect(undoStatus('paused')).toBe('paused');
+    expect(undoStatus('running')).toBe('paused');
+    expect(undoStatus('failed')).toBeUndefined();
+    expect(undoStatus('scheduled')).toBeUndefined();
   });
 });

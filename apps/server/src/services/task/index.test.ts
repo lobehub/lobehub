@@ -13,10 +13,13 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from './index';
 
-const { cancelScheduled, scheduleNextTopic } = vi.hoisted(() => ({
+const { cancelScheduled, scheduleNextTopic, trashTasksInTransaction } = vi.hoisted(() => ({
   cancelScheduled: vi.fn(),
   scheduleNextTopic: vi.fn(),
+  trashTasksInTransaction: vi.fn(),
 }));
+
+vi.mock('../trash', () => ({ trashTasksInTransaction }));
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
@@ -1636,11 +1639,16 @@ describe('TaskService', () => {
     beforeEach(() => {
       (db as any).transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(db);
       mockTaskModel.lockForUpdate.mockResolvedValue(true);
-      mockTaskModel.deleteIfStatus.mockResolvedValue(true);
+      // Moves every target into the recycle bin unless a test says otherwise.
+      trashTasksInTransaction.mockReset();
+      trashTasksInTransaction.mockImplementation(
+        async (_tx: unknown, _scope: unknown, targets: { taskId: string }[]) =>
+          targets.map((target) => target.taskId),
+      );
       mockTaskTopicModel.findByTaskId.mockResolvedValue([]);
     });
 
-    it('interrupts a running execution before deleting the task row', async () => {
+    it('interrupts a running execution before trashing the task', async () => {
       mockTaskModel.findById.mockResolvedValue({
         id: 'task-live',
         identifier: 'T-2',
@@ -1654,9 +1662,13 @@ describe('TaskService', () => {
 
       expect(interruptTaskMock).toHaveBeenCalledWith({ operationId: 'op-live' });
       expect(interruptTaskMock.mock.invocationCallOrder[0]).toBeLessThan(
-        mockTaskModel.deleteIfStatus.mock.invocationCallOrder[0],
+        trashTasksInTransaction.mock.invocationCallOrder[0],
       );
-      expect(mockTaskModel.deleteIfStatus).toHaveBeenCalledWith('task-live', 'running');
+      expect(trashTasksInTransaction).toHaveBeenCalledWith(
+        expect.anything(),
+        { userId, workspaceId: undefined },
+        [expect.objectContaining({ status: 'running', taskId: 'task-live' })],
+      );
     });
 
     it('keeps the task when its execution cannot be stopped', async () => {
@@ -1673,7 +1685,7 @@ describe('TaskService', () => {
       await expect(new TaskService(db, userId).deleteTask('T-2')).rejects.toThrow(
         'Task interruption was not confirmed',
       );
-      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
+      expect(trashTasksInTransaction).not.toHaveBeenCalled();
     });
 
     it('refuses to delete a task whose run is still starting', async () => {
@@ -1688,7 +1700,7 @@ describe('TaskService', () => {
       await expect(new TaskService(db, userId).deleteTask('T-4')).rejects.toMatchObject({
         code: 'CONFLICT',
       });
-      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
+      expect(trashTasksInTransaction).not.toHaveBeenCalled();
     });
 
     it('deletes a running task whose start died long ago', async () => {
@@ -1702,7 +1714,11 @@ describe('TaskService', () => {
 
       await new TaskService(db, userId).deleteTask('T-5');
 
-      expect(mockTaskModel.deleteIfStatus).toHaveBeenCalledWith('task-stale', 'running');
+      expect(trashTasksInTransaction).toHaveBeenCalledWith(
+        expect.anything(),
+        { userId, workspaceId: undefined },
+        [expect.objectContaining({ status: 'running', taskId: 'task-stale' })],
+      );
     });
 
     it('loses to a run that started after the checks instead of orphaning it', async () => {
@@ -1711,12 +1727,16 @@ describe('TaskService', () => {
         identifier: 'T-6',
         status: 'backlog',
       });
-      mockTaskModel.deleteIfStatus.mockResolvedValueOnce(false);
+      trashTasksInTransaction.mockResolvedValueOnce([]);
 
       await expect(new TaskService(db, userId).deleteTask('T-6')).rejects.toMatchObject({
         code: 'CONFLICT',
       });
-      expect(mockTaskModel.deleteIfStatus).toHaveBeenCalledWith('task-race', 'backlog');
+      expect(trashTasksInTransaction).toHaveBeenCalledWith(
+        expect.anything(),
+        { userId, workspaceId: undefined },
+        [expect.objectContaining({ status: 'backlog', taskId: 'task-race' })],
+      );
     });
 
     it('loses to a run that recorded a new topic while the delete was interrupting', async () => {
@@ -1746,7 +1766,7 @@ describe('TaskService', () => {
       });
       expect(interruptTaskMock).toHaveBeenCalledWith({ operationId: 'op-a' });
       expect(mockTaskModel.lockForUpdate).toHaveBeenCalledWith('task-cont');
-      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
+      expect(trashTasksInTransaction).not.toHaveBeenCalled();
     });
 
     it('treats a task already gone as deleted', async () => {
@@ -1760,7 +1780,7 @@ describe('TaskService', () => {
       await expect(new TaskService(db, userId).deleteTask('T-7')).resolves.toMatchObject({
         id: 'task-gone',
       });
-      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
+      expect(trashTasksInTransaction).not.toHaveBeenCalled();
     });
 
     it("does not interrupt the caller's own run", async () => {
@@ -1776,10 +1796,14 @@ describe('TaskService', () => {
       await new TaskService(db, userId).deleteTask('T-3', { keepOperationId: 'op-self' });
 
       expect(interruptTaskMock).not.toHaveBeenCalled();
-      expect(mockTaskModel.deleteIfStatus).toHaveBeenCalledWith('task-self', 'running');
+      expect(trashTasksInTransaction).toHaveBeenCalledWith(
+        expect.anything(),
+        { userId, workspaceId: undefined },
+        [expect.objectContaining({ status: 'running', taskId: 'task-self' })],
+      );
     });
 
-    it('cascades the underlying topic rows when the task row is deleted', async () => {
+    it('trashes the linked topics with the task, from the snapshot taken under the lock', async () => {
       mockTaskModel.findById.mockResolvedValue({
         id: 'task-topics',
         identifier: 'T-9',
@@ -1792,13 +1816,12 @@ describe('TaskService', () => {
 
       await new TaskService(db, userId).deleteTask('T-9');
 
-      // Topic ids are snapshotted before the task row goes, then removed in
-      // the same transaction — `task_topics` links alone cascade via FK, the
-      // topic rows would otherwise survive as sidebar orphans.
-      expect(mockTopicModel.batchDeleteIncludingTrashed).toHaveBeenCalledWith([
-        'topic-1',
-        'topic-2',
+      // The topic rows have no FK back to the task: they go into the bin as its
+      // children (restored with it), instead of lingering as sidebar orphans.
+      expect(trashTasksInTransaction).toHaveBeenCalledWith(expect.anything(), expect.anything(), [
+        { status: 'backlog', taskId: 'task-topics', topicIds: ['topic-1', 'topic-2'] },
       ]);
+      expect(mockTopicModel.batchDeleteIncludingTrashed).not.toHaveBeenCalled();
     });
 
     it('spares the kept operation topic when a task deletes itself mid-run', async () => {
@@ -1827,13 +1850,14 @@ describe('TaskService', () => {
 
       await new TaskService(db, userId).deleteTask('T-12', { keepOperationId: 'op-self' });
 
-      // The live run's topic must survive with its operation — messages
-      // cascade off the topic row, so deleting it would rip the conversation
-      // out from under the still-running tool call.
-      expect(mockTopicModel.batchDeleteIncludingTrashed).toHaveBeenCalledWith(['topic-old']);
+      // The live run's topic must survive with its operation — it stays out of
+      // the bin, so the still-running tool call keeps its conversation.
+      expect(trashTasksInTransaction).toHaveBeenCalledWith(expect.anything(), expect.anything(), [
+        { status: 'running', taskId: 'task-self-topics', topicIds: ['topic-old'] },
+      ]);
     });
 
-    it('deletes no topic rows when the task has none', async () => {
+    it('trashes the task alone when it has no topics', async () => {
       mockTaskModel.findById.mockResolvedValue({
         id: 'task-bare',
         identifier: 'T-10',
@@ -1843,10 +1867,12 @@ describe('TaskService', () => {
 
       await new TaskService(db, userId).deleteTask('T-10');
 
-      expect(mockTopicModel.batchDeleteIncludingTrashed).not.toHaveBeenCalled();
+      expect(trashTasksInTransaction).toHaveBeenCalledWith(expect.anything(), expect.anything(), [
+        { status: 'backlog', taskId: 'task-bare', topicIds: [] },
+      ]);
     });
 
-    it('leaves topic rows alone when the delete loses the race', async () => {
+    it('reports a conflict when the status CAS loses the race', async () => {
       mockTaskModel.findById.mockResolvedValue({
         id: 'task-race-topics',
         identifier: 'T-11',
@@ -1855,12 +1881,13 @@ describe('TaskService', () => {
       mockTaskTopicModel.findByTaskId.mockResolvedValue([
         { status: 'completed', taskId: 'task-race-topics', topicId: 'topic-race' },
       ]);
-      mockTaskModel.deleteIfStatus.mockResolvedValueOnce(false);
+      trashTasksInTransaction.mockResolvedValueOnce([]);
 
       await expect(new TaskService(db, userId).deleteTask('T-11')).rejects.toMatchObject({
         code: 'CONFLICT',
       });
       expect(mockTopicModel.batchDeleteIncludingTrashed).not.toHaveBeenCalled();
+      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
     });
   });
 
