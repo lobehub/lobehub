@@ -165,6 +165,23 @@ describe('useGoalItemMenu', () => {
       expect(mocks.store.archiveGoal).toHaveBeenCalledWith('goal_1', false);
     });
 
+    it('locks the status submenu of an archived goal until it is restored', () => {
+      const status = (items: DropdownItem[]) =>
+        items.find((item) => item && 'key' in item && item.key === 'status') as any;
+      const archivedGoal = renderHook(() =>
+        useGoalItemMenu({
+          agentId: 'agt_1',
+          goal: { ...goal, archivedAt: '2026-11-03T00:00:00.000Z', status: 'achieved' },
+        }),
+      );
+      const liveGoal = renderHook(() =>
+        useGoalItemMenu({ agentId: 'agt_1', goal: { ...goal, archivedAt: null } }),
+      );
+
+      expect(status(archivedGoal.result.current).disabled).toBe(true);
+      expect(status(liveGoal.result.current).disabled).toBe(false);
+    });
+
     it('is left out when the host does not know whether the goal is archived', () => {
       const { result } = renderHook(() =>
         useGoalMenuItems({ goalId: 'goal_1', status: 'achieved' }),

@@ -182,14 +182,19 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   // state rather than the first-goal onboarding.
   const isScopeEmpty =
     (isGlobal ? (allGoalsView?.goals.length ?? 0) : goals.length) === 0 && !isLoading;
-  useFetchGoals(
+  const archivedSync = useFetchGoals(
     isScopeEmpty ? archivedProbe.agentId : undefined,
     isScopeEmpty ? archivedProbe.projectId : undefined,
     'archived',
     isScopeEmpty ? archivedProbe.globalScope : undefined,
   );
   const archivedView = useGoalStore(goalSelectors.goalListView(goalListKey(archivedProbe)));
-  const hasNoGoals = isScopeEmpty && (archivedView?.goals.length ?? 0) === 0;
+  // Onboarding only once the probe has answered "nothing archived either":
+  // while it is in flight the page holds its skeleton, and a failed probe keeps
+  // the tabs (the Archived tab then reads and reports its own failure) rather
+  // than a first-goal screen that would hide them.
+  const isArchivedProbePending = isScopeEmpty && archivedView === undefined && !archivedSync.error;
+  const hasNoGoals = isScopeEmpty && archivedView !== undefined && archivedView.goals.length === 0;
   const summary = useMemo(() => {
     const total = listView?.total ?? goals.length;
     // An aggregate that has not answered is unknown, not zero. Falling back to
@@ -269,7 +274,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         paddingInline={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
-        {isLoading ? (
+        {isLoading || isArchivedProbePending ? (
           <GoalSkeleton chrome={'body'} />
         ) : error && listView === undefined ? (
           // Only a read that left nothing to show becomes the page: a failed

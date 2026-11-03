@@ -150,7 +150,9 @@ export const useGoalMenuItems = ({
             onClick: () => changeStatus(next),
           };
         }),
-        disabled: !canEditTask || !status,
+        // An archived goal stays put until restored: the server refuses to
+        // start or resume it, so its lifecycle is not offered here either.
+        disabled: !canEditTask || !status || isArchived,
         icon: <Icon icon={CircleDashedIcon} />,
         key: 'status',
         label: t('taskList.contextMenu.status'),
