@@ -64,7 +64,13 @@ const prepareMarketAgent = (identifier: string, visibility: MarketInstallVisibil
     const existing = await agentService.getAgentByForkedFromIdentifier(identifier, {
       virtual: true,
     });
-    if (existing) return existing;
+    if (existing) {
+      // A Market skill it depends on may have failed to install when the copy was
+      // made; installed ones are skipped locally, so this only retries what's missing.
+      const config = await agentService.getAgentConfigById(existing);
+      await ensureAgentMarketSkillsAndWarn(config?.plugins);
+      return existing;
+    }
 
     const detail = await loadAgentDetail(identifier);
     const [result] = await Promise.all([

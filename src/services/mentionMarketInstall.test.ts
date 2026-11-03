@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   ensureAgentMarketSkills: vi.fn(),
   ensureAgentMarketSkillsAndWarn: vi.fn(),
   getAgentByForkedFromIdentifier: vi.fn(),
+  getAgentConfigById: vi.fn(),
   getAssistantDetail: vi.fn(),
 }));
 
@@ -12,7 +13,10 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => 'ws_1',
 }));
 vi.mock('@/services/agent', () => ({
-  agentService: { getAgentByForkedFromIdentifier: mocks.getAgentByForkedFromIdentifier },
+  agentService: {
+    getAgentByForkedFromIdentifier: mocks.getAgentByForkedFromIdentifier,
+    getAgentConfigById: mocks.getAgentConfigById,
+  },
 }));
 vi.mock('@/services/discover', () => ({
   discoverService: { getAssistantDetail: mocks.getAssistantDetail },
@@ -159,5 +163,24 @@ describe('installMarketMentions', () => {
 
     expect(installed.get('reused-coach')).toBe('agt_earlier');
     expect(mocks.createAgent).not.toHaveBeenCalled();
+  });
+
+  it('makes sure a reused hidden copy still has the Market skills it depends on', async () => {
+    // A dependency that failed to install when the copy was created must be
+    // retried, or the agent keeps running without it.
+    mocks.getAgentByForkedFromIdentifier.mockResolvedValue('agt_earlier');
+    mocks.getAgentConfigById.mockResolvedValue({ plugins: ['okr-skill', 'lobe-web-browsing'] });
+
+    await installMarketMentions({
+      agents: [{ identifier: 'coach-with-skills', label: 'OKR 教练', visibility: 'private' }],
+      skills: [],
+    });
+
+    expect(mocks.getAgentConfigById).toHaveBeenCalledWith('agt_earlier');
+    expect(mocks.ensureAgentMarketSkillsAndWarn).toHaveBeenCalledWith([
+      'okr-skill',
+      'lobe-web-browsing',
+    ]);
+    expect(mocks.getAssistantDetail).not.toHaveBeenCalled();
   });
 });
