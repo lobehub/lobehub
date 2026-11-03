@@ -51,6 +51,7 @@ const statusIcon = (s: string): string => {
 export interface TaskSummary {
   id?: string;
   identifier: string;
+  labels?: { name: string }[] | null;
   name?: string | null;
   priority?: number | null;
   status: string;
@@ -139,8 +140,11 @@ export type {
 /**
  * Format a single task as a one-line summary
  */
+const formatLabelSuffix = (labels: TaskSummary['labels']): string =>
+  labels?.length ? `  labels: ${labels.map((label) => label.name).join(', ')}` : '';
+
 export const formatTaskLine = (t: TaskSummary): string =>
-  `${taskIdentity(t)} ${statusIcon(t.status)} ${t.status}  ${t.name || '(unnamed)'}  [${priorityLabel(t.priority)}]`;
+  `${taskIdentity(t)} ${statusIcon(t.status)} ${t.status}  ${t.name || '(unnamed)'}  [${priorityLabel(t.priority)}]${formatLabelSuffix(t.labels)}`;
 
 /**
  * Format createTask response
@@ -160,6 +164,7 @@ export const formatTaskCreated = (
     `  Status: ${statusIcon(t.status)} ${t.status}`,
     `  Priority: ${priorityLabel(t.priority)}`,
   ];
+  if (t.labels?.length) lines.push(`  Labels: ${t.labels.map((label) => label.name).join(', ')}`);
   if (t.assigneeLabel) lines.push(`  Assignee: ${t.assigneeLabel}`);
   if (t.parentLabel)
     lines.push(
@@ -211,6 +216,7 @@ export interface TaskListFilters {
   isDefaultScope?: boolean;
   isForAllAgents?: boolean;
   isForCurrentAgent?: boolean;
+  labels?: string[];
   parentIdentifier?: string;
   priorities?: number[];
   statuses?: TaskStatus[];
@@ -230,6 +236,7 @@ const buildTaskListLabel = (filters: TaskListFilters): string => {
     parts.push(`priority=[${filters.priorities.map((p) => priorityLabel(p)).join(',')}]`);
   }
   if (filters.assigneeAgentId) parts.push(`agent=${filters.assigneeAgentId}`);
+  if (filters.labels?.length) parts.push(`label=[${filters.labels.join(',')}]`);
 
   if (filters.parentIdentifier) {
     return parts.length > 0
@@ -266,6 +273,7 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
   // `userId` on the detail payload is the human assignee (workspace member).
   if (t.userId) lines.push(`Assignee (member): ${t.userId}`);
   if (t.parent) lines.push(`Parent: ${taskIdentity(t.parent)}`);
+  if (t.labels?.length) lines.push(`Labels: ${t.labels.map((label) => label.name).join(', ')}`);
   if (t.topicCount) lines.push(`Topics: ${t.topicCount}`);
   if (t.createdAt) lines.push(`Created: ${t.createdAt}`);
 

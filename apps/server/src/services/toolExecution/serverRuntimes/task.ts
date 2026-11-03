@@ -5,6 +5,7 @@ import {
   normalizeListTasksParams,
   normalizeListWorkspaceMembersParams,
   normalizeSetTaskVerifyParams,
+  resolveToolLabelIds,
   selectAssignableMembers,
   TaskIdentifier,
   toCreateTaskModelConfig,
@@ -37,6 +38,7 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { appEnv } from '@/envs/app';
 import { formatPgError, unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { taskRouter } from '@/server/routers/lambda/task';
+import { taskLabelRouter } from '@/server/routers/lambda/taskLabel';
 import { TaskService } from '@/server/services/task';
 import { resolveTaskOrThrow, resolveTasksOrThrow } from '@/server/services/task/utils';
 
@@ -69,6 +71,7 @@ export interface TaskRuntimeDeps {
   scope?: string | null;
   taskCaller: ReturnType<typeof taskRouter.createCaller>;
   taskId?: string;
+  taskLabelCaller?: ReturnType<typeof taskLabelRouter.createCaller>;
   taskModel: TaskModel;
   taskService: TaskService;
   threadId?: string | null;
@@ -97,6 +100,13 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
   const taskService = () => deps.taskService;
   const taskCaller = () => deps.taskCaller;
 
+  /** Resolve agent-supplied label names against the registry; never creates labels. */
+  const resolveLabels = async (names: string[] | undefined, allowGroups = false) => {
+    if (!names?.some((name) => name.trim())) return { ids: [] as string[] };
+    if (!deps.taskLabelCaller) return { error: 'Task labels are unavailable in this context.' };
+    return resolveToolLabelIds(await deps.taskLabelCaller.list(), names, { allowGroups });
+  };
+
   // Base URL for task deep-links embedded in tool results. These results can be
   // pushed to IM / bot channels and mobile, so the link must be ABSOLUTE — and
   // workspace-scoped tasks live under `/{slug}/task/...`, so the slug has to be
@@ -119,6 +129,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       requirement?: string | null;
       title?: string;
     };
+    labels?: string[];
     model?: string;
     name: string;
     parentIdentifier?: string;
@@ -165,6 +176,9 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
     const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId, projectId);
     if (!assigneeResult.success) return { content: assigneeResult.content, success: false };
+    // Resolved before the insert so a bad label name creates nothing.
+    const labelResult = await resolveLabels(args.labels);
+    if (labelResult.error) return { content: labelResult.error, success: false };
 
     // Capture where this task was spawned from so the lifecycle can later
     // bridge the handoff result back to the creator conversation.
@@ -213,6 +227,24 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
     notifyMemberAssigned(task);
 
+    let labels: { name: string }[] | undefined;
+    if (labelResult.ids.length > 0) {
+      try {
+        labels = await deps.taskLabelCaller!.addToTask({
+          labelIds: labelResult.ids,
+          taskId: task.id,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: `Task ${task.identifier} (id: ${task.id}) was created, but its labels could not be attached: ${message}`,
+          identifier: task.identifier,
+          success: false,
+          taskId: task.id,
+        };
+      }
+    }
+
     return {
       content: formatTaskCreated({
         assigneeLabel: task.assigneeUserId
@@ -225,6 +257,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         id: task.id,
         identifier: task.identifier,
         instruction: args.instruction,
+        labels,
         name: task.name,
         parentLabel,
         parentTaskId,
@@ -360,6 +393,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
     editTask: async (args: {
       addDependencies?: string[];
+      addLabels?: string[];
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
       description?: string;
@@ -371,9 +405,14 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       priority?: number;
       provider?: string | null;
       removeDependencies?: string[];
+      removeLabels?: string[];
     }) => {
       const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
+      const addLabels = await resolveLabels(args.addLabels);
+      if (addLabels.error) return { content: addLabels.error, success: false };
+      const removeLabels = await resolveLabels(args.removeLabels);
+      if (removeLabels.error) return { content: removeLabels.error, success: false };
 
       const updateData: {
         assigneeAgentId?: string | null;
@@ -478,6 +517,23 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         );
       }
 
+      // Removal first, so "swap Bug for Feature" in one call ends with Feature.
+      if (removeLabels.ids.length > 0 || addLabels.ids.length > 0) {
+        const labelCaller = deps.taskLabelCaller!;
+        ops.push(
+          (async () => {
+            if (removeLabels.ids.length > 0) {
+              await labelCaller.removeFromTask({ labelIds: removeLabels.ids, taskId: task.id });
+              changes.push(`labels removed: ${args.removeLabels!.join(', ')}`);
+            }
+            if (addLabels.ids.length > 0) {
+              await labelCaller.addToTask({ labelIds: addLabels.ids, taskId: task.id });
+              changes.push(`labels added: ${args.addLabels!.join(', ')}`);
+            }
+          })(),
+        );
+      }
+
       if (ops.length === 0 && depResults.length === 0) {
         return { content: 'No fields provided; nothing to update.', success: false };
       }
@@ -491,6 +547,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
     listTasks: async (args: {
       assigneeAgentId?: string;
+      labels?: string[];
       limit?: number;
       offset?: number;
       parentIdentifier?: string;
@@ -503,6 +560,11 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       });
 
       try {
+        const labelFilter = await resolveLabels(args.labels, true);
+        if (labelFilter.error) return { content: labelFilter.error, success: false };
+        if (labelFilter.ids.length > 0) {
+          normalized.query.filter = { label: { operator: 'is', values: labelFilter.ids } };
+        }
         const result = await taskCaller().list(normalized.query);
 
         return {
@@ -1027,6 +1089,7 @@ export const taskRuntime: ServerRuntimeRegistration = {
       // reassignment activity). Server-side only by contract — it must never
       // reach the router through a client-supplied field.
       taskCaller: taskRouter.createCaller({ actingAgentId: agentId, userId }),
+      taskLabelCaller: taskLabelRouter.createCaller({ userId }),
     } as TaskRuntimeDeps;
 
     let modelsPromise: Promise<void> | undefined;
@@ -1048,6 +1111,7 @@ export const taskRuntime: ServerRuntimeRegistration = {
           userId,
           workspaceId: wsId,
         });
+        deps.taskLabelCaller = taskLabelRouter.createCaller({ userId, workspaceId: wsId });
       })());
 
     const baseRuntime = createTaskRuntime(deps);

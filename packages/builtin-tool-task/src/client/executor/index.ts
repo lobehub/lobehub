@@ -26,6 +26,7 @@ import debug from 'debug';
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { getWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import { taskService } from '@/services/task';
+import { taskLabelService } from '@/services/taskLabel';
 import { getChatStoreState } from '@/store/chat';
 import { getTaskStoreState } from '@/store/task';
 import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
@@ -34,6 +35,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { MISSING_TASK_NAME_ERROR } from '../../constants';
+import { resolveToolLabelIds } from '../../labels';
 import { normalizeListTasksParams } from '../../listTasks';
 import { selectAssignableMembers } from '../../listWorkspaceMembers';
 import { TaskIdentifier } from '../../manifest';
@@ -202,11 +204,20 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
    * driven by the manifest `work` config at the tool-execution dispatch layer
    * (`invokeExecutor`), not here.
    */
+  /** Label names → ids against the registry; throws a tool-readable message. */
+  #labelIds = async (names: string[] | undefined, allowGroups = false) => {
+    if (!names?.some((name) => name.trim())) return [];
+    const result = resolveToolLabelIds(await taskLabelService.list(), names, { allowGroups });
+    if (result.error) throw new Error(result.error);
+    return result.ids;
+  };
+
   #createTask = async (
     params: {
       instruction: string;
       assigneeAgentId?: string;
       assigneeUserId?: string;
+      labels?: string[];
       model?: string;
       name: string;
       parentIdentifier?: string;
@@ -235,6 +246,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       // member owns the outcome, the agent executes) — a member owner does not
       // suppress the usual current-agent default.
       const parent = parentIdentifier ? (await taskService.find(parentIdentifier)).data : undefined;
+      const labelIds = await this.#labelIds(params.labels);
       const task = await getTaskStoreState().createTask({
         assigneeAgentId: assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
         assigneeUserId,
@@ -253,6 +265,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           success: false,
         };
       }
+      const labels = labelIds.length ? await taskLabelService.addToTask(task.id, labelIds) : [];
 
       return {
         content: formatTaskCreated({
@@ -261,6 +274,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           id: task.id,
           identifier: task.identifier,
           instruction: params.instruction,
+          labels,
           name: task.name,
           parentLabel: parent?.identifier,
           parentTaskId: parent?.id,
@@ -417,6 +431,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   editTask = async (
     params: {
       addDependencies?: string[];
+      addLabels?: string[];
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
       description?: string;
@@ -428,11 +443,16 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       priority?: number;
       provider?: string | null;
       removeDependencies?: string[];
+      removeLabels?: string[];
     },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] editTask - params:', params);
+      const [addLabelIds, removeLabelIds] = await Promise.all([
+        this.#labelIds(params.addLabels),
+        this.#labelIds(params.removeLabels),
+      ]);
 
       const { addDependencies, removeDependencies } = params;
       const target = (await taskService.find(params.identifier)).data;
@@ -534,6 +554,10 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       };
       if (addDependencies?.length) await applyDependencies(addDependencies, false);
       if (removeDependencies?.length) await applyDependencies(removeDependencies, true);
+      if (removeLabelIds.length) await taskLabelService.removeFromTask(identifier, removeLabelIds);
+      if (addLabelIds.length) await taskLabelService.addToTask(identifier, addLabelIds);
+      if (removeLabelIds.length) changes.push(`labels removed: ${params.removeLabels!.join(', ')}`);
+      if (addLabelIds.length) changes.push(`labels added: ${params.addLabels!.join(', ')}`);
 
       await Promise.all(ops);
 
@@ -870,6 +894,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   listTasks = async (
     params: {
       assigneeAgentId?: string;
+      labels?: string[];
       limit?: number;
       offset?: number;
       parentIdentifier?: string;
@@ -886,6 +911,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         defaultScope: ctx?.scope === 'task' ? 'allAgents' : 'currentAgent',
       });
 
+      const labelIds = await this.#labelIds(params.labels, true);
+      if (labelIds.length)
+        normalized.query.filter = { label: { operator: 'is', values: labelIds } };
       const result = await getTaskStoreState().fetchTaskList(normalized.query);
 
       const tasks = result.data ?? [];
