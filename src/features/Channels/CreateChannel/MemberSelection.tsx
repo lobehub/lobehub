@@ -142,7 +142,7 @@ export const MemberSelection = ({
                 )}
                 {others.length ? (
                   others.map(renderAgent)
-                ) : priority.length ? null : people ? (
+                ) : priority.length ? null : people?.channelId ? (
                   <Text fontSize={12} type="secondary" {...stylex.props(styles.section)}>
                     {t(search.trim() ? 'invite.noAgentMatches' : 'invite.noAgents')}
                   </Text>

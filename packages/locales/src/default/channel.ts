@@ -3,6 +3,7 @@ export default {
 
   'people.empty': 'All available workspace members have joined',
   'people.noMatches': 'No matching workspace members',
+  'people.noOthers': 'No one else is in this workspace yet',
   'people.searchMore': 'Showing the first 50 members. Search to find more.',
   'receipt.errorReason': 'Failure reason',
   'receipt.errorUnavailable':
@@ -134,6 +135,7 @@ export default {
   'activity.many': '{{count}} members are replying…',
   'activity.one': '{{name}} · {{status}}',
   'activity.two': '{{names}} are replying…',
+  'autoTitle.empty': 'My Channel',
   'autoTitle.more': '{{names}} and {{count}} more',
   'autoTitle.separator': ', ',
   'environment.editNamed': 'Change where {{name}} runs',
@@ -149,7 +151,6 @@ export default {
   'failure.locate': 'Show message',
   'failure.messageLabel': 'Reply failed: {{names}}',
   'failure.title': 'Failed replies · {{count}}',
-  'nameAutoPlaceholder': 'Leave blank to name it after its members',
   'nameOptional': 'Channel name (optional)',
   'rename': 'Rename channel',
   'renameFailed': 'Could not rename the channel. Try again.',

@@ -97,7 +97,6 @@
   "moveToTrash": "Kanal in den Papierkorb verschieben",
   "moveToTrashConfirm": "„{{title}}“ in den Papierkorb verschieben? Antworten werden gestoppt. Sie können den Kanal und seinen Verlauf aus dem Papierkorb wiederherstellen. Agenten und Dateien bleiben erhalten.",
   "moveToTrashSuccess": "Kanal in den Papierkorb verschoben",
-  "nameAutoPlaceholder": "Leer lassen, um ihn nach seinen Mitgliedern zu benennen",
   "nameOptional": "Kanalname (optional)",
   "noDevice": "Kein Gerät",
   "noDevices": "Kein Gerät ist verbunden. Verbinden Sie eines und wählen Sie es hier aus.",

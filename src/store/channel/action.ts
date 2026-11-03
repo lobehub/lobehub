@@ -23,7 +23,7 @@ export const CHANNEL_IDLE_REFRESH_MS = 60_000;
 
 class ChannelActionImpl {
   readonly #private = new ChannelPrivateAction(useChannelStore.setState, useChannelStore.getState);
-  useFetchUserCandidates = (channelId: string, search: string) =>
+  useFetchUserCandidates = (channelId: string | undefined, search: string) =>
     useClientDataSWR(channelKeys.userCandidates(channelId, search), () =>
       channelService.userCandidates(channelId, search),
     );
