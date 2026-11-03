@@ -739,7 +739,16 @@ export function registerTaskCommand(program: Command) {
         }
         if (hasLabelEdits && !hasOtherEdits) {
           if (options.json !== undefined) {
-            outputJson(labels, typeof options.json === 'string' ? options.json : undefined);
+            // Same task-shaped JSON as any other `task edit --json`.
+            const { data } = await client.task.find.query({ id });
+            outputJson(
+              withUrl(
+                { ...data, labels },
+                await resolveUrlBuilder(client),
+                resourcePath.task(data),
+              ),
+              typeof options.json === 'string' ? options.json : undefined,
+            );
           } else {
             log.info(
               `Labels on ${pc.bold(id)}: ${labels?.length ? formatTaskLabels(labels, labels.length) : pc.dim('none')}`,

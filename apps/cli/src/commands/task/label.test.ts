@@ -15,6 +15,7 @@ const { client } = vi.hoisted(() => ({
     task: {
       create: { mutate: vi.fn() },
       detail: { query: vi.fn() },
+      find: { query: vi.fn() },
       list: { query: vi.fn() },
       update: { mutate: vi.fn() },
       updateStatus: { mutate: vi.fn() },
@@ -109,6 +110,21 @@ describe('lh task --label', () => {
     expect(client.task.update.mutate).not.toHaveBeenCalled();
     expect(client.task.updateStatus.mutate).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(1);
+  });
+
+  it('label-only edit --json prints the task, not the label array', async () => {
+    client.taskLabel.changeForTask.mutate.mockResolvedValue([{ id: 'bug', name: 'Bug' }]);
+    client.task.find.query.mockResolvedValue({ data: { id: 'task_1', identifier: 'T-1' } });
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await run('edit', 'T-1', '--label', 'Bug', '--json');
+
+    const printed = [...vi.mocked(console.log).mock.calls.flat(), ...write.mock.calls.flat()]
+      .map(String)
+      .join('');
+    write.mockRestore();
+    expect(printed).toContain('"id": "task_1"');
+    expect(printed).toContain('"labels"');
   });
 
   it('edit puts the previous labels back when the field edit fails', async () => {
