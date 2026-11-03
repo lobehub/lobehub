@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
+import { isGoalSnapshotSignedOff } from './goalSignedOff';
 import { useGoalMenuItems } from './useGoalMenuItems';
 
 interface GoalDetailActionsProps {
@@ -23,6 +24,9 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(
     const status = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.status);
     const creatorUserId = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.userId);
     const title = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.title);
+    const signedOff = useGoalStore((s) =>
+      isGoalSnapshotSignedOff(goalSelectors.goalGraph(goalId)(s)),
+    );
     const items = useGoalMenuItems({
       agentId,
       archivedAt,
@@ -30,6 +34,7 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(
       goalId,
       onRename,
       projectId,
+      signedOff,
       status,
       title,
     });

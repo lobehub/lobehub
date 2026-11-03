@@ -168,9 +168,10 @@ export const lifecycleRouter = router({
   }),
   /**
    * Put a goal away, or bring it back. User-only, like a task's archive: no
-   * agent tool exposes it. Only a draft or an ended goal can be archived —
-   * archived goals leave every list, so one that can still move would keep
-   * working out of sight. `status` is left untouched.
+   * agent tool exposes it. Only a goal that is done with — signed off by its
+   * owner, or canceled — can be archived: archived goals leave every list, so
+   * one still waiting on a decision would wait out of sight. `status` is left
+   * untouched.
    */
   archive: goalWriteProcedure
     .input(idInput.extend({ archived: z.boolean() }))
@@ -187,7 +188,7 @@ export const lifecycleRouter = router({
         if (!data) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: 'Only a draft or an ended goal can be archived; end it first',
+            message: 'Only a signed-off or canceled goal can be archived',
           });
         }
         return { data, message: archived ? 'Goal archived' : 'Goal restored', success: true };

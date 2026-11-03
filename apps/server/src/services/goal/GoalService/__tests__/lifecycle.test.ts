@@ -680,6 +680,7 @@ describe('GoalService.archiveSignedOffTasks', () => {
 
   it('leaves an archived goal put when its sign-off is sent back for changes', async () => {
     const { acceptanceTaskId, goalId, service, taskModel } = await achieveGoal();
+    await signOff(acceptanceTaskId);
     expect(await new GoalArchiveModel(serverDB, userId).archive(goalId)).not.toBeNull();
 
     expect(

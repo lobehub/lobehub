@@ -114,10 +114,21 @@ describe('useGoalItemMenu', () => {
     const archiveItem = (items: DropdownItem[]) =>
       items.find((item) => item && 'key' in item && item.key === 'archive') as any;
 
-    it('is disabled, with the reason, while the goal can still move on its own', () => {
-      for (const status of ['planning', 'running', 'verifying', 'review', 'paused']) {
+    it('is disabled, with the reason, until the goal is signed off or canceled', () => {
+      const cases = [
+        ...['draft', 'planning', 'running', 'verifying', 'review', 'paused', 'failed'].map(
+          (status) => ({ signedOff: true, status }),
+        ),
+        // Achieved but the owner has not signed it off yet.
+        { signedOff: false, status: 'achieved' },
+      ];
+      for (const { signedOff, status } of cases) {
         const { result } = renderHook(() =>
-          useGoalItemMenu({ agentId: 'agt_1', goal: { ...goal, archivedAt: null, status } }),
+          useGoalItemMenu({
+            agentId: 'agt_1',
+            goal: { ...goal, archivedAt: null, status },
+            signedOff,
+          }),
         );
         expect(archiveItem(result.current)).toMatchObject({
           desc: 'goalList.archiveBlocked',
@@ -127,13 +138,25 @@ describe('useGoalItemMenu', () => {
       }
     });
 
-    it('archives an ended goal and refreshes the list it was opened from', async () => {
+    it('is enabled for a canceled goal', () => {
+      const { result } = renderHook(() =>
+        useGoalItemMenu({
+          agentId: 'agt_1',
+          goal: { ...goal, archivedAt: null, status: 'canceled' },
+        }),
+      );
+
+      expect(archiveItem(result.current)).toMatchObject({ disabled: false });
+    });
+
+    it('archives a signed-off goal and refreshes the list it was opened from', async () => {
       mocks.store.archiveGoal.mockResolvedValue(undefined);
       const { result } = renderHook(() =>
         useGoalItemMenu({
           agentId: 'agt_1',
           goal: { ...goal, archivedAt: null, status: 'achieved' },
           routeAgentId: 'agt_1',
+          signedOff: true,
         }),
       );
 

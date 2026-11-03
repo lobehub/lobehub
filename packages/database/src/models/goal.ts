@@ -10,7 +10,7 @@ import type {
   GoalSupervisionState,
   GoalUnderstanding,
 } from '@lobechat/types';
-import { isGoalArchiveBlocked } from '@lobechat/types';
+import { isGoalStatusInMotion } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
@@ -21,7 +21,7 @@ import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
-import { GoalArchivedError } from './goalArchive';
+import { GoalArchivedError, goalSignedOffSql } from './goalArchive';
 
 /** States after which a goal's loop no longer advances. */
 const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
@@ -476,7 +476,7 @@ export class GoalModel {
     // sent back, the coordinator — lands here, so this is where an archived
     // goal is kept put. The archive check is part of the UPDATE, which
     // serializes with the guarded archive write (`GoalArchiveModel`).
-    const unlessArchived = isGoalArchiveBlocked(status);
+    const unlessArchived = isGoalStatusInMotion(status);
     const row = await this.update(
       id,
       {
@@ -710,7 +710,7 @@ export class GoalModel {
       .offset(offset);
 
     const goalIds = rows.map((goal) => goal.id);
-    const [nodeRows, decisionRows, runStats] = await Promise.all([
+    const [nodeRows, decisionRows, runStats, signedOffRows] = await Promise.all([
       this.db
         .select({
           goalId: goalNodes.goalId,
@@ -728,7 +728,13 @@ export class GoalModel {
         .where(and(inArray(goalNodes.goalId, goalIds), eq(goalNodeDecisions.status, 'pending')))
         .groupBy(goalNodes.goalId),
       this.graphTaskRunStats(goalIds),
+      // Archiving needs the owner's sign-off, which the row alone cannot say.
+      this.db
+        .select({ id: goals.id })
+        .from(goals)
+        .where(and(inArray(goals.id, goalIds), eq(goals.status, 'achieved'), goalSignedOffSql)),
     ]);
+    const signedOff = new Set(signedOffRows.map((row) => row.id));
 
     const stats = new Map<string, { findingCount: number; taskDone: number; taskTotal: number }>();
     for (const row of nodeRows) {
@@ -750,6 +756,7 @@ export class GoalModel {
         findingCount: counts.findingCount,
         goal,
         pendingDecisions: pendingByGoal.get(goal.id) ?? 0,
+        signedOff: signedOff.has(goal.id),
         taskDone: counts.taskDone,
         taskTotal: counts.taskTotal,
         totalRunCost: run.totalRunCost,
@@ -822,6 +829,8 @@ export interface GoalListItem {
   goal: GoalItem;
   /** Decision gates waiting on a human right now. */
   pendingDecisions: number;
+  /** Achieved and accepted by its owner (its Goal-level acceptance is `accepted`). */
+  signedOff: boolean;
   /** Task nodes in a terminal status (resolved / rejected / retired). */
   taskDone: number;
   taskTotal: number;

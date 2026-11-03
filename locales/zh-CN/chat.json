@@ -740,7 +740,7 @@
   "goalList.acceptanceProgress": "已通过 {{passed}}/{{total}}",
   "goalList.agentRuns": "{{count}} 次运行",
   "goalList.archive": "归档",
-  "goalList.archiveBlocked": "请先结束目标（已达成或已取消）再归档",
+  "goalList.archiveBlocked": "签收或取消目标后才能归档",
   "goalList.archiveDenied": "只有目标创建者或工作区所有者可以归档",
   "goalList.archiveFailed": "归档目标失败",
   "goalList.archiveSuccess": "目标已归档",

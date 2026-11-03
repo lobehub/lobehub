@@ -1,24 +1,29 @@
 import type { GoalStatus } from './goal';
 
+/** What decides whether a goal may be archived. */
+export interface GoalArchiveGuardInput {
+  /** Its Goal-level acceptance was accepted by the owner. */
+  signedOff?: boolean;
+  status: GoalStatus | string;
+}
+
 /**
- * Statuses a goal may be archived in: a draft the coordinator leaves alone
- * until someone starts it, and the terminal outcomes. Everything else can still
- * move without a person — the coordinator ticks a planning / running /
- * verifying goal, a review gate resumes it once answered, and a paused goal can
- * be lifted by a measurement or a release review. Archived goals drop out of
- * every list, so archiving one of those would let it keep working where nobody
- * sees it — the goal counterpart of `isTaskArchiveBlocked`.
+ * A goal may be archived once it is truly done with: achieved and signed off
+ * by its owner, or canceled. Anything else still has a decision left — an
+ * achieved goal waits on its sign-off (and the owner may still send it back),
+ * a failed one on a retry or a continuation, and an open one can move on its
+ * own — so hiding it from every list would leave that decision out of sight.
  *
- * `GoalArchiveModel` applies the same list inside its UPDATE.
+ * `GoalArchiveModel` applies the same rule inside its UPDATE.
  */
-export const GOAL_ARCHIVABLE_STATUSES = [
-  'draft',
-  'achieved',
-  'failed',
-  'canceled',
-] as const satisfies readonly GoalStatus[];
+export const isGoalArchiveBlocked = ({ signedOff, status }: GoalArchiveGuardInput): boolean =>
+  !(status === 'canceled' || (status === 'achieved' && !!signedOff));
 
-const ARCHIVABLE = new Set<string>(GOAL_ARCHIVABLE_STATUSES);
+const SETTLED_GOAL_STATUSES = new Set<string>(['achieved', 'canceled', 'failed']);
 
-/** Whether archiving a goal in this status would hide work that can still move. */
-export const isGoalArchiveBlocked = (status: string): boolean => !ARCHIVABLE.has(status);
+/**
+ * Whether moving a goal to `status` puts it back in motion. An archived goal
+ * never gets there until restored (`GoalModel.updateStatus`).
+ */
+export const isGoalStatusInMotion = (status: GoalStatus | string): boolean =>
+  !SETTLED_GOAL_STATUSES.has(status);

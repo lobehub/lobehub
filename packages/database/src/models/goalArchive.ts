@@ -1,13 +1,15 @@
-import { GOAL_ARCHIVABLE_STATUSES } from '@lobechat/types';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
+import { and, eq, or, sql } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
+import { goalNodes } from '../schemas/goalGraph';
+import { acceptances } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
  * Thrown when a write would move an archived goal back into a status in which
- * it can move on its own (`isGoalArchiveBlocked`). Archived goals are hidden
+ * it can move on its own (`isGoalStatusInMotion`). Archived goals are hidden
  * from every list, so they stay put until restored.
  */
 export class GoalArchivedError extends Error {
@@ -21,8 +23,23 @@ export class GoalArchivedError extends Error {
 }
 
 /**
+ * Whether the owner signed the goal off: its Goal-level acceptance Task has an
+ * accepted acceptance. Correlated on `goals.id`, so it reads inside any query
+ * over `goals`.
+ */
+export const goalSignedOffSql = sql<boolean>`EXISTS (
+  SELECT 1 FROM ${goalNodes}
+  JOIN ${acceptances}
+    ON ${acceptances.subjectType} = 'task' AND ${acceptances.subjectId} = ${goalNodes.taskId}
+  WHERE ${goalNodes.goalId} = ${goals.id}
+    AND ${goalNodes.kind} = 'task'
+    AND ${goalNodes.title} = ${GOAL_ACCEPTANCE_TASK_TITLE}
+    AND ${acceptances.status} = 'accepted'
+)`;
+
+/**
  * Archive writes for `goals`, kept out of `GoalModel` the way `TaskArchiveModel`
- * is: the "nothing can still move" check is part of the UPDATE that sets
+ * is: the "signed off or canceled" check is part of the UPDATE that sets
  * `archived_at`, so a resume or start racing it either lands first (and the
  * archive matches no row) or sees the archive under the row lock and refuses.
  */
@@ -41,8 +58,8 @@ export class GoalArchiveModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, goals);
 
   /**
-   * Archive a goal that is a draft or has ended (`isGoalArchiveBlocked`).
-   * Returns null when the goal is missing or still able to move; an already
+   * Archive a goal that is signed off or canceled (`isGoalArchiveBlocked`).
+   * Returns null when the goal is missing or not done with yet; an already
    * archived goal keeps its original `archived_at`.
    */
   async archive(id: string) {
@@ -53,7 +70,7 @@ export class GoalArchiveModel {
         and(
           eq(goals.id, id),
           this.ownership(),
-          inArray(goals.status, [...GOAL_ARCHIVABLE_STATUSES]),
+          or(eq(goals.status, 'canceled'), and(eq(goals.status, 'achieved'), goalSignedOffSql)),
         ),
       )
       .returning();

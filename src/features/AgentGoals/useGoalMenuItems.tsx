@@ -43,6 +43,8 @@ interface UseGoalMenuItemsOptions {
   /** Runs after a status change lands, for hosts that render the status from another read. */
   onStatusChanged?: () => void;
   projectId?: string | null;
+  /** Achieved and accepted by its owner — with `canceled`, what archiving needs. */
+  signedOff?: boolean;
   status?: string;
   /** The current title, prefilled by the rename dialog. */
   title?: string;
@@ -58,6 +60,7 @@ export const useGoalMenuItems = ({
   onRename,
   onStatusChanged,
   projectId,
+  signedOff,
   status,
   title,
 }: UseGoalMenuItemsOptions): DropdownItem[] => {
@@ -80,9 +83,9 @@ export const useGoalMenuItems = ({
 
   const current = toManualStatus(status);
   const isArchived = !!archivedAt;
-  // Archived goals leave every list, so only a draft or an ended goal — one
-  // that cannot move on its own — may be put away. Restoring is always fine.
-  const archiveBlocked = !isArchived && (!status || isGoalArchiveBlocked(status));
+  // Archived goals leave every list, so only a goal that is done with — signed
+  // off, or canceled — may be put away. Restoring is always fine.
+  const archiveBlocked = !isArchived && (!status || isGoalArchiveBlocked({ signedOff, status }));
 
   const toggleArchive = useCallback(async () => {
     try {
@@ -246,6 +249,8 @@ interface UseGoalItemMenuOptions {
   projectId?: string;
   /** The route's agent, which keys the list scope on an agent's page. */
   routeAgentId?: string;
+  /** The list row's sign-off state (`GoalListItem.signedOff`). */
+  signedOff?: boolean;
 }
 
 /** The action menu of a goal-list row (list or card view). */
@@ -255,6 +260,7 @@ export const useGoalItemMenu = ({
   goal,
   projectId,
   routeAgentId,
+  signedOff,
 }: UseGoalItemMenuOptions): DropdownItem[] => {
   // The row reads its status from the list, not the goal graph the store
   // actions refresh, so a status change refetches the list it was rendered in.
@@ -274,6 +280,7 @@ export const useGoalItemMenu = ({
     onDeleted: noop,
     onStatusChanged: handleStatusChanged,
     projectId,
+    signedOff,
     status: goal.status,
     title: goal.title,
   });

@@ -2412,7 +2412,7 @@ export default {
   'goalList.acceptanceProgress': '{{passed}}/{{total}} passed',
   'goalList.agentRuns': '{{count}} runs',
   'goalList.archive': 'Archive',
-  'goalList.archiveBlocked': 'End the goal (achieved or canceled) before archiving it',
+  'goalList.archiveBlocked': 'Sign off or cancel the goal before archiving it',
   'goalList.archiveDenied': 'Only the goal creator or a workspace owner can archive it',
   'goalList.archiveFailed': 'Failed to archive goal',
   'goalList.archiveSuccess': 'Goal archived',

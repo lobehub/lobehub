@@ -1,13 +1,16 @@
 // @vitest-environment node
+import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { users } from '../../schemas';
+import { goalNodes, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AcceptanceModel } from '../acceptance';
 import { GoalModel } from '../goal';
 import { GoalArchivedError, GoalArchiveModel } from '../goalArchive';
 import { GoalGraphModel } from '../goalGraph';
+import { TaskModel } from '../task';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'goal-archive-user';
@@ -28,6 +31,19 @@ const createListedGoal = async (title: string, status: string) => {
   return goal;
 };
 
+/** Give the goal its Goal-level acceptance Task, with that acceptance in `status`. */
+const signOff = async (goalId: string, status: 'accepted' | 'delivered') => {
+  const task = await new TaskModel(serverDB, userId).create({ instruction: 'Accept the goal' });
+  const node = await graphModel.createNode(goalId, {
+    kind: 'task',
+    title: GOAL_ACCEPTANCE_TASK_TITLE,
+  });
+  await serverDB.update(goalNodes).set({ taskId: task.id }).where(eq(goalNodes.id, node!.id));
+  const acceptanceModel = new AcceptanceModel(serverDB, userId);
+  const acceptance = await acceptanceModel.ensureForSubject('task', task.id);
+  await acceptanceModel.updateStatus(acceptance.id, status);
+};
+
 beforeEach(async () => {
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
 });
@@ -38,19 +54,35 @@ afterEach(async () => {
 });
 
 describe('GoalArchiveModel', () => {
-  it.each(['draft', 'achieved', 'failed', 'canceled'])('archives a %s goal', async (status) => {
-    const goal = await createListedGoal('Done', status);
+  it('archives a canceled goal', async () => {
+    const goal = await createListedGoal('Dropped', 'canceled');
 
     const archived = await archiveModel.archive(goal.id);
 
     expect(archived?.archivedAt).toBeInstanceOf(Date);
-    expect(archived?.status).toBe(status);
+    expect(archived?.status).toBe('canceled');
   });
 
-  it.each(['planning', 'running', 'verifying', 'review', 'paused'])(
-    'refuses a %s goal, which can still move on its own',
+  it('archives an achieved goal once its owner signed it off', async () => {
+    const goal = await createListedGoal('Delivered', 'achieved');
+    await signOff(goal.id, 'accepted');
+
+    expect((await archiveModel.archive(goal.id))?.archivedAt).toBeInstanceOf(Date);
+  });
+
+  it('refuses an achieved goal whose sign-off is still open', async () => {
+    const goal = await createListedGoal('Awaiting sign-off', 'achieved');
+    await signOff(goal.id, 'delivered');
+
+    expect(await archiveModel.archive(goal.id)).toBeNull();
+    expect((await goalModel.findById(goal.id))?.archivedAt).toBeNull();
+  });
+
+  it.each(['draft', 'planning', 'running', 'verifying', 'review', 'paused', 'failed'])(
+    'refuses a %s goal',
     async (status) => {
-      const goal = await createListedGoal('Live', status);
+      const goal = await createListedGoal('Not done with', status);
+      await signOff(goal.id, 'accepted');
 
       expect(await archiveModel.archive(goal.id)).toBeNull();
       expect((await goalModel.findById(goal.id))?.archivedAt).toBeNull();
@@ -58,7 +90,7 @@ describe('GoalArchiveModel', () => {
   );
 
   it('keeps the original archive time when archived again', async () => {
-    const goal = await createListedGoal('Done', 'achieved');
+    const goal = await createListedGoal('Dropped', 'canceled');
     const first = await archiveModel.archive(goal.id);
 
     const second = await archiveModel.archive(goal.id);
@@ -68,7 +100,7 @@ describe('GoalArchiveModel', () => {
 
   it('does not touch another user’s goal', async () => {
     const theirs = await new GoalModel(serverDB, otherUserId).create({
-      status: 'achieved',
+      status: 'canceled',
       title: 'Theirs',
     });
 
@@ -77,7 +109,7 @@ describe('GoalArchiveModel', () => {
   });
 
   it('unarchives a goal', async () => {
-    const goal = await createListedGoal('Done', 'achieved');
+    const goal = await createListedGoal('Dropped', 'canceled');
     await archiveModel.archive(goal.id);
 
     const restored = await archiveModel.unarchive(goal.id);
@@ -88,7 +120,7 @@ describe('GoalArchiveModel', () => {
 
 describe('GoalModel.updateStatus on an archived goal', () => {
   it('refuses to put it back in motion, whichever path asks', async () => {
-    const goal = await createListedGoal('Put away', 'achieved');
+    const goal = await createListedGoal('Put away', 'canceled');
     await archiveModel.archive(goal.id);
 
     for (const status of ['running', 'paused', 'planning', 'review', 'verifying'] as const) {
@@ -96,14 +128,14 @@ describe('GoalModel.updateStatus on an archived goal', () => {
         GoalArchivedError,
       );
     }
-    expect((await goalModel.findById(goal.id))?.status).toBe('achieved');
+    expect((await goalModel.findById(goal.id))?.status).toBe('canceled');
   });
 
   it('still lets it move between ended statuses', async () => {
-    const goal = await createListedGoal('Put away', 'achieved');
+    const goal = await createListedGoal('Put away', 'canceled');
     await archiveModel.archive(goal.id);
 
-    expect((await goalModel.updateStatus(goal.id, 'canceled'))?.status).toBe('canceled');
+    expect((await goalModel.updateStatus(goal.id, 'failed'))?.status).toBe('failed');
   });
 
   it('moves an unarchived goal as before', async () => {
@@ -115,8 +147,8 @@ describe('GoalModel.updateStatus on an archived goal', () => {
 
 describe('GoalModel.list archive filter', () => {
   it('hides archived goals by default and lists only them when asked', async () => {
-    const kept = await createListedGoal('Kept', 'achieved');
-    const putAway = await createListedGoal('Put away', 'achieved');
+    const kept = await createListedGoal('Kept', 'canceled');
+    const putAway = await createListedGoal('Put away', 'canceled');
     await archiveModel.archive(putAway.id);
 
     const visible = await goalModel.list();
@@ -131,6 +163,7 @@ describe('GoalModel.list archive filter', () => {
 
   it('combines the archive filter with a status filter', async () => {
     const achieved = await createListedGoal('Achieved', 'achieved');
+    await signOff(achieved.id, 'accepted');
     const canceled = await createListedGoal('Canceled', 'canceled');
     await archiveModel.archive(achieved.id);
     await archiveModel.archive(canceled.id);
@@ -141,11 +174,25 @@ describe('GoalModel.list archive filter', () => {
   });
 
   it('lists a restored goal again', async () => {
-    const goal = await createListedGoal('Back', 'achieved');
+    const goal = await createListedGoal('Back', 'canceled');
     await archiveModel.archive(goal.id);
     await archiveModel.unarchive(goal.id);
 
     expect((await goalModel.list()).goals.map((item) => item.goal.id)).toEqual([goal.id]);
     expect((await goalModel.list({ archived: true })).total).toBe(0);
+  });
+});
+
+describe('GoalModel.list signedOff', () => {
+  it('marks an achieved goal signed off only once its acceptance is accepted', async () => {
+    const signed = await createListedGoal('Signed', 'achieved');
+    await signOff(signed.id, 'accepted');
+    const awaiting = await createListedGoal('Awaiting', 'achieved');
+    await signOff(awaiting.id, 'delivered');
+
+    const { goals: rows } = await goalModel.list();
+    const byId = Object.fromEntries(rows.map((item) => [item.goal.id, item.signedOff]));
+
+    expect(byId).toEqual({ [awaiting.id]: false, [signed.id]: true });
   });
 });
