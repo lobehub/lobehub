@@ -5,6 +5,7 @@ import {
 } from '@lobechat/const';
 import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
 import {
+  Block,
   createStaticStyles,
   cssVar,
   cx,
@@ -118,8 +119,16 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 20px;
     color: ${cssVar.colorTextTertiary};
   `,
+  subAgentSection: css`
+    margin-block: 12px 8px;
+  `,
   subAgentTitle: css`
-    padding-block-start: 12px;
+    user-select: none;
+
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+    color: ${cssVar.colorText};
   `,
   body: css`
     overflow-y: auto;
@@ -889,14 +898,16 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
               )}
             </>
           )}
-          {/* Sub-agent settings come last, under their own title, so none of their
-           * controls sit among (or above) the main agent's identically named ones. */}
+          {/* Sub-agent settings come last, in their own titled card, so none of their
+           * controls read as the main agent's identically named ones above. */}
           {enableAgentMode && (
-            <>
-              <div className={styles.divider} />
-              <div className={cx(styles.sectionTitle, styles.subAgentTitle)}>
-                {t('settingModel.params.panel.subAgent.title')}
-              </div>
+            <Block className={styles.subAgentSection} padding={12} variant={'filled'}>
+              <Flexbox gap={2}>
+                <span className={styles.subAgentTitle}>
+                  {t('settingModel.params.panel.subAgent.title')}
+                </span>
+                <span className={styles.hint}>{t('settingModel.params.panel.subAgent.desc')}</span>
+              </Flexbox>
               <ControlRow
                 tag="subAgentModel"
                 title={t('settingModel.params.panel.subAgent.model')}
@@ -926,7 +937,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   />
                 )}
               </ControlRow>
-            </>
+            </Block>
           )}
           {!enableAgentMode && (
             <>

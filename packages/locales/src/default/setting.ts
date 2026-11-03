@@ -1489,6 +1489,8 @@ export default {
   'settingModel.params.panel.historyLimit': 'Limit History Messages',
   'settingModel.params.panel.openness': 'Openness',
   'settingModel.params.panel.responseLength': 'Limit Response Length',
+  'settingModel.params.panel.subAgent.desc':
+    "Only applies to sub-agents this agent spawns; the main agent's settings above are unaffected.",
   'settingModel.params.panel.subAgent.model': 'Model',
   'settingModel.params.panel.subAgent.title': 'Sub-Agents',
   'settingModel.params.panel.tab': 'Params',

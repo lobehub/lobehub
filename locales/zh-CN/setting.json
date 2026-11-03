@@ -1607,6 +1607,7 @@
   "settingModel.params.panel.historyLimit": "限制历史消息",
   "settingModel.params.panel.openness": "开放性",
   "settingModel.params.panel.responseLength": "限制回复长度",
+  "settingModel.params.panel.subAgent.desc": "仅作用于该助手派生的子助手，不影响上方主助手的设置。",
   "settingModel.params.panel.subAgent.model": "模型",
   "settingModel.params.panel.subAgent.title": "子助手",
   "settingModel.params.panel.tab": "参数",
