@@ -1,3 +1,4 @@
+import type { IEditor } from '@lobehub/editor';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -9,9 +10,11 @@ import {
   type LexicalEditor,
   type ParagraphNode,
 } from 'lexical';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  focusEditorFirstLine,
+  focusEditorStartLine,
   selectEditorFirstLineOnLexical,
   selectEditorStartLineOnLexical,
 } from './focusEditorStartLine';
@@ -201,5 +204,69 @@ describe('selectEditorFirstLineOnLexical', () => {
     await flush(editor);
 
     expect(readSnapshot(editor)).toEqual({ caretLine: 0, caretOffset: 0, lines: [''] });
+  });
+});
+
+describe('focusEditorStartLine / focusEditorFirstLine', () => {
+  const setupKernel = async ({ editable = true, mounted = true } = {}) => {
+    const lexical = createTestEditor();
+    if (mounted) {
+      const root = document.createElement('div');
+      root.contentEditable = 'true';
+      document.body.append(root);
+      lexical.setRootElement(root);
+    }
+    lexical.update(() => {
+      $getRoot().append($createParagraphNode().append($createTextNode('body')));
+    });
+    await flush(lexical);
+    lexical.setEditable(editable);
+
+    const focus = vi.fn();
+    const editor = { focus, getLexicalEditor: () => lexical } as unknown as IEditor;
+    return { editor, focus, lexical };
+  };
+
+  it('writes the split-off title text into a mounted, editable body', async () => {
+    const { editor, focus, lexical } = await setupKernel();
+
+    focusEditorStartLine(editor, 'tail');
+    await flush(lexical);
+
+    expect(readSnapshot(lexical).lines).toEqual(['tail', 'body']);
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  // While the body is loading the kernel can hold a detached editor whose
+  // content is about to be replaced: text written there would be lost.
+  it('leaves a body that is not mounted yet untouched', async () => {
+    const { editor, focus, lexical } = await setupKernel({ mounted: false });
+
+    focusEditorStartLine(editor, 'tail');
+    focusEditorFirstLine(editor);
+    await flush(lexical);
+
+    expect(readSnapshot(lexical).lines).toEqual(['body']);
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it('leaves a read-only body untouched', async () => {
+    const { editor, focus, lexical } = await setupKernel({ editable: false });
+
+    focusEditorStartLine(editor, 'tail');
+    await flush(lexical);
+
+    expect(readSnapshot(lexical).lines).toEqual(['body']);
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it('does nothing before the kernel has a Lexical editor', () => {
+    const focus = vi.fn();
+    const editor = { focus, getLexicalEditor: () => null } as unknown as IEditor;
+
+    focusEditorStartLine(editor, 'tail');
+    focusEditorFirstLine(editor);
+
+    expect(focus).not.toHaveBeenCalled();
   });
 });

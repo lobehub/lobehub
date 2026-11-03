@@ -11,7 +11,10 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { focusEditorFirstLine } from '@/features/EditorCanvas/focusEditorStartLine';
+import {
+  focusEditorFirstLine,
+  getWritableLexicalEditor,
+} from '@/features/EditorCanvas/focusEditorStartLine';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 import { truncateByWeightedLength } from '@/utils/textLength';
@@ -115,6 +118,7 @@ export const usePageTitleInteractions = (containerRef: RefObject<HTMLElement | n
   const setEmoji = usePageEditorStore((s) => s.setEmoji);
   const setTitle = usePageEditorStore((s) => s.setTitle);
   const handleTitleSubmit = usePageEditorStore((s) => s.handleTitleSubmit);
+  const flushMetaSave = usePageEditorStore((s) => s.flushMetaSave);
   const isDocumentLoading = useDocumentStore(editorSelectors.isDocumentLoading(documentId));
   const content = useDocumentStore((s) =>
     documentId ? editorSelectors.content(documentId)(s) : '',
@@ -168,9 +172,14 @@ export const usePageTitleInteractions = (containerRef: RefObject<HTMLElement | n
     setTitle(truncated);
   };
 
+  // Read at key time: the body mounts after its content loads, which no render
+  // of the title is told about.
+  const isBodyReady = () => !isDocumentLoading && !!getWritableLexicalEditor(editor);
+
   const handleTitleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (isTitleArrowDownKey(e)) {
-      if (!bodyEditable || !shouldTitleArrowDownEnterBody(e.currentTarget)) return;
+      if (!bodyEditable || !isBodyReady()) return;
+      if (!shouldTitleArrowDownEnterBody(e.currentTarget)) return;
       e.preventDefault();
       focusEditorFirstLine(editor);
       return;
@@ -179,6 +188,13 @@ export const usePageTitleInteractions = (containerRef: RefObject<HTMLElement | n
     if (!canEdit || !isTitleSubmitKey(e)) return;
 
     e.preventDefault();
+    // Splitting moves the text after the caret into the body. Until the body
+    // can take it, keep the whole title and only save it.
+    if (!isBodyReady()) {
+      flushMetaSave();
+      return;
+    }
+
     const { selectionEnd, selectionStart, value } = e.currentTarget;
     const split = splitTitleAtSelection(value, selectionStart, selectionEnd);
     if (split.title !== value) setTitle(split.title);

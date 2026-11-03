@@ -28,6 +28,19 @@ const $selectStartLine = (text: string) => {
   paragraph.selectStart();
 };
 
+/**
+ * The editor's Lexical instance, when it can take the caret and text right now:
+ * mounted in the page and editable. While the body is still loading (or after
+ * a document switch, before the next body mounts) the kernel may hold no
+ * Lexical editor, or a detached one whose content is about to be replaced —
+ * anything written there would be lost.
+ */
+export const getWritableLexicalEditor = (editor: IEditor | undefined) => {
+  const lexicalEditor = editor?.getLexicalEditor?.();
+  if (!lexicalEditor?.getRootElement() || !lexicalEditor.isEditable()) return null;
+  return lexicalEditor;
+};
+
 /** Exported for tests, which drive a bare Lexical editor without the kernel. */
 export const selectEditorStartLineOnLexical = (lexicalEditor: LexicalEditor, text = ''): void => {
   lexicalEditor.update(() => $selectStartLine(text));
@@ -46,7 +59,7 @@ export const selectEditorStartLineOnLexical = (lexicalEditor: LexicalEditor, tex
  * becomes the body's new first line, with the caret at its start.
  */
 export const focusEditorStartLine = (editor: IEditor | undefined, text?: string): void => {
-  const lexicalEditor = editor?.getLexicalEditor?.();
+  const lexicalEditor = getWritableLexicalEditor(editor);
   if (!editor || !lexicalEditor) return;
 
   selectEditorStartLineOnLexical(lexicalEditor, text);
@@ -72,7 +85,7 @@ export const selectEditorFirstLineOnLexical = (lexicalEditor: LexicalEditor): vo
  * when the body has none to stand on — ArrowDown out of the title.
  */
 export const focusEditorFirstLine = (editor: IEditor | undefined): void => {
-  const lexicalEditor = editor?.getLexicalEditor?.();
+  const lexicalEditor = getWritableLexicalEditor(editor);
   if (!editor || !lexicalEditor) return;
 
   selectEditorFirstLineOnLexical(lexicalEditor);

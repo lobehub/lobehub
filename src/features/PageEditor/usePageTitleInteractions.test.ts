@@ -21,7 +21,9 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/features/EditorCanvas/focusEditorStartLine', () => ({
+vi.mock('@/features/EditorCanvas/focusEditorStartLine', async (importOriginal) => ({
+  // Keep the real readiness check; only the caret moves are spied on.
+  ...(await importOriginal<Record<string, unknown>>()),
   focusEditorFirstLine: vi.fn(),
   focusEditorStartLine: vi.fn(),
 }));
@@ -46,14 +48,23 @@ vi.mock('@/store/document/slices/editor', () => ({
   },
 }));
 
-const editor = { focus: vi.fn() } as unknown as IEditor;
+/** Whether the body editor is mounted and editable (its content request resolved). */
+const mockBodyMounted = { current: true };
+const editor = {
+  focus: vi.fn(),
+  getLexicalEditor: () =>
+    mockBodyMounted.current
+      ? { getRootElement: () => document.body, isEditable: () => true }
+      : null,
+} as unknown as IEditor;
 
 const setup = ({
   content = 'Some body',
+  documentLoaded = true,
   metaReadOnly = false,
   title = 'My page',
-}: { content?: string; metaReadOnly?: boolean; title?: string } = {}) => {
-  mockDocumentState.current = { documents: { 'doc-1': { content } } };
+}: { content?: string; documentLoaded?: boolean; metaReadOnly?: boolean; title?: string } = {}) => {
+  mockDocumentState.current = { documents: documentLoaded ? { 'doc-1': { content } } : {} };
 
   const container = document.createElement('div');
   const input = document.createElement('textarea');
@@ -63,13 +74,15 @@ const setup = ({
   document.body.append(container);
 
   const store = createStore({ documentId: 'doc-1', editor, metaReadOnly, title });
+  const flushMetaSave = vi.fn();
+  store.setState({ flushMetaSave });
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(Provider, { createStore: () => store }, children);
   const { result } = renderHook(() => usePageTitleInteractions({ current: container }), {
     wrapper,
   });
 
-  return { input, result, store };
+  return { flushMetaSave, input, result, store };
 };
 
 const keyDown = (
@@ -93,6 +106,7 @@ const keyDown = (
 
 beforeEach(() => {
   mockEditable.current = true;
+  mockBodyMounted.current = true;
   vi.mocked(focusEditorFirstLine).mockClear();
   vi.mocked(focusEditorStartLine).mockClear();
 });
@@ -143,6 +157,40 @@ describe('usePageTitleInteractions — Enter', () => {
 
     expect(store.getState().title).toBe('Hello world');
     expect(focusEditorStartLine).not.toHaveBeenCalled();
+  });
+});
+
+describe('usePageTitleInteractions — Enter before the body is ready', () => {
+  it.each([
+    ['the body editor is not mounted yet', { bodyMounted: false, documentLoaded: true }],
+    ['the document is still loading', { bodyMounted: true, documentLoaded: false }],
+  ])('keeps the whole title and only saves it while %s', (_, { bodyMounted, documentLoaded }) => {
+    mockBodyMounted.current = bodyMounted;
+    const { flushMetaSave, input, result, store } = setup({
+      documentLoaded,
+      title: 'Hello world',
+    });
+    input.setSelectionRange(5, 5);
+    const { event, preventDefault } = keyDown(input, { key: 'Enter', keyCode: 13 });
+
+    act(() => result.current.handleTitleKeyDown(event));
+
+    // No line break goes into the title, and nothing of it is lost.
+    expect(preventDefault).toHaveBeenCalled();
+    expect(store.getState().title).toBe('Hello world');
+    expect(flushMetaSave).toHaveBeenCalledTimes(1);
+    expect(focusEditorStartLine).not.toHaveBeenCalled();
+  });
+
+  it('leaves ArrowDown to the browser until the body is mounted', () => {
+    mockBodyMounted.current = false;
+    const { input, result } = setup({ title: 'Hello' });
+    const { event, preventDefault } = keyDown(input, { key: 'ArrowDown' });
+
+    act(() => result.current.handleTitleKeyDown(event));
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(focusEditorFirstLine).not.toHaveBeenCalled();
   });
 });
 
