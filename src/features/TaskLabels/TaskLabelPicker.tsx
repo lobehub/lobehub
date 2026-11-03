@@ -214,9 +214,7 @@ const TaskLabelPicker = memo<TaskLabelPickerProps>(({ children, disabled, onChan
           <Text fontSize={12} type={'secondary'}>
             {t('taskLabels.loadFailed', { ns: 'setting' })}
           </Text>
-          <Button size={'small'} onClick={() => mutate()}>
-            {t('retry', { ns: 'common' })}
-          </Button>
+          <Button onClick={() => mutate()}>{t('retry', { ns: 'common' })}</Button>
         </Flexbox>
       ) : flatOptions.length === 0 ? (
         <Flexbox align={'center'} justify={'center'} padding={16}>
