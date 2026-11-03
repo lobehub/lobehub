@@ -1,14 +1,21 @@
 import type { IEditor } from '@lobehub/editor';
 import { CommonPlugin, Kernel, MarkdownPlugin } from '@lobehub/editor';
+import { toast } from '@lobehub/ui';
 import { $createParagraphNode, $createTextNode, $getRoot, KEY_ESCAPE_COMMAND } from 'lexical';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { installMarketMentions, MarketMentionInstallError } from '@/services/mentionMarketInstall';
 import { useAgentStore } from '@/store/agent';
 import { systemAgentSelectors } from '@/store/user/selectors';
 
 import { getDraft, saveDraft } from '../draftStorage';
 import { getInputHistory } from '../inputHistoryStorage';
 import { createStore, selectors } from '.';
+
+vi.mock('@/services/mentionMarketInstall', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  installMarketMentions: vi.fn(),
+}));
 
 describe('ChatInput store actions', () => {
   beforeEach(() => {
@@ -170,7 +177,6 @@ describe('ChatInput store actions', () => {
     store.getState().handleSendButton();
 
     expect(getInputHistory()).toEqual([]);
-    expect(editor.getDocument).not.toHaveBeenCalled();
   });
 
   it('clears the input-completion ghost before sending when autocomplete is enabled', () => {
@@ -321,5 +327,82 @@ describe('ChatInput store actions', () => {
     store.getState().handleSendButton();
 
     expect(sent).toBe(prompt);
+  });
+
+  describe('market entries picked from the @ menu', () => {
+    const marketDoc = {
+      root: {
+        children: [
+          {
+            children: [
+              {
+                label: 'Writer',
+                metadata: {
+                  id: 'market:writer',
+                  label: 'Writer',
+                  marketIdentifier: 'writer',
+                  marketVisibility: 'public',
+                  type: 'agent',
+                },
+                type: 'mention',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'root',
+      },
+    };
+    const marketEditor = () => ({
+      cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) =>
+        type === 'markdown' ? '<mention name="Writer" id="market:writer" /> hi' : marketDoc,
+      ),
+      getLexicalEditor: () => ({}),
+    });
+
+    it('installs them first and sends the installed agent id', async () => {
+      vi.mocked(installMarketMentions).mockResolvedValue(new Map([['writer', 'agt_writer']]));
+      const loadingToast = vi.spyOn(toast, 'loading');
+      const onSend = vi.fn();
+      const store = createStore({ editor: marketEditor() as unknown as IEditor, onSend });
+
+      store.getState().handleSendButton();
+
+      expect(installMarketMentions).toHaveBeenCalledWith({
+        agents: [{ identifier: 'writer', label: 'Writer', visibility: 'public' }],
+        skills: [],
+      });
+      expect(onSend).not.toHaveBeenCalled();
+      // The send button's spinner is the only progress cue; no toast.
+      expect(store.getState().installingMarketMentions).toBe(true);
+      expect(loadingToast).not.toHaveBeenCalled();
+
+      await vi.waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+      const { getEditorData, getMarkdownContent } = onSend.mock.calls[0][0];
+      expect(getMarkdownContent()).toBe('<mention name="Writer" id="agt_writer" /> hi');
+      expect(getEditorData().root.children[0].children[0].metadata).toEqual({
+        id: 'agt_writer',
+        label: 'Writer',
+        type: 'agent',
+      });
+      expect(store.getState().installingMarketMentions).toBe(false);
+    });
+
+    it('keeps the message in the composer when the install fails', async () => {
+      vi.mocked(installMarketMentions).mockRejectedValue(new MarketMentionInstallError(['Writer']));
+      const onSend = vi.fn();
+      const editor = marketEditor();
+      const store = createStore({ editor: editor as unknown as IEditor, onSend });
+
+      store.getState().handleSendButton();
+      await vi.waitFor(() => expect(store.getState().installingMarketMentions).toBe(false));
+
+      expect(onSend).not.toHaveBeenCalled();
+      expect(editor.cleanDocument).not.toHaveBeenCalled();
+      expect(getInputHistory()).toEqual([]);
+    });
   });
 });

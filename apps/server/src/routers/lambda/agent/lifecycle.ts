@@ -156,10 +156,13 @@ export const lifecycleRouter = router({
     .input(
       z.object({
         forkedFromIdentifier: z.string(),
+        virtual: z.boolean().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.agentModel.getAgentByForkedFromIdentifier(input.forkedFromIdentifier);
+      return ctx.agentModel.getAgentByForkedFromIdentifier(input.forkedFromIdentifier, {
+        virtual: input.virtual,
+      });
     }),
   /**
    * Get an agent by marketIdentifier

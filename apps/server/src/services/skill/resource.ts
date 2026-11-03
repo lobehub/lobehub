@@ -7,12 +7,15 @@ import {
 import { getMimeType } from '@lobechat/utils';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
+import pMap from 'p-map';
 
 import { FileService } from '@/server/services/file';
 
 import { SkillResourceError } from './errors';
 
 const log = debug('lobe-chat:service:skill-resource');
+
+const STORE_RESOURCES_CONCURRENCY = 16;
 
 function isTextMimeType(mimeType: string): boolean {
   if (mimeType.startsWith('text/')) return true;
@@ -51,12 +54,18 @@ export class SkillResourceService {
     log('storeResources: starting with zipHash=%s, resourceCount=%d', zipHash, resources.size);
     const result: Record<string, SkillResourceMeta> = {};
 
-    for (const [virtualPath, buffer] of resources) {
-      log('storeResources: storing resource path=%s, size=%d bytes', virtualPath, buffer.length);
-      const fileHash = await this.storeResource(zipHash, virtualPath, buffer);
-      result[virtualPath] = { fileHash, size: buffer.length };
-      log('storeResources: stored resource path=%s, fileHash=%s', virtualPath, fileHash);
-    }
+    // Each file is an object-storage upload plus a row insert; a Market skill can
+    // carry hundreds of them, so storing them one at a time dominated install time.
+    await pMap(
+      resources,
+      async ([virtualPath, buffer]) => {
+        log('storeResources: storing resource path=%s, size=%d bytes', virtualPath, buffer.length);
+        const fileHash = await this.storeResource(zipHash, virtualPath, buffer);
+        result[virtualPath] = { fileHash, size: buffer.length };
+        log('storeResources: stored resource path=%s, fileHash=%s', virtualPath, fileHash);
+      },
+      { concurrency: STORE_RESOURCES_CONCURRENCY },
+    );
 
     log('storeResources: completed, stored %d resources', Object.keys(result).length);
     return result;

@@ -1741,6 +1741,7 @@
   "mention.category.tools": "工具",
   "mention.category.topics": "话题",
   "mention.category.workspaceAgents": "工作区",
+  "mention.marketInstall.failed": "{{names}} 暂时无法使用，消息未发送，请重试。",
   "mention.title": "提及成员",
   "messageAction.advanced": "高级操作",
   "messageAction.codexEdit.alreadySubmitting": "正在提交此次编辑，请稍候",
