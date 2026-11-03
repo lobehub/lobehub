@@ -15,13 +15,16 @@ import { agentEvalMemories } from '../src/schemas/agentEvalMemory';
 import { agentEvalEnvironments } from '../src/schemas/agentEvals';
 
 const migrationsFolder = path.join(__dirname, '../migrations');
+const migrationTag = '0199_lobe_bench_environments_and_memory';
 const temporaryFolders: string[] = [];
 
 async function canaryMigrationsFolder() {
   const folder = await mkdtemp(path.join(tmpdir(), 'lobe-bench-migration-'));
   temporaryFolders.push(folder);
   await mkdir(path.join(folder, 'meta'));
-  const entries = journal.entries.filter(({ idx }) => idx <= 198);
+  const migrationIndex = journal.entries.findIndex(({ tag }) => tag === migrationTag);
+  expect(migrationIndex).toBeGreaterThanOrEqual(0);
+  const entries = journal.entries.slice(0, migrationIndex);
   await writeFile(path.join(folder, 'meta/_journal.json'), JSON.stringify({ ...journal, entries }));
   await Promise.all(
     entries.map(({ tag }) =>
