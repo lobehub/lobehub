@@ -1082,7 +1082,7 @@ export default {
   'notification.item.agent_run_completed': 'Agent task completed',
   'notification.item.agent_transfer_result': 'Transfer request result',
   'notification.item.checkout_abandoned': 'Unfinished checkout reminders',
-  'notification.item.credit_balance_low': 'Credit balance running low',
+  'notification.item.credit_balance_low': 'Balance running low',
   'notification.item.image_generation_completed': 'Image generation completed',
   'notification.item.storage_overage_cap_reached': 'Storage pay-as-you-go cap reached',
   'notification.item.subscription_one_time_expired': 'One-time plan ended',
@@ -1095,7 +1095,7 @@ export default {
   'notification.item.topic_comment_activity': 'Comment activity',
   'notification.item.topic_comment_mentioned': 'Mentioned in a comment',
   'notification.item.video_generation_completed': 'Video generation completed',
-  'notification.item.workspace_credit_balance_low': 'Workspace credits running low',
+  'notification.item.workspace_credit_balance_low': 'Workspace balance running low',
   'notification.item.workspace_member_invited': 'Workspace invitation',
   'notification.item.workspace_member_joined': 'New member joined',
   'notification.item.workspace_member_removed': 'Removed from workspace',
@@ -1557,7 +1557,7 @@ export default {
   'settingsSearch.tabKeywords.chatPreference':
     'chat preferences, follow-up suggestions, input suggestions, autocomplete',
   'settingsSearch.tabKeywords.connector': 'connectors, integrations, mcp',
-  'settingsSearch.tabKeywords.credits': 'credits, balance, top up, recharge, buy credits',
+  'settingsSearch.tabKeywords.credits': 'usage, balance, top up, recharge, buy top-up pack',
   'settingsSearch.tabKeywords.creds': 'credentials, secrets, oauth',
   'settingsSearch.tabKeywords.devices': 'devices, sessions, logged in devices',
   'settingsSearch.tabKeywords.hotkey': 'hotkey, shortcut, keyboard',
@@ -2077,7 +2077,7 @@ When I am ___, I need ___
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',
-  'workspace.billing.credits.label': 'Credits this month',
+  'workspace.billing.credits.label': 'Usage this month',
   'workspace.billing.basicHint': 'Basic workspace · shared monthly pool',
   'workspace.billing.freeHint': 'Free workspace · shared monthly pool',
   'workspace.billing.platformLine': 'Pro Platform · monthly',
@@ -2134,7 +2134,7 @@ When I am ___, I need ___
     'Your subscription has ended. Re-subscribe to restore Pro features, or downgrade to Free.',
   'workspace.billingPage.billing.banner.expiredTitle': 'Subscription cancelled',
   'workspace.billingPage.billing.banner.inactiveDesc':
-    'Subscription is inactive — credits will not refresh until you re-subscribe.',
+    'Subscription is inactive — usage will not refresh until you re-subscribe.',
   'workspace.billingPage.billing.banner.inactiveTitle': 'Subscription inactive',
   'workspace.billingPage.billing.banner.resumeCta': 'Resume',
   'workspace.billingPage.billing.banner.subscribeCta': 'Subscribe',
@@ -2145,10 +2145,9 @@ When I am ___, I need ___
   'workspace.billingPage.billing.paymentFailed.updatePaymentMethodCta': 'Update payment method',
   'workspace.billingPage.billing.paymentFailed.updatePaymentMethodFailed':
     'Failed to open billing portal.',
-  'workspace.billingPage.billing.breakdown.creditsLine_one':
-    '{{seats}} seat · {{credits}} credits / month',
+  'workspace.billingPage.billing.breakdown.creditsLine_one': '{{seats}} seat · {{credits}} / month',
   'workspace.billingPage.billing.breakdown.creditsLine_other':
-    '{{seats}} seats · {{credits}} credits / month',
+    '{{seats}} seats · {{credits}} / month',
   'workspace.billingPage.billing.breakdown.extraSeats': 'Extra seats',
   'workspace.billingPage.billing.breakdown.platform': 'Platform fee',
   'workspace.billingPage.billing.breakdown.product': 'Product',
@@ -2167,7 +2166,7 @@ When I am ___, I need ___
   'workspace.billingPage.billing.cancelPlanModal.continueCta': 'Continue',
   'workspace.billingPage.billing.cancelPlanModal.keepCta': 'Keep plan',
   'workspace.billingPage.billing.cancelPlanModal.limitDesc':
-    'Free workspaces are limited to {{maxSeats}} seats and do not include monthly workspace credits. You can keep using the workspace and upgrade again in the future.',
+    'Free workspaces are limited to {{maxSeats}} seats and do not include monthly workspace usage. You can keep using the workspace and upgrade again in the future.',
   'workspace.billingPage.billing.cancelPlanModal.overLimitDesc':
     'This workspace currently has {{currentSeats}} billable members. Free supports up to {{maxSeats}} seats. Remove members or change them to {{viewerRole}} before canceling the plan.',
   'workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one':
@@ -2391,9 +2390,9 @@ When I am ___, I need ___
   'workspace.billingPage.billing.currentPlan.descBasic': 'Basic workspace for up to 3 members',
   'workspace.billingPage.billing.currentPlan.descFree': 'Free workspace for up to 3 members',
   'workspace.billingPage.billing.currentPlan.descBusiness':
-    'Business workspace with expanded credits and larger teams',
+    'Business workspace with expanded usage and larger teams',
   'workspace.billingPage.billing.currentPlan.descPro':
-    'Team workspace with monthly credits allowance',
+    'Team workspace with monthly usage allowance',
   'workspace.billingPage.billing.currentPlan.title': 'Current plan',
   'workspace.billingPage.billing.summarySubtitle': 'Workspace subscription and billing breakdown',
   'workspace.billingPage.billing.summaryTitle': 'Subscription',
@@ -2403,7 +2402,7 @@ When I am ___, I need ___
   'workspace.billingPage.credits.breakdownSpend': 'Spend',
   'workspace.billingPage.credits.breakdownTitle': 'Spend by category',
   'workspace.billingPage.credits.breakdownType': 'Category',
-  'workspace.billingPage.credits.empty': 'No credit data yet',
+  'workspace.billingPage.credits.empty': 'No usage data yet',
   'workspace.billingPage.credits.hero.cycleHint': '{{from}} → {{to}}',
   'workspace.billingPage.credits.hero.percentOfTotal': '{{percent}}% of {{total}}',
   'workspace.billingPage.credits.hero.planBasic': 'Basic · 3 free members',
@@ -2411,12 +2410,12 @@ When I am ___, I need ___
   'workspace.billingPage.credits.hero.planPro_other': 'Pro · {{count}} seats',
   'workspace.billingPage.credits.hero.poolDesc':
     'Shared across all seats. Resets each billing cycle.',
-  'workspace.billingPage.credits.hero.remainingLine': 'Remaining {{amount}} credits',
+  'workspace.billingPage.credits.hero.remainingLine': 'Remaining ${{amount}}',
   'workspace.billingPage.credits.hero.resetsIn_one': 'Resets in {{count}} day',
   'workspace.billingPage.credits.hero.resetsIn_other': 'Resets in {{count}} days',
   'workspace.billingPage.credits.hero.resetsToday': 'Resets today',
   'workspace.billingPage.credits.hero.seePlans': 'See Plans',
-  'workspace.billingPage.credits.hero.title': 'Credit pool',
+  'workspace.billingPage.credits.hero.title': 'Usage pool',
   'workspace.billingPage.credits.hero.usedLabel': 'Used',
   'workspace.billingPage.credits.hero.viewUsage': 'View detailed usage',
   'workspace.billingPage.credits.monthly': 'Monthly allowance',
@@ -2440,40 +2439,40 @@ When I am ___, I need ___
   'workspace.billingPage.credits.packages.sourceLabel.autoTopUp': 'Auto top-up',
   'workspace.billingPage.credits.packages.sourceLabel.systemGift': 'System gift',
   'workspace.billingPage.credits.packages.sourceLabel.userPurchase': 'Sales add-on',
-  'workspace.billingPage.credits.packages.subtitle': 'All credit packages owned by this workspace',
-  'workspace.billingPage.credits.packages.title': 'Packages',
+  'workspace.billingPage.credits.packages.subtitle': 'All top-up packs owned by this workspace',
+  'workspace.billingPage.credits.packages.title': 'Top-up packs',
   'workspace.billingPage.credits.packages.usedPercent': 'Used',
   'workspace.billingPage.credits.poolDesc': 'Shared across all seats. Resets each billing cycle.',
-  'workspace.billingPage.credits.poolTitle': 'Workspace credit pool',
+  'workspace.billingPage.credits.poolTitle': 'Workspace usage pool',
   'workspace.billingPage.credits.resetAt': 'Next reset: {{date}}',
   'workspace.billingPage.credits.status.cancelledCta': 'Resume subscription',
   'workspace.billingPage.credits.status.cancelledDesc':
-    'Subscription is scheduled to end on {{date}}. Credits will stop refreshing after that.',
-  'workspace.billingPage.credits.balance.creditBalance': 'Credit package',
+    'Subscription is scheduled to end on {{date}}. Usage will stop refreshing after that.',
+  'workspace.billingPage.credits.balance.creditBalance': 'Top-up balance',
   'workspace.billingPage.credits.balance.basicDesc':
-    'Basic workspaces do not include subscription credits — top up below or upgrade to Pro.',
+    'Basic workspaces do not include monthly usage — top up below or upgrade to Pro.',
   'workspace.billingPage.credits.balance.freeDesc':
-    'Free workspaces do not include subscription credits — top up below or upgrade to Pro.',
+    'Free workspaces do not include monthly usage — top up below or upgrade to Pro.',
   'workspace.billingPage.credits.balance.link.history': 'Top-up history',
   'workspace.billingPage.credits.balance.link.usage': 'View usage',
   'workspace.billingPage.credits.balance.plansUsage': 'Included in plan',
   'workspace.billingPage.credits.balance.plansUsageDesc':
-    'Subscription credits are used first, then top-up credits',
+    'Subscription usage is used first, then top-up balance',
   'workspace.billingPage.credits.balance.sharedHint': 'Shared by all workspace members',
   'workspace.billingPage.credits.balance.sharedTag': 'Workspace-shared',
   'workspace.billingPage.credits.balance.title': 'Overview',
-  'workspace.billingPage.credits.title': 'Credits',
+  'workspace.billingPage.credits.title': 'Usage',
   'workspace.billingPage.credits.topUp.custom': 'Custom',
   'workspace.billingPage.credits.topUp.maxAmountError':
     'Purchase amount cannot exceed ${{max}} per transaction.',
   'workspace.billingPage.credits.topUp.purchaseNow': 'Purchase now',
   'workspace.billingPage.credits.topUp.purchaseSuccess': 'Purchase successful.',
-  'workspace.billingPage.credits.topUp.selectPackage': 'Select a credit pack',
+  'workspace.billingPage.credits.topUp.selectPackage': 'Select a top-up pack',
   'workspace.billingPage.credits.topUp.subtitle':
-    'Add credits to this workspace with a one-time purchase',
-  'workspace.billingPage.credits.topUp.title': 'Purchase credits',
+    'Add balance to this workspace with a one-time purchase',
+  'workspace.billingPage.credits.topUp.title': 'Top Up',
   'workspace.billingPage.credits.topUp.total': 'Total',
-  'workspace.billingPage.credits.topUp.unitPriceFormat': '${{price}} per million compute credits',
+  'workspace.billingPage.credits.topUp.unitPriceFormat': '${{price}} per $1 of balance',
   'workspace.billingPage.credits.topUp.upgradePlanName': 'Pro',
   'workspace.billingPage.credits.topUp.upgradePrefix': 'Upgrade to',
   'workspace.billingPage.credits.topUp.upgradeSuffix': 'to save ${{savings}}',
@@ -2481,10 +2480,10 @@ When I am ___, I need ___
   'workspace.billingPage.credits.autoTopUp.enable': 'Enable auto top-up',
   'workspace.billingPage.credits.autoTopUp.monthlyCap': 'Monthly cap',
   'workspace.billingPage.credits.autoTopUp.noCustomerHint':
-    'Purchase credits once and save a payment method to enable auto top-up.',
+    'Top up once and save a payment method to enable auto top-up.',
   'workspace.billingPage.credits.autoTopUp.noPaymentMethodHint':
     'No saved payment method. Set one up to enable auto top-up.',
-  'workspace.billingPage.credits.autoTopUp.purchaseCredits': 'Purchase credits',
+  'workspace.billingPage.credits.autoTopUp.purchaseCredits': 'Top Up',
   'workspace.billingPage.credits.autoTopUp.setupPaymentMethod': 'Set up payment method',
   'workspace.billingPage.credits.autoTopUp.monthlyLimitReached':
     "This month's auto top-up has reached the cap; will resume next month.",
@@ -2497,7 +2496,7 @@ When I am ___, I need ___
   'workspace.billingPage.credits.autoTopUp.save': 'Save',
   'workspace.billingPage.credits.autoTopUp.saveSuccess': 'Auto top-up settings updated.',
   'workspace.billingPage.credits.autoTopUp.subtitle':
-    'Keep credits topped up automatically so the team is never blocked.',
+    'Keep your balance topped up automatically so the team is never blocked.',
   'workspace.billingPage.credits.autoTopUp.target': 'Target balance',
   'workspace.billingPage.credits.autoTopUp.threshold': 'Trigger threshold',
   'workspace.billingPage.credits.autoTopUp.title': 'Auto top-up',
@@ -2528,9 +2527,9 @@ When I am ___, I need ___
   'workspace.billingPage.plans.enterprise.title': 'Enterprise Edition',
   'workspace.billingPage.plans.creditsHint':
     'Shared monthly pool · every seat draws from the same balance',
-  'workspace.billingPage.plans.creditsTitle': 'Workspace credits',
+  'workspace.billingPage.plans.creditsTitle': 'Workspace usage',
   'workspace.billingPage.plans.creditsTooltip':
-    'Workspace-wide monthly credits. Adding seats does NOT grow the pool — overage flows through AutoTopUp.',
+    'Workspace-wide monthly usage. Adding seats does NOT grow the pool — overage flows through AutoTopUp.',
   'workspace.billingPage.plans.capacityOnly': 'Up to {{max}} seats',
   'workspace.billingPage.plans.compare.collaborationTitle': 'Collaboration & Management',
   'workspace.billingPage.plans.compare.extraSeats': 'Additional seats',
@@ -2539,20 +2538,20 @@ When I am ___, I need ___
   'workspace.billingPage.plans.compare.maxSeats': 'Member capacity',
   'workspace.billingPage.plans.compare.seatsTitle': 'Seats & Members',
   'workspace.billingPage.plans.compare.topUpPrice': 'On-demand top-up',
-  'workspace.billingPage.plans.compare.topUpPriceValue': '${{price}} / 1M credits',
+  'workspace.billingPage.plans.compare.topUpPriceValue': '${{price}} per $1 of balance',
   'workspace.billingPage.plans.downgradeToBasicCta': 'Downgrade',
   'workspace.billingPage.plans.headline': 'Choose a plan',
   'workspace.billingPage.plans.basicCapacity': 'Up to 3 seats',
   'workspace.billingPage.plans.basicCta': 'Basic',
-  'workspace.billingPage.plans.basicCreditsHint': 'No monthly credits included',
+  'workspace.billingPage.plans.basicCreditsHint': 'No monthly usage included',
   'workspace.billingPage.plans.basicCreditsTooltip':
-    'Basic workspaces do not include monthly credits. Configure your own model API or top up credits as needed.',
+    'Basic workspaces do not include monthly usage. Configure your own model API or top up your balance as needed.',
   'workspace.billingPage.plans.basicDesc':
     'For small teams getting started with workspace collaboration',
   'workspace.billingPage.plans.freeCapacity': 'Up to 3 seats',
-  'workspace.billingPage.plans.freeCreditsHint': 'No monthly credits included',
+  'workspace.billingPage.plans.freeCreditsHint': 'No monthly usage included',
   'workspace.billingPage.plans.freeCreditsTooltip':
-    'Free workspaces do not include monthly credits. Configure your own model API or top up credits as needed.',
+    'Free workspaces do not include monthly usage. Configure your own model API or top up your balance as needed.',
   'workspace.billingPage.plans.freeDesc':
     'For small teams getting started with workspace collaboration',
   'workspace.billingPage.plans.manageSeatsLink': 'Manage seats',
@@ -2597,7 +2596,7 @@ When I am ___, I need ___
   'workspace.billingPage.usage.activity.viewAll': 'View all',
   'workspace.billingPage.usage.activity.viewAllTitle': 'All recent activity',
   'workspace.billingPage.usage.at': 'When',
-  'workspace.billingPage.usage.breakdownTitle': 'Credits Breakdown',
+  'workspace.billingPage.usage.breakdownTitle': 'Usage Breakdown',
   'workspace.billingPage.usage.byMemberTitle': 'Spend by member',
   'workspace.billingPage.usage.byTypeTitle': 'Spend by category',
   'workspace.billingPage.usage.categories.chat': 'Chat',
@@ -2621,7 +2620,7 @@ When I am ___, I need ___
   'workspace.billingPage.usage.privateAgents': 'Private agents',
   'workspace.billingPage.usage.privateAgentsTooltip':
     'Number of private agents owned by this member. Owners can see the count for accounting, but not the agent content.',
-  'workspace.billingPage.usage.quota.credits': 'Credits',
+  'workspace.billingPage.usage.quota.credits': 'Usage',
   'workspace.billingPage.usage.quota.currentPlan': 'You are on {{plan}} plan',
   'workspace.billingPage.usage.quota.seats': 'Member seats',
   'workspace.billingPage.usage.quota.title': 'Overview',
@@ -3285,9 +3284,9 @@ When I am ___, I need ___
   'workspace.waitlistPage.pendingTitle': "You're on the list",
   'workspace.waitlistPage.requiredField': 'This field is required',
   'workspace.waitlistPage.rewardApprovedHint':
-    'After you create a workspace, your $5 beta credits will arrive automatically within a few minutes (valid for 3 months).',
+    'After you create a workspace, your $5 beta usage will arrive automatically within a few minutes (valid for 3 months).',
   'workspace.waitlistPage.rewardBanner':
-    'Get approved and create a workspace to receive $5 in free trial credits (valid for 3 months).',
+    'Get approved and create a workspace to receive $5 in free usage (valid for 3 months).',
   'workspace.waitlistPage.roleLabel': 'Your role (optional)',
   'workspace.waitlistPage.rolePlaceholder': 'e.g. Team lead, teacher, parent',
   'workspace.waitlistPage.signIn': 'Sign in to join',
@@ -3418,8 +3417,7 @@ When I am ___, I need ___
   'workspace.upgradeModal.payFailed': 'Failed to start checkout',
   'workspace.upgradeModal.pickerLabel': 'Select a workspace',
   'workspace.upgradeModal.proTag': 'Pro',
-  'workspace.upgradeModal.subtitle':
-    'Unlock collaboration, larger credits, and higher rate limits.',
+  'workspace.upgradeModal.subtitle': 'Unlock collaboration, more usage, and higher rate limits.',
   'workspace.upgradeModal.successPage.amountLabel': 'Total paid',
   'workspace.upgradeModal.successPage.activating':
     'Activating your subscription — this usually takes a few seconds…',
@@ -3452,7 +3450,7 @@ When I am ___, I need ___
   'workspace.wizard.step1.features.collaboration': 'Invite members to one shared workspace',
   'workspace.wizard.step1.features.roles': 'Roles & permissions',
   'workspace.wizard.step1.features.sharedAssets': 'Shared agents, files & knowledge bases',
-  'workspace.wizard.step1.features.sharedCredits': 'Shared team credits pool',
+  'workspace.wizard.step1.features.sharedCredits': 'Shared team usage pool',
   'workspace.wizard.step1.formSubtitle': 'Give your workspace a name and URL.',
   'workspace.wizard.step1.formTitle': 'Setup Your Workspace',
   'workspace.wizard.step1.name.label': 'Workspace name',
@@ -3501,9 +3499,9 @@ When I am ___, I need ___
   'workspace.wizard.step2.createFree': 'Create workspace',
   'workspace.wizard.step2.createdToast': 'Workspace {{name}} created.',
   'workspace.wizard.step2.basicAgreement':
-    'The Basic plan has no monthly credits. Top-ups or AutoTopUp are billed only after you confirm them.',
+    'The Basic plan has no monthly usage. Top-ups or AutoTopUp are billed only after you confirm them.',
   'workspace.wizard.step2.freeAgreement':
-    'The Free plan has no monthly credits. Top-ups or AutoTopUp are billed only after you confirm them.',
+    'The Free plan has no monthly usage. Top-ups or AutoTopUp are billed only after you confirm them.',
   'workspace.wizard.step2.header.description': 'Each workspace is billed separately.',
   'workspace.wizard.step2.header.title': 'Select Your Plan',
   'workspace.wizard.step2.basicLimitReached':
@@ -3515,12 +3513,12 @@ When I am ___, I need ___
   'workspace.wizard.step2.features.basic.share': 'First 3 members are free, including you',
   'workspace.wizard.step2.features.basic.members': 'Up to 3 members, no paid seats',
   'workspace.wizard.step2.features.basic.onDemand':
-    'On-demand usage · Auto top-up (${{price}} / 1M credits)',
+    'On-demand usage · Auto top-up (${{price}} per $1 of balance)',
   'workspace.wizard.step2.features.basic.upgradable': 'Upgrade anytime for more seats',
   'workspace.wizard.step2.features.free.share': 'First 3 members are free, including you',
   'workspace.wizard.step2.features.free.members': 'Up to 3 members, no paid seats',
   'workspace.wizard.step2.features.free.onDemand':
-    'On-demand usage · Auto top-up (${{price}} / 1M credits)',
+    'On-demand usage · Auto top-up (${{price}} per $1 of balance)',
   'workspace.wizard.step2.features.free.upgradable': 'Upgrade anytime for more seats',
   'workspace.wizard.step2.features.business.auditLog': 'Audit logs',
   'workspace.wizard.step2.features.pro.adminControls': 'Centralized billing and role management',
@@ -3528,12 +3526,12 @@ When I am ___, I need ___
   'workspace.wizard.step2.features.pro.collaboration': 'Invite members · share agents and files',
   'workspace.wizard.step2.features.pro.memberBudget': 'Per-member budget control',
   'workspace.wizard.step2.features.pro.onDemand':
-    'On-demand usage · Auto top-up (${{price}} / 1M credits)',
+    'On-demand usage · Auto top-up (${{price}} per $1 of balance)',
   'workspace.wizard.step2.features.pro.priorityModels': 'Priority premium models',
   'workspace.wizard.step2.features.pro.support': 'Priority email support',
-  'workspace.wizard.step2.left.creditsBasicHint': 'No monthly credits · pay as you go',
-  'workspace.wizard.step2.left.creditsLabel': 'Credits per month',
-  'workspace.wizard.step2.left.creditsProHint': 'Shared workspace pool · seats do not add credits',
+  'workspace.wizard.step2.left.creditsBasicHint': 'No monthly usage · pay as you go',
+  'workspace.wizard.step2.left.creditsLabel': 'Usage per month',
+  'workspace.wizard.step2.left.creditsProHint': 'Shared workspace pool · seats do not add usage',
   'workspace.wizard.step2.left.basicHeadline': 'Basic workspace',
   'workspace.wizard.step2.left.basicTagline': 'For up to 3 members. Upgrade later for more seats.',
   'workspace.wizard.step2.left.headline': 'Team workspace',
@@ -3541,7 +3539,7 @@ When I am ___, I need ___
     'Top up anytime: ${{price}}/M ({{percent}}% above base, with no subscription fee)',
   'workspace.wizard.step2.left.proTagline': '${{fee}}/seat/month. Extra usage is billed on demand.',
   'workspace.wizard.step2.left.proTopUpHint':
-    'Top up when credits run low: ${{price}}/M ({{percent}}% off the standard rate)',
+    'Top up when balance runs low: ${{price}} per $1 ({{percent}}% off the standard rate)',
   'workspace.wizard.step2.payFailed': 'Failed to start checkout',
   'workspace.wizard.step2.pill.basic': 'Basic',
   'workspace.wizard.step2.pill.basicUsed': '{{used}}/{{limit}} used',
@@ -3723,9 +3721,9 @@ When I am ___, I need ___
   'workspace.onboarding.flow.learnYourTeam.error':
     "Couldn't finish the team analysis. Retry or skip for now.",
   'workspace.onboarding.flow.learnYourTeam.budget.title':
-    'Not enough workspace credits for the team analysis',
+    'Not enough workspace balance for the team analysis',
   'workspace.onboarding.flow.learnYourTeam.budget.desc':
-    "The team analysis uses this workspace's credits, and the balance can't cover it. Top up or upgrade the plan, then retry, or skip the analysis and finish the setup.",
+    "The team analysis uses this workspace's balance, and it can't cover it. Top up or upgrade the plan, then retry, or skip the analysis and finish the setup.",
   'workspace.onboarding.flow.learnYourTeam.budget.skip': 'Skip analysis',
   'workspace.onboarding.flow.learnYourTeam.progress.review':
     'Reading team data from connected apps',

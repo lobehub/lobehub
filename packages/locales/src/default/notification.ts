@@ -6,8 +6,8 @@ export default {
   'agent_cron_job_failed':
     'Your scheduled task "{{jobName}}" failed. Open the task to see the full error.',
   'agent_cron_job_failed_insufficient_budget':
-    'Your scheduled task "{{jobName}}" couldn\'t run because your account is out of credits. Top up or upgrade your plan to resume future runs.',
-  'agent_cron_job_failed_insufficient_budget_title': 'Scheduled task paused: insufficient credits',
+    'Your scheduled task "{{jobName}}" couldn\'t run because your account is out of usage. Top up or upgrade your plan to resume future runs.',
+  'agent_cron_job_failed_insufficient_budget_title': 'Scheduled task paused: insufficient usage',
   'agent_cron_job_failed_paused':
     'Your scheduled task "{{jobName}}" was paused after {{count}} consecutive failures. Review the error and resume it when ready.',
   'agent_cron_job_failed_paused_title': 'Scheduled task paused',
@@ -21,8 +21,8 @@ export default {
     'Your task "{{jobName}}" stopped responding and was marked as failed. Open the task to run it again.',
   'agent_task_run_failed_heartbeat_timeout_title': 'Task timed out',
   'agent_task_run_failed_insufficient_budget':
-    'Your task "{{jobName}}" couldn\'t run because your account is out of credits. Top up or upgrade your plan to continue.',
-  'agent_task_run_failed_insufficient_budget_title': 'Task failed: insufficient credits',
+    'Your task "{{jobName}}" couldn\'t run because your account is out of usage. Top up or upgrade your plan to continue.',
+  'agent_task_run_failed_insufficient_budget_title': 'Task failed: insufficient usage',
   'agent_task_run_failed_title': 'Task failed',
   'agent_transfer_reassigned':
     'A workspace owner transferred your agent "{{agentTitle}}" to {{recipientLabel}}.',
@@ -53,13 +53,13 @@ export default {
   'checkout_abandoned_subscription_action': 'Finish upgrade',
   'checkout_abandoned_subscription_title': 'Your upgrade is unfinished',
   'checkout_abandoned_topup':
-    'Your credit top-up was not completed, so no credits were added. You can finish it anytime from the credits page.',
-  'checkout_abandoned_topup_action': 'Top up credits',
-  'checkout_abandoned_topup_title': 'Your credit top-up is unfinished',
+    'Your top-up was not completed, so no balance was added. You can finish it anytime from the balance page.',
+  'checkout_abandoned_topup_action': 'Top up',
+  'checkout_abandoned_topup_title': 'Your top-up is unfinished',
   'credit_balance_low':
-    'Your credit balance is running low — about {{balance}} in credits remaining. Turn on auto top-up so your balance refills automatically and your work is never interrupted.',
+    'Your balance is running low — about {{balance}} remaining. Turn on auto top-up so your balance refills automatically and your work is never interrupted.',
   'credit_balance_low_action': 'Set up auto top-up',
-  'credit_balance_low_title': 'Your credit balance is running low',
+  'credit_balance_low_title': 'Your balance is running low',
   'email.footer.contactSupport': 'Contact support',
   'email.footer.joinDiscord': 'Join Discord',
   'email.footer.manage': 'Manage notifications',
@@ -95,14 +95,14 @@ export default {
   'inbox.title': 'Notifications',
   'inbox.unread': 'Unread',
   'inbox.viewDetail': 'View details',
-  'promotion_gift_granted': '{{credits}} bonus credits have been added to your account.',
+  'promotion_gift_granted': '${{credits}} in bonus balance has been added to your account.',
   'promotion_gift_granted_card_binding':
-    'Thanks for adding a payment method — {{credits}} bonus credits have been added to your account.',
-  'promotion_gift_granted_card_binding_title': 'Bonus credits for adding a payment method',
+    'Thanks for adding a payment method — ${{credits}} in bonus balance has been added to your account.',
+  'promotion_gift_granted_card_binding_title': 'Bonus balance for adding a payment method',
   'promotion_gift_granted_first_top_up':
-    'Thanks for your first top-up — {{credits}} bonus credits have been added to your account.',
-  'promotion_gift_granted_first_top_up_title': 'First top-up bonus credits',
-  'promotion_gift_granted_title': 'Bonus credits added',
+    'Thanks for your first top-up — ${{credits}} in bonus balance has been added to your account.',
+  'promotion_gift_granted_first_top_up_title': 'First top-up bonus balance',
+  'promotion_gift_granted_title': 'Bonus balance added',
   'storage_overage_cap_reached':
     'Your storage pay-as-you-go monthly cap of ${{monthlyCap}} has been reached. Estimated charges this cycle are ${{estimatedCycleCharge}}. New uploads beyond your included storage will be blocked until the next billing cycle or until you increase the cap.',
   'storage_overage_cap_reached_title': 'Storage pay-as-you-go cap reached',
@@ -137,7 +137,8 @@ export default {
     'Your subscription was upgraded from {{oldPlan}} to {{newPlan}}. Your new benefits are available now.',
   'subscription_plan_changed_upgraded_title': 'Subscription upgraded',
   'subscription_renewed':
-    'Your {{plan}} subscription has renewed and your subscription credits were reset for the new billing cycle.',
+    'Your {{plan}} subscription has renewed and your subscription usage was reset for the new billing cycle.',
+  'subscription_renewed_rolling': 'Your {{plan}} subscription has renewed.',
   'subscription_renewed_title': 'Subscription renewed',
   'task_assigned': '{{actorLabel}} assigned you the task "{{taskTitle}}".',
   'task_assigned_title': "You've been assigned a task",
@@ -161,9 +162,9 @@ export default {
   'video_generation_completed': 'Your video "{{prompt}}" is ready.',
   'video_generation_completed_title': 'Video generation completed',
   'workspace_credit_balance_low':
-    'Workspace "{{workspaceName}}" is running low on credits — about {{balance}} remaining in the shared pool. Top up or turn on auto top-up to keep your team working.',
-  'workspace_credit_balance_low_action': 'Top up credits',
-  'workspace_credit_balance_low_title': 'Workspace credits running low',
+    'Workspace "{{workspaceName}}" is running low on balance — about {{balance}} remaining in the shared pool. Top up or turn on auto top-up to keep your team working.',
+  'workspace_credit_balance_low_action': 'Top up',
+  'workspace_credit_balance_low_title': 'Workspace balance running low',
   'workspace_member_invited':
     '{{inviterLabel}} invited you to join workspace "{{workspaceName}}" as a {{role}}.',
   'workspace_member_invited_title': 'Invitation to join {{workspaceName}}',

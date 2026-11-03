@@ -232,7 +232,7 @@ describe('config command', () => {
 
       await createProgram().parseAsync(['node', 'test', 'usage', 'quota']);
 
-      expect(output()).toContain('No credit allowance on this server.');
+      expect(output()).toContain('No usage allowance on this server.');
     });
 
     it('shows spend without a percentage when the allowance has no cap', async () => {

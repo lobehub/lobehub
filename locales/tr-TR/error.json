@@ -89,7 +89,6 @@
   "response.GoogleAIBlockReason.SAFETY": "İçerik güvenlik nedenleriyle engellendi. Lütfen ayarlayın ve tekrar deneyin.",
   "response.GoogleAIBlockReason.SPII": "İçerik hassas kişisel bilgiler (SPII) içerebilir. Lütfen hassas detayları kaldırarak tekrar deneyin.",
   "response.GoogleAIBlockReason.default": "İçerik engellendi ({{blockReason}}). Lütfen ayarlayın ve tekrar deneyin.",
-  "response.InsufficientBudgetForModel": "Bu model için kalan kredileriniz yetersiz. Lütfen kredilerinizi doldurun, planınızı yükseltin veya daha uygun fiyatlı bir modeli deneyin.",
   "response.InvalidAccessCode": "Geçersiz veya boş erişim kodu. Lütfen doğru erişim kodunu girin veya özel bir API Anahtarı ekleyin.",
   "response.LobeHubModelDeprecated": "\"{{model}}\" modeli artık mevcut değil. Lütfen model seçicisinden güncel bir model seçin.",
   "response.ModelContentModerationCooldown": "Bu istek, geçici bir içerik güvenliği kısıtlaması nedeniyle seçilen model veya ilgili modelleri kullanamadı. Daha sonra tekrar deneyin veya farklı bir model seçin.",
@@ -122,8 +121,6 @@
   "response.RemoteServerTimeout": "Sunucuya olan bağlantı zaman aşımına uğradı. Bu genellikle yerel ağ sorunlarını gösterir — lütfen ağ kalitenizi, proxy veya VPN ayarlarınızı kontrol edin ve tekrar deneyin.",
   "response.RemoteServerUnreachable": "Sunucuya ulaşılamadı. Bu genellikle yerel ağ sorunlarını gösterir — lütfen internet bağlantınızı, proxy veya VPN ayarlarınızı kontrol edin ve tekrar deneyin.",
   "response.ServerAgentRuntimeError": "Üzgünüz, Ajan hizmeti şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin veya destek için bizimle iletişime geçin.",
-  "response.SubscriptionPlanLimit": "Abonelik puanlarınız tükendi, bu özelliği kullanamazsınız. Lütfen daha yüksek bir plana geçin veya özel model API yapılandırın.",
-  "response.SubscriptionPlanLimitUltimate": "Abonelik puanlarınız tükendi, bu özelliği kullanamazsınız. Lütfen kredi yükleyin veya özel model API yapılandırın.",
   "response.SystemTimeNotMatchError": "Üzgünüz, sistem saatiniz sunucuyla eşleşmiyor. Lütfen sistem saatinizi kontrol edip tekrar deneyin.",
   "response.UnknownChatFetchError": "Üzgünüz, bilinmeyen bir istek hatası oluştu. Lütfen aşağıdaki bilgileri kontrol edin veya tekrar deneyin.",
   "response.UnreadableServerResponse": "Sunucu, uygulamanın okuyamadığı bir yanıt döndürdü. Bu genellikle geçici bir ağ veya ağ geçidi sorunudur — lütfen bir dakika sonra tekrar deneyin.",
@@ -213,13 +210,9 @@
   "workspaceFrozenByAdmin.frozenAt": "Dondurulma tarihi",
   "workspaceFrozenByAdmin.reason": "Neden",
   "workspaceFrozenByAdmin.title": "Çalışma alanı donduruldu",
-  "workspaceFrozenByRiskControl.available": "Mevcut krediler",
-  "workspaceFrozenByRiskControl.bannerDescription": "Harcamaya devam etmek için kredileri doldurun.",
   "workspaceFrozenByRiskControl.bannerHint": "Detaylar için tıklayın",
   "workspaceFrozenByRiskControl.bannerTitle": "Risk kontrolü nedeniyle çalışma alanı donduruldu",
   "workspaceFrozenByRiskControl.contactSupport": "Destekle iletişime geçin",
-  "workspaceFrozenByRiskControl.description": "Bu çalışma alanı, anormal harcama tespit edildikten sonra risk kontrolü tarafından otomatik olarak donduruldu. Durumu gözden geçirmek ve dondurmayı kaldırmak için destekle iletişime geçin.",
   "workspaceFrozenByRiskControl.frozenAt": "Dondurulma tarihi",
-  "workspaceFrozenByRiskControl.title": "Çalışma alanı risk kontrolü tarafından otomatik olarak donduruldu",
-  "workspaceFrozenByRiskControl.topup": "Kredi yükle"
+  "workspaceFrozenByRiskControl.title": "Çalışma alanı risk kontrolü tarafından otomatik olarak donduruldu"
 }

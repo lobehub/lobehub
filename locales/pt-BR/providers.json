@@ -35,7 +35,6 @@
   "jina.description": "Fundada em 2020, a Jina AI é uma empresa líder em busca com IA. Sua pilha de busca inclui modelos vetoriais, reranqueadores e pequenos modelos de linguagem para construir aplicativos generativos e multimodais confiáveis e de alta qualidade.",
   "kimicodingplan.description": "O Kimi Code da Moonshot AI oferece acesso aos modelos Kimi, incluindo o K2.5, para tarefas de codificação.",
   "lmstudio.description": "O LM Studio é um aplicativo de desktop para desenvolver e experimentar com LLMs no seu computador.",
-  "lobehub.description": "O LobeHub Cloud utiliza APIs oficiais para acessar modelos de IA e mede o uso com Créditos vinculados aos tokens dos modelos.",
   "longcat.description": "LongCat é uma série de grandes modelos de IA generativa desenvolvidos de forma independente pela Meituan. Ele foi projetado para aumentar a produtividade interna da empresa e possibilitar aplicações inovadoras por meio de uma arquitetura computacional eficiente e fortes capacidades multimodais.",
   "magpie.description": "magpie é um gateway LLM: cada modelo e assinatura que você tem lá é servido em um único endpoint.",
   "meta.description": "A Meta desenvolve modelos e produtos de IA que ajudam as pessoas a se conectar, criar e realizar tarefas, incluindo as famílias de modelos Llama e Muse.",

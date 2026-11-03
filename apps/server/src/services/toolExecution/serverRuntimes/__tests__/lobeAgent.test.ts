@@ -218,7 +218,7 @@ describe('lobeAgentRuntime', () => {
     expect([...pixel.subarray(0, 3)]).toEqual([255, 255, 255]);
   });
 
-  it('should explain that media analysis needs LobeHub credits when the budget is exhausted', async () => {
+  it('should explain that media analysis needs LobeHub balance when the budget is exhausted', async () => {
     mockChat.mockRejectedValueOnce({
       budget: { availableCredits: 0, requiredCredits: 1219, shortfallCredits: 1219 },
       error: { message: 'Budget exceeded' },
@@ -234,7 +234,7 @@ describe('lobeAgentRuntime', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: 'InsufficientBudgetForModel' });
-    expect(result.content).toContain('credits');
+    expect(result.content).toContain('balance');
     expect(result.content).toContain('test-provider/vision-model');
     expect(result.content).toMatch(/own API key/i);
   });
