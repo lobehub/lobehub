@@ -298,8 +298,13 @@ export const gitRouter = router({
         ctx.workspaceId,
         { maxAgeMs: WORKTREE_HOME_MAX_AGE_MS },
       );
-      if (!systemInfo?.homePath)
+      const homeDir = systemInfo?.homePath;
+      if (!homeDir)
         log('addGitWorktree: no homePath for deviceId=%s, using sibling layout', input.deviceId);
+      // `sourcePath` only names and hashes the central folder; the sibling
+      // fallback places the checkout next to its key, so it keeps keying on
+      // `path`, the repo git actually runs in, rather than on a client string.
+      const keyPath = homeDir ? input.sourcePath || input.path : input.path;
 
       return deviceGateway.addGitWorktree({
         branch: input.branch,
@@ -307,9 +312,7 @@ export const gitRouter = router({
         path: input.path,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
-        worktreePath: deriveWorktreePath(input.sourcePath || input.path, input.branch, {
-          homeDir: systemInfo?.homePath,
-        }),
+        worktreePath: deriveWorktreePath(keyPath, input.branch, { homeDir }),
       });
     }),
   /**

@@ -79,4 +79,17 @@ describe('device.addGitWorktree', () => {
       deriveWorktreePath('/code/lobehub', 'feat/x', { homeDir: '/Users/me' }),
     );
   });
+
+  it('keeps the sibling fallback next to the repo git runs in, not a client sourcePath', async () => {
+    mocks.queryDeviceSystemInfo.mockResolvedValue(undefined);
+
+    await caller.addGitWorktree({
+      branch: 'feat/x',
+      deviceId: 'device',
+      path: '/code/lobehub',
+      sourcePath: '/Users/me/.ssh/x',
+    });
+
+    expect(mocks.addGitWorktree.mock.calls[0][0].worktreePath).toBe('/code/lobehub-feat-x');
+  });
 });
