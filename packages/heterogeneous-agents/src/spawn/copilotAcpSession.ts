@@ -475,20 +475,21 @@ export class CopilotAcpSession extends AcpAgentSession<
     sessionId: string,
     sessionResult: CopilotAcpSessionResult,
   ): Promise<{ configOptions: unknown; model?: string }> {
-    let catalog = parseCopilotAcpModelCatalog(sessionResult);
+    const sessionCatalog = parseCopilotAcpModelCatalog(sessionResult);
+    let catalog = sessionCatalog;
     const requestedModel = (this.options.initialModel?.trim() || this.modelFromArgs?.trim()) ?? '';
     if (!requestedModel || requestedModel === 'default') {
-      const currentModelId = catalog?.currentModelId;
+      const currentModelId = sessionCatalog?.currentModelId;
       if (
         this.options.resumeSessionId &&
-        catalog &&
+        sessionCatalog &&
         currentModelId &&
         currentModelId !== 'auto' &&
         !getReasoningEffortConfig(sessionResult.configOptions)
       ) {
         const response = await this.resetLoadedModelWithoutReasoningEffort(
           sessionId,
-          catalog.configId,
+          sessionCatalog.configId,
           currentModelId,
         );
         return {
@@ -510,7 +511,7 @@ export class CopilotAcpSession extends AcpAgentSession<
     );
     if (!selected) throw new Error(`GitHub Copilot ACP model is unavailable: ${requestedModel}`);
 
-    if (catalog.currentModelId === selected.id) {
+    if (sessionCatalog?.currentModelId === selected.id) {
       if (
         this.options.resumeSessionId &&
         selected.id !== 'auto' &&
@@ -518,7 +519,7 @@ export class CopilotAcpSession extends AcpAgentSession<
       ) {
         const response = await this.resetLoadedModelWithoutReasoningEffort(
           sessionId,
-          catalog.configId,
+          sessionCatalog.configId,
           selected.id,
         );
         return {

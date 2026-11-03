@@ -1,13 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import type { ChildProcess } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AcpRpcResponseError } from './acpStdioClient';
 import {
   buildCopilotAcpArgs,
+  CopilotAcpSession,
   isCopilotAcpSessionNotFoundError,
   parseCopilotAcpModelCatalog,
 } from './copilotAcpSession';
 
+const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, spawn: spawnMock };
+});
+
 describe('Copilot ACP helpers', () => {
+  afterEach(() => {
+    spawnMock.mockReset();
+  });
+
   it('prepends --acp --stdio while stripping session-level model/effort flags and duplicated ACP flags', () => {
     expect(
       buildCopilotAcpArgs([
@@ -101,5 +117,127 @@ describe('Copilot ACP helpers', () => {
         }),
       ),
     ).toBe(false);
+  });
+
+  it('applies initialModel on resume even when discovery session defaults to the same model', async () => {
+    const requests: Array<{
+      id?: number | string;
+      method?: string;
+      params?: Record<string, unknown>;
+    }> = [];
+    spawnMock.mockImplementation(() => {
+      const child = new EventEmitter() as ChildProcess;
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      const send = (message: Record<string, unknown>) =>
+        stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+
+      Object.assign(child, {
+        kill: vi.fn(() => true),
+        killed: false,
+        pid: 123_456,
+        stderr,
+        stdin: {
+          once: vi.fn(),
+          write: vi.fn((chunk: string) => {
+            const msg = JSON.parse(chunk.trim()) as {
+              id?: number | string;
+              method?: string;
+              params?: Record<string, unknown>;
+            };
+            requests.push(msg);
+            queueMicrotask(() => {
+              switch (msg.method) {
+                case 'initialize': {
+                  send({
+                    id: msg.id,
+                    result: { agentCapabilities: { loadSession: true }, protocolVersion: 1 },
+                  });
+                  return;
+                }
+                case 'session/load': {
+                  send({ id: msg.id, result: {} });
+                  return;
+                }
+                case 'session/new': {
+                  send({
+                    id: msg.id,
+                    result: {
+                      configOptions: [
+                        {
+                          category: 'model',
+                          currentValue: 'auto',
+                          id: 'model',
+                          options: [
+                            { name: 'Auto', value: 'auto' },
+                            { name: 'GPT-5.4', value: 'gpt-5.4' },
+                          ],
+                        },
+                      ],
+                      sessionId: 'discovery-session',
+                    },
+                  });
+                  return;
+                }
+                case 'session/set_config_option': {
+                  send({
+                    id: msg.id,
+                    result: {
+                      configOptions: [
+                        {
+                          category: 'model',
+                          currentValue: msg.params?.value,
+                          id: 'model',
+                        },
+                      ],
+                    },
+                  });
+                  return;
+                }
+                case 'session/prompt': {
+                  send({ id: msg.id, result: { stopReason: 'end_turn' } });
+                  return;
+                }
+              }
+            });
+            return true;
+          }),
+        },
+        stdout,
+      });
+      return child;
+    });
+
+    const models: string[] = [];
+    const session = new CopilotAcpSession({
+      commandPath: 'copilot',
+      cwd: '/tmp',
+      initialModel: 'auto',
+      onEvents: async () => {},
+      onModel: (model) => models.push(model),
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-1',
+      prompt: 'hello',
+      resumeSessionId: 'resumed-session-1',
+      sessionId: 'session-1',
+    });
+
+    await session.run();
+
+    const setModelCall = requests.find(
+      (req) =>
+        req.method === 'session/set_config_option' &&
+        req.params?.configId === 'model' &&
+        req.params?.sessionId === 'resumed-session-1',
+    );
+    expect(setModelCall?.params).toEqual({
+      configId: 'model',
+      sessionId: 'resumed-session-1',
+      value: 'auto',
+    });
+    expect(models).toEqual(['auto']);
   });
 });

@@ -10,6 +10,7 @@ import {
   isLocalHeterogeneousType,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
   type LocalHeterogeneousAgentType,
+  usesHeterogeneousSessionInitialModel,
 } from '@lobechat/heterogeneous-agents';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
@@ -247,6 +248,7 @@ const collectAgentArg = (value: string, previous: string[] = []): string[] => [.
 const buildExtraArgs = (
   options: Pick<ExecOptions, 'agentArg' | 'effort' | 'mode' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
+  const modelArg = options.model ? ['--model', options.model] : [];
   const selectorArgs =
     options.type === 'amp'
       ? options.mode
@@ -256,7 +258,7 @@ const buildExtraArgs = (
         ? []
         : options.type === 'codex'
           ? [
-              ...(options.model ? ['--model', options.model] : []),
+              ...modelArg,
               ...(options.effort
                 ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
                 : []),
@@ -267,23 +269,15 @@ const buildExtraArgs = (
           : options.type === 'claude-code' ||
               options.type === 'codebuddy' ||
               options.type === 'grok-build'
-            ? [
-                ...(options.model ? ['--model', options.model] : []),
-                ...(options.effort ? ['--effort', options.effort] : []),
-              ]
+            ? [...modelArg, ...(options.effort ? ['--effort', options.effort] : [])]
             : options.type === 'cursor' ||
                 options.type === 'devin' ||
                 options.type === 'kimi-code' ||
                 options.type === 'opencode' ||
                 options.type === 'pi'
-              ? options.model
-                ? ['--model', options.model]
-                : []
+              ? modelArg
               : options.type === 'copilot' || options.type === 'qoder'
-                ? [
-                    ...(options.model ? ['--model', options.model] : []),
-                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
-                  ]
+                ? [...modelArg, ...(options.effort ? ['--reasoning-effort', options.effort] : [])]
                 : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
@@ -773,15 +767,15 @@ const exec = async (options: ExecOptions): Promise<void> => {
       agentType === 'qoder') &&
     serverIngester
   ) {
-    if (agentType === 'copilot' || agentType === 'cursor' || agentType === 'droid') {
+    if (
+      agentType === 'copilot' ||
+      agentType === 'cursor' ||
+      agentType === 'devin' ||
+      agentType === 'droid'
+    ) {
       askBridge = new AskUserBridge(operationId, {
         identifier: agentType === 'cursor' ? 'claude-code' : agentType,
         provider: agentType,
-      });
-    } else if (agentType === 'devin') {
-      askBridge = new AskUserBridge(operationId, {
-        identifier: 'devin',
-        provider: 'devin',
       });
     } else {
       askServer = new LobeBuiltinMcpServer();
@@ -1274,13 +1268,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // server agents. Ask Claude Code for content-block deltas so the current conversation
     // receives text while the process is running, not only the terminal assistant snapshot.
     includePartialMessages: options.type === 'claude-code',
-    initialModel:
-      options.type === 'copilot' ||
-      options.type === 'droid' ||
-      options.type === 'devin' ||
-      options.type === 'trae'
-        ? options.model
-        : undefined,
+    initialModel: usesHeterogeneousSessionInitialModel(options.type) ? options.model : undefined,
     // Keep Claude Code's stdin open while it can still use input: closing it
     // early makes print mode kill background tasks after 10 minutes.
     liveInput: options.type === 'claude-code',

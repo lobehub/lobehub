@@ -61,6 +61,7 @@ export {
   QODER_CLI_INSTALL_DOCS_URL,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
   resolveHeterogeneousAgentCommand,
+  usesHeterogeneousSessionInitialModel,
 } from './config';
 export type {
   HeteroErrorAttribution,

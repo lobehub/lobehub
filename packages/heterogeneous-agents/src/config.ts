@@ -68,6 +68,17 @@ export const getHeterogeneousAgentConfigOrThrow = (
   return config;
 };
 
+const SESSION_INITIAL_MODEL_TYPES = new Set<string>([
+  'copilot',
+  'deepseek-harness',
+  'devin',
+  'droid',
+  'trae',
+]);
+
+export const usesHeterogeneousSessionInitialModel = (type: string): boolean =>
+  SESSION_INITIAL_MODEL_TYPES.has(type);
+
 export const resolveHeterogeneousAgentCommand = (type: string, command?: string): string => {
   const configuredCommand = command?.trim();
   return configuredCommand || getHeterogeneousAgentConfigOrThrow(type).defaultCommand;
