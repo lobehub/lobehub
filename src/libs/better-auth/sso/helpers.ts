@@ -1,6 +1,11 @@
+import { isTrimmedNonEmptyString } from '@lobechat/utils/object';
 import { type GenericOAuthConfig } from 'better-auth/plugins';
 
 export const DEFAULT_OIDC_SCOPES = ['openid', 'email', 'profile'];
+
+/** Custom OIDC claims are untrusted unknown values, not necessarily strings. */
+export const getStringClaim = (...values: unknown[]): string | undefined =>
+  values.find(isTrimmedNonEmptyString);
 
 const createDiscoveryUrl = (issuer: string) => {
   const normalized = issuer.replace(/\/$/, '');
