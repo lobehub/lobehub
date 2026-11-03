@@ -1,10 +1,10 @@
 import type { Page } from '@playwright/test';
 import { z } from 'zod';
 
+import { parseWidthCondition } from '../../../../packages/style-equivalence/src/capture/conditionPartitions';
 import type { collectRulesInPage } from '../browser/ruleInventory';
 import type { RuntimeCompositions } from '../browser/runtimeCompositions';
 import type { CaptureRoot } from '../browser/surfaces';
-import { parseWidthCondition } from './conditionPartitions';
 import { analyzeSelector } from './selectorAnalysis';
 import type { StyleBindingPlan } from './styleBindings';
 

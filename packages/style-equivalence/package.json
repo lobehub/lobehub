@@ -1,0 +1,14 @@
+{
+  "name": "@lobechat/style-equivalence",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Style migration equivalence verifier: synthetic per-element comparison with an evidence report",
+  "type": "module",
+  "exports": {
+    "./capture/snapshot": "./src/capture/snapshot.ts",
+    "./capture/conditionPartitions": "./src/capture/conditionPartitions.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

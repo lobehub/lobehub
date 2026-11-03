@@ -2,9 +2,12 @@ import path from 'node:path';
 
 import { chromium } from '@playwright/test';
 
+import {
+  captureInPage,
+  compareSnapshots,
+} from '../../../../packages/style-equivalence/src/capture/snapshot';
 import { createFastCapture } from '../browser/fastCapture';
 import { createProbeDriver } from '../browser/probes';
-import { captureInPage, compareSnapshots } from '../browser/snapshot';
 import { writeArtifactManifest, writeHtmlReport, writeJson } from '../reporting/report';
 import { boundaries, boundaryHtml } from './boundaries';
 import { runBrowserPipelineSelfTest } from './browserPipelineSelfTest';
