@@ -15,9 +15,11 @@ import { Link } from 'react-router';
 
 import { useBusinessResourceCategories } from '@/business/client/features/ResourceCategories';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -48,6 +50,9 @@ const CategoryMenu = memo(() => {
   const setMode = useResourceManagerStore((s) => s.setMode);
   const navigate = useWorkspaceAwareNavigate();
   const location = useActiveLocation();
+  // The real href carries the workspace prefix too, so a middle-click or
+  // "open in new tab" stays in the same workspace as a plain click.
+  const workspaceSlug = useActiveWorkspaceSlug();
   // Business Works types keep their own routes but belong to Works.
   const businessCategories = useBusinessResourceCategories();
   const activeSection = resolveDocsSection(
@@ -91,7 +96,7 @@ const CategoryMenu = memo(() => {
       {items.map((item) => (
         <Link
           key={item.key}
-          to={item.url}
+          to={buildWorkspaceAwarePath(item.url, workspaceSlug)}
           onClick={(e) => {
             e.preventDefault();
             setMode('explorer');
