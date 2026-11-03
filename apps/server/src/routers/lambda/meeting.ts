@@ -253,8 +253,13 @@ export const meetingRouter = router({
         const meeting = await ctx.meetingModel.getDetail(input.id, { source: input.source });
         if (!meeting) throw notFound();
 
+        // The upload stays private to the creator, but the recording belongs to
+        // the meeting: a member who can read a public meeting may play it. The
+        // fallback only accepts this creator's `meeting`-source uploads, so it
+        // cannot widen access to arbitrary attachments.
         const file = meeting.audioFileId
-          ? await ctx.fileModel.findById(meeting.audioFileId)
+          ? ((await ctx.fileModel.findById(meeting.audioFileId)) ??
+            (await ctx.fileModel.findMeetingAudio(meeting.audioFileId, meeting.userId)))
           : undefined;
         const audio = file
           ? {

@@ -44,7 +44,12 @@ describe('meeting router integration', () => {
   let strangerId: string;
   const workspaceId = 'meeting-router-ws';
 
-  const seedAudio = async (userId: string, fileType = 'audio/webm', ws?: string) => {
+  const seedAudio = async (
+    userId: string,
+    fileType = 'audio/webm',
+    ws?: string,
+    visibility: 'private' | 'public' = 'public',
+  ) => {
     const [file] = await testDB
       .insert(files)
       .values({
@@ -54,6 +59,7 @@ describe('meeting router integration', () => {
         source: FileSource.Meeting,
         url: `meetings/${Math.random()}.webm`,
         userId,
+        visibility,
         workspaceId: ws,
       })
       .returning();
@@ -197,6 +203,42 @@ describe('meeting router integration', () => {
 
     const [row] = await testDB.select().from(meetings).where(eq(meetings.id, wsPublic.id));
     expect(row).toMatchObject({ status: 'recording', title: '周会' });
+  });
+
+  it('shares a meeting-owned recording with readers of a public meeting', async () => {
+    const ownerInWs = meetingRouter.createCaller(context(ownerId, workspaceId));
+    const memberInWs = meetingRouter.createCaller(context(strangerId, workspaceId));
+
+    const { data: meeting } = (await ownerInWs.create({ ...startInput, visibility: 'public' }))!;
+    const audio = await seedAudio(ownerId, 'audio/webm', workspaceId, 'private');
+    await ownerInWs.attachAudio({ audioFileId: audio.id, id: meeting.id });
+
+    // The upload stays private to the creator; the meeting is what shares it.
+    expect((await memberInWs.detail({ id: meeting.id }))!.data.audio).toMatchObject({
+      fileType: 'audio/webm',
+      id: audio.id,
+      url: `https://cdn.test/${audio.url}`,
+    });
+
+    // A private library upload attached to the same meeting is not shared with it.
+    const [library] = await testDB
+      .insert(files)
+      .values({
+        fileType: 'audio/mpeg',
+        name: 'library.mp3',
+        size: 1024,
+        url: 'library.mp3',
+        userId: ownerId,
+        visibility: 'private',
+        workspaceId,
+      })
+      .returning();
+
+    await ownerInWs.attachAudio({ audioFileId: library.id, id: meeting.id });
+    expect((await ownerInWs.detail({ id: meeting.id }))!.data.audio).toMatchObject({
+      id: library.id,
+    });
+    expect((await memberInWs.detail({ id: meeting.id }))!.data.audio).toBeNull();
   });
 
   it('only attaches an audio file the caller can read', async () => {

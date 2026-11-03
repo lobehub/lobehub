@@ -1,5 +1,6 @@
-import type { FileAccessScope, FileSource, QueryFileListParams } from '@lobechat/types';
+import type { FileAccessScope, QueryFileListParams } from '@lobechat/types';
 import {
+  FileSource,
   FilesTabs,
   getAgentShareFileProvenance,
   ordinaryFileAccessScope,
@@ -646,6 +647,24 @@ export class FileModel {
         ),
       );
     return rows.map((row) => row.id);
+  };
+
+  /**
+   * Audio owned by a meeting, reached through the meeting rather than the
+   * resource library. A member who can read a public meeting may play its
+   * recording even though the upload itself stays private to the creator.
+   * Only `meeting`-source uploads of that creator qualify, so arbitrary
+   * attachments keep their own visibility.
+   */
+  findMeetingAudio = async (id: string, ownerId: string) => {
+    return this.db.query.files.findFirst({
+      where: and(
+        eq(files.id, id),
+        eq(files.userId, ownerId),
+        eq(files.source, FileSource.Meeting),
+        notAgentShareFile(files.metadata),
+      ),
+    });
   };
 
   findById = async (
