@@ -114,6 +114,12 @@ describe('meeting router integration', () => {
       ],
     });
 
+    // Refine batches land while the pass is still running: the complete draft wins.
+    const { data: midway } = (await owner.detail({ id: meeting.id }))!;
+    expect(midway.segmentSource).toBe('realtime');
+
+    await testDB.update(meetings).set({ status: 'ready' }).where(eq(meetings.id, meeting.id));
+
     const { data: detail } = (await owner.detail({ id: meeting.id }))!;
     expect(detail.segmentSource).toBe('refine');
     expect(detail.segments.map((s) => [s.text, s.startMs, s.endMs])).toEqual([

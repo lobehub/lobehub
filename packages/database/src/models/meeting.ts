@@ -10,7 +10,7 @@ import type {
   MeetingStatus,
   MeetingVisibility,
 } from '@lobechat/types';
-import { MEETING_LIVE_STATUSES } from '@lobechat/types';
+import { MEETING_LIVE_STATUSES, MEETING_REFINED_STATUSES } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { MeetingItem } from '../schemas/meeting';
@@ -158,14 +158,17 @@ export class MeetingModel {
   /**
    * A meeting with its speakers, one transcript and its minutes.
    *
-   * Without an explicit `source`, the refined transcript is returned once it
-   * exists and the realtime draft until then.
+   * Without an explicit `source`, the refined transcript is returned once the
+   * refine pass has finished (see `MEETING_REFINED_STATUSES`) and the realtime
+   * draft until then — segment presence alone is not enough, because a long
+   * transcript arrives as several batches and the first one lands while
+   * refinement is still running.
    */
   async getDetail(id: string, options: { source?: MeetingSegmentSource } = {}) {
     const meeting = await this.findById(id);
     if (!meeting) return undefined;
 
-    const source = options.source ?? (await this.preferredSegmentSource(id));
+    const source = options.source ?? (await this.preferredSegmentSource(meeting));
 
     const [speakers, segments, [minutes]] = await Promise.all([
       this.db
@@ -422,11 +425,17 @@ export class MeetingModel {
     return new Map(rows.map((row) => [row.label, row.id]));
   }
 
-  private async preferredSegmentSource(meetingId: string): Promise<MeetingSegmentSource> {
+  private async preferredSegmentSource(
+    meeting: Pick<MeetingItem, 'id' | 'status'>,
+  ): Promise<MeetingSegmentSource> {
+    if (!(MEETING_REFINED_STATUSES as readonly MeetingStatus[]).includes(meeting.status)) {
+      return 'realtime';
+    }
+
     const [refined] = await this.db
       .select({ id: meetingSegments.id })
       .from(meetingSegments)
-      .where(and(eq(meetingSegments.meetingId, meetingId), eq(meetingSegments.source, 'refine')))
+      .where(and(eq(meetingSegments.meetingId, meeting.id), eq(meetingSegments.source, 'refine')))
       .limit(1);
 
     return refined ? 'refine' : 'realtime';

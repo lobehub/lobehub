@@ -358,7 +358,7 @@ describe('MeetingModel', () => {
   });
 
   describe('getDetail', () => {
-    it('returns the realtime draft until refine lands, then the refined transcript', async () => {
+    it('returns the realtime draft until the refine pass completes, then the refined transcript', async () => {
       const meeting = await personal.create(base);
       await personal.appendSegments(meeting.id, [
         { endMs: 2000, seq: 1, source: 'realtime', startMs: 1000, text: 'second' },
@@ -372,6 +372,14 @@ describe('MeetingModel', () => {
       await personal.appendSegments(meeting.id, [
         { endMs: 2000, seq: 0, source: 'refine', speakerLabel: 'S1', startMs: 0, text: 'refined' },
       ]);
+
+      // A long transcript arrives in batches, so refine segments on record do not
+      // mean the pass is over: keep serving the complete draft until it is.
+      const midway = await personal.getDetail(meeting.id);
+      expect(midway!.segmentSource).toBe('realtime');
+      expect(midway!.segments).toHaveLength(2);
+
+      await serverDB.update(meetings).set({ status: 'ready' }).where(eq(meetings.id, meeting.id));
 
       const refined = await personal.getDetail(meeting.id);
       expect(refined!.segmentSource).toBe('refine');

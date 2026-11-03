@@ -29,6 +29,13 @@ export type MeetingStatus = (typeof MEETING_STATUSES)[number];
 /** Statuses in which the recorder is still live (segments stream in, pause/resume apply). */
 export const MEETING_LIVE_STATUSES = ['recording', 'paused'] as const satisfies MeetingStatus[];
 
+/**
+ * Statuses in which the refine pass has finished, so its transcript is complete
+ * and becomes the authoritative one. Before that the refine segments on record
+ * are only the batches already stored, so reads keep serving the realtime draft.
+ */
+export const MEETING_REFINED_STATUSES = ['summarizing', 'ready'] as const satisfies MeetingStatus[];
+
 export const MEETING_PLATFORMS = ['web', 'desktop'] as const;
 export type MeetingPlatform = (typeof MEETING_PLATFORMS)[number];
 
