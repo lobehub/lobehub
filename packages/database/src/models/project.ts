@@ -30,7 +30,6 @@ import {
 } from '../utils/workspace';
 import { AgentModel } from './agent';
 import { EnvironmentModel } from './environment';
-import { createProjectMainAgent } from './projectMainAgent';
 import { topicHasGoal } from './topicGoal';
 
 /**
@@ -96,6 +95,28 @@ export interface CreateProjectInput {
   slug?: string;
   visibility?: ProjectVisibility;
 }
+
+/**
+ * Input for the single-aggregate insert. The main agent belongs to AgentModel's
+ * aggregate, so `ProjectRepository.create` resolves or creates it first and only
+ * its id reaches this model.
+ */
+export interface InsertProjectInput extends CreateProjectInput {
+  coordinatorAgentId: string;
+}
+
+/**
+ * Normalize a project identifier and enforce its shape. Shared with
+ * `ProjectRepository.create`, which needs the normalized value to check the
+ * scope before it writes the main agent.
+ */
+export const normalizeProjectIdentifier = (identifier?: string | null) => {
+  const normalized = identifier?.trim().toUpperCase() || null;
+  if (normalized && (normalized.length < 3 || normalized.length > 6)) {
+    throw new Error('Project identifier must be between 3 and 6 characters');
+  }
+  return normalized;
+};
 
 const BUILTIN_SLUGS: ReadonlySet<string> = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
@@ -187,7 +208,7 @@ export class ProjectModel {
    * or library is visible to its creator alone, so such a project binds only
    * public resources. Anything else would show each reader a different project.
    */
-  private assertSharedResource(
+  assertSharedResource(
     project: { visibility: string; workspaceId: string | null },
     resourceVisibility: string,
     message: string,
@@ -239,17 +260,14 @@ export class ProjectModel {
     return Boolean(existing);
   }
 
-  async create(input: CreateProjectInput) {
-    const identifier = input.identifier?.trim().toUpperCase() || null;
-    if (identifier && (identifier.length < 3 || identifier.length > 6)) {
-      throw new Error('Project identifier must be between 3 and 6 characters');
-    }
+  async create(input: InsertProjectInput) {
+    const identifier = normalizeProjectIdentifier(input.identifier);
 
     try {
       return await this.db.transaction(async (tx) => {
         // Check the identifier inline, in the scope the unique index enforces,
-        // before the coordinator agent is written: a collision then surfaces as
-        // a field error instead of a mid-transaction query failure.
+        // before anything is written: a collision then surfaces as a field error
+        // instead of a mid-transaction query failure.
         if (identifier) {
           const [existing] = await tx
             .select({ id: projects.id })
@@ -259,35 +277,19 @@ export class ProjectModel {
           if (existing) throw new ProjectIdentifierTakenError(identifier);
         }
 
-        const coordinator = input.coordinatorAgentId
-          ? await this.findAccessibleAgent(tx as LobeChatDatabase, input.coordinatorAgentId)
-          : await createProjectMainAgent(
-              tx as LobeChatDatabase,
-              { userId: this.userId, workspaceId: this.workspaceId },
-              { avatar: input.avatar, name: input.name, visibility: input.visibility },
-            );
-        if (!coordinator) throw new Error('Agent not found');
-        if (input.coordinatorAgentId) {
-          this.assertSharedResource(
-            { visibility: input.visibility ?? 'private', workspaceId: this.workspaceId ?? null },
-            (coordinator as { visibility: string }).visibility,
-            'A shared project only takes shared agents',
-          );
-        }
-
         const [project] = await tx
           .insert(projects)
           .values(
             buildWorkspacePayload(
               { userId: this.userId, workspaceId: this.workspaceId },
-              { ...input, coordinatorAgentId: coordinator.id, identifier },
+              { ...input, identifier },
             ),
           )
           .returning();
 
         await tx.insert(projectAgents).values({
           addedByUserId: this.userId,
-          agentId: coordinator.id,
+          agentId: input.coordinatorAgentId,
           projectId: project.id,
           responsibility: 'Coordinates project conversations, work, and resources',
           role: 'coordinator',
@@ -659,7 +661,7 @@ export class ProjectModel {
     await joinTopicAgentsToProjects(this.db, { projectId });
   }
 
-  private async findAccessibleAgent(db: LobeChatDatabase, agentId: string) {
+  async findAccessibleAgent(db: LobeChatDatabase, agentId: string) {
     const [agent] = await db
       .select({ id: agents.id, visibility: agents.visibility })
       .from(agents)

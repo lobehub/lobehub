@@ -41,7 +41,7 @@ export const isProjectIdentifierValid = (identifier: string) =>
  */
 export const isProjectIdentifierTaken = (
   identifier: string,
-  projects: readonly { identifier: string }[],
+  projects: readonly { identifier?: string | null }[],
 ) => {
   const normalized = identifier.trim().toUpperCase();
 

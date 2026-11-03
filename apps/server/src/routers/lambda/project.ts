@@ -12,6 +12,7 @@ import {
   ProjectModel,
   type ProjectModelOptions,
 } from '@/database/models/project';
+import { ProjectRepository } from '@/database/repositories/project';
 import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
@@ -47,6 +48,7 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
         options,
       ),
       projectModel: new ProjectModel(ctx.serverDB, ctx.userId, workspaceId, options),
+      projectRepo: new ProjectRepository(ctx.serverDB, ctx.userId, workspaceId),
     },
   });
 });
@@ -199,7 +201,7 @@ export const projectRouter = router({
         if (input.coordinatorAgentId) {
           await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
         }
-        const project = await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input));
+        const project = await withMainAgent(ctx.projectModel, await ctx.projectRepo.create(input));
         await createDefaultChannel({
           agentId: project.coordinatorAgentId,
           db: ctx.serverDB,

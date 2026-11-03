@@ -8,6 +8,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ProjectRepository } from '../../repositories/project';
 import {
   agents,
   briefs,
@@ -558,7 +559,7 @@ describe('TaskModel', () => {
 
     it('should filter by projectId', async () => {
       const model = new TaskModel(serverDB, userId);
-      const project = await new ProjectModel(serverDB, userId).create({
+      const project = await new ProjectRepository(serverDB, userId).create({
         identifier: 'TLIST',
         name: 'Scoped project',
       });
@@ -848,7 +849,7 @@ describe('TaskModel', () => {
 
     it('should group only tasks from the requested project', async () => {
       const model = new TaskModel(serverDB, userId);
-      const project = await new ProjectModel(serverDB, userId).create({
+      const project = await new ProjectRepository(serverDB, userId).create({
         identifier: 'TGRP',
         name: 'Scoped project',
       });

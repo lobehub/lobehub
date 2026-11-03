@@ -125,6 +125,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
 
   const handleCreate = async () => {
     if (!createInput || identifierTaken || form.loading || form.avatarUploading) return;
+    const submittedIdentifier = createInput.identifier ?? '';
     updateForm({ loading: true });
     try {
       const project = await createProject(
@@ -152,7 +153,15 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
       // still collide after the inline check. Report it on the field, not as a
       // generic failure.
       if ((error as { data?: { code?: string } } | undefined)?.data?.code === 'CONFLICT') {
-        updateForm({ identifierConflict: true });
+        setForm((current) => ({
+          ...current,
+          // Only the identifier that was submitted is known to be taken. The
+          // field stays editable while the request is in flight, so a value
+          // typed meanwhile must not inherit that verdict.
+          identifierConflict:
+            Boolean(submittedIdentifier) &&
+            current.identifier.trim().toUpperCase() === submittedIdentifier,
+        }));
         return;
       }
       toast.error(t('operationFailed', { ns: 'common' }));
@@ -195,14 +204,13 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
             placeholder={t('create.identifierPlaceholder')}
             style={identifierError ? { borderColor: cssVar.colorError } : undefined}
             value={form.identifier}
+            onPressEnter={handleCreate}
             onChange={(event) =>
               updateForm({
                 identifier: event.target.value.toUpperCase(),
                 identifierConflict: false,
-                identifierEdited: true,
               })
             }
-            onPressEnter={handleCreate}
           />
           <Text fontSize={12} type={identifierError ? 'danger' : 'secondary'}>
             {t(

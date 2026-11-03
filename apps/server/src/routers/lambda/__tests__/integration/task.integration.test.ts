@@ -4,9 +4,9 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
-import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { ProjectRepository } from '@/database/repositories/project';
 import { TaskService } from '@/server/services/task';
 
 import { taskRouter } from '../../task';
@@ -136,7 +136,7 @@ describe('Task Router Integration', () => {
         }
         const scopedCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
         const model = new TaskModel(serverDB, userId, workspaceId);
-        const project = await new ProjectModel(serverDB, userId, workspaceId).create({
+        const project = await new ProjectRepository(serverDB, userId, workspaceId).create({
           identifier: 'PROJ',
           name: 'Prefix project',
         });
