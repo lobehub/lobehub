@@ -230,8 +230,6 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       return { content: `Failed to create task: ${formatPgError(pgError)}`, success: false };
     }
 
-    notifyMemberAssigned(task);
-
     let labels: { name: string }[] | undefined;
     if (labelResult.ids.length > 0) {
       try {
@@ -240,15 +238,21 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
           taskId: task.id,
         });
       } catch (error) {
+        // Roll the task back (as task.create does) so a failed call leaves
+        // nothing behind and a retry cannot produce a duplicate.
+        await taskModel()
+          .delete(task.id)
+          .catch(() => {});
         const message = error instanceof Error ? error.message : String(error);
         return {
-          content: `Task ${task.identifier} (id: ${task.id}) was created, but its labels could not be attached: ${message}`,
-          identifier: task.identifier,
+          content: `Failed to create task: its labels could not be attached (${message}). Nothing was created.`,
           success: false,
-          taskId: task.id,
         };
       }
     }
+
+    // Only once the task is complete, so a rolled-back task never notifies.
+    notifyMemberAssigned(task);
 
     return {
       content: formatTaskCreated({

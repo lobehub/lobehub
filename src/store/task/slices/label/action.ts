@@ -122,8 +122,19 @@ export class TaskLabelSliceActionImpl {
       collections.commit();
     } catch (error) {
       collections.rollback();
+      if (hasDetail) {
+        // Nothing was written, so the labels the user started from are the
+        // server's; restore them now rather than trusting a refetch to.
+        this.#get().internal_dispatchTaskDetail({
+          id: taskId,
+          type: 'updateTaskDetail',
+          value: { labels: current },
+        });
+        void this.#get()
+          .internal_refreshTaskDetail(taskId)
+          .catch(() => {});
+      }
       saveToast(error);
-      if (hasDetail) await this.#get().internal_refreshTaskDetail(taskId);
       return false;
     }
 
