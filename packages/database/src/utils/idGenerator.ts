@@ -37,6 +37,7 @@ const prefixes = {
   plugins: 'plg',
   projects: 'prj',
   projectSites: 'psite',
+  quickNotes: 'qn',
   scmChangeRequests: 'scr',
   sessionGroups: 'sg',
   sessions: 'ssn',

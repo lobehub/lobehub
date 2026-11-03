@@ -1393,6 +1393,13 @@
       "when": 1793450092790,
       "tag": "0198_goal_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 199,
+      "version": "7",
+      "when": 1793561358625,
+      "tag": "0199_quick_note_persistence",
+      "breakpoints": true
     }
   ],
   "version": "6"
