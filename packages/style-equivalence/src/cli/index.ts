@@ -1,10 +1,12 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs, promisify } from 'node:util';
 
 import { runComparison } from '../run';
 import { runSelfTest } from '../selftest';
 import { formatSelfTest } from '../selftest/run';
+import { startServer } from '../server';
 import { runStack } from '../stack';
 import { formatStack, formatSummary } from './summary';
 
@@ -16,6 +18,7 @@ const HELP = `style-equivalence — compare styled elements between two revision
   bun run style-eq --base <ref> --head <ref>
   bun run style-eq --stack [--stack-base <branch>]
   bun run style-eq self-test
+  bun run style-eq serve <run-id|run-dir> [--port <n>]
 
 Options:
   --config <file>     project config (default scripts/stylexMigration/style-equivalence.config.ts)
@@ -62,6 +65,7 @@ const main = async () => {
       'help': { short: 'h', type: 'boolean' },
       'keep-worktrees': { type: 'boolean' },
       'mutations': { type: 'string' },
+      'port': { type: 'string' },
       'pr': { type: 'string' },
       'records': { type: 'string' },
       'skip-calibration': { type: 'boolean' },
@@ -79,6 +83,19 @@ const main = async () => {
     const report = await runSelfTest({ configFile, recordsDir, repo });
     console.log(formatSelfTest(report));
     process.exitCode = report.passed ? 0 : 1;
+    return;
+  }
+  if (positionals[0] === 'serve') {
+    const target = positionals[1];
+    if (!target) throw new Error('serve takes a run id or run directory');
+    const runDir = existsSync(path.resolve(target))
+      ? path.resolve(target)
+      : path.join(recordsDir, target);
+    if (!existsSync(path.join(runDir, 'run.json'))) throw new Error(`No stored run at ${runDir}`);
+    const server = await startServer({ port: Number(values.port ?? 0), runDir });
+    console.log(`Report: ${server.url}`);
+    await new Promise<void>((resolve) => process.once('SIGINT', resolve));
+    await server.stop();
     return;
   }
   if (positionals.length) throw new Error(`Unknown command ${positionals[0]}`);

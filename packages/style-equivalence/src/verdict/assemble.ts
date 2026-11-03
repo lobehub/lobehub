@@ -1,7 +1,7 @@
 import type { CaseResult } from '../analyze/diff';
 import type { FileExtraction } from '../extract';
 import type { FilePlan, PlanCase, Side } from '../plan/planFile';
-import { collectCaseHashInput, contentHash } from '../signoff/hash';
+import { type CaseHashInput, collectCaseHashInput, contentHash } from '../signoff/hash';
 import { readSignoffs } from '../signoff/store';
 import type { ScopeFile } from '../source/scope';
 import type { CaseCategory } from './categorize';
@@ -32,23 +32,28 @@ export const assembleVerdict = async (input: AssembleInput) => {
     const entry = input.scope.find((item) => (item.head ?? item.base) === file);
     return { base: entry?.base, head: entry?.head };
   };
-  const hashFor = (file: string, extra: Partial<Parameters<typeof collectCaseHashInput>[0]>) =>
-    contentHash(
-      collectCaseHashInput({
-        aliases: input.aliases,
-        extractions: input.extractions[file] ?? {},
-        roots: input.roots,
-        sources: sourcesOf(file),
-        verifierVersion: input.verifierVersion,
-        ...extra,
-      }),
-    );
+  const evidence: Record<string, CaseHashInput> = {};
+  const hashFor = (
+    key: string,
+    file: string,
+    extra: Partial<Parameters<typeof collectCaseHashInput>[0]>,
+  ) => {
+    evidence[key] = collectCaseHashInput({
+      aliases: input.aliases,
+      extractions: input.extractions[file] ?? {},
+      roots: input.roots,
+      sources: sourcesOf(file),
+      verifierVersion: input.verifierVersion,
+      ...extra,
+    });
+    return contentHash(evidence[key]);
+  };
   const items: VerdictItem[] = [
     ...input.cases.map((entry) => ({
       category: entry.category,
       file: entry.plan.file,
       flags: [...entry.plan.flags, ...entry.result.gaps],
-      hash: hashFor(entry.plan.file, { plan: entry.plan }),
+      hash: hashFor(entry.key, entry.plan.file, { plan: entry.plan }),
       key: entry.key,
     })),
     ...input.plans.flatMap((plan) =>
@@ -56,7 +61,9 @@ export const assembleVerdict = async (input: AssembleInput) => {
         category: 'unpaired' as const,
         file: plan.file,
         flags: ['UNPAIRED'],
-        hash: hashFor(plan.file, { elementIds: { [side]: elementId } }),
+        hash: hashFor(unpairedKey(plan.file, side, elementId), plan.file, {
+          elementIds: { [side]: elementId },
+        }),
         key: unpairedKey(plan.file, side, elementId),
       })),
     ),
@@ -71,5 +78,5 @@ export const assembleVerdict = async (input: AssembleInput) => {
     mutation: input.mutation,
     signoffs,
   });
-  return verdict;
+  return { evidence, verdict };
 };

@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 
 import type { Browser } from '@playwright/test';
 
-import { analyzeRun, type CaseResult } from './analyze/diff';
+import { type CaseResult, createRunAnalyzer } from './analyze/diff';
 import { buildSide } from './build/viteBuild';
 import { calibrate, type CalibrationResult } from './calibration';
 import { launchBrowser } from './capture/browser';
@@ -111,15 +111,23 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
     const server = await serveDirectories(runDir);
     browser ??= await launchBrowser();
     let capture;
+    let comparisons = 0;
     let cases: CaseRecord[];
     let mutation: MutationReport;
     try {
+      const analyzer = createRunAnalyzer();
       capture = await captureRun({
         browser,
         conditions: config.conditions,
+        onCondition: (condition) => {
+          comparisons += Object.keys(condition.head).length;
+          analyzer.add(condition);
+        },
         urls: { base: `${server.url}/dist-base/`, head: `${server.url}/dist-head/` },
       });
-      const results = new Map(analyzeRun(capture).map((result) => [result.key, result]));
+      const results = new Map(
+        analyzer.finish(capture.caseGaps).map((result) => [result.key, result]),
+      );
       cases = synthesis.plans.flatMap((plan) =>
         plan.cases.map((entry) => {
           const result =
@@ -172,7 +180,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       { base, cases, head, repo: options.repo, runDir },
       options.calibrate === false ? undefined : config.calibration,
     );
-    const verdict = await assembleVerdict({
+    const { evidence, verdict } = await assembleVerdict({
       aliases: config.aliases,
       calibration,
       cases,
@@ -183,10 +191,6 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       scope,
       verifierVersion: VERIFIER_VERSION,
     });
-    const comparisons = capture.conditions.reduce(
-      (total, condition) => total + Object.keys(condition.head).length,
-      0,
-    );
     const result: RunResult = {
       base,
       calibration,
@@ -204,11 +208,14 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
     };
     await writeEvidence(runDir, 'run.json', {
       base,
+      conditionConfig: config.conditions,
+      conditions: capture.conditions.map((condition) => condition.condition),
       containerRules: capture.containerRules,
       dependencyMode: revisions.dependencyMode,
       durationMs: result.durationMs,
       head,
       pageErrors: capture.pageErrors,
+      repo: options.repo,
       runId,
       scope,
       states: capture.states,
@@ -221,6 +228,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
     await writeEvidence(runDir, 'mutation.json', mutation);
     await writeEvidence(runDir, 'calibration.json', calibration);
     await writeEvidence(runDir, 'verdict.json', verdict);
+    await writeEvidence(runDir, 'evidence.json', evidence);
     await writeEvidence(runDir, 'results.json', { cases, comparisons, unpaired: result.unpaired });
     return result;
   } finally {
