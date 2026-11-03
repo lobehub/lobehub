@@ -32,6 +32,9 @@ import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import WorkspaceMentionNotifier from '@/features/Electron/WorkspaceMentionNotifier';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanelShell from '@/features/NavPanel/Shell';
+import NavRail from '@/features/NavRail';
+import { useImLayout, useSyncImLayoutHint } from '@/features/NavRail/useImLayout';
+import { wrapStyles } from '@/features/NavRail/wrapStyle';
 import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
@@ -52,6 +55,9 @@ const tabHostContainer: CSSProperties = { position: 'relative' };
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
+  // `im_layout` trial: icon rail + wrapped list column; off keeps this layout.
+  const imLayout = useImLayout();
+  useSyncImLayoutHint(imLayout);
 
   useSeedTabsOnBoot();
   useWindowUrlMirror();
@@ -89,12 +95,28 @@ const Layout: FC = () => {
               stylex.props(isPWA ? styles.mainContainerPWA : styles.mainContainer).className
             }
           >
-            <NavPanelShell />
-            <DesktopLayoutContainer>
-              <Flexbox height={'100%'} style={tabHostContainer} width={'100%'}>
-                <TabHost />
-              </Flexbox>
-            </DesktopLayoutContainer>
+            {imLayout ? (
+              <>
+                <NavRail />
+                <Flexbox horizontal {...stylex.props(wrapStyles.wrap, wrapStyles.wrapDesktop)}>
+                  <NavPanelShell />
+                  <DesktopLayoutContainer flush>
+                    <Flexbox height={'100%'} style={tabHostContainer} width={'100%'}>
+                      <TabHost />
+                    </Flexbox>
+                  </DesktopLayoutContainer>
+                </Flexbox>
+              </>
+            ) : (
+              <>
+                <NavPanelShell />
+                <DesktopLayoutContainer>
+                  <Flexbox height={'100%'} style={tabHostContainer} width={'100%'}>
+                    <TabHost />
+                  </Flexbox>
+                </DesktopLayoutContainer>
+              </>
+            )}
           </Flexbox>
         </DndContextWrapper>
         <Suspense fallback={null}>

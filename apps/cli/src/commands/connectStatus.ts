@@ -1,6 +1,33 @@
-import { readConnectRuntimes } from '../daemon/connectStatus';
+import { type ConnectRuntime, readConnectRuntimes } from '../daemon/connectStatus';
 import { cliVersion } from '../pkg';
 import { log } from '../utils/logger';
+
+/** Why a running connector may not be executing the installed CLI. Empty when it is. */
+export function describeStaleConnector(
+  runtime: ConnectRuntime,
+  installedVersion: string,
+): string[] {
+  const { pid, status } = runtime;
+  if (!pid || status?.cliVersion === installedVersion) return [];
+  return [
+    status?.cliVersion
+      ? `Connector PID ${pid} is running ${status.cliVersion}; installed CLI is ${installedVersion}.`
+      : `Connector PID ${pid} did not report its version. The installed CLI version does not confirm the running version.`,
+    `Installing an update does not reload a running connector. After active tasks finish, run: ${runtime.restartCommand}`,
+    'Restarting disconnects the device and closes its remote terminals. If the version still differs, check the service uses the upgraded CLI installation.',
+  ];
+}
+
+/**
+ * Only the mismatch warnings, for commands whose own output is about something else. An
+ * update from a CLI that predates the connector report leaves this as the first notice.
+ */
+export async function warnStaleConnectors() {
+  const { runtimes } = await readConnectRuntimes();
+  for (const runtime of runtimes) {
+    for (const line of describeStaleConnector(runtime, cliVersion)) log.warn(line);
+  }
+}
 
 /** Shared by status and update, including when the installed CLI is already current. */
 export async function printConnectStatus(
@@ -58,19 +85,7 @@ export async function printConnectStatus(
       );
     }
     log.info(`  Restart command  : ${runtime.restartCommand}`);
-    if (pid && status?.cliVersion !== installedVersion) {
-      log.warn(
-        status?.cliVersion
-          ? `Connector PID ${pid} is running ${status.cliVersion}; installed CLI is ${installedVersion}.`
-          : `Connector PID ${pid} did not report its version. The installed CLI version does not confirm the running version.`,
-      );
-      log.warn(
-        `Installing an update does not reload a running connector. After active tasks finish, run: ${runtime.restartCommand}`,
-      );
-      log.warn(
-        'Restarting disconnects the device and closes its remote terminals. If the version still differs, check the service uses the upgraded CLI installation.',
-      );
-    }
+    for (const line of describeStaleConnector(runtime, installedVersion)) log.warn(line);
   }
 }
 

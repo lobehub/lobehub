@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/> heeft de prioriteit gewijzigd van <from/> naar <to/>",
   "taskDetail.activities.status.changed": "<actor/> heeft de status gewijzigd van <from/> naar <to/>",
   "taskDetail.activitiesEmpty": "Nog geen activiteit",
+  "taskDetail.activitiesLoadMore": "Eerdere activiteit tonen ({{count}})",
   "taskDetail.addSubtask": "Subtaak toevoegen",
   "taskDetail.artifactInaccessible": "Niet beschikbaar document — geen toegang",
   "taskDetail.artifactMenu.delete": "Uit taak verwijderen",

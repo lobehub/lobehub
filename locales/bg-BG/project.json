@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Търсене на библиотеки",
   "knowledgeBases.updateFailed": "Неуспешно обновяване на библиотеката",
   "list.deleteAction": "Изтриване на проект",
-  "list.deleteConfirmDescription": "Изтриване на „{{name}}“? Неговите задачи, цели, теми и връзки ще бъдат окончателно премахнати.",
-  "list.deleteConfirmTitle": "Да изтрия проекта?",
   "list.deleteError": "Неуспешно изтриване на проекта.",
   "list.deleteSuccess": "„{{name}}“ е изтрит",
   "list.emptyDescription": "Създайте първия си проект, за да организирате цели, задачи и ресурси.",

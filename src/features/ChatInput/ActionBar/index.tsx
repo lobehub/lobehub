@@ -12,7 +12,7 @@ import { actionMap } from '../ActionBar/config';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useChatInputStore } from '../store';
 import { type DropdownPlacement } from './context';
-import { ActionBarContext } from './context';
+import { ActionBarContext, useActionBarContext } from './context';
 import { filterChatOnlyActions } from './filterChatOnlyActions';
 
 const mapActionToItem = (actionKey: ActionKey) => {
@@ -78,9 +78,12 @@ const ActionToolbar = memo<ActionToolbarProps>(
       [disableCollapse, extraActionItems, leftActions],
     );
 
+    // Keep an outer action size (e.g. the compact composer preset) instead of
+    // resetting it for the toolbar's own items.
+    const { actionSize } = useActionBarContext();
     const contextValue = useMemo(
-      () => ({ borderRadius, dropdownPlacement }),
-      [borderRadius, dropdownPlacement],
+      () => ({ actionSize, borderRadius, dropdownPlacement }),
+      [actionSize, borderRadius, dropdownPlacement],
     );
 
     if (!canShowControls) return null;

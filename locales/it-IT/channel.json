@@ -97,7 +97,6 @@
   "moveToTrash": "Sposta il canale nel cestino",
   "moveToTrashConfirm": "Spostare “{{title}}” nel cestino? Le risposte si fermeranno. Puoi ripristinare il canale e la sua cronologia dal cestino. Gli agenti e i file saranno mantenuti.",
   "moveToTrashSuccess": "Canale spostato nel cestino",
-  "nameAutoPlaceholder": "Lascia vuoto per nominarlo in base ai suoi membri",
   "nameOptional": "Nome del canale (opzionale)",
   "noDevice": "Nessun dispositivo",
   "noDevices": "Nessun dispositivo è connesso. Connettine uno, quindi sceglilo qui.",

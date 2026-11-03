@@ -49,7 +49,8 @@ export const channelKeys = {
   ),
   userCandidates: def(
     'channel:userCandidates',
-    (channelId: string, search: string) => ['channel:userCandidates', channelId, search] as const,
+    (channelId: string | undefined, search: string) =>
+      ['channel:userCandidates', channelId ?? null, search] as const,
   ),
 };
 
@@ -944,8 +945,6 @@ export const ollamaKeys = {
   downloadModel: def('ollama:downloadModel', (model: string) => ['ollama:downloadModel', model]),
 };
 export const authKeys = {
-  oauthAppById: def('auth:oauthAppById', (id: string) => ['auth:oauthAppById', id]),
-  oauthAppList: def('auth:oauthAppList', () => ['auth:oauthAppList']),
   oidcClientMetadata: def('auth:oidcClientMetadata', (clientId: string) => [
     'auth:oidcClientMetadata',
     clientId,
@@ -993,6 +992,7 @@ export const imessageKeys = {
 export const electronKeys = {
   /** Claude Code logins held on this machine (device-local, never persisted). */
   claudeCodeAccounts: def('electron:claudeCodeAccounts', () => ['electron:claudeCodeAccounts']),
+  appMenu: def('electron:getAppMenu', () => ['electron:getAppMenu']),
   appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
   desktopHotkeys: def('electron:getDesktopHotkeys', () => ['electron:getDesktopHotkeys']),
   gatewayDeviceInfo: def('electron:getGatewayDeviceInfo', () => ['electron:getGatewayDeviceInfo']),

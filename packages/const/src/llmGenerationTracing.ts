@@ -43,6 +43,7 @@ export const TRACING_SCENARIOS = {
   TaskInstruction: 'task_instruction',
   TaskIntent: 'task_intent',
   TopicTitle: 'topic_title',
+  TopicAnalysis: 'topic_analysis',
   TopicAutoSummary: 'topic_auto_summary',
   UnderstandingAnalysis: 'understanding_analysis',
   UnderstandingDetailedPersona: 'understanding_detailed_persona',

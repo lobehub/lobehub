@@ -8,13 +8,12 @@ import { DocumentLoadPosition, getDocumentTemplate, PolicyLoad } from '@lobechat
 import { buildAgentSkillIdentifier, WEB_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
-import type { DocumentAccessScope } from '@lobechat/types';
+import type { DocumentAccessScope, DocumentWriteSource } from '@lobechat/types';
 import { FileSource, ordinaryDocumentAccessScope } from '@lobechat/types';
 
 import type {
   AgentDocument,
   AgentDocumentContextPayload,
-  AgentDocumentContextRow,
   AgentDocumentListItem,
   AgentDocumentListSourceType,
   AgentDocumentWithRules,
@@ -33,19 +32,27 @@ import { isUuid } from '@/database/utils/uuid';
 import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
 import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
 import { DocumentService } from '../document';
+import { assertDocumentWriteWithinLimit } from '../document/writeLimit';
 import { FileService } from '../file';
 import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
+import { excludeArchivedToolResults } from './archivedToolResults';
 import {
   type AgentDocumentBodyWriter,
   writeAgentDocumentBody,
   writeSnapshotThroughRoom,
 } from './bodyWrite';
 import { isRawTextAgentDocument } from './contentFormat';
+import { toAgentDocumentContextPayload } from './contextPayload';
 import {
   attachEmptyParseShellLiteXML,
   isEmptyParseShellDocument,
   projectEmptyParseShell,
 } from './emptyParseShell';
+import {
+  appendFilenameSuffix,
+  appendSpacedFilenameSuffix,
+  MAX_UNIQUE_FILENAME_ATTEMPTS,
+} from './filenames';
 import {
   type AgentDocumentLiteXMLOperation,
   applyLiteXMLOperations,
@@ -54,7 +61,6 @@ import {
   exportEditorDataSnapshot,
 } from './headlessEditor';
 
-const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
 /** Guards the ancestor walk against a corrupt parent cycle. */
 const MAX_TREE_DEPTH = 64;
 
@@ -84,21 +90,6 @@ export interface CreateAgentFolderResult {
   created: boolean;
   folder: AgentDocument;
 }
-const appendFilenameSuffix = (filename: string, suffix: number): string => {
-  const dotIndex = filename.lastIndexOf('.');
-
-  if (dotIndex <= 0) return `${filename}-${suffix}`;
-
-  return `${filename.slice(0, dotIndex)}-${suffix}${filename.slice(dotIndex)}`;
-};
-
-const appendSpacedFilenameSuffix = (filename: string, suffix: number): string => {
-  const dotIndex = filename.lastIndexOf('.');
-
-  if (dotIndex <= 0) return `${filename} ${suffix}`;
-
-  return `${filename.slice(0, dotIndex)} ${suffix}${filename.slice(dotIndex)}`;
-};
 
 interface UpsertDocumentParams {
   agentId: string;
@@ -110,6 +101,11 @@ interface UpsertDocumentParams {
   metadata?: Record<string, any>;
   policy?: AgentDocumentPolicy;
   policyLoad?: PolicyLoad;
+  /**
+   * Who asked for the write. Defaults to `user` (the upsert API); templates,
+   * onboarding and clones pass `system` to skip the per-document character limit.
+   */
+  source?: DocumentWriteSource;
   templateId?: string;
   updatedAt?: Date;
 }
@@ -117,6 +113,8 @@ interface UpsertDocumentParams {
 interface CreateAgentDocumentOptions {
   hintIsSkill?: boolean;
   parentId?: string;
+  /** Defaults to `agent`: these entry points are the agent document tools. */
+  source?: DocumentWriteSource;
 }
 
 type AgentDocumentWithLiteXML = AgentDocument & { litexml?: string };
@@ -124,71 +122,6 @@ type ProjectableAgentDocument = Pick<
   AgentDocument,
   'content' | 'editorData' | 'fileType' | 'templateId'
 >;
-
-/** Collect ids of root `.tool-results` archive folders present in a doc list. */
-const collectArchiveFolderIds = <
-  T extends Pick<AgentDocument, 'documentId' | 'parentId' | 'filename' | 'fileType'>,
->(
-  docs: T[],
-): Set<string> =>
-  new Set(
-    docs
-      .filter(
-        (d) =>
-          d.filename === TOOL_RESULTS_DIR_NAME &&
-          !d.parentId &&
-          d.fileType === DOCUMENT_FOLDER_TYPE,
-      )
-      .map((d) => d.documentId),
-  );
-
-/**
- * Hide the auto-created `.tool-results/` archive (root folder + its children)
- * from user-facing document lists. Applied by default everywhere, including
- * `listDocuments` / `listDocumentsForTopic`. The tool runtime that lets agents
- * discover archived entries opts back in via `includeArchivedToolResults`.
- *
- * `archiveFolderIds` lets callers whose list may not contain the folder row
- * supply the ids explicitly — the topic path only sees the archived file
- * (which is topic-associated), never the folder, so it can't be derived from
- * the list alone.
- */
-const excludeArchivedToolResults = <
-  T extends Pick<AgentDocument, 'documentId' | 'parentId' | 'filename' | 'fileType'>,
->(
-  docs: T[],
-  archiveFolderIds: Set<string> = collectArchiveFolderIds(docs),
-): T[] => {
-  if (archiveFolderIds.size === 0) return docs;
-  return docs.filter(
-    (d) =>
-      !archiveFolderIds.has(d.documentId) && (!d.parentId || !archiveFolderIds.has(d.parentId)),
-  );
-};
-
-const toAgentDocumentContextPayload = (
-  doc: AgentDocumentContextRow,
-): AgentDocumentContextPayload => ({
-  content: doc.content,
-  contentCharCount: doc.contentCharCount,
-  createdAt: doc.createdAt,
-  description: doc.description,
-  documentId: doc.documentId,
-  filename: doc.filename,
-  fileType: doc.fileType,
-  id: doc.id,
-  isFolder: doc.isFolder,
-  loadRules: doc.loadRules,
-  parentId: doc.parentId,
-  policy: doc.policy,
-  policyLoad: doc.policyLoad,
-  policyLoadFormat: doc.policyLoadFormat,
-  policyLoadPosition: doc.policyLoadPosition,
-  sourceType: doc.sourceType,
-  templateId: doc.templateId,
-  title: doc.title,
-  updatedAt: doc.updatedAt,
-});
 
 /**
  * Service for managing agent documents with reusable template sets.
@@ -337,9 +270,11 @@ export class AgentDocumentsService {
       metadata?: Record<string, unknown>;
       parentId?: string;
       policy?: AgentDocumentPolicy;
+      source?: DocumentWriteSource;
       templateId?: string;
     },
   ) {
+    const { source, ...createParams } = params ?? {};
     const baseFilename = buildDocumentFilename(title);
 
     let filename = baseFilename;
@@ -363,11 +298,30 @@ export class AgentDocumentsService {
     }
 
     const snapshot = await createAgentMarkdownSnapshot(content);
+    await this.assertWithinCharLimit(snapshot.content.length, 0, source ?? 'agent');
 
     return this.agentDocumentModel.create(agentId, filename, snapshot.content, {
-      ...params,
+      ...createParams,
       editorData: snapshot.editorData,
       title,
+    });
+  }
+
+  /**
+   * Refuses a write that would leave a document over the plan's character limit,
+   * before anything is persisted. A write that does not grow the document passes.
+   */
+  private assertWithinCharLimit(
+    charCount: number,
+    previousCharCount: number,
+    source: DocumentWriteSource,
+  ) {
+    return assertDocumentWriteWithinLimit({
+      charCount,
+      previousCharCount,
+      source,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
     });
   }
 
@@ -392,6 +346,7 @@ export class AgentDocumentsService {
           ? { context: { policyLoadFormat: template.policyLoadFormat } }
           : undefined,
         policyLoad: template.policyLoad,
+        source: 'system',
         templateId,
       });
     }
@@ -413,6 +368,7 @@ export class AgentDocumentsService {
           ? { context: { policyLoadFormat: template.policyLoadFormat } }
           : undefined,
         policyLoad: template.policyLoad,
+        source: 'system',
         templateId: templateSet.id,
       });
     }
@@ -596,8 +552,18 @@ export class AgentDocumentsService {
     policyLoad,
     createdAt,
     updatedAt,
+    source = 'user',
   }: UpsertDocumentParams) {
     const snapshot = await createMarkdownEditorSnapshot(content);
+
+    if (source !== 'system') {
+      const existing = await this.agentDocumentModel.findByFilename(agentId, filename);
+      await this.assertWithinCharLimit(
+        snapshot.content.length,
+        existing?.content?.length ?? 0,
+        source,
+      );
+    }
 
     return this.agentDocumentModel.upsert(agentId, filename, snapshot.content, {
       createdAt,
@@ -714,6 +680,7 @@ export class AgentDocumentsService {
     return this.createWithUniqueFilename(agentId, finalTitle, finalContent, {
       ...(metadata ? { metadata } : {}),
       ...(parentId ? { parentId } : {}),
+      source: options.source ?? 'agent',
     });
   }
 
@@ -1010,6 +977,8 @@ export class AgentDocumentsService {
         loadRules: doc.loadRules,
         metadata: doc.metadata || undefined,
         policy: doc.policy || undefined,
+        // A clone copies content the user already stored; it must not be refused.
+        source: 'system',
         templateId: doc.templateId || undefined,
       });
     }
@@ -1072,6 +1041,9 @@ export class AgentDocumentsService {
     return this.projectDocumentContent(doc);
   }
 
+  /**
+   * System write (onboarding documents), exempt from the per-document character limit.
+   */
   async upsertDocumentByFilename({
     agentId,
     filename,
@@ -1086,7 +1058,7 @@ export class AgentDocumentsService {
     const snapshot = await createAgentMarkdownSnapshot(content);
 
     if (existing && projectedExisting?.content !== snapshot.content) {
-      if (await writeSnapshotThroughRoom(this.bodyWriter, existing.documentId, snapshot))
+      if (await writeSnapshotThroughRoom(this.bodyWriter, existing.documentId, snapshot, 'system'))
         return (await this.agentDocumentModel.findById(existing.id)) ?? existing;
       await this.documentService.trySaveCurrentDocumentHistory(existing.documentId, 'llm_call');
     }
@@ -1096,7 +1068,12 @@ export class AgentDocumentsService {
     });
   }
 
-  async replaceDocumentContentById(documentId: string, content: string, expectedAgentId?: string) {
+  async replaceDocumentContentById(
+    documentId: string,
+    content: string,
+    expectedAgentId?: string,
+    source: DocumentWriteSource = 'agent',
+  ) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
 
@@ -1107,7 +1084,12 @@ export class AgentDocumentsService {
 
     const target = { agentDocumentId: documentId, documentId: doc.documentId };
     const recordHistory = doc.content !== snapshot.content;
-    await writeAgentDocumentBody(this.bodyWriter, target, snapshot, { recordHistory });
+    await writeAgentDocumentBody(this.bodyWriter, target, snapshot, {
+      beforeRowWrite: () =>
+        this.assertWithinCharLimit(snapshot.content.length, doc.content?.length ?? 0, source),
+      recordHistory,
+      writeSource: source,
+    });
     return this.getDocumentByIdInAgent(documentId, expectedAgentId);
   }
 
@@ -1115,6 +1097,7 @@ export class AgentDocumentsService {
     documentId: string,
     operations: AgentDocumentLiteXMLOperation[],
     expectedAgentId?: string,
+    source: DocumentWriteSource = 'agent',
   ) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
@@ -1124,12 +1107,16 @@ export class AgentDocumentsService {
       fallbackContent: doc.content,
       operations,
     });
-
     // History must capture the successfully hydrated pre-edit state. Persisted
     // editorData may be the stale payload that forced Markdown recovery.
     const target = { agentDocumentId: documentId, documentId: doc.documentId };
     const { previousEditorData } = snapshot;
-    await writeAgentDocumentBody(this.bodyWriter, target, snapshot, { previousEditorData });
+    await writeAgentDocumentBody(this.bodyWriter, target, snapshot, {
+      beforeRowWrite: () =>
+        this.assertWithinCharLimit(snapshot.content.length, doc.content?.length ?? 0, source),
+      previousEditorData,
+      writeSource: source,
+    });
 
     return this.getDocumentByIdInAgent(documentId, expectedAgentId);
   }
@@ -1171,6 +1158,7 @@ export class AgentDocumentsService {
       );
     }
 
+    // A copy has the length of its source, so it is exempt from the character limit.
     return this.agentDocumentModel.copy(documentId, newTitle);
   }
 

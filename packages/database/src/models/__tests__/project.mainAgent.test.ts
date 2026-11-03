@@ -15,7 +15,8 @@ import { AgentModel } from '../agent';
 import { AgentLabelModel } from '../agentLabel';
 import type { CreateProjectInput } from '../project';
 import { ProjectModel } from '../project';
-import { PROJECT_AGENT_LABEL } from '../projectMainAgent';
+import { createProjectMainAgent, PROJECT_AGENT_LABEL } from '../projectMainAgent';
+import { createProxyTestDB } from './_proxyTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'project-main-agent-user';
@@ -147,5 +148,37 @@ describe('the main agent a project creates', () => {
           ),
         ),
     ).toEqual([{ accessLevel: 'edit', resourceId: shared.coordinatorAgentId }]);
+  });
+
+  it('adopts the Project label another project created mid-flight', async () => {
+    // The label exists, but this caller's first lookup runs before it is visible:
+    // the insert then loses the race and has to read the winner's row.
+    await new AgentLabelModel(serverDB, userId).create({ name: PROJECT_AGENT_LABEL });
+    let labelLookups = 0;
+    const proxy = createProxyTestDB(serverDB, (query, result) => {
+      if (query.includes('from "agent_labels"')) {
+        labelLookups += 1;
+        if (labelLookups === 1) return [];
+      }
+      return result.rows;
+    });
+
+    const agent = await createProjectMainAgent(proxy, { userId }, { name: 'Raced' });
+
+    const [label] = await labelsOf(agent.id);
+    expect(label).toMatchObject({ name: PROJECT_AGENT_LABEL });
+    expect(await serverDB.select().from(agentLabels)).toHaveLength(1);
+  });
+
+  it('fails loudly when the Project label can be neither found nor created', async () => {
+    const proxy = createProxyTestDB(serverDB, (query, result) => {
+      if (query.includes('from "agent_labels"')) return [];
+      if (query.startsWith('insert into "agent_labels"')) return [];
+      return result.rows;
+    });
+
+    await expect(createProjectMainAgent(proxy, { userId }, { name: 'Doomed' })).rejects.toThrow(
+      'Failed to create the project agent label',
+    );
   });
 });

@@ -521,7 +521,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     daemon:
       !!options.daemonChild && !options.serviceChild && process.env.LOBEHUB_CONNECT_SERVICE !== '1',
     restartArgs: buildDaemonArgs(options).slice(1),
-    shutdown: () => shutdown(),
+    shutdown: (exitCode) => shutdown(exitCode),
   });
 
   const deviceControlDeps: DeviceControlDeps = {
@@ -918,17 +918,17 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // A clean stop pushes the health samples taken since the last upload
   // (bounded) before the socket closes, so the device page doesn't show the
   // final minutes as "not running".
-  const shutdown = async () => {
+  const shutdown = async (exitCode = 0) => {
     await Promise.all([
       metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS }),
       closeBrowserSessions(browser),
     ]);
     cleanup();
-    process.exit(0);
+    process.exit(exitCode);
   };
 
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => shutdown());
+  process.on('SIGTERM', () => shutdown());
 
   // Register this device in the server registry before opening the WS, so the
   // row exists by the time the gateway reports it online. `lh login` already
