@@ -46,13 +46,15 @@ export const resetRefusedDraftsForTests = () => refusedDrafts.clear();
 /**
  * The refused draft to reopen with, if it was written against the version the
  * editor now shows. A draft over an older version is dropped: the remote body
- * replaced it, the same as when the editor is mounted (see the `updatedAt` effect).
+ * replaced it, the same as when the editor is mounted (see the `updatedAt` effect),
+ * and `null` is returned so its banner is cleared too.
  */
 const takeRefusedDraft = (documentId: string, updatedAt?: Date) => {
   const draft = refusedDrafts.get(documentId);
   if (!draft) return;
   if (draft.baseUpdatedAt === updatedAt?.getTime()) return draft;
   refusedDrafts.delete(documentId);
+  return null;
 };
 
 export interface UseHighlightSaveParams {
@@ -81,7 +83,7 @@ export const useHighlightSave = ({
 }: UseHighlightSaveParams): UseHighlightSaveResult => {
   const { t } = useTranslation('portal');
   const [restored] = useState(() => takeRefusedDraft(documentId, updatedAt));
-  const [buffer, setBuffer] = useState<string | undefined>(restored?.content);
+  const [buffer, setBuffer] = useState<string | undefined>(restored?.content ?? undefined);
   const editingValue = buffer ?? content;
 
   const bufferRef = useRef(buffer);
@@ -99,7 +101,9 @@ export const useHighlightSave = ({
   // Reopening a refused draft shows its banner again (closing the portal drops
   // the document's store entry), or clears it when the draft was dropped.
   // Runs once: `restored` never changes, and the caller keys the editor by document.
+  // `undefined` means there was no draft, so the banner is left alone.
   useEffect(() => {
+    if (restored === undefined) return;
     setCharLimitError(documentId, restored?.refusal);
   }, [documentId, restored]);
 
