@@ -2042,6 +2042,7 @@
   "taskLabels.form.editGroupTitle": "Edit label group",
   "taskLabels.form.editTitle": "Edit label",
   "taskLabels.form.group": "Group",
+  "taskLabels.form.groupConflict": "Some tasks already carry another label from this group. Remove it from them first.",
   "taskLabels.form.groupNamePlaceholder": "e.g. Type",
   "taskLabels.form.name": "Name",
   "taskLabels.form.namePlaceholder": "e.g. Bug",

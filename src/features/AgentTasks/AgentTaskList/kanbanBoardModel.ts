@@ -209,8 +209,11 @@ export const getKanbanLabelPatch = (
 /** Pinned on the new task, so it lands in the column it was created from. */
 export interface KanbanColumnCreateDefaults {
   assigneeAgentId?: string;
-  /** The label of a label column; the "No label" column pins none. */
-  labelId?: string;
+  /**
+   * Labels of a label column (and, when nested, of its parent group); the
+   * "No label" column pins none.
+   */
+  labelIds?: string[];
   priority?: number;
 }
 
@@ -224,7 +227,7 @@ export const getTaskGroupCreateDefaults = (
   groupMeta: TaskGroupMeta | undefined,
 ): KanbanColumnCreateDefaults | undefined => {
   if (isTaskLabelGroupBy(groupMeta?.groupBy)) {
-    return groupMeta?.labelId ? { labelId: groupMeta.labelId } : {};
+    return groupMeta?.labelId ? { labelIds: [groupMeta.labelId] } : {};
   }
   switch (groupMeta?.groupBy) {
     // New tasks start in backlog, so only that status group can receive one.
@@ -252,7 +255,9 @@ export const getTaskSubGroupCreateDefaults = (
   const parent = getTaskGroupCreateDefaults(parentMeta);
   const sub = getTaskGroupCreateDefaults(subMeta);
   if (!parent || !sub) return undefined;
-  return { ...parent, ...sub };
+  // Two label groupings each pin one label; the task needs both to sit here.
+  const labelIds = [...(parent.labelIds ?? []), ...(sub.labelIds ?? [])];
+  return { ...parent, ...sub, ...(labelIds.length > 0 ? { labelIds } : {}) };
 };
 
 /**
@@ -278,7 +283,7 @@ export const getKanbanCreateTaskModalProps = (
   scope: { agentId?: string; projectId?: string },
 ): CreateTaskContentProps => ({
   agentId: defaults.assigneeAgentId ?? scope.agentId,
-  defaultLabelIds: defaults.labelId ? [defaults.labelId] : undefined,
+  defaultLabelIds: defaults.labelIds?.length ? defaults.labelIds : undefined,
   defaultPriority: defaults.priority,
   // An agent-scoped board only holds that agent's tasks.
   lockAssignee: !!scope.agentId,

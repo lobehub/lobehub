@@ -108,6 +108,7 @@ export class TaskDetailService {
       workspace,
       acceptance,
       goal,
+      labels,
     ] = await Promise.all([
       this.taskModel.findAllDescendants(task.id),
       this.taskModel.getDependencies(task.id),
@@ -120,6 +121,7 @@ export class TaskDetailService {
       new GoalGraphModel(this.db, this.userId, this.workspaceId)
         .findGoalByTaskId(task.id)
         .catch(() => undefined),
+      new TaskLabelModel(this.db, this.userId, this.workspaceId).getTaskLabels(task.id),
     ]);
 
     // What the reader is shown, not what was written: a burst of edits to one
@@ -498,9 +500,6 @@ export class TaskDetailService {
     });
 
     const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
-    const labels = await new TaskLabelModel(this.db, this.userId, this.workspaceId).getTaskLabels(
-      task.id,
-    );
 
     return {
       ...projectTaskDetailState(task, taskConfig),
