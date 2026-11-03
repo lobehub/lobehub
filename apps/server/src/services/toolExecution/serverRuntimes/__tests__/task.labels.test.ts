@@ -31,14 +31,18 @@ const setup = () => {
     update: vi.fn().mockResolvedValue({ data: task }),
   };
   const taskService = { createTask: vi.fn().mockResolvedValue(task) };
+  const taskModel = {
+    delete: vi.fn().mockResolvedValue(undefined),
+    resolve: vi.fn().mockResolvedValue(task),
+  };
   const runtime = createTaskRuntime({
     agentModel: { existsById: vi.fn().mockResolvedValue(true) } as any,
     taskCaller: taskCaller as any,
     taskLabelCaller: taskLabelCaller as any,
-    taskModel: { resolve: vi.fn().mockResolvedValue(task) } as any,
+    taskModel: taskModel as any,
     taskService: taskService as any,
   });
-  return { runtime, taskCaller, taskLabelCaller, taskService };
+  return { runtime, taskCaller, taskLabelCaller, taskModel, taskService };
 };
 
 describe('task tool labels', () => {
@@ -56,6 +60,21 @@ describe('task tool labels', () => {
     expect(result.success).toBe(true);
     expect(taskLabelCaller.addToTask).toHaveBeenCalledWith({ labelIds: ['bug'], taskId: 'task-1' });
     expect(result.content).toContain('Labels: Bug');
+  });
+
+  it('createTask rolls the task back when its labels cannot be attached', async () => {
+    const { runtime, taskLabelCaller, taskModel } = setup();
+    taskLabelCaller.addToTask.mockRejectedValueOnce(new Error('Labels not found: bug'));
+
+    const result = await runtime.createTask({
+      instruction: 'x',
+      labels: ['Type/Bug'],
+      name: 'Ship',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Nothing was created');
+    expect(taskModel.delete).toHaveBeenCalledWith('task-1');
   });
 
   it('createTask with an unknown label creates nothing and suggests names', async () => {

@@ -89,12 +89,20 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const excludeStatuses =
     options.completedTasks === 'none' ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
 
+  // Label columns read their name and color from the registry.
+  const { error: labelsError } = useFetchTaskLabels();
+  const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
   // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
   // `queryKey` the groups are read by.
   const { error, isLoading, mutate, queryKey } = useFetchTaskGroupList({
     ...buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
     completedWithin: getCompletedWithin(options),
+    // A persisted label grouping may point at a deleted group; the page only
+    // drops it once the registry is known, so wait for that (or its failure)
+    // instead of sending one doomed request after every reload.
+    enabled: !isTaskLabelGroupBy(groupBy) || isLabelsInit || !!labelsError,
     filter,
     includeArchived: options.showArchived,
   });
@@ -128,8 +136,6 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const [activeTask, setActiveTask] = useState<TaskListItem | null>(null);
-  // Label columns read their name and color from the registry.
-  useFetchTaskLabels();
   const taskLabels = useTaskStore(taskLabelSelectors.labels);
   const columns = useMemo(
     () => buildKanbanColumns(currentTaskGroups, groupBy),
