@@ -111,9 +111,18 @@ class ElevenLabsSpeechError extends Error {
   }
 }
 
+/** Strip trailing `char`s with a linear scan (a `/x+$/` regex backtracks quadratically). */
+const trimTrailing = (value: string, char: string) => {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === char) end--;
+  return value.slice(0, end);
+};
+
 /** Accepts the host with or without a trailing `/v1`, since users often paste either. */
-export const normalizeElevenLabsBaseURL = (baseURL?: string | null) =>
-  (baseURL?.trim() || DEFAULT_ELEVENLABS_BASE_URL).replace(/\/+$/, '').replace(/\/v1$/, '');
+export const normalizeElevenLabsBaseURL = (baseURL?: string | null) => {
+  const url = trimTrailing(baseURL?.trim() || DEFAULT_ELEVENLABS_BASE_URL, '/');
+  return url.endsWith('/v1') ? url.slice(0, -3) : url;
+};
 
 export const resolveElevenLabsOutputFormat = (
   format: TTSAudioFormat,
@@ -213,7 +222,7 @@ const toSpeechError = async (response: Response): Promise<ElevenLabsSpeechError>
 
   return new ElevenLabsSpeechError(
     paymentRequired
-      ? `ElevenLabs API error (${response.status}): ${reason.replace(/\.+$/, '')}. ${ELEVENLABS_PAID_VOICE_HINT}`
+      ? `ElevenLabs API error (${response.status}): ${trimTrailing(reason, '.')}. ${ELEVENLABS_PAID_VOICE_HINT}`
       : `ElevenLabs API error (${response.status}): ${reason}`,
     (status ? DETAIL_STATUS_ERROR_TYPES[status] : undefined) ??
       HTTP_ERROR_TYPES[response.status] ??
@@ -353,7 +362,7 @@ export async function createElevenLabsSpeech(
       const fallback = await resolveAccountVoice(baseURL, apiKey, options);
       if (!fallback) {
         throw new ElevenLabsSpeechError(
-          `${error.message.replace(/\.+$/, '')}. ${ELEVENLABS_NO_ACCOUNT_VOICE_HINT}`,
+          `${trimTrailing(error.message, '.')}. ${ELEVENLABS_NO_ACCOUNT_VOICE_HINT}`,
           error.errorType,
           error.detail,
         );

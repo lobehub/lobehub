@@ -103,6 +103,14 @@ describe('createElevenLabsSpeech', () => {
       );
     });
 
+    it('normalizes a base URL with many slashes in linear time', () => {
+      const input = `https://proxy.example.com${'/'.repeat(100_000)}x`;
+      const start = performance.now();
+      expect(normalizeElevenLabsBaseURL(input)).toBe(input);
+      expect(normalizeElevenLabsBaseURL(`https://h${'/'.repeat(100_000)}`)).toBe('https://h');
+      expect(performance.now() - start).toBeLessThan(500);
+    });
+
     it('normalizes the base URL, with or without /v1 and trailing slashes', () => {
       expect(normalizeElevenLabsBaseURL(undefined)).toBe('https://api.elevenlabs.io');
       expect(normalizeElevenLabsBaseURL('')).toBe('https://api.elevenlabs.io');
