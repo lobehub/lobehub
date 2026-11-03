@@ -34,4 +34,15 @@ describe('resolveTTSModelRef', () => {
     });
     expect(resolveTTSModelRef('tts-1')).toEqual({ model: 'tts-1', provider: 'openai' });
   });
+
+  it('resolves ElevenLabs model references', () => {
+    expect(resolveTTSModelRef('elevenlabs/eleven_v4')).toEqual({
+      model: 'eleven_v4',
+      provider: 'elevenlabs',
+    });
+    expect(resolveTTSModelRef('eleven_multilingual_v2')).toEqual({
+      model: 'eleven_multilingual_v2',
+      provider: 'elevenlabs',
+    });
+  });
 });

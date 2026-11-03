@@ -1,5 +1,6 @@
+import type { ModelRuntime } from '@lobechat/model-runtime';
 import type { ModelUsage } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import type { AITTSModelCard, TTSAudioFormat } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST, TTS_AUDIO_MIME_TYPES, validateTTSParams } from 'model-bank';
 import { ModelProvider } from 'model-bank/modelProvider';
@@ -84,6 +85,9 @@ const toProviderError = (error: unknown, provider: string): TTSProviderError => 
     (typeof error.message === 'string' && error.message) ||
     (typeof detail?.message === 'string' && detail.message) ||
     (typeof detail?.base_resp?.status_msg === 'string' && detail.base_resp.status_msg) ||
+    (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey
+      ? `No valid API key is configured for provider "${provider}"; add one in the provider settings or the server environment.`
+      : '') ||
     (errorType ? `${provider} text-to-speech failed: ${errorType}` : '') ||
     `${provider} text-to-speech failed`;
 
@@ -159,7 +163,18 @@ export class TTSService {
 
     const voice = request.voice ?? card?.parameters?.voice?.default ?? 'alloy';
 
-    const runtime = await initModelRuntimeFromDB(this.db, this.userId, provider, this.workspaceId);
+    let runtime: ModelRuntime;
+    try {
+      runtime = await initModelRuntimeFromDB(this.db, this.userId, provider, this.workspaceId);
+    } catch (error) {
+      // Runtimes reject a missing key at construction with a plain
+      // `{ errorType: 'InvalidProviderAPIKey' }` payload; surface it as a readable provider
+      // error instead of a bare 500. Anything else (e.g. a DB failure) propagates as is.
+      if (isRecord(error) && typeof error.errorType === 'string' && !(error instanceof Error)) {
+        throw toProviderError(error, provider);
+      }
+      throw error;
+    }
 
     let result: Awaited<ReturnType<typeof runtime.textToSpeech>>;
     try {
