@@ -127,6 +127,22 @@ describe('lh task --label', () => {
     expect(printed).toContain('"labels"');
   });
 
+  it('combined edit --json includes the post-edit labels', async () => {
+    client.task.detail.query.mockResolvedValue({ data: { labels: [] } });
+    client.taskLabel.changeForTask.mutate.mockResolvedValue([{ id: 'bug', name: 'Bug' }]);
+    client.task.update.mutate.mockResolvedValue({ data: { id: 'task_1', identifier: 'T-1' } });
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await run('edit', 'T-1', '--label', 'Bug', '--name', 'X', '--json');
+
+    const printed = [...vi.mocked(console.log).mock.calls.flat(), ...write.mock.calls.flat()]
+      .map(String)
+      .join('');
+    write.mockRestore();
+    expect(printed).toContain('"id": "task_1"');
+    expect(printed).toContain('"name": "Bug"');
+  });
+
   it('edit puts the previous labels back when the field edit fails', async () => {
     client.task.detail.query.mockResolvedValue({
       data: {

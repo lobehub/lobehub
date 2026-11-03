@@ -787,8 +787,10 @@ export function registerTaskCommand(program: Command) {
         const result = await client.task.update.mutate(input as any).catch(restoreLabelsOnFailure);
 
         if (options.json !== undefined) {
+          // task.update returns the bare row; overlay the post-edit labels.
+          const data = labels ? { ...result.data, labels } : result.data;
           outputJson(
-            withUrl(result.data, await resolveUrlBuilder(client), resourcePath.task(result.data)),
+            withUrl(data, await resolveUrlBuilder(client), resourcePath.task(result.data)),
             typeof options.json === 'string' ? options.json : undefined,
           );
           return;
