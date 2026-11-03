@@ -72,6 +72,8 @@ import {
   AcpRpcResponseError,
   AgentStreamPipeline,
   buildAgentInput,
+  buildCopilotAcpArgs,
+  buildCopilotAcpPrompt,
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
   buildDevinAcpArgs,
@@ -83,6 +85,7 @@ import {
   buildTraeAcpArgs,
   buildTraeAcpPrompt,
   ClaudeAgentSdkSession,
+  CopilotAcpSession,
   createFileStoreImageUploader,
   CursorAcpSession,
   detectDshCommand,
@@ -94,6 +97,7 @@ import {
   getCodexAppServerUnsupportedArgs,
   getHeterogeneousAgentPresetEnv,
   GrokAcpSession,
+  isCopilotAcpSessionNotFoundError,
   isCursorAcpSessionNotFoundError,
   isDevinAcpSessionNotFoundError,
   isDroidAcpSessionNotFoundError,
@@ -582,6 +586,10 @@ export default class HeterogeneousAgentCtr {
       });
       return false;
     },
+    'copilot': async (params, session) => {
+      await this.sendPromptWithCopilotAcp(params, session);
+      return true;
+    },
     'cursor': async (params, session) => {
       await this.sendPromptWithCursorAcp(params, session);
       return true;
@@ -856,6 +864,34 @@ export default class HeterogeneousAgentCtr {
     };
   }
 
+  private getCopilotResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'copilot' ||
+      !session.resumeSessionId ||
+      !isCopilotAcpSessionNotFoundError(error)
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'copilot',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        data: error.rpcError.data,
+      },
+      message:
+        'The saved GitHub Copilot session could not be found, so a new conversation will start.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
   private getDevinResumeError(
     error: unknown,
     session: AgentSession,
@@ -908,6 +944,7 @@ export default class HeterogeneousAgentCtr {
 
     const resumeError =
       this.getCodexResumeError(error, session) ??
+      this.getCopilotResumeError(error, session) ??
       this.getDroidResumeError(error, session) ??
       this.getGrokResumeError(error, session) ??
       this.getCursorResumeError(error, session) ??
@@ -2572,6 +2609,86 @@ export default class HeterogeneousAgentCtr {
     });
   }
 
+  private async sendPromptWithCopilotAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      isNewSession: this.needsSessionIntroduction(session),
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = await buildCopilotAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildCopilotAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const stderrChunks: string[] = [];
+    const intervention = this.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'copilot',
+    );
+    const copilotAcpSession = new CopilotAcpSession({
+      args: session.args,
+      askUserBridge: intervention.bridge,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      initialModel: session.model,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onModel: (model) => {
+        session.model = model;
+        session.modelSource = 'copilot-acp';
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.copilotAcpSession = copilotAcpSession;
+
+    await this.runInteractiveAcpSession({
+      acpSession: copilotAcpSession,
+      activeSessionKey: 'copilotAcpSession',
+      cleanup: intervention.cleanup,
+      isResumeError: isCopilotAcpSessionNotFoundError,
+      session,
+      stderrChunks,
+      traceSession,
+      transport: 'copilot-acp',
+    });
+  }
+
   private async runInteractiveAcpSession({
     acpSession,
     activeSessionKey,
@@ -2583,13 +2700,14 @@ export default class HeterogeneousAgentCtr {
     transport,
   }: {
     acpSession: InteractiveAcpSession;
-    activeSessionKey: 'cursorAcpSession' | 'devinAcpSession' | 'traeAcpSession';
+    activeSessionKey:
+      'copilotAcpSession' | 'cursorAcpSession' | 'devinAcpSession' | 'traeAcpSession';
     cleanup?: () => Promise<void>;
     isResumeError?: (error: unknown) => boolean;
     session: AgentSession;
     stderrChunks: string[];
     traceSession: CliTraceSession | undefined;
-    transport: 'cursor-acp' | 'devin-acp' | 'trae-acp';
+    transport: 'copilot-acp' | 'cursor-acp' | 'devin-acp' | 'trae-acp';
   }): Promise<void> {
     try {
       await acpSession.run();
@@ -2627,7 +2745,12 @@ export default class HeterogeneousAgentCtr {
       });
     } finally {
       await cleanup?.();
-      if (activeSessionKey === 'cursorAcpSession' && session.cursorAcpSession === acpSession) {
+      if (activeSessionKey === 'copilotAcpSession' && session.copilotAcpSession === acpSession) {
+        session.copilotAcpSession = undefined;
+      } else if (
+        activeSessionKey === 'cursorAcpSession' &&
+        session.cursorAcpSession === acpSession
+      ) {
         session.cursorAcpSession = undefined;
       } else if (activeSessionKey === 'devinAcpSession' && session.devinAcpSession === acpSession) {
         session.devinAcpSession = undefined;
@@ -3750,6 +3873,10 @@ export default class HeterogeneousAgentCtr {
       await session.dshSession.dispose();
       return;
     }
+    if (session.copilotAcpSession) {
+      session.copilotAcpSession.interrupt();
+      return;
+    }
     if (session.devinAcpSession) {
       session.devinAcpSession.interrupt();
       return;
@@ -3828,6 +3955,10 @@ export default class HeterogeneousAgentCtr {
       session.cancelledByUs = true;
       await session.dshSession.dispose();
       session.dshSession = undefined;
+    }
+    if (session.copilotAcpSession) {
+      session.cancelledByUs = true;
+      session.copilotAcpSession.close();
     }
     if (session.devinAcpSession) {
       session.cancelledByUs = true;
@@ -3955,6 +4086,10 @@ export default class HeterogeneousAgentCtr {
         if (session.piRpcSession) {
           session.cancelledByUs = true;
           piClosing.push(session.piRpcSession.close());
+        }
+        if (session.copilotAcpSession) {
+          session.cancelledByUs = true;
+          session.copilotAcpSession.close();
         }
         if (session.devinAcpSession) {
           session.cancelledByUs = true;

@@ -90,9 +90,20 @@ export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number
 
 export const QODER_REASONING_EFFORT_FLAG = '--reasoning-effort';
 
+/**
+ * GitHub Copilot CLI reasoning-effort levels, mirrored 1:1 with the CLI's
+ * `--reasoning-effort <level>` flag and ACP `reasoning_effort` config option.
+ */
+const COPILOT_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type CopilotReasoningEffort = (typeof COPILOT_REASONING_EFFORT_LEVELS)[number];
+
+export const COPILOT_REASONING_EFFORT_FLAG = '--reasoning-effort';
+
 export type HeterogeneousReasoningEffortLevel =
   | ClaudeCodeReasoningEffort
   | CodexReasoningEffort
+  | CopilotReasoningEffort
   | GrokBuildReasoningEffort
   | QoderReasoningEffort;
 
@@ -155,6 +166,11 @@ export const isGrokBuildReasoningEffort = (
 
 export const isQoderReasoningEffort = (value: string | undefined): value is QoderReasoningEffort =>
   !!value && QODER_REASONING_EFFORT_LEVELS.includes(value as QoderReasoningEffort);
+
+export const isCopilotReasoningEffort = (
+  value: string | undefined,
+): value is CopilotReasoningEffort =>
+  !!value && COPILOT_REASONING_EFFORT_LEVELS.includes(value as CopilotReasoningEffort);
 
 export const isCodexFastServiceTier = (value: string | undefined): boolean =>
   !!value &&
@@ -275,6 +291,15 @@ const resolveQoderReasoningEffort = (
     getCliFlagValue(source?.args, QODER_REASONING_EFFORT_FLAG) ?? source?.effort
   )?.trim();
   return isQoderReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+const resolveCopilotReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): CopilotReasoningEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (
+    getCliFlagValue(source?.args, COPILOT_REASONING_EFFORT_FLAG) ?? source?.effort
+  )?.trim();
+  return isCopilotReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
 /**
@@ -398,6 +423,18 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       encodings: [{ key: CODEX_SERVICE_TIER_CONFIG_KEY, kind: 'config' }],
       resolve: resolveCodexSpeedMode,
       supported: codexModelSupportsFastSpeed,
+    },
+  },
+  'copilot': {
+    effort: {
+      encodings: [{ flags: [COPILOT_REASONING_EFFORT_FLAG], kind: 'flag' }],
+      levels: () => COPILOT_REASONING_EFFORT_LEVELS,
+      resolve: resolveCopilotReasoningEffort,
+    },
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
     },
   },
   'cursor': {

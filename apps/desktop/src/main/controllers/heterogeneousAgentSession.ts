@@ -5,6 +5,7 @@ import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   ClaudeAgentSdkSession,
   CodexThreadSession,
+  CopilotAcpSession,
   CursorAcpSession,
   DevinAcpSession,
   DroidAcpSession,
@@ -104,6 +105,7 @@ export interface AgentSession {
   cliVersion?: string;
   codexAppServerFallback?: boolean;
   command: string;
+  copilotAcpSession?: CopilotAcpSession;
   cursorAcpSession?: CursorAcpSession;
   cwd?: string;
   devinAcpSession?: DevinAcpSession;

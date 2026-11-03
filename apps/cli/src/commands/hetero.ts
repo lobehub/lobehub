@@ -249,7 +249,9 @@ const buildExtraArgs = (
 ): string[] | undefined => {
   const selectorArgs =
     options.type === 'amp'
-      ? [...(options.mode ? ['--mode', options.mode] : [])]
+      ? options.mode
+        ? ['--mode', options.mode]
+        : []
       : options.type === 'droid' || options.type === 'trae'
         ? []
         : options.type === 'codex'
@@ -274,8 +276,10 @@ const buildExtraArgs = (
                 options.type === 'kimi-code' ||
                 options.type === 'opencode' ||
                 options.type === 'pi'
-              ? [...(options.model ? ['--model', options.model] : [])]
-              : options.type === 'qoder'
+              ? options.model
+                ? ['--model', options.model]
+                : []
+              : options.type === 'copilot' || options.type === 'qoder'
                 ? [
                     ...(options.model ? ['--model', options.model] : []),
                     ...(options.effort ? ['--reasoning-effort', options.effort] : []),
@@ -762,13 +766,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
   if (
     serverIngest &&
     (agentType === 'claude-code' ||
+      agentType === 'copilot' ||
       agentType === 'cursor' ||
       agentType === 'droid' ||
       agentType === 'devin' ||
       agentType === 'qoder') &&
     serverIngester
   ) {
-    if (agentType === 'cursor' || agentType === 'droid') {
+    if (agentType === 'copilot' || agentType === 'cursor' || agentType === 'droid') {
       askBridge = new AskUserBridge(operationId, {
         identifier: agentType === 'cursor' ? 'claude-code' : agentType,
         provider: agentType,
@@ -1270,7 +1275,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // receives text while the process is running, not only the terminal assistant snapshot.
     includePartialMessages: options.type === 'claude-code',
     initialModel:
-      options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
+      options.type === 'copilot' ||
+      options.type === 'droid' ||
+      options.type === 'devin' ||
+      options.type === 'trae'
         ? options.model
         : undefined,
     // Keep Claude Code's stdin open while it can still use input: closing it

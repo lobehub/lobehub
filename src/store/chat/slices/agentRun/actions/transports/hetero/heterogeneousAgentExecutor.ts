@@ -1950,7 +1950,8 @@ export const executeHeterogeneousAgent = async (
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        (adapterType === 'devin' ||
+        (adapterType === 'copilot' ||
+          adapterType === 'devin' ||
           adapterType === 'droid' ||
           adapterType === 'trae' ||
           adapterType === 'deepseek-harness') &&

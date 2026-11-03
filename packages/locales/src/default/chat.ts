@@ -1335,6 +1335,17 @@ export default {
   'codexInstallGuide.menuNotification.title': 'Codex CLI not found',
   'codexInstallGuide.reason': 'LobeHub could not start Codex: {{message}}',
   'codexInstallGuide.title': 'Install Codex CLI',
+  'copilotInstallGuide.actions.openDocs': 'Open Install Guide',
+  'copilotInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'copilotInstallGuide.afterInstall':
+    'After installing, run `copilot login`, then retry your message or click Re-detect in System Tools.',
+  'copilotInstallGuide.desc':
+    'GitHub Copilot needs the GitHub Copilot CLI to run locally. Install it and make sure the `copilot` command is available in your PATH.',
+  'copilotInstallGuide.installWithBrew': 'Homebrew (macOS / Linux)',
+  'copilotInstallGuide.installWithNpm': 'Recommended install',
+  'copilotInstallGuide.menuNotification.title': 'GitHub Copilot CLI not found',
+  'copilotInstallGuide.reason': 'LobeHub could not start GitHub Copilot: {{message}}',
+  'copilotInstallGuide.title': 'Install GitHub Copilot CLI',
   'cursorInstallGuide.actions.openDocs': 'Open Install Guide',
   'cursorInstallGuide.actions.openSystemTools': 'Open System Tools',
   'cursorInstallGuide.afterInstall':
@@ -1451,6 +1462,7 @@ export default {
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodeBuddyAgent': 'Add CodeBuddy',
   'newCodexAgent': 'Add Codex',
+  'newCopilotAgent': 'Add GitHub Copilot',
   'newCursorAgent': 'Add Cursor',
   'newDroidAgent': 'Add Factory Droid',
   'newDevinAgent': 'Add Devin',
@@ -1548,6 +1560,7 @@ export default {
     'DeepSeek Harness agent (dsh CLI) with tools and subagents',
   'connectAgent.providerDesc.codebuddy': 'Tencent coding agent CLI',
   'connectAgent.providerDesc.codex': 'OpenAI coding agent CLI',
+  'connectAgent.providerDesc.copilot': 'GitHub Copilot coding agent CLI',
   'connectAgent.providerDesc.cursor': 'Cursor coding agent CLI',
   'connectAgent.providerDesc.droid': 'Factory coding agent CLI',
   'connectAgent.providerDesc.devin': 'Cognition coding agent CLI',
