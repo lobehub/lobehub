@@ -180,8 +180,20 @@ export const meetingRouter = router({
           }
         }
 
+        const previous = await ctx.meetingModel.findById(id);
+
         const data = await ctx.meetingModel.attachAudio(id, location);
         if (!data) throw notFound();
+
+        // The replaced upload is no longer reachable: meeting-source files stay out
+        // of the resource library and `delete` only reclaims the attached one. Best
+        // effort, like `delete` — the meeting keeps its new audio either way.
+        if (previous?.audioFileId && previous.audioFileId !== data.audioFileId) {
+          await ctx.fileService
+            .removeUnreferencedFile(previous.audioFileId, FileSource.Meeting)
+            .catch((error) => console.error('[meeting:attachAudio] audio cleanup failed', error));
+        }
+
         return { data, message: 'Audio attached', success: true };
       } catch (error) {
         fail(error, 'attach audio to');

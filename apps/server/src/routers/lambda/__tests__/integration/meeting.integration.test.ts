@@ -221,6 +221,24 @@ describe('meeting router integration', () => {
     expect(data).toMatchObject({ audioFileId: null, localAudioPath: '/Users/me/meetings/a.wav' });
   });
 
+  it('reclaims the upload a meeting no longer points at', async () => {
+    const owner = meetingRouter.createCaller(context(ownerId));
+    const { data: meeting } = (await owner.create(startInput))!;
+    const first = await seedAudio(ownerId);
+    const second = await seedAudio(ownerId);
+
+    await owner.attachAudio({ audioFileId: first.id, id: meeting.id });
+    expect(removeUnreferencedFile).not.toHaveBeenCalled();
+
+    await owner.attachAudio({ audioFileId: second.id, id: meeting.id });
+    expect(removeUnreferencedFile).toHaveBeenCalledWith(first.id, FileSource.Meeting);
+
+    // Switching to desktop-local audio displaces the upload as well.
+    await owner.attachAudio({ id: meeting.id, localAudioPath: '/Users/me/meetings/a.wav' });
+    expect(removeUnreferencedFile).toHaveBeenLastCalledWith(second.id, FileSource.Meeting);
+    expect(removeUnreferencedFile).toHaveBeenCalledTimes(2);
+  });
+
   it('maps lifecycle violations to CONFLICT and rejects malformed segments', async () => {
     const owner = meetingRouter.createCaller(context(ownerId));
     const { data: meeting } = (await owner.create(startInput))!;

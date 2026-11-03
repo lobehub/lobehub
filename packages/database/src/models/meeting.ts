@@ -107,6 +107,17 @@ export class MeetingModel {
     return and(this.readable(), eq(meetings.userId, this.userId));
   }
 
+  /**
+   * Desktop local mode keeps the recording on the machine that captured it, so
+   * `local_audio_path` is only meaningful — and only safe — for the creator.
+   * A workspace member reading a public meeting gets the row without it.
+   */
+  private forCaller<T extends MeetingItem>(meeting: T): T {
+    if (meeting.userId === this.userId) return meeting;
+
+    return { ...meeting, localAudioPath: null };
+  }
+
   private async findManageable(id: string, db: LobeChatDatabase | Transaction = this.db) {
     const [meeting] = await db
       .select()
@@ -146,13 +157,15 @@ export class MeetingModel {
 
   /** Newest first. */
   async list({ limit = 20, offset = 0, status }: ListMeetingsInput = {}) {
-    return this.db
+    const rows = await this.db
       .select()
       .from(meetings)
       .where(and(this.readable(), status ? eq(meetings.status, status) : undefined))
       .orderBy(desc(meetings.createdAt), desc(meetings.id))
       .limit(limit)
       .offset(offset);
+
+    return rows.map((row) => this.forCaller(row));
   }
 
   /**
@@ -184,7 +197,13 @@ export class MeetingModel {
       this.db.select().from(meetingMinutes).where(eq(meetingMinutes.meetingId, id)).limit(1),
     ]);
 
-    return { ...meeting, minutes: minutes ?? null, segmentSource: source, segments, speakers };
+    return {
+      ...this.forCaller(meeting),
+      minutes: minutes ?? null,
+      segmentSource: source,
+      segments,
+      speakers,
+    };
   }
 
   async rename(id: string, title: string) {

@@ -120,6 +120,21 @@ describe('MeetingModel', () => {
       const [row] = await serverDB.select().from(meetings).where(eq(meetings.id, meeting.id));
       expect(row).toMatchObject({ status: 'recording', title: 'Weekly sync' });
     });
+
+    it('hides the desktop-local audio path from a member reading a public meeting', async () => {
+      const owner = new MeetingModel(serverDB, userId, workspaceId);
+      const member = new MeetingModel(serverDB, otherUserId, workspaceId);
+      const meeting = await owner.create({ ...base, platform: 'desktop', visibility: 'public' });
+      await owner.attachAudio(meeting.id, { localAudioPath: '/Users/a/meetings/x.wav' });
+
+      expect((await owner.getDetail(meeting.id))!.localAudioPath).toBe('/Users/a/meetings/x.wav');
+      expect((await owner.list()).find((m) => m.id === meeting.id)!.localAudioPath).toBe(
+        '/Users/a/meetings/x.wav',
+      );
+
+      expect((await member.getDetail(meeting.id))!.localAudioPath).toBeNull();
+      expect((await member.list()).find((m) => m.id === meeting.id)!.localAudioPath).toBeNull();
+    });
   });
 
   describe('list', () => {
