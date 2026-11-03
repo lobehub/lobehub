@@ -4886,6 +4886,8 @@ When I am ___, I need ___
   'taskLabels.form.createGroupTitle': 'New label group',
   'taskLabels.form.createTitle': 'New label',
   'taskLabels.form.duplicateName': 'A label with this name already exists',
+  'taskLabels.form.groupConflict':
+    'Some tasks already carry another label from this group. Remove it from them first.',
   'taskLabels.form.editGroupTitle': 'Edit label group',
   'taskLabels.form.editTitle': 'Edit label',
   'taskLabels.form.group': 'Group',

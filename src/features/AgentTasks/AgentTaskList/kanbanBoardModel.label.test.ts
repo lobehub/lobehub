@@ -9,6 +9,7 @@ import {
   getKanbanCreateTaskModalProps,
   getKanbanLabelPatch,
   getTaskGroupCreateDefaults,
+  getTaskSubGroupCreateDefaults,
   normalizeKanbanGroupBy,
 } from './kanbanBoardModel';
 import {
@@ -141,9 +142,18 @@ describe('label column create entry', () => {
       labelId: null,
     });
 
-    expect(bug).toEqual({ labelId: 'bug' });
+    expect(bug).toEqual({ labelIds: ['bug'] });
     expect(none).toEqual({});
     expect(getKanbanCreateTaskModalProps(bug!, {}).defaultLabelIds).toEqual(['bug']);
     expect(getKanbanCreateTaskModalProps(none!, {}).defaultLabelIds).toBeUndefined();
+  });
+
+  it('pins both labels when grouped and sub-grouped by two label groups', () => {
+    const nested = getTaskSubGroupCreateDefaults(
+      { groupBy: toTaskLabelGroupBy('type'), key: 'label:bug', label: 'Bug', labelId: 'bug' },
+      { groupBy: toTaskLabelGroupBy('area'), key: 'label:fe', label: 'FE', labelId: 'fe' },
+    );
+
+    expect(getKanbanCreateTaskModalProps(nested!, {}).defaultLabelIds).toEqual(['bug', 'fe']);
   });
 });

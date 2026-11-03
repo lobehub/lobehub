@@ -96,9 +96,16 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
         toast.error(t('taskLabels.form.duplicateName'));
         return;
       }
-      // Moving into a group can collide with tasks that already carry a sibling.
-      const message = (error as { message?: string })?.message;
-      toast.error(message || t('operationFailed', { ns: 'common' }));
+      // Server messages are English (they also serve the CLI and agents), so
+      // only map the known rule error. A BAD_REQUEST here is a regroup that
+      // collides with tasks already carrying a sibling.
+      const code = (error as { data?: { code?: string } })?.data?.code;
+      const isRegroup = !!label && !!nextParentId && nextParentId !== (label.parentId ?? null);
+      toast.error(
+        code === 'BAD_REQUEST' && isRegroup
+          ? t('taskLabels.form.groupConflict')
+          : t('operationFailed', { ns: 'common' }),
+      );
     } finally {
       setLoading(false);
     }

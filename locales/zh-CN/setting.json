@@ -2069,6 +2069,7 @@
   "taskLabels.form.editGroupTitle": "编辑标签组",
   "taskLabels.form.editTitle": "编辑标签",
   "taskLabels.form.group": "所属标签组",
+  "taskLabels.form.groupConflict": "部分任务已带有该组的其他标签，请先从这些任务上移除。",
   "taskLabels.form.groupNamePlaceholder": "例如：类型",
   "taskLabels.form.name": "名称",
   "taskLabels.form.namePlaceholder": "例如：Bug",
