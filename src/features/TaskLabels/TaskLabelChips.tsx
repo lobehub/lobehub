@@ -23,6 +23,13 @@ const styles = stylex.create({
     lineHeight: 1,
     color: sxVar.colorTextSecondary,
   },
+  // Named chips give up width first (ellipsis), so the "+N" count never clips.
+  shrinkable: {
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: 0,
+  },
 });
 
 interface TaskLabelChipProps {
@@ -30,7 +37,7 @@ interface TaskLabelChipProps {
 }
 
 export const TaskLabelChip = memo<TaskLabelChipProps>(({ label }) => (
-  <span {...stylex.props(styles.chip)}>
+  <span {...stylex.props(styles.chip, styles.shrinkable)} title={label.name}>
     <TaskLabelDot color={label.color} />
     <Text ellipsis fontSize={12} type={'secondary'}>
       {label.name}
@@ -44,16 +51,23 @@ interface TaskLabelChipsProps {
   labels?: TaskLabelRef[] | null;
   /** Chips shown before the rest collapse into a "+N" chip with a tooltip. */
   max?: number;
+  /** Wrap onto more lines instead of truncating (roomy surfaces such as task detail). */
+  wrap?: boolean;
 }
 
 /** A task's labels as colored chips, for list rows, board cards and the detail page. */
-const TaskLabelChips = memo<TaskLabelChipsProps>(({ labels, max = 3 }) => {
+const TaskLabelChips = memo<TaskLabelChipsProps>(({ labels, max = 3, wrap }) => {
   if (!labels?.length) return null;
   const shown = labels.slice(0, max);
   const hidden = labels.slice(max);
 
   return (
-    <Flexbox horizontal align={'center'} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      gap={4}
+      style={{ minWidth: 0, ...(wrap ? { flexWrap: 'wrap' } : { overflow: 'hidden' }) }}
+    >
       {shown.map((label) => (
         <TaskLabelChip key={label.id} label={label} />
       ))}

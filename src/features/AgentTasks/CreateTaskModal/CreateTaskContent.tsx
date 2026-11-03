@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskExecutionConfig } from '@lobechat/types';
+import type { TaskExecutionConfig, TaskLabelRef } from '@lobechat/types';
 import { toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import {
@@ -10,11 +10,12 @@ import {
   confirmModal,
   cssVar,
   Flexbox,
+  Icon,
   Text,
   toast,
   useModalContext,
 } from '@lobehub/ui';
-import { Minimize2, Paperclip, X } from 'lucide-react';
+import { Minimize2, Paperclip, TagIcon, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,9 +26,11 @@ import {
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
 import { releaseEditorSelection } from '@/features/EditorCanvas/releaseEditorSelection';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
-import { useTaskStore } from '@/store/task';
+import { getTaskStoreState, useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -57,6 +60,8 @@ import { useTitleEnterToInstruction } from './useTitleEnterToInstruction';
 
 export interface CreateTaskContentProps {
   agentId?: string;
+  /** Initial labels, e.g. the label column of a board grouped by a label group. */
+  defaultLabelIds?: string[];
   /** Initial priority, e.g. the Kanban priority column the modal was opened from. */
   defaultPriority?: number;
   /**
@@ -81,6 +86,7 @@ export interface CreateTaskContentProps {
 const CreateTaskContent = memo<CreateTaskContentProps>(
   ({
     agentId,
+    defaultLabelIds,
     defaultPriority = 0,
     lockAssignee,
     onCreated,
@@ -100,6 +106,9 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState(defaultPriority);
+    const [labels, setLabels] = useState<TaskLabelRef[]>(() =>
+      getTaskStoreState().taskLabels.filter((label) => defaultLabelIds?.includes(label.id)),
+    );
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
     // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
     const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -196,6 +205,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           ...(isScheduled ? toScheduledCreateParams(scheduleDraft, config) : { config }),
           editorData: editorJson,
           instruction: instruction || title.trim(),
+          ...(labels.length > 0 ? { labelIds: labels.map((label) => label.id) } : {}),
           name: title.trim() || undefined,
           priority: priority || undefined,
           projectId,
@@ -226,6 +236,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       editor,
       isMemberPending,
       isScheduled,
+      labels,
       onCreated,
       priority,
       projectId,
@@ -375,6 +386,28 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 </Text>
               </Block>
             </TaskPriorityTag>
+
+            <TaskLabelPicker value={labels} onChange={setLabels}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {labels.length > 0 ? (
+                  <TaskLabelChips labels={labels} max={3} />
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />
+                    <Text fontSize={12}>{t('taskLabel.label')}</Text>
+                  </>
+                )}
+              </Block>
+            </TaskLabelPicker>
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector
