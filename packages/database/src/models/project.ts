@@ -260,6 +260,11 @@ export class ProjectModel {
     return Boolean(existing);
   }
 
+  /**
+   * Insert the project row only. The coordinator agent and the `projectAgents`
+   * link that seats it span another aggregate, so `ProjectRepository.create`
+   * owns that transaction — see {@link ProjectRepository}.
+   */
   async create(input: InsertProjectInput) {
     const identifier = normalizeProjectIdentifier(input.identifier);
 
@@ -286,15 +291,6 @@ export class ProjectModel {
             ),
           )
           .returning();
-
-        await tx.insert(projectAgents).values({
-          addedByUserId: this.userId,
-          agentId: input.coordinatorAgentId,
-          projectId: project.id,
-          responsibility: 'Coordinates project conversations, work, and resources',
-          role: 'coordinator',
-          workspaceId: this.workspaceId ?? null,
-        });
 
         return project;
       });

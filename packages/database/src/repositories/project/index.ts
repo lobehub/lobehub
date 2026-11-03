@@ -5,6 +5,7 @@ import {
   ProjectModel,
 } from '../../models/project';
 import { createProjectMainAgent } from '../../models/projectMainAgent';
+import { projectAgents } from '../../schemas/project';
 import type { LobeChatDatabase } from '../../type';
 
 /**
@@ -52,11 +53,30 @@ export class ProjectRepository {
         );
       }
 
-      return projectModel.create({
+      const project = await projectModel.create({
         ...input,
         coordinatorAgentId: mainAgent.id,
         identifier,
       });
+      await this.linkCoordinator(db, project.id, mainAgent.id);
+
+      return project;
+    });
+  }
+
+  /**
+   * Seat the main agent on the project it leads. The link lives in the project
+   * aggregate but points at a row another aggregate owns, so it is written here
+   * alongside the project insert rather than inside the model.
+   */
+  private async linkCoordinator(db: LobeChatDatabase, projectId: string, agentId: string) {
+    await db.insert(projectAgents).values({
+      addedByUserId: this.userId,
+      agentId,
+      projectId,
+      responsibility: 'Coordinates project conversations, work, and resources',
+      role: 'coordinator',
+      workspaceId: this.workspaceId ?? null,
     });
   }
 }
