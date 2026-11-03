@@ -619,6 +619,13 @@ export class UserModel {
         }
       };
       await applyRemainingTimeout();
+      // Lock the account first. A concurrent insert referencing it takes a
+      // KEY SHARE lock on this row, so one already in flight commits before we
+      // proceed (and the cleanups below see it), and any later one waits and
+      // then fails its FK — none can slip in between a cleanup and the final
+      // delete, where a SET NULL FK would orphan it.
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, id)).for('update');
+      await applyRemainingTimeout();
       // A goal decision can reference the same user that owns its parent goal.
       // Delete the graph first so its CASCADE completes before the user delete
       // runs the decision's SET NULL action on an already-deleted node.

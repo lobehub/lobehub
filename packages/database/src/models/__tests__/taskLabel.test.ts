@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, like, or } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -147,6 +147,27 @@ describe('TaskLabelModel account deletion', () => {
 
     expect(await workspace.findById(label.id)).toMatchObject({ name: 'Frontend', userId: null });
     expect((await workspace.getTaskLabels(task.id)).map((l) => l.name)).toEqual(['Frontend']);
+  });
+
+  it('never orphans a personal label created while its owner is being deleted', async () => {
+    const personalOther = new TaskLabelModel(serverDB, otherUserId);
+    await Promise.allSettled([
+      ...Array.from({ length: 5 }, (_, i) => personalOther.create({ name: `Racing ${i}` })),
+      UserModel.deleteUser(serverDB, otherUserId),
+      ...Array.from({ length: 5 }, (_, i) => personalOther.create({ name: `Late ${i}` })),
+    ]);
+
+    const orphans = await serverDB
+      .select()
+      .from(taskLabels)
+      .where(
+        and(
+          isNull(taskLabels.userId),
+          isNull(taskLabels.workspaceId),
+          or(like(taskLabels.name, 'Racing %'), like(taskLabels.name, 'Late %')),
+        ),
+      );
+    expect(orphans).toEqual([]);
   });
 
   it('deletes personal labels with their owner', async () => {
