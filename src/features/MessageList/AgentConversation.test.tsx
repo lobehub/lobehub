@@ -13,7 +13,18 @@ vi.mock('@/components/AgentAvatar', () => ({
     createElement('span', { 'data-testid': 'agent-avatar' }, `${agentId}:${avatar ?? 'generated'}`),
 }));
 vi.mock('@/features/HomeSidebar/Body/Agent/List/AgentItem/useDropdownMenu', () => ({
-  useAgentDropdownMenu: () => [],
+  // An Agent's own menu ends with its Delete; the row must not clash with it.
+  useAgentDropdownMenu: () => () => [{ key: 'delete', label: 'delete' }],
+}));
+vi.mock('@/features/Channels/useChannelMenu', () => ({
+  useChannelMenu: () => (channel: { status?: string }) => [
+    { key: 'copyId', label: 'copyId' },
+    channel.status === 'archived'
+      ? { key: 'unarchive', label: 'unarchive' }
+      : { key: 'archive', label: 'archive' },
+    { type: 'divider' },
+    { key: 'delete', label: 'moveToTrash' },
+  ],
 }));
 vi.mock('@/features/HomeSidebar/Body/Agent/List/usePreservedAgentUrl', () => ({
   usePreservedAgentUrl: (id: string) => `/agent/${id}`,
@@ -30,13 +41,24 @@ vi.mock('./useAgentConversationLink', () => ({
   useAgentConversationLink: (_: string, url: string) => ({ url }),
 }));
 vi.mock('./ConversationRow', () => ({
-  default: ({ avatar, title }: { avatar: unknown; title: string }) =>
-    createElement('div', {}, title, avatar as never),
+  default: ({ avatar, contextMenuItems, title }: any) =>
+    createElement(
+      'div',
+      {},
+      title,
+      avatar as never,
+      createElement(
+        'span',
+        { 'data-testid': 'menu' },
+        (contextMenuItems?.() ?? []).map((item: any) => item.key ?? item.type).join(','),
+      ),
+    ),
 }));
 
-const conversation = (avatar?: string) =>
+const conversation = (avatar?: string, channel?: { status?: string }) =>
   ({
     activeAt: new Date('2026-11-03'),
+    ...(channel ? { channel: { id: 'cht_cook', title: 'Cook', unreadCount: 0, ...channel } } : {}),
     item: { avatar, id: 'agt_cook', name: 'Cook', title: 'Cook', type: 'agent' },
   }) as never;
 
@@ -52,5 +74,35 @@ describe('AgentConversation avatar', () => {
     render(createElement(AgentConversation, { active: false, conversation: conversation('🍳') }));
 
     expect(screen.getByTestId('agent-avatar')).toHaveTextContent('agt_cook:🍳');
+  });
+
+  // A row that opens a direct Channel is that conversation, so its archive / trash live here.
+  it('offers the direct Channel archive and trash actions beside the Agent menu', () => {
+    render(
+      createElement(AgentConversation, {
+        active: false,
+        conversation: conversation(undefined, {}),
+      }),
+    );
+
+    expect(screen.getByTestId('menu')).toHaveTextContent('delete,divider,channel-archive,channel-delete');
+  });
+
+  it('offers unarchive instead for an archived direct Channel', () => {
+    render(
+      createElement(AgentConversation, {
+        active: false,
+        conversation: conversation(undefined, { status: 'archived' }),
+      }),
+    );
+
+    expect(screen.getByTestId('menu')).toHaveTextContent('channel-unarchive');
+  });
+
+  it('keeps the Agent menu alone when the row opens no Channel', () => {
+    render(createElement(AgentConversation, { active: false, conversation: conversation() }));
+
+    expect(screen.getByTestId('menu')).toHaveTextContent('delete');
+    expect(screen.getByTestId('menu')).not.toHaveTextContent('channel-');
   });
 });

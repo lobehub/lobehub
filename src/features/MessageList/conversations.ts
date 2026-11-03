@@ -5,6 +5,8 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 export interface Conversation {
   /** Latest activity: the newer of the item itself and its latest topic. */
   activeAt: Date;
+  /** The agent's direct Channel, when the row opens it. Carries its own archive / trash actions. */
+  channel?: ChannelListItem;
   item: SidebarAgentItem;
   /** One-line preview from the latest topic (assistant reply, else title). */
   preview?: string;
@@ -97,6 +99,7 @@ export const buildConversationSections = (
       // The row opens the direct Channel, so its legacy topics no longer describe it.
       conversations.push({
         activeAt: new Date(Math.max(itemTime, channelActivity(direct).getTime())),
+        channel: direct,
         item,
         preview: channelPreview(direct) ?? oneLine(item.description),
         unread: direct.unreadCount ?? 0,
