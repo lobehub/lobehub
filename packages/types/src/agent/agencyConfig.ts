@@ -494,7 +494,7 @@ interface QoderSelectionSource {
   model?: string | null;
 }
 
-const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
+export const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
 
 const modelFlagsOf = (
   type: 'codex' | 'grok-build' | 'kimi-code' | 'opencode' | 'pi' | 'qoder',
