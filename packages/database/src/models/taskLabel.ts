@@ -260,6 +260,25 @@ export class TaskLabelModel {
   };
 
   /**
+   * Same scope check, but takes a row lock on the task for the rest of the
+   * transaction. The unique index only covers `(task_id, label_id)`, so "one
+   * label per group" is a read-then-write invariant: without serializing
+   * writers per task, two concurrent attaches of different siblings could
+   * each delete the old one and both insert. Holding the task row lock makes
+   * the second writer wait, and its sibling DELETE (a fresh READ COMMITTED
+   * snapshot) then sees and replaces the first writer's label.
+   */
+  private lockTaskInScope = async (taskId: string, tx: Transaction) => {
+    const [row] = await tx
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.id, taskId), taskOwnership(this.ctx)))
+      .limit(1)
+      .for('update', { of: tasks });
+    if (!row) throw new TaskLabelError('TASK_NOT_FOUND', `Task not found: ${taskId}`);
+  };
+
+  /**
    * Resolve ids to assignable labels: every id must exist in scope, none may
    * be a group, and the set may hold at most one label per group.
    */
@@ -310,7 +329,7 @@ export class TaskLabelModel {
     const labels = await this.resolveAssignable(labelIds);
 
     await this.db.transaction(async (tx) => {
-      await this.assertTaskInScope(taskId, tx);
+      await this.lockTaskInScope(taskId, tx);
 
       const groupIds = [
         ...new Set(labels.map((l) => l.parentId).filter((id): id is string => !!id)),
@@ -358,7 +377,7 @@ export class TaskLabelModel {
     const nextIds = labels.map((label) => label.id);
 
     await this.db.transaction(async (tx) => {
-      await this.assertTaskInScope(taskId, tx);
+      await this.lockTaskInScope(taskId, tx);
 
       await tx
         .delete(taskLabelLinks)

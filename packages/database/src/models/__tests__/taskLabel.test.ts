@@ -143,6 +143,24 @@ describe('TaskLabelModel task assignments', () => {
     expect(next.map((l) => l.name).sort()).toEqual(['Feature', 'Frontend']);
   });
 
+  it('keeps one label per group when siblings are attached concurrently', async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const bug = await workspace.create({ name: 'Bug', parentId: group.id });
+    const feature = await workspace.create({ name: 'Feature', parentId: group.id });
+    const chore = await workspace.create({ name: 'Chore', parentId: group.id });
+
+    await Promise.all([
+      workspace.addTaskLabels(task.id, [bug.id]),
+      member.addTaskLabels(task.id, [feature.id]),
+      workspace.setTaskLabels(task.id, [chore.id]),
+    ]);
+
+    const labels = await workspace.getTaskLabels(task.id);
+    expect(labels).toHaveLength(1);
+    expect(labels[0].parentId).toBe(group.id);
+  });
+
   it('rejects groups, two labels of one group, and labels from another scope', async () => {
     const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
     const group = await workspace.create({ isGroup: true, name: 'Type' });
