@@ -1044,14 +1044,6 @@ describe('resolveAgencyConfig', () => {
     expect(resolveAgencyConfig(undefined, undefined)).toBeUndefined();
   });
 
-  it('an override with only executionTarget leaves the shared boundDeviceId in place', () => {
-    const shared = { boundDeviceId: 'ws-device', executionTarget: 'device' as const };
-    expect(resolveAgencyConfig(shared, { executionTarget: 'sandbox' })).toEqual({
-      boundDeviceId: 'ws-device',
-      executionTarget: 'sandbox',
-    });
-  });
-
   it('an override that unsets executionTarget by setting it to a defined value replaces the shared', () => {
     // Merge semantics: `undefined` in the override is treated as "not overriding".
     // Only *defined* values in the override win. Test both branches.

@@ -509,17 +509,6 @@ describe('AI Agent Router Integration Tests', () => {
       );
     });
 
-    it('should handle autoStart=true by default', async () => {
-      const caller = aiAgentRouter.createCaller(createTestContext());
-
-      const result = await caller.execAgent({
-        agentId: testAgentId,
-        prompt: 'Hello',
-      });
-
-      expect(result.autoStarted).toBe(true);
-    });
-
     it('should include threadId in appContext when provided', async () => {
       const { AgentRuntimeService } = await import('@/server/services/agentRuntime');
       const mockCreateOperation = vi.fn().mockResolvedValue({

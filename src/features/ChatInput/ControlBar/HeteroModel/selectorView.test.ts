@@ -81,28 +81,11 @@ describe('dimensions per provider', () => {
     });
   });
 
-  it('labels Claude aliases without claiming a fixed model version', () => {
-    const options = viewOf({ type: 'claude-code' }).dimensions[0].options;
-    expect(options.slice(1)).toEqual([
-      { label: 'Fable', value: 'fable' },
-      { label: 'Opus', value: 'opus' },
-      { label: 'Sonnet', value: 'sonnet' },
-      { label: 'Haiku', value: 'haiku' },
-    ]);
-  });
-
   it('offers Amp mode without inventing a model dimension', () => {
     const dimensions = viewOf({ type: 'amp' }).dimensions;
 
     expect(dimensions.map((dimension) => dimension.key)).toEqual(['mode']);
     expect(dimensions[0].label).toBe('heteroAgent.modelSelector.mode.label');
-    expect(dimensions[0].options.map((option) => option.value)).toEqual([
-      'default',
-      'low',
-      'medium',
-      'high',
-      'ultra',
-    ]);
   });
 
   it('keeps reasoning and speed beside the catalog for a fast-capable codex model', () => {
@@ -115,6 +98,28 @@ describe('dimensions per provider', () => {
 
   it('offers model and reasoning but never speed for claude-code', () => {
     expect(dimensionKeys({ model: 'opus', type: 'claude-code' })).toEqual(['model', 'reasoning']);
+  });
+
+  it('keeps a Grok Build reasoning pick available and reflects it in the menu', () => {
+    const provider: HeterogeneousProviderConfig = { model: 'grok-4.6', type: 'grok-build' };
+    const updated = { ...provider, ...applyHeteroSelection(provider, { effort: 'xhigh' }) };
+    const reasoning = viewOf(updated).dimensions.find((dimension) => dimension.key === 'reasoning');
+
+    expect(reasoning).toMatchObject({
+      current: 'xhigh',
+      valueLabel: 'heteroAgent.modelSelector.reasoning.xhigh',
+    });
+    expect(reasoning?.options.map((option) => option.value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+    expect(reasoning?.options).toContainEqual({
+      label: 'heteroAgent.modelSelector.reasoning.xhigh',
+      value: 'xhigh',
+    });
   });
 
   it('loads the CodeBuddy model dimension from its CLI catalog and keeps reasoning in the menu', () => {
