@@ -90,9 +90,12 @@ const TaskLabelPicker = memo<TaskLabelPickerProps>(({ children, disabled, onChan
   // The workspace the picker is showing now, read when a create completes.
   const workspaceId = useActiveWorkspaceId();
   const workspaceIdRef = useRef(workspaceId);
+  // The selection as it is now, for an inline create that resolves later.
+  const valueRef = useRef(value);
   useEffect(() => {
     workspaceIdRef.current = workspaceId;
-  }, [workspaceId]);
+    valueRef.current = value;
+  }, [workspaceId, value]);
 
   const sections = useMemo(
     () => buildTaskLabelPickerSections(registry, search),
@@ -130,13 +133,15 @@ const TaskLabelPicker = memo<TaskLabelPickerProps>(({ children, disabled, onChan
       // Switched workspaces meanwhile: the label belongs to the old one.
       if (workspaceIdRef.current !== startedIn) return;
       setSearch('');
-      onChange([...value, toTaskLabelRef(label)]);
+      // Merge into the latest selection: other labels may have been toggled
+      // while the request was in flight.
+      onChange([...valueRef.current, toTaskLabelRef(label)]);
     } catch (error) {
       saveToast(error, { title: t('taskLabel.createFailed') });
     } finally {
       setCreating(false);
     }
-  }, [createTaskLabel, creating, onChange, search, t, value]);
+  }, [createTaskLabel, creating, onChange, search, t]);
 
   const handleSelect = useCallback(
     (option: PickerOption) => {
