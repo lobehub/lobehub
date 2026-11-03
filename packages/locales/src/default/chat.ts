@@ -4346,4 +4346,6 @@ export default {
     'This private environment directory is still on the public drive and needs to be rebuilt on your personal drive. This run will use a temporary sandbox.',
   'sandboxDrive.fallbackChip.instanceRebuildRequired': 'Rebuild on personal drive',
   'sandboxDrive.folderOnDriveDesc': '{{drive}} · {{path}}',
+  'input.costEstimate.hintUsd': 'Estimated cost: about {{amount}}',
+  'input.costEstimate.usdPerMillionTokens': '{{amount}} / 1M tokens',
 };
