@@ -78,6 +78,8 @@ export interface ProviderBindingPlan {
   operationTokenEnvKey?: string;
   profileFiles?: ProviderBindingFilePlan[];
   runFiles?: ProviderBindingFilePlan[];
+  /** Host-generated settings file for transports that reject one in user arguments. */
+  settingsPath?: string;
 }
 
 /**

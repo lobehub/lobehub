@@ -89,6 +89,7 @@ export interface HostedProviderBinding {
   operationTokenEnvKey?: string;
   profileDir: string;
   runDir: string;
+  settingsPath?: string;
 }
 
 /** Keep native resume state only when it belongs to the same hosted binding. */
@@ -244,6 +245,7 @@ export const prepareHostedServerDefaultBinding = async (params: {
       operationTokenEnvKey: plan.operationTokenEnvKey,
       profileDir,
       runDir,
+      settingsPath: plan.settingsPath,
     };
   } catch (error) {
     await cleanupBindingRun(runDir, plan);

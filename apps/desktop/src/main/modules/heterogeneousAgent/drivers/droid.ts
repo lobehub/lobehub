@@ -11,14 +11,6 @@ export const droidDriver: HeterogeneousAgentDriver = {
     return { args: buildDroidAcpArgs(args) };
   },
   prepareServerDefaultBinding({ args, endpoint, env, model, modelDescriptor, profileDir }) {
-    const sanitized: string[] = [];
-    for (let index = 0; index < args.length; index += 1) {
-      if (args[index] === '--settings') {
-        index += 1;
-        continue;
-      }
-      if (!args[index].startsWith('--settings=')) sanitized.push(args[index]);
-    }
     const bindingEnv = { ...env };
     delete bindingEnv.LOBEHUB_DROID_API_KEY;
     const customModel = {
@@ -34,7 +26,7 @@ export const droidDriver: HeterogeneousAgentDriver = {
       provider: 'anthropic',
     };
     return {
-      args: ['--settings', path.join(profileDir, 'settings.json'), ...sanitized],
+      args,
       env: bindingEnv,
       model: 'custom:LobeHub-Server-Default-0',
       operationTokenEnvKey: 'LOBEHUB_DROID_API_KEY',
@@ -44,6 +36,7 @@ export const droidDriver: HeterogeneousAgentDriver = {
           path: 'settings.json',
         },
       ],
+      settingsPath: path.join(profileDir, 'settings.json'),
     };
   },
 };

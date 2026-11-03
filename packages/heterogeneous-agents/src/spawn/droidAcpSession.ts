@@ -14,7 +14,6 @@ const NOTIFICATION_DRAIN_TIMEOUT_MS = 2000;
 const TRANSPORT = 'droid-acp' as const;
 
 const DROID_ACP_VALUE_ARGS = new Set([
-  '--settings',
   '--additional-tools',
   '--append-system-prompt',
   '--append-system-prompt-file',
@@ -44,9 +43,10 @@ export type DroidAcpPromptBlock = DroidAcpImagePromptBlock | DroidAcpTextPromptB
  * Build the fixed Droid ACP invocation while keeping prompt/session/framing and
  * permission policy under protocol control. Only additive tool/system options
  * are accepted; execution, model, cwd, resume, and unsafe permission flags must
- * never be able to override the host's ACP lifecycle.
+ * never be able to override the host's ACP lifecycle. A settings file can
+ * redefine all of those, so only the host may supply one via `settingsPath`.
  */
-export const buildDroidAcpArgs = (extraArgs: string[] = []): string[] => {
+export const buildDroidAcpArgs = (extraArgs: string[] = [], settingsPath?: string): string[] => {
   const safeArgs: string[] = [];
 
   for (let index = 0; index < extraArgs.length; index += 1) {
@@ -72,7 +72,13 @@ export const buildDroidAcpArgs = (extraArgs: string[] = []): string[] => {
     }
   }
 
-  return ['exec', '--output-format', 'acp', ...safeArgs];
+  return [
+    'exec',
+    '--output-format',
+    'acp',
+    ...(settingsPath ? ['--settings', settingsPath] : []),
+    ...safeArgs,
+  ];
 };
 
 export const buildDroidAcpPrompt = async (
@@ -204,6 +210,8 @@ export interface DroidAcpSessionOptions extends AcpAgentSessionOptions {
   inputOptions?: BuildAgentInputOptions;
   onModel?: (model: string) => void;
   prompt: AgentPromptInput | DroidAcpPromptBlock[];
+  /** Host-generated settings file; `args` can never select one. */
+  settingsPath?: string;
 }
 
 /** Droid wraps every load failure alike, so only its nested not-found detail is recoverable. */
@@ -228,7 +236,7 @@ export class DroidAcpSession extends AcpAgentSession<
 
   constructor(options: DroidAcpSessionOptions) {
     super(options, {
-      args: buildDroidAcpArgs(options.args),
+      args: buildDroidAcpArgs(options.args, options.settingsPath),
       pipeline: { agentType: 'droid' },
       processLabel: 'Factory Droid ACP',
       transport: TRANSPORT,

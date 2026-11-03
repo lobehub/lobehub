@@ -2400,7 +2400,7 @@ export default class HeterogeneousAgentCtr {
     const prompt = await buildDroidAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
     const tracePayload = `${JSON.stringify(prompt)}\n`;
     const traceSession = await this.createCliTraceSession({
-      cliArgs: buildDroidAcpArgs(session.args),
+      cliArgs: buildDroidAcpArgs(session.args, session.hostedProviderBinding?.settingsPath),
       cwd,
       imageList: params.imageList ?? [],
       session,
@@ -2449,47 +2449,20 @@ export default class HeterogeneousAgentCtr {
       prompt,
       resumeSessionId: session.agentSessionId,
       sessionId: session.sessionId,
+      settingsPath: session.hostedProviderBinding?.settingsPath,
     });
     session.droidAcpSession = droidAcpSession;
 
-    try {
-      await droidAcpSession.run();
-      void this.writeCliTraceJson(traceSession, 'exit.json', {
-        finishedAt: new Date().toISOString(),
-        transport: 'droid-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-    } catch (error) {
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message: this.getErrorMessage(error),
-        transport: 'droid-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      if (session.cancelledByUs) {
-        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-        return;
-      }
-      const stderr = stderrChunks.join('').trim();
-      const errorForClassification = isDroidAcpSessionNotFoundError(error)
-        ? error
-        : stderr
-          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
-              cause: error,
-            })
-          : error;
-      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
-      this.broadcast('heteroAgentSessionError', {
-        error: sessionError,
-        sessionId: session.sessionId,
-      });
-      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
-        cause: error,
-      });
-    } finally {
-      await intervention.cleanup();
-      if (session.droidAcpSession === droidAcpSession) session.droidAcpSession = undefined;
-    }
+    await this.runInteractiveAcpSession({
+      acpSession: droidAcpSession,
+      activeSessionKey: 'droidAcpSession',
+      cleanup: intervention.cleanup,
+      isResumeError: isDroidAcpSessionNotFoundError,
+      session,
+      stderrChunks,
+      traceSession,
+      transport: 'droid-acp',
+    });
   }
 
   private async sendPromptWithDevinAcp(
@@ -2583,13 +2556,13 @@ export default class HeterogeneousAgentCtr {
     transport,
   }: {
     acpSession: InteractiveAcpSession;
-    activeSessionKey: 'cursorAcpSession' | 'devinAcpSession' | 'traeAcpSession';
+    activeSessionKey: 'cursorAcpSession' | 'devinAcpSession' | 'droidAcpSession' | 'traeAcpSession';
     cleanup?: () => Promise<void>;
     isResumeError?: (error: unknown) => boolean;
     session: AgentSession;
     stderrChunks: string[];
     traceSession: CliTraceSession | undefined;
-    transport: 'cursor-acp' | 'devin-acp' | 'trae-acp';
+    transport: 'cursor-acp' | 'devin-acp' | 'droid-acp' | 'trae-acp';
   }): Promise<void> {
     try {
       await acpSession.run();
@@ -2631,6 +2604,8 @@ export default class HeterogeneousAgentCtr {
         session.cursorAcpSession = undefined;
       } else if (activeSessionKey === 'devinAcpSession' && session.devinAcpSession === acpSession) {
         session.devinAcpSession = undefined;
+      } else if (activeSessionKey === 'droidAcpSession' && session.droidAcpSession === acpSession) {
+        session.droidAcpSession = undefined;
       } else if (activeSessionKey === 'traeAcpSession' && session.traeAcpSession === acpSession) {
         session.traeAcpSession = undefined;
       }
