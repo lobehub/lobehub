@@ -9,12 +9,20 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { DocumentHistoryService } from '../history';
 import { DocumentService } from '../index';
 
-const { checkDocumentCharLimit } = vi.hoisted(() => ({ checkDocumentCharLimit: vi.fn() }));
+const { checkDocumentCharLimit, invalidateDocumentChecks } = vi.hoisted(() => ({
+  checkDocumentCharLimit: vi.fn(),
+  invalidateDocumentChecks: vi.fn(),
+}));
 
 vi.mock('@/business/server/document/writeLimit', () => ({ checkDocumentCharLimit }));
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({ getAgentRuntimeRedisClient: () => null }));
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
 vi.mock('@/database/models/document');
+vi.mock('@/database/models/documentReview', () => ({
+  DocumentReviewModel: vi.fn().mockImplementation(function () {
+    return { invalidateDocumentChecks };
+  }),
+}));
 vi.mock('@/database/models/file');
 vi.mock('@/database/models/knowledgeBase');
 vi.mock('../../file');
@@ -43,6 +51,7 @@ describe('DocumentService per-document character limit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     checkDocumentCharLimit.mockResolvedValue({ allowed: true });
+    invalidateDocumentChecks.mockResolvedValue(0);
     documentModel.create.mockResolvedValue({ id: 'doc-1' });
     documentModel.findById.mockResolvedValue({
       content: '12345678901234',
