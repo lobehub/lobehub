@@ -352,6 +352,10 @@ describe('matchErrorPattern — second residue convergence round', () => {
       AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
     ],
     [
+      'Error while downloading https://app.lobehub.com/f/file_abc.',
+      AgentRuntimeErrorType.RemoteMediaDownloadFailed,
+    ],
+    [
       'Exceeded maximum number of images (50) allowed in the request.',
       AgentRuntimeErrorType.ExceededImageLimit,
     ],

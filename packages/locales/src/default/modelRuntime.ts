@@ -87,6 +87,8 @@ export default {
     'Connection to the provider timed out or was dropped. Please check your network and try again.',
   ProviderNoImageGenerated:
     'The provider returned no image for this request. Try rephrasing the request, or choose a model that supports image generation.',
+  RemoteMediaDownloadFailed:
+    'The provider could not download an image or file in this conversation. It may have been deleted or is no longer accessible. Remove it and try again.',
   RemoteMediaDownloadTimeout:
     'The provider timed out while downloading an attached image or file. Please try again.',
   ProviderServiceUnavailable:

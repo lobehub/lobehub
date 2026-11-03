@@ -421,6 +421,19 @@ export const ERROR_CODE_SPECS: SpecMap = {
     description:
       'A relayed model request on the user device missed its first-output or total deadline.',
   },
+  [AgentRuntimeErrorType.RemoteMediaDownloadFailed]: {
+    code: AgentRuntimeErrorType.RemoteMediaDownloadFailed,
+    numericId: 6005,
+    category: 'network',
+    severity: 'error',
+    attribution: 'system',
+    httpStatus: 400,
+    retryable: false,
+    routeFallback: false,
+    countAsFailure: true,
+    description:
+      'Provider could not download a remote image or file URL in the request (deleted, denied or unreachable).',
+  },
 
   // ─── 7xxx Stream / Runtime ────────────────────────────────────────────
   [AgentRuntimeErrorType.StreamChunkError]: {
