@@ -186,7 +186,7 @@ describe('AudioController.handleSpeech', () => {
   it('reports a missing ElevenLabs key as a readable 502, not a silent 500', async () => {
     synthesizeMock.mockRejectedValue(
       new TTSProviderError(
-        'No valid API key is configured for provider "elevenlabs"; add one in the provider settings or the server environment.',
+        'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again. Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
         'InvalidProviderAPIKey',
       ),
     );
@@ -196,7 +196,7 @@ describe('AudioController.handleSpeech', () => {
     expect(res.status).toBe(502);
     expect((await res.json()).error).toMatchObject({
       code: 'InvalidProviderAPIKey',
-      message: expect.stringContaining('No valid API key is configured for provider "elevenlabs"'),
+      message: expect.stringContaining('ElevenLabs API Key is incorrect or empty'),
     });
   });
 

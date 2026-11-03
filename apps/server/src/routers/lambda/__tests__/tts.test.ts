@@ -225,22 +225,28 @@ describe('ttsRouter.synthesize', () => {
       expect(textToSpeechMock).not.toHaveBeenCalled();
     });
 
-    it('reports a missing API key with a readable message instead of a bare 500', async () => {
+    it('reports a missing API key with the InvalidProviderAPIKey copy instead of a bare 500', async () => {
       // what a runtime constructor throws when neither the user nor the server has a key
       vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce({
         errorType: 'InvalidProviderAPIKey',
       });
 
-      await expect(
-        caller.synthesize({ input: 'Hi', model: 'eleven_v4', provider: 'elevenlabs' }),
-      ).rejects.toMatchObject({
+      const error = await caller
+        .synthesize({ input: 'Hi', model: 'eleven_v4', provider: 'elevenlabs' })
+        .catch((e) => e);
+
+      expect(error).toMatchObject({
         code: 'BAD_GATEWAY',
         message:
-          'No valid API key is configured for provider "elevenlabs"; add one in the provider settings or the server environment.',
+          'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again. Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
+      });
+      // the lambda errorFormatter exposes `cause.data` to clients as `data.errorData`
+      expect(error.cause).toMatchObject({
+        data: { errorType: 'InvalidProviderAPIKey', provider: 'elevenlabs' },
       });
     });
 
-    it('keeps the upstream ElevenLabs message on provider errors', async () => {
+    it('reports a rejected key with the InvalidProviderAPIKey copy and the upstream message', async () => {
       textToSpeechMock.mockRejectedValue({
         error: {
           detail: { message: 'Invalid API key', status: 'invalid_api_key' },
@@ -254,8 +260,10 @@ describe('ttsRouter.synthesize', () => {
       await expect(
         caller.synthesize({ input: 'Hi', model: 'eleven_v4', provider: 'elevenlabs' }),
       ).rejects.toMatchObject({
+        cause: { data: { errorType: 'InvalidProviderAPIKey', provider: 'elevenlabs' } },
         code: 'BAD_GATEWAY',
-        message: 'ElevenLabs API error (401): Invalid API key',
+        message:
+          'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again (ElevenLabs API error (401): Invalid API key). Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
       });
     });
   });

@@ -122,12 +122,12 @@ describe('TTSService with provider elevenlabs', () => {
     expect(error).toBeInstanceOf(TTSProviderError);
     expect(error.errorType).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
     expect(error.message).toBe(
-      'No valid API key is configured for provider "elevenlabs"; add one in the provider settings or the server environment.',
+      'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again. Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('surfaces an upstream 401 with the ElevenLabs message', async () => {
+  it('surfaces an upstream 401 with the InvalidProviderAPIKey copy and the ElevenLabs message', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({ detail: { message: 'Invalid API key', status: 'invalid_api_key' } }),
@@ -141,7 +141,9 @@ describe('TTSService with provider elevenlabs', () => {
 
     expect(error).toBeInstanceOf(TTSProviderError);
     expect(error.errorType).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
-    expect(error.message).toBe('ElevenLabs API error (401): Invalid API key');
+    expect(error.message).toBe(
+      'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again (ElevenLabs API error (401): Invalid API key). Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
+    );
   });
 
   it('surfaces an upstream 429 as RateLimitExceeded', async () => {

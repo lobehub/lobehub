@@ -4,6 +4,7 @@ import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import type { AITTSModelCard, TTSAudioFormat } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST, TTS_AUDIO_MIME_TYPES, validateTTSParams } from 'model-bank';
 import { ModelProvider } from 'model-bank/modelProvider';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -76,18 +77,45 @@ export class TTSProviderError extends Error {
 const isRecord = (value: unknown): value is Record<string, any> =>
   typeof value === 'object' && value !== null;
 
+const providerDisplayName = (provider: string): string =>
+  DEFAULT_MODEL_PROVIDER_LIST.find((card) => card.id === provider)?.name ?? provider;
+
+/**
+ * The app's own `InvalidProviderAPIKey` copy, plus where to set the key. Server code renders
+ * source English, so this is the `modelRuntime.InvalidProviderAPIKey` source string (shown in
+ * chat and the provider checker); a test keeps the two in sync.
+ */
+export const invalidProviderAPIKeyMessage = (provider: string, upstreamMessage?: string) => {
+  const name = providerDisplayName(provider);
+  const copy = `${name} API Key is incorrect or empty, please check your ${name} API Key and try again`;
+  const hint = `Set it in Settings → AI Providers → ${name}, or in the server environment.`;
+
+  return upstreamMessage ? `${copy} (${upstreamMessage}). ${hint}` : `${copy}. ${hint}`;
+};
+
 const toProviderError = (error: unknown, provider: string): TTSProviderError => {
   if (!isRecord(error)) return new TTSProviderError(String(error), undefined, error);
 
   const errorType = typeof error.errorType === 'string' ? error.errorType : undefined;
   const detail = isRecord(error.error) ? error.error : undefined;
-  const message =
+  const upstreamMessage =
     (typeof error.message === 'string' && error.message) ||
     (typeof detail?.message === 'string' && detail.message) ||
     (typeof detail?.base_resp?.status_msg === 'string' && detail.base_resp.status_msg) ||
-    (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey
-      ? `No valid API key is configured for provider "${provider}"; add one in the provider settings or the server environment.`
-      : '') ||
+    undefined;
+
+  // A missing or rejected key reads the same as everywhere else in the app, so the
+  // caller knows to configure the key rather than retry.
+  if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+    return new TTSProviderError(
+      invalidProviderAPIKeyMessage(provider, upstreamMessage),
+      errorType,
+      error,
+    );
+  }
+
+  const message =
+    upstreamMessage ||
     (errorType ? `${provider} text-to-speech failed: ${errorType}` : '') ||
     `${provider} text-to-speech failed`;
 
