@@ -71,6 +71,13 @@ export async function readAcceptanceRepair(
   return repair;
 }
 
+async function rootCommentIds(db: LobeChatDatabase, acceptanceId: string, ids: string[]) {
+  if (!ids.length) return [];
+  const rows = await new AcceptanceCommentModel(db).listByAcceptance(acceptanceId);
+  const parents = new Map(rows.map((row) => [row.id, row.parentCommentId]));
+  return [...new Set(ids.map((id) => parents.get(id) ?? id))];
+}
+
 async function snapshotFeedback(
   db: LobeChatDatabase,
   service: AcceptanceService,
@@ -300,7 +307,11 @@ export async function dispatchAcceptanceFeedbackRepair(
       acceptance.workspaceId ?? undefined,
     ).setVisibilityByAcceptance(delivery.id, 'private');
     await deliveryService.acceptanceModel.patchMetadata(delivery.id, {
-      repairSource: { acceptanceId: acceptance.id, requestId: request.id },
+      repairSource: {
+        acceptanceId: acceptance.id,
+        commentIds: await rootCommentIds(ctx.serverDB, acceptance.id, request.commentIds),
+        requestId: request.id,
+      },
     });
     await patch({ deliveryAcceptanceId: delivery.id });
     const result = await createTaskExecutionRouter((operationId) =>

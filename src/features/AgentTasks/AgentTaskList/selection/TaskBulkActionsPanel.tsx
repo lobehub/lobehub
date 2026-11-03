@@ -42,7 +42,9 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { PRIORITY_META } from '../../features/TaskPriorityTag';
 import { STATUS_META } from '../../features/taskStatusMeta';
 import { hasWorkspaceMemberDirectory } from '../../shared/memberAssigneeMode';
+import BulkDeleteConfirmContent from './BulkDeleteConfirmContent';
 import { useTaskSelectionStore } from './store';
+import { countTasksCreatedByOthers } from './taskSelectionModel';
 import { type TaskBatchStatus, useTaskBatchActions } from './useTaskBatchActions';
 
 const BATCH_STATUSES: TaskBatchStatus[] = ['backlog', 'paused', 'completed', 'canceled'];
@@ -126,8 +128,11 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
 
   const confirmDelete = () => {
     onClose();
+    // Any member who can edit tasks may delete a teammate's task, as with a
+    // single task; in a batch it is easy to miss, so say how many are theirs.
+    const othersCount = activeWorkspaceId ? countTasksCreatedByOthers(selectedTasks, userId) : 0;
     confirmModal({
-      content: t('taskList.bulk.deleteConfirm.content', { count: selectedIds.length }),
+      content: <BulkDeleteConfirmContent count={selectedIds.length} othersCount={othersCount} />,
       okButtonProps: { danger: true },
       okText: t('taskList.bulk.deleteConfirm.ok'),
       onOk: () => run({ kind: 'delete' }),

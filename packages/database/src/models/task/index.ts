@@ -31,7 +31,7 @@ import * as documents from './documents';
 import * as queries from './queries';
 import { resolveRefs } from './refs';
 import * as rows from './rows';
-import type { OrphanedRunningTopic } from './scheduling';
+import type { InterruptedRunningTopic, OrphanedRunningTopic } from './scheduling';
 import * as scheduling from './scheduling';
 import * as transfer from './transfer';
 import * as tree from './tree';
@@ -44,7 +44,7 @@ import {
   withStaleReposCleared,
 } from './utils';
 
-export type { OrphanedRunningTopic } from './scheduling';
+export type { InterruptedRunningTopic, OrphanedRunningTopic } from './scheduling';
 export { isTaskIdentifierUniqueViolation, taskActivityActor } from './utils';
 
 export class TaskModel {
@@ -484,6 +484,13 @@ export class TaskModel {
     return scheduling.findOrphanedRunningTopics(db, options);
   }
 
+  static async findInterruptedRunningTopics(
+    db: LobeChatDatabase,
+    options: { limit?: number; staleBefore: Date },
+  ): Promise<InterruptedRunningTopic[]> {
+    return scheduling.findInterruptedRunningTopics(db, options);
+  }
+
   // ========== Dependencies ==========
 
   async addDependency(taskId: string, dependsOnId: string, type: string = 'blocks'): Promise<void> {
@@ -581,6 +588,13 @@ export class TaskModel {
 
   async addComment(data: Omit<NewTaskComment, 'id'>): Promise<TaskCommentItem> {
     return comments.addComment(this.ctx, data);
+  }
+
+  async addComments(
+    taskId: string,
+    rows: Omit<NewTaskComment, 'id' | 'taskId'>[],
+  ): Promise<TaskCommentItem[]> {
+    return comments.addComments(this.ctx, taskId, rows);
   }
 
   async findCommentById(id: string): Promise<TaskCommentItem | undefined> {

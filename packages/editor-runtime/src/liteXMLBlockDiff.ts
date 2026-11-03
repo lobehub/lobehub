@@ -244,6 +244,77 @@ const longestCommonSubsequence = (a: string[], b: string[]): Set<string> => {
   return common;
 };
 
+const REWRITE_SIMILARITY = 0.3;
+
+const withId = (payload: string, id: string) =>
+  payload.replace(/^<([a-z][\w-]*)/i, `<$1 id="${id}"`);
+
+const bigrams = (text: string) => {
+  const compact = text.replaceAll(/\s+/g, '');
+  const counts = new Map<string, number>();
+  for (let i = 0; i < compact.length - 1; i += 1) {
+    const gram = compact.slice(i, i + 2);
+    counts.set(gram, (counts.get(gram) ?? 0) + 1);
+  }
+  return counts;
+};
+
+const textSimilarity = (a: string, b: string) => {
+  const gramsA = bigrams(a);
+  const gramsB = bigrams(b);
+  let shared = 0;
+  let total = 0;
+  for (const [gram, count] of gramsA) {
+    shared += Math.min(count, gramsB.get(gram) ?? 0);
+    total += count;
+  }
+  for (const count of gramsB.values()) total += count;
+  if (total === 0) return a === b ? 1 : 0;
+  return (2 * shared) / total;
+};
+
+// Shell edits of /doc.xml often rewrite a block without its id. Reviewing that as a
+// remove plus an insert splits the old and new text apart, so a new block that sits
+// where an original disappeared, with the same tag and similar text, modifies it.
+const pairRewrites = (removed: ParsedBlock[], inserted: ParsedBlock[]): [number, number][] => {
+  const single = removed.length === 1 && inserted.length === 1;
+  const score = (i: number, j: number) => {
+    if (removed[i].tag !== inserted[j].tag) return -1;
+    if (single) return 1;
+    const similarity = textSimilarity(removed[i].text, inserted[j].text);
+    return similarity >= REWRITE_SIMILARITY ? similarity : -1;
+  };
+
+  const best = Array.from(
+    { length: removed.length + 1 },
+    () => new Float64Array(inserted.length + 1),
+  );
+  for (let i = removed.length - 1; i >= 0; i -= 1) {
+    for (let j = inserted.length - 1; j >= 0; j -= 1) {
+      const pair = score(i, j);
+      best[i][j] = Math.max(
+        best[i + 1][j],
+        best[i][j + 1],
+        pair >= 0 ? pair + best[i + 1][j + 1] : 0,
+      );
+    }
+  }
+
+  const pairs: [number, number][] = [];
+  let i = 0;
+  let j = 0;
+  while (i < removed.length && j < inserted.length) {
+    const pair = score(i, j);
+    if (pair >= 0 && best[i][j] === pair + best[i + 1][j + 1]) {
+      pairs.push([i, j]);
+      i += 1;
+      j += 1;
+    } else if (best[i][j] === best[i + 1][j]) i += 1;
+    else j += 1;
+  }
+  return pairs;
+};
+
 export const diffLiteXMLBlocks = (original: string, edited: string): LiteXMLBlockDiffResult => {
   const before = parseBlocks(original);
   if (typeof before === 'string') return { ok: false, reason: `original document: ${before}` };
@@ -279,6 +350,30 @@ export const diffLiteXMLBlocks = (original: string, edited: string): LiteXMLBloc
     candidates.filter((id): id is string => !!id),
   );
 
+  const removedGaps: ParsedBlock[][] = [[]];
+  for (const block of before) {
+    if (!block.id) continue;
+    if (kept.has(block.id)) removedGaps.push([]);
+    else removedGaps.at(-1)!.push(block);
+  }
+  const insertedGaps: number[][] = [[]];
+  after.forEach((block, index) => {
+    const id = candidates[index];
+    if (id && kept.has(id)) insertedGaps.push([]);
+    else insertedGaps.at(-1)!.push(index);
+  });
+
+  const rewrites = new Map<number, string>();
+  removedGaps.forEach((removedBlocks, gap) => {
+    const insertedIndexes = insertedGaps[gap] ?? [];
+    const pairs = pairRewrites(
+      removedBlocks,
+      insertedIndexes.map((index) => after[index]),
+    );
+    for (const [i, j] of pairs) rewrites.set(insertedIndexes[j], removedBlocks[i].id!);
+  });
+  const rewritten = new Set(rewrites.values());
+
   const inserts: ModifyOperation[] = [];
   const modifies: ModifyOperation[] = [];
   let pending: string[] = [];
@@ -294,21 +389,31 @@ export const diffLiteXMLBlocks = (original: string, edited: string): LiteXMLBloc
   };
 
   after.forEach((block, index) => {
-    const id = candidates[index];
-    if (!id || !kept.has(id)) {
+    const candidate = candidates[index];
+    const rewriteOf = rewrites.get(index);
+    const id = candidate && kept.has(candidate) ? candidate : rewriteOf;
+    if (!id) {
       pending.push(toPayload(block.tokens, { stripIds: true }));
       return;
     }
     flush(lastKeptId ? { afterId: lastKeptId } : { beforeId: id });
     lastKeptId = id;
-    if (block.xml !== originalById.get(id)!.xml) {
+    const previous = originalById.get(id)!;
+    if (rewriteOf) {
+      if (block.bare !== previous.bare) {
+        modifies.push({
+          action: 'modify',
+          litexml: withId(toPayload(block.tokens, { stripIds: true }), id),
+        });
+      }
+    } else if (block.xml !== previous.xml) {
       modifies.push({ action: 'modify', litexml: toPayload(block.tokens) });
     }
   });
   flush({ afterId: lastKeptId ?? originalIds.at(-1)! });
 
   const removes: ModifyOperation[] = originalIds
-    .filter((id) => !kept.has(id))
+    .filter((id) => !kept.has(id) && !rewritten.has(id))
     .map((id) => ({ action: 'remove', id }));
 
   return {

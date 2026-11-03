@@ -10,14 +10,18 @@ import {
 
 import { useNavPanelDrawerContent } from './useNavPanelDrawerContent';
 
-const mocks = vi.hoisted(() => ({ navKey: 'memory' }));
+const mocks = vi.hoisted(() => ({ pathname: '/memory' }));
 
-vi.mock('@/features/NavPanel/useActiveNavKey', () => ({
-  useActiveNavKey: () => mocks.navKey,
+vi.mock('@/hooks/useActiveLocation', () => ({
+  useActiveLocation: () => ({ pathname: mocks.pathname }),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => null,
 }));
 
 beforeEach(() => {
-  mocks.navKey = 'memory';
+  mocks.pathname = '/memory';
   clearNavPanelRegistry();
 });
 
@@ -46,14 +50,24 @@ describe('useNavPanelDrawerContent', () => {
   // home route's registered sidebar is the agent list mobile already renders
   // as the page itself.
   it('skips the home route sidebar while serving other routes from the same registry', () => {
-    mocks.navKey = 'home';
+    mocks.pathname = '/';
     registerNavPanelContent('home', Symbol('home-sidebar'), 'agent list');
     registerNavPanelContent('memory', Symbol('memory-sidebar'), 'memory sections');
 
     expect(renderHook(() => useNavPanelDrawerContent()).result.current).toBeUndefined();
 
     // The same registry still serves another route's sidebar.
-    mocks.navKey = 'memory';
+    mocks.pathname = '/memory';
     expect(renderHook(() => useNavPanelDrawerContent()).result.current).toBe('memory sections');
+  });
+
+  // The desktop rail folds agent chats into the conversation list (`home`);
+  // mobile has no rail, so the agent route must keep serving its own sidebar.
+  it('serves the agent sidebar on an agent chat route', () => {
+    mocks.pathname = '/agent/agent-1';
+    registerNavPanelContent('home', Symbol('home-sidebar'), 'agent list');
+    registerNavPanelContent('agent', Symbol('agent-sidebar'), 'agent topics');
+
+    expect(renderHook(() => useNavPanelDrawerContent()).result.current).toBe('agent topics');
   });
 });

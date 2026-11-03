@@ -51,8 +51,10 @@ export const mergeLinearSyncResults = (
   { resumed }: { resumed: boolean },
 ): LinearSyncResult => {
   if (!previous) return latest;
+  const commentsImported = (previous.commentsImported ?? 0) + (latest.commentsImported ?? 0);
   const written = {
     closed: previous.closed + latest.closed,
+    ...(commentsImported ? { commentsImported } : {}),
     created: previous.created + latest.created,
     updated: previous.updated + latest.updated,
   };
@@ -260,7 +262,10 @@ export class LinearSyncJobService {
     if (!project) throw new LinearSyncJobError('unavailable');
 
     const sync = new LinearIssueSyncService(this.db, this.userId, this.workspaceId);
-    const options = { targetProjectId: metadata.projectId };
+    const options = {
+      syncComments: metadata.syncComments,
+      targetProjectId: metadata.projectId,
+    };
 
     if (metadata.kind === 'issues') {
       const token = await getLinearAccessToken(this.db, metadata.connectionId);

@@ -3,6 +3,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import { type AgentInterventionItem, agentInterventions, agentOperations } from '../../schemas';
 import type { Transaction } from '../../type';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import {
   AGENT_INTERVENTION_IDENTITY_CONFLICT,
   AGENT_INTERVENTION_INVALID_ACTION,
@@ -19,7 +20,6 @@ import type {
 import {
   hasValidCustomDetail,
   isCanonicalDtoJsonSafe,
-  isUniqueViolation,
   normalizeDtoJson,
   sameDtoJson,
   sameJson,

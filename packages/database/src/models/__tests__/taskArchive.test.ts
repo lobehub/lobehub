@@ -128,6 +128,13 @@ describe('TaskArchiveModel', () => {
     expect(restored?.archivedAt).toBeNull();
   });
 
+  it('unarchives nothing when it is handed no ids', async () => {
+    const model = new TaskArchiveModel(serverDB, userId);
+
+    // No statement to run, so the empty list must not reach the database.
+    expect(await model.unarchiveMany([])).toEqual([]);
+  });
+
   it("cannot touch another user's task", async () => {
     const task = await new TaskModel(serverDB, otherUserId).create({ instruction: 'Not mine' });
 

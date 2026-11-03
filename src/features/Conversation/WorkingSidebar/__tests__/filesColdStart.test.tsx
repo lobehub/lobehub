@@ -15,6 +15,9 @@ import {
   reviewState,
 } from './harness';
 
+// The `im_layout` trial reads the server-config store; these tests cover the default layout.
+vi.mock('@/features/NavRail/useImLayout', () => ({ useImLayout: () => false }));
+
 // The first frame is what the cold start is about: the deferred follow-up pass
 // that gates the other panes has not run yet. Most cases assert the settled
 // state; the cold-mount case flips this to false.

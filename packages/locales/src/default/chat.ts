@@ -1,8 +1,25 @@
 export default {
+  'sharePage.app.linkCopied': 'Link copied',
   'sharePage.app.open': 'Open app',
   'sharePage.app.help': 'Trouble opening the app?',
   'sharePage.app.helpDescription':
     'If this browser prevents opening the app, use its menu to open this page in your system browser. You can also keep reading here.',
+  'sharePage.app.browserGuide.dismiss': 'Got it',
+  'sharePage.app.browserGuide.stepMenu': 'Tap ··· in the top-right corner',
+  'sharePage.app.browserGuide.stepOpen': 'Choose “Open in Browser” or a similar option',
+  'sharePage.app.browserGuide.title.dingtalk':
+    'DingTalk can’t open the app directly. Open this page in your browser to continue.',
+  'sharePage.app.browserGuide.title.qq':
+    'QQ can’t open the app directly. Open this page in your browser to continue.',
+  'sharePage.app.browserGuide.title.wechat':
+    'WeChat can’t open the app directly. Open this page in your browser to continue.',
+  'sharePage.app.browserGuide.title.weibo':
+    'Weibo can’t open the app directly. Open this page in your browser to continue.',
+  'sharePage.app.fallback.desc':
+    'You may not have the LobeHub app yet, or this browser blocked the jump.',
+  'sharePage.app.fallback.dismiss': 'Keep reading',
+  'sharePage.app.fallback.download': 'Get the app',
+  'sharePage.app.fallback.title': 'App didn’t open?',
 
   'backgroundActivity.alertDesc': '{{name}} is using {{memory}} of memory and {{cpu}} CPU.',
   'backgroundActivity.cpu': 'CPU',
@@ -3088,6 +3105,10 @@ export default {
   'taskList.bulk.deleteConfirm.content':
     'Deleted tasks and their comments and runs cannot be recovered; their subtasks stay as top-level tasks. Running tasks are stopped first.',
   'taskList.bulk.deleteConfirm.ok': 'Delete',
+  'taskList.bulk.deleteConfirm.othersWarning_one':
+    '{{count}} of these tasks was created by another workspace member. Deleting it removes it for everyone.',
+  'taskList.bulk.deleteConfirm.othersWarning_other':
+    '{{count}} of these tasks were created by other workspace members. Deleting them removes them for everyone.',
   'taskList.bulk.deleteConfirm.title_one': 'Delete {{count}} task?',
   'taskList.bulk.deleteConfirm.title_other': 'Delete {{count}} tasks?',
   'taskList.bulk.followUpFailed.desc':
@@ -3123,6 +3144,43 @@ export default {
   'taskList.empty': 'No tasks yet',
   'taskList.emptyHero.greeting': 'What should we tackle today?',
   'taskList.emptyHero.templatesTitle': 'Templates picked for you',
+  'taskList.filter.add': 'Add filter',
+  'taskList.filter.clear': 'Clear',
+  'taskList.filter.clearAll': 'Clear filters',
+  'taskList.filter.contentContains': 'Content contains “{{text}}”',
+  'taskList.filter.empty': 'No tasks match the current filters',
+  'taskList.filter.field.agent': 'Agent',
+  'taskList.filter.field.assignee': 'Assignee',
+  'taskList.filter.field.completedAt': 'Completed',
+  'taskList.filter.field.content': 'Content',
+  'taskList.filter.field.createdAt': 'Created',
+  'taskList.filter.field.creator': 'Creator',
+  'taskList.filter.field.dates': 'Dates',
+  'taskList.filter.field.priority': 'Priority',
+  'taskList.filter.field.project': 'Project',
+  'taskList.filter.field.status': 'Status',
+  'taskList.filter.field.updatedAt': 'Updated',
+  'taskList.filter.me': 'Me',
+  'taskList.filter.noAgent': 'No agent',
+  'taskList.filter.noProject': 'No project',
+  'taskList.filter.operator.before': 'is older than',
+  'taskList.filter.operator.contains': 'contains',
+  'taskList.filter.operator.is': 'is',
+  'taskList.filter.operator.isAnyOf': 'is any of',
+  'taskList.filter.operator.isNoneOf': 'is none of',
+  'taskList.filter.operator.isNot': 'is not',
+  'taskList.filter.operator.within': 'is within',
+  'taskList.filter.remove': 'Remove filter',
+  'taskList.filter.searchPlaceholder': 'Add filter…',
+  'taskList.filter.unknownValue': 'Unknown',
+  'taskList.filter.untitledAgent': 'Untitled agent',
+  'taskList.filter.untitledProject': 'Untitled project',
+  'taskList.filter.valueCount_one': '{{count}} value',
+  'taskList.filter.valueCount_other': '{{count}} values',
+  'taskList.filter.window.day': 'Past day',
+  'taskList.filter.window.month': 'Past month',
+  'taskList.filter.window.quarter': 'Past 3 months',
+  'taskList.filter.window.week': 'Past week',
   'taskList.form.columns': 'Columns',
   'taskList.form.completedTasks': 'Completed & canceled',
   'taskList.form.grouping': 'Grouping',
@@ -3284,6 +3342,9 @@ export default {
   'tool.intervention.stop': 'Stop',
   'tool.intervention.stopTooltip':
     'Stop here — nothing pending runs and the agent does not continue',
+  'tool.intervention.switchToAutoRun': 'Switch to auto approve',
+  'tool.intervention.switchToAutoRunDesc':
+    'Approve this call and stop asking from now on. Calls that must always ask still ask.',
   'tool.intervention.renderFallback.description':
     'This display was downgraded to raw JSON because the current model was not capable enough to generate a stable interactive payload. Switch to a stronger model and try again.',
   'tool.intervention.renderFallback.rawJson': 'Raw JSON',
@@ -3652,6 +3713,12 @@ export default {
   'workingPanel.overview.empty':
     'Workspace activity and outputs will appear here as the agent works.',
   'workingPanel.overview.emptyTitle': 'Ready to work',
+  'workingPanel.overview.profile.view': 'View profile',
+  'workingPanel.profile.description': 'About',
+  'workingPanel.profile.model': 'Model',
+  'workingPanel.profile.noDescription': 'No description yet',
+  'workingPanel.profile.tabs.detail': 'Details',
+  'workingPanel.profile.tabs.workspace': 'Workspace',
   'workingPanel.overview.deviceError': 'Could not load the device status',
   'workingPanel.overview.environmentError': 'Could not load the repository status',
   'workingPanel.overview.execution.device': 'Connected device',
