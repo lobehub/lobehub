@@ -10,6 +10,7 @@ import {
   ImageIcon,
   LibraryBigIcon,
   Mic2,
+  ServerIcon,
   SquarePlay,
 } from 'lucide-react';
 import type { RouteObject } from 'react-router';
@@ -69,6 +70,22 @@ export const resourceRoute: RouteObject = {
         },
         ...BusinessResourceRoutes,
         ...resourceDriveRoutes,
+        // The cloud sandbox's drives, beside the file drive (moved out of settings).
+        {
+          element: dynamicElement(
+            () => import('@/routes/(main)/resource/(home)/sandbox-storage'),
+            'Desktop > Resource > Sandbox Storage',
+            { preloadId: 'resource' },
+          ),
+          handle: {
+            meta: routeMeta({
+              icon: ServerIcon,
+              Skeleton: createSurfaceSkeleton('list'),
+              titleKey: 'navigation.resourceSandboxStorage',
+            }),
+          },
+          path: 'sandbox-storage',
+        },
         {
           element: dynamicElement(
             () => import('@/routes/(main)/resource/(home)'),

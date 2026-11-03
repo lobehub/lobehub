@@ -26,8 +26,10 @@ const daemon: DoctorCheck = {
     if (result.evidence?.repairable !== 'stale-files')
       throw new Error('the daemon process is still running, so its pid file is not stale');
 
-    removePid();
-    removeStatus();
+    const pid = result.evidence.stalePid;
+    if (typeof pid !== 'number') throw new Error('the stale process identity was not recorded');
+    removePid(pid);
+    removeStatus(pid);
     return 'removed the stale daemon pid/status files';
   },
   run: async (): Promise<CheckOutcome> => {
@@ -70,7 +72,7 @@ const daemon: DoctorCheck = {
       if (status)
         return {
           detail: 'A daemon status file is left over, but no daemon is running.',
-          evidence: { ...evidence, repairable: 'stale-files' },
+          evidence: { ...evidence, repairable: 'stale-files', stalePid: status.pid },
           fix: `Run '${CLI_PRIMARY_BIN} connect --daemon', or re-run with --fix to clear the leftovers.`,
           status: 'warn',
         };

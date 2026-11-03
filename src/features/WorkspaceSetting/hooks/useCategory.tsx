@@ -17,7 +17,6 @@ import {
   FlaskConical,
   GaugeIcon,
   HandCoins,
-  HardDriveIcon,
   Info,
   KeyboardIcon,
   KeyIcon,
@@ -205,12 +204,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: ContainerIcon,
               key: WorkspaceSettingsTabs.Environments,
               label: t('tab.environments'),
-            },
-            // The public drive and the member's own, with the pool's usage.
-            {
-              icon: HardDriveIcon,
-              key: WorkspaceSettingsTabs.Drive,
-              label: t('tab.drive'),
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Resource,

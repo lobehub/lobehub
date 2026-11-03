@@ -159,15 +159,14 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
       {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
         <AssigneeMemberSelector
           currentUserId={task.assigneeUserId}
-          disabled={status === 'running'}
           taskCreatorId={task.createdByUserId}
           taskIdentifier={task.id}
           taskVisibility={task.visibility}
         >
           {task.assigneeUserId ? (
-            <AssigneeUserAvatar tooltip={status !== 'running'} userId={task.assigneeUserId} />
+            <AssigneeUserAvatar tooltip userId={task.assigneeUserId} />
           ) : (
-            <Tooltip title={status === 'running' ? undefined : tChat('taskList.assignTo')}>
+            <Tooltip title={tChat('taskList.assignTo')}>
               <UnassignedAssigneeIcon kind={'human'} />
             </Tooltip>
           )}

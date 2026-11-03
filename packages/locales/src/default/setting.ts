@@ -1376,6 +1376,9 @@ export default {
     'Check out <site></site> and <repo></repo> for more details.',
   'settingChatAppearance.linkIcon.title': 'Show icons in message links',
   'settingChatAppearance.mermaidTheme.title': 'Mermaid Theme',
+  'settingChatAppearance.pasteAutoConvert.desc':
+    'Pasted Markdown turns into formatted text in the input. Turn this off to keep text exactly as copied. Press ⇧⌘V (Ctrl+Shift+V on Windows) to paste plain text anytime.',
+  'settingChatAppearance.pasteAutoConvert.title': 'Format Markdown on Paste',
   'settingChatAppearance.title': 'Chat Appearance',
   'settingChatAppearance.transitionMode.desc': 'Choose how chat messages appear',
   'settingChatAppearance.transitionMode.options.fadeIn': 'Fade In',
@@ -4659,7 +4662,6 @@ When I am ___, I need ___
   'environments.files.readOnly':
     'Environment directories are read-only: only their own sessions write to them.',
   'environments.files.notFound': 'That folder doesn’t exist.',
-  'tab.drive': 'Storage',
   'drive.tabs.public': 'Public drive',
   'drive.tabs.personal': 'Personal drive',
   'drive.scope.public': 'Visible to all members',
@@ -4700,7 +4702,7 @@ When I am ___, I need ___
   'drive.retained.deleteConfirm.title': "Delete {{name}}'s personal drive?",
   'drive.retained.deleteConfirm.desc': 'Everything on it is deleted and cannot be recovered.',
   'drive.retained.deleted': 'Drive deleted',
-  'drive.usage.manage': 'Manage in Storage',
+  'drive.usage.manage': 'Manage in Sandbox Storage',
   'drive.explorer.newFolder': 'New folder',
   'drive.explorer.columns.name': 'Name',
   'drive.explorer.columns.modified': 'Date modified',

@@ -42,6 +42,7 @@ import { projectWorkspaceRoute } from '@/spa/router/projectWorkspaceRoutes';
 import { agentAccessLoader, agentGroupAccessLoader } from '@/spa/router/resourceAccessLoader';
 import { resourceRoute } from '@/spa/router/resourceRoutes';
 import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
+import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
 import { taskWorkspaceChildren } from '@/spa/router/taskWorkspaceRoutes';
 import { withSegmentFallback } from '@/spa/router/withSegmentFallback';
 import { workspaceSettingsContentRoute } from '@/spa/router/workspaceSettingsRoutes';
@@ -667,6 +668,8 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: redirectElement('/settings/credential'),
         path: 'creds',
       },
+      // Sandbox storage moved to Docs (`/resource/sandbox-storage`).
+      { element: <LegacySandboxStorageRedirect />, path: 'drive' },
       // Devices list and detail get their own page-shaped skeletons; the generic
       // `:tab` routes below would load them under the form-shaped settings one.
       {

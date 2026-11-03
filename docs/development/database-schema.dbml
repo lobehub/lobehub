@@ -1427,6 +1427,7 @@ table channels {
   sequence integer [not null, default: 0]
   status text [not null, default: 'active']
   visibility text [not null, default: 'private']
+  config jsonb
   metadata jsonb [default: `{}`]
   deleted_at "timestamp with time zone"
   is_deleted boolean

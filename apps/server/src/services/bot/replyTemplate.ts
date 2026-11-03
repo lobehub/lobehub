@@ -426,7 +426,7 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     groupRejectedAllowlist:
       "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
     groupRejectedDisabled:
-      "This bot doesn't respond in groups or channels. Please reach out via direct message instead.",
+      "Sorry, you don't have permission to talk to this bot in groups or channels. Please contact the bot's owner if you need access.",
     guestAttachmentOverflow:
       '<i>Additional attachments could not be listed in this Guest Mode reply.</i>',
     guestLinkButton: 'Open Bot',
@@ -551,7 +551,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
         : `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
     groupRejectedAllowlist: '该机器人未在此频道启用。如需访问请联系机器人管理员。',
-    groupRejectedDisabled: '该机器人不在群组或频道中响应。请通过私信联系。',
+    groupRejectedDisabled:
+      '抱歉，您没有在群组或频道中与该机器人对话的权限。如需访问请联系机器人主人。',
     guestAttachmentOverflow: '<i>更多附件无法在这条访客模式回复中列出。</i>',
     guestLinkButton: '打开机器人',
     guestLinkPromptChat: '请在私聊中继续，以完成 LobeHub 账户关联。',
@@ -973,8 +974,16 @@ export function renderDmRejected(reason: 'disabled' | 'allowlist', lng?: BotRepl
 
 /**
  * Render the system message shown when an inbound non-DM event was blocked
- * by Group Policy. Same disabled-vs-allowlist split as
- * {@link renderDmRejected} so the sender can pivot (try DM, ask the owner).
+ * by Group Policy. Same disabled-vs-allowlist split as {@link renderDmRejected}.
+ *
+ * The bot's owner bypasses Group Policy (see `passGatesOrNotify`), so the bot
+ * *does* speak in groups — `disabled` really means "only the owner may use it
+ * in the groups it has joined" — or nobody, when no owner identity is
+ * configured. (Telegram Guest Mode summons skip Group Policy and follow Guest
+ * Policy instead, so they never reach this notice.) The copy therefore
+ * names the missing permission instead of claiming the bot can't talk in
+ * groups, never promises the owner can (it may be unset), and never points the
+ * sender to a DM (the DM policy may reject them just the same).
  */
 export function renderGroupRejected(
   reason: 'disabled' | 'allowlist',
