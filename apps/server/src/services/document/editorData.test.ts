@@ -122,6 +122,15 @@ describe('stripTitleHeading', () => {
 });
 
 describe('countEditorDataText', () => {
+  it('counts the body of code blocks and math, which is not in text children', async () => {
+    const code = 'x'.repeat(500);
+    const { editorData } = await resolveDocumentWrite({
+      content: `\`\`\`ts\n${code}\n\`\`\`\n\n$$\n${'y'.repeat(40)}\n$$\n`,
+    });
+
+    expect(countEditorDataText(editorData)).toBeGreaterThanOrEqual(540);
+  });
+
   it('sums text across nested nodes', () => {
     const editorData = {
       root: {

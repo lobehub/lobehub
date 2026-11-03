@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useDocumentStore } from '@/store/document';
 
-import { useHighlightSave } from './useHighlightSave';
+import { resetRefusedDraftsForTests, useHighlightSave } from './useHighlightSave';
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -351,7 +351,95 @@ describe('useHighlightSave', () => {
       });
 
     beforeEach(() => {
+      resetRefusedDraftsForTests();
       act(() => useDocumentStore.getState().closeDocument('doc-1'));
+    });
+
+    const updatedAt = new Date('2024-01-01T00:00:00.000Z');
+
+    const refuseDraft = async () => {
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      const editor = renderHook(() =>
+        useHighlightSave({
+          content: 'before',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt,
+        }),
+      );
+      act(() => editor.result.current.handleChange('after'));
+      await act(() => editor.result.current.handleSave());
+      // The unmount flush retries the same refused draft.
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      editor.unmount();
+      await act(async () => {});
+      // Closing the portal drops the document's store entry.
+      act(() => useDocumentStore.getState().closeDocument('doc-1'));
+    };
+
+    it('reopens a refused draft and its banner after the editor unmounts', async () => {
+      await refuseDraft();
+      seedStoreDocument();
+
+      const { result } = renderHook(() =>
+        useHighlightSave({
+          content: 'before',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt,
+        }),
+      );
+
+      expect(result.current.editingValue).toBe('after');
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toMatchObject({
+        limit: 100,
+      });
+    });
+
+    it('drops a refused draft once the document has a newer version', async () => {
+      await refuseDraft();
+      seedStoreDocument();
+
+      const { result } = renderHook(() =>
+        useHighlightSave({
+          content: 'remote',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt: new Date('2024-01-03T00:00:00.000Z'),
+        }),
+      );
+
+      expect(result.current.editingValue).toBe('remote');
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toBeUndefined();
+    });
+
+    it('forgets a refused draft edited back to the saved body', async () => {
+      seedStoreDocument();
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      const first = renderHook(() =>
+        useHighlightSave({
+          content: 'before',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt,
+        }),
+      );
+      act(() => first.result.current.handleChange('after'));
+      await act(() => first.result.current.handleSave());
+      act(() => first.result.current.handleChange('before'));
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toBeUndefined();
+      first.unmount();
+      await act(async () => {});
+
+      const { result } = renderHook(() =>
+        useHighlightSave({
+          content: 'before',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt,
+        }),
+      );
+      expect(result.current.editingValue).toBe('before');
     });
 
     it('records the refusal, keeps the buffer and toasts on a manual save', async () => {

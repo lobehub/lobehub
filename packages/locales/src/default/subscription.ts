@@ -676,6 +676,7 @@ export default {
   'plans.support.starter': 'Email and Community Forum',
   'plans.support.title': 'Support',
   'plans.support.ultimate': 'Priority Chat and Email Support',
+  'plans.usageHero.comparedTo': 'more usage than {{plan}}',
   'plans.workspace.features.adminControls': 'Centralized billing and role management',
   'plans.workspace.features.apiKey': 'Workspace API Keys',
   'plans.workspace.features.auditLog': 'Audit Logs',
@@ -723,9 +724,13 @@ export default {
   'qa.list.embeddings.q': 'How is vector storage calculated?',
   'qa.list.free.a':
     '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets {{credit}} free credits per month, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
+  'qa.list.free.legacyA':
+    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets {{credit}} free credits per month, ready to use without complex configuration. For more usage, subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
   'qa.list.free.q': 'Can {{name}} be used for free?',
   'qa.list.limit.a':
     '{{cloud}} offers {{plus}}, {{pro}} and {{max}}. Each caps usage within 5 hours and within a week; each window resets 5 hours or 7 days after it starts. When you reach a limit, you can wait for it to reset or upgrade your plan. Credit packs bought on the <fundsLink>"{{funds}}"</fundsLink> page keep you going once your plan limits run out. You can also set up a custom model API key to use API credits purchased from other sources.',
+  'qa.list.limit.legacyA':
+    '{{cloud}} offers {{starter}}, {{premium}} and {{ultimate}}, each with a different monthly credit allowance. If your plan\'s credits run short, consider upgrading. You can also buy credit packs on the <fundsLink>"{{funds}}"</fundsLink> page for pay-as-you-go usage, or set up a custom model API key to use API credits purchased from other sources.',
   'qa.list.limit.q': 'What if I run out of credits?',
   'qa.list.highUsage.a':
     'Credit consumption depends heavily on conversation length. As a conversation grows, each new message sends the entire history as input tokens, which increases cost significantly. We recommend starting a new conversation when topics change. Also, if there is a long gap between messages, the prompt cache may expire, causing a spike in cost. Some models like the Gemini Pro series use tiered pricing — input beyond 200K tokens is charged at double the rate.',
@@ -764,6 +769,7 @@ export default {
   'recurring.perMonth': 'Per Month',
   'recurring.perYear': 'Per Year',
   'recurring.sixMonth': '6 Months',
+  'recurring.slashMonth': '/mo',
   'recurring.threeMonth': '3 Months',
   'recurring.title': 'Billing Cycle',
   'recurring.yearly': 'Yearly Billing',
