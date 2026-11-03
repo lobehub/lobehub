@@ -39,7 +39,7 @@ const CONTENT_ADDRESSED_PATHNAME = /^files\/\d{4}-\d{2}-\d{2}\/[\da-f]{64}(?:\.[
 
 /**
  * A run's operation token reaches this router only to upload acceptance
- * evidence. It must sign a sized PUT through the reservation, which charges
+ * evidence or an image its tools returned. It must sign a sized PUT through the reservation, which charges
  * quota, bounds the length and refuses a key that already holds an object, and
  * only under a content-addressed key, never a pathname of its choosing.
  */
@@ -51,7 +51,7 @@ const assertOperationTokenUpload = (
   if (input.size === undefined || !CONTENT_ADDRESSED_PATHNAME.test(input.pathname)) {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: "This run's token uploads only sized evidence under a content-addressed path",
+      message: "This run's token uploads only sized files under a content-addressed path",
     });
   }
 };
