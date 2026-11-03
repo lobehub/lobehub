@@ -28,6 +28,8 @@ function getLogFilePath() {
 }
 
 export interface DaemonStatus {
+  /** Canonical entry path only; never persist argv or credentials for diagnostics. */
+  cliPath?: string;
   /** Captured by the running process, never inferred from the installed package. */
   cliVersion?: string;
   connectionStatus: string;

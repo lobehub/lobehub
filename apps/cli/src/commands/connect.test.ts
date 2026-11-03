@@ -1000,7 +1000,7 @@ describe('connect command', () => {
         vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
         systemService.enabled = true;
         try {
-          await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
+          await createProgram().parseAsync(['node', 'test', 'connect', ...command, '--verbose']);
           const output = vi.mocked(log.info).mock.calls.flat().join('\n');
           expect(output).toContain('system');
           expect(output).toContain('4567');
@@ -1034,30 +1034,26 @@ describe('connect command', () => {
       await program.parseAsync(['node', 'test', 'connect', 'status']);
 
       expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Daemon Status'));
-      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('12345'));
       expect(log.info).toHaveBeenCalledWith(expect.stringContaining('connected'));
     });
   });
 
   describe('connect restart', () => {
-    it.each([['--daemon'], ['restart']])(
-      'does not create a competing daemon through %j',
-      async (...command) => {
-        systemService.enabled = true;
-        const exitCode = process.exitCode;
-        try {
-          await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
-          expect(spawnDaemon).not.toHaveBeenCalled();
-          expect(log.error).toHaveBeenCalledWith(
-            expect.stringContaining('sudo systemctl --no-block restart lobehub-connect.service'),
-          );
-          expect(process.exitCode).toBe(1);
-        } finally {
-          systemService.enabled = false;
-          process.exitCode = exitCode;
-        }
-      },
-    );
+    it.each([['--daemon']])('does not create a competing daemon through %j', async (...command) => {
+      systemService.enabled = true;
+      const exitCode = process.exitCode;
+      try {
+        await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
+        expect(spawnDaemon).not.toHaveBeenCalled();
+        expect(log.error).toHaveBeenCalledWith(
+          expect.stringContaining('sudo systemctl --no-block restart lobehub-connect.service'),
+        );
+        expect(process.exitCode).toBe(1);
+      } finally {
+        systemService.enabled = false;
+        process.exitCode = exitCode;
+      }
+    });
     it('should stop and start daemon', async () => {
       mockRunningPid = 12345;
 

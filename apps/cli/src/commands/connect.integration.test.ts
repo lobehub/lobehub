@@ -256,7 +256,7 @@ describe('connect daemon startup', () => {
     expect(handshakes[0]?.path).toMatch(/^\/edge\/gw\/ws\?/);
     expect(handshakes[0]?.auth).toMatchObject({ serverUrl, token, type: 'auth' });
 
-    const status = await runCli(['connect', 'status'], home);
+    const status = await runCli(['connect', 'status', '--verbose'], home);
     expect(status.stdout).toContain(`http://127.0.0.1:${gatewayPort}/edge/gw (server)`);
     sockets.close();
   }, 20_000);
@@ -312,7 +312,7 @@ describe('connect daemon startup', () => {
 
     expect(paths.map((url) => url.split('?')[0])).toEqual(['/pinned/ws', '/pinned/ws']);
     expect(configReads).toBe(0);
-    const status = await runCli(['connect', 'status'], home);
+    const status = await runCli(['connect', 'status', '--verbose'], home);
     expect(status.stdout).toContain(`${pinned} (manual)`);
     sockets.close();
   }, 30_000);
