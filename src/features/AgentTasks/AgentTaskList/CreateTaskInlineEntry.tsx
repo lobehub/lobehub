@@ -255,6 +255,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     // hydration only — it must not keep the previous scope's selection).
     editor.cleanDocument?.();
     setPriority(0);
+    // Labels belong to a workspace: one picked in the previous scope would be a
+    // foreign id here and fail the create.
+    setLabels([]);
     setVisibility(defaultVisibility);
     setExecution(undefined);
     if (!lockAssignee) setAssigneeAgentId(agentId);

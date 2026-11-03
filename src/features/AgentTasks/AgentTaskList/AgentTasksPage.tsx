@@ -25,7 +25,7 @@ import { useGlobalStore } from '@/store/global';
 import type { TaskViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { taskLabelSelectors, taskListSelectors } from '@/store/task/selectors';
 import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
@@ -45,6 +45,7 @@ import {
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
 import {
+  dropMissingLabelGroupings,
   getCompletedWithin,
   getVisibleTaskStatuses,
   normalizeTaskListViewOptions,
@@ -254,7 +255,25 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   );
   const hasFilter = !!filter;
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
-  const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
+  // Joined into a string so the selector returns a stable primitive.
+  const labelGroupIdsKey = useTaskStore((s) =>
+    taskLabelSelectors.isLabelsInit(s)
+      ? taskLabelSelectors
+          .labelGroups(s)
+          .map((group) => group.id)
+          .join(',')
+      : undefined,
+  );
+  const viewOptions = useMemo(
+    () =>
+      dropMissingLabelGroupings(
+        normalizeTaskListViewOptions(rawViewOptions),
+        labelGroupIdsKey === undefined
+          ? undefined
+          : new Set(labelGroupIdsKey.split(',').filter(Boolean)),
+      ),
+    [rawViewOptions, labelGroupIdsKey],
+  );
   // Group headers of the ordinary list offer the board's column create entry.
   const groupCreateScope = useMemo(
     () => (canCreateTask ? { agentId, projectId } : undefined),

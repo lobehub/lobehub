@@ -179,6 +179,34 @@ export const toStoredTaskListViewOptions = <T extends Pick<TaskListViewOptions, 
   hideCompleted: options.completedTasks === 'none',
 });
 
+/**
+ * A `label:<groupId>` grouping persists in view options, so it outlives the
+ * label group it points at. Once the registry has loaded, fall back to the
+ * default for a grouping whose group is gone — otherwise every board request
+ * would keep asking the server to group by a deleted group. Before the
+ * registry loads (`labelGroupIds` undefined) the choice is kept as-is.
+ */
+export const dropMissingLabelGroupings = <
+  T extends Pick<TaskListViewOptions, 'groupBy' | 'subGroupBy'>,
+>(
+  options: T,
+  labelGroupIds: ReadonlySet<string> | undefined,
+): T => {
+  if (!labelGroupIds) return options;
+  const isMissing = (groupBy: TaskGroupBy) => {
+    const groupId = getTaskLabelGroupId(groupBy);
+    return !!groupId && !labelGroupIds.has(groupId);
+  };
+  const groupByMissing = isMissing(options.groupBy);
+  const subGroupByMissing = isMissing(options.subGroupBy);
+  if (!groupByMissing && !subGroupByMissing) return options;
+  return {
+    ...options,
+    groupBy: groupByMissing ? DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy : options.groupBy,
+    subGroupBy: subGroupByMissing ? DEFAULT_TASK_LIST_VIEW_OPTIONS.subGroupBy : options.subGroupBy,
+  };
+};
+
 export const normalizeTaskListViewOptions = (
   value?: StoredTaskListViewOptions | null,
 ): TaskListViewOptions => {
