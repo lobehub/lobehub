@@ -24,14 +24,18 @@ import { useAgentStore } from '@/store/agent';
  * alongside its local row instead of after it.
  */
 
-/** Cache successful lookups only, so a failed request is retried on the next attempt. */
-const memoize = <T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>) => {
-  const cached = cache.get(key);
-  if (cached) return cached;
+/**
+ * Share work that is still in flight, so the send reuses what picking the chip
+ * started. Settled work is not kept: each later attempt checks again (cheaply —
+ * an installed skill or an existing hidden copy is found without reinstalling),
+ * so a failure is retried and a skill removed since is installed again.
+ */
+const shareInFlight = <T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>) => {
+  const pending = cache.get(key);
+  if (pending) return pending;
 
-  const promise = load();
+  const promise = load().finally(() => cache.delete(key));
   cache.set(key, promise);
-  promise.catch(() => cache.delete(key));
   return promise;
 };
 
@@ -40,7 +44,7 @@ const installCache = new Map<string, Promise<string>>();
 const skillCache = new Map<string, Promise<void>>();
 
 const loadAgentDetail = (identifier: string) =>
-  memoize(detailCache, identifier, async () => {
+  shareInFlight(detailCache, identifier, async () => {
     const detail = await discoverService.getAssistantDetail({ identifier });
     if (!detail?.config) throw new Error(`Market agent ${identifier} is unavailable`);
     return detail as DiscoverAssistantDetail;
@@ -56,7 +60,7 @@ const prepareMarketAgent = (identifier: string, visibility: MarketInstallVisibil
   const workspaceId = getActiveWorkspaceId();
   const key = `${workspaceId ?? ''}:${visibility}:${identifier}`;
 
-  return memoize(installCache, key, async () => {
+  return shareInFlight(installCache, key, async () => {
     const existing = await agentService.getAgentByForkedFromIdentifier(identifier, {
       virtual: true,
     });
@@ -85,8 +89,8 @@ const prepareMarketAgent = (identifier: string, visibility: MarketInstallVisibil
 /**
  * Start readying a Market agent the moment its chip is picked, while the user is
  * still typing: an agent with large Market skills can take many seconds to set up,
- * and the send then only awaits whatever is left. A failure is dropped from the
- * cache, so the send retries it and reports it.
+ * and the send then only awaits whatever is left. A failure is not shared, so the
+ * send retries it and reports it.
  */
 export const prepareMentionedMarketAgent = (
   identifier: string,
@@ -104,9 +108,9 @@ class MarketSkillPrepareError extends Error {
   }
 }
 
-/** Install a Market skill picked from the @ menu once; a failure is retried next time. */
+/** Install a Market skill picked from the @ menu unless it is already installed. */
 const prepareMarketSkill = (identifier: string) =>
-  memoize(skillCache, `${getActiveWorkspaceId() ?? ''}:${identifier}`, async () => {
+  shareInFlight(skillCache, `${getActiveWorkspaceId() ?? ''}:${identifier}`, async () => {
     const [result] = await ensureAgentMarketSkills([identifier]);
     if (result?.status === 'failed' || result?.status === 'notSkill') {
       throw new MarketSkillPrepareError(result);

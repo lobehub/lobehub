@@ -162,10 +162,14 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     // the send button's spinner is the only progress cue while it waits.
     const names = [...pending.agents, ...pending.skills].map((item) => item.label).join('、');
     const submitted = JSON.stringify(editorData);
+    const submittedDraftKey = get().draftKey;
     set({ installingMarketMentions: true });
     installMarketMentions(pending)
       .then((installedAgentIds) => {
         set({ installingMarketMentions: false });
+        // The composer outlives a conversation switch; the conversation it now
+        // shows never asked to send, so the send is dropped.
+        if (get().draftKey !== submittedDraftKey) return;
         // The composer stays editable meanwhile: an edit may pick other Market
         // entries, so send its current content through the same preparation.
         if (JSON.stringify(get().getJSONState()) !== submitted) {

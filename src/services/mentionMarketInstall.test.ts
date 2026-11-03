@@ -135,6 +135,20 @@ describe('installMarketMentions', () => {
     expect(mocks.ensureAgentMarketSkills).toHaveBeenCalledTimes(2);
   });
 
+  it('installs a skill again when it was removed after an earlier mention installed it', async () => {
+    mocks.ensureAgentMarketSkills.mockResolvedValue([
+      { identifier: 'removed-skill', status: 'installed' },
+    ]);
+    const request = { agents: [], skills: [{ identifier: 'removed-skill', label: '被删技能' }] };
+
+    await installMarketMentions(request);
+    // The user deleted it from the agent's tools; mentioning it again must
+    // reinstall it rather than trust the earlier install.
+    await installMarketMentions(request);
+
+    expect(mocks.ensureAgentMarketSkills).toHaveBeenCalledTimes(2);
+  });
+
   it('reuses the hidden copy an earlier mention created', async () => {
     mocks.getAgentByForkedFromIdentifier.mockResolvedValue('agt_earlier');
 

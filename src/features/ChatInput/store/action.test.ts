@@ -440,6 +440,31 @@ describe('ChatInput store actions', () => {
       expect(store.getState().installingMarketMentions).toBe(false);
     });
 
+    it('drops the send when the composer moved to another conversation during the install', async () => {
+      // The composer store outlives a topic switch: the other conversation's
+      // draft must not be sent without the user pressing Send there.
+      let current: unknown = marketDoc;
+      const editor = { ...marketEditor(), getDocument: vi.fn(() => current) };
+      const onSend = vi.fn();
+      const store = createStore({
+        draftKey: 'topic-a',
+        editor: editor as unknown as IEditor,
+        onSend,
+      });
+      vi.mocked(installMarketMentions).mockImplementation(async () => {
+        current = { root: { children: [{ children: [], type: 'paragraph' }], type: 'root' } };
+        store.setState({ draftKey: 'topic-b' });
+        return new Map([['writer', 'agt_writer']]);
+      });
+
+      store.getState().handleSendButton();
+      await vi.waitFor(() => expect(store.getState().installingMarketMentions).toBe(false));
+
+      expect(installMarketMentions).toHaveBeenCalledOnce();
+      expect(onSend).not.toHaveBeenCalled();
+      expect(editor.cleanDocument).not.toHaveBeenCalled();
+    });
+
     it('keeps the message in the composer when the install fails', async () => {
       vi.mocked(installMarketMentions).mockRejectedValue(new MarketMentionInstallError(['Writer']));
       const onSend = vi.fn();
