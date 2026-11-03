@@ -20,6 +20,7 @@ vi.mock('@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry', (
 }));
 vi.mock('@/store/agent', () => ({ useAgentStore: fakeStore() }));
 vi.mock('@/store/agentGroup', () => ({ useAgentGroupStore: fakeStore() }));
+vi.mock('@/store/agentQuota', () => ({ useAgentQuotaStore: fakeStore() }));
 vi.mock('@/store/chat', () => ({ useChatStore: fakeStore() }));
 vi.mock('@/store/discover', () => ({ useDiscoverStore: fakeStore() }));
 vi.mock('@/store/document', () => ({ useDocumentStore: fakeStore() }));
@@ -61,7 +62,7 @@ describe('stores.reset', () => {
     stores.reset();
 
     expect(resetGatewayMuxRegistry).toHaveBeenCalledTimes(1);
-    expect(storeResets).toHaveLength(18);
+    expect(storeResets).toHaveLength(19);
     expect(pageReset).toHaveBeenCalledTimes(1);
     // Confirmed manage grants and the memory-only collaborator roster must not
     // outlive the data context, even when the next one reuses the scope string.

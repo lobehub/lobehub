@@ -128,9 +128,8 @@ describe('Task Router archive', () => {
     expect(subtask.archivedAt).toEqual(expect.any(String));
   });
 
-  it('limits archiving a shared task to its creator or a workspace owner or admin', async () => {
+  it('lets any workspace member archive, restore and delete a shared task', async () => {
     const memberId = await createTestUser(serverDB);
-    const adminId = await createTestUser(serverDB);
     const workspaceId = 'task-archive-scope-workspace';
     const { workspaces, workspaceMembers } = await import('@/database/schemas');
     await serverDB.insert(workspaces).values({
@@ -142,7 +141,6 @@ describe('Task Router archive', () => {
     await serverDB.insert(workspaceMembers).values([
       { role: 'owner', userId, workspaceId },
       { role: 'member', userId: memberId, workspaceId },
-      { role: 'admin', userId: adminId, workspaceId },
     ]);
     // The Cloud workspace middleware derives `workspaceRole` from membership;
     // the OSS test context has to state it.
@@ -156,36 +154,27 @@ describe('Task Router archive', () => {
       workspaceId,
       workspaceRole: 'member',
     } as any);
-    const adminCaller = taskRouter.createCaller({
-      ...createTestContext(adminId),
-      workspaceId,
-      workspaceRole: 'admin',
-    } as any);
 
     try {
       const ownersTask = await ownerCaller.create({ instruction: "Owner's task" });
       const membersTask = await memberCaller.create({ instruction: "Member's task" });
 
+      // A plain member archives and restores a task someone else created.
       await expect(
         memberCaller.archive({ archived: true, id: ownersTask.data.id }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-      // The member still manages their own task, and the owner manages every task.
-      await expect(
-        memberCaller.archive({ archived: true, id: membersTask.data.id }),
       ).resolves.toMatchObject({ success: true });
       await expect(
-        ownerCaller.archive({ archived: false, id: membersTask.data.id }),
-      ).resolves.toMatchObject({ success: true });
-      // An admin manages any member's task too.
-      await expect(
-        adminCaller.archive({ archived: true, id: ownersTask.data.id }),
+        memberCaller.archive({ archived: false, id: ownersTask.data.id }),
       ).resolves.toMatchObject({ success: true });
       await expect(
-        adminCaller.archive({ archived: true, id: membersTask.data.id }),
+        ownerCaller.archive({ archived: true, id: membersTask.data.id }),
       ).resolves.toMatchObject({ success: true });
+      // Delete is not limited to the creator or an owner either.
+      await expect(memberCaller.delete({ id: ownersTask.data.id })).resolves.toMatchObject({
+        success: true,
+      });
     } finally {
       await cleanupTestUser(serverDB, memberId);
-      await cleanupTestUser(serverDB, adminId);
     }
   });
 

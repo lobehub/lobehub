@@ -10,7 +10,8 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
-import { type State, useChatInputStoreApiOptional } from '../store';
+import { type State } from '../store';
+import { useChatInputStoreApiOptional } from '../store/apiContext';
 
 const EMPTY_SUBSCRIBE = () => () => {};
 

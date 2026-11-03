@@ -8,7 +8,7 @@ import {
 } from './calibration';
 import { computeTurnCostUsd, totalTokens } from './cost';
 import { selectAccount } from './loadBalancer';
-import { buildClaudeQuotaWindows } from './readings';
+import { buildClaudeQuotaWindows, dropRetiredLimits } from './readings';
 import type { QuotaLimitReading } from './types';
 import { CLAUDE_SESSION_WINDOW_SECONDS, windowSecondsForKind } from './types';
 import { findWindowAt, isWindowContaminated, projectWindows } from './windows';
@@ -320,6 +320,61 @@ describe('buildClaudeQuotaWindows', () => {
       session: null,
       weekly: null,
     });
+  });
+
+  it('drops a session window the plan no longer reports (Max upgraded to Ultra)', () => {
+    // Ultra has no 5-hour limit. The last Max-era session reading stays the
+    // newest one in its bucket, and once its window ended it would render as
+    // a refilled 5-hour meter on a plan that has none.
+    const windows = buildClaudeQuotaWindows(
+      [
+        reading({ capturedAt: now - 8 * 3_600_000, resetsAt: now - 6 * 3_600_000 }),
+        reading({ limitType: 'weekly_all', resetsAt: now + 3_600_000, utilization: 12 }),
+      ],
+      now,
+    );
+
+    expect(windows.session).toBeNull();
+    expect(windows.weekly).toMatchObject({ usedPercent: 12 });
+  });
+});
+
+describe('dropRetiredLimits', () => {
+  const sampledAt = Date.parse('2026-07-12T18:00:00Z');
+  const reading = (over: Partial<QuotaLimitReading> = {}): QuotaLimitReading => ({
+    capturedAt: sampledAt,
+    limitType: 'weekly_all',
+    resetsAt: sampledAt + 3_600_000,
+    scopeKey: '',
+    utilization: 30,
+    ...over,
+  });
+
+  it('keeps every limit of the newest sample, an idle rolled-over window included', () => {
+    const idleSession = reading({ limitType: 'session', resetsAt: sampledAt - 3_600_000 });
+    const readings = [idleSession, reading()];
+
+    expect(dropRetiredLimits(readings)).toEqual(readings);
+  });
+
+  it('keeps an older limit whose window was still live at the newest sample', () => {
+    const session = reading({
+      capturedAt: sampledAt - 3_600_000,
+      limitType: 'session',
+      resetsAt: sampledAt + 3_600_000,
+    });
+
+    expect(dropRetiredLimits([session, reading()])).toContain(session);
+  });
+
+  it('drops an older limit whose window had ended before the newest sample', () => {
+    const retired = reading({
+      capturedAt: sampledAt - 6 * 3_600_000,
+      limitType: 'session',
+      resetsAt: sampledAt - 3_600_000,
+    });
+
+    expect(dropRetiredLimits([retired, reading()])).toEqual([reading()]);
   });
 });
 

@@ -4,6 +4,7 @@ export type { DynamicKeyEntry, ExtractTranslationUsesOptions, TranslationUse } f
 export {
   assertBoundedTranslationUses,
   extractTranslationUses,
+  i18nextPreset,
   selectKeys,
   typePatterns,
   UNBOUNDED_PATTERN,

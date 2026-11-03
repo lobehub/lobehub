@@ -1,18 +1,17 @@
 'use client';
 
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import type { DeviceExecutionTarget, DeviceListItem, LobeAgentAgencyConfig } from '@lobechat/types';
-import type { SelectOptions } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Flexbox, Select } from '@lobehub/ui';
+import type { DeviceListItem, LobeAgentAgencyConfig } from '@lobechat/types';
+import type { SelectOption, SelectOptions } from '@lobehub/ui';
+import { Select } from '@lobehub/ui';
 import { MonitorSmartphone } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import {
-  ExecutionTargetDeviceStatus,
-  ExecutionTargetIcon,
+  ExecutionTargetLabel,
+  executionTargetSelectClassNames,
   executionTargetValue,
   groupExecutionTargetDevices,
   parseExecutionTargetValue,
@@ -20,140 +19,9 @@ import {
 } from '@/features/ExecutionTargetPicker';
 import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
+import { useDeviceList } from '@/store/device';
 
 import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
-
-const styles = createStaticStyles(({ css }) => ({
-  option: css`
-    display: flex;
-    flex: 1;
-    gap: 8px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  optionDescription: css`
-    font-size: 12px;
-    line-height: 16px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  optionIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  optionName: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 20px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  selectItem: css`
-    min-height: 40px;
-  `,
-  selectPopup: css`
-    max-width: calc(100vw - 24px);
-  `,
-  selectValue: css`
-    > span {
-      display: flex;
-      flex: 1;
-      min-width: 0;
-    }
-  `,
-  triggerIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-  triggerLabel: css`
-    display: flex;
-    flex: 1;
-    gap: 8px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  triggerName: css`
-    overflow: hidden;
-    flex: 1;
-
-    text-align: start;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
-
-interface ExecutionTargetLabelProps {
-  compact?: boolean;
-  description: string;
-  device?: DeviceListItem;
-  label: string;
-  offlineLabel: string;
-  onlineLabel: string;
-  target: DeviceExecutionTarget;
-}
-
-const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
-  ({ compact, description, device, label, offlineLabel, onlineLabel, target }) => {
-    const icon = <ExecutionTargetIcon devicePlatform={device?.platform} target={target} />;
-    const secondary = device ? (
-      <ExecutionTargetDeviceStatus
-        offlineLabel={offlineLabel}
-        online={device.online}
-        onlineLabel={onlineLabel}
-      />
-    ) : (
-      description
-    );
-
-    if (compact) {
-      return (
-        <span className={styles.triggerLabel}>
-          <span aria-hidden className={styles.triggerIcon}>
-            {icon}
-          </span>
-          <span className={styles.triggerName}>{label}</span>
-          {device ? <span className={styles.optionDescription}>{secondary}</span> : null}
-        </span>
-      );
-    }
-
-    return (
-      <span className={styles.option}>
-        <span aria-hidden className={styles.optionIcon}>
-          {icon}
-        </span>
-        <Flexbox flex={1} style={{ minWidth: 0 }}>
-          <span className={styles.optionName}>{label}</span>
-          <span className={styles.optionDescription}>{secondary}</span>
-        </Flexbox>
-      </span>
-    );
-  },
-);
-
-ExecutionTargetLabel.displayName = 'WorkspaceAgentDevicePolicy.ExecutionTargetLabel';
 
 interface WorkspaceAgentDevicePolicyProps {
   agentId: string;
@@ -166,12 +34,24 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
     const config = useAgentStore((s) => s.agentMap[agentId]);
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
-    const { data: devices, error, isLoading, mutate } = useDeviceList();
-    const { publicWorkspace: publicWorkspaceDevices } = useMemo(
-      () => groupExecutionTargetDevices(devices),
-      [devices],
+    const { data: devices, error, isConfirmed, isLoading, mutate } = useDeviceList();
+    const { privateWorkspace: privateWorkspaceDevices, publicWorkspace: publicWorkspaceDevices } =
+      useMemo(() => groupExecutionTargetDevices(devices), [devices]);
+    const selectableDevices = useMemo(
+      () => [...privateWorkspaceDevices, ...publicWorkspaceDevices],
+      [privateWorkspaceDevices, publicWorkspaceDevices],
     );
     const agencyConfig = config?.agencyConfig;
+    // This card writes the shared config, so a private device (resolvable only
+    // by the member who enrolled it) may be bound only when that member is the
+    // sole runner: a private Agent. A fixed target must stay public — the
+    // server rejects anything else (`assertFixedExecutionTarget`).
+    const privateDeviceBlockedReason =
+      config?.visibility !== 'private'
+        ? t('settingAgent.devicePolicy.privateDevicePublicAgent')
+        : agencyConfig?.executionTargetSelectionPolicy === 'fixed'
+          ? t('settingAgent.devicePolicy.privateDeviceFixed')
+          : undefined;
     const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
     const isHeterogeneous = !!heterogeneousType;
     const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heterogeneousType);
@@ -210,6 +90,7 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
           offlineLabel={t('chat:heteroAgent.executionTarget.offline')}
           onlineLabel={t('chat:heteroAgent.executionTarget.online')}
           target={target}
+          unknownLabel={t('chat:heteroAgent.executionTarget.presenceChecking')}
         />
       ),
       [t, targetLabels],
@@ -225,6 +106,7 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
           offlineLabel={t('chat:heteroAgent.executionTarget.offline')}
           onlineLabel={t('chat:heteroAgent.executionTarget.online')}
           target={'device'}
+          unknownLabel={t('chat:heteroAgent.executionTarget.presenceChecking')}
         />
       ),
       [t],
@@ -254,30 +136,64 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
         },
       ];
 
-      const workspaceOptions = isLoading
-        ? [
-            {
-              disabled: true,
-              label: t('chat:heteroAgent.executionTarget.loading'),
-              value: 'status:loading',
-            },
-          ]
-        : publicWorkspaceDevices.length > 0
-          ? publicWorkspaceDevices.map((device) => ({
-              label: renderDeviceLabel(device),
-              title: device.friendlyName || device.hostname || device.deviceId,
-              value: executionTargetValue('device', device.deviceId),
-            }))
-          : [
+      // Until the server confirms the list, the stored copy may hold devices that
+      // were since deleted or unshared (binding one would point the agent at an
+      // unresolvable machine) or lack ones that exist: show its rows, but only
+      // the confirmed list can be picked from or reported empty.
+      const workspaceOptions =
+        isLoading || (!isConfirmed && publicWorkspaceDevices.length === 0)
+          ? [
               {
                 disabled: true,
-                label: t('settingAgent.devicePolicy.noPublicDevice'),
-                value: 'status:empty',
+                label: t('chat:heteroAgent.executionTarget.loading'),
+                value: 'status:loading',
               },
-            ];
+            ]
+          : publicWorkspaceDevices.length > 0
+            ? publicWorkspaceDevices.map((device) => ({
+                disabled: !isConfirmed,
+                label: renderDeviceLabel(device),
+                title: device.friendlyName || device.hostname || device.deviceId,
+                value: executionTargetValue('device', device.deviceId),
+              }))
+            : [
+                {
+                  disabled: true,
+                  label: t('settingAgent.devicePolicy.noPublicDevice'),
+                  value: 'status:empty',
+                },
+              ];
+
+      // Only the caller's own private devices reach this list, so the group is
+      // simply absent for anyone without one.
+      const privateOptions: SelectOption<string>[] = [
+        ...privateWorkspaceDevices.map((device) => ({
+          disabled: !isConfirmed || !!privateDeviceBlockedReason,
+          label: renderDeviceLabel(device),
+          title: device.friendlyName || device.hostname || device.deviceId,
+          value: executionTargetValue('device', device.deviceId),
+        })),
+        ...(privateDeviceBlockedReason
+          ? [
+              {
+                disabled: true,
+                label: privateDeviceBlockedReason,
+                value: 'status:privateUnavailable',
+              },
+            ]
+          : []),
+      ];
 
       return [
         ...sharedTargets,
+        ...(!error && !isLoading && privateWorkspaceDevices.length > 0
+          ? [
+              {
+                label: t('chat:heteroAgent.executionTarget.personalGroup'),
+                options: privateOptions,
+              },
+            ]
+          : []),
         ...(!error
           ? [
               {
@@ -289,8 +205,11 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
       ];
     }, [
       error,
+      isConfirmed,
       isLoading,
       isHeterogeneous,
+      privateDeviceBlockedReason,
+      privateWorkspaceDevices,
       publicWorkspaceDevices,
       renderDeviceLabel,
       renderTargetLabel,
@@ -302,7 +221,7 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
     const selectedTarget = resolveExecutionTargetSelection({
       boundDeviceId: agencyConfig?.boundDeviceId,
       configuredTarget: agencyConfig?.executionTarget,
-      devices: publicWorkspaceDevices,
+      devices: selectableDevices,
       isHeterogeneous,
     });
     const selectedValue = selectedTarget
@@ -326,22 +245,18 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
       >
         {showDevicePicker ? (
           <Select
+            classNames={executionTargetSelectClassNames}
             optionRender={(option) => option.label}
             options={targetOptions}
             placeholder={t('settingAgent.devicePolicy.selectTarget')}
             popupMatchSelectWidth={true}
             value={selectedValue}
-            classNames={{
-              item: styles.selectItem,
-              popup: styles.selectPopup,
-              value: styles.selectValue,
-            }}
             labelRender={(option) => {
               if (typeof option.value !== 'string') return option.label;
               const selection = parseExecutionTargetValue(option.value);
               if (!selection) return option.label;
               if (selection.target === 'device') {
-                const device = publicWorkspaceDevices.find(
+                const device = selectableDevices.find(
                   (item) => item.deviceId === selection.deviceId,
                 );
                 return device ? renderDeviceLabel(device, true) : option.label;

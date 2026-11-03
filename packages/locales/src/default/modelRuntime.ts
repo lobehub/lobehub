@@ -2,7 +2,7 @@ export default {
   AccountDeactivated:
     'Your account has been deactivated or suspended. This may be due to policy, security, or account review reasons. Please contact the provider support for assistance.',
   AgentRuntimeError:
-    'Lobe language model runtime execution error. Please troubleshoot or retry based on the following information.',
+    'Something went wrong while generating the reply. Expand the details below to see the cause, or try again.',
   CapabilityNotSupported:
     'Sorry, this model does not support the requested capability (such as vision input or tool calling). Please switch to a model that supports it.',
   ClientLlmExecutorLost:

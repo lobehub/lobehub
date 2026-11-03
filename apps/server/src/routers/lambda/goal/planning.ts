@@ -23,6 +23,8 @@ const reportInput = idInput.extend({
   operationId: z.string().min(1),
   report: z.object({
     content: z.string(),
+    /** The same report as one self-contained HTML page. */
+    html: z.string().optional(),
     metadata: z.record(z.string(), z.unknown()),
   }),
 });

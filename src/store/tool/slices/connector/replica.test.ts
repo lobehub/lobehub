@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The connector lists are `@lobechat/replica` resources: the persisted
+ * The connector lists are `local-replica` resources: the persisted
  * projection paints while the network confirms it, a permission write shows on
  * the row immediately and rolls back when the server rejects it, and a
  * confirmed delete drops the same connector from every list that holds it in

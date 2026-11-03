@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { act, render, renderHook, waitFor } from '@testing-library/react';
-import { createElement } from 'react';
+import { createElement, useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope, replicaSWRDriver } from '@/libs/replica';
@@ -200,6 +200,88 @@ describe('document detail replica', () => {
     });
   });
 
+  it('keeps edits typed during an in-flight save when a focus revalidation lands', async () => {
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
+    let settleSave!: () => void;
+    vi.mocked(documentService.updateDocument).mockReturnValue(
+      new Promise((resolve) => {
+        settleSave = () =>
+          resolve({ historyAppended: false, id: 'doc-1', updatedAt: '2026-01-03T00:00:00.000Z' });
+      }) as any,
+    );
+    const editor = createEditor();
+    const { result } = renderDocument('doc-1', editor);
+
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+    act(() => useDocumentStore.getState().handleContentChange());
+    const save = useDocumentStore.getState().performSave('doc-1');
+    await waitFor(() => expect(documentService.updateDocument).toHaveBeenCalled());
+
+    // The server already committed the save, but its response has not arrived:
+    // the read returns that row, which lacks what was typed since.
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(
+      documentRow({
+        content: '# Draft without the latest edits',
+        updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+      }) as any,
+    );
+    await act(async () => {
+      await result.current.mutate();
+    });
+
+    expect(useDocumentStore.getState().documents['doc-1']).toMatchObject({
+      content: '# Draft',
+      isDirty: true,
+    });
+
+    await act(async () => {
+      settleSave();
+      await save;
+    });
+  });
+
+  it('adopts a newer writer read during an in-flight save once the save settles', async () => {
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
+    let settleSave!: () => void;
+    vi.mocked(documentService.updateDocument).mockReturnValue(
+      new Promise((resolve) => {
+        settleSave = () =>
+          resolve({ historyAppended: false, id: 'doc-1', updatedAt: '2026-01-03T00:00:00.000Z' });
+      }) as any,
+    );
+    const editor = createEditor();
+    const { result } = renderDocument('doc-1', editor);
+
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+    act(() => useDocumentStore.getState().handleContentChange());
+    const save = useDocumentStore.getState().performSave('doc-1');
+    await waitFor(() => expect(documentService.updateDocument).toHaveBeenCalled());
+
+    // Another writer committed after this save; its row arrives first.
+    const newer = new Date('2026-01-04T00:00:00.000Z');
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(
+      documentRow({ content: '# Other writer', updatedAt: newer }) as any,
+    );
+    await act(async () => {
+      await result.current.mutate();
+    });
+    expect(useDocumentStore.getState().documents['doc-1'].content).toBe('# Draft');
+
+    await act(async () => {
+      settleSave();
+      await save;
+    });
+
+    expect(useDocumentStore.getState().documents['doc-1']).toMatchObject({
+      content: '# Other writer',
+      lastUpdatedTime: newer,
+    });
+    expect(useDocumentStore.getState().documentDetailMap['doc-1']?.document).toMatchObject({
+      content: '# Other writer',
+      updatedAt: newer,
+    });
+  });
+
   it('ignores a replayed row older than the version saved since', async () => {
     vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
     vi.mocked(documentService.updateDocument).mockResolvedValue({
@@ -293,6 +375,41 @@ describe('document detail replica', () => {
     // visit is supposed to be free of.
     expect(commits.filter((c) => c.view && !c.editorReady)).toEqual([]);
     expect(useDocumentStore.getState().documents['doc-1']?.content).toBe('# Cached');
+  });
+
+  it('adopts an in-memory document once it becomes active after another document was open', async () => {
+    vi.mocked(documentService.getDocumentById).mockImplementation(
+      async (id: string) => documentRow({ id, content: `# ${id}` }) as any,
+    );
+    // Open doc-1, then leave it without closing: `activeDocumentId` stays on it,
+    // as it does when the portal is closed.
+    const first = renderDocument('doc-1', createEditor());
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+    first.unmount();
+    expect(useDocumentStore.getState().activeDocumentId).toBe('doc-1');
+
+    // The portal body reads doc-2 before the editor mounts, so its entry is
+    // already in memory and will not be written again.
+    await act(async () => {
+      await useDocumentStore.getState().prefetchDocument('doc-2');
+    });
+    vi.mocked(documentService.getDocumentById).mockImplementation(pending as any);
+
+    // Mirror `DocumentIdMode`: the hook adopts in a layout effect, the component
+    // claims `activeDocumentId` in a later passive effect.
+    const editor = createEditor();
+    const Probe = () => {
+      useDocumentStore((s) => s.useFetchDocument)('doc-2', { editor, sourceType: 'notebook' });
+      useEffect(() => {
+        useDocumentStore.setState({ activeDocumentId: 'doc-2' });
+      }, []);
+      return null;
+    };
+    render(createElement(Probe), { wrapper });
+
+    await waitFor(() =>
+      expect(useDocumentStore.getState().documents['doc-2']?.content).toBe('# doc-2'),
+    );
   });
 
   it('drops the previous identity’s document, projection and editor state included', async () => {

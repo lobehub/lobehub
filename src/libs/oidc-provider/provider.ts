@@ -1,3 +1,4 @@
+import { siteReviewFromResource } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 import type { Configuration, KoaContextWithOIDC } from 'oidc-provider';
@@ -9,10 +10,12 @@ import { appEnv } from '@/envs/app';
 import { getJWKS } from '@/libs/oidc-provider/jwt';
 import { OIDC_ISSUER_PATH, OIDC_ROUTES } from '@/libs/oidc-provider/routes';
 import { normalizeLocale } from '@/locales/resources';
+import { findSiteForOrigin } from '@/server/services/projectReview/sites';
 
 import { accessTokenTTL, isAcceptanceReviewClient, reviewResourceServer } from './acceptanceReview';
 import { isOIDCUserBanned } from './access-control';
 import { DrizzleAdapter } from './adapter';
+import { stampClientLastUsed } from './clientLastUsed';
 import { defaultClaims, defaultClients, defaultScopes } from './config';
 import { getOIDCCookieKeys } from './cookies';
 import { createInteractionPolicy } from './interaction-policy';
@@ -69,7 +72,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
 
     // Added: client-based CORS control logic
     clientBasedCORS(ctx, origin, client) {
-      // The review toolbar runs on whatever origin the delivered product is
+      // The acceptance toolbar runs on whatever origin the delivered product is
       // previewed on; its token is scoped to one acceptance by audience.
       if (isAcceptanceReviewClient(client?.clientId)) return true;
 
@@ -149,14 +152,19 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
         defaultResource: () => API_AUDIENCE,
         enabled: true,
 
-        getResourceServerInfo: (ctx, resourceIndicator) => {
+        getResourceServerInfo: async (ctx, resourceIndicator) => {
           logProvider('getResourceServerInfo called with indicator: %s', resourceIndicator); // <-- Add this log line
           const review = reviewResourceServer(
             ctx.oidc.client?.clientId,
             resourceIndicator,
             ctx.oidc.params?.resource,
+            { grantType: ctx.oidc.params?.grant_type as string | undefined, route: ctx.oidc.route },
           );
           if (review === 'reject') throw new errors.InvalidTarget();
+          const site = review ? siteReviewFromResource(resourceIndicator) : undefined;
+          if (site && !(await findSiteForOrigin(db, site.siteId, site.origin))) {
+            throw new errors.InvalidTarget('site is not registered for this origin');
+          }
           if (review) return review;
 
           if (resourceIndicator === API_AUDIENCE) {
@@ -345,6 +353,10 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     logProvider('OIDC Provider Server Error: %O', err); // Use logProvider
     console.error('OIDC Provider Error:', err);
   });
+
+  // JWT access tokens (every token for the API audience) are self-contained and
+  // never written through the adapter, so its upsert never sees them.
+  provider.on('access_token.issued', (token) => stampClientLastUsed(db, token.clientId));
 
   provider.on('authorization.success', (ctx) => {
     logProvider('Authorization successful for client: %s', ctx.oidc.client?.clientId); // Use logProvider

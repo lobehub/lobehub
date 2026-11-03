@@ -1,13 +1,7 @@
 import { type DropdownItem } from '@lobehub/ui';
-import {
-  Button,
-  Center,
-  createStaticStyles,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -19,46 +13,31 @@ import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { type ApprovalMode } from '@/store/user/slices/settings/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  desc: css`
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextDescription};
-  `,
-  icon: css`
-    border: 1px solid ${cssVar.colorFillTertiary};
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgElevated};
-  `,
-  modeButton: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  modeButtonDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-  `,
-  title: css`
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-  trigger: css`
-    overflow: hidden;
-    border-radius: ${cssVar.borderRadius};
-  `,
-}));
+const styles = stylex.create({
+  desc: { fontSize: '12px', lineHeight: 1.4, color: cssVar.colorTextDescription },
+  icon: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillTertiary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  modeButton: { fontSize: cssVar.fontSizeSM, color: cssVar.colorTextSecondary },
+  modeButtonDisabled: { cursor: 'not-allowed', opacity: 0.5 },
+  title: { fontSize: '14px', fontWeight: 500, lineHeight: 1.4, color: cssVar.colorText },
+  trigger: { overflow: 'hidden', borderRadius: cssVar.borderRadius },
+});
 
 const ModeItemLabel = memo<{ desc: string; icon: LucideIcon; title: string }>(
   ({ desc, icon, title }) => (
     <Flexbox horizontal align={'flex-start'} gap={12}>
-      <Center className={styles.icon} flex={'none'} height={32} width={32}>
+      <Center className={stylex.props(styles.icon).className} flex={'none'} height={32} width={32}>
         <Icon icon={icon} />
       </Center>
       <Flexbox flex={1} style={{ minWidth: 120 }}>
-        <div className={styles.title}>{title}</div>
-        <div className={styles.desc}>{desc}</div>
+        <div {...stylex.props(styles.title)}>{title}</div>
+        <div {...stylex.props(styles.desc)}>{desc}</div>
       </Flexbox>
     </Flexbox>
   ),
@@ -146,7 +125,7 @@ const ModeSelector = memo(() => {
 
   const button = (
     <Button
-      className={styles.modeButton}
+      className={stylex.props(styles.modeButton).className}
       disabled={disabled}
       icon={ChevronDown}
       iconPosition="end"
@@ -166,7 +145,7 @@ const ModeSelector = memo(() => {
             : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
         }
       >
-        <div className={styles.modeButtonDisabled}>{button}</div>
+        <div {...stylex.props(styles.modeButtonDisabled)}>{button}</div>
       </Tooltip>
     );
 
@@ -177,7 +156,7 @@ const ModeSelector = memo(() => {
       placement="bottomRight"
       onOpenChange={handleOpenChange}
     >
-      <div className={styles.trigger}>
+      <div {...stylex.props(styles.trigger)}>
         {dropdownOpen ? (
           button
         ) : (

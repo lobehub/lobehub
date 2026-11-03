@@ -127,6 +127,7 @@ describe('AgentRuntimeService', () => {
       operationId: 'test-operation-1',
       status: 'running',
       stepCount: 5,
+      llmCalls: 5,
       messages: [{ content: 'msg1' }, { content: 'msg2' }],
       cost: { total: 0.1 },
       usage: { tokens: 100 },

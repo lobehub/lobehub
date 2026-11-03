@@ -1,9 +1,8 @@
 'use client';
 
 import type { WidgetLevelFilter } from '@lobechat/types';
-import { Center, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
-import { LayoutDashboardIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +10,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import type { DashboardListItem } from '@/services/dashboard';
 
 import DashboardActionsMenu from '../DashboardActionsMenu';
+import DashboardAvatar from '../DashboardAvatar';
 
 export const dashboardListStyles = createStaticStyles(({ css }) => ({
   card: css`
@@ -50,17 +50,6 @@ export const dashboardListStyles = createStaticStyles(({ css }) => ({
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 16px;
-  `,
-  icon: css`
-    flex: none;
-
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.geekblue};
-
-    background: color-mix(in srgb, ${cssVar.geekblue} 12%, transparent);
   `,
   menu: css`
     position: absolute;
@@ -103,9 +92,7 @@ const DashboardListCard = memo<DashboardListCardProps>(({ dashboard, href, level
       <WorkspaceLink style={{ color: 'inherit', display: 'block' }} to={href}>
         <Flexbox gap={12}>
           <Flexbox horizontal align={'center'} gap={12} style={{ paddingInlineEnd: 24 }}>
-            <Center className={dashboardListStyles.icon}>
-              <Icon icon={LayoutDashboardIcon} size={18} />
-            </Center>
+            <DashboardAvatar icon={dashboard.icon} size={36} title={dashboard.title} />
             <Text ellipsis fontSize={15} weight={600}>
               {dashboard.title}
             </Text>

@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -112,6 +112,46 @@ describe('extractI18n', () => {
     );
     const { resources } = await extractI18n(config);
     expect(resources['en-US'].home).toEqual({});
+  });
+
+  it('type-checks with the declaration files of the tsconfig', async () => {
+    const { config, root } = await setup();
+    await mkdir(path.join(root, 'src/types'));
+    await writeFile(
+      path.join(root, 'src/types/translator.d.ts'),
+      `${translatorType} declare const homeT: T<"home">;`,
+    );
+    await writeFile(
+      path.join(root, 'src/copy.ts'),
+      'export const copy = () => homeT("outer.key");',
+    );
+    const { resources } = await extractI18n(config);
+    expect(resources['en-US'].home).toEqual({ 'outer.key': 'Wrapper copy' });
+  });
+
+  it('type-checks with declarations outside the tsconfig', async () => {
+    const { config, root } = await setup();
+    await mkdir(path.join(root, 'typings'));
+    await writeFile(
+      path.join(root, 'typings/translator.d.ts'),
+      `${translatorType} declare const homeT: T<"home">;`,
+    );
+    await writeFile(
+      path.join(root, 'src/copy.ts'),
+      'export const copy = () => homeT("outer.key");',
+    );
+    const tsconfig = path.join(root, 'tsconfig.json');
+    const { compilerOptions } = JSON.parse(await readFile(tsconfig, 'utf8'));
+    await writeFile(tsconfig, JSON.stringify({ compilerOptions, include: ['src', 'upstream'] }));
+    expect((await extractI18n(config)).resources['en-US'].home).toBeUndefined();
+    const { resources } = await extractI18n({
+      ...config,
+      declarations: ['typings/translator.d.ts'],
+    });
+    expect(resources['en-US'].home).toEqual({ 'outer.key': 'Wrapper copy' });
+    await expect(
+      extractI18n({ ...config, declarations: ['typings/missing.d.ts'] }),
+    ).rejects.toThrow('ENOENT');
   });
 
   it('refuses to emit empty resources unless allowed', async () => {

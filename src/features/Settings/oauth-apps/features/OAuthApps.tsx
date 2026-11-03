@@ -34,9 +34,11 @@ const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
   const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ sub?: string }>();
 
-  const { data: apps, error, isLoading, isValidating, mutate } = useOAuthAppList();
+  const { data: apps, error, isLoading, isValidating, revalidate } = useOAuthAppList();
 
-  const reload = () => mutate();
+  const reload = () => {
+    void revalidate();
+  };
 
   if (params.sub)
     return (
@@ -45,7 +47,6 @@ const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
         id={params.sub}
         key={params.sub}
         onBack={() => navigate('/settings/oauth-apps')}
-        onChanged={reload}
       />
     );
 
@@ -78,8 +79,6 @@ const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
         app={app}
         canEdit={canEdit}
         key={app.id}
-        onChanged={reload}
-        onDeleted={reload}
         onOpen={() => navigate(`/settings/oauth-apps/${app.id}`)}
       />
     ));

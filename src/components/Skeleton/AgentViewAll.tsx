@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, Center, createStaticStyles, cssVar, Flexbox, responsive } from '@lobehub/ui';
+import { Block, Center, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
@@ -9,34 +11,25 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import SkeletonBar from './Bar';
 
-/** Matches `ACTION_COL_WIDTH` in `features/AgentViewAll/AgentRow.tsx`. */
+/** Match `ACTION_COL_WIDTH` / `NAME_COL_WIDTH` / `ROLE_COL_WIDTH` in `features/AgentViewAll/AgentRow.tsx`. */
 const ACTION_COL_WIDTH = 64;
+const NAME_COL_WIDTH = 240;
+const ROLE_COL_WIDTH = 200;
 
-const styles = createStaticStyles(({ css }) => ({
-  sidebarCard: css`
-    min-height: 72px;
-    padding-block: 10px;
-    padding-inline: 12px;
-  `,
-  sidebarGrid: css`
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-
-    ${responsive.md} {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    ${responsive.sm} {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  `,
-  sidebarSection: css`
-    padding: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  sidebarCard: { minHeight: '72px', paddingBlock: '10px', paddingInline: '12px' },
+  sidebarGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
+    gap: '12px',
+  },
+  sidebarSection: {
+    padding: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 /**
  * The "In sidebar" block (`features/AgentViewAll/SidebarAgentsSection.tsx`)
@@ -51,7 +44,7 @@ export const AgentViewAllSidebarSectionSkeleton = () => {
 
   return (
     <Flexbox
-      className={styles.sidebarSection}
+      className={stylex.props(styles.sidebarSection).className}
       data-testid={'agent-view-all-sidebar-skeleton'}
       gap={12}
     >
@@ -60,10 +53,10 @@ export const AgentViewAllSidebarSectionSkeleton = () => {
         <SkeletonBar height={12} width={40} />
       </Flexbox>
       {!collapsed && (
-        <div className={styles.sidebarGrid}>
+        <div {...stylex.props(styles.sidebarGrid)}>
           {[0, 1, 2].map((key) => (
             <Block
-              className={styles.sidebarCard}
+              className={stylex.props(styles.sidebarCard).className}
               data-testid={'agent-view-all-sidebar-card-skeleton'}
               key={key}
               variant={'outlined'}
@@ -81,8 +74,9 @@ export const AgentViewAllSidebarSectionSkeleton = () => {
 };
 
 /**
- * Dense `AgentRow`s of the default list view (`agentListViewMode: 'list'`,
- * `groupBy: 'none'`): padding 8/12, 28px square avatar + 14px name, then the
+ * Dense `AgentRow`s of the list view (`agentListViewMode: 'list'`,
+ * `groupBy: 'none'`): padding 8/12, 28px square avatar, then the name / role /
+ * description columns, then the
  * right-aligned 88px update-time column and the 64px eye / "…" action column.
  * Also the page's own loading state while the agent list initialises.
  */
@@ -92,7 +86,15 @@ export const AgentViewAllRowsSkeleton = ({ rows = 8 }: { rows?: number }) => (
       <Flexbox horizontal align={'center'} gap={12} key={index} paddingBlock={8} paddingInline={12}>
         <Flexbox horizontal align={'center'} flex={1} gap={12} style={{ minWidth: 0 }}>
           <SkeletonBar height={28} width={28} />
-          <SkeletonBar height={14} width={`${18 + (index % 4) * 6}%`} />
+          <Flexbox flex={'0 1 auto'} style={{ minWidth: 0, width: NAME_COL_WIDTH }}>
+            <SkeletonBar height={14} width={`${50 + (index % 4) * 10}%`} />
+          </Flexbox>
+          <Flexbox flex={'0 1 auto'} style={{ minWidth: 0, width: ROLE_COL_WIDTH }}>
+            <SkeletonBar height={12} width={`${40 + (index % 3) * 15}%`} />
+          </Flexbox>
+          <Flexbox flex={1} style={{ minWidth: 0 }}>
+            <SkeletonBar height={12} width={`${30 + (index % 5) * 8}%`} />
+          </Flexbox>
         </Flexbox>
         <Flexbox align={'flex-end'} flex={'none'} style={{ minWidth: 88 }}>
           <SkeletonBar height={12} width={56} />
@@ -111,9 +113,9 @@ export const AgentViewAllRowsSkeleton = ({ rows = 8 }: { rows?: number }) => (
 
 /**
  * Route-level skeleton for `/agents` (`features/AgentViewAll/AgentViewAllPage.tsx`):
- * the 44px header (title left, list-config icon right), then the 960px column
+ * the 44px header (title left, list-config icon right), then the full-width column
  * with the "In sidebar" block and the toolbar (240px-max search left, split
- * create button right) over the default list view's rows.
+ * create button right) over list-view rows (also the loading state of the card view).
  */
 const AgentViewAllSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
@@ -132,7 +134,7 @@ const AgentViewAllSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
         <SkeletonBar height={28} width={28} />
       </Flexbox>
     )}
-    <WideScreenContainer gap={16} paddingBlock={16}>
+    <WideScreenContainer fullWidth gap={16} paddingBlock={16} paddingInline={16}>
       <AgentViewAllSidebarSectionSkeleton />
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
         <SkeletonBar height={32} width={206} />

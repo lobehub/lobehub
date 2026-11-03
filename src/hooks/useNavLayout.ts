@@ -112,12 +112,6 @@ export const useNavLayout = (): NavLayout => {
           url: '/community',
         },
         {
-          icon: getRouteById('page')!.icon,
-          key: SidebarTabKey.Pages,
-          title: t('tab.pages'),
-          url: '/page',
-        },
-        {
           hidden: !!activeWorkspaceSlug,
           icon: getRouteById('memory')!.icon,
           key: SidebarTabKey.Memory,

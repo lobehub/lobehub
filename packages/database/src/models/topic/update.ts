@@ -2,6 +2,7 @@ import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, eq, or, sql } from 'drizzle-orm';
 
 import { type TopicItem, topics } from '../../schemas';
+import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { recomputeTopicUsage } from '../topicUsage';
 import type { TopicModelContext } from './context';
 import type { TopicMetadataPatch } from './types';
@@ -46,11 +47,18 @@ export const update = async (ctx: TopicModelContext, id: string, data: Partial<T
           ? persistedMetadata
           : undefined;
 
-  return ctx.db
+  const updated = await ctx.db
     .update(topics)
     .set({ ...data, metadata, updatedAt: new Date() })
     .where(and(eq(topics.id, id), ctx.ownership()))
     .returning();
+
+  // Moving a topic into a project, or handing it to another agent, makes that
+  // agent a project member.
+  if ((data.projectId || data.agentId) && updated.some((topic) => topic.projectId && topic.agentId))
+    await joinTopicAgentsToProjects(ctx.db, { topicIds: updated.map((topic) => topic.id) });
+
+  return updated;
 };
 
 /**
@@ -78,6 +86,24 @@ export const settleRunningStatus = async (
 };
 
 /**
+ * Clear a topic's unread mark: `unread` → `active`.
+ *
+ * Guarded on `status = 'unread'` like `settleRunningStatus`, so a reader acting
+ * on a stale copy of the row (a persisted list, another tab) degrades to a no-op
+ * instead of overwriting a status that has moved on — a run started since, or
+ * one now waiting for a human.
+ *
+ * Returns the cleared row, or nothing when the topic was not unread.
+ */
+export const markRead = async (ctx: TopicModelContext, id: string) => {
+  return ctx.db
+    .update(topics)
+    .set({ status: 'active', updatedAt: new Date() })
+    .where(and(eq(topics.id, id), eq(topics.status, 'unread'), ctx.ownership()))
+    .returning({ id: topics.id, status: topics.status });
+};
+
+/**
  * Recompute this topic's denormalized usage/cost rollup from its assistant
  * messages. The canonical aggregation lives in `recomputeTopicUsage`; the
  * live path (MessageModel) calls it inline within its own transaction, while
@@ -90,10 +116,20 @@ export const recomputeUsage = async (ctx: TopicModelContext, id: string) =>
  * Update topic metadata with merge logic
  * This method merges new metadata with existing metadata instead of replacing it
  */
+export interface UpdateMetadataOptions {
+  /**
+   * Checked against the row's current metadata under the row lock; the write is
+   * skipped (and `[]` returned) when it fails. Lets a caller undo its own
+   * earlier write without clobbering one that landed after it.
+   */
+  onlyIf?: (metadata: ChatTopicMetadata | null | undefined) => boolean;
+}
+
 export const updateMetadata = async (
   ctx: TopicModelContext,
   id: string,
   metadata: TopicMetadataPatch,
+  options?: UpdateMetadataOptions,
 ) => {
   // Merge into the existing metadata under a row lock so concurrent writers
   // can't lose each other's keys. The old read-then-write was a non-atomic
@@ -114,6 +150,7 @@ export const updateMetadata = async (
 
     // No row (missing or not owned) — nothing to update, mirror the old no-op.
     if (!existing) return [];
+    if (options?.onlyIf && !options.onlyIf(existing.metadata)) return [];
 
     const mergedOnboardingSession =
       existing.metadata?.onboardingSession && metadata.onboardingSession

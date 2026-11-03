@@ -40,6 +40,18 @@ const TRANSIENT_STATUSES = new Set([408, 425, 429]);
 const CREDENTIAL_SPENT_ERROR = 'invalid_grant';
 
 /**
+ * The refresh currently on the wire, shared by every caller.
+ *
+ * A WebSocket reconnect and the journal catch-up it triggers can both find the
+ * stored token inside the refresh window. The provider rotates refresh tokens,
+ * so the second request spends one that is already gone, comes back
+ * `invalid_grant`, and a transient disconnect is then reported as a dead login —
+ * which is exactly the case where the run still has recovery attempts left. One
+ * refresh at a time; concurrent callers ride the same result.
+ */
+let refreshInFlight: Promise<TokenLookup> | undefined;
+
+/**
  * Get a valid access token, refreshing if expired.
  */
 export async function getValidToken(bufferSeconds = 60): Promise<TokenLookup> {
@@ -54,8 +66,20 @@ export async function getValidToken(bufferSeconds = 60): Promise<TokenLookup> {
   // Token expired — try refresh
   if (!credentials.refreshToken) return { status: 'no-login' };
 
+  if (refreshInFlight) return refreshInFlight;
+
+  const pending = refreshStoredToken(credentials);
+  refreshInFlight = pending;
+  try {
+    return await pending;
+  } finally {
+    if (refreshInFlight === pending) refreshInFlight = undefined;
+  }
+}
+
+const refreshStoredToken = async (credentials: StoredCredentials): Promise<TokenLookup> => {
   const serverUrl = resolveServerUrl();
-  const refreshed = await refreshAccessToken(serverUrl, credentials.refreshToken);
+  const refreshed = await refreshAccessToken(serverUrl, credentials.refreshToken!);
   if (refreshed.status !== 'ok') return refreshed;
 
   const updated: StoredCredentials = {
@@ -68,7 +92,7 @@ export async function getValidToken(bufferSeconds = 60): Promise<TokenLookup> {
 
   saveCredentials(updated);
   return { credentials: updated, status: 'ok' };
-}
+};
 
 /**
  * What went wrong, and what the user can do about it.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  applyProjectName,
+  buildCreateProjectRequest,
   getCreateProjectInput,
   getProjectFieldSuggestions,
   isProjectIdentifierTaken,
@@ -10,57 +10,30 @@ import {
 } from './createProjectForm';
 
 describe('createProjectForm', () => {
-  it('derives a valid identifier and slug from the project name', () => {
-    expect(getProjectFieldSuggestions('LobeHub')).toEqual({
-      identifier: 'LOBE',
-      slug: 'lobe-hub',
-    });
-    expect(getProjectFieldSuggestions('LobeHub Mobile')).toEqual({
-      identifier: 'LHM',
-      slug: 'lobe-hub-mobile',
-    });
-    expect(getProjectFieldSuggestions('用户记忆')).toEqual({
-      identifier: 'YHJY',
-      slug: 'yong-hu-ji-yi',
+  it('derives only the slug from the project name, leaving the identifier to the user', () => {
+    expect(getProjectFieldSuggestions('LobeHub')).toEqual({ slug: 'lobe-hub' });
+    expect(getProjectFieldSuggestions('LobeHub Mobile')).toEqual({ slug: 'lobe-hub-mobile' });
+    expect(getProjectFieldSuggestions('用户记忆')).toEqual({ slug: 'yong-hu-ji-yi' });
+  });
+
+  it('returns an empty suggestion when the project name is empty', () => {
+    expect(getProjectFieldSuggestions('  ')).toEqual({ slug: '' });
+  });
+
+  it('omits an empty identifier so tasks keep the default prefix', () => {
+    expect(getCreateProjectInput({ identifier: '  ', name: 'LobeHub', slug: '' })).toEqual({
+      name: 'LobeHub',
     });
   });
 
-  it('returns empty suggestions when the project name is empty', () => {
-    expect(getProjectFieldSuggestions('  ')).toEqual({ identifier: '', slug: '' });
+  it('rejects a filled identifier that is malformed', () => {
+    expect(getCreateProjectInput({ identifier: 'AC', name: 'LobeHub', slug: '' })).toBeNull();
   });
 
   it('validates the identifier format shown by the form', () => {
     expect(isProjectIdentifierValid('LOBE')).toBe(true);
     expect(isProjectIdentifierValid('LH')).toBe(false);
     expect(isProjectIdentifierValid('1LOBE')).toBe(false);
-  });
-
-  it('keeps a server-confirmed conflict until the identifier itself changes', () => {
-    const base = {
-      identifier: 'LOBE',
-      identifierConflict: true,
-      identifierEdited: true,
-      name: 'lobehub-mobile',
-      slug: 'lobehub-mobile',
-      slugEdited: false,
-    };
-
-    // A manually chosen identifier survives a rename, so the conflict must too.
-    expect(applyProjectName(base, 'LobeHub Mobile')).toMatchObject({
-      identifier: 'LOBE',
-      identifierConflict: true,
-    });
-
-    // A derived identifier that still resolves to the same prefix is unchanged.
-    expect(
-      applyProjectName({ ...base, identifierEdited: false, name: 'LobeHub' }, 'lobehub-web'),
-    ).toMatchObject({ identifier: 'LOBE', identifierConflict: true });
-
-    // Once the derived identifier changes, the old conflict no longer applies.
-    expect(applyProjectName({ ...base, identifierEdited: false }, 'Mobile App')).toMatchObject({
-      identifier: 'MOBI',
-      identifierConflict: false,
-    });
   });
 
   it('flags an identifier that another project in the scope already uses', () => {
@@ -100,5 +73,23 @@ describe('createProjectForm', () => {
     expect(
       getCreateProjectInput({ identifier: 'LOBE', name: 'LobeHub Project', slug: '-invalid' }),
     ).toBeNull();
+  });
+
+  it('leaves the main agent out so the server creates a dedicated one', () => {
+    expect(
+      buildCreateProjectRequest(
+        { name: 'Launch' },
+        { avatar: '🚀', mainAgentId: 'inbox', mainAgentMode: 'dedicated' },
+      ),
+    ).toEqual({ avatar: '🚀', name: 'Launch' });
+  });
+
+  it('sends the picked agent when the project reuses an existing one', () => {
+    expect(
+      buildCreateProjectRequest(
+        { name: 'Launch', slug: 'launch' },
+        { mainAgentId: 'agt_1', mainAgentMode: 'existing' },
+      ),
+    ).toEqual({ coordinatorAgentId: 'agt_1', name: 'Launch', slug: 'launch' });
   });
 });

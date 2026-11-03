@@ -17,7 +17,7 @@ const CreateGoalInspector = memo<BuiltinInspectorProps<CreateGoalParams, CreateG
     return (
       <div className={inspectorTextStyles.root}>
         <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
-          {t('builtins.lobe-goal.apiName.createGoal')}
+          {t('builtins.builtin-goal.apiName.createGoal')}
         </span>
         {name && <span> · {name}</span>}
       </div>

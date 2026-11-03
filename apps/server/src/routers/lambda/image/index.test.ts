@@ -15,6 +15,7 @@ const {
   mockCreateAsyncCaller,
   mockGenerationTopicFindById,
   mockFindUserById,
+  mockGetAiProviderModelList,
   mockInsertValues,
   mockIsLobeHubModelAvailable,
   mockResolveBusinessModelMapping,
@@ -30,6 +31,7 @@ const {
   mockCreateAsyncCaller: vi.fn(),
   mockGenerationTopicFindById: vi.fn(),
   mockFindUserById: vi.fn(),
+  mockGetAiProviderModelList: vi.fn(),
   mockInsertValues: [] as unknown[],
   mockIsLobeHubModelAvailable: vi.fn(),
   mockResolveBusinessModelMapping: vi.fn(),
@@ -76,6 +78,16 @@ vi.mock('@/database/models/user', () => ({
   UserModel: {
     findById: mockFindUserById,
   },
+}));
+
+vi.mock('@/database/repositories/aiInfra', () => ({
+  AiInfraRepos: vi.fn(function () {
+    return { getAiProviderModelList: mockGetAiProviderModelList };
+  }),
+}));
+
+vi.mock('@/server/globalConfig', () => ({
+  getServerGlobalConfig: vi.fn(async () => ({ aiProvider: {} })),
 }));
 
 // Mock chargeBeforeGenerate
@@ -176,6 +188,7 @@ describe('imageRouter', () => {
     mockGetFullFileUrl.mockResolvedValue(null);
     mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
     mockIsLobeHubModelAvailable.mockResolvedValue(true);
+    mockGetAiProviderModelList.mockResolvedValue([]);
     mockGenerationTopicFindById.mockResolvedValue({ id: 'topic-1' });
 
     // Setup default transaction mock
@@ -310,6 +323,60 @@ describe('imageRouter', () => {
 
       expect(mockServerDB.transaction).not.toHaveBeenCalled();
       expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
+    it('should reject params the model does not declare before charging or creating records', async () => {
+      mockGetAiProviderModelList.mockResolvedValue([
+        {
+          id: 'gpt-image-2.5',
+          parameters: { prompt: { default: '' }, size: { default: 'auto', enum: ['auto'] } },
+          type: 'image',
+        },
+      ]);
+
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(
+        caller.createImage(createDefaultInput({ model: 'gpt-image-2.5', provider: 'lobehub' })),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'Unsupported parameters for gpt-image-2.5: height, width. Supported: prompt, size',
+      });
+
+      expect(mockGetAiProviderModelList).toHaveBeenCalledWith('lobehub', { type: 'image' });
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+    });
+
+    it('should accept params declared by the model', async () => {
+      mockGetAiProviderModelList.mockResolvedValue([
+        {
+          id: 'stable-diffusion',
+          parameters: {
+            height: { default: 512 },
+            prompt: { default: '' },
+            width: { default: 512 },
+          },
+          type: 'image',
+        },
+      ]);
+
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(caller.createImage(createDefaultInput())).resolves.toMatchObject({
+        success: true,
+      });
+    });
+
+    it('should reject an empty prompt before charging or creating records', async () => {
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(
+        caller.createImage(createDefaultInput({ params: { prompt: '  ' } })),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
     });
 
     it('should convert imageUrls to S3 keys for database storage', async () => {

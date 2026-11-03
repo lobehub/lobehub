@@ -22,6 +22,7 @@ const TOOL_TO_API = {
   browser_read_page: 'readPage',
   browser_screenshot: 'screenshot',
   browser_scroll: 'scroll',
+  browser_set_viewport: 'setViewport',
   browser_snapshot: 'snapshot',
 } as const;
 
@@ -61,6 +62,7 @@ const API_LABELS: Record<BrowserMcpApi, string> = {
   readPage: 'Read page text',
   screenshot: 'Captured screenshot',
   scroll: 'Scrolled page',
+  setViewport: 'Set viewport',
   snapshot: 'Read page elements',
 };
 

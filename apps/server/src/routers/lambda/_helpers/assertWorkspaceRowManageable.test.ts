@@ -53,31 +53,31 @@ describe('assertWorkspaceRowManageable', () => {
       assertWorkspaceRowManageable(
         { userId: 'me', workspaceId: 'ws1', workspaceRole: 'admin' },
         'someone-else',
-        'connector',
+        'topic',
       ),
-    ).toThrow(TRPCError);
+    ).toThrow('Only the creator or a workspace owner can modify this topic');
   });
 
-  it('allows a workspace admin when allowAdmin is set', () => {
+  it('allows a workspace admin when the call site opts in', () => {
     expect(() =>
       assertWorkspaceRowManageable(
         { userId: 'me', workspaceId: 'ws1', workspaceRole: 'admin' },
         'someone-else',
-        'task',
+        'topic',
         { allowAdmin: true },
       ),
     ).not.toThrow();
   });
 
-  it('still rejects a member when allowAdmin is set', () => {
+  it('still rejects a member when admins are allowed', () => {
     expect(() =>
       assertWorkspaceRowManageable(
         { userId: 'me', workspaceId: 'ws1', workspaceRole: 'member' },
         'someone-else',
-        'task',
+        'topic',
         { allowAdmin: true },
       ),
-    ).toThrow(TRPCError);
+    ).toThrow('Only the creator or a workspace owner or admin can modify this topic');
   });
 
   it('rejects when the row has no creator recorded', () => {

@@ -7,17 +7,19 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import NotFound from '@/components/404';
-import AsyncError from '@/components/AsyncError';
 import ConversationSkeleton from '@/components/Skeleton/Conversation/List';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useAgentRoutePath } from '@/features/AgentBreadcrumb/useAgentRoutePath';
+import { FavoriteButton, useCurrentFavoritePath } from '@/features/Favorites';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
 import { useWorkspaceSidePanel } from '@/features/RightPanel/WorkspaceSidePanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import OtherScopeAsyncError from '@/features/Workspace/OtherScopeAsyncError';
+import { type ScopedLambdaClient } from '@/features/Workspace/useLocateInOtherScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useChatStore } from '@/store/chat';
@@ -30,11 +32,13 @@ import GoalAgentModelConfig from './GoalAgentModelConfig';
 import GoalChat from './GoalChat';
 import { GoalConversationContext } from './goalConversation';
 import GoalDetailActions from './GoalDetailActions';
+import GoalDetailTitle from './GoalDetailTitle';
 import GoalHeaderMetrics from './GoalHeaderMetrics';
 import { goalManagerConversation } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import { GoalSupervision } from './GoalSupervision';
 import GoalSupervisorToggle from './GoalSupervisorToggle';
+import GoalVisibilitySelector from './GoalVisibilitySelector';
 import GoalWorkspaceBreadcrumb from './GoalWorkspaceBreadcrumb';
 import NorthStarMetrics from './NorthStarMetrics';
 import ProcessControl from './ProcessControl';
@@ -55,6 +59,10 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px 4px;
   `,
 }));
+
+/** A goal 404s outside its own scope; reading it through another scope tells where it lives. */
+const probeGoalGraph = (client: ScopedLambdaClient, id: string, signal: AbortSignal) =>
+  client.goal.graph.query({ id }, { context: { showNotification: false }, signal });
 
 interface GoalDetailPageProps {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
@@ -78,6 +86,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const canStart = useResourceManageable(snapshot?.goal.userId);
 
   const buildAgentPath = useAgentRoutePath(agentId ?? '');
+  const favoritePath = useCurrentFavoritePath();
 
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
@@ -117,6 +126,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
   const toggleLeftPanel = useGlobalStore((s) => s.toggleLeftPanel);
   const collapsedRailRef = useRef(false);
+  const titleInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (showPortal) {
@@ -157,7 +167,19 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   // page (or switching goals) must not leak it into the conversation surface.
   useEffect(() => () => clearPortalStack(), [clearPortalStack, goalId]);
 
-  if (error && !snapshot) return <AsyncError error={error} variant={'page'} onRetry={mutate} />;
+  if (error && !snapshot)
+    return (
+      <OtherScopeAsyncError
+        error={error}
+        pendingFallback={<GoalDetailSkeleton />}
+        resourceKey={`goal:${goalId}`}
+        variant={'page'}
+        probe={(client: ScopedLambdaClient, signal: AbortSignal) =>
+          probeGoalGraph(client, goalId, signal)
+        }
+        onRetry={mutate}
+      />
+    );
   if (!snapshot)
     return isLoading ? (
       <GoalDetailSkeleton />
@@ -205,18 +227,6 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   // message landing, so the reply is never invisible behind a drill-down. A
   // managed goal whose main Agent has no supervision record yet gets one from
   // this very turn: the panel opens now and moves there once it exists.
-  // A topic picked from either panel's history: the supervision record opens as
-  // the record, any other topic as the side conversation on that topic.
-  const selectTopic = (topicId: string) => {
-    if (!supervisingAgentId || topicId === chat.topicId) return;
-    clearPortalStack();
-    chat.openConversation(
-      managerConversation?.topicId === topicId
-        ? { agentId: managerConversation.agentId, topicId }
-        : { agentId: supervisingAgentId, topicId },
-    );
-  };
-
   const revealConversation = () => {
     setGraphFullscreen(false);
     clearPortalStack();
@@ -224,6 +234,22 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
       chat.openAwaitingRecord({ agentId: supervisingAgentId });
     else openPanel();
   };
+
+  // Deferred past the menu closing, which hands focus back to its trigger.
+  const focusTitleEditor = () => {
+    requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+  };
+
+  // Clipped like the workspace crumb, so a long title cannot push the header's
+  // actions off the bar.
+  const goalCrumb = (
+    <Text ellipsis color={'inherit'} style={{ maxWidth: 'min(320px, 45vw)' }} weight={500}>
+      {goal.title}
+    </Text>
+  );
 
   const paused = goal.status === 'paused';
   // Pace control exists only while the coordinator loop is actually moving (or
@@ -244,7 +270,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 {agentId ? (
                   <AgentBreadcrumb
                     agentId={agentId}
-                    extraItems={[goal.title]}
+                    extraItems={[goalCrumb]}
                     // The goal title owns the last crumb, so this one is a way back
                     // to the agent's goal list rather than a label for this page.
                     title={<Link to={buildAgentPath('goals')}>{t('goalList.title')}</Link>}
@@ -252,9 +278,20 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 ) : (
                   <GoalWorkspaceBreadcrumb title={goal.title} />
                 )}
+                <FavoriteButton
+                  path={favoritePath}
+                  targetId={goal.id}
+                  title={goal.title}
+                  type={'goal'}
+                />
                 {/* Not nested under the breadcrumb: an agent-less goal still has to
                   be deletable, and this menu is the only place that can do it. */}
-                <GoalDetailActions agentId={agentId} goalId={goal.id} projectId={goal.projectId} />
+                <GoalDetailActions
+                  agentId={agentId}
+                  goalId={goal.id}
+                  projectId={goal.projectId}
+                  onRename={focusTitleEditor}
+                />
               </Flexbox>
             }
             right={
@@ -278,9 +315,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           <Flexbox flex={1} style={{ overflowY: 'auto' }}>
             <WideScreenContainer gap={20} paddingBlock={16}>
               <Flexbox className={styles.header} gap={8}>
-                <Text as={'h1'} fontSize={22} weight={600}>
-                  {goal.title}
-                </Text>
+                <GoalDetailTitle
+                  creatorUserId={goal.userId}
+                  goalId={goal.id}
+                  inputRef={titleInputRef}
+                  title={goal.title}
+                />
                 <GoalHeaderMetrics goalId={goalId} />
                 {/* Pause/resume above the requirement document — its reviewed
                   home. The status glyph keeps the "running" animation; this
@@ -331,6 +371,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                       canEdit ? t('goalDetail.agentManagedByOwner') : editBlockedReason
                     }
                   />
+                  <GoalVisibilitySelector goalId={goal.id} />
                   {goal.status === 'draft' && (
                     <Text fontSize={12} type={'secondary'}>
                       {t('goalProcess.draft')}
@@ -393,20 +434,17 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
             hasWorkspaceSidePanel ? null : (
               <PortalContent />
             )
-          ) : supervisingAgentId &&
-            chat.topicId &&
-            chat.topicId === managerConversation?.topicId ? (
+          ) : managerConversation ? (
+            // A goal bound to its supervision record keeps the panel on that
+            // topic: no side conversation, no other topic can replace it.
             <GoalSupervision
-              agentId={supervisingAgentId}
+              agentId={managerConversation.agentId}
               goalId={goalId}
               initialMessage={chat.initialMessage}
-              key={`${goalId}:${supervisingAgentId}:${chat.request}`}
-              topicId={chat.topicId}
+              key={`${goalId}:${managerConversation.agentId}:${managerConversation.topicId}:${chat.request}`}
+              topicId={managerConversation.topicId}
               onCollapse={() => chat.setOpen(false)}
               onInitialMessageConsumed={chat.consumeInitialMessage}
-              // A question that should not land in the manager's own record.
-              onOpenChat={() => chat.openConversation({ agentId: supervisingAgentId })}
-              onSelectTopic={selectTopic}
             />
           ) : chat.awaitingRecord ? (
             // The supervision record is on its way: show it loading, not the
@@ -423,7 +461,6 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               key={`${goalId}:${supervisingAgentId}:${chat.request}`}
               onCollapse={() => chat.setOpen(false)}
               onInitialMessageConsumed={chat.consumeInitialMessage}
-              onSelectTopic={managerConversation ? selectTopic : undefined}
             />
           ) : null}
         </RightPanel>

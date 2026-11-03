@@ -1,4 +1,4 @@
-import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,8 +8,13 @@ import {
   COMPUTER_USE_IDENTIFIER as AuvIdentifier,
   toAuvToolOutput,
 } from '@lobechat/device-control/computer-use';
-import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
-import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import type { GatewayMcpParams } from '@lobechat/device-gateway-client';
+import { deviceGatewayServerKey } from '@lobechat/device-gateway-client/endpoint';
+import type {
+  GatewayConnectionState,
+  GatewayConnectResult,
+  GatewayEndpointInfo,
+} from '@lobechat/electron-client-ipc';
 import type { HeterogeneousAgentCancellationSignal } from '@lobechat/heterogeneous-agents/protocol';
 import { stripInheritedRunIdentity } from '@lobechat/heterogeneous-agents/protocol';
 import type { RemotePlatformCommandRuntime } from '@lobechat/heterogeneous-agents/scanHost';
@@ -26,13 +31,16 @@ import { updaterConfig } from '@/modules/updater/configs';
 import { createRemoteAppUpdateDeps } from '@/modules/updater/remoteUpdate';
 import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
 import { backfillDeviceArchitecture } from '@/services/deviceArchitectureBackfill';
-import GatewayConnectionService from '@/services/gatewayConnectionSrv';
+import GatewayConnectionService, {
+  type WorkspaceDeviceRegistration,
+} from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import { findHeteroExecProcesses } from '@/utils/heteroExecProcess';
 import { createLogger } from '@/utils/logger';
 import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import BrowserControlCtr from './BrowserControlCtr';
+import { executeGatewayAgentRun, type PlatformTaskEntry } from './gatewayAgentRun';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, createProtocolHandler, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
@@ -96,20 +104,6 @@ function buildNotifyProtocol(lhPath: string, topicId: string): string {
     `- Always pass \`--message-id\` on every subsequent call so updates overwrite the same bubble.\n` +
     `- Call notify at least once when the task is done, even if there were no intermediate updates.`
   );
-}
-
-interface PlatformTaskEntry {
-  agentId?: string;
-  agentType: string;
-  operationId: string;
-  parentOperationId?: string;
-  pid: number;
-  topicId: string;
-  /**
-   * Workspace owning the dispatched topic (seeded by `runHeteroTask`), so the
-   * exit-time cleanup notify scopes to the workspace agentNotify resolves it in.
-   */
-  workspaceId?: string;
 }
 
 /**
@@ -199,7 +193,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     srv.loadOrCreateDeviceId();
 
-    // Wire up token provider and refresher
+    // Wire up the login the connection is bound to: server, token and refresher
+    srv.setServerUrlProvider(() => this.getConfiguredServerUrl());
     srv.setTokenProvider(() => this.remoteServerConfigCtr.getAccessToken());
     srv.setTokenRefresher(() => this.remoteServerConfigCtr.refreshAccessToken());
 
@@ -217,21 +212,29 @@ export default class GatewayConnectionCtr extends ControllerModule {
     );
 
     // Wire up agent run handler
-    srv.setAgentRunHandler((request) => this.executeAgentRun(request));
+    srv.setAgentRunHandler((request) =>
+      executeGatewayAgentRun(request, {
+        getServerUrl: () => this.remoteServerConfigCtr.getRemoteServerUrl(),
+        heterogeneousAgentCtr: this.heterogeneousAgentCtr,
+        platformTasks: this.platformTasks,
+      }),
+    );
 
     // Wire up generic device RPC handler (server-internal method forwarding,
     // e.g. workspace-init scans — never surfaced to the agent)
     srv.setRpcHandler((method, params) => this.executeDeviceRpc(method, params));
 
     // Wire up device registrar (persists this device to the server registry)
-    srv.setDeviceRegistrar((info) => this.registerDevice(info));
+    srv.setDeviceRegistrar((info, auth) => this.registerDevice(info, auth));
 
     // Wire up the workspace-share hooks: connect-token minting (startup restore
     // + token expiry) and the "row still registered?" probe that keeps a share
     // revoked while offline from resurrecting as a ghost device.
-    srv.setWorkspaceTokenProvider((workspaceId) => this.mintWorkspaceConnectToken(workspaceId));
-    srv.setWorkspaceDeviceChecker((workspaceId, deviceId) =>
-      this.checkWorkspaceDeviceRegistered(workspaceId, deviceId),
+    srv.setWorkspaceTokenProvider((workspaceId, serverUrl) =>
+      this.mintWorkspaceConnectToken(workspaceId, serverUrl),
+    );
+    srv.setWorkspaceDeviceChecker((workspaceId, deviceId, serverUrl) =>
+      this.checkWorkspaceDeviceRegistered(workspaceId, deviceId, serverUrl),
     );
 
     this.resolveGatewayReady?.();
@@ -243,7 +246,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
   // ─── IPC Methods (Renderer → Main) ───
 
   @IpcMethod()
-  async connect(): Promise<{ error?: string; success: boolean }> {
+  async connect(): Promise<GatewayConnectResult> {
     this.app.storeManager.set('gatewayEnabled', true);
     return this.service.connect();
   }
@@ -255,8 +258,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async getConnectionStatus(): Promise<{ status: GatewayConnectionStatus }> {
-    return { status: this.service.getDisplayedStatus() };
+  async getConnectionStatus(): Promise<GatewayConnectionState> {
+    return this.service.getDisplayedState();
+  }
+
+  /** Which gateway this login uses, and the address saved in settings. */
+  @IpcMethod()
+  async getGatewayEndpoint(): Promise<GatewayEndpointInfo> {
+    return this.service.getEndpointInfo();
   }
 
   @IpcMethod()
@@ -323,6 +332,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return result.success;
   }
 
+  /** The signed-in server, or undefined when the desktop has no active login. */
+  private async getConfiguredServerUrl(): Promise<string | undefined> {
+    const config = await this.remoteServerConfigCtr.getRemoteServerConfig();
+    if (!(await this.remoteServerConfigCtr.isRemoteServerConfigured(config))) return undefined;
+    return this.remoteServerConfigCtr.getRemoteServerUrl(config);
+  }
+
   // ─── Auto Connect ───
 
   private async tryAutoConnect() {
@@ -339,80 +355,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }
 
   // ─── Agent Run Routing ───
-
-  private async executeAgentRun(
-    request: AgentRunRequestMessage,
-  ): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
-    try {
-      const serverUrl = await this.remoteServerConfigCtr.getRemoteServerUrl();
-      if (!serverUrl) {
-        return { reason: 'Remote server URL not configured', status: 'rejected' };
-      }
-
-      // Reuse this device's own logged-in session as the run identity. The
-      // access token is a full user OIDC token (7-day TTL, longer than any run),
-      // which heteroIngest/heteroFinish now accept (ownership-gated), AND which
-      // gives the spawned Claude Code's nested `lh` calls a real login state —
-      // unlike the narrow `hetero-operation` token, which only works for the
-      // ingest endpoints. We deliberately do NOT pass the refresh token to the
-      // CLI: the device stays the single refresher (refresh tokens rotate), and
-      // the 7-day access token outlives the run so no mid-run refresh is needed.
-      //
-      // Fall back to the dispatched `request.jwt` when the device has no access
-      // token (e.g. not logged in), preserving the prior behavior gracefully.
-      const accessToken = await this.remoteServerConfigCtr.getAccessToken();
-      const jwt = accessToken || request.jwt;
-
-      // The embedded CLI handles spawn -> adapt -> BatchIngester ->
-      // heteroIngest/heteroFinish -> server -> Gateway -> clients. Wait until
-      // the process has actually spawned (or emitted an early error) before
-      // acknowledging the server request.
-      return await this.heterogeneousAgentCtr.spawnLhHeteroExec({
-        agentId: request.agentId,
-        agentType: request.agentType,
-        assistantMessageId: request.assistantMessageId,
-        args: request.args,
-        cwd: request.cwd,
-        imageList: request.imageList,
-        jwt,
-        operationId: request.operationId,
-        prompt: request.prompt,
-        resumeFallbackSystemContext: request.resumeFallbackSystemContext,
-        resumeSessionId: request.resumeSessionId,
-        serverUrl,
-        systemContext: request.systemContext,
-        topicId: request.topicId,
-        workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
-        // Register the spawned CLI process so `cancelHeteroTask` (sent by the
-        // server's `interruptTask` when the user clicks Stop) can find and kill
-        // it by operationId. The entry is cleaned up on child exit below.
-        onChildSpawned: (child: ChildProcess) => {
-          const pid = child.pid;
-          if (pid === undefined) return;
-          const taskId = request.operationId;
-          this.platformTasks.set(taskId, {
-            agentType: request.agentType,
-            operationId: request.operationId,
-            pid,
-            topicId: request.topicId,
-            workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
-          });
-          child.once('exit', () => {
-            // Only clear if this exit belongs to the current entry — a
-            // superseding run for the same operationId may have already
-            // replaced it.
-            const current = this.platformTasks.get(taskId);
-            if (current?.pid === pid) {
-              this.platformTasks.delete(taskId);
-            }
-          });
-        },
-      });
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      return { reason, status: 'rejected' };
-    }
-  }
 
   // ─── Tool Call Routing ───
 
@@ -1322,18 +1264,15 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * connection, the device just won't appear in the offline list until the
    * next successful connect.
    */
-  private async registerDevice(info: {
-    deviceId: string;
-    hostname: string;
-    identitySource: string;
-    platform: string;
-  }): Promise<void> {
-    const [serverUrl, token] = await Promise.all([
-      this.remoteServerConfigCtr.getRemoteServerUrl(),
-      this.remoteServerConfigCtr.getAccessToken(),
-    ]);
-    if (!serverUrl || !token) return;
-
+  private async registerDevice(
+    info: {
+      deviceId: string;
+      hostname: string;
+      identitySource: string;
+      platform: string;
+    },
+    { serverUrl, token }: { serverUrl: string; token: string },
+  ): Promise<void> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Oidc-Auth': token,
@@ -1351,15 +1290,23 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * Build the auth headers for a workspace-scoped server call. The
    * `X-Workspace-Id` header is what routes the request through the workspace
    * (member+) procedures — same convention as `sendNotify` above.
+   *
+   * `expectedServerUrl` is the server the gateway session belongs to; when the
+   * desktop has since signed out or moved to another server there is no auth
+   * to use for that session, so the call is skipped.
    */
   private async buildWorkspaceHeaders(
     workspaceId: string,
+    expectedServerUrl: string,
   ): Promise<{ headers: Record<string, string>; serverUrl: string } | null> {
     const [serverUrl, token] = await Promise.all([
-      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.getConfiguredServerUrl(),
       this.remoteServerConfigCtr.getAccessToken(),
     ]);
     if (!serverUrl || !token) return null;
+    if (deviceGatewayServerKey(serverUrl) !== deviceGatewayServerKey(expectedServerUrl)) {
+      return null;
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -1376,8 +1323,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * when a workspace connection's token expires. Returns null when the desktop
    * has no usable auth (logged out) — the service treats that as "skip".
    */
-  private async mintWorkspaceConnectToken(workspaceId: string): Promise<string | null> {
-    const auth = await this.buildWorkspaceHeaders(workspaceId);
+  private async mintWorkspaceConnectToken(
+    workspaceId: string,
+    expectedServerUrl: string,
+  ): Promise<string | null> {
+    const auth = await this.buildWorkspaceHeaders(workspaceId, expectedServerUrl);
     if (!auth) return null;
 
     const res = await fetch(`${auth.serverUrl}/trpc/lambda/device.mintWorkspaceConnectToken`, {
@@ -1396,16 +1346,17 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   /**
    * Probe whether the workspace-scoped deviceId still has a registered row via
-   * `device.listDevices`. Returns `false` only on a definitive "row gone"
-   * answer; `undefined` on any failure — the service must not clear persisted
-   * enrollments off an inconclusive check.
+   * `device.listDevices`, and who enrolled it. `registered: false` is a
+   * definitive "row gone" answer; `undefined` on any failure — the service must
+   * not clear persisted enrollments off an inconclusive check.
    */
   private async checkWorkspaceDeviceRegistered(
     workspaceId: string,
     deviceId: string,
-  ): Promise<boolean | undefined> {
+    expectedServerUrl: string,
+  ): Promise<WorkspaceDeviceRegistration | undefined> {
     try {
-      const auth = await this.buildWorkspaceHeaders(workspaceId);
+      const auth = await this.buildWorkspaceHeaders(workspaceId, expectedServerUrl);
       if (!auth) return undefined;
 
       const res = await fetch(`${auth.serverUrl}/trpc/lambda/device.listDevices`, {
@@ -1417,10 +1368,16 @@ export default class GatewayConnectionCtr extends ControllerModule {
       const devices = payload?.result?.data?.json;
       if (!Array.isArray(devices)) return undefined;
 
-      return devices.some(
+      const row = devices.find(
         (d: { deviceId?: unknown; registered?: unknown }) =>
           d?.deviceId === deviceId && d?.registered === true,
-      );
+      ) as { enroller?: { userId?: unknown } | null } | undefined;
+      if (!row) return { registered: false };
+
+      const enrollerUserId = row.enroller?.userId;
+      return typeof enrollerUserId === 'string'
+        ? { enrollerUserId, registered: true }
+        : { registered: true };
     } catch {
       return undefined;
     }

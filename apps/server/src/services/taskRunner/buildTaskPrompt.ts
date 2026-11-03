@@ -1,9 +1,11 @@
+import { UserInteractionApiName } from '@lobechat/builtin-tool-user-interaction';
 import { buildTaskRunPrompt, type TaskRunPromptGoalLoop } from '@lobechat/prompts';
 import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import type { BriefModel } from '@/database/models/brief';
 import { GoalModel } from '@/database/models/goal';
+import { MessageModel } from '@/database/models/message';
 import type { TaskModel } from '@/database/models/task';
 import type { TaskTopicModel } from '@/database/models/taskTopic';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
@@ -22,6 +24,56 @@ import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptanceRe
 
 /** Cap on unresolved checks carried into the next round's prompt. */
 const MAX_GOAL_FAILED_CHECKS = 8;
+
+/** Cap on earlier questions to the owner carried into the next round's prompt. */
+const MAX_GOAL_ASKED_QUESTIONS = 8;
+const MAX_ASKED_ANSWER_CHARS = 500;
+
+/**
+ * What earlier rounds of a Task asked the owner, and what came back. Every
+ * builder shape records the question under the same `askUserQuestion` API, with
+ * the answer — or the notice that none arrived — as the tool message's text.
+ */
+const readAskedQuestions = async (
+  deps: BuildTaskPromptDeps,
+  topicIds: string[],
+): Promise<NonNullable<TaskRunPromptGoalLoop['askedQuestions']>> => {
+  const calls = await new MessageModel(
+    deps.db,
+    deps.userId,
+    deps.workspaceId,
+  ).listToolCallsInTopics({
+    apiName: UserInteractionApiName.askUserQuestion,
+    limit: MAX_GOAL_ASKED_QUESTIONS,
+    topicIds,
+  });
+  return calls.flatMap((call) => {
+    let questions: string[] = [];
+    try {
+      const args = JSON.parse(call.arguments ?? '{}') as {
+        question?: unknown;
+        questions?: Array<{ question?: unknown }>;
+      };
+      questions = [
+        ...(Array.isArray(args.questions) ? args.questions.map((q) => q?.question) : []),
+        args.question,
+      ].filter((q): q is string => typeof q === 'string' && !!q.trim());
+    } catch {
+      // Unreadable arguments: nothing to tell the next round about.
+    }
+    if (questions.length === 0) return [];
+    const answer = call.content?.trim();
+    return [
+      {
+        answer:
+          answer && answer.length > MAX_ASKED_ANSWER_CHARS
+            ? `${answer.slice(0, MAX_ASKED_ANSWER_CHARS)}…`
+            : answer || undefined,
+        questions,
+      },
+    ];
+  });
+};
 
 /**
  * Whether the verifier actually judged this result. `pending` / `running` rows
@@ -51,13 +103,21 @@ const resolveGoalLoopContext = async (
   // Runs lost to a machine problem (offline device, usage limit, transport fault)
   // are not rounds the budget counts, so the agent is not told it is on a later
   // round than the coordinator thinks.
-  const unchargedRuns = countUnchargedRuns(
-    await deps.taskTopicModel.findByTaskId(task.id).catch(() => []),
-  );
+  const taskRuns = await deps.taskTopicModel.findByTaskId(task.id).catch(() => []);
+  const unchargedRuns = countUnchargedRuns(taskRuns);
   const context: TaskRunPromptGoalLoop = {
     maxRounds: Number.isFinite(budget) ? budget : null,
     round: countChargedTaskAttempts(task, unchargedRuns) + 1,
   };
+
+  // Each round is a fresh conversation, so a question an earlier round asked —
+  // and its answer — never reached the next one. Rounds kept re-asking the
+  // owner the same thing, timing out, and delivering "awaiting confirmation".
+  const askedQuestions = await readAskedQuestions(
+    deps,
+    taskRuns.flatMap((run) => (run.topicId ? [run.topicId] : [])),
+  ).catch(() => []);
+  if (askedQuestions.length > 0) context.askedQuestions = askedQuestions;
 
   try {
     const acceptance = await new AcceptanceModel(db, userId, workspaceId).findBySubject(
@@ -239,10 +299,11 @@ export async function buildTaskPrompt(
       ? await taskModel.getDependenciesByTaskIds(subtaskIds).catch(() => [])
       : [];
   const subtaskIdToIdentifier = new Map(subtasks.map((s: any) => [s.id, s.identifier]));
-  const subtaskDepMap = new Map<string, string>();
+  const subtaskDepMap = new Map<string, { id: string; identifier: string }>();
   for (const dep of subtaskDeps as any[]) {
     const depIdentifier = subtaskIdToIdentifier.get(dep.dependsOnId);
-    if (depIdentifier) subtaskDepMap.set(dep.taskId, depIdentifier);
+    if (depIdentifier)
+      subtaskDepMap.set(dep.taskId, { id: dep.dependsOnId, identifier: depIdentifier });
   }
 
   const depTaskIds = [...new Set(dependencies.map((d: any) => d.dependsOnId))];
@@ -252,11 +313,14 @@ export async function buildTaskPrompt(
   let parentIdentifier: string | null = null;
   let parentTaskContext:
     | {
+        id: string;
         identifier: string;
         instruction: string;
         name?: string | null;
         subtasks?: Array<{
           blockedBy?: string;
+          blockedById?: string;
+          id: string;
           identifier: string;
           name?: string | null;
           priority?: number | null;
@@ -276,18 +340,21 @@ export async function buildTaskPrompt(
           ? await taskModel.getDependenciesByTaskIds(siblingIds).catch(() => [])
           : [];
       const siblingIdToIdentifier = new Map(siblings.map((s: any) => [s.id, s.identifier]));
-      const siblingDepMap = new Map<string, string>();
+      const siblingDepMap = new Map<string, { id: string; identifier: string }>();
       for (const dep of siblingDeps as any[]) {
         const depId = siblingIdToIdentifier.get(dep.dependsOnId);
-        if (depId) siblingDepMap.set(dep.taskId, depId);
+        if (depId) siblingDepMap.set(dep.taskId, { id: dep.dependsOnId, identifier: depId });
       }
 
       parentTaskContext = {
+        id: parent.id,
         identifier: parent.identifier,
         instruction: parent.instruction,
         name: parent.name,
         subtasks: siblings.map((s: any) => ({
-          blockedBy: siblingDepMap.get(s.id),
+          id: s.id,
+          blockedBy: siblingDepMap.get(s.id)?.identifier,
+          blockedById: siblingDepMap.get(s.id)?.id,
           identifier: s.identifier,
           name: s.name,
           priority: s.priority,
@@ -401,6 +468,7 @@ export async function buildTaskPrompt(
       automationMode: task.automationMode,
       dependencies: dependencies.map((d: any) => ({
         dependsOn: depIdToIdentifier.get(d.dependsOnId) ?? d.dependsOnId,
+        dependsOnId: d.dependsOnId,
         type: d.type,
       })),
       description: task.description,
@@ -411,6 +479,7 @@ export async function buildTaskPrompt(
       instruction: task.instruction,
       name: task.name,
       parentIdentifier,
+      parentTaskId: task.parentTaskId,
       priority: task.priority,
       review: taskModel.getReviewConfig(task) as any,
       schedulePattern: task.schedulePattern,
@@ -425,7 +494,9 @@ export async function buildTaskPrompt(
           }
         : undefined,
       subtasks: subtasks.map((s: any) => ({
-        blockedBy: subtaskDepMap.get(s.id),
+        id: s.id,
+        blockedBy: subtaskDepMap.get(s.id)?.identifier,
+        blockedById: subtaskDepMap.get(s.id)?.id,
         identifier: s.identifier,
         name: s.name,
         priority: s.priority,

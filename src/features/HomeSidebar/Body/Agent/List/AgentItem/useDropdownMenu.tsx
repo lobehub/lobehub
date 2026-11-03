@@ -35,6 +35,7 @@ import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalPr
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { agentService } from '@/services/agent';
@@ -188,6 +189,8 @@ export const useAgentDropdownMenu = ({
     { userId, visibility },
   );
 
+  const copyAgentIdItem = useCopyAgentIdMenuItem(id);
+
   const isDefault = group === SessionDefaultGroup.Default;
 
   // Visibility flips move the item across accordions. Reveal the destination
@@ -239,6 +242,7 @@ export const useAgentDropdownMenu = ({
           },
           sfSymbol: 'macwindow.badge.plus',
         },
+        ...(copyAgentIdItem ? [copyAgentIdItem] : []),
         ...(canConfigure || canCreate || canEdit ? [{ type: 'divider' as const }] : []),
         ...(canConfigure
           ? [
@@ -609,6 +613,7 @@ export const useAgentDropdownMenu = ({
       labelsEnabled,
       openCreateLabelModal,
       openAgentInNewWindow,
+      copyAgentIdItem,
       sessionCustomGroups,
       group,
       isDefault,

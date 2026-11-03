@@ -8,9 +8,11 @@ import {
   CalendarClockIcon,
   CpuIcon,
   FolderIcon,
+  HardDriveIcon,
   LayersIcon,
   type LucideIcon,
   MemoryStickIcon,
+  MessagesSquareIcon,
   MonitorIcon,
   PowerIcon,
   ServerIcon,
@@ -21,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
+import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
 import { useDeviceMetricSeries } from './DeviceHealth/shared';
 import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
@@ -105,8 +108,8 @@ interface DeviceHoverPanelProps {
 
 /**
  * A device's details at a glance, shown beside its row in the execution
- * environment picker: live state and load first (what decides whether to run
- * there), then the machine's specs. A read-only digest of the detail page's
+ * environment picker: live state and resource usage first (what decides
+ * whether to run there), each in its own group, then the machine's specs. A read-only digest of the detail page's
  * overview, reading the same metric series so opening one warms the other.
  */
 const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
@@ -132,7 +135,13 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
             width: 6,
           }}
         />
-        <span>{online ? t('devices.status.online') : t('devices.status.offline')}</span>
+        <span>
+          {summary.onlineUnknown
+            ? t('devices.status.checking')
+            : online
+              ? t('devices.status.online')
+              : t('devices.status.offline')}
+        </span>
       </InfoRow>
       {online && (
         <InfoRow icon={CableIcon} label={t('devices.detail.connections')}>
@@ -143,22 +152,44 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
         {dayjs(summary.lastConnectedAt).fromNow()}
       </InfoRow>
       {online && (
-        <div className={styles.usage}>
-          {usage.loading ? (
-            <UsageMeterGroup loading>
-              <UsageMeterSkeleton />
-              <UsageMeterSkeleton />
-            </UsageMeterGroup>
-          ) : (
-            <UsageMeterGroup>
-              <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
-              <UsageMeter
-                label={t('devices.card.memoryUsage')}
-                value={usage.latest?.memoryPercent}
-              />
-            </UsageMeterGroup>
-          )}
-        </div>
+        <InfoRow icon={MessagesSquareIcon} label={t('devices.card.runningTopics')}>
+          <DeviceRunningSummaryValue deviceId={device.deviceId} />
+        </InfoRow>
+      )}
+      {online && (
+        <>
+          <Section color={cssVar.colorWarning} title={t('devices.detail.usage')} />
+          <div className={styles.usage}>
+            {usage.loading ? (
+              <UsageMeterGroup loading>
+                {/* CPU, memory and load: the rows a Linux / macOS device always shows. */}
+                <UsageMeterSkeleton />
+                <UsageMeterSkeleton />
+                <UsageMeterSkeleton />
+              </UsageMeterGroup>
+            ) : (
+              <UsageMeterGroup>
+                <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
+                <UsageMeter
+                  label={t('devices.card.memoryUsage')}
+                  value={usage.latest?.memoryPercent}
+                />
+                {usage.reportsLoad && (
+                  <UsageMeter
+                    label={t('devices.detail.loadUsage')}
+                    value={usage.latest?.loadPercent}
+                  />
+                )}
+                {usage.reportsDisk && (
+                  <UsageMeter
+                    label={t('devices.card.diskUsage')}
+                    value={usage.latest?.diskPercent}
+                  />
+                )}
+              </UsageMeterGroup>
+            )}
+          </div>
+        </>
       )}
 
       <Section color={cssVar.colorInfo} title={t('devices.detail.specs')} />
@@ -181,6 +212,11 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       <InfoRow icon={MemoryStickIcon} label={t('devices.detail.memory')}>
         {summary.memoryTotalBytes ? formatSize(summary.memoryTotalBytes) : undefined}
       </InfoRow>
+      {summary.diskTotalBytes && (
+        <InfoRow icon={HardDriveIcon} label={t('devices.detail.disk')}>
+          {formatSize(summary.diskTotalBytes)}
+        </InfoRow>
+      )}
       <InfoRow icon={ServerIcon} label={t('devices.card.hostname')}>
         {summary.hostname ? (
           <span className={styles.code} title={summary.hostname}>

@@ -2,8 +2,8 @@ import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import type { GoalGraphSnapshot, GoalRolloutState, GoalTickResult } from '@lobechat/types';
 import debug from 'debug';
 
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { GoalRepository } from '@/database/repositories/goal';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { BatchPlanSkillService } from './batchPlanSkill';
@@ -87,7 +87,7 @@ export class GoalProbeDistill {
 
     if (state.phase !== 'plan_distill') {
       const entered = await this.db.transaction(async (tx) => {
-        const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+        const goalModel = new GoalRepository(tx, this.userId, this.workspaceId);
         const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
         if (
           current?.phase !== 'probe' ||
@@ -143,7 +143,7 @@ export class GoalProbeDistill {
   /** No main Agent can rewrite the plan: the gate judges the probes on it as written. */
   private skip = async (goalId: string) =>
     this.db.transaction(async (tx) => {
-      const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+      const goalModel = new GoalRepository(tx, this.userId, this.workspaceId);
       const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
       if (current?.phase !== 'plan_distill' || current.pendingDistill) return;
       log('probe distill: no main Agent turn; judging the gate on the plan as written');
@@ -169,7 +169,7 @@ export class GoalProbeDistill {
     const goalId = graph.goal.id;
     const policy = graph.goal.config?.rollout;
     const reopened = await this.db.transaction(async (tx) => {
-      const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+      const goalModel = new GoalRepository(tx, this.userId, this.workspaceId);
       const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
       // Another advance landed it first; what it decided is next either way.
       if (current?.phase !== 'plan_distill' || !current.pendingDistill) return [];

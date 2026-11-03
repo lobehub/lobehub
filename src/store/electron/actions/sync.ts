@@ -1,8 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { type DataSyncConfig } from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
+import { type SWRResponse } from 'swr';
 
 import { mutate } from '@/libs/swr';
 import { electronKeys } from '@/libs/swr/keys';
@@ -98,12 +98,7 @@ export class ElectronRemoteServerActionImpl {
     const { stores } = await import('@/store/utils/userDataStores');
     stores.reset();
 
-    const [{ useSessionStore }, { useChatStore }] = await Promise.all([
-      import('@/store/session'),
-      import('@/store/chat'),
-    ]);
-
-    await useSessionStore.getState().refreshSessions();
+    const { useChatStore } = await import('@/store/chat');
     await useChatStore.getState().refreshMessages();
     await useChatStore.getState().refreshTopic();
     await useUserStore.getState().refreshUserState();

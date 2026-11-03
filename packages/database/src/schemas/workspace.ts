@@ -64,6 +64,10 @@ export const workspaceMembers = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     role: text('role').notNull().default('member'),
+    // Workspace-scoped profile: the same person can hold a different title and
+    // duties in each workspace. Lengths are enforced by the API, not the column.
+    title: text('title'),
+    responsibilities: text('responsibilities'),
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
     deletedAt: timestamptz('deleted_at'),

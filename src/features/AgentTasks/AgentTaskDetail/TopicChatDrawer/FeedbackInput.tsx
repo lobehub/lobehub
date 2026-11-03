@@ -7,17 +7,20 @@ import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
 import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
+import QueueTray from '@/features/Conversation/ChatInput/QueueTray';
 import { useConversationChatInputUiState } from '@/features/Conversation/ChatInput/useConversationChatInputUiState';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { useConversationStore } from '@/features/Conversation/store';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
+  hasIncompleteEditorAttachments,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 
 import { useComposerFocus } from './useComposerFocus';
+import { useFollowUpQueue } from './useFollowUpQueue';
 
 interface FeedbackInputProps {
   /** Acceptance's in-flow topic rail starts with the composer visible. The
@@ -41,7 +44,8 @@ const FeedbackInput = memo<FeedbackInputProps>(
     const [submitting, setSubmitting] = useState(false);
     const [hasContent, setHasContent] = useState(false);
     const [hasAttachments, setHasAttachments] = useState(false);
-    const { collapse, expand, expanded, handleEditorInit } = useComposerFocus({
+    const [uploadingAttachments, setUploadingAttachments] = useState(false);
+    const { collapse, expand, expanded, handleEditorInit, reveal } = useComposerFocus({
       defaultExpanded,
       editor,
       focusRequest,
@@ -51,7 +55,19 @@ const FeedbackInput = memo<FeedbackInputProps>(
     // can watch the run but get no reply composer.
     const { canUseResource } = useConversationResourceAccess();
 
-    const canSubmit = hasContent || hasAttachments;
+    // Follow-ups queued behind the running run are listed above the composer,
+    // like the main chat input, so they can be edited, sent now or deleted.
+    const { composerExpanded, hasQueuedMessages } = useFollowUpQueue({
+      editor,
+      enabled: canUseResource,
+      expanded,
+      reveal,
+    });
+
+    // Hold the send while an inline image is still uploading: its node still
+    // carries the local `blob:` preview URL, and sending would hand the agent
+    // a link it can never open.
+    const canSubmit = (hasContent || hasAttachments) && !uploadingAttachments;
     // The run this drawer shows is a real op in its own conversation context, so
     // the composer reads the same op-derived send area as the main composer:
     // while the agent is working the control is Stop, and a typed follow-up
@@ -69,6 +85,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
         setHasContent(text.length > 0);
       });
       setHasAttachments(getAttachmentFileIdsFromEditor(editor).length > 0);
+      setUploadingAttachments(hasIncompleteEditorAttachments(editor));
     }, [editor]);
 
     const handleAttach = useCallback(
@@ -79,7 +96,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
     );
 
     const handleSubmit = useCallback(async () => {
-      if (submitting) return;
+      if (submitting || hasIncompleteEditorAttachments(editor)) return;
       const editorData = editor?.getDocument?.('json') as Record<string, any> | undefined;
       const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
       const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
@@ -114,7 +131,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
     // Surface the live running-op status flush above the reply affordance (seamless
     // inline row that renders nothing when idle), so the user can watch the agent
     // work without expanding the composer.
-    if (!expanded) {
+    if (!composerExpanded) {
       return (
         <Flexbox gap={8}>
           <OpStatusTray seamless />
@@ -126,8 +143,17 @@ const FeedbackInput = memo<FeedbackInputProps>(
     }
 
     return (
-      <Flexbox gap={8}>
-        <OpStatusTray seamless />
+      <Flexbox gap={hasQueuedMessages ? 0 : 8}>
+        {hasQueuedMessages ? (
+          // Same stack as the main composer: the queue and the run status ride
+          // flush on the input as attached cards, inset from its edges.
+          <Flexbox paddingInline={12}>
+            <QueueTray />
+            <OpStatusTray topAttached />
+          </Flexbox>
+        ) : (
+          <OpStatusTray seamless />
+        )}
         <ChatInput
           maxHeight={240}
           minHeight={64}
@@ -136,7 +162,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
               style={{ paddingInline: 8 }}
               left={
                 <Flexbox horizontal align={'center'} gap={2}>
-                  {!disableCollapse && (
+                  {!disableCollapse && !hasQueuedMessages && (
                     <Button icon={ChevronDownIcon} size={'small'} type={'text'} onClick={collapse}>
                       {t('taskDetail.collapseReply')}
                     </Button>

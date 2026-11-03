@@ -28,7 +28,9 @@ export const isKnownPlan = (plan?: string): plan is Plans => !!plan && PLAN_VALU
 
 const PLAN_UPGRADE_PATH: Partial<Record<Plans, Plans>> = {
   [Plans.Free]: Plans.Starter,
+  [Plans.Plus]: Plans.Pro,
   [Plans.Premium]: Plans.Ultimate,
+  [Plans.Pro]: Plans.Max,
   [Plans.Starter]: Plans.Premium,
 };
 

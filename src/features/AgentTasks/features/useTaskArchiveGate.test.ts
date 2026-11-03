@@ -5,81 +5,44 @@ import { useTaskArchiveGate } from './useTaskArchiveGate';
 
 const mocks = vi.hoisted(() => ({
   canEdit: true,
-  currentUserId: 'me',
-  isAdmin: false,
-  isOwner: false,
+  manageable: true,
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({ allowed: mocks.canEdit }),
 }));
 
-vi.mock('@/business/client/hooks/useIsWorkspaceAdmin', () => ({
-  useIsWorkspaceAdmin: () => mocks.isAdmin,
+// The gate must not depend on who created the task; this mock fails the
+// creator-agnostic case below if a creator check is wired back in.
+vi.mock('@/hooks/useResourceManageable', () => ({
+  useResourceManageableChecker: () => () => mocks.manageable,
 }));
 
-vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
-  useIsWorkspaceOwner: () => mocks.isOwner,
-}));
-
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: { id: string }) => unknown) =>
-    selector({ id: mocks.currentUserId }),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  userProfileSelectors: { userId: (state: { id: string }) => state.id },
-}));
-
-const check = (createdByUserId?: string | null, options?: { archiveBlocked?: boolean }) =>
-  renderHook(() => useTaskArchiveGate()).result.current(createdByUserId, options);
+const check = (options?: { archiveBlocked?: boolean }) =>
+  renderHook(() => useTaskArchiveGate()).result.current(options);
 
 describe('useTaskArchiveGate', () => {
   beforeEach(() => {
     mocks.canEdit = true;
-    mocks.isAdmin = false;
-    mocks.isOwner = false;
+    mocks.manageable = true;
   });
 
-  it('lets the creator archive their own task', () => {
-    expect(check('me')).toEqual({ allowed: true });
-  });
-
-  it("explains why a member can't archive someone else's task", () => {
-    expect(check('someone-else')).toEqual({
-      allowed: false,
-      reasonKey: 'taskList.contextMenu.archiveDenied.notCreatorOrAdmin',
-    });
-  });
-
-  it("lets a workspace owner or admin archive someone else's task", () => {
-    mocks.isOwner = true;
-    expect(check('someone-else')).toEqual({ allowed: true });
-
-    mocks.isOwner = false;
-    mocks.isAdmin = true;
-    expect(check('someone-else')).toEqual({ allowed: true });
+  it('lets any member who can edit tasks archive, whoever created the task', () => {
+    mocks.manageable = false;
+    expect(check()).toEqual({ allowed: true });
   });
 
   it('explains that live work must stop before archiving, but not before restoring', () => {
-    expect(check('me', { archiveBlocked: true })).toEqual({
+    expect(check({ archiveBlocked: true })).toEqual({
       allowed: false,
       reasonKey: 'taskList.contextMenu.archiveBlocked',
     });
-    expect(check('me', { archiveBlocked: false })).toEqual({ allowed: true });
+    expect(check({ archiveBlocked: false })).toEqual({ allowed: true });
   });
 
-  it('reports the permission reason ahead of live work', () => {
-    expect(check('someone-else', { archiveBlocked: true })).toEqual({
-      allowed: false,
-      reasonKey: 'taskList.contextMenu.archiveDenied.notCreatorOrAdmin',
-    });
-  });
-
-  it('puts the missing edit permission ahead of the role check', () => {
+  it('puts the missing edit permission ahead of live work', () => {
     mocks.canEdit = false;
-    mocks.isAdmin = true;
-    expect(check('me')).toEqual({
+    expect(check({ archiveBlocked: true })).toEqual({
       allowed: false,
       reasonKey: 'taskList.contextMenu.archiveDenied.noEditPermission',
     });

@@ -3,7 +3,6 @@ import { kebabCase } from 'es-toolkit';
 import { pinyin } from 'pinyin-pro';
 
 const PROJECT_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const PROJECT_IDENTIFIER_LENGTH = 4;
 
 export interface CreateProjectDraft {
   identifier: string;
@@ -12,13 +11,12 @@ export interface CreateProjectDraft {
 }
 
 export interface ProjectFieldSuggestions {
-  identifier: string;
   slug: string;
 }
 
 export const getProjectFieldSuggestions = (name: string): ProjectFieldSuggestions => {
   const normalizedName = name.trim();
-  if (!normalizedName) return { identifier: '', slug: '' };
+  if (!normalizedName) return { slug: '' };
 
   const transliteratedName = pinyin(normalizedName, {
     nonZh: 'consecutive',
@@ -26,51 +24,12 @@ export const getProjectFieldSuggestions = (name: string): ProjectFieldSuggestion
     type: 'array',
   }).join(' ');
   const slug = kebabCase(transliteratedName).replaceAll(/[^a-z0-9-]/g, '');
-  const parts = slug.split('-').filter(Boolean);
-  const initials = parts.map((part) => part[0]).join('');
-  const compactName = parts.join('');
-  const identifierSource = initials.length >= 3 ? initials : compactName;
-  const identifier = identifierSource
-    .slice(0, PROJECT_IDENTIFIER_LENGTH)
-    .padEnd(3, 'x')
-    .toUpperCase();
 
-  return { identifier, slug };
+  return { slug };
 };
 
 export const isProjectIdentifierValid = (identifier: string) =>
   PROJECT_IDENTIFIER_REGEX.test(identifier.trim().toUpperCase());
-
-interface ProjectNameFormState {
-  identifier: string;
-  identifierConflict: boolean;
-  identifierEdited: boolean;
-  name: string;
-  slug: string;
-  slugEdited: boolean;
-}
-
-/**
- * Merge a new project name into the form state.
- *
- * Renaming can leave the identifier untouched — a manually chosen one is kept
- * as-is, and a derived one can resolve to the same prefix — so a
- * server-confirmed conflict must survive until the identifier itself changes.
- * Clearing it on every keystroke would re-enable submit for the same doomed
- * request.
- */
-export const applyProjectName = <T extends ProjectNameFormState>(current: T, name: string): T => {
-  const suggestions = getProjectFieldSuggestions(name);
-  const identifier = current.identifierEdited ? current.identifier : suggestions.identifier;
-
-  return {
-    ...current,
-    identifier,
-    identifierConflict: current.identifierConflict && identifier === current.identifier,
-    name,
-    slug: current.slugEdited ? current.slug : suggestions.slug,
-  };
-};
 
 /**
  * Whether an already-loaded project in the active scope claims `identifier`.
@@ -99,9 +58,30 @@ export const getCreateProjectInput = (draft: CreateProjectDraft) => {
   const name = draft.name.trim();
   const slug = draft.slug.trim().toLowerCase();
 
-  if (!name || !isProjectIdentifierValid(identifier) || !isProjectSlugValid(slug)) {
+  // The identifier is optional; left empty, tasks keep the default prefix.
+  if (!name || (identifier && !isProjectIdentifierValid(identifier)) || !isProjectSlugValid(slug)) {
     return null;
   }
 
-  return { identifier, name, ...(slug ? { slug } : {}) };
+  return { name, ...(identifier ? { identifier } : {}), ...(slug ? { slug } : {}) };
 };
+
+export interface CreateProjectExtras {
+  avatar?: string;
+  /** The picked agent; only sent when the project reuses an existing agent. */
+  mainAgentId?: string;
+  mainAgentMode: 'dedicated' | 'existing';
+}
+
+/**
+ * Leaving `coordinatorAgentId` out is what makes the server create an agent
+ * for the project, named after it and wearing its avatar.
+ */
+export const buildCreateProjectRequest = (
+  input: NonNullable<ReturnType<typeof getCreateProjectInput>>,
+  { avatar, mainAgentId, mainAgentMode }: CreateProjectExtras,
+) => ({
+  ...input,
+  ...(avatar ? { avatar } : {}),
+  ...(mainAgentMode === 'existing' && mainAgentId ? { coordinatorAgentId: mainAgentId } : {}),
+});

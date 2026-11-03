@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => ({
   canManageResource: false,
   canManage: false,
   confirmModal: vi.fn(),
+  copyToClipboard: vi.fn(),
   toastError: vi.fn(),
+  toastSuccess: vi.fn(),
   activeWorkspaceId: 'workspace-1' as string | null,
   home: {
     duplicateAgent: vi.fn(),
@@ -46,7 +48,8 @@ vi.mock('antd', async (importOriginal) => {
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   confirmModal: mocks.confirmModal,
-  toast: { error: mocks.toastError, success: vi.fn() },
+  copyToClipboard: mocks.copyToClipboard,
+  toast: { error: mocks.toastError, success: mocks.toastSuccess },
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -180,6 +183,7 @@ describe('useAgentDropdownMenu', () => {
       'pin',
       'hideFromSidebar',
       'openInNewWindow',
+      'copyAgentId',
       'duplicate',
       'moveGroup',
     ]);
@@ -261,7 +265,32 @@ describe('useAgentDropdownMenu', () => {
       }),
     );
 
-    expect(getMenuKeys(result.current())).toEqual(['hideFromSidebar', 'openInNewWindow']);
+    expect(getMenuKeys(result.current())).toEqual([
+      'hideFromSidebar',
+      'openInNewWindow',
+      'copyAgentId',
+    ]);
+  });
+
+  it('copies the Agent ID from the row menu', async () => {
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        group: undefined,
+        id: 'agt_sidebar',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Public Agent',
+        userId: 'creator-1',
+        visibility: 'public',
+      }),
+    );
+
+    const stopPropagation = vi.fn();
+    await getMenuItem(result.current(), 'copyAgentId').onClick({ domEvent: { stopPropagation } });
+
+    expect(stopPropagation).toHaveBeenCalled();
+    expect(mocks.copyToClipboard).toHaveBeenCalledWith('agt_sidebar');
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('agent.copyIdSuccess');
   });
 
   it('hides an Agent through the caller sidebar preference', async () => {
@@ -365,6 +394,7 @@ describe('useAgentDropdownMenu', () => {
       'pin',
       'hideFromSidebar',
       'openInNewWindow',
+      'copyAgentId',
       'divider',
       'rename',
       'duplicate',

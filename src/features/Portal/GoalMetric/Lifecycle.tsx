@@ -22,12 +22,12 @@ import {
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
 import {
   artifactIconOf,
   openTargetOf,
   useOpenGoalArtifact,
 } from '@/features/AgentGoals/ProcessControl/Deliverables';
+import { AgentActor, UserActor } from '@/features/AgentGoals/ProcessControl/GoalActors';
 import type {
   GoalArtifactView,
   GoalGraphView,
@@ -35,11 +35,7 @@ import type {
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KIND_ICON } from '@/features/AgentGoals/ProcessControl/shared';
 import { useGoalNodeSelect } from '@/features/AgentGoals/ProcessControl/useGoalProcessActions';
-import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
-import UserAvatar from '@/features/User/UserAvatar';
 import { goalSelectors, useGoalStore } from '@/store/goal';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
 import type { LifecycleNote } from './lifecycleEvent';
 import { buildLifecycleDays, type LifecycleGroup, type LifecycleRow } from './lifecycleRows';
@@ -129,6 +125,14 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
 
     background: ${cssVar.colorBgContainer};
+  `,
+  // The same header for a host that scrolls the whole page instead of owning a
+  // padded scroller: nothing to cancel, so it simply reads as a label.
+  dayPlain: css`
+    padding-block: 12px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${cssVar.colorTextTertiary};
   `,
   item: css`
     position: relative;
@@ -374,52 +378,6 @@ const ArtifactCard = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
 
 ArtifactCard.displayName = 'GoalMetricLifecycleArtifact';
 
-const AgentActor = memo<{ agentId: string }>(({ agentId }) => {
-  const { t } = useTranslation('chat');
-  const meta = useAgentDisplayMeta(agentId);
-
-  // The node titles give way first — who acted stays readable, and only a very
-  // long agent name is capped.
-  return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
-      <AssigneeProfileAvatar agentId={agentId} size={16} />
-      <Text ellipsis fontSize={13} style={{ maxWidth: 120 }} weight={500}>
-        {meta?.title ?? t('goalProcess.actor.agent')}
-      </Text>
-    </Flexbox>
-  );
-});
-
-AgentActor.displayName = 'GoalMetricLifecycleAgentActor';
-
-const UserActor = memo<{ userId?: string | null }>(({ userId }) => {
-  const { t } = useTranslation('chat');
-  const [currentUserId, nickName] = useUserStore((s) => [
-    userProfileSelectors.userId(s),
-    userProfileSelectors.nickName(s),
-  ]);
-
-  // Only the signed-in user can be shown by face; another member's event reads
-  // as "Member" rather than borrowing this user's identity or calling it "You".
-  if (userId && userId !== currentUserId)
-    return (
-      <Text fontSize={13} style={{ flex: 'none' }} weight={500}>
-        {t('goalProcess.actor.member')}
-      </Text>
-    );
-
-  return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
-      <UserAvatar size={16} />
-      <Text ellipsis fontSize={13} style={{ maxWidth: 120 }} weight={500}>
-        {nickName || t('goalProcess.actor.user')}
-      </Text>
-    </Flexbox>
-  );
-});
-
-UserActor.displayName = 'GoalMetricLifecycleUserActor';
-
 const Actor = memo<{ event: GoalGraphEvent }>(({ event }) => {
   const { t } = useTranslation('chat');
   if (event.actorType === 'agent' && event.actorId) return <AgentActor agentId={event.actorId} />;
@@ -543,13 +501,32 @@ const useDayLabel = () => {
   };
 };
 
-const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph }) => {
+interface LifecycleProps {
+  goalId: string;
+  graph: GoalGraphView;
+  /**
+   * Click landing for a row's subject. A host that also renders the graph passes
+   * its own handler so a timeline click keeps the map's selection in sync —
+   * without it the timeline would open the node but leave the graph stale.
+   */
+  onSelect?: (nodeId: string) => void;
+  /**
+   * Pins each day label under the host's top edge. Only right inside the metric
+   * panel, whose padded scroller the offsets are computed against; a host that
+   * scrolls the page turns it off.
+   */
+  stickyDays?: boolean;
+}
+
+const Lifecycle = memo<LifecycleProps>(({ goalId, graph, stickyDays = true, onSelect }) => {
   const { t } = useTranslation('chat');
   const dayLabel = useDayLabel();
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
   // Same landing as a click anywhere else on the goal: a Task opens its Task
-  // panel, other nodes their drill-down.
-  const onSelect = useGoalNodeSelect(goalId, graph);
+  // panel, other nodes their drill-down. A host that owns the graph's selection
+  // passes its own handler instead, so the click updates both surfaces.
+  const openNode = useGoalNodeSelect(goalId, graph);
+  const select = onSelect ?? openNode;
 
   const days = useMemo(() => {
     const workTypes = new Map(
@@ -571,14 +548,14 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, grap
     <Flexbox gap={0}>
       {days.map(({ day, groups }) => (
         <Flexbox gap={2} key={day.valueOf()}>
-          <div className={styles.day}>{dayLabel(day)}</div>
+          <div className={stickyDays ? styles.day : styles.dayPlain}>{dayLabel(day)}</div>
           <Flexbox gap={0}>
             {groups.map((group) => (
               <EventItem
                 graph={graph}
                 group={group}
                 key={group.rows[0].event.id}
-                onSelect={onSelect}
+                onSelect={select}
               />
             ))}
           </Flexbox>

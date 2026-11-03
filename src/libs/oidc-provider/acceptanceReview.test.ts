@@ -10,7 +10,7 @@ const RESOURCE = 'urn:lobehub:acceptance:7f0c9a7e-0000-4000-8000-000000000001';
 
 describe('reviewResourceServer', () => {
   it('issues an eight hour JWT scoped to the one acceptance for the review client', () => {
-    expect(reviewResourceServer('lobehub-review', RESOURCE)).toEqual({
+    expect(reviewResourceServer('lobehub-acceptance', RESOURCE)).toEqual({
       accessTokenFormat: 'jwt',
       accessTokenTTL: 8 * 60 * 60,
       audience: RESOURCE,
@@ -19,17 +19,19 @@ describe('reviewResourceServer', () => {
   });
 
   it('refuses to widen the review client to the full API audience', () => {
-    expect(reviewResourceServer('lobehub-review', 'urn:lobehub:chat')).toBe('reject');
-    expect(reviewResourceServer('lobehub-review', 'urn:lobehub:acceptance:../x')).toBe('reject');
+    expect(reviewResourceServer('lobehub-acceptance', 'urn:lobehub:chat')).toBe('reject');
+    expect(reviewResourceServer('lobehub-acceptance', 'urn:lobehub:acceptance:../x')).toBe(
+      'reject',
+    );
   });
 
   it('refuses a request naming more than one acceptance, since consent names only one', () => {
     const other = 'urn:lobehub:acceptance:7f0c9a7e-0000-4000-8000-000000000002';
-    expect(reviewResourceServer('lobehub-review', RESOURCE, [RESOURCE, other])).toBe('reject');
-    expect(reviewResourceServer('lobehub-review', RESOURCE, [RESOURCE])).toMatchObject({
+    expect(reviewResourceServer('lobehub-acceptance', RESOURCE, [RESOURCE, other])).toBe('reject');
+    expect(reviewResourceServer('lobehub-acceptance', RESOURCE, [RESOURCE])).toMatchObject({
       audience: RESOURCE,
     });
-    expect(reviewResourceServer('lobehub-review', RESOURCE, RESOURCE)).toMatchObject({
+    expect(reviewResourceServer('lobehub-acceptance', RESOURCE, RESOURCE)).toMatchObject({
       audience: RESOURCE,
     });
   });
@@ -62,5 +64,45 @@ describe('isAcceptanceReviewAudience', () => {
     expect(isAcceptanceReviewAudience('urn:lobehub:chat')).toBe(false);
     expect(isAcceptanceReviewAudience(undefined)).toBe(false);
     expect(isAcceptanceReviewAudience(['urn:lobehub:hetero-operation'])).toBe(false);
+  });
+});
+
+describe('site review resources', () => {
+  const SITE = 'urn:lobehub:site:psite_7f3k9q2mAbCd:https%3A%2F%2Ffieldnotes.app';
+
+  it('issues an eight hour JWT for a site through the browser code flow', () => {
+    expect(
+      reviewResourceServer('lobehub-acceptance', SITE, SITE, { route: 'authorization' }),
+    ).toEqual({
+      accessTokenFormat: 'jwt',
+      accessTokenTTL: 8 * 60 * 60,
+      audience: SITE,
+      scope: 'acceptance:review',
+    });
+    expect(
+      reviewResourceServer('lobehub-acceptance', SITE, SITE, {
+        grantType: 'authorization_code',
+        route: 'token',
+      }),
+    ).toMatchObject({ audience: SITE });
+  });
+
+  it('refuses a site through the device flow, which has no origin to hand the result back to', () => {
+    expect(
+      reviewResourceServer('lobehub-acceptance', SITE, SITE, { route: 'device_authorization' }),
+    ).toBe('reject');
+    expect(
+      reviewResourceServer('lobehub-acceptance', SITE, SITE, {
+        grantType: 'urn:ietf:params:oauth:grant-type:device_code',
+        route: 'token',
+      }),
+    ).toBe('reject');
+    expect(
+      reviewResourceServer('lobehub-acceptance', SITE, SITE, { route: 'code_verification' }),
+    ).toBe('reject');
+  });
+
+  it('counts a site audience as review-issued so it never passes as an app session', () => {
+    expect(isAcceptanceReviewAudience(SITE)).toBe(true);
   });
 });

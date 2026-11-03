@@ -55,6 +55,20 @@ describe('OIDC Provider - Market Client Integration', () => {
 
       vi.doUnmock('@/envs/app');
     });
+
+    it('names the acceptance toolbar client after the product people see', async () => {
+      vi.doMock('@/envs/app', () => ({
+        appEnv: { APP_URL: 'https://example.com' },
+      }));
+
+      const { defaultClients } = await import('./config');
+      const client = defaultClients.find((c) => c.client_id === 'lobehub-acceptance');
+
+      expect(client?.client_name).toBe('LobeHub Acceptance');
+      expect(client?.redirect_uris).toEqual(['https://example.com/oidc/acceptance/callback']);
+
+      vi.doUnmock('@/envs/app');
+    });
   });
 
   describe('Provider Configuration', () => {
@@ -80,6 +94,32 @@ describe('OIDC Provider - Market Client Integration', () => {
       expect(desktopClient?.redirectUriAllowed('https://example.com/oidc/callback/desktop')).toBe(
         false,
       );
+
+      vi.doUnmock('@/envs/app');
+    });
+
+    it('should register toby as a public native client with an https callback only', async () => {
+      vi.doMock('@/envs/app', () => ({
+        appEnv: {
+          APP_URL: 'https://app.lobehub.com',
+          MARKET_BASE_URL: undefined,
+        },
+      }));
+
+      const { default: Provider } = await import('oidc-provider');
+      const { defaultClients } = await import('./config');
+      const provider = new Provider('https://app.lobehub.com/oidc', { clients: defaultClients });
+      const tobyClient = await provider.Client.find('toby');
+
+      expect(tobyClient?.applicationType).toBe('native');
+      expect(tobyClient?.tokenEndpointAuthMethod).toBe('none');
+      expect(tobyClient?.grantTypes).toEqual(['authorization_code', 'refresh_token']);
+      expect(tobyClient?.redirectUriAllowed('https://app.lobehub.com/oidc/callback/toby')).toBe(
+        true,
+      );
+      expect(tobyClient?.redirectUriAllowed('https://lobehub.com/oidc/callback/toby')).toBe(true);
+      expect(tobyClient?.redirectUriAllowed('com.lobehub.toby://auth/callback')).toBe(false);
+      expect(tobyClient?.redirectUriAllowed('https://example.com/oidc/callback/toby')).toBe(false);
 
       vi.doUnmock('@/envs/app');
     });

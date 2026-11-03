@@ -31,12 +31,19 @@ import { getTaskStoreState } from '@/store/task';
 import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { MISSING_TASK_NAME_ERROR } from '../../constants';
 import { normalizeListTasksParams } from '../../listTasks';
 import { selectAssignableMembers } from '../../listWorkspaceMembers';
 import { TaskIdentifier } from '../../manifest';
 import { normalizeSetTaskVerifyParams } from '../../setTaskVerify';
+import {
+  describeTaskModelChange,
+  toCreateTaskModelConfig,
+  toTaskModelConfigPatch,
+} from '../../taskModel';
+import { resolveTaskOpenTarget } from '../../taskRef';
 import type {
   AddTaskCommentParams,
   CreateTaskParams,
@@ -91,14 +98,6 @@ const memberLabel = (userId: string): string => {
   return name ? `${name} (${userId})` : userId;
 };
 
-const extractIdentifier = (params: unknown, result: BuiltinToolResult): string | undefined => {
-  const fromState = (result.state as { identifier?: unknown } | undefined)?.identifier;
-  if (typeof fromState === 'string' && fromState.length > 0) return fromState;
-  const fromParams = (params as { identifier?: unknown } | null | undefined)?.identifier;
-  if (typeof fromParams === 'string' && fromParams.length > 0) return fromParams;
-  return undefined;
-};
-
 class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   readonly identifier = TaskIdentifier;
   protected readonly apiEnum = TaskApiName;
@@ -107,7 +106,10 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     if (!result.success) return;
 
     const store = getTaskStoreState();
-    const identifier = extractIdentifier(params, result);
+    const identifier = resolveTaskOpenTarget(
+      result.state as { taskId?: string; identifier?: string },
+      params as { identifier?: string },
+    );
 
     // Auto-expand the freshly created task's detail in the right-side portal so
     // the user can review it without leaving the conversation. This fires once
@@ -172,14 +174,15 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
     try {
       log('[TaskExecutor] addTaskComment - identifier:', identifier);
-      const result = await getTaskStoreState().addComment(identifier, params.content, {
+      const target = (await taskService.find(identifier)).data;
+      const result = await getTaskStoreState().addComment(target.id, params.content, {
         authorAgentId: ctx?.agentId,
       });
       const commentId = (result as { data?: { id?: string } } | undefined)?.data?.id;
 
       return {
-        content: `Comment added to task ${identifier}.`,
-        state: { commentId, identifier, success: true },
+        content: `Comment added to task ${target.identifier} (id: ${target.id}).`,
+        state: { commentId, identifier: target.identifier, taskId: target.id, success: true },
         success: true,
       };
     } catch (error) {
@@ -204,10 +207,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       instruction: string;
       assigneeAgentId?: string;
       assigneeUserId?: string;
-      // Bind a goal entity to the created task (see TaskService.createTask).
+      model?: string;
       name: string;
       parentIdentifier?: string;
       priority?: number;
+      provider?: string;
       sortOrder?: number;
     },
     ctx?: BuiltinToolContext,
@@ -230,13 +234,15 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       // Executing agent and human owner are independent, coexisting sides (the
       // member owns the outcome, the agent executes) — a member owner does not
       // suppress the usual current-agent default.
+      const parent = parentIdentifier ? (await taskService.find(parentIdentifier)).data : undefined;
       const task = await getTaskStoreState().createTask({
         assigneeAgentId: assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
         assigneeUserId,
+        config: toCreateTaskModelConfig(params),
         createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
         name: params.name,
-        parentTaskId: parentIdentifier,
+        parentTaskId: parent?.id,
         priority: params.priority,
       });
 
@@ -252,10 +258,12 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         content: formatTaskCreated({
           assigneeLabel: task.assigneeUserId ? memberLabel(task.assigneeUserId) : undefined,
           baseUrl: taskLinkBaseUrl(),
+          id: task.id,
           identifier: task.identifier,
           instruction: params.instruction,
           name: task.name,
-          parentLabel: parentIdentifier,
+          parentLabel: parent?.identifier,
+          parentTaskId: parent?.id,
           priority: task.priority,
           status: task.status,
         }),
@@ -293,9 +301,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       instruction: string;
       assigneeAgentId?: string;
       assigneeUserId?: string;
+      model?: string;
       name: string;
       parentIdentifier?: string;
       priority?: number;
+      provider?: string;
       sortOrder?: number;
     },
     ctx?: BuiltinToolContext,
@@ -327,7 +337,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           (typeof result.content === 'string' ? result.content : 'Unknown error');
       const identifier = (result.state as { identifier?: string } | undefined)?.identifier;
 
-      results.push({ error, identifier, name: item.name, success });
+      results.push({
+        error,
+        identifier,
+        taskId: (result.state as { taskId?: string })?.taskId,
+        name: item.name,
+        success,
+      });
     }
 
     const succeeded = results.filter((r) => r.success).length;
@@ -355,7 +371,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const label = deleted?.identifier ?? params.identifier;
 
       return {
-        content: formatTaskDeleted(label, deleted?.name),
+        content: formatTaskDeleted(`${label} (id: ${deleted?.id})`, deleted?.name),
         // Surface the deleted task's internal id so the manifest-driven dispatch
         // layer (`work: { action: 'delete' }`) can delete its Work + refresh the
         // conversation caches — the task row is gone, so the Work can only be
@@ -406,9 +422,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       description?: string;
       identifier: string;
       instruction?: string;
+      model?: string | null;
       name?: string;
       parentIdentifier?: string | null;
       priority?: number;
+      provider?: string | null;
       removeDependencies?: string[];
     },
     ctx?: BuiltinToolContext,
@@ -416,7 +434,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     try {
       log('[TaskExecutor] editTask - params:', params);
 
-      const { identifier, addDependencies, removeDependencies } = params;
+      const { addDependencies, removeDependencies } = params;
+      const target = (await taskService.find(params.identifier)).data;
+      const identifier = target.id;
       const store = getTaskStoreState();
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
@@ -462,7 +482,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       }
       if (params.parentIdentifier !== undefined) {
         const parentIdentifier = params.parentIdentifier?.trim() || null;
-        updateData.parentTaskId = parentIdentifier;
+        updateData.parentTaskId = parentIdentifier
+          ? (await taskService.find(parentIdentifier)).data.id
+          : null;
         changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
       }
       if (params.priority !== undefined) {
@@ -485,24 +507,39 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         );
       }
 
-      if (addDependencies?.length) {
-        addDependencies.forEach((dep) => {
-          ops.push(store.addDependency(identifier, dep));
-          changes.push(formatDependencyAdded(identifier, dep));
-        });
+      // Merged into `config` so checkpoint / review / execution keys survive.
+      const modelPatch = toTaskModelConfigPatch(params);
+      if (modelPatch) {
+        ops.push(store.updateTaskModelConfig(identifier, modelPatch, { rethrow: true }));
+        changes.push(describeTaskModelChange(modelPatch));
       }
-      if (removeDependencies?.length) {
-        removeDependencies.forEach((dep) => {
-          ops.push(store.removeDependency(identifier, dep));
-          changes.push(formatDependencyRemoved(identifier, dep));
-        });
-      }
+
+      const applyDependencies = async (refs: string[], remove: boolean) => {
+        const tasks = await Promise.all(
+          refs.map(async (ref) => (await taskService.find(ref)).data),
+        );
+        for (const dep of new Map(tasks.map((task) => [task.id, task])).values()) {
+          ops.push(
+            remove
+              ? store.removeDependency(identifier, dep.id)
+              : store.addDependency(identifier, dep.id),
+          );
+          const label = `${dep.identifier} (id: ${dep.id})`;
+          changes.push(
+            remove
+              ? formatDependencyRemoved(target.identifier, label)
+              : formatDependencyAdded(target.identifier, label),
+          );
+        }
+      };
+      if (addDependencies?.length) await applyDependencies(addDependencies, false);
+      if (removeDependencies?.length) await applyDependencies(removeDependencies, true);
 
       await Promise.all(ops);
 
       return {
-        content: formatTaskEdited(identifier, changes),
-        state: { identifier, success: true },
+        content: formatTaskEdited(`${target.identifier} (id: ${target.id})`, changes),
+        state: { identifier: target.identifier, taskId: target.id, success: true },
         success: true,
       };
     } catch (error) {
@@ -553,7 +590,8 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     try {
       log('[TaskExecutor] setTaskSchedule - params:', params);
 
-      const { identifier } = params;
+      const target = (await taskService.find(params.identifier)).data;
+      const identifier = target.id;
       const store = getTaskStoreState();
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
@@ -563,7 +601,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const schedule = await this.checkResultingSchedule(params);
       if (schedule && !schedule.valid) {
         return {
-          content: formatInvalidScheduleMessage(identifier, schedule.error),
+          content: formatInvalidScheduleMessage(target.identifier, schedule.error),
           error: { message: schedule.error, type: 'InvalidSchedule' },
           success: false,
         };
@@ -649,8 +687,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       if (schedule?.valid) changes.push(schedule.preview);
 
       return {
-        content: formatTaskEdited(identifier, changes),
-        state: { automationMode: params.automationMode, identifier, success: true },
+        content: formatTaskEdited(`${target.identifier} (id: ${target.id})`, changes),
+        state: {
+          automationMode: params.automationMode,
+          identifier: target.identifier,
+          taskId: target.id,
+          success: true,
+        },
         success: true,
       };
     } catch (error) {
@@ -680,7 +723,8 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       log('[TaskExecutor] setTaskVerify - params:', params);
       params = normalizeSetTaskVerifyParams(params);
 
-      const { identifier } = params;
+      const target = (await taskService.find(params.identifier)).data;
+      const identifier = target.id;
 
       // Only forward keys the caller actually provided. The TRPC contract
       // (task.updateVerifyConfig) treats `null` as "clear" and omission as
@@ -754,8 +798,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       await getTaskStoreState().internal_refreshTaskDetail(identifier);
 
       return {
-        content: formatTaskEdited(identifier, changes),
-        state: { enabled: params.enabled, identifier, success: true },
+        content: formatTaskEdited(`${target.identifier} (id: ${target.id})`, changes),
+        state: {
+          enabled: params.enabled,
+          identifier: target.identifier,
+          taskId: target.id,
+          success: true,
+        },
         success: true,
       };
     } catch (error) {
@@ -843,7 +892,16 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       return {
         content: formatTaskList(tasks, normalized.displayFilters),
-        state: { count: tasks.length, success: true, total: result.total },
+        state: {
+          count: tasks.length,
+          success: true,
+          total: result.total,
+          results: tasks.map((task) => ({
+            identifier: task.identifier,
+            taskId: task.id,
+            success: true,
+          })),
+        },
         success: true,
       };
     } catch (error) {
@@ -858,7 +916,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   };
 
   runTask = async (
-    params: { continueTopicId?: string; identifier?: string; prompt?: string },
+    params: {
+      continueTopicId?: string;
+      identifier?: string;
+      model?: string;
+      prompt?: string;
+      provider?: string;
+    },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const identifier = params.identifier?.trim() || ctx?.taskId || undefined;
@@ -872,9 +936,12 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
     try {
       log('[TaskExecutor] runTask - identifier:', identifier);
-      const result = await taskService.run(identifier, {
+      const target = (await taskService.find(identifier)).data;
+      const result = await taskService.run(target.id, {
         continueTopicId: params.continueTopicId,
+        model: params.model,
         prompt: params.prompt,
+        provider: params.provider,
       });
 
       const topicId = (result as { topicId?: string } | undefined)?.topicId;
@@ -883,13 +950,19 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const store = getTaskStoreState();
       await Promise.all([store.internal_refreshTaskDetail(identifier), store.refreshTaskList()]);
 
-      const lines = [`Task ${identifier} started.`];
+      const lines = [`Task ${target.identifier} (id: ${target.id}) started.`];
       if (topicId) lines.push(`  Topic: ${topicId}`);
       if (operationId) lines.push(`  Operation: ${operationId}`);
 
       return {
         content: lines.join('\n'),
-        state: { identifier, operationId, success: true, topicId },
+        state: {
+          identifier: target.identifier,
+          taskId: target.id,
+          operationId,
+          success: true,
+          topicId,
+        },
         success: true,
       };
     } catch (error) {
@@ -904,11 +977,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   };
 
   runTasks = async (
-    params: { identifiers: string[] },
+    params: { identifiers: string[]; model?: string; provider?: string },
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const identifiers = Array.isArray(params.identifiers)
-      ? params.identifiers.map((id) => id?.trim()).filter((id): id is string => !!id)
+      ? params.identifiers.filter((id): id is string => typeof id === 'string' && !!id.trim())
       : [];
 
     if (identifiers.length === 0) {
@@ -922,19 +995,52 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     log('[TaskExecutor] runTasks - count:', identifiers.length);
 
     const results: RunTasksItemResult[] = [];
-    const lines: string[] = [];
 
-    for (const [index, identifier] of identifiers.entries()) {
+    const byId = new Map<string, { id: string; identifier: string; refs: string[] }>();
+    for (const ref of identifiers) {
       try {
-        const result = await taskService.run(identifier);
-        const topicId = (result as { topicId?: string } | undefined)?.topicId;
-        const operationId = (result as { operationId?: string } | undefined)?.operationId;
-        results.push({ identifier, operationId, success: true, topicId });
-        lines.push(`${index + 1}. ${identifier} — started${topicId ? ` (topic ${topicId})` : ''}`);
+        const { data: task } = await taskService.find(ref);
+        const group = byId.get(task.id) ?? { id: task.id, identifier: task.identifier, refs: [] };
+        group.refs.push(ref);
+        byId.set(task.id, group);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        results.push({ error: message, identifier, success: false });
-        lines.push(`${index + 1}. ${identifier} — failed: ${message}`);
+        if (isTrpcErrorCode(error, 'BAD_REQUEST')) {
+          const message = error instanceof Error ? error.message : 'Invalid task reference';
+          return {
+            content: message,
+            error: { message, type: 'InvalidTaskReference' },
+            success: false,
+          };
+        }
+        results.push({
+          identifier: ref,
+          refs: [ref],
+          error: error instanceof Error ? error.message : 'Task not found',
+          success: false,
+        });
+      }
+    }
+    for (const task of byId.values()) {
+      try {
+        const result = await (params.model || params.provider
+          ? taskService.run(task.id, { model: params.model, provider: params.provider })
+          : taskService.run(task.id));
+        results.push({
+          identifier: task.identifier,
+          taskId: task.id,
+          refs: task.refs,
+          operationId: result.operationId,
+          topicId: result.topicId,
+          success: true,
+        });
+      } catch (error) {
+        results.push({
+          identifier: task.identifier,
+          taskId: task.id,
+          refs: task.refs,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          success: false,
+        });
       }
     }
 
@@ -952,7 +1058,15 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         : `Started ${succeeded}/${results.length} tasks (${failed} failed):`;
 
     return {
-      content: [header, ...lines].join('\n'),
+      content: [
+        header,
+        ...results.map((result) => {
+          const label = result.taskId
+            ? `${result.identifier} (id: ${result.taskId})`
+            : result.identifier;
+          return `${label} — ${result.success ? 'started' : `failed: ${result.error}`}`;
+        }),
+      ].join('\n'),
       state: { failed, results, succeeded },
       success: failed === 0,
     };
@@ -992,7 +1106,8 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       log('[TaskExecutor] updateTaskStatus - params:', params);
 
       const identifier = params.identifier ?? ctx?.taskId ?? undefined;
-      const id = await getTaskStoreState().updateTaskStatus(identifier, params.status, {
+      const target = (await taskService.find(identifier ?? getTaskStoreState().activeTaskId!)).data;
+      await getTaskStoreState().updateTaskStatus(target.id, params.status, {
         ...(ctx?.agentId ? { actorAgentId: ctx.agentId } : {}),
         error: params.error,
       });
@@ -1003,9 +1118,14 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       return {
         content:
           params.status === 'failed' && params.error
-            ? `Task ${id} status updated to failed. Error: ${params.error}`
-            : `Task ${id} status updated to ${params.status}.`,
-        state: { status: params.status, success: true },
+            ? `Task ${target.identifier} (id: ${target.id}) status updated to failed. Error: ${params.error}`
+            : `Task ${target.identifier} (id: ${target.id}) status updated to ${params.status}.`,
+        state: {
+          identifier: target.identifier,
+          taskId: target.id,
+          status: params.status,
+          success: true,
+        },
         success: true,
       };
     } catch (error) {
@@ -1032,7 +1152,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       return {
         content: formatTaskDetail(detail),
-        state: { identifier: detail.identifier, success: true },
+        state: { identifier: detail.identifier, taskId: detail.id, success: true },
         success: true,
       };
     } catch (error) {

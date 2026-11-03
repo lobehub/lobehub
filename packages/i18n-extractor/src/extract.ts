@@ -17,10 +17,25 @@ export interface DynamicKeyEntry {
 }
 
 export interface ExtractTranslationUsesOptions {
+  contextOption?: string;
+  contextSeparator?: string;
+  countOption?: string;
   marker?: string;
+  namespaceOption?: string;
+  namespaceSeparator?: string;
+  pluralSeparator?: string;
   skip?: (file: string) => boolean;
   translatorFields?: string[];
 }
+
+export const i18nextPreset = {
+  contextOption: 'context',
+  countOption: 'count',
+  marker: '$TFunctionBrand',
+  namespaceOption: 'ns',
+  namespaceSeparator: ':',
+  translatorFields: ['t'],
+} satisfies ExtractTranslationUsesOptions;
 
 export const UNBOUNDED_PATTERN = '.*';
 
@@ -42,6 +57,22 @@ export const assertBoundedTranslationUses = (
 const escape = (value: string) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const product = (left: string[], right: string[]) => left.flatMap((a) => right.map((b) => a + b));
 const INDIRECT_CALLS = new Set(['apply', 'bind', 'call']);
+const PLURAL_CATEGORIES = 'zero|one|two|few|many|other';
+const unwrapAssertions = (node: ts.Expression): ts.Expression =>
+  ts.isAsExpression(node) ||
+  ts.isTypeAssertionExpression(node) ||
+  ts.isSatisfiesExpression(node) ||
+  ts.isNonNullExpression(node) ||
+  ts.isParenthesizedExpression(node)
+    ? unwrapAssertions(node.expression)
+    : node;
+// Other initializers are already summarized by the use-site type, which also carries flow narrowing.
+const tracesKeyText = (initializer: ts.Expression) => {
+  const node = unwrapAssertions(initializer);
+  return ts.isStringLiteralLike(node) || ts.isTemplateExpression(node) || ts.isIdentifier(node);
+};
+const OPAQUE_INTERPOLATION =
+  ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Object | ts.TypeFlags.BooleanLike;
 
 // Patterns are anchored at selection time. Unknown strings deliberately retain every matching key.
 export const typePatterns = (type: ts.Type): string[] => {
@@ -68,7 +99,13 @@ export const extractTranslationUses = (
   program: ts.Program,
   files: string[],
   {
+    contextOption,
+    contextSeparator = '_',
+    countOption,
     marker: markerName = DEFAULT_NAMESPACE_MARKER,
+    namespaceOption,
+    namespaceSeparator,
+    pluralSeparator = '_',
     skip,
     translatorFields = ['t', 'find'],
   }: ExtractTranslationUsesOptions = {},
@@ -86,6 +123,7 @@ export const extractTranslationUses = (
   const patternsFor = (node: ts.Expression, seen = new Set<ts.Node>()): string[] => {
     if (seen.has(node)) throw new Error('Cyclic translation key initializer');
     seen.add(node);
+    if (unwrapAssertions(node) !== node) return patternsFor(unwrapAssertions(node), seen);
     if (ts.isStringLiteralLike(node)) return [escape(node.text)];
     if (ts.isTemplateExpression(node))
       return node.templateSpans.reduce(
@@ -103,20 +141,27 @@ export const extractTranslationUses = (
         ts.isVariableDeclaration(declaration) &&
         declaration.initializer &&
         ts.isVariableDeclarationList(declaration.parent) &&
-        declaration.parent.flags & ts.NodeFlags.Const
+        declaration.parent.flags & ts.NodeFlags.Const &&
+        tracesKeyText(declaration.initializer)
       )
         return patternsFor(declaration.initializer, seen);
     }
     return typePatterns(type);
   };
+  // JS stringifies arbitrary interpolation values; a fixed surrounding pattern still bounds the resource set.
+  const stringifiedPatterns = (type: ts.Type): string[] | undefined => {
+    if (type.flags & ts.TypeFlags.Undefined) return ['undefined'];
+    if (type.flags & ts.TypeFlags.Null) return ['null'];
+    if (type.flags & OPAQUE_INTERPOLATION) return [UNBOUNDED_PATTERN];
+  };
   const interpolationPatterns = (node: ts.Expression, seen: Set<ts.Node>): string[] => {
     const type = checker.getTypeAtLocation(node);
-    // JS stringifies arbitrary interpolation values; a fixed surrounding pattern still bounds the resource set.
-    if (
-      type.flags &
-      (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Object | ts.TypeFlags.BooleanLike)
-    )
-      return [UNBOUNDED_PATTERN];
+    const direct = stringifiedPatterns(type);
+    if (direct) return direct;
+    if (type.isUnion() && type.types.some(stringifiedPatterns))
+      return [
+        ...new Set(type.types.flatMap((part) => stringifiedPatterns(part) ?? typePatterns(part))),
+      ];
     return patternsFor(node, new Set(seen));
   };
   for (const file of files) {
@@ -134,6 +179,13 @@ export const extractTranslationUses = (
         : ts.isAsExpression(node.parent)
           ? checker.getTypeAtLocation(node.parent)
           : checker.getContextualType(node);
+      // An unknown-typed list element (e.g. a hook dependency list) cannot be called without a cast.
+      if (
+        context &&
+        ts.isArrayLiteralExpression(node.parent) &&
+        context.flags & ts.TypeFlags.Unknown
+      )
+        return;
       if (context) {
         const target = checker.getNonNullableType(context);
         const erased = marker
@@ -153,33 +205,92 @@ export const extractTranslationUses = (
           `Unsupported indirect translation call in ${file}; call the typed translator directly`,
         );
     };
-    const recordCall = (node: ts.CallExpression) => {
+    const namespaceTypes = (type: ts.Type) => {
+      const parts = (type.isUnion() ? type.types : [type]).filter(
+        (part) => !(part.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Void)),
+      );
+      return {
+        literals: parts.map((part) => (part.isStringLiteral() ? part.value : undefined)),
+        omittable: parts.length < (type.isUnion() ? type.types.length : 1),
+      };
+    };
+    const optionType = (node: ts.CallExpression, name: string | undefined) => {
+      const options = node.arguments[1];
+      if (!name || !options) return;
+      const option = checker.getTypeAtLocation(options).getProperty(name);
+      if (!option) return;
+      // Object literal properties widen without a contextual type; the initializer keeps its literal.
+      const declaration = ts.isObjectLiteralExpression(options)
+        ? options.properties.find((property) => property.name?.getText(source) === name)
+        : undefined;
+      return {
+        optional: !declaration && Boolean(option.flags & ts.SymbolFlags.Optional),
+        type:
+          declaration && ts.isPropertyAssignment(declaration)
+            ? checker.getTypeAtLocation(declaration.initializer)
+            : declaration && ts.isShorthandPropertyAssignment(declaration)
+              ? checker.getTypeAtLocation(declaration.name)
+              : checker.getTypeOfSymbolAtLocation(option, options),
+      };
+    };
+    const callNamespaces = (node: ts.CallExpression) => {
       const marker = markerOf(checker.getTypeAtLocation(node.expression));
       if (!marker) return;
-      const namespaceType = checker.getNonNullableType(
-        checker.getTypeOfSymbolAtLocation(marker, node.expression),
-      );
-      const namespaces = namespaceType.isUnion() ? namespaceType.types : [namespaceType];
+      const branded = namespaceTypes(
+        checker.getNonNullableType(checker.getTypeOfSymbolAtLocation(marker, node.expression)),
+      ).literals;
+      const option = optionType(node, namespaceOption);
+      if (!option) return branded;
+      const { literals, omittable } = namespaceTypes(option.type);
+      return omittable || option.optional ? [...new Set([...literals, ...branded])] : literals;
+    };
+    // i18next also tries `key_<context>` and `key[_<context>]_[ordinal_]<plural category>`, falling back to `key`.
+    const lookupSuffix = (node: ts.CallExpression) => {
+      let suffix = '';
+      const context = optionType(node, contextOption);
+      const contextType = context && checker.getNonNullableType(context.type);
+      if (contextType && !(contextType.flags & ts.TypeFlags.Never))
+        suffix += `(?:${escape(contextSeparator)}(?:${typePatterns(contextType).join('|')}))?`;
+      const count = optionType(node, countOption);
+      const countType = count && checker.getNonNullableType(count.type);
+      const countParts = countType?.isUnion() ? countType.types : countType ? [countType] : [];
+      if (countParts.some((part) => !(part.flags & (ts.TypeFlags.StringLike | ts.TypeFlags.Never))))
+        suffix += `(?:${escape(pluralSeparator)}(?:ordinal${escape(pluralSeparator)})?(?:${PLURAL_CATEGORIES}))?`;
+      return suffix;
+    };
+    const prefixPattern = namespaceSeparator
+      ? new RegExp(`^([A-Za-z_][\\w-]*)${escape(escape(namespaceSeparator))}([^]*)$`)
+      : undefined;
+    const recordCall = (node: ts.CallExpression) => {
+      const namespaces = callNamespaces(node);
+      if (!namespaces) return;
       const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
       if (!node.arguments[0]) throw new Error(`${file}:${line}: missing translation key`);
+      let patterns: string[];
+      let optional: boolean;
+      try {
+        const resultType = checker.getTypeAtLocation(node);
+        optional =
+          resultType.isUnion() &&
+          resultType.types.some((type) => type.flags & ts.TypeFlags.Undefined);
+        const suffix = lookupSuffix(node);
+        patterns = patternsFor(node.arguments[0]).map((pattern) => pattern + suffix);
+      } catch (error) {
+        throw new Error(`${file}:${line}: ${String(error)}`, { cause: error });
+      }
       for (const namespace of namespaces) {
-        if (!namespace.isStringLiteral())
-          throw new Error(`${file}:${line}: unknown translation namespace`);
-        try {
-          const resultType = checker.getTypeAtLocation(node);
-          const optional =
-            resultType.isUnion() &&
-            resultType.types.some((type) => type.flags & ts.TypeFlags.Undefined);
-          uses.push({
-            file,
-            line,
-            namespace: namespace.value,
-            optional,
-            patterns: patternsFor(node.arguments[0]),
-          });
-        } catch (error) {
-          throw new Error(`${file}:${line}: ${String(error)}`, { cause: error });
+        if (namespace === undefined)
+          throw new Error(
+            `${file}:${line}: unknown translation namespace; make sure the declaration that types the translator (such as i18next CustomTypeOptions) is part of the program`,
+          );
+        const grouped = new Map<string, string[]>();
+        for (const pattern of patterns) {
+          const prefixed = prefixPattern?.exec(pattern);
+          const target = prefixed ? prefixed[1] : namespace;
+          grouped.set(target, [...(grouped.get(target) ?? []), prefixed ? prefixed[2] : pattern]);
         }
+        for (const [target, keys] of grouped)
+          uses.push({ file, line, namespace: target, optional, patterns: keys });
       }
     };
     const visit = (node: ts.Node) => {

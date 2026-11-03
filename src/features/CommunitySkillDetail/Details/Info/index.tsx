@@ -1,6 +1,9 @@
 'use client';
 
-import { Block, createStaticStyles, responsive } from '@lobehub/ui';
+import { Block } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,78 +16,54 @@ import { isGitHubUrl } from './isGitHubUrl';
 
 const EMPTY_VALUE = '--';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    overflow: hidden;
-    border-color: ${cssVar.colorBorderSecondary} !important;
-    border-radius: 16px !important;
-    background: ${cssVar.colorBgContainer} !important;
-  `,
-  label: css`
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.35;
-    color: ${cssVar.colorTextDescription};
-
-    ${responsive.sm} {
-      font-size: 13px;
-    }
-  `,
-  row: css`
-    display: grid;
-    grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr);
-    align-items: center;
-
-    min-height: 58px;
-    padding-block: 0;
-    padding-inline: 24px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: 0;
-    }
-
-    ${responsive.sm} {
-      grid-template-columns: 1fr;
-      gap: 6px;
-      align-items: flex-start;
-
-      min-height: 56px;
-      padding-block: 14px;
-      padding-inline: 18px;
-    }
-  `,
-  sourceLink: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-    justify-content: flex-end;
-
-    color: ${cssVar.colorLink};
-
-    &:hover {
-      color: ${cssVar.colorLinkHover};
-    }
-  `,
-  value: css`
-    min-width: 0;
-
-    font-size: 14px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.35;
-    color: ${cssVar.colorText};
-    text-align: end;
-    word-break: break-word;
-
-    ${responsive.sm} {
-      text-align: start;
-    }
-  `,
-  valueMuted: css`
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  label: {
+    fontSize: { default: '14px', [media.sm]: '13px' },
+    fontWeight: 500,
+    lineHeight: 1.35,
+    color: cssVar.colorTextDescription,
+  },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: {
+      default: 'minmax(120px, 1fr) minmax(0, 2fr)',
+      [media.sm]: '1fr',
+    },
+    gap: { default: null, [media.sm]: '6px' },
+    alignItems: { default: 'center', [media.sm]: 'flex-start' },
+    minHeight: { default: '58px', [media.sm]: '56px' },
+    paddingBlock: { default: '0', [media.sm]: '14px' },
+    paddingInline: { default: '24px', [media.sm]: '18px' },
+    borderBlockEndWidth: { 'default': '1px', ':last-child': '0' },
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  sourceLink: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    color: { 'default': cssVar.colorLink, ':hover': cssVar.colorLinkHover },
+  },
+  value: {
+    minWidth: 0,
+    fontSize: '14px',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.35,
+    color: cssVar.colorText,
+    textAlign: { default: 'end', [media.sm]: 'start' },
+    wordBreak: 'break-word',
+  },
+  valueMuted: { color: cssVar.colorTextDescription },
+});
 
 const isEmptyValue = (value: ReactNode) => value === undefined || value === null || value === '';
 
@@ -92,9 +71,9 @@ const InfoRow = memo<{ label: ReactNode; value: ReactNode }>(({ label, value }) 
   const empty = isEmptyValue(value);
 
   return (
-    <div className={styles.row}>
-      <span className={styles.label}>{label}</span>
-      <div className={[styles.value, empty ? styles.valueMuted : ''].filter(Boolean).join(' ')}>
+    <div {...stylex.props(styles.row)}>
+      <span {...stylex.props(styles.label)}>{label}</span>
+      <div {...stylex.props(styles.value, empty && styles.valueMuted)}>
         {empty ? EMPTY_VALUE : value}
       </div>
     </div>
@@ -129,7 +108,12 @@ const Info = memo(() => {
   const updatedDate = selectedVersion?.createdAt || updatedAt || createdAt;
 
   const sourceValue = sourceUrl ? (
-    <a className={styles.sourceLink} href={sourceUrl} rel={'noopener noreferrer'} target={'_blank'}>
+    <a
+      {...stylex.props(styles.sourceLink)}
+      href={sourceUrl}
+      rel={'noopener noreferrer'}
+      target={'_blank'}
+    >
       {isGitHubSource ? t('skills.details.info.viewOnGithub') : t('skills.details.info.viewSource')}{' '}
       ↗
     </a>
@@ -198,7 +182,12 @@ const Info = memo(() => {
   ];
 
   return (
-    <Block className={styles.card} paddingBlock={0} paddingInline={0} variant={'outlined'}>
+    <Block
+      className={stylex.props(styles.card).className}
+      paddingBlock={0}
+      paddingInline={0}
+      variant={'outlined'}
+    >
       {rows.map((row) => (
         <InfoRow key={row.key} label={row.label} value={row.value} />
       ))}

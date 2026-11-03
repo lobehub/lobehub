@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { aiChatService } from '@/services/aiChat';
 import { goalService } from '@/services/goal';
 
 import { useGoalStore } from './index';
@@ -26,7 +27,16 @@ vi.mock('@/services/goal', () => ({
     getGraph: vi.fn(),
     list: vi.fn(),
     tick: vi.fn(),
+    updateTitle: vi.fn(),
   },
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: { getState: () => ({ refreshTopicDetail: vi.fn() }) },
+}));
+
+vi.mock('@/services/aiChat', () => ({
+  aiChatService: { generateJSON: vi.fn() },
 }));
 
 const SCOPE = 'user-1:personal';
@@ -189,47 +199,53 @@ describe('GoalAction', () => {
   });
 
   describe('useFetchTopicGoals', () => {
-    it('reads the goals created from the topic under a topic-scoped key', () => {
+    it('reads the goals created from the topic through the topic-keyed replica', () => {
       renderHook(() => useGoalStore.getState().useFetchTopicGoals('tpc-1'));
-      const [key, fetcher] = vi.mocked(useClientDataSWR).mock.calls[0];
+      const key = syncKeyFor('topicGoalList');
 
-      expect(key).toEqual(['goal:topicGoals', 'tpc-1']);
-      void (fetcher as () => unknown)();
+      expect(key?.[3]).toBe(SCOPE);
+      expect(key?.[4]).toBe('tpc-1');
+      void syncFetcherFor('topicGoalList')?.();
       expect(goalService.list).toHaveBeenCalledWith({ limit: 20, topicId: 'tpc-1' });
     });
 
     it('does not fetch without a topic', () => {
       renderHook(() => useGoalStore.getState().useFetchTopicGoals(undefined));
 
-      expect(vi.mocked(useClientDataSWR).mock.calls[0][0]).toBeNull();
+      expect(syncCallFor('topicGoalList')).toBeUndefined();
     });
 
     it('polls only while one of the goals is still advancing on the server', () => {
-      renderHook(() => useGoalStore.getState().useFetchTopicGoals('tpc-1'));
-      const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {
-        refreshInterval: (result?: { goals: Array<{ goal: { status: string } }> }) => number;
+      const withStatuses = (...statuses: string[]) => {
+        act(() =>
+          useGoalStore.setState({
+            topicGoalsByTopicId: {
+              'tpc-1': {
+                goals: statuses.map((status) => ({ goal: { status } })) as never,
+                total: statuses.length,
+              },
+            },
+          }),
+        );
+        renderHook(() => useGoalStore.getState().useFetchTopicGoals('tpc-1'));
+        return syncConfigFor('topicGoalList')?.refreshInterval;
       };
-      const withStatuses = (...statuses: string[]) => ({
-        goals: statuses.map((status) => ({ goal: { status } })),
-      });
 
-      expect(options.refreshInterval(withStatuses('achieved', 'running'))).toBeGreaterThan(0);
-      expect(options.refreshInterval(withStatuses('review', 'paused'))).toBe(0);
-      expect(options.refreshInterval(undefined)).toBe(0);
+      expect(withStatuses('achieved', 'running')).toBeGreaterThan(0);
+      expect(withStatuses('review', 'paused')).toBe(0);
       // Regression: the tray read "Not started" after its agent started the draft.
-      expect(options.refreshInterval(withStatuses('draft'))).toBeGreaterThan(0);
+      expect(withStatuses('draft')).toBeGreaterThan(0);
+      act(() => useGoalStore.setState({ topicGoalsByTopicId: {} }));
+      renderHook(() => useGoalStore.getState().useFetchTopicGoals('tpc-1'));
+      expect(syncConfigFor('topicGoalList')?.refreshInterval).toBe(0);
     });
 
     it('polls while the conversation is generating, before any goal exists', () => {
       // A CLI agent's /goal run creates the goal mid-run: the first read finds
       // nothing, and without polling the tray stayed empty until a page reload.
       renderHook(() => useGoalStore.getState().useFetchTopicGoals('tpc-1', true));
-      const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {
-        refreshInterval: (result?: { goals: Array<{ goal: { status: string } }> }) => number;
-      };
 
-      expect(options.refreshInterval(undefined)).toBeGreaterThan(0);
-      expect(options.refreshInterval({ goals: [] })).toBeGreaterThan(0);
+      expect(syncConfigFor('topicGoalList')?.refreshInterval).toBeGreaterThan(0);
     });
   });
 
@@ -397,5 +413,171 @@ describe('GoalAction', () => {
 
     expect(goalService.advance).toHaveBeenCalledWith('goal-1', 'ollama');
     expect(goalService.tick).toHaveBeenCalledWith('goal-1', 'ollama');
+  });
+
+  describe('goal title', () => {
+    const LONG_ASK = '继续并完成桌宠项目，在现有基础上完善 TTS 语音系统，补齐唤醒词与打断';
+
+    const seedEverywhere = () =>
+      useGoalStore.setState({
+        goalGraphById: {
+          'goal-1': graphWith('paused', {
+            goal: { id: 'goal-1', requirement: LONG_ASK, status: 'paused', title: LONG_ASK },
+            nodes: [
+              { id: 'n1', kind: 'task', status: 'active', title: 'Wire up the TTS engine' },
+              { id: 'n2', kind: 'finding', status: 'resolved', title: 'Edge TTS has low latency' },
+            ],
+          }),
+        },
+        goalListByAgentId: {
+          'agent-1': { goals: [{ goal: { id: 'goal-1', title: LONG_ASK } }] as never, total: 1 },
+        },
+        homeGoalsByScope: {
+          [SCOPE]: { goals: [{ goal: { id: 'goal-1', title: LONG_ASK } }] as never, total: 1 },
+        },
+      });
+
+    const titlesShown = () => {
+      const state = useGoalStore.getState();
+      return [
+        state.goalGraphById['goal-1']?.goal.title,
+        state.goalListByAgentId['agent-1']?.goals[0]?.goal.title,
+        state.homeGoalsByScope[SCOPE]?.goals[0]?.goal.title,
+      ];
+    };
+
+    it('renames the goal on the page and in every list holding it', async () => {
+      seedEverywhere();
+      vi.mocked(goalService.updateTitle).mockResolvedValue({} as never);
+
+      await useGoalStore.getState().updateGoalTitle('goal-1', '  桌宠 TTS  ');
+
+      expect(goalService.updateTitle).toHaveBeenCalledWith('goal-1', '桌宠 TTS');
+      expect(titlesShown()).toEqual(['桌宠 TTS', '桌宠 TTS', '桌宠 TTS']);
+    });
+
+    it('ignores a blank title', async () => {
+      seedEverywhere();
+
+      await useGoalStore.getState().updateGoalTitle('goal-1', '   ');
+
+      expect(goalService.updateTitle).not.toHaveBeenCalled();
+      expect(titlesShown()).toEqual([LONG_ASK, LONG_ASK, LONG_ASK]);
+    });
+
+    it('re-reads from the server and rethrows when the rename is rejected', async () => {
+      seedEverywhere();
+      const error = new Error('forbidden');
+      vi.mocked(goalService.updateTitle).mockRejectedValue(error);
+
+      await expect(useGoalStore.getState().updateGoalTitle('goal-1', 'New')).rejects.toBe(error);
+
+      expect(mutate).toHaveBeenCalled();
+    });
+
+    it('sends title writes one at a time, so the latest edit is the last the server sees', async () => {
+      seedEverywhere();
+      const finish: Array<() => void> = [];
+      vi.mocked(goalService.updateTitle).mockImplementation(
+        () => new Promise((resolve) => finish.push(() => resolve({} as never))),
+      );
+
+      const first = useGoalStore.getState().updateGoalTitle('goal-1', 'First');
+      const second = useGoalStore.getState().updateGoalTitle('goal-1', 'Second');
+      await vi.waitFor(() => expect(goalService.updateTitle).toHaveBeenCalledTimes(1));
+      expect(goalService.updateTitle).toHaveBeenLastCalledWith('goal-1', 'First');
+
+      finish[0]();
+      await first;
+      await vi.waitFor(() => expect(goalService.updateTitle).toHaveBeenCalledTimes(2));
+      expect(goalService.updateTitle).toHaveBeenLastCalledWith('goal-1', 'Second');
+
+      finish[1]();
+      await second;
+      expect(titlesShown()).toEqual(['Second', 'Second', 'Second']);
+    });
+
+    it('keeps the newer edit on screen when an older write fails', async () => {
+      seedEverywhere();
+      const error = new Error('network');
+      vi.mocked(goalService.updateTitle)
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce({} as never);
+      mutate.mockClear();
+
+      const first = useGoalStore.getState().updateGoalTitle('goal-1', 'First');
+      const second = useGoalStore.getState().updateGoalTitle('goal-1', 'Second');
+
+      await expect(first).rejects.toBe(error);
+      await second;
+
+      expect(goalService.updateTitle).toHaveBeenLastCalledWith('goal-1', 'Second');
+      expect(mutate).not.toHaveBeenCalled();
+      expect(titlesShown()).toEqual(['Second', 'Second', 'Second']);
+    });
+
+    it('keeps a title saved by hand while the model was generating', async () => {
+      seedEverywhere();
+      vi.mocked(goalService.updateTitle).mockResolvedValue({} as never);
+      vi.mocked(aiChatService.generateJSON).mockImplementation(async () => {
+        await useGoalStore.getState().updateGoalTitle('goal-1', 'By hand');
+        return { data: { title: 'Generated' } } as never;
+      });
+
+      await useGoalStore.getState().autoRenameGoalTitle('goal-1');
+
+      expect(goalService.updateTitle).toHaveBeenCalledTimes(1);
+      expect(titlesShown()).toEqual(['By hand', 'By hand', 'By hand']);
+    });
+
+    it('names the goal from its ask and progress with the topic title chain', async () => {
+      seedEverywhere();
+      vi.mocked(aiChatService.generateJSON).mockResolvedValue({
+        data: { title: '桌宠 TTS 语音系统' },
+      } as never);
+      vi.mocked(goalService.updateTitle).mockResolvedValue({} as never);
+
+      await useGoalStore.getState().autoRenameGoalTitle('goal-1');
+
+      const [params] = vi.mocked(aiChatService.generateJSON).mock.calls[0];
+      const prompt = (params as { messages: Array<{ content: string }> }).messages
+        .map((message) => message.content)
+        .join('\n');
+      expect(prompt).toContain(LONG_ASK);
+      expect(prompt).toContain('Wire up the TTS engine');
+      expect(prompt).toContain('Edge TTS has low latency');
+      expect(params).toMatchObject({ schema: { name: expect.any(String) } });
+      expect(goalService.updateTitle).toHaveBeenCalledWith('goal-1', '桌宠 TTS 语音系统');
+      expect(titlesShown()).toEqual([
+        '桌宠 TTS 语音系统',
+        '桌宠 TTS 语音系统',
+        '桌宠 TTS 语音系统',
+      ]);
+      expect(useGoalStore.getState().goalTitleRenamingIds).toEqual([]);
+    });
+
+    it('keeps the title and reports the failure when no title comes back', async () => {
+      seedEverywhere();
+      vi.mocked(aiChatService.generateJSON).mockResolvedValue({ data: { title: ' ' } } as never);
+
+      await expect(useGoalStore.getState().autoRenameGoalTitle('goal-1')).rejects.toThrow();
+
+      expect(goalService.updateTitle).not.toHaveBeenCalled();
+      expect(titlesShown()).toEqual([LONG_ASK, LONG_ASK, LONG_ASK]);
+      expect(useGoalStore.getState().goalTitleRenamingIds).toEqual([]);
+    });
+
+    it('reads the graph first when the goal is only known from a list', async () => {
+      vi.mocked(goalService.getGraph).mockResolvedValue(
+        graphWith('running', { goal: { id: 'goal-1', requirement: LONG_ASK, title: 'x' } }),
+      );
+      vi.mocked(aiChatService.generateJSON).mockResolvedValue({ data: { title: 'TTS' } } as never);
+      vi.mocked(goalService.updateTitle).mockResolvedValue({} as never);
+
+      await useGoalStore.getState().autoRenameGoalTitle('goal-1');
+
+      expect(goalService.getGraph).toHaveBeenCalledWith('goal-1');
+      expect(goalService.updateTitle).toHaveBeenCalledWith('goal-1', 'TTS');
+    });
   });
 });

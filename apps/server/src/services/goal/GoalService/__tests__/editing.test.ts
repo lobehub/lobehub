@@ -6,7 +6,7 @@ import { getTestDB } from '@/database/core/getTestDB';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
-import { agents, goals, taskTopics, topics } from '@/database/schemas';
+import { agents, goalNodes, goals, taskTopics, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from '../../../task';
@@ -200,6 +200,74 @@ describe('GoalService', () => {
     expect(updated.requirement).toBe('改过的验收标准');
     expect((await service.graph(graph.goal.id)).goal.requirement).toBe('改过的验收标准');
     await expect(service.updateRequirement('goal_missing', 'x')).rejects.toThrow();
+  });
+
+  it('renames the goal without touching its requirement', async () => {
+    const service = new GoalService(serverDB, userId);
+    const longAsk = '继续并完成桌宠项目，在现有基础上完善 TTS 语音系统'.repeat(4);
+    const graph = await service.create({ requirement: longAsk, title: longAsk });
+
+    const updated = await service.updateTitle(graph.goal.id, '桌宠 TTS 语音系统');
+
+    expect(updated.title).toBe('桌宠 TTS 语音系统');
+    const read = (await service.graph(graph.goal.id)).goal;
+    expect(read.title).toBe('桌宠 TTS 语音系统');
+    expect(read.requirement).toBe(longAsk);
+    await expect(service.updateTitle('goal_missing', 'x')).rejects.toThrow();
+  });
+
+  it('renames the root question and the management topic with the goal', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Old name' });
+    await serverDB
+      .insert(topics)
+      .values({ id: 'tpc_rename_manager', title: 'Goal management: Old name', userId });
+    await serverDB
+      .update(goals)
+      .set({ config: { managerState: { consumed: true, topicId: 'tpc_rename_manager' } } as never })
+      .where(eq(goals.id, graph.goal.id));
+
+    await service.updateTitle(graph.goal.id, 'New name');
+
+    const read = await service.graph(graph.goal.id);
+    expect(read.nodes.find((node) => node.kind === 'problem')?.title).toBe('New name');
+    const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'tpc_rename_manager'));
+    expect(topic.title).toBe('Goal management: New name');
+  });
+
+  it('keeps the goal and its root question in step when two renames race', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Old name' });
+
+    await Promise.all([
+      service.updateTitle(graph.goal.id, 'Name A'),
+      service.updateTitle(graph.goal.id, 'Name B'),
+    ]);
+
+    const read = await service.graph(graph.goal.id);
+    expect(read.nodes.find((node) => node.kind === 'problem')?.title).toBe(read.goal.title);
+  });
+
+  it('leaves a root question and a topic someone already renamed', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Old name' });
+    const problem = graph.nodes.find((node) => node.kind === 'problem')!;
+    await serverDB
+      .update(goalNodes)
+      .set({ title: 'My question' })
+      .where(eq(goalNodes.id, problem.id));
+    await serverDB.insert(topics).values({ id: 'tpc_rename_kept', title: 'My topic', userId });
+    await serverDB
+      .update(goals)
+      .set({ config: { managerState: { consumed: true, topicId: 'tpc_rename_kept' } } as never })
+      .where(eq(goals.id, graph.goal.id));
+
+    await service.updateTitle(graph.goal.id, 'New name');
+
+    const read = await service.graph(graph.goal.id);
+    expect(read.nodes.find((node) => node.kind === 'problem')?.title).toBe('My question');
+    const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'tpc_rename_kept'));
+    expect(topic.title).toBe('My topic');
   });
 
   it('names the agent each dispatched task node is assigned to', async () => {

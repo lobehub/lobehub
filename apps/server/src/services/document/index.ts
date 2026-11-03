@@ -21,7 +21,7 @@ import debug from 'debug';
 import { and, eq, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
-import { DocumentModel } from '@/database/models/document';
+import { DocumentModel, type DocumentQuerySortBy } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
@@ -231,9 +231,11 @@ export class DocumentService {
     // Resolve visibility upfront so the KB mirror file uses the same policy
     // as the document. A library-root document inherits the KB visibility;
     // parent documents remain navigation-only and do not pass visibility or
-    // ACL to children. Personal mode leaves it undefined — the ownership
-    // filter ignores the column there — but still checks the library exists,
-    // so a wrong id fails as NOT_FOUND instead of a foreign-key violation.
+    // ACL to children. Without a library or an explicit value it stays
+    // undefined, so the row takes the schema default (`'public'` — workspace
+    // documents are shared unless asked otherwise). Personal mode ignores the
+    // column but still checks the library exists, so a wrong id fails as
+    // NOT_FOUND instead of a foreign-key violation.
     let resolvedVisibility: 'private' | 'public' | undefined = visibility;
     if (knowledgeBaseId) {
       const knowledgeBase = await this.knowledgeBaseModel.findById(
@@ -248,7 +250,6 @@ export class DocumentService {
       }
       if (this.workspaceId) resolvedVisibility = knowledgeBase.visibility;
     }
-    if (!resolvedVisibility && this.workspaceId) resolvedVisibility = 'private';
 
     let fileId: string | null = null;
 
@@ -359,11 +360,14 @@ export class DocumentService {
    * Query documents with pagination
    */
   async queryDocuments(params?: {
+    creator?: 'others' | 'self';
     current?: number;
     excludeKnowledgeBaseIds?: string[];
     fileTypes?: string[];
     pageSize?: number;
+    sortBy?: DocumentQuerySortBy;
     sourceTypes?: string[];
+    standaloneOnly?: boolean;
   }) {
     return this.documentModel.query(params);
   }
@@ -789,7 +793,11 @@ export class DocumentService {
         historyAppended ||
         htmlTypeChanged ||
         (params.content !== undefined && params.content !== currentDocument.content);
-      if (contentChanged && this.isCollaborativeDocument(currentDocument)) {
+      if (
+        contentChanged &&
+        params.origin !== 'room-projection' &&
+        this.isCollaborativeDocument(currentDocument)
+      ) {
         const canWrite = await this.editLockService.canWrite('document', id, params.lockOwnerId);
         if (!canWrite) {
           throw new TRPCError({
@@ -845,6 +853,7 @@ export class DocumentService {
       const savedAt = historyAppended ? updatedAt : undefined;
       if (historyAppended) {
         await documentHistoryService.createHistory({
+          ...params.history,
           breakAutosaveWindow: params.breakAutosaveWindow,
           documentId: id,
           editorData: currentEditorDataAccepted,

@@ -36,7 +36,14 @@ export const isPGliteDatabase = (db: LobeChatDatabase) => {
     }
   ).$client;
 
-  return 'waitReady' in (client ?? {}) && 'dataDir' in (client ?? {});
+  return (
+    'waitReady' in (client ?? {}) &&
+    'dataDir' in
+      (client ??
+        // v8 ignore start -- unreachable: a nullish client already failed the waitReady check
+        {})
+    // v8 ignore stop
+  );
 };
 
 export const buildTextSearchCondition = (params: {
@@ -69,4 +76,5 @@ export const buildTextSearchCondition = (params: {
   return conditions.length > 0 ? or(...conditions) : undefined;
 };
 
+/* v8 ignore next -- unreachable: module-private helper with no callers */
 const _pickSingleSearchType = (types?: string[]) => (types?.length === 1 ? types[0] : undefined);

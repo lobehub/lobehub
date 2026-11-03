@@ -211,7 +211,7 @@ describe('DocumentModel — private/public cross-user isolation', () => {
 });
 
 describe('DocumentModel.create — workspace visibility defaults', () => {
-  it("defaults a top-level workspace document to 'private'", async () => {
+  it("defaults a top-level workspace document to 'public'", async () => {
     const callerA = new DocumentModel(serverDB, userA, workspaceId);
     const created = await callerA.create({
       fileType: 'text/plain',
@@ -221,7 +221,7 @@ describe('DocumentModel.create — workspace visibility defaults', () => {
       totalCharCount: 0,
       totalLineCount: 0,
     });
-    expect(created.visibility).toBe('private');
+    expect(created.visibility).toBe('public');
   });
 
   it('does not inherit visibility from a parent document', async () => {
@@ -233,8 +233,8 @@ describe('DocumentModel.create — workspace visibility defaults', () => {
       title: 'private-root',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
-    await callerA.setVisibility(root.id, 'public');
 
     const child = await callerA.create({
       fileType: 'text/plain',
@@ -245,21 +245,21 @@ describe('DocumentModel.create — workspace visibility defaults', () => {
       totalCharCount: 0,
       totalLineCount: 0,
     });
-    expect(child.visibility).toBe('private');
+    expect(child.visibility).toBe('public');
   });
 
-  it('honors an explicit visibility override at the top level', async () => {
+  it('honors an explicit private visibility at the top level', async () => {
     const callerA = new DocumentModel(serverDB, userA, workspaceId);
     const created = await callerA.create({
       fileType: 'text/plain',
       source: 'inline',
       sourceType: 'api',
-      title: 'explicit-public',
+      title: 'explicit-private',
       totalCharCount: 0,
       totalLineCount: 0,
-      visibility: 'public',
+      visibility: 'private',
     });
-    expect(created.visibility).toBe('public');
+    expect(created.visibility).toBe('private');
   });
 });
 
@@ -273,6 +273,7 @@ describe('DocumentModel.publishToWorkspace', () => {
       title: 'pub-root',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     const child = await callerA.create({
       fileType: 'text/plain',
@@ -282,6 +283,7 @@ describe('DocumentModel.publishToWorkspace', () => {
       title: 'pub-child',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     const grandchild = await callerA.create({
       fileType: 'text/plain',
@@ -291,6 +293,7 @@ describe('DocumentModel.publishToWorkspace', () => {
       title: 'pub-grandchild',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     expect(root.visibility).toBe('private');
     expect(child.visibility).toBe('private');
@@ -312,6 +315,7 @@ describe('DocumentModel.publishToWorkspace', () => {
       title: 'owner-root',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
 
     const callerB = new DocumentModel(serverDB, userB, workspaceId);
@@ -332,6 +336,7 @@ describe('DocumentModel.publishToWorkspace', () => {
       title: 'mixed-root',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     await callerA.publishToWorkspace(root.id);
 
@@ -354,6 +359,7 @@ describe('DocumentModel.setVisibility', () => {
       title: 'unpub-root',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     const child = await callerA.create({
       fileType: 'text/plain',
@@ -363,6 +369,7 @@ describe('DocumentModel.setVisibility', () => {
       title: 'unpub-child',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     await callerA.publishToWorkspace(root.id);
     await callerA.publishToWorkspace(child.id);
@@ -403,6 +410,7 @@ describe('DocumentModel.setVisibility', () => {
       title: 'idem-root',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     await callerA.setVisibility(root.id, 'public');
 
@@ -426,6 +434,7 @@ describe('DocumentModel.setVisibility', () => {
       title: 'ws-scoped-root',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
 
     // Same user, but personal scope (workspace_id IS NULL) — ownership() must
@@ -449,6 +458,7 @@ describe('DocumentModel.update — independent parent visibility', () => {
       title: 'private-root-to-move',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     const publicRoot = await callerA.create({
       fileType: 'custom/folder',
@@ -475,6 +485,7 @@ describe('DocumentModel.update — independent parent visibility', () => {
       title: 'private-root-target',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     const publicRoot = await callerA.create({
       fileType: 'custom/folder',
@@ -501,6 +512,7 @@ describe('DocumentModel.update — independent parent visibility', () => {
       title: 'old-private-parent',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     const newParent = await callerA.create({
       fileType: 'custom/folder',
@@ -509,6 +521,7 @@ describe('DocumentModel.update — independent parent visibility', () => {
       title: 'new-private-parent',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     const child = await callerA.create({
       fileType: 'text/plain',
@@ -518,6 +531,7 @@ describe('DocumentModel.update — independent parent visibility', () => {
       title: 'moving-child',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
 
     await expect(callerA.update(child.id, { parentId: newParent.id })).resolves.toBeDefined();
@@ -534,6 +548,7 @@ describe('DocumentModel.update — independent parent visibility', () => {
       title: 'visibility-strip',
       totalCharCount: 0,
       totalLineCount: 0,
+      visibility: 'private',
     });
     expect(doc.visibility).toBe('private');
 

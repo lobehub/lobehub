@@ -12,6 +12,8 @@ import matter from 'gray-matter';
 import { sha256 } from 'js-sha256';
 import { marked, type Token, type Tokens } from 'marked';
 
+import { safeMatterOptions } from '@/server/utils/safeMatterOptions';
+
 import { SkillManifestError, SkillParseError } from './errors';
 
 export interface ParseSkillMdOptions {
@@ -91,7 +93,7 @@ export class SkillParser {
   parseSkillMd(fileContent: string, options?: ParseSkillMdOptions): ParsedSkill {
     try {
       const source = this.stripLeadingCommentsBeforeFrontMatter(fileContent);
-      const { data, content } = matter(source);
+      const { data, content } = matter(source, safeMatterOptions);
       // gray-matter yields the same empty `data` for an absent block and for an
       // empty / comment-only one (`---\n---`), so presence is detected on the
       // source: a present-but-incomplete block must stay authoritative.

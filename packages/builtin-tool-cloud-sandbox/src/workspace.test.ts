@@ -58,6 +58,53 @@ describe('formatSandboxStoragePromptVariables', () => {
   });
 });
 
+describe('the three placements a run can have', () => {
+  it('names a drive folder as a folder on the network drive', () => {
+    const { sandbox_workspace: prompt } = formatSandboxStoragePromptVariables({
+      cwd: 'reports',
+      mode: 'drive',
+    });
+
+    expect(prompt).toContain("`reports`, a folder on the user's **network drive**");
+    expect(prompt).toContain('Keep to this folder');
+    // A drive restores nothing but files, so the model must not count on
+    // installed packages being there next time.
+    expect(prompt).toContain('packages you install');
+    expect(prompt).not.toContain('environment directory');
+  });
+
+  it('names the drive root when no folder narrows it', () => {
+    const { sandbox_workspace: prompt } = formatSandboxStoragePromptVariables({ mode: 'drive' });
+
+    expect(prompt).toContain("the root of the user's **network drive**");
+    expect(prompt).toContain('its own subfolder');
+  });
+
+  it('names an instance as an environment directory whose packages come back', () => {
+    const { sandbox_workspace: prompt } = formatSandboxStoragePromptVariables({
+      cwd: 'notes-env',
+      mode: 'persistent',
+    });
+
+    expect(prompt).toContain('`notes-env`, an **environment directory**');
+    expect(prompt).not.toContain('network drive**:');
+  });
+
+  it('persists files in both persistent placements and not in the temporary one', () => {
+    const persisted = '- Files in your working directory persist across sessions';
+
+    expect(formatSandboxStoragePromptVariables({ mode: 'drive' }).sandbox_session_files).toContain(
+      persisted,
+    );
+    expect(
+      formatSandboxStoragePromptVariables({ mode: 'persistent' }).sandbox_session_files,
+    ).toContain(persisted);
+    expect(
+      formatSandboxStoragePromptVariables({ mode: 'ephemeral' }).sandbox_session_files,
+    ).not.toContain(persisted);
+  });
+});
+
 describe('the placement text the skills runtime also renders', () => {
   it('keeps the ephemeral default renderable without any persistence input', () => {
     // The skills tool now carries `{{sandbox_workspace}}` too, and its prompt

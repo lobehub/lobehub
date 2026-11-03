@@ -57,7 +57,7 @@ describe('ClaudeCodeLiveInput', () => {
     expect(ended).toHaveBeenCalled();
   });
 
-  it('keeps stdin open past the result while a background task runs', () => {
+  it('keeps stdin open past the result while a background task runs, until the turn its end wakes', () => {
     const { live } = setup();
     live.send(userLine('first'), 'u-1');
 
@@ -66,8 +66,51 @@ describe('ClaudeCodeLiveInput', () => {
     live.observe(line({ subtype: 'success', type: 'result' }));
     expect(live.isOpen).toBe(true);
 
-    // Print mode still runs the notification turn after stdin closes.
     live.observe(line({ subtype: 'task_notification', task_id: 't-1', type: 'system' }));
+    expect(live.isOpen).toBe(true);
+
+    live.observe(line({ subtype: 'init', type: 'system' }));
+    live.observe(line({ subtype: 'success', type: 'result' }));
+    expect(live.isOpen).toBe(false);
+  });
+
+  it('keeps stdin open for a task the wake-up turn starts or resumes', () => {
+    const { live } = setup();
+    live.send(userLine('first'), 'u-1');
+    live.observe(line({ isReplay: true, type: 'user', uuid: 'u-1' }));
+    live.observe(line({ subtype: 'task_started', task_id: 'runner', type: 'system' }));
+    live.observe(line({ subtype: 'success', type: 'result' }));
+
+    // The runner returns between turns; Claude Code reports both events.
+    live.observe(
+      line({
+        patch: { status: 'completed' },
+        subtype: 'task_updated',
+        task_id: 'runner',
+        type: 'system',
+      }),
+    );
+    live.observe(line({ subtype: 'task_notification', task_id: 'runner', type: 'system' }));
+    expect(live.isOpen).toBe(true);
+
+    // The wake-up turn starts a checker, ends, and the checker returns.
+    live.observe(line({ subtype: 'init', type: 'system' }));
+    live.observe(line({ type: 'assistant' }));
+    live.observe(line({ subtype: 'task_started', task_id: 'checker', type: 'system' }));
+    live.observe(line({ subtype: 'success', type: 'result' }));
+    live.observe(line({ subtype: 'task_notification', task_id: 'checker', type: 'system' }));
+    expect(live.isOpen).toBe(true);
+
+    // That wake-up turn resumes the runner with SendMessage (same task id).
+    live.observe(line({ subtype: 'init', type: 'system' }));
+    live.observe(line({ type: 'assistant' }));
+    live.observe(line({ subtype: 'task_started', task_id: 'runner', type: 'system' }));
+    live.observe(line({ subtype: 'success', type: 'result' }));
+    expect(live.isOpen).toBe(true);
+
+    live.observe(line({ subtype: 'task_notification', task_id: 'runner', type: 'system' }));
+    live.observe(line({ subtype: 'init', type: 'system' }));
+    live.observe(line({ subtype: 'success', type: 'result' }));
     expect(live.isOpen).toBe(false);
   });
 
@@ -84,8 +127,9 @@ describe('ClaudeCodeLiveInput', () => {
     expect(live.isOpen).toBe(false);
   });
 
-  it('closes when the last background task ends between turns', () => {
-    const { live } = setup();
+  it('closes when the last task ends between turns and no turn wakes up', () => {
+    vi.useFakeTimers();
+    const { live } = setup({ wakeUpGraceMs: 1000 });
     live.send(userLine('first'), 'u-1');
     live.observe(line({ isReplay: true, type: 'user', uuid: 'u-1' }));
     live.observe(line({ subtype: 'task_started', task_id: 't-1', type: 'system' }));
@@ -100,6 +144,9 @@ describe('ClaudeCodeLiveInput', () => {
       }),
     );
 
+    vi.advanceTimersByTime(999);
+    expect(live.isOpen).toBe(true);
+    vi.advanceTimersByTime(1);
     expect(live.isOpen).toBe(false);
   });
 
@@ -180,7 +227,7 @@ describe('ClaudeCodeLiveInput', () => {
 
   it('treats sub-agent output as background activity that keeps the idle timer fresh', () => {
     vi.useFakeTimers();
-    const { live } = setup({ idleCloseMs: 1000 });
+    const { live } = setup({ idleCloseMs: 1000, wakeUpGraceMs: 100 });
     live.send(userLine('first'), 'u-1');
     live.observe(line({ isReplay: true, type: 'user', uuid: 'u-1' }));
     live.observe(line({ subtype: 'task_started', task_id: 't-1', type: 'system' }));
@@ -203,8 +250,10 @@ describe('ClaudeCodeLiveInput', () => {
     live.observe(line({ subtype: 'task_notification', task_id: 't-2', type: 'system' }));
     expect(live.isOpen).toBe(true);
 
-    // The sub-agent opened no main turn, so its end leaves the session idle.
+    // The sub-agent opened no main turn, so once its end wakes none, the
+    // session is idle.
     live.observe(line({ subtype: 'task_notification', task_id: 't-1', type: 'system' }));
+    vi.advanceTimersByTime(100);
     expect(live.isOpen).toBe(false);
   });
 

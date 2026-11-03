@@ -78,13 +78,13 @@ export class GoalReportTools {
       };
     });
 
-  submitGoalReport = ({ content, goalId, ...metadata }: SubmitGoalReportParams) =>
+  submitGoalReport = ({ content, goalId, html, ...metadata }: SubmitGoalReportParams) =>
     this.run(async () => {
       const { agentId, operationId, serverDB, toolCallId, topicId, userId, workspaceId } =
         this.context;
       return new GoalReportStore(serverDB!, userId!, workspaceId).submit(
         goalId,
-        { content, metadata },
+        { content, html, metadata },
         { agentId, operationId, toolCallId, topicId: topicId ?? null },
       );
     });

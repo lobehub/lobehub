@@ -7,7 +7,11 @@ import { type AgentState } from '@lobechat/agent-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
-import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
+import {
+  type StreamChunkData,
+  type StreamEvent,
+  type StreamHistoryPage,
+} from './StreamEventManager';
 
 export interface PublishAgentRuntimeEndParams {
   finalState: any;
@@ -220,6 +224,12 @@ export interface IStreamEventManager {
    * Get stream event history
    */
   getStreamHistory: (operationId: string, count?: number) => Promise<StreamEvent[]>;
+
+  getStreamHistoryPage: (
+    operationId: string,
+    cursor?: string,
+    limit?: number,
+  ) => Promise<StreamHistoryPage>;
 
   /**
    * Optional: open a one-shot relay channel on the gateway, owned by `userId`.

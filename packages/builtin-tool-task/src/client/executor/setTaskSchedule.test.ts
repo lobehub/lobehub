@@ -31,6 +31,7 @@ vi.mock('@/store/task/slices/detail/reducer', () => ({
 
 vi.mock('@/services/task', () => ({
   taskService: {
+    find: vi.fn(async () => ({ data: { id: 'task-1', identifier: 'T-1' } })),
     getDetail: mocks.getDetail,
     update: mocks.update,
     updateConfig: mocks.updateConfig,

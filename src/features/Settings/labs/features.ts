@@ -25,14 +25,11 @@ type LabFeatureI18nKey =
   | 'heteroSessionImport'
   | 'imessage'
   | 'inputMarkdown'
-  | 'integrations'
   | 'messageTextSelectionActions'
   | 'oauthApps'
-  | 'persistentSandbox'
   | 'projects'
   | 'selfLearning'
-  | 'topicBugReport'
-  | 'workspaceOnboarding';
+  | 'topicBugReport';
 
 export interface LabFeatureItem {
   /**
@@ -124,29 +121,10 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'beta',
   },
   {
-    flag: 'enableIntegrations',
-    i18nKey: 'integrations',
-    searchKeywords: ['integrations', 'github', 'github app', 'pull request'],
-    stage: 'alpha',
-  },
-  {
-    flag: 'enablePersistentSandbox',
-    i18nKey: 'persistentSandbox',
-    searchKeywords: ['persistent sandbox', 'workspace', 'sandbox storage'],
-    stage: 'alpha',
-  },
-  {
     flag: 'enableArtifactDeployment',
     i18nKey: 'artifactDeployment',
     searchKeywords: ['artifact', 'deploy', 'publish'],
     stage: 'beta',
-  },
-  {
-    flag: 'enableWorkspaceOnboardingV2',
-    i18nKey: 'workspaceOnboarding',
-    searchKeywords: ['workspace', 'onboarding', 'team setup'],
-    stage: 'alpha',
-    workspaceOnly: true,
   },
   {
     desktopOnly: true,

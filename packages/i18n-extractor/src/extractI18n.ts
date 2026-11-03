@@ -27,6 +27,7 @@ export interface ExtractI18nConfig {
   allowEmpty?: boolean;
   catalog: CatalogAdapter;
   compilerOptions?: ts.CompilerOptions;
+  declarations?: string[];
   dynamicKeys?: DynamicKeyEntry[];
   entries: string[];
   extract?: ExtractTranslationUsesOptions;
@@ -49,21 +50,36 @@ export interface ExtractI18nResult {
   resources: Resources;
 }
 
-const readCompilerOptions = (file: string): ts.CompilerOptions => {
+const readTsconfig = (file: string) => {
   const config = ts.readConfigFile(file, ts.sys.readFile);
   if (config.error)
     throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'));
-  return ts.parseJsonConfigFileContent(config.config, ts.sys, path.dirname(file)).options;
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, path.dirname(file));
+  return {
+    declarations: parsed.fileNames.filter((name) => DECLARATION_FILE.test(name)),
+    options: parsed.options,
+  };
 };
 
-const createAnalysisProgram = (graph: ImportGraph, compilerOptions: ts.CompilerOptions) => {
+const DECLARATION_FILE = /\.d\.[cm]?ts$/;
+
+const createAnalysisProgram = (
+  graph: ImportGraph,
+  compilerOptions: ts.CompilerOptions,
+  declarations: string[],
+) => {
   const host = ts.createCompilerHost(compilerOptions);
   const getSourceFile = host.getSourceFile.bind(host);
   const boundaries = new Set(graph.boundaries);
   // Boundary modules resolve as missing so the checker never loads the graph behind them.
   host.getSourceFile = (file, ...args) =>
     boundaries.has(file) ? undefined : getSourceFile(file, ...args);
-  return ts.createProgram(graph.files, { ...compilerOptions, noEmit: true }, host);
+  // Ambient declarations (module augmentation, globals) type the translators but are never imported.
+  return ts.createProgram(
+    [...new Set([...graph.files, ...declarations])],
+    { ...compilerOptions, noEmit: true },
+    host,
+  );
 };
 
 const pick = (values: Catalog, patterns: string[]) =>
@@ -71,10 +87,14 @@ const pick = (values: Catalog, patterns: string[]) =>
 
 export const extractI18n = async (config: ExtractI18nConfig): Promise<ExtractI18nResult> => {
   const root = await realpath(config.root);
-  const compilerOptions: ts.CompilerOptions = {
-    ...readCompilerOptions(path.resolve(root, config.tsconfig ?? 'tsconfig.json')),
-    ...config.compilerOptions,
-  };
+  const tsconfig = readTsconfig(path.resolve(root, config.tsconfig ?? 'tsconfig.json'));
+  const compilerOptions: ts.CompilerOptions = { ...tsconfig.options, ...config.compilerOptions };
+  const declarations = [
+    ...tsconfig.declarations,
+    ...(await Promise.all(
+      (config.declarations ?? []).map((file) => realpath(path.resolve(root, file))),
+    )),
+  ];
   if (config.workspace !== false) await addWorkspacePaths(root, compilerOptions, config.workspace);
   const graph = await traceImportGraph({
     ...config.graph,
@@ -83,7 +103,7 @@ export const extractI18n = async (config: ExtractI18nConfig): Promise<ExtractI18
     root,
   });
   const uses = extractTranslationUses(
-    createAnalysisProgram(graph, compilerOptions),
+    createAnalysisProgram(graph, compilerOptions, declarations),
     graph.files,
     config.extract,
   );

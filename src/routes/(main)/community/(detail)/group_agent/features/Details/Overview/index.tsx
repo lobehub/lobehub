@@ -1,15 +1,8 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import {
-  Accordion,
-  Avatar,
-  Block,
-  createStaticStyles,
-  Flexbox,
-  Grid,
-  Text,
-  useTheme,
-} from '@lobehub/ui';
+import { Accordion, Avatar, Block, Flexbox, Grid, Text, useTheme } from '@lobehub/ui';
 import { ChatList } from '@lobehub/ui/chat';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,19 +13,9 @@ import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    desc: css`
-      flex: 1;
-      margin: 0 !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    title: css`
-      margin: 0 !important;
-      font-size: 14px !important;
-      font-weight: 500 !important;
-    `,
-  };
+const styles = stylex.create({
+  desc: { flex: '1', margin: '0', color: cssVar.colorTextSecondary },
+  title: { margin: '0', fontSize: '14px', fontWeight: 500 },
 });
 
 const MemberCard = memo(({ agent, currentVersion }: { agent: any; currentVersion: any }) => {
@@ -62,7 +45,7 @@ const MemberCard = memo(({ agent, currentVersion }: { agent: any; currentVersion
               overflow: 'hidden',
             }}
           >
-            <Text ellipsis as={'h3'} className={styles.title}>
+            <Text ellipsis as={'h3'} className={stylex.props(styles.title).className}>
               {currentVersion.name || agent.name}
             </Text>
           </Flexbox>
@@ -72,7 +55,7 @@ const MemberCard = memo(({ agent, currentVersion }: { agent: any; currentVersion
         {currentVersion.description && currentVersion.description !== 'No description provided' && (
           <Text
             as={'p'}
-            className={styles.desc}
+            className={stylex.props(styles.desc).className}
             ellipsis={{
               rows: 2,
             }}

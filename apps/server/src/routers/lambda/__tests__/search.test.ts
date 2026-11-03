@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageModel } from '@/database/models/message';
 import { UserModel } from '@/database/models/user';
+import { GoalSearchRepo } from '@/database/repositories/goalSearch';
 import { TaskSearchRepo } from '@/database/repositories/taskSearch';
 import { DiscoverService } from '@/server/services/discover';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
@@ -20,6 +22,13 @@ vi.mock('@/database/models/user', () => ({
 
 vi.mock('@/database/repositories/taskSearch', () => ({ TaskSearchRepo: vi.fn() }));
 
+vi.mock('@/database/repositories/goalSearch', () => ({ GoalSearchRepo: vi.fn() }));
+
+vi.mock('@/database/models/message', () => ({
+  MESSAGE_KEYWORD_SEARCH_MAX_LIMIT: 100,
+  MessageModel: vi.fn(),
+}));
+
 vi.mock('@/server/services/discover', () => ({
   DiscoverService: vi.fn(),
 }));
@@ -31,6 +40,8 @@ describe('searchRouter', () => {
   const getUserSettings = vi.fn();
   const search = vi.fn();
   const searchTasks = vi.fn();
+  const searchGoals = vi.fn();
+  const searchByKeyword = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -40,6 +51,14 @@ describe('searchRouter', () => {
     getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
     search.mockResolvedValue([]);
     searchTasks.mockResolvedValue([]);
+    searchGoals.mockResolvedValue([]);
+    searchByKeyword.mockResolvedValue({ hasMore: false, items: [] });
+    vi.mocked(GoalSearchRepo).mockImplementation(function () {
+      return { search: searchGoals } as unknown as GoalSearchRepo;
+    });
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return { searchByKeyword } as unknown as MessageModel;
+    });
     vi.mocked(TaskSearchRepo).mockImplementation(function () {
       return { search: searchTasks } as unknown as TaskSearchRepo;
     });
@@ -232,6 +251,103 @@ describe('searchRouter', () => {
     ).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
       message: 'Marketplace agent search is currently unavailable',
+    });
+  });
+  describe('goals', () => {
+    const goal = { id: 'goal_1', status: 'paused', title: 'Replica (STAMP)', type: 'goal' };
+
+    it('searches goals for an explicit goal type without touching the index', async () => {
+      searchGoals.mockResolvedValue([goal]);
+      const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+      const result = await caller.query({ limitPerType: 7, query: 'STAMP', type: 'goal' });
+
+      expect(result).toEqual([goal]);
+      expect(searchGoals).toHaveBeenCalledWith({ limit: 7, query: 'STAMP' });
+      expect(search).not.toHaveBeenCalled();
+      expect(getAssistantList).not.toHaveBeenCalled();
+    });
+
+    it('keeps goals out of untyped searches unless the caller opts in', async () => {
+      searchGoals.mockResolvedValue([goal]);
+      const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+      await caller.query({ includeMarketplace: false, query: 'STAMP' });
+      expect(searchGoals).not.toHaveBeenCalled();
+
+      const result = await caller.query({
+        includeGoals: true,
+        includeMarketplace: false,
+        query: 'STAMP',
+      });
+      expect(result).toEqual([goal]);
+    });
+  });
+
+  describe('recall', () => {
+    it('combines message, topic, goal and page hits in the window without the marketplace', async () => {
+      const startDate = new Date('2026-10-12T00:00:00.000Z');
+      const endDate = new Date('2026-10-18T23:59:59.000Z');
+      searchByKeyword.mockResolvedValue({
+        hasMore: false,
+        items: [
+          {
+            createdAt: new Date('2026-10-15T00:00:00.000Z'),
+            id: 'msg_1',
+            role: 'user',
+            snippet: 'STAMP mode',
+            topicId: 'tpc_1',
+            topicTitle: 'Weekly',
+          },
+        ],
+      });
+      search.mockImplementation(async ({ type }: { type: string }) =>
+        type === 'page'
+          ? [
+              {
+                id: 'docs_in',
+                title: 'STAMP notes',
+                type: 'page',
+                updatedAt: new Date('2026-10-16T00:00:00.000Z'),
+              },
+            ]
+          : [],
+      );
+      searchGoals.mockResolvedValue([{ id: 'goal_1', title: 'Replica (STAMP)', type: 'goal' }]);
+      const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+      const result = await caller.recall({ endDate, exact: true, query: 'STAMP', startDate });
+
+      expect(searchByKeyword).toHaveBeenCalledWith(
+        expect.objectContaining({ endDate, exact: true, keyword: 'STAMP', startDate }),
+      );
+      expect(searchGoals).toHaveBeenCalledWith({ endDate, limit: 10, query: 'STAMP', startDate });
+      expect(result.messages.items.map(({ id }) => id)).toEqual(['msg_1']);
+      expect(result.topics).toMatchObject([{ hitCount: 1, id: 'tpc_1', title: 'Weekly' }]);
+      expect(result.goals.map(({ id }) => id)).toEqual(['goal_1']);
+      expect(result.pages.map(({ id }) => id)).toEqual(['docs_in']);
+      // The window reaches the repository, which applies it during retrieval.
+      expect(search).toHaveBeenCalledWith(
+        expect.objectContaining({
+          excludeKnowledgeBaseIds: expect.any(Array),
+          timeRange: { end: endDate, field: 'updatedAt', start: startDate },
+          type: 'page',
+        }),
+      );
+      expect(DiscoverService).not.toHaveBeenCalled();
+      expect(UserModel.findById).not.toHaveBeenCalled();
+    });
+
+    it('runs a goal-only recall without initializing full-text search', async () => {
+      vi.mocked(createFtsSearchRepo).mockRejectedValue(new Error('provider unavailable'));
+      searchGoals.mockResolvedValue([{ id: 'goal_1', title: 'Replica', type: 'goal' }]);
+      const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+      const result = await caller.recall({ query: 'replica', types: ['goal'] });
+
+      expect(result.goals.map(({ id }) => id)).toEqual(['goal_1']);
+      expect(createFtsSearchRepo).not.toHaveBeenCalled();
+      expect(MessageModel).not.toHaveBeenCalled();
     });
   });
 });

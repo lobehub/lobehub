@@ -8,8 +8,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
  * Whether the current user may manage (edit / delete / re-authorize) a
  * workspace-shared resource row. Mirrors the server-side
  * `assertWorkspaceRowManageable` rule: only the row's creator or a workspace
- * owner may mutate it. Actions that also admit workspace admins (e.g. task
- * archive via `useTaskArchiveGate`) layer that on top of this check.
+ * owner may mutate it.
  *
  * - Personal mode: every row is created by the current user, so the creator
  *   check passes naturally.

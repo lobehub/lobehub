@@ -19,6 +19,10 @@ window.addEventListener('vite:preloadError', (event) => {
   }
 });
 
+// No index.html in this app, so the StyleX unplugin cannot inject its dev CSS;
+// load it from the Vite dev server instead. Production CSS is linked by root.tsx.
+if (import.meta.env.DEV) void import('virtual:lobe-stylex-dev-css');
+
 // The conversation route blocks its first render on this registry, whose own
 // dependency chain is several round trips deep. Kicking it off with the entry
 // — rather than when the gated chunk mounts — overlaps it with hydration.

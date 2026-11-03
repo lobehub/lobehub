@@ -1,4 +1,5 @@
 import type { UserInterventionConfig } from '../../tool';
+import type { WidgetDryRunGrant } from '../../widget';
 
 export interface UserToolConfig {
   /**
@@ -34,6 +35,11 @@ export interface UserToolConfig {
    * default state), not the user's personal `uninstalledBuiltinTools`.
    */
   uninstalledBuiltinToolsByWorkspace?: Record<string, string[]>;
+  /**
+   * Access the user approved for widget dry runs "from now on" (see
+   * `WidgetDryRunGrant`). Appended from the dry-run approval card.
+   */
+  widgetDryRunGrants?: WidgetDryRunGrant[];
 }
 
 /**

@@ -68,7 +68,7 @@ function definedRefIds() {
 function fixtureExpectations() {
   const map = new Map(); // id -> [file:line]
   const dir = join(skillDir, 'tests/fixtures');
-  for (const f of readdirSync(dir)) {
+  for (const f of readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile()).map((d) => d.name)) {
     const lines = readFileSync(join(dir, f), 'utf8').split('\n');
     lines.forEach((l, i) => {
       const m = l.match(/expect(?:-file)?:\s*([A-Z0-9\- ]+)/);

@@ -38,4 +38,5 @@ export {
   type PiRpcSessionCallbacks,
   type PiRpcSessionOptions,
 } from './piRpcSession';
+export { preparePiRpcInput } from './preparePiRpcInput';
 export { RpcStdioClient, RpcStdioConnectionError } from './rpcStdioClient';

@@ -13,6 +13,7 @@ import { useChatInputStore, useStoreApi } from '../store';
 import { isOtherAudioInputModeActive } from './mutualExclusion';
 import { getDictationControlMode } from './presentation';
 import { useDictationControlFocus } from './useDictationControlFocus';
+import { useDictationPrefetch } from './useDictationPrefetch';
 import { useRealtimeDictation } from './useRealtimeDictation';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -109,6 +110,7 @@ const Dictation = memo(() => {
       s.setActiveAudioInputMode,
     ]);
   const { client, errorCode, retryable, status } = useRealtimeDictation(editor);
+  const prefetch = useDictationPrefetch(client, enabled && !mobile);
   const active = status !== 'idle' || activeAudioInputMode === 'dictation';
   const controlMode = getDictationControlMode(status);
   const otherAudioModeActive = isOtherAudioInputModeActive(activeAudioInputMode, 'dictation');
@@ -223,7 +225,10 @@ const Dictation = memo(() => {
         ref={actionRef}
         title={t('voiceDictation.action')}
         onClick={handleStart}
+        onFocus={prefetch}
         onKeyDown={(event) => handleKeyboardActivation(event, start)}
+        onPointerDown={prefetch}
+        onPointerEnter={prefetch}
       />
     );
   }
@@ -306,6 +311,7 @@ const Dictation = memo(() => {
             title={t('voiceDictation.retry')}
             onClick={handleStart}
             onKeyDown={(event) => handleKeyboardActivation(event, start)}
+            onPointerDown={prefetch}
           />
         ) : status !== 'error' ? (
           <Spin aria-hidden size="small" />

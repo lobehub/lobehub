@@ -12,17 +12,12 @@ import {
   schedulePatternSchema,
   scheduleTimezoneSchema,
 } from '@/server/services/task/scheduleValidation';
+import { normalizeTaskConfig, resolveTaskOrThrow } from '@/server/services/task/utils';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
-import {
-  idInput,
-  resolveOrThrow,
-  taskProcedureWrite,
-  taskVerifyConfigPatchSchema,
-} from './procedures';
+import { idInput, taskProcedureWrite, taskVerifyConfigPatchSchema } from './procedures';
 
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 // Unknown fields are stripped, including the removed identifierPrefix. Released
@@ -137,7 +132,13 @@ export const lifecycleRouter = router({
       const { verify: _legacyVerify, ...taskConfig } = createInput.config ?? {};
       const task = await ctx.taskService.createTask({
         ...createInput,
-        config: parsedVerify.success ? taskConfig : createInput.config,
+        parentTaskId: createInput.parentTaskId
+          ? (await resolveTaskOrThrow(ctx.taskModel, createInput.parentTaskId)).id
+          : undefined,
+        config: await normalizeTaskConfig(
+          ctx.taskModel,
+          parsedVerify.success ? taskConfig : createInput.config,
+        ),
       });
       try {
         if (parsedVerify.success) {
@@ -192,8 +193,9 @@ export const lifecycleRouter = router({
   }),
   delete: taskProcedureWrite.input(idInput).mutation(async ({ input, ctx }) => {
     try {
-      const task = await resolveOrThrow(ctx.taskModel, input.id);
-      assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
+      // Any member who can edit tasks may delete one they can see, whoever
+      // created it; viewers are gated by `taskProcedureWrite`.
+      const task = await resolveTaskOrThrow(ctx.taskModel, input.id);
       await ctx.taskService.deleteTask(task.id);
       return { data: task, message: 'Task deleted', success: true };
     } catch (error) {
@@ -212,10 +214,8 @@ export const lifecycleRouter = router({
     .input(idInput.extend({ archived: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       try {
-        const task = await resolveOrThrow(ctx.taskModel, input.id);
-        // Archiving hides a shared task from every member's lists. It is reversible,
-        // so admins may do it too, beyond delete's creator-or-owner scope.
-        assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task', { allowAdmin: true });
+        const task = await resolveTaskOrThrow(ctx.taskModel, input.id);
+        // Same scope as delete: any member who can edit tasks, whoever created it.
         if (input.archived) {
           await assertNotInOpenGoal(
             ctx.serverDB,

@@ -2,12 +2,13 @@
 
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
-import { createStaticStyles, Icon } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Icon } from '@lobehub/ui';
 import {
   BadgeCheckIcon,
   BotIcon,
   CheckCircleIcon,
   CheckSquareIcon,
+  ExternalLinkIcon,
   FileTextIcon,
   TargetIcon,
 } from 'lucide-react';
@@ -15,7 +16,9 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
 import { useClientDataSWR } from '@/libs/swr';
 import { useAgentStore } from '@/store/agent';
@@ -25,6 +28,7 @@ import {
   useAgentDocumentStore,
 } from '@/store/agentDocument';
 import { useChatStore } from '@/store/chat';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { useEntityLinkHostDismiss, useEntityLinkPortal } from '../host';
 import { type InternalLinkReference, isBareLinkLabel, isEntityIdLabel } from '../internalLink';
@@ -33,8 +37,17 @@ import {
   InternalEntityPreview,
   internalEntityPreviewKey,
 } from './InternalEntityPreview';
+import { useAcceptanceBrowserUrl } from './useAcceptanceBrowserUrl';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  browser: css`
+    color: ${cssVar.colorTextTertiary};
+    transition: color 0.15s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
   icon: css`
     margin-inline-end: 4px;
     color: ${cssVar.colorTextSecondary};
@@ -69,6 +82,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       outline-offset: 2px;
     }
   `,
+  wrapper: css`
+    display: inline-flex;
+    gap: 2px;
+    align-items: center;
+  `,
 }));
 
 const ENTITY_ICONS = {
@@ -88,6 +106,7 @@ interface InternalEntityLinkProps {
 
 export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, reference }) => {
   const { t } = useTranslation('chat');
+  const { t: tVerify } = useTranslation('verify');
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const portalAvailable = useEntityLinkPortal(reference.type);
@@ -125,6 +144,14 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
     { revalidateOnFocus: false },
   );
   const displayLabel = (shouldResolveTitle && entity?.title) || label;
+  // A click on the link opens the acceptance in the side panel, which another
+  // surface (a session overlay) can cover; this one-click way out to the full
+  // browser page needs no hover on the preview first. Mobile opens it in a
+  // modal on top of everything, and a small icon right beside the link would
+  // be a mis-tap target there, so the action stays off the mobile build.
+  const isMobile = typeof __MOBILE__ !== 'undefined' && __MOBILE__;
+  const acceptanceBrowserUrl = useAcceptanceBrowserUrl(reference);
+  const browserUrl = isMobile ? undefined : acceptanceBrowserUrl;
 
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
@@ -155,7 +182,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
           reference.type === 'verify') &&
         shouldHardNavigateToWorkbench(reference.pathname)
       ) {
-        window.location.assign(reference.pathname);
+        // A workspace-prefixed path is already scoped; an unprefixed one (or one
+        // whose active slug was normalized away) is scoped like `navigate` does.
+        window.location.assign(
+          reference.workspaceSlug
+            ? reference.pathname
+            : buildWorkspaceAwarePath(reference.pathname, getActiveWorkspaceSlug()),
+        );
         return;
       }
 
@@ -280,12 +313,32 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
     </a>
   );
 
-  if (reference.type === 'route' || reference.workspaceSlug) return link;
+  const preview =
+    reference.type === 'route' || reference.workspaceSlug ? (
+      link
+    ) : (
+      <InternalEntityPreview fallbackTitle={displayLabel} reference={reference}>
+        {link}
+      </InternalEntityPreview>
+    );
+
+  if (!browserUrl) return preview;
 
   return (
-    <InternalEntityPreview fallbackTitle={displayLabel} reference={reference}>
-      {link}
-    </InternalEntityPreview>
+    <span className={styles.wrapper}>
+      {preview}
+      {/* Outside the anchor, like the side-browser action: the desktop preload
+          claims clicks via `closest('a')`, so a nested button would never fire. */}
+      <ActionIcon
+        data-acceptance-browser
+        aria-label={tVerify('report.actions.openInBrowser')}
+        className={styles.browser}
+        icon={ExternalLinkIcon}
+        size={'small'}
+        title={tVerify('report.actions.openInBrowser')}
+        onClick={() => openTrustedExternalUrl(browserUrl)}
+      />
+    </span>
   );
 });
 

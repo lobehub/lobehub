@@ -1,10 +1,11 @@
 import type { GoalGraphSnapshot, GoalItem, GoalStatus, TaskItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { GoalRepository } from '@/database/repositories/goal';
 
 import { GoalAssignmentService } from '../assignment';
 import { GOAL_ACCEPTANCE_TASK_TITLE, TERMINAL_NODE_STATUSES } from '../decideNextMove';
@@ -38,6 +39,59 @@ export const requestSignOff = async (ctx: GoalServiceContext, graph: GoalGraphSn
   await ctx.briefs.openSignOff(graph.goal, acceptance.id);
 };
 
+const SIGNED_OFF_ARCHIVABLE_TASK_STATUSES = ['canceled', 'completed'];
+
+/**
+ * The owner signed the Goal off (accepted its Goal-level acceptance), so its
+ * finished Tasks are done with: archive them instead of leaving the owner to
+ * clear them by hand. Conservative on purpose — only an `achieved` Goal whose
+ * Goal-level acceptance is `accepted`, only Tasks that are completed or
+ * canceled, and only through the guarded archive write, which keeps anything
+ * running or scheduled live. An unfinished Task stays where its owner can see
+ * it, and every archived one can be restored on its own.
+ *
+ * The sign-off and the `achieved` transition can land in either order — the
+ * sign-off is asked for before the Goal turns terminal — so both call this and
+ * whichever comes second does the work. The finished-status check sits in the
+ * archive UPDATE itself, so a Task reopened for changes after this read is
+ * never archived again.
+ *
+ * `taskId` is the signed acceptance's Task; anything other than a Goal-level
+ * acceptance archives nothing. Returns the archived Task ids.
+ */
+export const archiveSignedOffTasks = async (
+  ctx: GoalServiceContext,
+  taskId: string,
+): Promise<string[]> => {
+  const goal = await ctx.goalModel.findByGraphTask(taskId);
+  if (goal?.status !== 'achieved') return [];
+  const graph = await ctx.graphModel.getGraph(goal.id);
+  if (!graph) return [];
+  const isGoalAcceptance = graph.nodes.some(
+    (node) =>
+      node.kind === 'task' && node.taskId === taskId && node.title === GOAL_ACCEPTANCE_TASK_TITLE,
+  );
+  if (!isGoalAcceptance) return [];
+  const acceptances = await ctx.acceptanceService.acceptanceModel.findBySubjects('task', [taskId]);
+  if (!acceptances.some((acceptance) => acceptance.status === 'accepted')) return [];
+
+  const taskIds = [
+    ...new Set(
+      graph.nodes.flatMap((node) => (node.kind === 'task' && node.taskId ? [node.taskId] : [])),
+    ),
+  ];
+  const archiveModel = new TaskArchiveModel(ctx.db, ctx.userId, ctx.workspaceId);
+  const archived: string[] = [];
+  for (const task of await ctx.taskModel.findByIds(taskIds)) {
+    if (task.archivedAt || !SIGNED_OFF_ARCHIVABLE_TASK_STATUSES.includes(task.status)) continue;
+    const written = await archiveModel.archive(task.id, {
+      onlyStatuses: SIGNED_OFF_ARCHIVABLE_TASK_STATUSES,
+    });
+    if (written) archived.push(task.id);
+  }
+  return archived;
+};
+
 /**
  * Stop everything the goal has running, then delete it and its graph.
  *
@@ -54,7 +108,7 @@ export const deleteGoal = async (ctx: GoalServiceContext, goalId: string) => {
   if (managed || supervised) {
     // Fence new claims before cancellation, then read the latest claimed turn.
     await ctx.db.transaction(async (db) => {
-      const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+      const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
       const current = await model.lockById(goalId);
       if (current && current.status !== 'paused') {
         await model.updateStatus(goalId, 'paused');
@@ -101,7 +155,7 @@ export const deleteGoal = async (ctx: GoalServiceContext, goalId: string) => {
 
   if (managed || supervised) {
     return ctx.db.transaction(async (db) => {
-      const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+      const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
       const current = await model.lockById(goalId);
       if (
         current &&
@@ -284,7 +338,7 @@ export const resume = async (ctx: GoalServiceContext, goalId: string) => {
   // Tasks back to `backlog` and they would dispatch again. Reopening an ended
   // goal still works — that resume reads the ended status itself.
   return ctx.db.transaction(async (tx) => {
-    const model = new GoalModel(tx, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     // Only `start` launches a draft: it settles the creating run's planning
@@ -325,7 +379,7 @@ export const close = async (
   // the close cannot start a Task after the scan below. The pause is the
   // person's, so no measurement lifts it if the close is refused later on.
   await ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     // Only a goal that can still dispatch needs fencing.
     if (!current || ['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) return;
@@ -428,7 +482,7 @@ export const close = async (
   // would leave that run spending on a goal reading "ended".
   const reason = to === 'achieved' ? 'marked achieved by user' : 'canceled by user';
   const goal = await ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     if (!['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) {

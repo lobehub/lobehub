@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { agents, messages, threads, topics } from '../../schemas';
+import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { messageOwnership, topicOwnership, type TopicRepositoryScope } from './scope';
 
@@ -50,10 +51,13 @@ export const batchMoveToAgent = async (
       throw new Error(`Target agent ${targetAgentId} not found or not accessible`);
     }
 
-    await tx
+    const moved = await tx
       .update(topics)
       .set({ agentId: targetAgentId, sessionId: null, updatedAt: new Date() })
-      .where(and(inArray(topics.id, topicIds), topicOwnership(scope)));
+      .where(and(inArray(topics.id, topicIds), topicOwnership(scope)))
+      .returning({ id: topics.id });
+    // A project topic handed to another agent brings that agent into the project.
+    await joinTopicAgentsToProjects(tx, { topicIds: moved.map((topic) => topic.id) });
 
     await tx
       .update(messages)

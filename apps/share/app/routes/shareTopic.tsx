@@ -1,4 +1,4 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
+import { APPLE_APP_STORE_ID, BRANDING_NAME } from '@lobechat/business-const';
 import type { ClientLoaderFunctionArgs, LoaderFunctionArgs, MetaFunction } from 'react-router';
 import { useLoaderData } from 'react-router';
 import { SWRConfig, unstable_serialize } from 'swr';
@@ -12,7 +12,7 @@ import {
 } from '../../src/features/topic/sharedConversation';
 import SharedTopicView, { preloadSharedTopic } from '../../src/features/topic/SharedTopicView';
 import { buildTopicByline } from '../../src/features/topic/topicByline';
-import { loadShareResources } from '../../src/shell/createShareI18n';
+import { loadShareT } from '../../src/shell/createShareI18n';
 import { cloudflareContext } from '../lib/cloudflareContext';
 import { buildPageMeta, shareMetaDescription, truncateDescription } from '../lib/seo';
 import { createServerLambdaClient } from '../lib/serverTrpc';
@@ -35,10 +35,11 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   ]);
 
   return {
+    appArgument: `${new URL(request.url).origin}/share/t/${encodeURIComponent(shareId)}`,
     firstPage,
     messageReadMode,
     byline: topic ? buildTopicByline(topic) : undefined,
-    description: shareMetaDescription(await loadShareResources(locale), 'topicDescription'),
+    description: shareMetaDescription(await loadShareT(locale), 'topicDescription'),
     locale,
     shareId,
     topic,
@@ -61,7 +62,7 @@ clientLoader.hydrate = true as const;
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   const title = loaderData?.topic?.title;
 
-  return buildPageMeta({
+  const metas = buildPageMeta({
     description: [truncateDescription(loaderData?.byline), loaderData?.description]
       .filter(Boolean)
       .join(' · '),
@@ -69,6 +70,12 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
     title: title ? `${title} · ${BRANDING_NAME}` : BRANDING_NAME,
     type: 'article',
   });
+  if (APPLE_APP_STORE_ID && loaderData?.appArgument)
+    metas.push({
+      name: 'apple-itunes-app',
+      content: `app-id=${APPLE_APP_STORE_ID}, app-argument=${loaderData.appArgument}`,
+    });
+  return metas;
 };
 
 export default function ShareTopicRoute() {

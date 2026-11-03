@@ -145,6 +145,9 @@ export interface ChatPortalState {
   /** Path of the currently active tab; kept for legacy consumers that only need display/open path. */
   activeLocalFilePath?: string;
 
+  /** Version a canvas tab is held at; a canvas absent here follows its latest version. */
+  canvasTabVersions: Record<string, number>;
+
   /** Unsaved edit buffers keyed by file path. Presence implies the file is dirty. */
   dirtyLocalFileContents: Record<string, string>;
 
@@ -174,6 +177,7 @@ export interface ChatPortalState {
 
 export const initialChatPortalState: ChatPortalState = {
   activeLocalFileIdsByScope: {},
+  canvasTabVersions: {},
   dirtyLocalFileContents: {},
   openLocalFiles: [],
   portalArtifactDisplayMode: ArtifactDisplayMode.Preview,

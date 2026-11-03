@@ -71,6 +71,16 @@ describe('useAgentConversationCoordinate (desktop)', () => {
     expect(result.current).toEqual(['agent-of-topic', 'tpc_1', null]);
   });
 
+  /** @example Review: on desktop the sidebar "+" draft had no agent, so its first send was a no-op. */
+  it('takes the agent of a blank project draft from its route', () => {
+    route.params = { projectId: 'prj_1' };
+    route.search = new URLSearchParams('agent=agent-of-draft&dir=pwd_1');
+
+    const { result } = renderHook(() => useAgentConversationCoordinate());
+
+    expect(result.current).toEqual(['agent-of-draft', null, null]);
+  });
+
   it('keeps agent undefined for an unknown project topic instead of falling back to the global pointer', () => {
     route.params = { projectId: 'prj_1', topicId: 'tpc_unknown' };
     route.search = new URLSearchParams();

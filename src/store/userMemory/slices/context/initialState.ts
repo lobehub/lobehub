@@ -5,7 +5,7 @@ import { memoryListKey } from '../../utils/replica';
 import { type ContextListData, type ContextListSort } from './projection';
 
 /**
- * The context list is a `@lobechat/replica` paged resource with one page set
+ * The context list is a `local-replica` paged resource with one page set
  * per search / sort (`contextListEntries`). The long-standing flat fields
  * (`contextListData`, `contexts`, `contextsTotal`, `contextsPage`,
  * `contextsHasMore`, `contextsInit`) mirror the active query's entry so every

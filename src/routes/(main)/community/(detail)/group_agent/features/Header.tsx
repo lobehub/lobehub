@@ -4,8 +4,6 @@ import {
   ActionIcon,
   Avatar,
   Button,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Tag,
@@ -15,6 +13,8 @@ import {
   TooltipGroup,
   useResponsive,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BookmarkCheckIcon, BookmarkIcon, DotIcon, GitBranchIcon, UsersIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
@@ -31,12 +31,7 @@ import { resolveCommunityProfileLink } from '../../utils/profileLink';
 import { useDetailContext } from './DetailProvider';
 import GroupAgentForkTag from './GroupAgentForkTag';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  time: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+const styles = stylex.create({ time: { fontSize: '12px', color: cssVar.colorTextDescription } });
 
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { t } = useTranslation('discover');
@@ -181,7 +176,10 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               );
             })()}
             <Icon icon={DotIcon} />
-            <PublishedTime className={styles.time} date={createdAt as string} />
+            <PublishedTime
+              className={stylex.props(styles.time).className}
+              date={createdAt as string}
+            />
             <GroupAgentForkTag />
             {!!forkCount && forkCount > 0 && (
               <Tag color="default" icon={<Icon icon={GitBranchIcon} />}>

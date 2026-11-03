@@ -12,6 +12,9 @@ import type {
 import type { NightlyReviewWorkflowDependencies } from '../nightlyReview';
 import { executeNightlyReviewUser, paginateNightlyReviewUsers } from '../nightlyReview';
 
+// The real retro service pulls in the document editor stack; the workflow only orchestrates it.
+vi.mock('@/server/services/agentSignal/services/botRetro', () => ({ BotRetroService: class {} }));
+
 const createContext = <TPayload>(payload: TPayload): WorkflowContext<TPayload> => {
   const run = vi.fn(async (_stepName: string, handler: () => Promise<unknown>) => {
     const result = await handler();
@@ -93,11 +96,53 @@ describe('nightly review layered workflows', () => {
         createdAt: users.at(-1)!.createdAt.toISOString(),
         id: users.at(-1)!.id,
       },
+      job: 'self-review',
       pageSize: 50,
       requestedAt: '2026-05-03T18:30:00.000Z',
       targetLimit: 20,
       whitelist: undefined,
     });
+  });
+
+  it('carries the bot-retro job through the page scan and every child trigger', async () => {
+    const service = createService();
+    vi.mocked(service.listEligibleUsersPage).mockResolvedValue({
+      users: [{ createdAt: new Date('2026-01-01T00:00:00.000Z'), id: 'user-1' }],
+    });
+    const { dependencies, triggerExecuteUser, triggerPaginateUsers } = createDependencies(service);
+
+    await paginateNightlyReviewUsers(
+      createContext<PaginateNightlyReviewUsersPayload>({
+        job: 'bot-retro',
+        pageSize: 50,
+        requestedAt: '2026-05-03T20:30:00.000Z',
+        targetLimit: 20,
+      }),
+      dependencies,
+    );
+
+    expect(service.listEligibleUsersPage).toHaveBeenCalledWith(
+      expect.objectContaining({ job: 'bot-retro' }),
+    );
+    expect(triggerPaginateUsers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        job: 'bot-retro',
+        users: [expect.objectContaining({ id: 'user-1' })],
+      }),
+    );
+
+    await paginateNightlyReviewUsers(
+      createContext<PaginateNightlyReviewUsersPayload>({
+        job: 'bot-retro',
+        pageSize: 50,
+        requestedAt: '2026-05-03T20:30:00.000Z',
+        targetLimit: 20,
+        users: [{ createdAt: '2026-01-01T00:00:00.000Z', id: 'user-1' }],
+      }),
+      dependencies,
+    );
+
+    expect(triggerExecuteUser).toHaveBeenCalledWith(expect.objectContaining({ job: 'bot-retro' }));
   });
 
   it('turns one fan-out chunk into one execution workflow per user without querying a page', async () => {
@@ -166,5 +211,63 @@ describe('nightly review layered workflows', () => {
         timezone: 'Asia/Shanghai',
       },
     });
+  });
+
+  it("runs one retro step per bot agent over the user's previous local day", async () => {
+    const service = createService();
+    const listTargets = vi.fn().mockResolvedValue(['agent-a', 'agent-b']);
+    const runForAgent = vi.fn().mockResolvedValue({ status: 'written' });
+    const { dependencies } = createDependencies(service);
+    // 04:30 in Shanghai on 2026-05-04: inside the bot-retro window, reviewing 2026-05-03.
+    const context = createContext<ExecuteNightlyReviewUserPayload>({
+      job: 'bot-retro',
+      requestedAt: '2026-05-03T20:30:00.000Z',
+      targetLimit: 5,
+      user: { createdAt: '2026-01-01T00:00:00.000Z', id: 'user-1', timezone: 'Asia/Shanghai' },
+    });
+
+    await expect(
+      executeNightlyReviewUser(context, {
+        ...dependencies,
+        createBotRetroService: () => ({ listTargets, runForAgent }),
+      }),
+    ).resolves.toEqual({ enqueued: 2, skipped: 0, success: true, userId: 'user-1' });
+
+    const windowStart = new Date('2026-05-02T16:00:00.000Z');
+    const windowEnd = new Date('2026-05-03T16:00:00.000Z');
+    expect(listTargets).toHaveBeenCalledWith({ limit: 5, windowEnd, windowStart });
+    expect(runForAgent).toHaveBeenCalledTimes(2);
+    expect(runForAgent).toHaveBeenCalledWith({
+      agentId: 'agent-b',
+      localDate: '2026-05-03',
+      windowEnd,
+      windowStart,
+    });
+    expect(vi.mocked(context.run).mock.calls.map(([name]) => name)).toEqual([
+      'agent-signal:nightly-bot-retro:list-agents:user-1',
+      'agent-signal:nightly-bot-retro:run:agent-a',
+      'agent-signal:nightly-bot-retro:run:agent-b',
+    ]);
+    expect(service.dispatchNightlyReviewForUser).not.toHaveBeenCalled();
+  });
+
+  it('skips the bot retro outside the 04:00-06:00 local window', async () => {
+    const listTargets = vi.fn();
+    const { dependencies } = createDependencies(createService());
+    // 02:30 in Shanghai is the self-review window, not the bot retro one.
+    const context = createContext<ExecuteNightlyReviewUserPayload>({
+      job: 'bot-retro',
+      requestedAt: '2026-05-03T18:30:00.000Z',
+      targetLimit: 5,
+      user: { createdAt: '2026-01-01T00:00:00.000Z', id: 'user-1', timezone: 'Asia/Shanghai' },
+    });
+
+    await expect(
+      executeNightlyReviewUser(context, {
+        ...dependencies,
+        createBotRetroService: () => ({ listTargets, runForAgent: vi.fn() }),
+      }),
+    ).resolves.toEqual({ enqueued: 0, skipped: 1, success: true, userId: 'user-1' });
+    expect(listTargets).not.toHaveBeenCalled();
   });
 });

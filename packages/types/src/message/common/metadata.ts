@@ -1,10 +1,67 @@
 import { z } from 'zod';
 
 import { RequestTrigger } from '../../agentRuntime';
+import type { WorkRegistrationIntent } from '../../work';
 import type { ContextSelection } from './contextSelection';
 import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
+
+const ToolWorkRegistrationSchema: z.ZodType<WorkRegistrationIntent> = z.union([
+  z.object({
+    action: z.enum(['create', 'update', 'delete']),
+    changeType: z.enum(['created', 'updated']).optional(),
+    targets: z.array(
+      z.object({ taskId: z.string().optional(), taskIdentifier: z.string().optional() }),
+    ),
+    type: z.literal('task'),
+  }),
+  z.object({
+    args: z.record(z.string(), z.unknown()).optional(),
+    data: z.unknown(),
+    provider: z.string(),
+    toolName: z.string(),
+    type: z.literal('skill'),
+  }),
+  z.object({
+    action: z.literal('register'),
+    document: z.object({
+      agentDocumentId: z.string().nullish(),
+      agentId: z.string().nullish(),
+      description: z.string().nullish(),
+      documentId: z.string(),
+      changeType: z.enum(['created', 'updated']),
+      toolName: z.string(),
+    }),
+    type: z.literal('document'),
+  }),
+  z.object({
+    action: z.literal('delete'),
+    document: z.object({
+      agentDocumentId: z.string().nullish(),
+      agentId: z.string().nullish(),
+      documentId: z.string(),
+    }),
+    type: z.literal('document'),
+  }),
+  z.object({
+    action: z.literal('register'),
+    canvas: z.object({
+      canvasId: z.string(),
+      description: z.string().nullish(),
+      title: z.string(),
+      toolName: z.string(),
+      metadata: z.object({
+        entry: z.string(),
+        fileCount: z.number(),
+        manifestKey: z.string(),
+        runtimeMajor: z.number(),
+        totalSize: z.number(),
+      }),
+    }),
+    type: z.literal('canvas'),
+  }),
+]);
 
 const LocalSystemToolSnapshotSchema = z.object({
   apiName: z.enum(['readFile', 'listFiles', 'readLocalFile', 'listLocalFiles']),
@@ -67,6 +124,11 @@ export interface ModelTokensUsage {
 
   inputCacheMissTokens?: number;
   /**
+   * Input text characters, billed through `millionCharacters` pricing units
+   * (e.g. character-billed text-to-speech models).
+   */
+  inputCharacters?: number;
+  /**
    * currently only pplx has citation_tokens
    */
   inputCitationTokens?: number;
@@ -125,6 +187,7 @@ export const ModelUsageSchema = z.object({
   inputVideoTokens: z.number().optional(),
   inputCitationTokens: z.number().optional(),
   inputToolTokens: z.number().optional(),
+  inputCharacters: z.number().optional(),
 
   // Output tokens breakdown
   outputTextTokens: z.number().optional(),
@@ -175,6 +238,13 @@ export const MessageSignalSchema = z.object({
   sourceToolCallId: z.string(),
   sourceToolName: z.string(),
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
+});
+
+export const MessageSubAgentCallbackSchema = z.object({
+  agentId: z.string().optional(),
+  name: z.string(),
+  status: z.enum(['completed', 'error']),
+  threadId: z.string(),
 });
 
 export const MessageTaskCallbackSchema = z.object({
@@ -229,6 +299,13 @@ export interface AgentSenderMetadata {
    * own conversation instead of the group the turn actually came from.
    */
   chatGroupId?: string;
+  /**
+   * How many agent → agent sends in a row led to this message: 1 when the
+   * sending turn was started by a person, one more than the message that
+   * started the sending turn otherwise. The server refuses a send past
+   * `MAX_AGENT_RELAY_HOPS`, so two agents cannot keep waking each other.
+   */
+  hop?: number;
   /** Sending agent's personal name at send time; resolve the label with `agentDisplayName`. */
   name?: string;
   /**
@@ -259,6 +336,7 @@ export const AgentSenderMetadataSchema = z.object({
   agentId: z.string(),
   avatar: z.string().optional(),
   chatGroupId: z.string().optional(),
+  hop: z.number().int().positive().optional(),
   name: z.string().optional(),
   threadId: z.string().optional(),
   title: z.string().optional(),
@@ -357,11 +435,17 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   steer: z.boolean().optional(),
+  // User message carrying a background sub-agent's answer back to its parent;
+  // its sender is that sub-agent.
+  subAgentCallback: MessageSubAgentCallbackSchema.optional(),
   subAgentId: z.string().optional(),
   // role='taskCallback' card: which task delivered its handoff back to this
   // conversation, and the run outcome. The card header + jump link read this.
   taskCallback: MessageTaskCallbackSchema.optional(),
   toolExecutionTimeMs: z.number().optional(),
+  toolResultSuccess: z.boolean().optional(),
+  toolResultStop: z.boolean().optional(),
+  toolWorkRegistration: ToolWorkRegistrationSchema.optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
   // role='verify' card: which Agent Run (agent_operations.id) it renders.
   verifyOperationId: z.string().optional(),
@@ -645,6 +729,13 @@ export interface MessageMetadata {
    * - scope: 'group' | 'group_agent': indicates the agent that generated this message in group mode
    * Used by callAgent tool (sub_agent) and group orchestration (group modes)
    */
+  /**
+   * Present on a user message that delivers a background sub-agent's answer
+   * (`callSubAgent` / `callAgent` with `runInBackground`) back to its parent
+   * conversation: the answer is the content, and this is its sender in place
+   * of the human.
+   */
+  subAgentCallback?: MessageSubAgentCallback;
   subAgentId?: string;
   /**
    * Task-callback card pointer (for role='taskCallback' messages). Identifies
@@ -659,6 +750,11 @@ export interface MessageMetadata {
    * Tool execution time for tool messages (ms)
    */
   toolExecutionTimeMs?: number;
+  toolResultStop?: boolean;
+  /** Terminal tool-result flags retained for step redelivery. */
+  toolResultSuccess?: boolean;
+  /** Durable registration intent; omitted from runtime conversation contexts. */
+  toolWorkRegistration?: WorkRegistrationIntent;
   /** @deprecated use the top-level message `usage` field instead */
   totalInputTokens?: number;
   /** @deprecated use the top-level message `usage` field instead */
@@ -702,6 +798,20 @@ export interface MessageMetadata {
 export interface MessageWorkMetadata {
   rootOperationId: string;
   userMessageId?: string;
+}
+
+/** Who sent a background sub-agent's answer — see `MessageMetadata.subAgentCallback`. */
+export interface MessageSubAgentCallback {
+  /**
+   * The agent that answered: a `callAgent` target, or the parent agent itself
+   * for an anonymous `callSubAgent` clone. Its avatar is the sender's.
+   */
+  agentId?: string;
+  /** The sender's label: the call's description, or the target agent's name. */
+  name: string;
+  status: 'completed' | 'error';
+  /** The sub-agent's isolation thread (its full trace, and its id to follow up). */
+  threadId: string;
 }
 
 /**
