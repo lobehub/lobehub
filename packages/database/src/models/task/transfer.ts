@@ -9,6 +9,7 @@ import {
   taskDocuments,
   tasks,
 } from '../../schemas/task';
+import { taskLabelLinks } from '../../schemas/taskLabel';
 import type { LobeChatDatabase } from '../../type';
 import { type CheckpointTaskRelocation, remapCheckpointConfig } from './checkpoint';
 import type { TaskModelContext } from './context';
@@ -115,6 +116,17 @@ export const transferTo = async (
       .update(taskActivities)
       .set({ ...ownershipUpdate, ...visibilityUpdate })
       .where(inArray(taskActivities.taskId, ids));
+
+    // Labels belong to the source scope's registry, which the destination
+    // cannot see. Keep the links on a same-scope handover only.
+    const sameLabelScope = targetWorkspaceId
+      ? targetWorkspaceId === ctx.workspaceId
+      : !ctx.workspaceId && targetUserId === ctx.userId;
+    if (!sameLabelScope) {
+      await (trx as LobeChatDatabase)
+        .delete(taskLabelLinks)
+        .where(inArray(taskLabelLinks.taskId, ids));
+    }
 
     return { taskIds: ids };
   });

@@ -1,0 +1,222 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { getTestDB } from '../../core/getTestDB';
+import { taskLabelLinks, users, workspaces } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { TaskModel } from '../task';
+import { TaskLabelError, TaskLabelModel } from '../taskLabel';
+
+const serverDB: LobeChatDatabase = await getTestDB();
+
+const userId = 'task-label-test-user';
+const otherUserId = 'task-label-test-user-2';
+const workspaceId = 'task-label-test-ws';
+const otherWorkspaceId = 'task-label-test-ws-2';
+
+const personal = new TaskLabelModel(serverDB, userId);
+const workspace = new TaskLabelModel(serverDB, userId, workspaceId);
+const member = new TaskLabelModel(serverDB, otherUserId, workspaceId);
+
+beforeEach(async () => {
+  await serverDB.delete(users);
+  await serverDB.delete(workspaces);
+  await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values([
+    { id: workspaceId, name: 'WS', primaryOwnerId: userId, slug: workspaceId },
+    { id: otherWorkspaceId, name: 'WS 2', primaryOwnerId: userId, slug: otherWorkspaceId },
+  ]);
+});
+
+afterEach(async () => {
+  await serverDB.delete(users);
+  await serverDB.delete(workspaces);
+});
+
+const expectCode = async (promise: Promise<unknown>, code: TaskLabelError['code']) => {
+  await expect(promise).rejects.toBeInstanceOf(TaskLabelError);
+  await expect(promise).rejects.toMatchObject({ code });
+};
+
+describe('TaskLabelModel registry', () => {
+  it('scopes labels per workspace and per personal owner', async () => {
+    await personal.create({ name: 'Mine' });
+    await workspace.create({ color: '#EB5757', name: 'Shared' });
+
+    expect((await personal.query()).map((l) => l.name)).toEqual(['Mine']);
+    expect((await workspace.query()).map((l) => l.name)).toEqual(['Shared']);
+    // every workspace member shares the registry
+    expect((await member.query()).map((l) => l.name)).toEqual(['Shared']);
+    // personal labels never leak to another user
+    expect(await new TaskLabelModel(serverDB, otherUserId).query()).toHaveLength(0);
+  });
+
+  it('rejects a duplicate name in the same scope case-insensitively', async () => {
+    await workspace.create({ name: 'Bug' });
+    await expect(member.create({ name: 'bug' })).rejects.toThrow();
+    // the same name is fine in another scope
+    await expect(personal.create({ name: 'Bug' })).resolves.toBeDefined();
+  });
+
+  it('nests labels one level under a group only', async () => {
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const bug = await workspace.create({ name: 'Bug', parentId: group.id });
+    expect(bug.parentId).toBe(group.id);
+
+    await expectCode(
+      workspace.create({ isGroup: true, name: 'Nested', parentId: group.id }),
+      'INVALID_PARENT',
+    );
+    await expectCode(workspace.create({ name: 'Child', parentId: bug.id }), 'INVALID_PARENT');
+    // a group from another scope is not a valid parent
+    const foreign = await personal.create({ isGroup: true, name: 'Foreign' });
+    await expectCode(workspace.create({ name: 'X', parentId: foreign.id }), 'INVALID_PARENT');
+  });
+
+  it('deleting a group deletes its labels and their task links', async () => {
+    const tasks = new TaskModel(serverDB, userId, workspaceId);
+    const task = await tasks.create({ instruction: 'a' });
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const bug = await workspace.create({ name: 'Bug', parentId: group.id });
+    await workspace.addTaskLabels(task.id, [bug.id]);
+
+    await workspace.delete(group.id);
+
+    expect(await workspace.query()).toHaveLength(0);
+    expect(await workspace.getTaskLabels(task.id)).toEqual([]);
+  });
+
+  it('counts only tasks visible to the caller', async () => {
+    const label = await workspace.create({ name: 'Shared' });
+    const own = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'mine' });
+    const othersPrivate = await new TaskModel(serverDB, otherUserId, workspaceId).create({
+      instruction: 'secret',
+      visibility: 'private',
+    });
+    await workspace.addTaskLabels(own.id, [label.id]);
+    await member.addTaskLabels(othersPrivate.id, [label.id]);
+
+    expect((await workspace.query())[0].usageCount).toBe(1);
+    expect((await member.query())[0].usageCount).toBe(2);
+  });
+
+  it('refuses to move a label into a group when a task would end up with two', async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const bug = await workspace.create({ name: 'Bug', parentId: group.id });
+    const loose = await workspace.create({ name: 'Feature' });
+    await workspace.addTaskLabels(task.id, [bug.id, loose.id]);
+
+    await expectCode(workspace.update(loose.id, { parentId: group.id }), 'GROUP_CONFLICT');
+
+    const other = await workspace.create({ name: 'Chore' });
+    await expect(workspace.update(other.id, { parentId: group.id })).resolves.toMatchObject({
+      parentId: group.id,
+    });
+  });
+});
+
+describe('TaskLabelModel task assignments', () => {
+  it('adds, lists and removes labels on a task', async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const a = await workspace.create({ color: '#4CB782', name: 'Alpha' });
+    const b = await workspace.create({ name: 'Beta' });
+
+    const added = await workspace.addTaskLabels(task.id, [a.id, b.id, a.id]);
+    expect(added.map((l) => l.name)).toEqual(['Alpha', 'Beta']);
+    expect(added[0]).toMatchObject({ color: '#4CB782', id: a.id });
+
+    const removed = await workspace.removeTaskLabels(task.id, [a.id]);
+    expect(removed.map((l) => l.name)).toEqual(['Beta']);
+  });
+
+  it('replaces the sibling when attaching another label of the same group', async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const bug = await workspace.create({ name: 'Bug', parentId: group.id });
+    const feature = await workspace.create({ name: 'Feature', parentId: group.id });
+    const loose = await workspace.create({ name: 'Frontend' });
+
+    await workspace.addTaskLabels(task.id, [bug.id, loose.id]);
+    const next = await workspace.addTaskLabels(task.id, [feature.id]);
+
+    expect(next.map((l) => l.name).sort()).toEqual(['Feature', 'Frontend']);
+  });
+
+  it('rejects groups, two labels of one group, and labels from another scope', async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const bug = await workspace.create({ name: 'Bug', parentId: group.id });
+    const feature = await workspace.create({ name: 'Feature', parentId: group.id });
+    const foreign = await personal.create({ name: 'Personal' });
+
+    await expectCode(workspace.addTaskLabels(task.id, [group.id]), 'GROUP_NOT_ASSIGNABLE');
+    await expectCode(workspace.setTaskLabels(task.id, [bug.id, feature.id]), 'GROUP_CONFLICT');
+    await expectCode(workspace.addTaskLabels(task.id, [foreign.id]), 'LABEL_NOT_FOUND');
+  });
+
+  it('setTaskLabels replaces the full set', async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const a = await workspace.create({ name: 'A' });
+    const b = await workspace.create({ name: 'B' });
+    const c = await workspace.create({ name: 'C' });
+    await workspace.addTaskLabels(task.id, [a.id, b.id]);
+
+    expect((await workspace.setTaskLabels(task.id, [b.id, c.id])).map((l) => l.name)).toEqual([
+      'B',
+      'C',
+    ]);
+    expect(await workspace.setTaskLabels(task.id, [])).toEqual([]);
+  });
+
+  it('cannot label a task the caller cannot see', async () => {
+    const hidden = await new TaskModel(serverDB, otherUserId, workspaceId).create({
+      instruction: 'secret',
+      visibility: 'private',
+    });
+    const label = await workspace.create({ name: 'A' });
+
+    await expectCode(workspace.addTaskLabels(hidden.id, [label.id]), 'TASK_NOT_FOUND');
+    expect(await workspace.getLabelsForTasks([hidden.id])).toEqual({});
+  });
+
+  it('groups labels by task for a batch of tasks', async () => {
+    const model = new TaskModel(serverDB, userId, workspaceId);
+    const t1 = await model.create({ instruction: '1' });
+    const t2 = await model.create({ instruction: '2' });
+    const t3 = await model.create({ instruction: '3' });
+    const a = await workspace.create({ name: 'A' });
+    const b = await workspace.create({ name: 'B' });
+    await workspace.addTaskLabels(t1.id, [a.id, b.id]);
+    await workspace.addTaskLabels(t2.id, [b.id]);
+
+    const map = await workspace.getLabelsForTasks([t1.id, t2.id, t3.id]);
+    expect(map[t1.id].map((l) => l.name)).toEqual(['A', 'B']);
+    expect(map[t2.id].map((l) => l.name)).toEqual(['B']);
+    expect(map[t3.id]).toBeUndefined();
+  });
+
+  it('finds labels by name case-insensitively within scope', async () => {
+    await workspace.create({ name: 'Bug' });
+    await personal.create({ name: 'Bug' });
+
+    const found = await workspace.findByNames(['bug', ' BUG ', 'missing']);
+    expect(found).toHaveLength(1);
+    expect(found[0].workspaceId).toBe(workspaceId);
+  });
+
+  it('drops label links when a task moves to another workspace, keeps them otherwise', async () => {
+    const model = new TaskModel(serverDB, userId, workspaceId);
+    const moved = await model.create({ instruction: 'moved' });
+    const kept = await model.create({ instruction: 'kept' });
+    const label = await workspace.create({ name: 'A' });
+    await workspace.addTaskLabels(moved.id, [label.id]);
+    await workspace.addTaskLabels(kept.id, [label.id]);
+
+    await model.transferTo(moved.id, otherWorkspaceId, userId, 'public');
+    await model.transferTo(kept.id, workspaceId, otherUserId, 'public');
+
+    const links = await serverDB.select().from(taskLabelLinks);
+    expect(links.map((l) => l.taskId)).toEqual([kept.id]);
+  });
+});

@@ -1414,6 +1414,13 @@
       "when": 1793718950376,
       "tag": "0201_goal_archived_at",
       "breakpoints": true
+    },
+    {
+      "idx": 202,
+      "version": "7",
+      "when": 1793792795990,
+      "tag": "0202_task_labels",
+      "breakpoints": true
     }
   ],
   "version": "6"

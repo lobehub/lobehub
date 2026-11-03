@@ -1,0 +1,368 @@
+import type { TaskLabelRef, TaskLabelWithUsage } from '@lobechat/types';
+import { and, asc, count, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
+
+import type { TaskLabelItem } from '../schemas';
+import { taskLabelLinks, taskLabels, tasks } from '../schemas';
+import type { LobeChatDatabase, Transaction } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { type TaskModelContext, taskOwnership } from './task/context';
+
+/** Thrown for caller mistakes the router maps to BAD_REQUEST / CONFLICT. */
+export class TaskLabelError extends Error {
+  constructor(
+    public readonly code:
+      | 'GROUP_CONFLICT'
+      | 'GROUP_NOT_ASSIGNABLE'
+      | 'INVALID_PARENT'
+      | 'LABEL_NOT_FOUND'
+      | 'TASK_NOT_FOUND',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'TaskLabelError';
+  }
+}
+
+export interface CreateTaskLabelParams {
+  color?: string | null;
+  description?: string | null;
+  isGroup?: boolean;
+  name: string;
+  parentId?: string | null;
+  sortOrder?: number;
+}
+
+export type UpdateTaskLabelParams = Partial<
+  Pick<TaskLabelItem, 'color' | 'description' | 'name' | 'parentId' | 'sortOrder'>
+>;
+
+const toRef = (row: Pick<TaskLabelItem, 'color' | 'id' | 'name' | 'parentId'>): TaskLabelRef => ({
+  color: row.color,
+  id: row.id,
+  name: row.name,
+  parentId: row.parentId,
+});
+
+export class TaskLabelModel {
+  private readonly userId: string;
+  private readonly db: LobeChatDatabase;
+  private readonly workspaceId?: string;
+  private readonly ctx: TaskModelContext;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+    this.ctx = { db, userId, workspaceId };
+  }
+
+  // Labels are a workspace-level registry: every member sees and shares the
+  // same label set (no per-member visibility). Personal mode falls back to
+  // `user_id = ? AND workspace_id IS NULL`.
+  private ownership = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: taskLabels.userId, workspaceId: taskLabels.workspaceId },
+    );
+
+  private payload = <T extends object>(value: T) =>
+    buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, value);
+
+  // ========== Registry ==========
+
+  /**
+   * Every label in scope, groups included, with the number of tasks carrying
+   * it. The count only covers tasks the caller can see (task ownership,
+   * trash and archive excluded) so it matches what the task list shows rather
+   * than revealing how many of a teammate's private tasks use a shared label.
+   */
+  query = async (): Promise<TaskLabelWithUsage[]> => {
+    const rows = await this.db
+      .select({
+        color: taskLabels.color,
+        description: taskLabels.description,
+        id: taskLabels.id,
+        isGroup: taskLabels.isGroup,
+        name: taskLabels.name,
+        parentId: taskLabels.parentId,
+        sortOrder: taskLabels.sortOrder,
+        usageCount: count(tasks.id),
+      })
+      .from(taskLabels)
+      .leftJoin(taskLabelLinks, eq(taskLabelLinks.labelId, taskLabels.id))
+      .leftJoin(
+        tasks,
+        and(eq(tasks.id, taskLabelLinks.taskId), isNull(tasks.archivedAt), taskOwnership(this.ctx)),
+      )
+      .where(this.ownership())
+      .groupBy(taskLabels.id)
+      .orderBy(asc(taskLabels.sortOrder), asc(sql`lower(${taskLabels.name})`));
+
+    return rows;
+  };
+
+  findById = async (id: string): Promise<TaskLabelItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(taskLabels)
+      .where(and(eq(taskLabels.id, id), this.ownership()))
+      .limit(1);
+    return row;
+  };
+
+  findByIds = async (ids: string[]): Promise<TaskLabelItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(taskLabels)
+      .where(and(inArray(taskLabels.id, ids), this.ownership()));
+  };
+
+  /** Case-insensitive name lookup; names are unique per scope. */
+  findByNames = async (names: string[]): Promise<TaskLabelItem[]> => {
+    const lowered = [...new Set(names.map((name) => name.trim().toLowerCase()))].filter(Boolean);
+    if (lowered.length === 0) return [];
+    return this.db
+      .select()
+      .from(taskLabels)
+      .where(and(inArray(sql`lower(${taskLabels.name})`, lowered), this.ownership()));
+  };
+
+  /** Groups nest one level only, and only a group can be a parent. */
+  private assertValidParent = async (parentId: string | null | undefined, isGroup: boolean) => {
+    if (!parentId) return;
+    if (isGroup) throw new TaskLabelError('INVALID_PARENT', 'A label group cannot be nested');
+
+    const parent = await this.findById(parentId);
+    if (!parent || !parent.isGroup) {
+      throw new TaskLabelError('INVALID_PARENT', `Label group not found: ${parentId}`);
+    }
+  };
+
+  create = async (params: CreateTaskLabelParams): Promise<TaskLabelItem> => {
+    const isGroup = params.isGroup ?? false;
+    await this.assertValidParent(params.parentId, isGroup);
+
+    const [row] = await this.db
+      .insert(taskLabels)
+      .values(
+        this.payload({
+          color: params.color ?? null,
+          description: params.description ?? null,
+          isGroup,
+          name: params.name.trim(),
+          parentId: params.parentId ?? null,
+          sortOrder: params.sortOrder ?? 0,
+        }),
+      )
+      .returning();
+
+    return row;
+  };
+
+  update = async (id: string, value: UpdateTaskLabelParams): Promise<TaskLabelItem | undefined> => {
+    const current = await this.findById(id);
+    if (!current) throw new TaskLabelError('LABEL_NOT_FOUND', `Label not found: ${id}`);
+
+    if (value.parentId !== undefined && value.parentId !== current.parentId) {
+      await this.assertValidParent(value.parentId, current.isGroup);
+      // Moving into a group would break "one label per group" on tasks that
+      // already carry a sibling. Refuse rather than silently dropping one.
+      if (value.parentId) await this.assertNoGroupConflict(id, value.parentId);
+    }
+
+    const [row] = await this.db
+      .update(taskLabels)
+      .set({
+        ...value,
+        ...(value.name !== undefined ? { name: value.name.trim() } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(taskLabels.id, id), this.ownership()))
+      .returning();
+
+    return row;
+  };
+
+  private assertNoGroupConflict = async (labelId: string, groupId: string) => {
+    const sibling = this.db
+      .select({ taskId: taskLabelLinks.taskId })
+      .from(taskLabelLinks)
+      .innerJoin(taskLabels, eq(taskLabels.id, taskLabelLinks.labelId))
+      .where(and(eq(taskLabels.parentId, groupId), ne(taskLabels.id, labelId)));
+
+    const [conflict] = await this.db
+      .select({ taskId: taskLabelLinks.taskId })
+      .from(taskLabelLinks)
+      .where(and(eq(taskLabelLinks.labelId, labelId), inArray(taskLabelLinks.taskId, sibling)))
+      .limit(1);
+
+    if (conflict) {
+      throw new TaskLabelError(
+        'GROUP_CONFLICT',
+        'Some tasks already carry another label from this group',
+      );
+    }
+  };
+
+  /** Hard delete; links (and, for a group, its labels) go with it via FK cascade. */
+  delete = async (id: string) => {
+    return this.db.delete(taskLabels).where(and(eq(taskLabels.id, id), this.ownership()));
+  };
+
+  // ========== Task assignments ==========
+
+  /** Labels on each of the given tasks, keyed by task id; tasks the caller cannot see are skipped. */
+  getLabelsForTasks = async (taskIds: string[]): Promise<Record<string, TaskLabelRef[]>> => {
+    if (taskIds.length === 0) return {};
+
+    const rows = await this.db
+      .select({
+        color: taskLabels.color,
+        id: taskLabels.id,
+        name: taskLabels.name,
+        parentId: taskLabels.parentId,
+        sortOrder: taskLabels.sortOrder,
+        taskId: taskLabelLinks.taskId,
+      })
+      .from(taskLabelLinks)
+      .innerJoin(taskLabels, eq(taskLabels.id, taskLabelLinks.labelId))
+      .innerJoin(tasks, eq(tasks.id, taskLabelLinks.taskId))
+      .where(
+        and(inArray(taskLabelLinks.taskId, taskIds), this.ownership(), taskOwnership(this.ctx)),
+      )
+      .orderBy(asc(taskLabels.sortOrder), asc(sql`lower(${taskLabels.name})`));
+
+    const result: Record<string, TaskLabelRef[]> = {};
+    for (const row of rows) {
+      (result[row.taskId] ??= []).push(toRef(row));
+    }
+    return result;
+  };
+
+  getTaskLabels = async (taskId: string): Promise<TaskLabelRef[]> =>
+    (await this.getLabelsForTasks([taskId]))[taskId] ?? [];
+
+  private assertTaskInScope = async (taskId: string, db: LobeChatDatabase | Transaction) => {
+    const [row] = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.id, taskId), taskOwnership(this.ctx)))
+      .limit(1);
+    if (!row) throw new TaskLabelError('TASK_NOT_FOUND', `Task not found: ${taskId}`);
+  };
+
+  /**
+   * Resolve ids to assignable labels: every id must exist in scope, none may
+   * be a group, and the set may hold at most one label per group.
+   */
+  private resolveAssignable = async (labelIds: string[]): Promise<TaskLabelItem[]> => {
+    const ids = [...new Set(labelIds)];
+    const labels = await this.findByIds(ids);
+
+    const found = new Set(labels.map((label) => label.id));
+    const missing = ids.filter((id) => !found.has(id));
+    if (missing.length > 0) {
+      throw new TaskLabelError('LABEL_NOT_FOUND', `Labels not found: ${missing.join(', ')}`);
+    }
+
+    const group = labels.find((label) => label.isGroup);
+    if (group) {
+      throw new TaskLabelError(
+        'GROUP_NOT_ASSIGNABLE',
+        `"${group.name}" is a label group; pick one of its labels`,
+      );
+    }
+
+    const seenGroups = new Set<string>();
+    for (const label of labels) {
+      if (!label.parentId) continue;
+      if (seenGroups.has(label.parentId)) {
+        throw new TaskLabelError(
+          'GROUP_CONFLICT',
+          'A task can carry only one label from each group',
+        );
+      }
+      seenGroups.add(label.parentId);
+    }
+
+    return labels;
+  };
+
+  /**
+   * Attach labels to a task. Attaching a grouped label replaces whatever
+   * sibling from the same group the task already carried (Linear behavior).
+   */
+  addTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> => {
+    if (labelIds.length === 0) return this.getTaskLabels(taskId);
+    const labels = await this.resolveAssignable(labelIds);
+
+    await this.db.transaction(async (tx) => {
+      await this.assertTaskInScope(taskId, tx);
+
+      const groupIds = [
+        ...new Set(labels.map((l) => l.parentId).filter((id): id is string => !!id)),
+      ];
+      if (groupIds.length > 0) {
+        const siblings = tx
+          .select({ id: taskLabels.id })
+          .from(taskLabels)
+          .where(inArray(taskLabels.parentId, groupIds));
+        await tx.delete(taskLabelLinks).where(
+          and(
+            eq(taskLabelLinks.taskId, taskId),
+            inArray(taskLabelLinks.labelId, siblings),
+            notInArray(
+              taskLabelLinks.labelId,
+              labels.map((l) => l.id),
+            ),
+          ),
+        );
+      }
+
+      await tx
+        .insert(taskLabelLinks)
+        .values(labels.map((label) => this.payload({ labelId: label.id, taskId })))
+        .onConflictDoNothing();
+    });
+
+    return this.getTaskLabels(taskId);
+  };
+
+  removeTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> => {
+    await this.assertTaskInScope(taskId, this.db);
+    if (labelIds.length > 0) {
+      await this.db
+        .delete(taskLabelLinks)
+        .where(and(eq(taskLabelLinks.taskId, taskId), inArray(taskLabelLinks.labelId, labelIds)));
+    }
+    return this.getTaskLabels(taskId);
+  };
+
+  /** Replace the task's full label set. */
+  setTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> => {
+    const labels = await this.resolveAssignable(labelIds);
+    const nextIds = labels.map((label) => label.id);
+
+    await this.db.transaction(async (tx) => {
+      await this.assertTaskInScope(taskId, tx);
+
+      await tx
+        .delete(taskLabelLinks)
+        .where(
+          nextIds.length > 0
+            ? and(eq(taskLabelLinks.taskId, taskId), notInArray(taskLabelLinks.labelId, nextIds))
+            : eq(taskLabelLinks.taskId, taskId),
+        );
+
+      if (nextIds.length > 0) {
+        await tx
+          .insert(taskLabelLinks)
+          .values(nextIds.map((labelId) => this.payload({ labelId, taskId })))
+          .onConflictDoNothing();
+      }
+    });
+
+    return this.getTaskLabels(taskId);
+  };
+}
