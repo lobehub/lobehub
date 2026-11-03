@@ -240,4 +240,133 @@ describe('Copilot ACP helpers', () => {
     });
     expect(models).toEqual(['auto']);
   });
+
+  it('applies reasoningEffort on resume without initialModel when session/load omits configOptions', async () => {
+    const requests: Array<{
+      id?: number | string;
+      method?: string;
+      params?: Record<string, unknown>;
+    }> = [];
+    spawnMock.mockImplementation(() => {
+      const child = new EventEmitter() as ChildProcess;
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      const send = (message: Record<string, unknown>) =>
+        stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+
+      Object.assign(child, {
+        kill: vi.fn(() => true),
+        killed: false,
+        pid: 123_456,
+        stderr,
+        stdin: {
+          once: vi.fn(),
+          write: vi.fn((chunk: string) => {
+            const msg = JSON.parse(chunk.trim()) as {
+              id?: number | string;
+              method?: string;
+              params?: Record<string, unknown>;
+            };
+            requests.push(msg);
+            queueMicrotask(() => {
+              switch (msg.method) {
+                case 'initialize': {
+                  send({
+                    id: msg.id,
+                    result: { agentCapabilities: { loadSession: true }, protocolVersion: 1 },
+                  });
+                  return;
+                }
+                case 'session/load': {
+                  send({ id: msg.id, result: {} });
+                  return;
+                }
+                case 'session/new': {
+                  send({
+                    id: msg.id,
+                    result: {
+                      configOptions: [
+                        {
+                          category: 'model',
+                          currentValue: 'gpt-5.4',
+                          id: 'model',
+                          options: [
+                            { name: 'Auto', value: 'auto' },
+                            { name: 'GPT-5.4', value: 'gpt-5.4' },
+                          ],
+                        },
+                        {
+                          category: 'thought_level',
+                          currentValue: 'high',
+                          id: 'reasoning_effort',
+                          options: [
+                            { name: 'Low', value: 'low' },
+                            { name: 'Medium', value: 'medium' },
+                            { name: 'High', value: 'high' },
+                          ],
+                        },
+                      ],
+                      sessionId: 'discovery-session',
+                    },
+                  });
+                  return;
+                }
+                case 'session/set_config_option': {
+                  send({
+                    id: msg.id,
+                    result: {
+                      configOptions: [
+                        {
+                          category: 'thought_level',
+                          currentValue: msg.params?.value,
+                          id: 'reasoning_effort',
+                        },
+                      ],
+                    },
+                  });
+                  return;
+                }
+                case 'session/prompt': {
+                  send({ id: msg.id, result: { stopReason: 'end_turn' } });
+                  return;
+                }
+              }
+            });
+            return true;
+          }),
+        },
+        stdout,
+      });
+      return child;
+    });
+
+    const session = new CopilotAcpSession({
+      commandPath: 'copilot',
+      cwd: '/tmp',
+      onEvents: async () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-2',
+      prompt: 'hello',
+      reasoningEffort: 'high',
+      resumeSessionId: 'resumed-session-2',
+      sessionId: 'session-2',
+    });
+
+    await session.run();
+
+    const setEffortCall = requests.find(
+      (req) =>
+        req.method === 'session/set_config_option' &&
+        req.params?.configId === 'reasoning_effort' &&
+        req.params?.sessionId === 'resumed-session-2',
+    );
+    expect(setEffortCall?.params).toEqual({
+      configId: 'reasoning_effort',
+      sessionId: 'resumed-session-2',
+      value: 'high',
+    });
+  });
 });

@@ -160,6 +160,10 @@ export interface CopilotAcpModelCatalog {
   models: HeterogeneousAgentModel[];
 }
 
+interface CopilotAcpDiscoveredCatalog extends CopilotAcpModelCatalog {
+  configOptions?: unknown;
+}
+
 export interface ListCopilotAcpModelsOptions {
   args?: string[];
   clientVersion?: string;
@@ -350,8 +354,11 @@ export class CopilotAcpSession extends AcpAgentSession<
     this.acpSessionId = sessionId;
     this.options.onSessionId(sessionId);
 
-    const { configOptions, model } = await this.applyInitialModel(sessionId, sessionResult);
-    await this.applyReasoningEffort(sessionId, configOptions);
+    const { configOptions, hasSessionConfigOptions, model } = await this.applyInitialModel(
+      sessionId,
+      sessionResult,
+    );
+    await this.applyReasoningEffort(sessionId, configOptions, hasSessionConfigOptions);
 
     if (model) {
       this.pipeline.configureSession({ model });
@@ -431,7 +438,7 @@ export class CopilotAcpSession extends AcpAgentSession<
     throw new AcpServerRequestError(-32_601, `Unsupported ACP client request: ${message.method}`);
   }
 
-  private async discoverModelCatalog(): Promise<CopilotAcpModelCatalog> {
+  private async discoverModelCatalog(): Promise<CopilotAcpDiscoveredCatalog> {
     let discoverySessionId: string | undefined;
     try {
       const initialized = await this.initializeConnection();
@@ -448,7 +455,7 @@ export class CopilotAcpSession extends AcpAgentSession<
       if (initialized?.agentCapabilities?.sessionCapabilities?.close) {
         await this.client.request('session/close', { sessionId: sessionResult.sessionId });
       }
-      return catalog;
+      return { ...catalog, configOptions: sessionResult.configOptions };
     } finally {
       this.client.close();
       if (discoverySessionId) {
@@ -471,12 +478,18 @@ export class CopilotAcpSession extends AcpAgentSession<
     return buildCopilotAcpPrompt(prompt as AgentPromptInput, this.options.inputOptions);
   }
 
+  private hasRequestedReasoningEffort(): boolean {
+    const requestedEffort = this.reasoningEffort?.trim();
+    return Boolean(requestedEffort && requestedEffort !== 'default');
+  }
+
   private async applyInitialModel(
     sessionId: string,
     sessionResult: CopilotAcpSessionResult,
-  ): Promise<{ configOptions: unknown; model?: string }> {
+  ): Promise<{ configOptions: unknown; hasSessionConfigOptions: boolean; model?: string }> {
+    const hasLoadedConfigOptions = Array.isArray(sessionResult?.configOptions);
     const sessionCatalog = parseCopilotAcpModelCatalog(sessionResult);
-    let catalog = sessionCatalog;
+    let catalog: CopilotAcpDiscoveredCatalog | undefined = sessionCatalog;
     const requestedModel = (this.options.initialModel?.trim() || this.modelFromArgs?.trim()) ?? '';
     if (!requestedModel || requestedModel === 'default') {
       const currentModelId = sessionCatalog?.currentModelId;
@@ -492,12 +505,26 @@ export class CopilotAcpSession extends AcpAgentSession<
           sessionCatalog.configId,
           currentModelId,
         );
+        const nextConfigOptions = response?.configOptions ?? sessionResult.configOptions;
         return {
-          configOptions: response?.configOptions ?? sessionResult.configOptions,
+          configOptions: nextConfigOptions,
+          hasSessionConfigOptions: Array.isArray(nextConfigOptions),
           model: currentModelId,
         };
       }
-      return { configOptions: sessionResult.configOptions, model: currentModelId };
+      if (!sessionCatalog && this.options.resumeSessionId && this.hasRequestedReasoningEffort()) {
+        catalog = await this.discoverResumeModelCatalog();
+        return {
+          configOptions: catalog.configOptions,
+          hasSessionConfigOptions: false,
+          model: currentModelId,
+        };
+      }
+      return {
+        configOptions: sessionResult.configOptions,
+        hasSessionConfigOptions: hasLoadedConfigOptions,
+        model: currentModelId,
+      };
     }
     if (!catalog && this.options.resumeSessionId) {
       catalog = await this.discoverResumeModelCatalog();
@@ -522,12 +549,18 @@ export class CopilotAcpSession extends AcpAgentSession<
           sessionCatalog.configId,
           selected.id,
         );
+        const nextConfigOptions = response?.configOptions ?? sessionResult.configOptions;
         return {
-          configOptions: response?.configOptions ?? sessionResult.configOptions,
+          configOptions: nextConfigOptions,
+          hasSessionConfigOptions: Array.isArray(nextConfigOptions),
           model: selected.id,
         };
       }
-      return { configOptions: sessionResult.configOptions, model: selected.id };
+      return {
+        configOptions: sessionResult.configOptions,
+        hasSessionConfigOptions: hasLoadedConfigOptions,
+        model: selected.id,
+      };
     }
 
     const response = await this.client.request<CopilotAcpSetConfigOptionResult>(
@@ -538,8 +571,11 @@ export class CopilotAcpSession extends AcpAgentSession<
         value: selected.id,
       },
     );
+    const nextConfigOptions =
+      response?.configOptions ?? sessionResult.configOptions ?? catalog.configOptions;
     return {
-      configOptions: response?.configOptions ?? sessionResult.configOptions,
+      configOptions: nextConfigOptions,
+      hasSessionConfigOptions: Array.isArray(response?.configOptions) || hasLoadedConfigOptions,
       model:
         parseCopilotAcpModelCatalog({ configOptions: response?.configOptions })?.currentModelId ??
         selected.id,
@@ -569,11 +605,19 @@ export class CopilotAcpSession extends AcpAgentSession<
     });
   }
 
-  private async applyReasoningEffort(sessionId: string, configOptions: unknown): Promise<void> {
+  private async applyReasoningEffort(
+    sessionId: string,
+    configOptions: unknown,
+    hasSessionConfigOptions = true,
+  ): Promise<void> {
     const requestedEffort = this.reasoningEffort?.trim();
     if (!requestedEffort || requestedEffort === 'default') return;
 
-    const reasoningConfig = getReasoningEffortConfig(configOptions);
+    const reasoningConfig =
+      getReasoningEffortConfig(configOptions) ??
+      (!hasSessionConfigOptions && this.options.resumeSessionId
+        ? { id: 'reasoning_effort' }
+        : undefined);
     if (!reasoningConfig || typeof reasoningConfig.id !== 'string' || !reasoningConfig.id) {
       return;
     }
@@ -589,7 +633,9 @@ export class CopilotAcpSession extends AcpAgentSession<
       availableValues.length === 0 || availableValues.includes(requestedEffort)
         ? requestedEffort
         : undefined;
-    if (!targetValue || reasoningConfig.currentValue === targetValue) return;
+    if (!targetValue || (hasSessionConfigOptions && reasoningConfig.currentValue === targetValue)) {
+      return;
+    }
 
     await this.client.request<CopilotAcpSetConfigOptionResult>('session/set_config_option', {
       configId: reasoningConfig.id,
@@ -598,7 +644,7 @@ export class CopilotAcpSession extends AcpAgentSession<
     });
   }
 
-  private async discoverResumeModelCatalog(): Promise<CopilotAcpModelCatalog> {
+  private async discoverResumeModelCatalog(): Promise<CopilotAcpDiscoveredCatalog> {
     const discovery = new CopilotAcpSession({
       ...this.options,
       askUserBridge: undefined,
