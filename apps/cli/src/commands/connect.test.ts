@@ -1078,6 +1078,36 @@ describe('connect command', () => {
       expect(spawnDaemon).toHaveBeenCalled();
     });
 
+    it.each([
+      [
+        'connect',
+        'restart',
+        '--device-id',
+        'fixture-self',
+        '--gateway',
+        'wss://gateway.example.test',
+      ],
+      [
+        'connect',
+        '--device-id',
+        'fixture-self',
+        '--gateway',
+        'wss://gateway.example.test',
+        'restart',
+      ],
+    ])('preserves explicit connection options: %j', async (...args) => {
+      mockRunningPid = 12345;
+      await createProgram().parseAsync(['node', 'test', ...args]);
+      expect(spawnDaemon).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--device-id',
+          'fixture-self',
+          '--gateway',
+          'wss://gateway.example.test',
+        ]),
+      );
+    });
+
     it('does not launch a replacement until shutdown has finished', async () => {
       mockRunningPid = 12345;
       let finishStop!: (stopped: boolean) => void;

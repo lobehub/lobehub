@@ -208,13 +208,14 @@ export function registerConnectCommand(program: Command) {
       'Run the browser tool with this agent-browser binary (default: agent-browser on PATH)',
     )
     .option('-v, --verbose', 'Enable verbose logging')
-    .action((options: ConnectOptions) =>
-      restartConnector(options, async () => {
+    .action((_options: ConnectOptions, command: Command) => {
+      const options = command.optsWithGlobals<ConnectOptions>();
+      return restartConnector(options, async () => {
         const wasStopped = await stopDaemonAndWait();
         if (wasStopped) log.info('Stopped existing daemon.');
         await handleDaemonStart({ ...options, daemon: true });
-      }),
-    );
+      });
+    });
 
   const serviceCmd = connectCmd
     .command('service')
