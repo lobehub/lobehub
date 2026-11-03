@@ -36,6 +36,9 @@ export type UpdateTaskLabelParams = Partial<
   Pick<TaskLabelItem, 'color' | 'description' | 'name' | 'parentId' | 'sortOrder'>
 >;
 
+const UUID_PATTERN = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+const isUuid = (value: string) => UUID_PATTERN.test(value);
+
 const toRef = (row: Pick<TaskLabelItem, 'color' | 'id' | 'name' | 'parentId'>): TaskLabelRef => ({
   color: row.color,
   id: row.id,
@@ -102,6 +105,7 @@ export class TaskLabelModel {
   };
 
   findById = async (id: string): Promise<TaskLabelItem | undefined> => {
+    if (!isUuid(id)) return undefined;
     const [row] = await this.db
       .select()
       .from(taskLabels)
@@ -111,6 +115,8 @@ export class TaskLabelModel {
   };
 
   findByIds = async (ids: string[]): Promise<TaskLabelItem[]> => {
+    // A malformed id simply resolves to nothing instead of an invalid-uuid cast error.
+    ids = ids.filter(isUuid);
     if (ids.length === 0) return [];
     return this.db
       .select()
@@ -207,6 +213,7 @@ export class TaskLabelModel {
 
   /** Hard delete; links (and, for a group, its labels) go with it via FK cascade. */
   delete = async (id: string) => {
+    if (!isUuid(id)) return;
     return this.db.delete(taskLabels).where(and(eq(taskLabels.id, id), this.ownership()));
   };
 
@@ -289,6 +296,11 @@ export class TaskLabelModel {
     return labels;
   };
 
+  /** Validate a label set for assignment without writing anything. */
+  assertAssignable = async (labelIds: string[]): Promise<void> => {
+    await this.resolveAssignable(labelIds);
+  };
+
   /**
    * Attach labels to a task. Attaching a grouped label replaces whatever
    * sibling from the same group the task already carried (Linear behavior).
@@ -331,6 +343,7 @@ export class TaskLabelModel {
 
   removeTaskLabels = async (taskId: string, labelIds: string[]): Promise<TaskLabelRef[]> => {
     await this.assertTaskInScope(taskId, this.db);
+    labelIds = labelIds.filter(isUuid);
     if (labelIds.length > 0) {
       await this.db
         .delete(taskLabelLinks)
