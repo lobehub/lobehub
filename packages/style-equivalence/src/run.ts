@@ -12,6 +12,9 @@ import { captureRun } from './capture/runner';
 import { serveDirectories } from './capture/staticServer';
 import type { ProjectConfig } from './config';
 import { createRunDir, writeEvidence } from './evidence/store';
+import type { MutationOperator } from './mutation/operators';
+import { planMutations } from './mutation/plan';
+import { type MutationReport, runMutations } from './mutation/run';
 import { synthesize, writeHost } from './pipeline/synthesize';
 import type { FilePlan, PlanCase } from './plan/planFile';
 import { resolveScope } from './source/scope';
@@ -21,6 +24,7 @@ import { type CaseCategory, categorizeCase } from './verdict/categorize';
 const run = promisify(execFile);
 
 export const VERIFIER_VERSION = '1.0.0';
+export const DEFAULT_MUTATIONS = 10;
 
 export interface RunOptions {
   base: string;
@@ -28,6 +32,8 @@ export interface RunOptions {
   configFile: string;
   head: string;
   keepWorktrees?: boolean;
+  mutationOperators?: MutationOperator[];
+  mutations?: number;
   recordsDir: string;
   repo: string;
 }
@@ -46,6 +52,7 @@ export interface RunResult {
   durationMs: number;
   files: string[];
   head: string;
+  mutation: MutationReport;
   plans: FilePlan[];
   runDir: string;
   runId: string;
@@ -96,32 +103,61 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
     const server = await serveDirectories(runDir);
     browser ??= await launchBrowser();
     let capture;
+    let cases: CaseRecord[];
+    let mutation: MutationReport;
     try {
       capture = await captureRun({
         browser,
         conditions: config.conditions,
         urls: { base: `${server.url}/dist-base/`, head: `${server.url}/dist-head/` },
       });
+      const results = new Map(analyzeRun(capture).map((result) => [result.key, result]));
+      cases = synthesis.plans.flatMap((plan) =>
+        plan.cases.map((entry) => {
+          const result =
+            results.get(entry.key) ??
+            ({
+              comboDifferences: [],
+              differingConditions: [],
+              errors: ['CASE_NOT_CAPTURED'],
+              key: entry.key,
+              rootCauses: [],
+              status: 'error',
+              unstableConditions: [],
+            } satisfies CaseResult);
+          return { category: categorizeCase(entry, result), key: entry.key, plan: entry, result };
+        }),
+      );
+      const count = options.mutations ?? DEFAULT_MUTATIONS;
+      mutation = await runMutations({
+        browser,
+        candidates: count
+          ? planMutations({
+              aliases: config.aliases,
+              cases,
+              count,
+              extractions: synthesis.extractions,
+              headRoot: roots.head,
+              operators: options.mutationOperators,
+              scope,
+              seed: runId,
+            })
+          : [],
+        config,
+        configDir,
+        configFile: options.configFile,
+        count,
+        extractions: synthesis.extractions,
+        headRoot: roots.head,
+        plans: synthesis.plans,
+        runDir,
+        scope,
+        serverUrl: server.url,
+        widths: capture.widths,
+      });
     } finally {
       await server.close();
     }
-    const results = new Map(analyzeRun(capture).map((result) => [result.key, result]));
-    const cases: CaseRecord[] = synthesis.plans.flatMap((plan) =>
-      plan.cases.map((entry) => {
-        const result =
-          results.get(entry.key) ??
-          ({
-            comboDifferences: [],
-            differingConditions: [],
-            errors: ['CASE_NOT_CAPTURED'],
-            key: entry.key,
-            rootCauses: [],
-            status: 'error',
-            unstableConditions: [],
-          } satisfies CaseResult);
-        return { category: categorizeCase(entry, result), key: entry.key, plan: entry, result };
-      }),
-    );
     const comparisons = capture.conditions.reduce(
       (total, condition) => total + Object.keys(condition.head).length,
       0,
@@ -133,6 +169,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       durationMs: Math.round(performance.now() - started),
       files: synthesis.plans.map((plan) => plan.file),
       head,
+      mutation,
       plans: synthesis.plans,
       runDir,
       runId,
@@ -153,6 +190,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
     });
     await writeEvidence(runDir, 'plan.json', synthesis.plans);
     await writeEvidence(runDir, 'extractions.json', synthesis.extractions);
+    await writeEvidence(runDir, 'mutation.json', mutation);
     await writeEvidence(runDir, 'results.json', { cases, comparisons, unpaired: result.unpaired });
     return result;
   } finally {

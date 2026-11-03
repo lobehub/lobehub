@@ -5,10 +5,13 @@ import type { FilePlan } from '../plan/planFile';
 type CaseRender = (combo: Record<string, boolean>) => ReactNode;
 export type CaseModules = Record<string, { cases: Record<string, CaseRender> }>;
 
-export interface CaseSelection {
-  caseKey: string;
-  combo: number;
-}
+export type CaseSelection = { caseKey: string; combo: number } | { caseKeys: string[] };
+
+const isSelected = (selection: CaseSelection | undefined, key: string, combo: number) =>
+  !selection ||
+  ('caseKeys' in selection
+    ? selection.caseKeys.includes(key)
+    : selection.caseKey === key && selection.combo === combo);
 
 class Boundary extends Component<{ children: ReactNode }, { error?: string }> {
   state: { error?: string } = {};
@@ -40,8 +43,7 @@ export const CaseList = ({
     {plan.flatMap((file) =>
       file.cases.flatMap((entry) =>
         entry.combos.map((combo, index) => {
-          if (selection && (selection.caseKey !== entry.key || selection.combo !== index))
-            return null;
+          if (!isSelected(selection, entry.key, index)) return null;
           const key = `${entry.key}|${index}`;
           return (
             <section
@@ -67,6 +69,8 @@ export const CaseList = ({
 
 export const readSelection = (search: string): CaseSelection | undefined => {
   const params = new URLSearchParams(search);
+  const caseKeys = params.get('cases');
+  if (caseKeys) return { caseKeys: JSON.parse(caseKeys) as string[] };
   const caseKey = params.get('case');
   if (!caseKey) return undefined;
   return { caseKey, combo: Number(params.get('combo') ?? 0) };

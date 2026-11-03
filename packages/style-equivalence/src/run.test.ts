@@ -28,7 +28,7 @@ beforeAll(async () => {
   git('commit', '-qm', 'base');
   await writeFile(
     path.join(repo, 'src/Card.module.css'),
-    '.card { padding: 10px; }\n.active { color: rgb(0, 0, 255); }\n.title { font-weight: 600; }\n',
+    '.card { padding: 10px; }\n.active { color: rgb(0, 0, 255); border-color: var(--ink-alias); }\n.title { font-weight: 600; color: var(--ink); }\n',
   );
   git('commit', '-qam', 'head');
 }, 30_000);
@@ -63,5 +63,31 @@ describe('runComparison', () => {
     const stored = JSON.parse(await readFile(path.join(result.runDir, 'results.json'), 'utf8'));
     expect(stored.cases).toHaveLength(2);
     expect(git('worktree', 'list').split('\n')).toHaveLength(1);
+    expect(result.mutation).toMatchObject({ caught: 1, evaluated: 1, passed: true });
+    const [mutant] = result.mutation.mutants;
+    expect(mutant).toMatchObject({
+      caseKey: 'src/Card.tsx|Card#1',
+      operator: 'numeric',
+      outcome: 'caught',
+    });
+    expect(mutant.expected).toHaveLength(32);
+    expect(mutant.detected).toEqual(mutant.expected);
+  }, 180_000);
+
+  it('drops a token swap that resolves to the same value as an equivalent mutant', async () => {
+    const result = await runComparison({
+      base: 'HEAD~1',
+      configFile: path.join(fixtures, 'mini-project/style-equivalence.config.ts'),
+      head: 'HEAD',
+      mutationOperators: ['swap-token'],
+      recordsDir: records,
+      repo,
+    });
+    expect(result.mutation).toMatchObject({ equivalent: 1, evaluated: 0, passed: true });
+    expect(result.mutation.mutants[0]).toMatchObject({
+      expected: [],
+      operator: 'swap-token',
+      outcome: 'equivalent',
+    });
   }, 180_000);
 });
