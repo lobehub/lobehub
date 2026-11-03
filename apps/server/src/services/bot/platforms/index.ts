@@ -44,6 +44,7 @@ export {
   makeServerIdField,
   makeUserIdField,
   messageMatchesWatchKeyword,
+  NEW_BOT_REACTION_MODE,
   normalizeAllowFromEntries,
   normalizeBotReactionMode,
   normalizeBotReplyLocale,
