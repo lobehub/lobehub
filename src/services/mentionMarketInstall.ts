@@ -1,3 +1,5 @@
+import type { DiscoverAssistantDetail } from '@lobechat/types';
+
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import type {
   MarketInstallVisibility,
@@ -22,8 +24,6 @@ import { useAgentStore } from '@/store/agent';
  * alongside its local row instead of after it.
  */
 
-type AgentDetail = NonNullable<Awaited<ReturnType<typeof discoverService.getAssistantDetail>>>;
-
 /** Cache successful lookups only, so a failed request is retried on the next attempt. */
 const memoize = <T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>) => {
   const cached = cache.get(key);
@@ -35,7 +35,7 @@ const memoize = <T>(cache: Map<string, Promise<T>>, key: string, load: () => Pro
   return promise;
 };
 
-const detailCache = new Map<string, Promise<AgentDetail>>();
+const detailCache = new Map<string, Promise<DiscoverAssistantDetail>>();
 const installCache = new Map<string, Promise<string>>();
 const skillCache = new Map<string, Promise<void>>();
 
@@ -43,7 +43,7 @@ const loadAgentDetail = (identifier: string) =>
   memoize(detailCache, identifier, async () => {
     const detail = await discoverService.getAssistantDetail({ identifier });
     if (!detail?.config) throw new Error(`Market agent ${identifier} is unavailable`);
-    return detail as AgentDetail;
+    return detail as DiscoverAssistantDetail;
   });
 
 /**

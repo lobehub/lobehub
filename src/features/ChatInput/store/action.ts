@@ -161,10 +161,17 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     // keeps its content until the install succeeds, so a failure loses nothing;
     // the send button's spinner is the only progress cue while it waits.
     const names = [...pending.agents, ...pending.skills].map((item) => item.label).join('、');
+    const submitted = JSON.stringify(editorData);
     set({ installingMarketMentions: true });
     installMarketMentions(pending)
       .then((installedAgentIds) => {
         set({ installingMarketMentions: false });
+        // The composer stays editable meanwhile: an edit may pick other Market
+        // entries, so send its current content through the same preparation.
+        if (JSON.stringify(get().getJSONState()) !== submitted) {
+          get().handleSendButton();
+          return;
+        }
         commit(installedAgentIds);
       })
       .catch((error) => {

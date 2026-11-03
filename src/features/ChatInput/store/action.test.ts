@@ -363,6 +363,10 @@ describe('ChatInput store actions', () => {
       getLexicalEditor: () => ({}),
     });
 
+    beforeEach(() => {
+      vi.mocked(installMarketMentions).mockReset();
+    });
+
     it('installs them first and sends the installed agent id', async () => {
       vi.mocked(installMarketMentions).mockResolvedValue(new Map([['writer', 'agt_writer']]));
       const loadingToast = vi.spyOn(toast, 'loading');
@@ -388,6 +392,51 @@ describe('ChatInput store actions', () => {
         label: 'Writer',
         type: 'agent',
       });
+      expect(store.getState().installingMarketMentions).toBe(false);
+    });
+
+    it('sends what the composer holds once ready, even if it was edited during the install', async () => {
+      // The composer stays editable while the picked agent installs; replacing
+      // it must not send the new agent's unresolved Market placeholder.
+      const poetDoc = structuredClone(marketDoc);
+      Object.assign(poetDoc.root.children[0].children[0], {
+        label: 'Poet',
+        metadata: {
+          id: 'market:poet',
+          label: 'Poet',
+          marketIdentifier: 'poet',
+          marketVisibility: 'public',
+          type: 'agent',
+        },
+      });
+      let current: typeof marketDoc = marketDoc;
+      const editor = {
+        ...marketEditor(),
+        getDocument: vi.fn((type: string) =>
+          type === 'markdown'
+            ? `<mention name="${current.root.children[0].children[0].label}" id="${current.root.children[0].children[0].metadata.id}" /> hi`
+            : current,
+        ),
+      };
+      vi.mocked(installMarketMentions)
+        .mockImplementationOnce(async () => {
+          current = poetDoc;
+          return new Map([['writer', 'agt_writer']]);
+        })
+        .mockResolvedValueOnce(new Map([['poet', 'agt_poet']]));
+      const onSend = vi.fn();
+      const store = createStore({ editor: editor as unknown as IEditor, onSend });
+
+      store.getState().handleSendButton();
+
+      await vi.waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+      expect(installMarketMentions).toHaveBeenLastCalledWith({
+        agents: [{ identifier: 'poet', label: 'Poet', visibility: 'public' }],
+        skills: [],
+      });
+      expect(onSend.mock.calls[0][0].getMarkdownContent()).toBe(
+        '<mention name="Poet" id="agt_poet" /> hi',
+      );
       expect(store.getState().installingMarketMentions).toBe(false);
     });
 

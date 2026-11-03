@@ -1,4 +1,5 @@
 import type { InstallMarketplaceAgentSummary } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
+import type { DiscoverAssistantDetail } from '@lobechat/types';
 import { customAlphabet } from 'nanoid/non-secure';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -18,12 +19,8 @@ export const generateMarketIdentifier = () => {
   return generate();
 };
 
-type MarketAgentDetail = NonNullable<
-  Awaited<ReturnType<typeof discoverService.getAssistantDetail>>
->;
-
 /** Local agent config for the Market agent `sourceId`. */
-export const buildMarketAgentConfig = (detail: MarketAgentDetail, sourceId: string) => ({
+export const buildMarketAgentConfig = (detail: DiscoverAssistantDetail, sourceId: string) => ({
   ...detail.config,
   avatar: detail.avatar,
   backgroundColor: detail.backgroundColor,
@@ -39,7 +36,7 @@ export const buildMarketAgentConfig = (detail: MarketAgentDetail, sourceId: stri
 
 /** Local agent config for a Market fork of `sourceId`, as every install entry builds it. */
 export const buildForkedAgentConfig = (
-  detail: MarketAgentDetail,
+  detail: DiscoverAssistantDetail,
   fork: { identifier: string; name: string },
   sourceId: string,
 ) => ({
@@ -133,7 +130,7 @@ export const installMarketplaceAgents = async (
 
   // 3. Build batch fork input only for items with valid detail
   type Prepared = {
-    detail: MarketAgentDetail;
+    detail: DiscoverAssistantDetail;
     newIdentifier: string;
     sourceId: string;
   };

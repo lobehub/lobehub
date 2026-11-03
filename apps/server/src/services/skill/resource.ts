@@ -54,15 +54,26 @@ export class SkillResourceService {
     log('storeResources: starting with zipHash=%s, resourceCount=%d', zipHash, resources.size);
     const result: Record<string, SkillResourceMeta> = {};
 
+    // Paths with identical contents (e.g. several empty `__init__.py`) share one
+    // global file; registering that hash from parallel workers would race on its
+    // insert, so each distinct content is stored once, from its first path.
+    const pathsByHash = new Map<string, { buffer: Buffer; paths: string[] }>();
+    for (const [virtualPath, buffer] of resources) {
+      const fileHash = sha256(buffer);
+      const entry = pathsByHash.get(fileHash);
+      if (entry) entry.paths.push(virtualPath);
+      else pathsByHash.set(fileHash, { buffer, paths: [virtualPath] });
+    }
+
     // Each file is an object-storage upload plus a row insert; a Market skill can
     // carry hundreds of them, so storing them one at a time dominated install time.
     await pMap(
-      resources,
-      async ([virtualPath, buffer]) => {
-        log('storeResources: storing resource path=%s, size=%d bytes', virtualPath, buffer.length);
-        const fileHash = await this.storeResource(zipHash, virtualPath, buffer);
-        result[virtualPath] = { fileHash, size: buffer.length };
-        log('storeResources: stored resource path=%s, fileHash=%s', virtualPath, fileHash);
+      pathsByHash.values(),
+      async ({ buffer, paths }) => {
+        log('storeResources: storing resource path=%s, size=%d bytes', paths[0], buffer.length);
+        const fileHash = await this.storeResource(zipHash, paths[0], buffer);
+        for (const virtualPath of paths) result[virtualPath] = { fileHash, size: buffer.length };
+        log('storeResources: stored %d path(s), fileHash=%s', paths.length, fileHash);
       },
       { concurrency: STORE_RESOURCES_CONCURRENCY },
     );

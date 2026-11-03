@@ -188,6 +188,26 @@ describe('SkillResourceService', () => {
       mockUploadBuffer.mockResolvedValue({ key: 'mock-key' });
     });
 
+    it('registers each distinct content once, even when several paths share it', async () => {
+      // Concurrent workers registering one hash race on the global file insert
+      // (check-then-insert on its primary key), failing the whole install.
+      const service = new SkillResourceService({} as any, 'user-1');
+      const resources = new Map([
+        ['pkg/__init__.py', Buffer.from('')],
+        ['pkg/sub/__init__.py', Buffer.from('')],
+        ['pkg/main.py', Buffer.from('print(1)')],
+      ]);
+
+      const result = await service.storeResources('zip-dup', resources);
+
+      const registered = mockCreateGlobalFile.mock.calls.map(([file]) => file.fileHash);
+      expect(registered).toHaveLength(2);
+      expect(new Set(registered).size).toBe(2);
+      expect(result['pkg/__init__.py'].fileHash).toBe(result['pkg/sub/__init__.py'].fileHash);
+      expect(result['pkg/sub/__init__.py'].size).toBe(0);
+      expect(result['pkg/main.py'].fileHash).not.toBe(result['pkg/__init__.py'].fileHash);
+    });
+
     it('should pass correct metadata to createGlobalFile', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
       const resources = new Map([['docs/guide.md', Buffer.from('# Guide')]]);
