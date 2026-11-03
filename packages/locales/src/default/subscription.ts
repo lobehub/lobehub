@@ -726,6 +726,10 @@ export default {
     '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, we provide all registered users with {{credit}} of free usage per month, ready to use without complex configuration. If you need more usage, you can subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
   'qa.list.free.newA':
     '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets {{credit}} of free usage per month, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
+  'qa.list.free.limit.a':
+    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets a free monthly usage limit, ready to use without complex configuration. If you need more usage, you can subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
+  'qa.list.free.limit.newA':
+    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets a free monthly usage limit, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
   'qa.list.free.q': 'Can {{name}} be used for free?',
   'qa.list.limit.a':
     '{{cloud}} subscription plans are divided into {{starter}}, {{premium}} and {{ultimate}}, each providing a different usage allowance. If your current plan\'s usage is insufficient, we recommend upgrading. You can also buy top-up packs on the <fundsLink>"{{funds}}"</fundsLink> page for pay-as-you-go usage. Alternatively, you can set up a custom model API key to use API credits purchased from other sources.',
@@ -948,6 +952,7 @@ export default {
   'balance.subscriptionQuotaDesc': 'Subscription usage is spent first, then your balance',
   'compare.hobbyQuotaTooltip': 'No monthly usage included; configure your own model API',
   'compare.monthlyQuota': 'Monthly Usage',
+  'plans.quota.freeLimit': 'Monthly limit, resets every month',
   'plans.quota.freeTip': '{{amount}} free each month',
   'plans.quota.none': 'No built-in usage',
   'plans.quota.title': 'Usage',
