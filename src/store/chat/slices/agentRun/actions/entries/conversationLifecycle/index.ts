@@ -73,6 +73,7 @@ import {
   operationSelectors,
   topicSelectors,
 } from '@/store/chat/selectors';
+import { leaveBlankConversationBucket } from '@/store/chat/slices/agentRun/actions/clearBlankBucket';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import {
   executeDirectMention,
@@ -1554,25 +1555,11 @@ export class ConversationLifecycleActionImpl {
           resolveOptimisticTopic(heteroData.topicId, newTopicTitle);
           void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
         }
-        if (context.isolatedTopic) {
-          await onTopicCreated?.(heteroData.topicId);
-        } else {
-          await this.#get().switchTopic(heteroData.topicId, {
-            clearNewKey: true,
-            // The cleanup targets the blank bucket this send came from — the
-            // user may be viewing a different conversation by now.
-            clearNewKeyContext: {
-              agentId: operationContext.agentId,
-              groupId: operationContext.groupId,
-            },
-            // Guard against yanking the user back if they navigated to another
-            // topic while the persistence round-trip was in flight. Accept both
-            // the minted id and the persisted one: `resolveOptimisticTopic`
-            // above re-keys `activeTopicId` from the former to the latter.
-            onlyIfActiveTopicIn: [operationContext.topicId ?? null, heteroData.topicId],
-            skipRefreshMessage: true,
-          });
-        }
+        if (context.isolatedTopic) await onTopicCreated?.(heteroData.topicId);
+        await leaveBlankConversationBucket(this.#get, operationContext, {
+          isolated: context.isolatedTopic,
+          topicId: heteroData.topicId,
+        });
       }
 
       let directMentionThreadId: string | undefined;
@@ -2106,30 +2093,13 @@ export class ConversationLifecycleActionImpl {
       });
 
       if (isCreateNewTopic && data.topicId) {
-        if (context.isolatedTopic) {
-          // Notify the isolated caller immediately so its UI re-subscribes to
-          // the new topic key and picks up the streaming AI response.
-          await onTopicCreated?.(data.topicId);
-        } else {
-          // clearNewKey: true ensures the _new key data is cleared after topic creation
-          await this.#get().switchTopic(data.topicId, {
-            clearNewKey: true,
-            // The cleanup targets the blank bucket this send came from — the
-            // user may be viewing a different conversation by now.
-            clearNewKeyContext: {
-              agentId: operationContext.agentId,
-              groupId: operationContext.groupId,
-            },
-            // The send pivoted to the minted topic bucket at send time. If the
-            // user navigated to another topic while the persistence round-trip
-            // was in flight, leave them where they are — the new topic's unread
-            // badge surfaces the completed reply instead of yanking the view back.
-            // Both ids are accepted: `resolveOptimisticTopic` above re-keys
-            // `activeTopicId` from the minted id to the persisted one.
-            onlyIfActiveTopicIn: [operationContext.topicId ?? null, data.topicId],
-            skipRefreshMessage: true,
-          });
-        }
+        // Notify the isolated caller immediately so its UI re-subscribes to
+        // the new topic key and picks up the streaming AI response.
+        if (context.isolatedTopic) await onTopicCreated?.(data.topicId);
+        await leaveBlankConversationBucket(this.#get, operationContext, {
+          isolated: context.isolatedTopic,
+          topicId: data.topicId,
+        });
       }
     } catch (e) {
       console.error(e);
