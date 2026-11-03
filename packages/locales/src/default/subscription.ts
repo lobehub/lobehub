@@ -421,7 +421,7 @@ export default {
   'limitation.hobby.action': 'Configured, continue chatting',
   'limitation.hobby.configAPI': 'Configure API',
   'limitation.hobby.desc':
-    'Your free credits have been exhausted. Please configure a custom model API to continue.',
+    'Your free usage has run out. Please configure a custom model API to continue.',
   'limitation.hobby.docs': 'View configuration docs',
   'limitation.hobby.tip': 'Remember to switch to a model with custom API Key',
   'limitation.hobby.title': 'Please Configure Model Service API',
@@ -449,13 +449,11 @@ export default {
   'limitation.video.topupSuccess.title': 'Top-up Successful',
   'limitation.limited.action': 'Upgrade Now',
   'limitation.limited.advanceFeature': 'Upgrade to enjoy premium features:',
-  'limitation.limited.desc':
-    'Your {{plan}} credits have been exhausted. Upgrade now to get more credits.',
-  'limitation.limited.descUltimate':
-    'Your {{plan}} credits have been exhausted. Please top up credits to continue.',
-  'limitation.limited.referralTip': 'Invite friends, both get {{reward}}M',
-  'limitation.limited.title': 'Credits Exhausted',
-  'limitation.limited.topup': 'Top-Up Credits',
+  'limitation.limited.desc': 'Your {{plan}} usage has run out. Upgrade now to get more.',
+  'limitation.limited.descUltimate': 'Your {{plan}} usage has run out. Please top up to continue.',
+  'limitation.limited.referralTip': 'Invite friends, both get ${{reward}}',
+  'limitation.limited.title': 'Usage Exhausted',
+  'limitation.limited.topup': 'Top Up',
   'limitation.limited.upgrade': 'Upgrade to Higher Plan',
   'limitation.limited.upgradeToPlan': 'Upgrade to {{plan}}',
   'limitation.providers.lock.addNew': 'Subscribe now to create custom AI providers',
