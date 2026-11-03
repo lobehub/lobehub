@@ -39,7 +39,13 @@ const analyze = (selector: string): Analysis | undefined => {
   return result;
 };
 
-export const classifyRules = (rules: StyleRule[], extraOwned: Record<string, string> = {}) => {
+export type LocalClass = (name: string, slots: string[]) => boolean;
+
+export const classifyRules = (
+  rules: StyleRule[],
+  extraOwned: Record<string, string> = {},
+  isLocal: LocalClass = () => false,
+) => {
   const flags = new Map<string, Set<SelectorFlag>>();
   const add = (slot: string, flag: SelectorFlag) =>
     flags.set(slot, (flags.get(slot) ?? new Set()).add(flag));
@@ -51,7 +57,9 @@ export const classifyRules = (rules: StyleRule[], extraOwned: Record<string, str
       .filter((item) => !item.global && owned[item.name])
       .map((item) => owned[item.name]);
     if (!ownedSlots.length) continue;
-    const foreign = analysis.classes.some((item) => item.global || !owned[item.name]);
+    const foreign = analysis.classes.some(
+      (item) => item.global || (!owned[item.name] && !isLocal(item.name, ownedSlots)),
+    );
     for (const slot of new Set(ownedSlots)) {
       if (foreign) add(slot, 'CROSS_COMPONENT');
       if (analysis.innerType) add(slot, 'INNER_TARGET');
@@ -60,14 +68,23 @@ export const classifyRules = (rules: StyleRule[], extraOwned: Record<string, str
   return flags;
 };
 
-export const foreignClassNames = (rules: StyleRule[], extraOwned: Record<string, string> = {}) => {
+export const foreignClassNames = (
+  rules: StyleRule[],
+  extraOwned: Record<string, string> = {},
+  isLocal: LocalClass = () => false,
+) => {
   const names = new Set<string>();
   for (const rule of rules) {
     const owned = { ...rule.owned, ...extraOwned };
     const analysis = analyze(rule.selector);
-    if (!analysis?.classes.some((item) => !item.global && owned[item.name])) continue;
-    for (const item of analysis.classes)
-      if (!item.global && !owned[item.name]) names.add(item.name);
+    const ownedSlots =
+      analysis?.classes
+        .filter((item) => !item.global && owned[item.name])
+        .map((item) => owned[item.name]) ?? [];
+    if (!ownedSlots.length) continue;
+    for (const item of analysis!.classes)
+      if (!item.global && !owned[item.name] && !isLocal(item.name, ownedSlots))
+        names.add(item.name);
   }
   return names;
 };

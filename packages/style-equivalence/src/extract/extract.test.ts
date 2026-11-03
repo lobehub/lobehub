@@ -168,3 +168,33 @@ export const A = () => <Modal styles={{ body: {} }} className={styles.a} />;
     expect(extractFile(code, 'a.tsx', options).outsideReferences).toEqual(['styles@3']);
   });
 });
+
+describe('extractFile selector ownership', () => {
+  const source = (child: string) => `import { createStaticStyles, cx } from '@lobehub/ui';
+
+const styles = createStaticStyles(({ css }) => ({
+  header: css\`
+    &:hover .${child} { color: red; }
+  \`,
+  label: css\`font-size: 12px;\`,
+}));
+
+export const Header = ({ title }) => (
+  <button className={styles.header}>
+    <span className={cx(styles.label, 'header-label')}>{title}</span>
+  </button>
+);
+`;
+
+  it('treats a class the same file puts on its own element as local, not cross-component', () => {
+    const result = extractFile(source('header-label'), 'a.tsx', options);
+    expect(result.elements.flatMap((element) => element.flags)).toEqual([]);
+  });
+
+  it('flags a descendant class the file never renders as cross-component', () => {
+    const result = extractFile(source('ant-btn'), 'a.tsx', options);
+    expect(result.elements.find((element) => element.id === 'Header#0')?.flags).toEqual([
+      'CROSS_COMPONENT',
+    ]);
+  });
+});

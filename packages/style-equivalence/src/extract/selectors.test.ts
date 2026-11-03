@@ -47,9 +47,13 @@ const styles = createStaticStyles(({ css }) => ({
   label: css\`color: black;\`,
   muted: css\`.control-label { color: gray; }\`,
 }));
-export const Row = ({ muted }) => <div className={cx(muted && styles.muted)}><span className={cx(styles.label, 'control-label')} /></div>;
+const Label = () => <span className={cx(styles.label, 'control-label')} />;
+export const Row = ({ muted }) => <div className={cx(muted && styles.muted)}><Label /></div>;
 `;
-    expect(flagsById(code)).toEqual({ 'Row#0': ['CROSS_COMPONENT'], 'Row#1': ['CROSS_COMPONENT'] });
+    expect(flagsById(code)).toEqual({
+      'Label#0': ['CROSS_COMPONENT'],
+      'Row#0': ['CROSS_COMPONENT'],
+    });
   });
 
   it('flags a descendant selector that reaches into a child type', () => {

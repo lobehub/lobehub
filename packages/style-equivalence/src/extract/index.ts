@@ -247,8 +247,15 @@ export const extractFile = (
   }
 
   const globalOwned = Object.fromEntries([...usedGlobal].map((name) => [name, `global.${name}`]));
-  const flags = classifyRules(rules, globalOwned);
-  const foreign = foreignClassNames(rules, globalOwned);
+  const ownersOf = (matches: (element: (typeof elements)[number]) => boolean) =>
+    new Set(elements.filter(matches).map((element) => element.owner));
+  const isLocal = (name: string, slots: string[]) => {
+    const carriers = ownersOf((element) => classTokens.get(element.id)?.has(name) ?? false);
+    const users = ownersOf((element) => element.slots.some((slot) => slots.includes(slot)));
+    return carriers.size > 0 && [...carriers].every((owner) => users.has(owner));
+  };
+  const flags = classifyRules(rules, globalOwned, isLocal);
+  const foreign = foreignClassNames(rules, globalOwned, isLocal);
   for (const element of elements) {
     const found = new Set(element.slots.flatMap((slot) => [...(flags.get(slot) ?? [])]));
     if ([...(classTokens.get(element.id) ?? [])].some((token) => foreign.has(token)))
