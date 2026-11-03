@@ -11,6 +11,8 @@ import { ScriptDiff } from '../WidgetDetail/VersionDiff';
 import { resolvePublishSchedule } from './previewWidget';
 import {
   AccessFacts,
+  CardHtmlFact,
+  CardHtmlSource,
   Fact,
   FoldedSection,
   ReviewPreviewCard,
@@ -115,6 +117,7 @@ const PublishReview = memo<PublishReviewProps>(
             </Text>
           </Fact>
           <AccessFacts manifest={manifest} />
+          <CardHtmlFact view={target.view} />
         </Flexbox>
 
         <FoldedSection
@@ -126,6 +129,7 @@ const PublishReview = memo<PublishReviewProps>(
         >
           <ScriptDiff base={live && live.id !== target.id ? live : undefined} target={target} />
         </FoldedSection>
+        <CardHtmlSource view={target.view} />
       </Flexbox>
     );
   },

@@ -110,6 +110,11 @@ export default {
   'review.expectedEarlier':
     "for reference, v{{version}}'s last result; approving runs this draft to make its own",
   'review.expectedSameVersion': "from this version's last dry run",
+  'review.html.label': 'Card HTML',
+  'review.html.previewHeld':
+    "This card draws itself with custom HTML, which won't run until you approve; the preview shows the plain data for now.",
+  'review.html.source': 'Card HTML source',
+  'review.html.value': "Custom HTML · {{size}} — runs in your browser with this widget's data",
   'review.loadFailed': "Couldn't load the review, so approval is on hold",
   'review.stage.draft': 'Draft',
   'review.stage.dryRun': 'Dry run',

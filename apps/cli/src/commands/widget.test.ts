@@ -144,6 +144,32 @@ describe('widget command', () => {
     );
   });
 
+  it('refuses to dry-run a draft with card HTML until the user approved that exact version', async () => {
+    const html = { id: 'ver-9', manifest: null, view: { html: '<svg></svg>' } };
+    mockClient.widget.detail.query.mockResolvedValue({
+      data: { draftVersion: html, publishedVersion: null },
+    });
+    mockClient.widget.getVersion.query.mockResolvedValue({ data: html });
+    const stdin = process.stdin.isTTY;
+    process.stdin.isTTY = false;
+    try {
+      await run('widget', 'dry-run', 'w-1');
+      expect(mockClient.widget.dryRun.mutate).not.toHaveBeenCalled();
+      expect(process.exitCode).toBe(1);
+
+      mockClient.widget.dryRun.mutate.mockResolvedValue({
+        data: { id: 'run-1', output: null, status: 'succeeded' },
+      });
+      await run('widget', 'dry-run', 'w-1', '--version', 'ver-9', '--yes');
+      expect(mockClient.widget.dryRun.mutate).toHaveBeenCalledWith({
+        versionId: 'ver-9',
+        widgetId: 'w-1',
+      });
+    } finally {
+      process.stdin.isTTY = stdin;
+    }
+  });
+
   it('refuses a first draft without a script, runtime and output type', async () => {
     mockClient.widget.detail.query.mockResolvedValue({
       data: { draftVersion: null, publishedVersion: null },

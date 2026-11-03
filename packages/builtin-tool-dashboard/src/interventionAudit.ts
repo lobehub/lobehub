@@ -2,21 +2,35 @@ import type {
   DynamicInterventionResolver,
   WidgetDryRunGrant,
   WidgetManifest,
+  WidgetView,
 } from '@lobechat/types';
 
 /** Registry key of the `dryRunWidget` approval audit (see `dynamicInterventionAudits`). */
 export const DASHBOARD_DRY_RUN_AUDIT = 'dashboardDryRunAudit';
 
 /**
- * A draft that reads connector credentials or reaches the network can act on
- * the user's behalf (mutate, exfiltrate) the moment it runs, so running it —
- * even as a dry run — needs the user's approval. A draft with neither runs in
- * a sandbox with no secrets and no network and may run unattended.
+ * Whether a version draws its card with its own HTML. That HTML runs in the
+ * user's browser with the output in hand, and the browser cannot fully keep
+ * it offline (WebRTC is outside CSP), so it is reviewed like code that
+ * reaches the network.
  */
-export const dryRunNeedsApproval = (manifest: WidgetManifest | null | undefined) =>
-  !!manifest &&
-  ((manifest.env ?? []).some((item) => !!item.connector) ||
-    (manifest.network?.allow ?? []).length > 0);
+export const hasCustomHtml = (view: WidgetView | null | undefined) => !!view?.html?.trim();
+
+/**
+ * A draft that reads connector credentials or reaches the network can act on
+ * the user's behalf (mutate, exfiltrate) the moment it runs, and one with its
+ * own HTML can send the output it draws, so running it — even as a dry run —
+ * needs the user's approval. A draft with none of these runs in a sandbox
+ * with no secrets and no network and may run unattended.
+ */
+export const dryRunNeedsApproval = (
+  manifest: WidgetManifest | null | undefined,
+  view?: WidgetView | null,
+) =>
+  hasCustomHtml(view) ||
+  (!!manifest &&
+    ((manifest.env ?? []).some((item) => !!item.connector) ||
+      (manifest.network?.allow ?? []).length > 0));
 
 /** The access a version asks for: the connectors it reads and the hosts it calls. */
 export const dryRunAccessOf = (manifest: WidgetManifest | null | undefined) => ({
@@ -65,13 +79,17 @@ export interface DryRunAuditOptions {
   loadVersion?: (
     widgetId: string,
     versionId: string,
-  ) => Promise<{ manifest?: WidgetManifest | null; workspaceId?: string | null } | undefined>;
+  ) => Promise<
+    | { manifest?: WidgetManifest | null; view?: WidgetView | null; workspaceId?: string | null }
+    | undefined
+  >;
 }
 
 /**
  * Decide whether a `dryRunWidget` call needs approval by reading the exact
  * version it names: a closed draft, or one whose access a standing grant
- * covers, runs unattended. Fails closed: without a pinned version, a loader,
+ * covers, runs unattended. Custom HTML always asks: it is new code in every
+ * version, which no standing grant of connectors and hosts describes. Fails closed: without a pinned version, a loader,
  * or a readable version — or when the grants cannot be read — it asks.
  */
 export const createDryRunAudit =
@@ -82,8 +100,8 @@ export const createDryRunAudit =
     try {
       const version = await loadVersion(widgetId, versionId);
       if (!version) return true;
-      if (!dryRunNeedsApproval(version.manifest)) return false;
-      if (!loadGrants) return true;
+      if (!dryRunNeedsApproval(version.manifest, version.view)) return false;
+      if (hasCustomHtml(version.view) || !loadGrants) return true;
       const grants = await loadGrants();
       return !isDryRunAccessGranted(version.manifest, grants, version.workspaceId);
     } catch {

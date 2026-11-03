@@ -1,13 +1,15 @@
 'use client';
 
+import { hasCustomHtml } from '@lobechat/builtin-tool-dashboard';
 import type { WidgetManifest, WidgetOutput, WidgetView } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, Flexbox, Highlighter, Tag, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import type { DashboardWidgetDetail } from '@/services/dashboard';
+import { formatSize } from '@/utils/format';
 
 import WidgetCard from '../WidgetCard';
 import { toPreviewWidget, toSampleWidget } from './previewWidget';
@@ -179,6 +181,45 @@ export const AccessFacts = memo<{ manifest?: WidgetManifest | null }>(({ manifes
 });
 
 AccessFacts.displayName = 'DashboardReviewAccessFacts';
+
+/**
+ * A version that draws its card with its own HTML. That HTML runs in the
+ * user's browser with the widget's data, so the review says so and keeps the
+ * source one click away (`CardHtmlSource`).
+ */
+export const CardHtmlFact = memo<{ view?: WidgetView | null }>(({ view }) => {
+  const { t } = useTranslation('dashboard');
+  if (!hasCustomHtml(view)) return null;
+
+  return (
+    <Fact label={t('review.html.label')}>
+      <Text data-review-card-html fontSize={12}>
+        {t('review.html.value', { size: formatSize(new Blob([view!.html!]).size) })}
+      </Text>
+    </Fact>
+  );
+});
+
+CardHtmlFact.displayName = 'DashboardReviewCardHtmlFact';
+
+export const CardHtmlSource = memo<{ view?: WidgetView | null }>(({ view }) => {
+  const { t } = useTranslation('dashboard');
+  if (!hasCustomHtml(view)) return null;
+
+  return (
+    <FoldedSection title={t('review.html.source')}>
+      <Highlighter
+        language={'html'}
+        style={{ maxHeight: 360, overflow: 'auto' }}
+        variant={'filled'}
+      >
+        {view!.html!}
+      </Highlighter>
+    </FoldedSection>
+  );
+});
+
+CardHtmlSource.displayName = 'DashboardReviewCardHtmlSource';
 
 /**
  * The review could not be shown — a request failed, or the version under

@@ -295,10 +295,11 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Execute one exact draft version once in the sandbox and return its real output, stdout/stderr and error. Never affects the live widget. A draft that declares connector credentials (manifest.env) or network hosts (manifest.network.allow) runs only after the user approves it. Fix the script with updateWidgetDraft and dry-run the new version again until it succeeds.',
+        'Execute one exact draft version once in the sandbox and return its real output, stdout/stderr and error. Never affects the live widget. A draft that declares connector credentials (manifest.env), network hosts (manifest.network.allow) or card HTML (view.html) runs only after the user approves it; card HTML asks on every version. Fix the script with updateWidgetDraft and dry-run the new version again until it succeeds.',
       // Credentialed or networked code can act on the user's behalf the moment
-      // it runs, so those drafts need approval (`always`: auto-run cannot
-      // bypass it); a draft with neither runs in a closed sandbox unattended.
+      // it runs, and card HTML can send the output it draws, so those drafts
+      // need approval (`always`: auto-run cannot bypass it); a draft with none
+      // of these runs in a closed sandbox unattended.
       humanIntervention: {
         dynamic: { default: 'never', policy: 'always', type: DASHBOARD_DRY_RUN_AUDIT },
       },

@@ -71,7 +71,7 @@ Example — weather (outputType "data", network.allow ["api.open-meteo.com"], ma
 </card_layout>
 
 <card_html>
-Prefer view.layout. When the user asks for a visual it cannot draw — an illustrated scene (a farm whose crops are the items, a city skyline, a garden), custom charts, animation — set view.html instead: one self-contained HTML document that draws the card. It replaces layout and surface.
+Prefer view.layout. Every draft with view.html needs the user's approval before it runs (dryRunWidget asks on each version, and the approval card shows the HTML source), so use it only when it is worth that. When the user asks for a visual it cannot draw — an illustrated scene (a farm whose crops are the items, a city skyline, a garden), custom charts, animation — set view.html instead: one self-contained HTML document that draws the card. It replaces layout and surface.
 - It runs in a sandboxed frame with no network: no external scripts, styles, fonts or images. Inline everything (CSS, JS, SVG, canvas); images only as data: URLs. It cannot read cookies or call any API.
 - The script still collects the data; the HTML only draws it. Read it from window.widgetData: .data (output.data for outputType data, else the whole output), .output, .theme.appearance ("light" | "dark"). Register window.widgetData.onUpdate((state) => draw(state.data)) — it fires once the output arrives and again on every refresh; the document is not reloaded between runs.
 - window.widgetData.open(url) opens an http(s) link in a new tab, e.g. when a part of the scene is clicked. Plain <a> navigation does not work.

@@ -38,13 +38,15 @@ interface RunManifest {
 }
 
 /** What a version can reach outside the sandbox, or undefined for a closed run. */
-const describeRunRisk = (manifest: unknown) => {
-  const { env = [], network } = (manifest ?? {}) as RunManifest;
+const describeRunRisk = (version: { manifest?: unknown; view?: unknown }) => {
+  const { env = [], network } = (version.manifest ?? {}) as RunManifest;
   const hosts = network?.allow ?? [];
+  const html = (version.view as { html?: unknown } | null | undefined)?.html;
   const parts = [
     env.length > 0 &&
       `credentials ${env.map((e) => (e.connector ? `${e.name} (${e.connector})` : e.name)).join(', ')}`,
     hosts.length > 0 && `network hosts ${hosts.join(', ')}`,
+    typeof html === 'string' && html.trim() && 'custom card HTML (view.html, runs in the browser)',
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(' and ') : undefined;
 };
@@ -240,10 +242,13 @@ export function registerWidgetCommand(program: Command) {
   widget
     .command('dry-run <widgetId>')
     .description(
-      "Run a draft once in the sandbox and print its real output and logs. A draft with connector credentials or network hosts needs the user's approval of that exact version (--version + --yes)",
+      "Run a draft once in the sandbox and print its real output and logs. A draft with connector credentials, network hosts or custom card HTML (view.html) needs the user's approval of that exact version (--version + --yes)",
     )
     .option('--version <versionId>', 'Draft version to run (default: the current draft)')
-    .option('--yes', "Confirm the user approved this exact version's credentials and hosts")
+    .option(
+      '--yes',
+      "Confirm the user approved this exact version's credentials, hosts and card HTML",
+    )
     .option('--json [fields]', 'Output JSON')
     .action(
       async (
@@ -262,7 +267,7 @@ export function registerWidgetCommand(program: Command) {
         // Credentialed or networked code can act on the user's behalf — or leak
         // the credential — the moment it runs, so it needs consent for exactly
         // this version, the same rule the Dashboards builtin tool enforces.
-        const risk = describeRunRisk(version.manifest);
+        const risk = describeRunRisk(version);
         if (risk) {
           const ask = `Version ${version.id} uses ${risk}.`;
           if (!options.yes) {

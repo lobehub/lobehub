@@ -1,6 +1,7 @@
 'use client';
 
-import type { BuiltinRememberApproval } from '@lobechat/types';
+import { hasCustomHtml } from '@lobechat/builtin-tool-dashboard';
+import type { BuiltinRememberApproval, WidgetView } from '@lobechat/types';
 import { Flexbox, Highlighter, Skeleton, Text, toast } from '@lobehub/ui';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +15,8 @@ import { RUNTIME_LANGUAGE } from '../WidgetDetail/diffContent';
 import { findExpectedRun, sampleOutputFor } from './previewWidget';
 import {
   AccessFacts,
+  CardHtmlFact,
+  CardHtmlSource,
   Fact,
   FoldedSection,
   ReviewPreviewCard,
@@ -24,6 +27,27 @@ import {
 } from './ReviewFacts';
 import ReviewStage, { ReviewStageNote } from './ReviewStage';
 import { useWidgetReview } from './useWidgetReview';
+
+/**
+ * The view the preview may render before approval: custom HTML is code that
+ * runs with the data, which is what the user is being asked to approve, so
+ * until then the card falls back to its layout or plain data.
+ */
+const withoutHtml = (view: WidgetView | null | undefined) => {
+  if (!view || !hasCustomHtml(view)) return view;
+  const { html: _html, ...rest } = view;
+  return rest;
+};
+
+const HtmlHeldNote = ({ view }: { view: WidgetView | null | undefined }) => {
+  const { t } = useTranslation('dashboard');
+  if (!hasCustomHtml(view)) return null;
+  return (
+    <Text data-review-html-held fontSize={12} type={'secondary'}>
+      {t('review.html.previewHeld')}
+    </Text>
+  );
+};
 
 interface ExpectedPreviewProps {
   target: DashboardWidgetVersionItem;
@@ -62,7 +86,8 @@ const ExpectedPreview = ({ target, versions, widget }: ExpectedPreviewProps) => 
     });
     return (
       <ReviewSection note={t('review.expectedSample')} title={title}>
-        <ReviewSampleCard output={sample} view={target.view} widget={widget} />
+        <ReviewSampleCard output={sample} view={withoutHtml(target.view)} widget={widget} />
+        <HtmlHeldNote view={target.view} />
       </ReviewSection>
     );
   }
@@ -77,7 +102,8 @@ const ExpectedPreview = ({ target, versions, widget }: ExpectedPreviewProps) => 
           : t('review.expectedEarlier', { version: source?.version ?? '?' })
       }
     >
-      <ReviewPreviewCard run={expected.run} view={target.view} widget={widget} />
+      <ReviewPreviewCard run={expected.run} view={withoutHtml(target.view)} widget={widget} />
+      <HtmlHeldNote view={target.view} />
     </ReviewSection>
   );
 };
@@ -99,9 +125,10 @@ interface DryRunReviewProps {
 }
 
 /**
- * Approval for running an agent-written draft that reads credentials or
- * reaches the network: the card it is expected to produce, what it measures
- * and may touch, and — folded — the exact script.
+ * Approval for running an agent-written draft that reads credentials,
+ * reaches the network or draws its card with its own HTML: the card it is
+ * expected to produce, what it measures and may touch, and — folded — the
+ * exact script and HTML.
  */
 const DryRunReview = memo<DryRunReviewProps>(
   ({ widgetId, versionId, onApprovalBlockedChange, onPinVersion, registerRememberApproval }) => {
@@ -117,7 +144,9 @@ const DryRunReview = memo<DryRunReviewProps>(
     const grantDryRunAccess = useDashboardStore((s) => s.grantDryRunAccess);
     const userId = useUserStore(userProfileSelectors.userId);
     // Only the widget's creator reviews its dry runs and may grant standing access.
-    const canRemember = !!widget && !!userId && widget.userId === userId;
+    // Custom HTML is asked for on every version, so a standing grant would not stop the asking.
+    const canRemember =
+      !!widget && !!userId && widget.userId === userId && !hasCustomHtml(target?.view);
     const targetId = target?.id;
 
     // "Similar" for a dry run means the same connectors and hosts: picking the
@@ -164,6 +193,7 @@ const DryRunReview = memo<DryRunReviewProps>(
             <Text fontSize={12}>{widget.description || t('chat.noDefinition')}</Text>
           </Fact>
           <AccessFacts manifest={target.manifest} />
+          <CardHtmlFact view={target.view} />
         </Flexbox>
 
         <FoldedSection title={`${t('publish.scriptNew')} · ${target.runtime}`}>
@@ -175,6 +205,7 @@ const DryRunReview = memo<DryRunReviewProps>(
             {target.script}
           </Highlighter>
         </FoldedSection>
+        <CardHtmlSource view={target.view} />
       </Flexbox>
     );
   },

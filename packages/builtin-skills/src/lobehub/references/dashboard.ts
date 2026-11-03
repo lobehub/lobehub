@@ -27,15 +27,16 @@ and asks the user to approve risky dry runs and publishing. Use these commands w
 
 1. \`lh widget list --agent <your agent id>\` and \`lh dashboard list\` — extend an existing widget instead of duplicating it, and pick a board.
 2. \`lh widget create\` with \`--agent <your agent id>\` (and \`--project\` in a project conversation), then \`lh widget draft\` with the script.
-3. \`lh widget dry-run <widgetId> --version <versionId>\` → read the output and logs → \`lh widget draft\` again → dry-run the new version … until it succeeds (or is \`partial\`, a run that still printed usable output) and the numbers look plausible. A draft with connector credentials or network hosts needs the user's approval first (see below). Do not stop at the first failure and do not ask the user to debug for you.
+3. \`lh widget dry-run <widgetId> --version <versionId>\` → read the output and logs → \`lh widget draft\` again → dry-run the new version … until it succeeds (or is \`partial\`, a run that still printed usable output) and the numbers look plausible. A draft with connector credentials, network hosts or card HTML (\`view.html\`, set with \`--html-file\`) needs the user's approval first (see below). Do not stop at the first failure and do not ask the user to debug for you.
 4. Show the user what the widget measures and the dry-run result, and **get their explicit confirmation before** \`lh widget publish <widgetId> --version <versionId> --yes\`. Publishing makes the script run unattended on a schedule; never publish on your own initiative. Only a version whose exact content produced usable output (\`succeeded\` or \`partial\`) in a dry run can be published.
 5. \`lh dashboard add <dashboardId> <widgetId>\` (or \`lh dashboard create -t <title> --widget <widgetId>\`) if the user wants it on a board — prefer the project's boards for a project's widgets.
 
 A draft that declares connector credentials (\`manifest.env\`) or network hosts (\`manifest.network.allow\`)
-can act on the user's behalf — or leak a credential — the moment it runs. Before every dry run of such a
-draft, show the user the exact version id, the credentials and hosts it uses and what the script does, then
+can act on the user's behalf — or leak a credential — the moment it runs, and card HTML (\`view.html\`) runs
+in the user's browser with the widget's data. Before every dry run of such a draft, show the user the exact
+version id, the credentials and hosts it uses, what the script does and, for card HTML, what the HTML draws, then
 **wait for their explicit approval of that exact version**, then run \`lh widget dry-run <widgetId> --version <versionId> --yes\` (the CLI refuses such a draft without it); a new draft needs a new approval. If they decline,
-ask what to change instead of retrying the same draft. A draft with neither runs in a closed sandbox and
+ask what to change instead of retrying the same draft. A draft with none of these runs in a closed sandbox and
 needs no approval.
 
 ## Output contract

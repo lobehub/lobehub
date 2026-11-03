@@ -9,7 +9,8 @@ import type { LobeChatDatabase } from '@/database/type';
  * The `dryRunWidget` approval audit for a server agent run: reads the exact
  * version the call names, as the run's user, and asks for approval when it
  * declares connector credentials or network hosts that none of the user's
- * standing grants covers. Unreadable → approval.
+ * standing grants covers, or draws its card with its own HTML (always).
+ * Unreadable → approval.
  */
 export const createWidgetDryRunAudit = (
   db: LobeChatDatabase,

@@ -4,6 +4,7 @@ export {
   dryRunAccessOf,
   type DryRunAuditOptions,
   dryRunNeedsApproval,
+  hasCustomHtml,
   isDryRunAccessGranted,
 } from './interventionAudit';
 export { DashboardIdentifier, DashboardManifest } from './manifest';

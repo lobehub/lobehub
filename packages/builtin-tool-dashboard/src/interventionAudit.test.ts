@@ -23,6 +23,29 @@ describe('dryRunNeedsApproval', () => {
   it('asks before running a draft that reaches the network', () => {
     expect(dryRunNeedsApproval({ network: { allow: ['api.github.com'] } })).toBe(true);
   });
+
+  it('asks before running a closed draft that draws its card with its own HTML', () => {
+    expect(dryRunNeedsApproval(null, { html: '<svg></svg>' })).toBe(true);
+    expect(dryRunNeedsApproval({}, { html: '  ' })).toBe(false);
+    expect(dryRunNeedsApproval({}, { layout: { type: 'spacer' } })).toBe(false);
+  });
+});
+
+describe('createDryRunAudit with card HTML', () => {
+  it('asks for every HTML version, even when a standing grant covers its access', async () => {
+    const manifest = { network: { allow: ['api.github.com'] } };
+    const grants = [
+      { connectors: [], grantedAt: '', hosts: ['api.github.com'], workspaceId: null },
+    ];
+    const audit = (view?: object) =>
+      createDryRunAudit({
+        loadGrants: () => grants,
+        loadVersion: async () => ({ manifest, view, workspaceId: null }),
+      })({ versionId: 'v1', widgetId: 'w1' });
+
+    expect(await audit()).toBe(false);
+    expect(await audit({ html: '<p>farm</p>' })).toBe(true);
+  });
 });
 
 describe('createDryRunAudit', () => {
