@@ -19,6 +19,7 @@ Options:
   --config <file>     project config (default scripts/stylexMigration/style-equivalence.config.ts)
   --records <dir>     evidence directory (default .records/style-equivalence)
   --keep-worktrees    keep base/head worktrees for debugging
+  --skip-calibration  do not run the project's real-mount calibration
   --mutations <n>     mutants to sample from equal cases (default 10, 0 turns it off)
 `;
 
@@ -56,6 +57,7 @@ const main = async () => {
       'mutations': { type: 'string' },
       'pr': { type: 'string' },
       'records': { type: 'string' },
+      'skip-calibration': { type: 'boolean' },
     },
   });
   if (values.help) return void console.log(HELP);
@@ -81,6 +83,7 @@ const main = async () => {
     throw new Error('--mutations takes a non-negative integer');
   const result = await runComparison({
     ...revisions,
+    calibrate: !values['skip-calibration'],
     configFile,
     keepWorktrees: values['keep-worktrees'],
     mutations: values.mutations === undefined ? undefined : Number(values.mutations),
@@ -89,8 +92,9 @@ const main = async () => {
   });
   console.log(formatSummary(result));
   const has = (category: string) => result.cases.some((entry) => entry.category === category);
+  const mismatch = result.calibration.some((entry) => entry.status === 'mismatch');
   process.exitCode =
-    has('blocking') || !result.mutation.passed
+    has('blocking') || !result.mutation.passed || mismatch
       ? 3
       : has('difference')
         ? 1

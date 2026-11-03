@@ -7,6 +7,7 @@ import type { Browser } from '@playwright/test';
 
 import { analyzeRun, type CaseResult } from './analyze/diff';
 import { buildSide } from './build/viteBuild';
+import { calibrate, type CalibrationResult } from './calibration';
 import { launchBrowser } from './capture/browser';
 import { captureRun } from './capture/runner';
 import { serveDirectories } from './capture/staticServer';
@@ -29,6 +30,7 @@ export const DEFAULT_MUTATIONS = 10;
 export interface RunOptions {
   base: string;
   browser?: Browser;
+  calibrate?: boolean;
   configFile: string;
   head: string;
   keepWorktrees?: boolean;
@@ -47,6 +49,7 @@ export interface CaseRecord {
 
 export interface RunResult {
   base: string;
+  calibration: CalibrationResult[];
   cases: CaseRecord[];
   comparisons: number;
   durationMs: number;
@@ -160,12 +163,17 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
     } finally {
       await server.close();
     }
+    const calibration = await calibrate(
+      { base, cases, head, repo: options.repo, runDir },
+      options.calibrate === false ? undefined : config.calibration,
+    );
     const comparisons = capture.conditions.reduce(
       (total, condition) => total + Object.keys(condition.head).length,
       0,
     );
     const result: RunResult = {
       base,
+      calibration,
       cases,
       comparisons,
       durationMs: Math.round(performance.now() - started),
@@ -194,6 +202,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
     await writeEvidence(runDir, 'plan.json', synthesis.plans);
     await writeEvidence(runDir, 'extractions.json', synthesis.extractions);
     await writeEvidence(runDir, 'mutation.json', mutation);
+    await writeEvidence(runDir, 'calibration.json', calibration);
     await writeEvidence(runDir, 'results.json', { cases, comparisons, unpaired: result.unpaired });
     return result;
   } finally {

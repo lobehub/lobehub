@@ -1,9 +1,11 @@
+import type { CalibrationResult } from '../calibration';
 import type { StyleDifference } from '../capture/snapshot';
 import type { MutantResult, MutationReport } from '../mutation/run';
 import type { CaseCategory } from '../verdict/categorize';
 
 export interface SummaryInput {
   base: string;
+  calibration: CalibrationResult[];
   cases: Array<{
     category: CaseCategory;
     key: string;
@@ -21,6 +23,21 @@ export interface SummaryInput {
 }
 
 const TOP = 10;
+
+const calibrationLines = ({ calibration }: SummaryInput) => {
+  if (!calibration.length) return [];
+  const count = (status: CalibrationResult['status']) =>
+    calibration.filter((entry) => entry.status === status).length;
+  return [
+    `calibration ${count('agree')} agree · ${count('mismatch')} mismatch · ${count('inconclusive')} inconclusive`,
+    ...calibration
+      .filter((entry) => entry.status === 'mismatch')
+      .map(
+        (entry) =>
+          `  mismatch ${entry.fixtureId} (${entry.file}): real mount ${entry.fixture}, synthetic ${entry.synthetic}`,
+      ),
+  ];
+};
 
 const mutationLines = ({ mutation }: SummaryInput) => {
   if (!mutation.requested) return ['mutation off'];
@@ -44,6 +61,7 @@ export const formatSummary = (input: SummaryInput) => {
     `style-equivalence ${input.base.slice(0, 7)}..${input.head.slice(0, 7)} · ${input.files.length} files · ${input.cases.length} cases · ${input.comparisons} comparisons · ${Math.round(input.durationMs / 1000)}s`,
     `difference ${count('difference')} · needs sign-off ${count('needs-signoff') + input.unpaired} · blocking ${count('blocking')} · equal ${count('equal')}`,
     ...mutationLines(input),
+    ...calibrationLines(input),
   ];
   const differences = input.cases.filter((entry) => entry.category === 'difference').slice(0, TOP);
   if (differences.length) {

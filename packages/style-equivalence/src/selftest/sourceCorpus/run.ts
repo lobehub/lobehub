@@ -82,6 +82,7 @@ export const runSourceCorpus = async ({
   const result = await runComparison({
     base,
     browser,
+    calibrate: false,
     configFile,
     head,
     mutations: 0,

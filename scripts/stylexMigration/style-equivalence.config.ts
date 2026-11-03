@@ -12,6 +12,7 @@ import { globalCssAdapter } from '../../packages/style-equivalence/src/extract/a
 import { stylexAdapter } from '../../packages/style-equivalence/src/extract/adapters/stylex';
 import type * as LobeUiImportsModule from '../../plugins/vite/lobeUiImports';
 import type * as StylexModule from '../../plugins/vite/stylex';
+import { fixtureCalibration } from './styleEquivalenceCalibration';
 import { workspaceExports } from './verification/build/fixtureResolvers';
 
 const fromRevision = async <T>(root: string, file: string) => {
@@ -37,6 +38,7 @@ const lenient = (plugin: Plugin): Plugin => ({
 const config: ProjectConfig = {
   adapters: [emotionStaticAdapter, stylexAdapter, cssModulesAdapter, globalCssAdapter],
   aliases: { '@/': 'src/' },
+  calibration: fixtureCalibration,
   conditions: { themeAttribute: 'data-theme', themes: ['light', 'dark'], widths: [375, 1280] },
   cxFallback: { name: 'cx', source: '@lobehub/ui' },
   hostWrapper: 'styleEquivalenceHost.tsx',
