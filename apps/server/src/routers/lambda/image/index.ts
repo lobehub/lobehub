@@ -22,6 +22,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { createAsyncCaller } from '@/server/routers/async/caller';
+import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import { FileService } from '@/server/services/file';
 import {
   AsyncTaskError,
@@ -30,8 +31,10 @@ import {
   AsyncTaskType,
 } from '@/types/asyncTask';
 import { type ProviderConfig } from '@/types/user/settings';
+import { resolveImageModelSelection } from '@/utils/defaultImageModel';
 import { generateUniqueSeeds } from '@/utils/number';
 
+import { buildEnabledImageProviderModels } from './defaultModel';
 import {
   applyLookupPricingParamDefaults,
   findUnsupportedImageParams,
@@ -64,7 +67,11 @@ const imageCreateProcedure = imageProcedure
 const createImageInputSchema = z.object({
   generationTopicId: z.string(),
   imageNum: z.number(),
-  model: z.string(),
+  /**
+   * Omit (together with or without `provider`) to let the server pick the user's default image
+   * model with the same rule as the image page, see `resolveImageModelSelection`.
+   */
+  model: z.string().optional(),
   params: z
     .object({
       cfg: z.number().optional(),
@@ -76,7 +83,8 @@ const createImageInputSchema = z.object({
       width: z.number().optional(),
     })
     .passthrough(),
-  provider: z.string(),
+  /** Omit to use the first enabled provider serving `model`, or the default image model. */
+  provider: z.string().optional(),
 });
 export type CreateImageServicePayload = z.infer<typeof createImageInputSchema>;
 
@@ -101,9 +109,42 @@ export const imageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
-      const { generationTopicId, provider, model, imageNum, params } = input;
+      const { generationTopicId, imageNum, params } = input;
 
       log('Starting image creation process, input: %O', input);
+
+      const { aiProvider } = await getServerGlobalConfig();
+      const aiInfraRepos = new AiInfraRepos(
+        serverDB,
+        userId,
+        aiProvider as Record<string, ProviderConfig>,
+        wsId,
+      );
+
+      // Callers such as `lh gen image` may omit the model/provider; fill them in from the user's
+      // enabled image models with the image page's default rule instead of a client-side guess.
+      let model = input.model;
+      let provider = input.provider;
+      if (!model || !provider) {
+        const runtimeState = await getUserScopedAiProviderRuntimeState(userId, () =>
+          aiInfraRepos.getAiProviderRuntimeState(),
+        );
+        const selection = resolveImageModelSelection(
+          buildEnabledImageProviderModels(runtimeState),
+          { model, provider },
+        );
+        if (!selection) {
+          const requested = [provider, model].filter(Boolean).join('/');
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: requested
+              ? `No enabled image model matched ${requested}.`
+              : 'No enabled image model is available.',
+          });
+        }
+        ({ model, provider } = selection);
+        log('Resolved image model selection: %s/%s', provider, model);
+      }
 
       const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
 
@@ -127,13 +168,6 @@ export const imageRouter = router({
       // schema comes from the same merged model list the image page and image tool read, so a
       // user-customized model is validated against its own declaration. Models without a
       // declared schema (e.g. custom ids) are passed through unchanged.
-      const { aiProvider } = await getServerGlobalConfig();
-      const aiInfraRepos = new AiInfraRepos(
-        serverDB,
-        userId,
-        aiProvider as Record<string, ProviderConfig>,
-        wsId,
-      );
       const modelCard = (
         await aiInfraRepos.getAiProviderModelList(provider, { type: 'image' })
       ).find((item) => item.id === model);

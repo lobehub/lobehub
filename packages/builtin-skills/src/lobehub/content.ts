@@ -114,8 +114,8 @@ lh message search "deployment issue" --since 7d
 # Recall everything about a topic from last week (messages, topics, goals, pages)
 lh recall "replica" --since 2026-10-12 --until 2026-10-18
 
-# Generate an image
-lh gen image "a sunset over mountains" -m dall-e-3
+# Generate an image (omit -m/-p to use the same default model as the web image page)
+lh gen image "a sunset over mountains"
 
 # Run an agent
 lh agent run -a <agentId> -p "Summarize today's tasks"
