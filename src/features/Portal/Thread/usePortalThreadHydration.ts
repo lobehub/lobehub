@@ -27,16 +27,42 @@ export const usePortalThreadHydration = () => {
   portalThreadRef.current = portalThread;
 
   useLayoutEffect(() => {
-    const unsubscribe = useChatStore.subscribe(
+    // Set while a topic switch closes the pane: the topic's own navigation
+    // already drops `?portalThread=`, so this close must not navigate again.
+    let closingForTopicSwitch = false;
+
+    const unsubscribeThread = useChatStore.subscribe(
       (s) => s.portalThreadId,
       (state) => {
+        if (closingForTopicSwitch) return;
         if ((state || null) === (portalThreadRef.current || null)) return;
         setThread(state || null);
       },
     );
 
+    // Close another topic's thread in the switch itself, so the new topic's
+    // first render has no pane; waiting for the URL leaves a skeleton frame.
+    const unsubscribeTopic = useChatStore.subscribe(
+      (s) => s.activeTopicId,
+      (topicId) => {
+        const state = useChatStore.getState();
+        // Only a pane showing a thread: a creator (no thread yet) or another view
+        // on top, such as a document bound to a thread, stays.
+        if (!portalThreadSelectors.currentThreadView(state)?.threadId) return;
+        if (portalThreadSelectors.isPortalThreadKeptOnTopic(topicId)(state)) return;
+
+        closingForTopicSwitch = true;
+        try {
+          state.closeThreadPortal();
+        } finally {
+          closingForTopicSwitch = false;
+        }
+      },
+    );
+
     return () => {
-      unsubscribe();
+      unsubscribeThread();
+      unsubscribeTopic();
     };
   }, [setThread]);
 

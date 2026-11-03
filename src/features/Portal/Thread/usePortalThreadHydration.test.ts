@@ -94,4 +94,79 @@ describe('usePortalThreadHydration', () => {
     });
     await waitFor(() => expect(result.current.location.search).toBe(''));
   });
+
+  describe('topic switch in the store', () => {
+    const openOnTopicA = async (threadMaps: Record<string, { id: string }[]>) => {
+      useChatStore.setState({ activeTopicId: 'tpc_a', threadMaps: threadMaps as any }, false);
+      const mounted = mount('/agent/agt_1/tpc_a?portalThread=thd_a');
+      await waitFor(() => expect(useChatStore.getState().showPortal).toBe(true));
+      await waitFor(() => expect(useChatStore.getState().portalThreadId).toBe('thd_a'));
+      return mounted;
+    };
+
+    /** @example T-2769: B's first frame must not show A's subtopic pane (no wait for the URL). */
+    it("closes another topic's pane in the same tick, without navigating", async () => {
+      const { keys } = await openOnTopicA({ tpc_a: [{ id: 'thd_a' }] });
+
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'tpc_b' }, false);
+        // Read before React or the router get a turn: the switch itself closed it.
+        expect(useChatStore.getState().showPortal).toBe(false);
+        expect(useChatStore.getState().portalStack).toEqual([]);
+        expect(useChatStore.getState().portalThreadId).toBeUndefined();
+      });
+
+      // The route sync owns the URL of a topic switch; the hook must not write it.
+      expect(keys).toHaveLength(1);
+    });
+
+    it('keeps a deep-linked thread no loaded list knows yet', async () => {
+      await openOnTopicA({ tpc_a: [{ id: 'thd_other' }] });
+
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'tpc_b' }, false);
+      });
+
+      expect(useChatStore.getState().showPortal).toBe(true);
+      expect(useChatStore.getState().portalThreadId).toBe('thd_a');
+    });
+
+    it('keeps a non-thread view whose panel synced a thread of the old topic', async () => {
+      useChatStore.setState(
+        { activeTopicId: 'tpc_a', threadMaps: { tpc_a: [{ id: 'thd_a' }] } as any },
+        false,
+      );
+      mount('/agent/agt_1/tpc_a');
+      await act(async () => {
+        useChatStore
+          .getState()
+          .pushPortalView({ documentId: 'doc_1', type: PortalViewType.Document });
+        // The Document panel's chat binds its thread without pushing a Thread view.
+        useChatStore.getState().syncThreadInPortal('thd_a');
+      });
+
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'tpc_b' }, false);
+      });
+
+      expect(useChatStore.getState().portalStack).toEqual([
+        { documentId: 'doc_1', type: PortalViewType.Document },
+      ]);
+    });
+
+    it('keeps the thread creator open across a topic switch', async () => {
+      await openOnTopicA({ tpc_a: [{ id: 'thd_a' }] });
+      await act(async () => {
+        useChatStore.getState().openThreadCreator('msg_1');
+      });
+
+      act(() => {
+        useChatStore.setState({ activeTopicId: 'tpc_b' }, false);
+      });
+
+      expect(useChatStore.getState().portalStack).toEqual([
+        { startMessageId: 'msg_1', type: PortalViewType.Thread },
+      ]);
+    });
+  });
 });
