@@ -707,12 +707,28 @@ export function registerTaskCommand(program: Command) {
           log.error(
             `Invalid status "${options.status}". Must be one of: ${validStatuses.join(', ')}`,
           );
+          process.exitCode = 1;
           return;
         }
 
         // Labels have their own endpoint; apply them (in one transaction)
         // after input validation and before any field / status edit, so a bad
-        // label fails the command before anything moves.
+        // label fails the command before anything moves. When the field /
+        // status edit then fails, the previous label set is put back, so the
+        // command never half-applies.
+        const hasOtherEdits = hasFieldEdits || !!options.status;
+        const previousLabelIds =
+          hasLabelEdits && hasOtherEdits
+            ? ((await client.task.detail.query({ id })).data?.labels ?? []).map((l) => l.id)
+            : undefined;
+        const restoreLabelsOnFailure = async (error: unknown): Promise<never> => {
+          if (previousLabelIds) {
+            await client.taskLabel.setForTask
+              .mutate({ labelIds: previousLabelIds, taskId: id })
+              .catch(() => log.warn(`Labels on ${id} were changed but could not be restored.`));
+          }
+          throw error;
+        };
         let labels: Awaited<ReturnType<typeof client.taskLabel.changeForTask.mutate>> | undefined;
         if (hasLabelEdits) {
           labels = await client.taskLabel.changeForTask.mutate({
@@ -721,7 +737,7 @@ export function registerTaskCommand(program: Command) {
             taskId: id,
           });
         }
-        if (hasLabelEdits && !hasFieldEdits && !options.status) {
+        if (hasLabelEdits && !hasOtherEdits) {
           if (options.json !== undefined) {
             outputJson(labels, typeof options.json === 'string' ? options.json : undefined);
           } else {
@@ -737,7 +753,9 @@ export function registerTaskCommand(program: Command) {
         // atomically.
         if (options.status) {
           if (!hasFieldEdits) {
-            const result = await client.task.updateStatus.mutate({ id, status: options.status });
+            const result = await client.task.updateStatus
+              .mutate({ id, status: options.status })
+              .catch(restoreLabelsOnFailure);
             if (options.json !== undefined) {
               outputJson(
                 withUrl(
@@ -757,7 +775,7 @@ export function registerTaskCommand(program: Command) {
           input.status = options.status;
         }
 
-        const result = await client.task.update.mutate(input as any);
+        const result = await client.task.update.mutate(input as any).catch(restoreLabelsOnFailure);
 
         if (options.json !== undefined) {
           outputJson(
