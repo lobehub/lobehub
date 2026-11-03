@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import type { FileExtraction, StyleElement } from '../extract';
 import type { FilePlan } from '../plan/planFile';
-import { CaseList } from './hostRuntime';
+import { CaseList, readSelection } from './hostRuntime';
 import { generateModule } from './module';
 
 const tmp = path.join(import.meta.dirname, '.generated-test');
@@ -171,5 +171,26 @@ describe('CaseList', () => {
     );
     expect(one.match(/data-case=/g)).toHaveLength(1);
     expect(one).toContain('class="item itemDragging"');
+  });
+
+  it('renders only the cases named in the cases query parameter', async () => {
+    const mod = await load();
+    const fullPlan = [
+      {
+        ...plan,
+        cases: plan.cases.map((entry) => ({
+          ...entry,
+          combos: entry.key === 'a.tsx|A#0' ? [{ isDragging: false }, { isDragging: true }] : [{}],
+        })),
+      },
+    ];
+    const selection = readSelection(`?cases=${encodeURIComponent(JSON.stringify(['a.tsx|A#0']))}`);
+    const html = render(
+      createElement(CaseList, { modules: { 'a.tsx': mod }, plan: fullPlan, selection }),
+    );
+    expect(html.match(/data-case="[^"]*"/g)).toEqual([
+      'data-case="a.tsx|A#0|0"',
+      'data-case="a.tsx|A#0|1"',
+    ]);
   });
 });

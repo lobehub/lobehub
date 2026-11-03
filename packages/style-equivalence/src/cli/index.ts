@@ -16,6 +16,7 @@ Options:
   --config <file>     project config (default scripts/stylexMigration/style-equivalence.config.ts)
   --records <dir>     evidence directory (default .records/style-equivalence)
   --keep-worktrees    keep base/head worktrees for debugging
+  --mutations <n>     mutants to sample from equal cases (default 10, 0 turns it off)
 `;
 
 const ensureObject = async (repo: string, sha: string) => {
@@ -48,6 +49,7 @@ const main = async () => {
       'head': { type: 'string' },
       'help': { short: 'h', type: 'boolean' },
       'keep-worktrees': { type: 'boolean' },
+      'mutations': { type: 'string' },
       'pr': { type: 'string' },
       'records': { type: 'string' },
     },
@@ -60,24 +62,28 @@ const main = async () => {
       ? { base: values.base, head: values.head }
       : undefined;
   if (!revisions) throw new Error('Specify --pr <number> or both --base and --head');
+  if (values.mutations !== undefined && !/^\d+$/.test(values.mutations))
+    throw new Error('--mutations takes a non-negative integer');
   const result = await runComparison({
     ...revisions,
     configFile: path.resolve(
       values.config ?? 'scripts/stylexMigration/style-equivalence.config.ts',
     ),
     keepWorktrees: values['keep-worktrees'],
+    mutations: values.mutations === undefined ? undefined : Number(values.mutations),
     recordsDir: path.resolve(values.records ?? '.records/style-equivalence'),
     repo,
   });
   console.log(formatSummary(result));
   const has = (category: string) => result.cases.some((entry) => entry.category === category);
-  process.exitCode = has('blocking')
-    ? 3
-    : has('difference')
-      ? 1
-      : has('needs-signoff') || result.unpaired
-        ? 2
-        : 0;
+  process.exitCode =
+    has('blocking') || !result.mutation.passed
+      ? 3
+      : has('difference')
+        ? 1
+        : has('needs-signoff') || result.unpaired
+          ? 2
+          : 0;
 };
 
 main().catch((error) => {

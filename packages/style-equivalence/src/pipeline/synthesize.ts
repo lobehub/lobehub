@@ -10,7 +10,7 @@ import { type FilePlan, planFile, type Side } from '../plan/planFile';
 import type { ScopeFile } from '../source/scope';
 
 export const HOST_DIR = '.style-equivalence-host';
-const RUNTIME = path.resolve(import.meta.dirname, '../generate/hostRuntime.tsx');
+export const RUNTIME = path.resolve(import.meta.dirname, '../generate/hostRuntime.tsx');
 
 const empty = (file: string): FileExtraction => ({
   elements: [],
@@ -22,7 +22,7 @@ const empty = (file: string): FileExtraction => ({
   styleSymbols: [],
 });
 
-const stylesheetReader = (root: string) => (fromFile: string, specifier: string) => {
+export const stylesheetReader = (root: string) => (fromFile: string, specifier: string) => {
   if (!specifier.startsWith('.')) return undefined;
   const target = path.resolve(root, path.dirname(fromFile), specifier);
   return existsSync(target) ? readFileSync(target, 'utf8') : undefined;
@@ -61,7 +61,7 @@ export const synthesize = async (
   return { extractions, plans };
 };
 
-const syntheticPath = (source: string) =>
+export const syntheticPath = (source: string) =>
   path.join(path.dirname(source), `__style_equivalence__${path.basename(source)}`);
 
 export const writeHost = async (

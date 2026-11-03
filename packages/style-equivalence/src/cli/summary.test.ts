@@ -42,15 +42,52 @@ describe('formatSummary', () => {
       durationMs: 81_500,
       files: ['src/Controls.tsx', 'src/A.tsx', 'src/B.tsx'],
       head: 'f0a8fd0ce5202864e5c6f8c81dceabaafb7978a3',
+      mutation: {
+        caught: 9,
+        equivalent: 2,
+        evaluated: 9,
+        mutants: [],
+        passed: true,
+        requested: 10,
+      },
       runDir: '/repo/.records/style-equivalence/run-1',
       unpaired: 3,
     });
     expect(text.split('\n')).toEqual([
       'style-equivalence 60dee14..f0a8fd0 · 3 files · 4 cases · 96 comparisons · 82s',
       'difference 1 · needs sign-off 4 · blocking 1 · equal 1',
+      'mutation 9/9 caught · 2 equivalent dropped (requested 10)',
       'Top root causes:',
       '  src/Controls.tsx|SectionHeader#0  font-feature-settings: "cv01", "kern", "tnum" → normal  (2 conditions)',
       'Evidence: /repo/.records/style-equivalence/run-1',
+    ]);
+  });
+
+  it('names the missed mutants when mutation testing fails', () => {
+    const text = formatSummary({
+      base: 'a'.repeat(40),
+      cases: [],
+      comparisons: 0,
+      durationMs: 0,
+      files: [],
+      head: 'b'.repeat(40),
+      mutation: {
+        caught: 1,
+        equivalent: 0,
+        evaluated: 2,
+        mutants: [
+          { caseKey: 'src/A.tsx|A#0', description: 'numeric: 8px → 9px', outcome: 'missed' },
+          { caseKey: 'src/B.tsx|B#0', description: 'delete-state: &:hover', outcome: 'caught' },
+        ],
+        passed: false,
+        requested: 2,
+      },
+      runDir: '/r',
+      unpaired: 0,
+    });
+    expect(text.split('\n').slice(2, 4)).toEqual([
+      'mutation FAILED 1/2 caught',
+      '  missed src/A.tsx|A#0  numeric: 8px → 9px',
     ]);
   });
 });
