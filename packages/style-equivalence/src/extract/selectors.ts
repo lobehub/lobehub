@@ -56,5 +56,17 @@ export const classifyRules = (rules: StyleRule[], extraOwned: Record<string, str
   return flags;
 };
 
+export const foreignClassNames = (rules: StyleRule[], extraOwned: Record<string, string> = {}) => {
+  const names = new Set<string>();
+  for (const rule of rules) {
+    const owned = { ...rule.owned, ...extraOwned };
+    const analysis = analyze(rule.selector);
+    if (!analysis?.classes.some((item) => !item.global && owned[item.name])) continue;
+    for (const item of analysis.classes)
+      if (!item.global && !owned[item.name]) names.add(item.name);
+  }
+  return names;
+};
+
 export const classNamesIn = (selector: string) =>
   (analyze(selector)?.classes ?? []).filter((item) => !item.global).map((item) => item.name);

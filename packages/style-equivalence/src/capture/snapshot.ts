@@ -57,6 +57,33 @@ export const captureInPage = (
   const canonical = (value: Record<string, unknown>) =>
     Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
   const animationNames = new Map<string, string>();
+  const keyframeRules = new Map<string, string>();
+  const collectKeyframes = (rules: CSSRuleList) => {
+    for (const rule of rules) {
+      if (rule instanceof CSSKeyframesRule)
+        keyframeRules.set(
+          rule.name,
+          `keyframes:${[...rule.cssRules]
+            .map((frame) => {
+              const style = (frame as CSSKeyframeRule).style;
+              const body = [...style]
+                .sort()
+                .map((property) => `${property}:${style.getPropertyValue(property)}`)
+                .join(';');
+              return `${(frame as CSSKeyframeRule).keyText}{${body}}`;
+            })
+            .join('')}`,
+        );
+      else if ('cssRules' in rule) collectKeyframes((rule as CSSGroupingRule).cssRules);
+    }
+  };
+  for (const sheet of document.styleSheets) {
+    try {
+      collectKeyframes(sheet.cssRules);
+    } catch {
+      continue;
+    }
+  }
   const animations: StyleSnapshot['animations'] = [];
   for (const animation of document.getAnimations()) {
     const effect = animation.effect;
@@ -128,7 +155,12 @@ export const captureInPage = (
       if (property === 'animation-name' && value !== 'none')
         value = value
           .split(',')
-          .map((name) => animationNames.get(name.trim()) ?? `unresolved:${name.trim()}`)
+          .map(
+            (name) =>
+              keyframeRules.get(name.trim()) ??
+              animationNames.get(name.trim()) ??
+              `unresolved:${name.trim()}`,
+          )
           .join(',');
       values[property] = value;
       propertyReads++;

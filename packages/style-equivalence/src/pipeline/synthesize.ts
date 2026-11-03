@@ -1,0 +1,103 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
+import type { ProjectConfig } from '../config';
+import { extractFile, type FileExtraction } from '../extract';
+import { generateHost, HOST_HTML } from '../generate/host';
+import { generateModule } from '../generate/module';
+import { type FilePlan, planFile, type Side } from '../plan/planFile';
+import type { ScopeFile } from '../source/scope';
+
+export const HOST_DIR = '.style-equivalence-host';
+const RUNTIME = path.resolve(import.meta.dirname, '../generate/hostRuntime.tsx');
+
+const empty = (file: string): FileExtraction => ({
+  elements: [],
+  file,
+  gaps: [],
+  outsideReferences: [],
+  prelude: '',
+  rules: [],
+  styleSymbols: [],
+});
+
+const stylesheetReader = (root: string) => (fromFile: string, specifier: string) => {
+  if (!specifier.startsWith('.')) return undefined;
+  const target = path.resolve(root, path.dirname(fromFile), specifier);
+  return existsSync(target) ? readFileSync(target, 'utf8') : undefined;
+};
+
+export interface Synthesis {
+  extractions: Record<string, Record<Side, FileExtraction>>;
+  plans: FilePlan[];
+}
+
+export const synthesize = async (
+  scope: ScopeFile[],
+  roots: Record<Side, string>,
+  config: ProjectConfig,
+): Promise<Synthesis> => {
+  const extractions: Synthesis['extractions'] = {};
+  const plans: FilePlan[] = [];
+  for (const entry of scope) {
+    const file = entry.head ?? entry.base!;
+    const read = async (side: Side) => {
+      const source = entry[side];
+      if (!source) return empty(file);
+      const code = await readFile(path.join(roots[side], source), 'utf8');
+      return extractFile(code, source, {
+        adapters: config.adapters,
+        layoutComponents: config.layoutComponents,
+        readStylesheet: stylesheetReader(roots[side]),
+      });
+    };
+    const pair = { base: await read('base'), head: await read('head') };
+    const plan = planFile(file, pair.base, pair.head, config);
+    if (!plan.cases.length && !plan.unpaired.length && !plan.gaps.length) continue;
+    extractions[file] = pair;
+    plans.push(plan);
+  }
+  return { extractions, plans };
+};
+
+const syntheticPath = (source: string) =>
+  path.join(path.dirname(source), `__style_equivalence__${path.basename(source)}`);
+
+export const writeHost = async (
+  side: Side,
+  root: string,
+  synthesis: Synthesis,
+  scope: ScopeFile[],
+  config: ProjectConfig,
+  configDir: string,
+) => {
+  const host = path.join(root, HOST_DIR);
+  await rm(host, { force: true, recursive: true });
+  await mkdir(host, { recursive: true });
+  const modules: Array<{ file: string; specifier: string }> = [];
+  const written: string[] = [];
+  for (const plan of synthesis.plans) {
+    const source = scope.find((entry) => (entry.head ?? entry.base) === plan.file)?.[side];
+    if (!source || !plan.cases.length) continue;
+    const target = path.join(root, syntheticPath(source));
+    await writeFile(
+      target,
+      generateModule(synthesis.extractions[plan.file][side], plan, side, config),
+    );
+    written.push(target);
+    modules.push({ file: plan.file, specifier: target });
+  }
+  await writeFile(path.join(host, 'index.html'), HOST_HTML);
+  await writeFile(path.join(host, 'plan.json'), JSON.stringify(synthesis.plans));
+  await writeFile(
+    path.join(host, 'entry.tsx'),
+    generateHost({
+      hostWrapper: path.resolve(configDir, config.hostWrapper),
+      modules,
+      runtime: RUNTIME,
+      themeAttribute: config.conditions.themeAttribute,
+    }),
+  );
+  return { host, written };
+};

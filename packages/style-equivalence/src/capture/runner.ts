@@ -6,7 +6,7 @@ import { captureInPage, type StyleSnapshot } from './snapshot';
 import { applyState, type CaptureState, STATES } from './states';
 import { planWidths, readMediaConditions } from './widths';
 
-export type SectionSnapshot = StyleSnapshot | { error: string };
+export type SectionSnapshot = (StyleSnapshot & { targetKey?: string }) | { error: string };
 export type SectionSnapshots = Record<string, SectionSnapshot>;
 
 export interface ConditionCapture {
@@ -42,7 +42,15 @@ const CAPTURE_ALL = `(() => {
     const key = section.getAttribute('data-case');
     const failure = section.querySelector('[data-synthetic-error]');
     if (failure) { result[key] = { error: failure.getAttribute('data-synthetic-error') }; continue; }
-    try { result[key] = capture({ selector: '[data-case="' + CSS.escape(key) + '"]' }); }
+    const skip = (element) => ['LINK', 'META', 'SCRIPT', 'STYLE'].includes(element.tagName);
+    const keyOf = (target) => {
+      const path = [];
+      for (let node = target; node && node !== section; node = node.parentElement)
+        path.unshift([...node.parentElement.children].filter((child) => !skip(child)).indexOf(node));
+      return ['root', ...path].join('.');
+    };
+    const targets = [...section.querySelectorAll('[data-synthetic-element]')].filter((node) => !node.querySelector('[data-synthetic-element]'));
+    try { result[key] = { ...capture({ selector: '[data-case="' + CSS.escape(key) + '"]' }), targetKey: targets[0] ? keyOf(targets[0]) : 'root' }; }
     catch (error) { result[key] = { error: String((error && error.message) || error) }; }
   }
   return result;

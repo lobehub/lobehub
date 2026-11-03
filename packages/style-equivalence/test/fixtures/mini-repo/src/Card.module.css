@@ -1,0 +1,9 @@
+.card {
+  padding: 8px;
+}
+.active {
+  color: rgb(0 0 255);
+}
+.title {
+  font-weight: 600;
+}

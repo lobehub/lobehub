@@ -2,7 +2,7 @@ import ts from 'typescript';
 
 import { parseRules } from './css';
 import { isJsxNode, mergeKinds, usageKinds, valueIdentifiers } from './identifiers';
-import { classifyRules, classNamesIn } from './selectors';
+import { classifyRules, classNamesIn, foreignClassNames } from './selectors';
 import { collectTopLevel } from './topLevel';
 import type {
   ExtractOptions,
@@ -105,6 +105,7 @@ export const extractFile = (
   const usedGlobal = new Set<string>();
 
   const elements: StyleElement[] = [];
+  const classTokens = new Map<string, Set<string>>();
   const bound = new Set<ts.Node>();
 
   for (const statement of ast.statements) {
@@ -131,7 +132,14 @@ export const extractFile = (
           continue;
         }
         const name = attribute.name.getText(ast);
-        const initializer = attribute.initializer;
+        const initializer =
+          attribute.initializer &&
+          ts.isJsxExpression(attribute.initializer) &&
+          attribute.initializer.expression &&
+          (ts.isStringLiteral(attribute.initializer.expression) ||
+            ts.isNoSubstitutionTemplateLiteral(attribute.initializer.expression))
+            ? ts.factory.createStringLiteral(attribute.initializer.expression.text)
+            : attribute.initializer;
         if (!initializer) {
           literalProps[name] = true;
           continue;
@@ -169,14 +177,28 @@ export const extractFile = (
         const tag = opening.tagName.getText(ast);
         const names = new Set<string>();
         for (const expression of expressions)
-          for (const name of valueIdentifiers(expression, { skipJsx: true }))
-            if (!GLOBALS.has(name) && !isStyleName(name) && !top.require(name)) names.add(name);
+          for (const name of valueIdentifiers(expression, { skipJsx: true })) {
+            if (GLOBALS.has(name)) continue;
+            if (markers.has(name)) top.require(name);
+            else if (!top.styleSymbols.has(name) && !top.require(name)) names.add(name);
+          }
         const kinds = new Map<string, VariableKind[]>();
         for (const expression of expressions)
           for (const [name, list] of usageKinds(expression, names))
             kinds.set(name, [...(kinds.get(name) ?? []), ...list]);
         if (layout.has(tag)) top.require(tag);
         const id = `${owner}#${ordinal++}`;
+        const tokens = new Set<string>();
+        const collectTokens = (node: ts.Node) => {
+          if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+            node.text.split(/\s+/).forEach((token) => token && tokens.add(token));
+          ts.forEachChild(node, collectTokens);
+        };
+        expressions.forEach(collectTokens);
+        for (const binding of bindings)
+          if (binding.prop === 'className' && binding.expr.startsWith('"'))
+            (JSON.parse(binding.expr) as string).split(/\s+/).forEach((token) => tokens.add(token));
+        classTokens.set(id, tokens);
         elements.push({
           bindings,
           flags: [],
@@ -222,14 +244,15 @@ export const extractFile = (
     visit(statement);
   }
 
-  const flags = classifyRules(
-    rules,
-    Object.fromEntries([...usedGlobal].map((name) => [name, `global.${name}`])),
-  );
-  for (const element of elements)
-    element.flags = [
-      ...new Set(element.slots.flatMap((slot) => [...(flags.get(slot) ?? [])])),
-    ].sort();
+  const globalOwned = Object.fromEntries([...usedGlobal].map((name) => [name, `global.${name}`]));
+  const flags = classifyRules(rules, globalOwned);
+  const foreign = foreignClassNames(rules, globalOwned);
+  for (const element of elements) {
+    const found = new Set(element.slots.flatMap((slot) => [...(flags.get(slot) ?? [])]));
+    if ([...(classTokens.get(element.id) ?? [])].some((token) => foreign.has(token)))
+      found.add('CROSS_COMPONENT');
+    element.flags = [...found].sort();
+  }
 
   return {
     elements,

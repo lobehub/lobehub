@@ -67,6 +67,25 @@ export const rootCausesOf = (differences: StyleDifference[]) => {
   });
 };
 
+const isOwned = (key: string, target: string) =>
+  key === target || key.startsWith(`${target}.`) || key.startsWith(`${target}::`);
+
+const sameSize = (before?: string, after?: string) => {
+  try {
+    const [left, right] = [JSON.parse(before ?? '[]'), JSON.parse(after ?? '[]')] as number[][];
+    return Math.abs(left[2] - right[2]) <= 0.05 && Math.abs(left[3] - right[3]) <= 0.05;
+  } catch {
+    return false;
+  }
+};
+
+export const ownDifferences = (differences: StyleDifference[], targetKey: string) =>
+  differences.filter(
+    (item) =>
+      isOwned(item.key, targetKey) &&
+      !(item.property === 'box' && sameSize(item.before, item.after)),
+  );
+
 export type CaseStatus = 'difference' | 'equal' | 'error' | 'unstable';
 
 export interface ComboDifference {
@@ -86,8 +105,9 @@ export interface CaseResult {
   unstableConditions: string[];
 }
 
-const isSnapshot = (value: SectionSnapshot | undefined): value is StyleSnapshot =>
-  Boolean(value && !('error' in value));
+const isSnapshot = (
+  value: SectionSnapshot | undefined,
+): value is StyleSnapshot & { targetKey?: string } => Boolean(value && !('error' in value));
 
 const meaningful = (before: StyleSnapshot, after: StyleSnapshot) =>
   compareSnapshots(before, after).filter((item) => !item.diagnosticReason);
@@ -123,12 +143,15 @@ export const analyzeRun = (capture: RunCapture): CaseResult[] => {
         if (!result.errors.includes(message)) result.errors.push(message);
         continue;
       }
-      if (!isSnapshot(control) || meaningful(base, control).length) {
+      if (
+        !isSnapshot(control) ||
+        ownDifferences(meaningful(base, control), base.targetKey ?? 'root').length
+      ) {
         if (!result.unstableConditions.includes(condition.condition))
           result.unstableConditions.push(condition.condition);
         continue;
       }
-      const differences = meaningful(base, head);
+      const differences = ownDifferences(meaningful(base, head), base.targetKey ?? 'root');
       const causes = rootCausesOf(differences);
       if (!causes.length) continue;
       result.comboDifferences.push({
