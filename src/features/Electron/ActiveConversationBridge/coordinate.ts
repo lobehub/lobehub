@@ -1,3 +1,5 @@
+import { PORTAL_THREAD_QUERY_KEY } from '@/features/Portal/Thread/sharePath';
+
 export interface ActiveConversationCoordinate {
   agentBasePath?: string;
   agentId?: string;
@@ -89,6 +91,7 @@ export const buildActiveConversationUrl = (
   coordinate: ActiveConversationCoordinate,
   topicId: string | null,
   threadId: string | null,
+  { keepPortalThread = true }: { keepPortalThread?: boolean } = {},
 ) => {
   const basePath =
     coordinate.groupBasePath || coordinate.agentBasePath || coordinate.projectBasePath;
@@ -98,6 +101,7 @@ export const buildActiveConversationUrl = (
 
   const searchParams = new URLSearchParams(coordinate.search);
   searchParams.delete('topic');
+  if (!keepPortalThread) searchParams.delete(PORTAL_THREAD_QUERY_KEY);
 
   if (threadId) searchParams.set('thread', threadId);
   else searchParams.delete('thread');
