@@ -13,6 +13,7 @@ import type {
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import type {
+  DevinSessionMode,
   HeterogeneousServerDefaultApiConfig,
   HeteroSessionImportMessage,
 } from '@lobechat/types';
@@ -116,6 +117,11 @@ export interface AgentSession {
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
   modelVerificationLastAttemptSessionId?: string;
+  /**
+   * Devin ACP session mode picked in the composer, applied through
+   * `session/set_config_option` when the ACP session is established.
+   */
+  permissionMode?: DevinSessionMode;
   /** Active pi RPC run (per-run process; cleared when the run settles). */
   piRpcSession?: PiRpcSession;
   process?: ChildProcess;

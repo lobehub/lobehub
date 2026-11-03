@@ -11,6 +11,7 @@ import type {
   HeterogeneousProviderBindingReference,
 } from '@lobechat/heterogeneous-agents';
 import type {
+  DevinSessionMode,
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
@@ -33,6 +34,8 @@ class HeterogeneousAgentService {
     cwd?: string;
     env?: Record<string, string>;
     initialModel?: string;
+    /** Devin ACP session mode, applied via `session/set_config_option` (Devin only). */
+    permissionMode?: DevinSessionMode;
     providerBinding?: HeterogeneousProviderBindingReference;
     resumeSessionId?: string;
     useClaudeCodeSdk?: boolean;

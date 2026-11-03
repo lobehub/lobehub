@@ -13,6 +13,7 @@ import type {
   ClaudeCodeReasoningEffort,
   CodexReasoningEffort,
   CodexSpeedMode,
+  DevinSessionMode,
   GrokBuildReasoningEffort,
   HeteroCliEncoding,
   HeterogeneousAgentMode,
@@ -32,6 +33,7 @@ import {
   isClaudeCodeReasoningEffort,
   isCodexFastServiceTier,
   isCodexReasoningEffort,
+  isDevinSessionMode,
   isGrokBuildReasoningEffort,
   isQoderReasoningEffort,
   QODER_REASONING_EFFORT_FLAG,
@@ -160,9 +162,10 @@ export interface HeterogeneousProviderConfig {
   /** Custom environment variables (local CLI only). */
   env?: Record<string, string>;
   /**
-   * Amp agent mode, surfaced through the chat-input selector and translated
-   * into `--mode <mode>` at spawn time. Omitted or `'default'` values leave
-   * Amp's own account and environment defaults in control.
+   * Agent session mode, surfaced through the chat-input selector. Amp turns it
+   * into `--mode <mode>` at spawn time; Devin applies it after ACP session
+   * setup via `session/set_config_option`. Omitted or `'default'` values leave
+   * the CLI's own account and environment defaults in control.
    */
   mode?: HeterogeneousAgentMode;
   /**
@@ -567,6 +570,17 @@ const getExplicitCodexSpeedMode = (
   return isCodexFastServiceTier(speed) ? 'fast' : undefined;
 };
 
+interface DevinSelectionSource {
+  mode?: string | null;
+}
+
+const getExplicitDevinSessionMode = (
+  source: DevinSelectionSource | null | undefined,
+): DevinSessionMode | undefined => {
+  const mode = source?.mode?.trim();
+  return isDevinSessionMode(mode) ? mode : undefined;
+};
+
 /**
  * Resolve the effective native CLI args for a heterogeneous spawn.
  *
@@ -845,6 +859,14 @@ export const buildHeteroExecArgs = (
     ) {
       selectorArgs.push('--model', model);
     }
+  }
+
+  if (provider.type === 'devin') {
+    // Devin's session mode has no argv spelling — it is applied through ACP
+    // `session/set_config_option` — so it travels as the wrapper's structured
+    // `--mode` option, which `lh hetero exec` maps back to the session config.
+    const mode = getExplicitDevinSessionMode(provider);
+    if (mode) selectorArgs.push('--mode', mode);
   }
 
   if (provider.type === 'kimi-code') {

@@ -387,6 +387,41 @@ describe('buildHeteroSpawnArgs', () => {
     ).toEqual(['--model', 'native-model']);
   });
 
+  it('sends the Devin session mode through the exec wrapper, never through native argv', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--agent-type', 'coding'],
+      mode: 'plan',
+      type: 'devin',
+    };
+
+    // Direct desktop spawns apply the mode through ACP
+    // `session/set_config_option`, so spawn args stay untouched.
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--agent-type', 'coding']);
+    // Device/sandbox dispatches carry it as the wrapper's structured `--mode`
+    // so `lh hetero exec` can apply it the same way.
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--agent-type',
+      '--agent-arg=coding',
+      '--mode',
+      'plan',
+    ]);
+  });
+
+  it('ignores a Devin mode value outside the ACP session-mode enum', () => {
+    const provider: HeterogeneousProviderConfig = {
+      // An Amp-style value left over from a recycled config is not a valid
+      // Devin session mode and must not reach the wrapper.
+      mode: 'high' as HeterogeneousProviderConfig['mode'],
+      type: 'devin',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toBeUndefined();
+    expect(buildHeteroExecArgs(provider)).toBeUndefined();
+    expect(
+      buildHeteroExecArgs({ mode: HETEROGENEOUS_AGENT_DEFAULT_SELECTION, type: 'devin' }),
+    ).toBeUndefined();
+  });
+
   it('forwards Grok Build model and effort through direct ACP and device execution', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--no-subagents'],

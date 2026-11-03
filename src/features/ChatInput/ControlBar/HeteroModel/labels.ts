@@ -24,10 +24,15 @@ const CODEX_EFFORT_LABEL_KEYS = {
 
 const MODE_LABEL_KEYS = {
   [HETEROGENEOUS_AGENT_DEFAULT_SELECTION]: 'heteroAgent.modelSelector.default',
-  high: 'heteroAgent.modelSelector.mode.high',
-  low: 'heteroAgent.modelSelector.mode.low',
-  medium: 'heteroAgent.modelSelector.mode.medium',
-  ultra: 'heteroAgent.modelSelector.mode.ultra',
+  // Devin session modes use Devin's own display names, not the raw values.
+  'accept-edits': 'heteroAgent.modelSelector.mode.acceptEdits',
+  'ask': 'heteroAgent.modelSelector.mode.ask',
+  'bypass': 'heteroAgent.modelSelector.mode.bypass',
+  'high': 'heteroAgent.modelSelector.mode.high',
+  'low': 'heteroAgent.modelSelector.mode.low',
+  'medium': 'heteroAgent.modelSelector.mode.medium',
+  'plan': 'heteroAgent.modelSelector.mode.plan',
+  'ultra': 'heteroAgent.modelSelector.mode.ultra',
 } as const satisfies Record<HeterogeneousAgentMode, string>;
 
 type EffortLabelKey =
