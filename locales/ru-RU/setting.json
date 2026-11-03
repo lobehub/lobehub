@@ -1521,7 +1521,6 @@
   "settingModel.params.panel.historyLimit": "Ограничение истории сообщений",
   "settingModel.params.panel.openness": "Открытость",
   "settingModel.params.panel.responseLength": "Ограничение длины ответа",
-  "settingModel.params.panel.subAgentModel": "Модель суб-агента",
   "settingModel.params.panel.tab": "Параметры",
   "settingModel.params.panel.title": "Настройки параметров чата",
   "settingModel.params.panel.topicDivergence": "Отклонение темы",

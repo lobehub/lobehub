@@ -1521,7 +1521,6 @@
   "settingModel.params.panel.historyLimit": "Limiter les Messages d'Historique",
   "settingModel.params.panel.openness": "Ouverture",
   "settingModel.params.panel.responseLength": "Limiter la Longueur des Réponses",
-  "settingModel.params.panel.subAgentModel": "Modèle de sous-agent",
   "settingModel.params.panel.tab": "Paramètres",
   "settingModel.params.panel.title": "Paramètres du Chat",
   "settingModel.params.panel.topicDivergence": "Divergence de Sujet",

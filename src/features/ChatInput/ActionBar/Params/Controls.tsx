@@ -90,9 +90,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 10px;
 
     font: inherit;
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextTertiary};
     text-align: start;
 
     background: transparent;
@@ -111,6 +109,17 @@ const styles = createStaticStyles(({ css }) => ({
       outline: 1px solid ${cssVar.colorBorder};
       outline-offset: 2px;
     }
+  `,
+  sectionTitle: css`
+    user-select: none;
+
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 20px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  subAgentTitle: css`
+    padding-block-start: 12px;
   `,
   body: css`
     overflow-y: auto;
@@ -380,8 +389,8 @@ interface SectionHeaderProps {
 const SectionHeader = memo<SectionHeaderProps>(({ onToggle, open, title }) => (
   <button aria-expanded={open} className={styles.sectionHeader} type="button" onClick={onToggle}>
     <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-      <span className={cx(styles.label, 'section-header-label')}>{title}</span>
-      <Icon icon={open ? ChevronUp : ChevronDown} size={18} />
+      <span className={cx(styles.sectionTitle, 'section-header-label')}>{title}</span>
+      <Icon icon={open ? ChevronUp : ChevronDown} size={16} />
     </Flexbox>
   </button>
 ));
@@ -858,10 +867,39 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                 }}
               />
             </ControlRow>
-            {enableAgentMode && (
+          </div>
+          {hasModelConfig && (
+            <>
+              <div className={styles.divider} />
+              <SectionHeader
+                open={modelConfigOpen}
+                title={t('ModelSwitchPanel.detail.config', { ns: 'components' })}
+                onToggle={handleModelConfigOpenChange}
+              />
+              {modelConfigOpen && (
+                <div className={styles.modelConfigSection}>
+                  <ControlsForm
+                    hideReasoningParams
+                    disabled={!canCreate}
+                    model={model}
+                    provider={provider}
+                    onUpdatingChange={setUpdating}
+                  />
+                </div>
+              )}
+            </>
+          )}
+          {/* Sub-agent settings come last, under their own title, so none of their
+           * controls sit among (or above) the main agent's identically named ones. */}
+          {enableAgentMode && (
+            <>
+              <div className={styles.divider} />
+              <div className={cx(styles.sectionTitle, styles.subAgentTitle)}>
+                {t('settingModel.params.panel.subAgent.title')}
+              </div>
               <ControlRow
                 tag="subAgentModel"
-                title={t('settingModel.params.panel.subAgentModel')}
+                title={t('settingModel.params.panel.subAgent.model')}
                 tooltip={t('settingModel.subAgentModel.desc')}
               >
                 <ModelSelect
@@ -888,27 +926,6 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   />
                 )}
               </ControlRow>
-            )}
-          </div>
-          {hasModelConfig && (
-            <>
-              <div className={styles.divider} />
-              <SectionHeader
-                open={modelConfigOpen}
-                title={t('ModelSwitchPanel.detail.config', { ns: 'components' })}
-                onToggle={handleModelConfigOpenChange}
-              />
-              {modelConfigOpen && (
-                <div className={styles.modelConfigSection}>
-                  <ControlsForm
-                    hideReasoningParams
-                    disabled={!canCreate}
-                    model={model}
-                    provider={provider}
-                    onUpdatingChange={setUpdating}
-                  />
-                </div>
-              )}
             </>
           )}
           {!enableAgentMode && (

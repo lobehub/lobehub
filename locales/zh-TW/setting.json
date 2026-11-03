@@ -1521,7 +1521,6 @@
   "settingModel.params.panel.historyLimit": "限制歷史訊息",
   "settingModel.params.panel.openness": "開放性",
   "settingModel.params.panel.responseLength": "限制回應長度",
-  "settingModel.params.panel.subAgentModel": "子代理模型",
   "settingModel.params.panel.tab": "參數",
   "settingModel.params.panel.title": "聊天參數設定",
   "settingModel.params.panel.topicDivergence": "主題分歧",

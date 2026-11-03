@@ -1521,7 +1521,6 @@
   "settingModel.params.panel.historyLimit": "履歴メッセージの制限",
   "settingModel.params.panel.openness": "開放性",
   "settingModel.params.panel.responseLength": "応答長の制限",
-  "settingModel.params.panel.subAgentModel": "サブエージェントモデル",
   "settingModel.params.panel.tab": "パラメータ",
   "settingModel.params.panel.title": "チャットパラメータ設定",
   "settingModel.params.panel.topicDivergence": "トピックの分岐",
