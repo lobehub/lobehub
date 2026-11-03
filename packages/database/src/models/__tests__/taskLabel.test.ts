@@ -294,5 +294,7 @@ describe('TaskLabelModel task assignments', () => {
 
     const links = await serverDB.select().from(taskLabelLinks);
     expect(links.map((l) => l.taskId)).toEqual([kept.id]);
+    // The kept link follows the new owner, so removing the old one keeps it.
+    expect(links[0].userId).toBe(otherUserId);
   });
 });

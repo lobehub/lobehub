@@ -122,7 +122,14 @@ export const transferTo = async (
     const sameLabelScope = targetWorkspaceId
       ? targetWorkspaceId === ctx.workspaceId
       : !ctx.workspaceId && targetUserId === ctx.userId;
-    if (!sameLabelScope) {
+    if (sameLabelScope) {
+      // Re-own the kept links like the other child rows, so deleting the
+      // previous owner (user_id cascades) does not drop live assignments.
+      await (trx as LobeChatDatabase)
+        .update(taskLabelLinks)
+        .set(ownershipUpdate)
+        .where(inArray(taskLabelLinks.taskId, ids));
+    } else {
       await (trx as LobeChatDatabase)
         .delete(taskLabelLinks)
         .where(inArray(taskLabelLinks.taskId, ids));
