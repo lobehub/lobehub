@@ -1,7 +1,7 @@
 import ts from 'typescript';
 
 import { valueIdentifiers } from './identifiers';
-import type { StyleAdapter } from './types';
+import type { StyleAdapter, StylesheetBinding } from './types';
 
 const STYLESHEET = /\.css$/;
 
@@ -11,7 +11,8 @@ export interface TopLevel {
   prelude: () => string;
   require: (name: string) => boolean;
   sideEffectCss: string[];
-  styleFactories: Map<string, ts.Expression>;
+  styleFactories: Map<string, ts.CallExpression>;
+  stylesheets: Array<{ binding: StylesheetBinding; source: string }>;
   styleSymbols: Set<string>;
 }
 
@@ -19,13 +20,21 @@ export const collectTopLevel = (ast: ts.SourceFile, adapters: StyleAdapter[]): T
   const importOf = new Map<string, ts.ImportDeclaration>();
   const declarations = new Map<string, ts.Statement>();
   const styleSymbols = new Set<string>();
-  const styleFactories = new Map<string, ts.Expression>();
+  const styleFactories = new Map<string, ts.CallExpression>();
   const sideEffectCss: string[] = [];
+  const stylesheets: TopLevel['stylesheets'] = [];
 
   for (const statement of ast.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
       const source = statement.moduleSpecifier.text;
       const clause = statement.importClause;
+      for (const adapter of adapters) {
+        const binding = adapter.stylesheet?.(source, clause);
+        if (binding) {
+          stylesheets.push({ binding, source });
+          break;
+        }
+      }
       if (!clause) {
         if (STYLESHEET.test(source)) sideEffectCss.push(statement.getText(ast));
         continue;
@@ -114,5 +123,6 @@ export const collectTopLevel = (ast: ts.SourceFile, adapters: StyleAdapter[]): T
     sideEffectCss,
     styleFactories,
     styleSymbols,
+    stylesheets,
   };
 };

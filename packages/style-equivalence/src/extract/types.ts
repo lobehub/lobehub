@@ -29,9 +29,12 @@ export interface StyleElement {
 
 export interface StyleRule {
   conditions: string[];
+  owned: Record<string, string>;
   selector: string;
   slot?: string;
 }
+
+export type StylesheetBinding = { kind: 'global' } | { kind: 'module'; symbol: string };
 
 export interface FileExtraction {
   elements: StyleElement[];
@@ -48,10 +51,15 @@ export interface StyleAdapter {
   markerIdentifiers: string[];
   name: string;
   recognizeFactory: (call: ts.CallExpression) => boolean;
-  rulesOf?: (symbol: string, initializer: ts.Expression) => StyleRule[];
+  rulesOf?: (symbol: string, factory: ts.CallExpression) => StyleRule[];
+  stylesheet?: (
+    source: string,
+    clause: ts.ImportClause | undefined,
+  ) => StylesheetBinding | undefined;
 }
 
 export interface ExtractOptions {
   adapters: StyleAdapter[];
   layoutComponents: string[];
+  readStylesheet?: (fromFile: string, specifier: string) => string | undefined;
 }

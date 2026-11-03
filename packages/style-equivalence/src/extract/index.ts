@@ -1,6 +1,8 @@
 import ts from 'typescript';
 
+import { parseRules } from './css';
 import { isJsxNode, mergeKinds, usageKinds, valueIdentifiers } from './identifiers';
+import { classifyRules, classNamesIn } from './selectors';
 import { collectTopLevel } from './topLevel';
 import type {
   ExtractOptions,
@@ -8,6 +10,7 @@ import type {
   LiteralValue,
   StyleBinding,
   StyleElement,
+  StyleRule,
   VariableKind,
 } from './types';
 
@@ -76,6 +79,31 @@ export const extractFile = (
     return slots;
   };
 
+  const gaps: string[] = [];
+  const rules: StyleRule[] = [];
+  for (const [symbol, factory] of top.styleFactories)
+    for (const adapter of options.adapters)
+      if (adapter.recognizeFactory(factory))
+        rules.push(...(adapter.rulesOf?.(symbol, factory) ?? []));
+  const globalClasses = new Set<string>();
+  for (const { binding, source } of top.stylesheets) {
+    const css = options.readStylesheet?.(file, source);
+    if (css === undefined) {
+      gaps.push(`STYLESHEET_UNREADABLE:${source}`);
+      continue;
+    }
+    const parsed = parseRules(css);
+    if (parsed.error) gaps.push(`STYLESHEET_UNPARSEABLE:${source}`);
+    const classes = new Set(parsed.rules.flatMap((rule) => classNamesIn(rule.selector)));
+    const owned =
+      binding.kind === 'module'
+        ? Object.fromEntries([...classes].map((name) => [name, `${binding.symbol}.${name}`]))
+        : {};
+    if (binding.kind === 'global') classes.forEach((name) => globalClasses.add(name));
+    for (const rule of parsed.rules) rules.push({ ...rule, owned });
+  }
+  const usedGlobal = new Set<string>();
+
   const elements: StyleElement[] = [];
   const bound = new Set<ts.Node>();
 
@@ -109,6 +137,18 @@ export const extractFile = (
           continue;
         }
         if (ts.isStringLiteral(initializer)) {
+          const matched =
+            name === 'className'
+              ? initializer.text.split(/\s+/).filter((token) => globalClasses.has(token))
+              : [];
+          if (matched.length) {
+            bindings.push({ expr: JSON.stringify(initializer.text), prop: name, spread: false });
+            matched.forEach((token) => {
+              usedGlobal.add(token);
+              slots.add(`global.${token}`);
+            });
+            continue;
+          }
           literalProps[name] = initializer.text;
           continue;
         }
@@ -182,13 +222,22 @@ export const extractFile = (
     visit(statement);
   }
 
+  const flags = classifyRules(
+    rules,
+    Object.fromEntries([...usedGlobal].map((name) => [name, `global.${name}`])),
+  );
+  for (const element of elements)
+    element.flags = [
+      ...new Set(element.slots.flatMap((slot) => [...(flags.get(slot) ?? [])])),
+    ].sort();
+
   return {
     elements,
     file,
-    gaps: [],
+    gaps,
     outsideReferences,
     prelude: top.prelude(),
-    rules: [],
+    rules,
     styleSymbols: [...top.styleSymbols].sort(),
   };
 };
