@@ -74,6 +74,49 @@ export interface BrowserSidebarPickElementResult extends BrowserSidebarResult {
   element?: BrowserSidebarPickedElement;
 }
 
+/** Local Chromium-family browsers whose login state can be imported. */
+export type BrowserLoginDataSource = 'chrome' | 'edge';
+
+/**
+ * Why an import or preview could not run. The renderer maps each code to
+ * readable copy; the main process never sends cookie values back.
+ */
+export type BrowserLoginDataErrorCode =
+  | 'browser_not_installed'
+  | 'browser_start_failed'
+  | 'cookie_db_locked'
+  | 'decrypt_failed'
+  | 'profile_not_found'
+  | 'unknown';
+
+export interface BrowserLoginDataSourceParams {
+  source: BrowserLoginDataSource;
+}
+
+export interface BrowserLoginDataDomain {
+  /** Number of cookies stored for this host. */
+  count: number;
+  /** Cookie host without the leading dot, e.g. `github.com`. */
+  domain: string;
+}
+
+export interface BrowserLoginDataPreviewResult extends BrowserSidebarResult {
+  domains: BrowserLoginDataDomain[];
+  errorCode?: BrowserLoginDataErrorCode;
+  /** Profile directory that will be read, e.g. `Default` or `Profile 1`. */
+  profile?: string;
+}
+
+export interface BrowserLoginDataImportParams extends BrowserLoginDataSourceParams {
+  /** Hosts to import (as returned by preview). Omit to import every host. */
+  domains?: string[];
+}
+
 export interface BrowserSidebarImportResult extends BrowserSidebarResult {
+  errorCode?: BrowserLoginDataErrorCode;
+  /** Hosts whose cookies could not be decrypted or written. */
+  failedDomains?: string[];
   importedCount: number;
+  /** Number of hosts with at least one imported cookie. */
+  importedDomainCount?: number;
 }

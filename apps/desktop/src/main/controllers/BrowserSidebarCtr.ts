@@ -1,4 +1,7 @@
 import type {
+  BrowserLoginDataImportParams,
+  BrowserLoginDataPreviewResult,
+  BrowserLoginDataSourceParams,
   BrowserSidebarCaptureResult,
   BrowserSidebarImportResult,
   BrowserSidebarNavigateParams,
@@ -21,7 +24,11 @@ import {
   elementPickerScript,
 } from '@/modules/browser/elementPickerScript';
 import { guestViewportScale } from '@/modules/browser/guestViewport';
-import { importChromeLoginData } from '@/modules/browser/importChromeLoginData';
+import {
+  BrowserLoginDataError,
+  importBrowserLoginData,
+  previewBrowserLoginData,
+} from '@/modules/browser/importBrowserLoginData';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -89,6 +96,14 @@ const isSupportedNavigationUrl = (url: string): boolean => {
  * an off-screen host; the main process registers its WebContents so agent tools
  * can continue driving it without coupling page lifetime to the visible pane.
  */
+const describeLoginDataFailure = (error: unknown) =>
+  error instanceof BrowserLoginDataError
+    ? { error: error.message, errorCode: error.code }
+    : {
+        error: error instanceof Error ? error.message : String(error),
+        errorCode: 'unknown' as const,
+      };
+
 export default class BrowserSidebarCtr extends ControllerModule {
   static override readonly groupName = 'browserSidebar';
 
@@ -252,19 +267,40 @@ export default class BrowserSidebarCtr extends ControllerModule {
     return this.snapshot(params.sessionId);
   }
 
+  /** Lists the hosts that have cookies in the local browser profile (no values). */
   @IpcMethod()
-  async importChromeLoginData(): Promise<BrowserSidebarImportResult> {
+  async previewBrowserLoginData({
+    source,
+  }: BrowserLoginDataSourceParams): Promise<BrowserLoginDataPreviewResult> {
+    try {
+      const { domains, profile } = await previewBrowserLoginData(source);
+      logger.info(`Previewed ${source} login data: ${domains.length} hosts in "${profile}"`);
+      return { domains, profile, success: true };
+    } catch (error) {
+      const failure = describeLoginDataFailure(error);
+      logger.warn(`Failed to preview ${source} login data: ${failure.errorCode}`);
+      return { domains: [], ...failure, success: false };
+    }
+  }
+
+  @IpcMethod()
+  async importBrowserLoginData({
+    domains,
+    source,
+  }: BrowserLoginDataImportParams): Promise<BrowserSidebarImportResult> {
     try {
       const browserSession = electronSession.fromPartition(BROWSER_PARTITION);
-      const importedCount = await importChromeLoginData(browserSession);
-      return { importedCount, success: true };
+      const summary = await importBrowserLoginData(browserSession, { domains, source });
+      // Counts and host names only — cookie values must never reach the logs.
+      logger.info(
+        `Imported ${summary.importedCount} ${source} cookies for ${summary.importedDomainCount} hosts; ` +
+          `${summary.failedDomains.length} hosts failed`,
+      );
+      return { ...summary, success: true };
     } catch (error) {
-      logger.error('Failed to import Chrome login information:', error);
-      return {
-        error: error instanceof Error ? error.message : String(error),
-        importedCount: 0,
-        success: false,
-      };
+      const failure = describeLoginDataFailure(error);
+      logger.warn(`Failed to import ${source} login data: ${failure.errorCode}`);
+      return { ...failure, importedCount: 0, success: false };
     }
   }
 
