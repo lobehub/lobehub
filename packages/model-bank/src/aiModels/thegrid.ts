@@ -1,11 +1,11 @@
 import type { AIChatModelCard } from '../types/aiModel';
 
-// The Grid addresses capability tiers rather than a specific lab's model name; a tier
+// The Grid AI addresses capability tiers rather than a specific lab's model name; a tier
 // routes to a current model for that tier. Lab-pinned instruments use the `*-latest` ids.
 // Catalog: https://api.thegrid.ai/v1/models
 // Specs:   https://thegrid.ai/docs/instrument-specifications/current-instruments
 //
-// No `pricing` block: The Grid is market-priced and the catalog currently publishes no
+// No `pricing` block: The Grid AI is market-priced and the catalog currently publishes no
 // per-token rate, so any static figure here would be wrong. The model fetcher is enabled
 // on the provider so the live catalog stays authoritative.
 

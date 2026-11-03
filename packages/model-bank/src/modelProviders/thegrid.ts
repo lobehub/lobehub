@@ -5,11 +5,11 @@ const TheGrid: ModelProviderCard = {
   chatModels: [],
   checkModel: 'text-standard',
   description:
-    'The Grid is an inference marketplace that serves models from several labs behind one OpenAI-compatible API, addressing capability tiers rather than a specific model name.',
+    'The Grid AI is an inference marketplace that serves models from several labs behind one OpenAI-compatible API, addressing capability tiers rather than a specific model name.',
   id: 'thegrid',
   modelList: { showModelFetcher: true },
   modelsUrl: 'https://api.thegrid.ai/v1/models',
-  name: 'The Grid',
+  name: 'The Grid AI',
   settings: {
     proxyUrl: {
       placeholder: 'https://api.thegrid.ai/v1',
