@@ -115,24 +115,27 @@ export const MemberSelection = ({
 
   return (
     <Flexbox gap={12}>
-      <AsyncBoundary
-        data={agents}
-        error={options.error}
-        isLoading={!agents && !options.error}
-        onRetry={options.retry}
-      >
-        <div {...stylex.props(styles.picker)}>
-          <Flexbox gap={8} {...stylex.props(styles.pane)}>
-            <SearchBar
-              allowClear
-              autoFocus
-              placeholder={t(people ? 'invite.search' : 'searchAgents')}
-              value={search}
-              variant="filled"
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <Flexbox gap={people || priority.length ? 8 : 0} {...stylex.props(styles.pane)}>
-              {people && <PeopleOptions people={people} search={search} />}
+      <div {...stylex.props(styles.picker)}>
+        <Flexbox gap={8} {...stylex.props(styles.pane)}>
+          <SearchBar
+            allowClear
+            autoFocus
+            placeholder={t(people ? 'invite.search' : 'searchAgents')}
+            value={search}
+            variant="filled"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <Flexbox gap={people || priority.length ? 8 : 0} {...stylex.props(styles.pane)}>
+            {people && <PeopleOptions people={people} search={search} />}
+            {people && !agents && <SectionTitle>{t('agents')}</SectionTitle>}
+            {/* People load on their own, so an Agent-list failure must not take them down. */}
+            <AsyncBoundary
+              data={agents}
+              error={options.error}
+              errorVariant={people ? 'inline' : 'block'}
+              isLoading={!agents && !options.error}
+              onRetry={options.retry}
+            >
               {priority.length > 0 && (
                 <Flexbox gap={2}>
                   <SectionTitle>{t('projectAgents')}</SectionTitle>
@@ -153,54 +156,54 @@ export const MemberSelection = ({
                   <AgentSelectionEmpty search={!!search.trim()} variant="noAvailable" />
                 )}
               </Flexbox>
-            </Flexbox>
+            </AsyncBoundary>
           </Flexbox>
-          <Flexbox gap={8} {...stylex.props(styles.pane, styles.selected)}>
-            <Text fontSize={12} type="secondary">
-              {t('memberSelection.selectedAgents', { ns: 'chat', count: selectedCount })}
-            </Text>
-            {!selectedCount &&
-              (emptyHint ? (
-                <AgentSelectionEmpty description={emptyHint} />
-              ) : people ? (
-                <Text fontSize={12} type="secondary" {...stylex.props(styles.section)}>
-                  {t('invite.noSelected')}
-                </Text>
-              ) : (
-                <AgentSelectionEmpty variant="noSelected" />
-              ))}
-            {people?.value.map((person) => (
-              <SelectedPerson
-                key={person.userId}
-                person={person}
-                onRemove={() =>
-                  people.onChange((current) =>
-                    current.filter((item) => item.userId !== person.userId),
-                  )
-                }
-              />
+        </Flexbox>
+        <Flexbox gap={8} {...stylex.props(styles.pane, styles.selected)}>
+          <Text fontSize={12} type="secondary">
+            {t('memberSelection.selectedAgents', { ns: 'chat', count: selectedCount })}
+          </Text>
+          {!selectedCount &&
+            (emptyHint ? (
+              <AgentSelectionEmpty description={emptyHint} />
+            ) : people ? (
+              <Text fontSize={12} type="secondary" {...stylex.props(styles.section)}>
+                {t('invite.noSelected')}
+              </Text>
+            ) : (
+              <AgentSelectionEmpty variant="noSelected" />
             ))}
-            {!!devices.error && (
-              <AsyncError
-                error={devices.error}
-                retrying={devices.isValidating}
-                title={t('environment.devicesFailed')}
-                variant="inline"
-                onRetry={() => void devices.mutate()}
-              />
-            )}
-            {value.map((draft) => (
-              <SelectedAgent
-                agent={agents?.find((agent) => agent.id === draft.agentId)}
-                devices={devices}
-                draft={draft}
-                key={draft.agentId}
-                setDrafts={onChange}
-              />
-            ))}
-          </Flexbox>
-        </div>
-      </AsyncBoundary>
+          {people?.value.map((person) => (
+            <SelectedPerson
+              key={person.userId}
+              person={person}
+              onRemove={() =>
+                people.onChange((current) =>
+                  current.filter((item) => item.userId !== person.userId),
+                )
+              }
+            />
+          ))}
+          {!!devices.error && (
+            <AsyncError
+              error={devices.error}
+              retrying={devices.isValidating}
+              title={t('environment.devicesFailed')}
+              variant="inline"
+              onRetry={() => void devices.mutate()}
+            />
+          )}
+          {value.map((draft) => (
+            <SelectedAgent
+              agent={agents?.find((agent) => agent.id === draft.agentId)}
+              devices={devices}
+              draft={draft}
+              key={draft.agentId}
+              setDrafts={onChange}
+            />
+          ))}
+        </Flexbox>
+      </div>
     </Flexbox>
   );
 };
