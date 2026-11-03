@@ -37,6 +37,7 @@ export interface RunCapture {
 export interface CaptureOptions {
   browser: Browser;
   conditions: ConditionConfig;
+  onCondition?: (condition: ConditionCapture) => void;
   states?: readonly CaptureState[];
   urls: Record<Side, string>;
 }
@@ -110,6 +111,7 @@ export const capturePage = async (
 export const captureRun = async ({
   browser,
   conditions,
+  onCondition,
   states,
   urls,
 }: CaptureOptions): Promise<RunCapture> => {
@@ -160,13 +162,19 @@ export const captureRun = async ({
       capturePage(browser, urls.head, options, pageErrors),
     ]);
     await Promise.all(loads.map(({ page }) => page.close()));
-    captures.push({
+    const captured: ConditionCapture = {
       base: loads[0].snapshots,
       baseAgain: loads[1].snapshots,
       condition: conditionLabel(options),
       head: loads[2].snapshots,
       ...options,
-    });
+    };
+    if (!onCondition) {
+      captures.push(captured);
+      continue;
+    }
+    onCondition(captured);
+    captures.push({ ...captured, base: {}, baseAgain: {}, head: {} });
   }
   return {
     caseGaps: caseGapsOf(unmodeled.base ?? {}, unmodeled.head ?? {}),

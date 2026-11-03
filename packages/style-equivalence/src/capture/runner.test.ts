@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { analyzeRun } from '../analyze/diff';
+import { analyzeRun, createRunAnalyzer } from '../analyze/diff';
 import { launchBrowser } from './browser';
 import { captureRun } from './runner';
 import { serveDirectories } from './staticServer';
@@ -127,6 +127,24 @@ describe('captureRun + analyzeRun', () => {
   it('treats renamed keyframes with the same frames as equal after the animation ends', async () => {
     const [result] = await run('base-fade', 'head-fade');
     expect(result).toMatchObject({ differingConditions: [], status: 'equal' });
+  });
+
+  it('streams conditions to an analyzer without keeping their snapshots', async () => {
+    const analyzer = createRunAnalyzer();
+    const capture = await captureRun({
+      browser,
+      conditions: { themeAttribute: 'data-theme', themes: ['light', 'dark'], widths: [1280] },
+      onCondition: analyzer.add,
+      urls: { base: `${server.url}/base-dark/`, head: `${server.url}/head-dark/` },
+    });
+    expect(capture.conditions.every((condition) => !Object.keys(condition.head).length)).toBe(true);
+    const [result] = analyzer.finish(capture.caseGaps);
+    expect(result.differingConditions).toEqual([
+      'dark/1280/default',
+      'dark/1280/hover-chain',
+      'dark/1280/hover-target',
+      'dark/1280/focus-visible',
+    ]);
   });
 
   it('reports equal pages as equal', async () => {

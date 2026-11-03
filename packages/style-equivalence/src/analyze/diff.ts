@@ -1,4 +1,4 @@
-import type { RunCapture, SectionSnapshot } from '../capture/runner';
+import type { ConditionCapture, RunCapture, SectionSnapshot } from '../capture/runner';
 import { compareSnapshots, type StyleDifference, type StyleSnapshot } from '../capture/snapshot';
 
 const LOGICAL: Record<string, string> = {
@@ -113,7 +113,7 @@ const isSnapshot = (
 const meaningful = (before: StyleSnapshot, after: StyleSnapshot) =>
   compareSnapshots(before, after).filter((item) => !item.diagnosticReason);
 
-export const analyzeRun = (capture: RunCapture): CaseResult[] => {
+export const createRunAnalyzer = () => {
   const results = new Map<string, CaseResult>();
   const resultFor = (key: string) => {
     const existing = results.get(key);
@@ -122,7 +122,7 @@ export const analyzeRun = (capture: RunCapture): CaseResult[] => {
       comboDifferences: [],
       differingConditions: [],
       errors: [],
-      gaps: capture.caseGaps?.[key] ?? [],
+      gaps: [],
       key,
       rootCauses: [],
       status: 'equal',
@@ -131,7 +131,7 @@ export const analyzeRun = (capture: RunCapture): CaseResult[] => {
     results.set(key, created);
     return created;
   };
-  for (const condition of capture.conditions)
+  const add = (condition: ConditionCapture) => {
     for (const [section, base] of Object.entries(condition.base)) {
       const separator = section.lastIndexOf('|');
       const result = resultFor(section.slice(0, separator));
@@ -176,13 +176,25 @@ export const analyzeRun = (capture: RunCapture): CaseResult[] => {
         )
           result.rootCauses.push(cause);
     }
-  for (const result of results.values())
-    result.status = result.errors.length
-      ? 'error'
-      : result.unstableConditions.length
-        ? 'unstable'
-        : result.differingConditions.length
-          ? 'difference'
-          : 'equal';
-  return [...results.values()];
+  };
+  const finish = (caseGaps: Record<string, string[]> = {}) => {
+    for (const result of results.values()) {
+      result.gaps = caseGaps[result.key] ?? [];
+      result.status = result.errors.length
+        ? 'error'
+        : result.unstableConditions.length
+          ? 'unstable'
+          : result.differingConditions.length
+            ? 'difference'
+            : 'equal';
+    }
+    return [...results.values()];
+  };
+  return { add, finish };
+};
+
+export const analyzeRun = (capture: RunCapture): CaseResult[] => {
+  const analyzer = createRunAnalyzer();
+  capture.conditions.forEach(analyzer.add);
+  return analyzer.finish(capture.caseGaps);
 };
