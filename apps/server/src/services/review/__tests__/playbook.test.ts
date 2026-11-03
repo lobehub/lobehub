@@ -57,10 +57,13 @@ describe('ReviewPlaybookService (Playbook rule checks)', () => {
   let checkMode: CheckMode;
   let verdicts: Map<string, any>;
   let warrantyRuleId: string;
+  // Lets a test make the model ignore the pinned quote in a suggestion.
+  let suggestionTarget: string | null;
   let llm: ReviewLlm & { generateObject: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     db = await getTestDB();
+    suggestionTarget = null;
     userId = `usr_${randomUUID()}`;
     await db.insert(users).values({ id: userId });
 
@@ -156,7 +159,7 @@ describe('ReviewPlaybookService (Playbook rule checks)', () => {
         }
 
         if (request.schemaName === 'ReviewSuggestion') {
-          const targetQuote = parseTargetQuote(request.user);
+          const targetQuote = suggestionTarget ?? parseTargetQuote(request.user);
           return {
             rationale: '把验收方式写成分阶段验收，付款与质保起算随之明确。',
             replacementText: targetQuote.includes('质保') ? EDITED_WARRANTY : EDITED_ACCEPTANCE,
@@ -407,6 +410,32 @@ describe('ReviewPlaybookService (Playbook rule checks)', () => {
     // compliant clause that merely came first.
     const withSuggestion = await service.suggestFix({ checkResultId: failed.id });
     expect(withSuggestion.suggestion?.original).toBe(VIOLATING_ACCEPTANCE);
+  });
+
+  it('rejects a suggestion that anchors on a clause other than the selected violating quote', async () => {
+    const { acceptance, session } = await confirmRulesFromDrafts();
+    verdicts.set(acceptance.id, {
+      confidence: 0.9,
+      evidence: [
+        { kind: 'supporting', quote: SUPPORTING_PAYMENT },
+        { kind: 'violating', quote: VIOLATING_ACCEPTANCE },
+      ],
+      explanation: '第 4 条只写最终验收，没有分阶段验收。',
+      verdict: 'failed',
+    });
+
+    const checked = await service.runChecks({ sessionId: session.id });
+    const failed = checked.find((item) => item.ruleId === acceptance.id)!;
+
+    // The model ignores the pinned quote and rewrites the compliant payment
+    // clause. That clause is in the document, so a plain `locateQuote` check
+    // passes and Apply would edit an unrelated passage.
+    suggestionTarget = SUPPORTING_PAYMENT;
+
+    await expect(service.suggestFix({ checkResultId: failed.id })).rejects.toMatchObject({
+      code: 'ANCHOR_LOST',
+    });
+    expect((await model.findCheckResultById(failed.id))?.suggestion ?? null).toBeNull();
   });
 
   it('falls back to a pattern hint and flags duplicates when proposing from a description', async () => {

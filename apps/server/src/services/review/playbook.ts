@@ -544,10 +544,23 @@ export class ReviewPlaybookService {
     }
 
     const suggestion = parsed.data;
-    if (!locateQuote(documentText, suggestion.targetQuote)) {
+    // The prompt pins the edit to the quote picked above. A model that rewrites
+    // another clause still passes `locateQuote` — that clause is in the document
+    // too — and `original` is persisted verbatim, so Apply would replace an
+    // unrelated passage. Require the returned span to sit inside the selected
+    // quote instead of anywhere in the document.
+    const selected = locateQuote(documentText, target.quote);
+    const returned = locateQuote(documentText, suggestion.targetQuote);
+    const insideSelected =
+      !!selected &&
+      !!returned &&
+      returned.start >= selected.start &&
+      returned.start + returned.anchor.quote.length <=
+        selected.start + selected.anchor.quote.length;
+    if (!insideSelected) {
       throw new ReviewServiceError(
         'ANCHOR_LOST',
-        'The suggested target text is not present in the document',
+        'The suggested target text is not the quote selected for this item',
       );
     }
     if (suggestion.replacementText === suggestion.targetQuote) {
