@@ -884,6 +884,29 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+straico-model-1,+straico-model-2=straico-special`
 
+## SOKKAN Router
+
+### `SOKKAN_API_KEY`
+
+- Type: Required
+- Description: The API key created on the SOKKAN Router account page. Setting it enables the provider for all users.
+- Default: -
+- Example: `skr_xxxxxx...xxxxxx`
+
+### `SOKKAN_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the base URL of the SOKKAN Router API.
+- Default: `https://router.sokkan.ch/v1`
+- Example: `https://router.sokkan.ch/v1`
+
+### `SOKKAN_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the SOKKAN Router model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+qwen/qwen3.6-35b-a3b-eu,+openai/gpt-oss-120b`
+
 ## Unsloth
 
 Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/docs/usage/providers/unsloth) for browser authentication and desktop CORS limitations.
