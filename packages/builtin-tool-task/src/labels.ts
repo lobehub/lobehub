@@ -4,7 +4,11 @@ import {
   type TaskLabelRegistryEntry,
 } from '@lobechat/types';
 
-export type ToolLabelResolution = { error: string; ids?: never } | { error?: never; ids: string[] };
+/** `error` is set when any name is unknown; `ids` is then empty. */
+export interface ToolLabelResolution {
+  error?: string;
+  ids: string[];
+}
 
 /**
  * Resolve label names an agent passed (`Bug`, `Type/Bug`) against the scope's
@@ -37,6 +41,7 @@ export const resolveToolLabelIds = (
   if (unresolved.length > 0) {
     const available = registry.filter((label) => !label.isGroup).length;
     return {
+      ids: [],
       error: `${describeUnresolvedTaskLabels(unresolved)}\n${
         available > 0
           ? 'Use only existing label names; labels are created by the user in task settings.'
