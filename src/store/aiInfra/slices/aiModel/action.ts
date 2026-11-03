@@ -10,6 +10,8 @@ import type {
   ToggleAiModelEnableParams,
   UpdateAiModelParams,
 } from 'model-bank';
+import { allModels as jzstokenBuiltinModels } from 'model-bank/jzstoken';
+import { ModelProvider } from 'model-bank/modelProvider';
 
 import {
   createReplicaSlice,
@@ -29,7 +31,7 @@ import {
   aiModelReasoningConfigResource,
 } from './projection';
 import { aiModelSelectors } from './selectors';
-import { deduplicateRemoteModels } from './utils';
+import { deduplicateRemoteModels, enabledBuiltinIdsMissingFromCatalog } from './utils';
 
 const MAX_DUPLICATE_MODEL_IDS_IN_WARNING = 3;
 
@@ -182,7 +184,24 @@ export class AiModelActionImpl {
       });
       const { duplicateIds, models, removedCount } = deduplicateRemoteModels(remoteModels);
 
+      // Builtin cards are merged back into the provider list, and this upsert only
+      // writes models the catalog returned. For JZSTOKEN, turn off enabled builtins
+      // the key did not return so a dedicated catalog cannot leave them selectable.
+      const missingBuiltinIds =
+        providerId === ModelProvider.JZSTOKEN
+          ? enabledBuiltinIdsMissingFromCatalog(
+              jzstokenBuiltinModels.map((model) => model.id),
+              new Set(models.map((model) => model.id)),
+              this.#get().aiModelListMap[providerId] ?? [],
+            )
+          : [];
+
       await this.#get().batchUpdateAiModels(models);
+
+      if (missingBuiltinIds.length > 0) {
+        await aiModelService.batchToggleAiModels(providerId, missingBuiltinIds, false);
+        await this.#get().refreshAiModelList();
+      }
 
       if (removedCount > 0) {
         const visibleDuplicateIds = duplicateIds.slice(0, MAX_DUPLICATE_MODEL_IDS_IN_WARNING);

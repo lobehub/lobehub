@@ -5,15 +5,18 @@ const jzstokenChatModels: AIChatModelCard[] = [
     description:
       'JZSTOKEN flagship model endpoint. Check the provider catalog for current context and pricing.',
     displayName: 'JZS Max 3.0',
+    // Available before a catalog fetch so a dedicated jzs-max-3.0 key can be used immediately.
     enabled: true,
     family: 'jzs',
     id: 'jzs-max-3.0',
     type: 'chat',
   },
+  // Account-scoped models. Builtin cards are merged back into the provider list, so
+  // leaving these enabled would keep them selectable on a key whose catalog omits them.
   {
     description: 'GPT-5.6 Terra through JZSTOKEN.',
     displayName: 'GPT-5.6 Terra',
-    enabled: true,
+    enabled: false,
     family: 'gpt',
     generation: 'gpt-5.6',
     id: 'gpt-5.6-terra',
@@ -22,7 +25,7 @@ const jzstokenChatModels: AIChatModelCard[] = [
   {
     description: 'Claude Sonnet 5 through JZSTOKEN.',
     displayName: 'Claude Sonnet 5',
-    enabled: true,
+    enabled: false,
     family: 'claude-sonnet',
     generation: 'claude-5',
     id: 'claude-sonnet-5',
@@ -31,7 +34,7 @@ const jzstokenChatModels: AIChatModelCard[] = [
   {
     description: 'DeepSeek V4 Pro through JZSTOKEN.',
     displayName: 'DeepSeek V4 Pro',
-    enabled: true,
+    enabled: false,
     family: 'deepseek',
     generation: 'deepseek-v4',
     id: 'deepseek-v4-pro',
@@ -40,7 +43,7 @@ const jzstokenChatModels: AIChatModelCard[] = [
   {
     description: 'Kimi K2.8 through JZSTOKEN.',
     displayName: 'Kimi K2.8',
-    enabled: true,
+    enabled: false,
     family: 'kimi',
     generation: 'kimi-k2',
     id: 'kimi-k2.8',

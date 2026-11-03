@@ -477,6 +477,99 @@ describe('AiModelAction', () => {
       });
     });
 
+    it('disables enabled JZSTOKEN builtins omitted by the fetched catalog', async () => {
+      const mockRemoteModels = [
+        { displayName: 'JZS Max 3.0', enabled: true, id: 'jzs-max-3.0', type: 'chat' },
+      ];
+
+      act(() => {
+        useStore.setState({
+          activeAiProvider: 'jzstoken',
+          aiModelListMap: {
+            jzstoken: [
+              { enabled: true, id: 'jzs-max-3.0', type: 'chat' },
+              { enabled: true, id: 'gpt-5.6-terra', type: 'chat' },
+              { enabled: false, id: 'claude-sonnet-5', type: 'chat' },
+              { enabled: true, id: 'deepseek-v4-pro', type: 'chat' },
+              { enabled: true, id: 'custom-extra', type: 'chat' },
+            ] as AiProviderModelListItem[],
+          },
+        });
+      });
+
+      const { result } = renderHook(() => useStore());
+      const batchUpdateSpy = vi
+        .spyOn(aiModelService, 'batchUpdateAiModels')
+        .mockResolvedValue(undefined as any);
+      const batchToggleSpy = vi
+        .spyOn(aiModelService, 'batchToggleAiModels')
+        .mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'refreshAiModelList').mockResolvedValue(undefined);
+
+      vi.resetModules();
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      await act(async () => {
+        await result.current.fetchRemoteModelList('jzstoken');
+      });
+
+      await waitFor(() => {
+        expect(batchToggleSpy).toHaveBeenCalled();
+      });
+
+      expect(batchToggleSpy).toHaveBeenCalledWith(
+        'jzstoken',
+        ['gpt-5.6-terra', 'deepseek-v4-pro'],
+        false,
+      );
+      expect(batchUpdateSpy).toHaveBeenCalledWith(
+        'jzstoken',
+        expect.arrayContaining([expect.objectContaining({ enabled: true, id: 'jzs-max-3.0' })]),
+      );
+    });
+
+    it('does not disable models missing from a non-JZSTOKEN catalog', async () => {
+      const mockRemoteModels = [{ enabled: true, id: 'remote-1', type: 'chat' }];
+
+      act(() => {
+        useStore.setState({
+          aiModelListMap: {
+            'test-provider': [
+              { enabled: true, id: 'remote-1', type: 'chat' },
+              { enabled: true, id: 'gpt-5.6-terra', type: 'chat' },
+            ] as AiProviderModelListItem[],
+          },
+        });
+      });
+
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(aiModelService, 'batchUpdateAiModels').mockResolvedValue(undefined as any);
+      const batchToggleSpy = vi
+        .spyOn(aiModelService, 'batchToggleAiModels')
+        .mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'refreshAiModelList').mockResolvedValue(undefined);
+
+      vi.resetModules();
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      await act(async () => {
+        await result.current.fetchRemoteModelList('test-provider');
+      });
+
+      await waitFor(() => {
+        expect(aiModelService.batchUpdateAiModels).toHaveBeenCalled();
+      });
+      expect(batchToggleSpy).not.toHaveBeenCalled();
+    });
+
     it('should not update if remote service returns no data', async () => {
       const { result } = renderHook(() => useStore());
       const batchUpdateSpy = vi
