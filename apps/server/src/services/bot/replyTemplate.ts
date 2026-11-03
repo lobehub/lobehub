@@ -978,7 +978,9 @@ export function renderDmRejected(reason: 'disabled' | 'allowlist', lng?: BotRepl
  *
  * The bot's owner bypasses Group Policy (see `passGatesOrNotify`), so the bot
  * *does* speak in groups — `disabled` really means "only the owner may use it
- * here" — or nobody, when no owner identity is configured. The copy therefore
+ * in the groups it has joined" — or nobody, when no owner identity is
+ * configured. (Telegram Guest Mode summons skip Group Policy and follow Guest
+ * Policy instead, so they never reach this notice.) The copy therefore
  * names the missing permission instead of claiming the bot can't talk in
  * groups, never promises the owner can (it may be unset), and never points the
  * sender to a DM (the DM policy may reject them just the same).
