@@ -310,14 +310,14 @@ describe('mapFeatureFlagsEnvToState', () => {
   });
 
   it('should keep MCP Apps views off by default and enable them per user or globally', () => {
-    expect(DEFAULT_FEATURE_FLAGS.mcp_app).toBe(false);
-    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableMcpApp).toBe(false);
+    expect(DEFAULT_FEATURE_FLAGS.mcp_apps).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableMcpApps).toBe(false);
 
-    expect(mapFeatureFlagsEnvToState({ mcp_app: true }).enableMcpApp).toBe(true);
+    expect(mapFeatureFlagsEnvToState({ mcp_apps: true }).enableMcpApps).toBe(true);
 
-    const config = { mcp_app: ['user-123'] };
-    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableMcpApp).toBe(true);
-    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApp).toBe(false);
+    const config = { mcp_apps: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableMcpApps).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
   });
 
   it('should keep the rail layout off by default and enable it per user or globally', () => {

@@ -62,10 +62,10 @@ export type IFeatureFlagsState = {
    */
   enableLlmRelay: boolean | undefined;
   /**
-   * MCP Apps views in the conversation (`mcp_app`). Off by default: tool results
+   * MCP Apps views in the conversation (`mcp_apps`). Off by default: tool results
    * that declare a `ui://` view render as plain results.
    */
-  enableMcpApp: boolean | undefined;
+  enableMcpApps: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;

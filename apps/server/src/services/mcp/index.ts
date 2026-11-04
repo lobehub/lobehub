@@ -245,7 +245,7 @@ export class MCPService {
      */
     fromApp?: boolean;
     /**
-     * Runtime flag `mcp_app` for the calling user. On: the session advertises
+     * Runtime flag `mcp_apps` for the calling user. On: the session advertises
      * MCP Apps and the result carries the tool's `ui://` view. Off: the call
      * runs as it did before MCP Apps, with no capability and no tool lookup.
      */

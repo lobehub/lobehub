@@ -573,7 +573,7 @@ describe('MCPService', () => {
       expect(result.state.isError).toBe(true);
     });
 
-    it("refuses a view's call while the mcp_app flag is off", async () => {
+    it("refuses a view's call while the mcp_apps flag is off", async () => {
       const result = await mcpService.callTool({
         argsStr: '{}',
         clientParams: mockParams,
@@ -586,7 +586,7 @@ describe('MCPService', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should neither look up nor attach a view while the mcp_app flag is off', async () => {
+    it('should neither look up nor attach a view while the mcp_apps flag is off', async () => {
       mockClient.getToolUiResourceUri.mockResolvedValue('ui://weather/view.html');
       mockClient.callTool.mockResolvedValue({
         content: [{ type: 'text', text: 'sunny' }],

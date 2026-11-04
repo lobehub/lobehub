@@ -11,12 +11,12 @@ describe('isMcpAppEnabled', () => {
     vi.clearAllMocks();
   });
 
-  it('follows the mcp_app flag for the user', async () => {
-    getFlags.mockResolvedValue({ enableMcpApp: true });
+  it('follows the mcp_apps flag for the user', async () => {
+    getFlags.mockResolvedValue({ enableMcpApps: true });
     await expect(isMcpAppEnabled('user-1')).resolves.toBe(true);
     expect(getFlags).toHaveBeenCalledWith('user-1');
 
-    getFlags.mockResolvedValue({ enableMcpApp: false });
+    getFlags.mockResolvedValue({ enableMcpApps: false });
     await expect(isMcpAppEnabled('user-1')).resolves.toBe(false);
   });
 

@@ -10,14 +10,14 @@ import type { AssistantContentBlock } from '@/types/index';
 import Group from './Group';
 
 const { flags, mounts, state } = vi.hoisted(() => ({
-  flags: { enableMcpApp: true },
+  flags: { enableMcpApps: true },
   mounts: [] as string[],
   state: { operations: [] as { metadata: Record<string, unknown>; status: string }[] },
 }));
 
 vi.mock('@/store/serverConfig', () => ({
   serverConfigSelectors: {
-    enableMcpApp: (s: { featureFlags: typeof flags }) => s.featureFlags.enableMcpApp,
+    enableMcpApps: (s: { featureFlags: typeof flags }) => s.featureFlags.enableMcpApps,
   },
   useServerConfigStore: (selector: (s: unknown) => unknown) => selector({ featureFlags: flags }),
 }));
@@ -88,7 +88,7 @@ const blocks: AssistantContentBlock[] = [
 
 afterEach(() => {
   cleanup();
-  flags.enableMcpApp = true;
+  flags.enableMcpApps = true;
   mounts.length = 0;
   state.operations = [];
 });
@@ -128,8 +128,8 @@ describe('Group with an MCP App view', () => {
     expect(mounts.filter((id) => id === 'step-3')).toHaveLength(1);
   });
 
-  it('does not remount the turn when the mcp_app flag arrives after the first paint', () => {
-    flags.enableMcpApp = false;
+  it('does not remount the turn when the mcp_apps flag arrives after the first paint', () => {
+    flags.enableMcpApps = false;
     const plainBlocks = [
       { content: '', id: 'step-1', tools: [tool('t1', 'search_city')] },
       { content: 'Paris looks good for a day out.', id: 'step-2' },
@@ -138,7 +138,7 @@ describe('Group with an MCP App view', () => {
     expect(mounts).toEqual(['step-1', 'step-2']);
 
     // Feature flags load; a changed prop lets the memoized group re-render.
-    flags.enableMcpApp = true;
+    flags.enableMcpApps = true;
     rerender(
       <Group blocks={plainBlocks} disableEditing={false} id="assistant-1" messageIndex={0} />,
     );
@@ -147,8 +147,8 @@ describe('Group with an MCP App view', () => {
     expect(mounts).toEqual(['step-1', 'step-2']);
   });
 
-  it('folds the view with the rest of the process while the mcp_app flag is off', () => {
-    flags.enableMcpApp = false;
+  it('folds the view with the rest of the process while the mcp_apps flag is off', () => {
+    flags.enableMcpApps = false;
     render(
       <Group enableProcessFold isLatestItem blocks={blocks} id="assistant-1" messageIndex={0} />,
     );

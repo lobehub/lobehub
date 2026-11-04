@@ -26,7 +26,7 @@ export class ConnectorToolCallError extends Error {
 export interface ConnectorExecContext extends ConnectorToolSyncContext {
   /** Visibility-aware: decides whether the caller may act as the given agent. */
   agentModel: Pick<AgentModel, 'existsById'>;
-  /** `userId` decides the caller's `mcp_app` flag. */
+  /** `userId` decides the caller's `mcp_apps` flag. */
   userId?: string | null;
 }
 
@@ -150,7 +150,7 @@ export const callConnectorToolById = async (
  * Read an MCP Apps `ui://` resource from a connector's server, so the chat can
  * render a connector tool result's interactive view. Same connector checks as
  * {@link callConnectorToolById}, minus the per-tool ones. Refused while the
- * `mcp_app` flag is off, since the read opens a session that advertises MCP Apps.
+ * `mcp_apps` flag is off, since the read opens a session that advertises MCP Apps.
  */
 export const readConnectorUiResourceById = async (
   params: { agentId?: string; identifier: string; uri: string },

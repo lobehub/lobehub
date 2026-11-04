@@ -15,8 +15,8 @@ export const serverConfigSelectors = {
   enableTopicPreview: (s: ServerConfigStore) => s.featureFlags.enableTopicPreview === true,
   enableLobehubSkill: (s: ServerConfigStore) => s.serverConfig.enableLobehubSkill || false,
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
-  /** Runtime flag `mcp_app`: MCP Apps views in the conversation. */
-  enableMcpApp: (s: ServerConfigStore) => s.featureFlags.enableMcpApp === true,
+  /** Runtime flag `mcp_apps`: MCP Apps views in the conversation. */
+  enableMcpApps: (s: ServerConfigStore) => s.featureFlags.enableMcpApps === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
     s.serverConfig.enableMarketTrustedClient || false,
   enablePageCollab: (s: ServerConfigStore) => s.serverConfig.enablePageCollab || false,

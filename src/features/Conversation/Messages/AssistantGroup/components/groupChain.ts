@@ -269,15 +269,15 @@ export const hasPendingIntervention = (blocks: RenderableAssistantContentBlock[]
 export const buildChainView = (
   chain: GroupChainInput,
   state: {
-    /** Runtime flag `mcp_app`: MCP App views break out of collapsed runs too. */
-    enableMcpApp?: boolean;
+    /** Runtime flag `mcp_apps`: MCP App views break out of collapsed runs too. */
+    enableMcpApps?: boolean;
     hasActiveOperation: boolean;
     isGenerating: boolean;
   },
 ): GroupChainView => {
   const { isGenerating } = state;
   const partitioned = partitionAssistantGroupBlocks(chain.blocks, {
-    isBreakoutTool: state.enableMcpApp ? isBreakoutTool : isImageBearingTool,
+    isBreakoutTool: state.enableMcpApps ? isBreakoutTool : isImageBearingTool,
     isGenerating,
     toolsPhaseComplete: isGenerating
       ? areWorkflowToolsComplete(chain.blocks.flatMap((block) => block.tools ?? []))

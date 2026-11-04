@@ -54,7 +54,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   );
   // MCP Apps results open by default so their interactive view is visible
   const isMcpApp = useServerConfigStore(
-    (s) => serverConfigSelectors.enableMcpApp(s) && !!getMcpAppFromState(result?.state),
+    (s) => serverConfigSelectors.enableMcpApps(s) && !!getMcpAppFromState(result?.state),
   );
   const isPending = intervention?.status === 'pending';
   const isReject = intervention?.status === 'rejected';

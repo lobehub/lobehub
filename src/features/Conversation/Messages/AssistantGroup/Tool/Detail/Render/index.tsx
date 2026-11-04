@@ -26,7 +26,7 @@ interface ToolRenderProps {
 const ToolRender = memo<ToolRenderProps>(
   ({ showCustomToolRender, content, messageId, plugin, pluginState, toolCallId }) => {
     const hasCustomRender = !!getBuiltinRender(plugin?.identifier, plugin?.apiName);
-    const enableMcpApp = useServerConfigStore(serverConfigSelectors.enableMcpApp);
+    const enableMcpApps = useServerConfigStore(serverConfigSelectors.enableMcpApps);
 
     // Tools whose card renders the stored body — the read path projected it away
     // and this component is where it comes back. Safe to fetch on mount: the
@@ -70,7 +70,7 @@ const ToolRender = memo<ToolRenderProps>(
     );
 
     // MCP Apps: the tool declared an interactive `ui://` view for its result
-    const mcpApp = enableMcpApp ? getMcpAppFromState(resolvedState) : undefined;
+    const mcpApp = enableMcpApps ? getMcpAppFromState(resolvedState) : undefined;
     if (mcpApp && showCustomToolRender && plugin) {
       return (
         <McpAppView

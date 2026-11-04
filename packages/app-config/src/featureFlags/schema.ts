@@ -70,7 +70,7 @@ export const FeatureFlagsSchema = z.object({
    * stays on screen when the turn folds. Off: such results render as plain
    * tool results. Array values are user ids.
    */
-  mcp_app: FeatureFlagValue.optional(),
+  mcp_apps: FeatureFlagValue.optional(),
 
   /**
    * Trial gate for the rail layout: icon rail + one wrapped list column and
@@ -197,7 +197,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   im_layout: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
-  mcp_app: false,
+  mcp_apps: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   channel: false,
@@ -246,7 +246,7 @@ export const mapFeatureFlagsEnvToState = (
     ),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
-    enableMcpApp: evaluateFeatureFlag(config.mcp_app, userId, 'mcp_app'),
+    enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
     enableImLayout: evaluateFeatureFlag(config.im_layout, userId, 'im_layout'),
     enableChannels: evaluateFeatureFlag(config.channel, userId, 'channel'),
     enableTopicPreview: evaluateFeatureFlag(config.topic_preview, userId, 'topic_preview'),

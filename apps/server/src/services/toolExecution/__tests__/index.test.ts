@@ -741,7 +741,7 @@ describe('ToolExecutionService', () => {
     });
 
     it.each([true, false])(
-      "passes the run owner's mcp_app flag (%s) to the server MCP call",
+      "passes the run owner's mcp_apps flag (%s) to the server MCP call",
       async (enabled) => {
         mcpAppEnabled.mockResolvedValueOnce(enabled);
         const callTool = vi.fn().mockResolvedValue({ ok: true });

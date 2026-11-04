@@ -137,18 +137,18 @@ const Group = memo<GroupChildrenProps>(
     );
     // Off: no view is lifted or broken out, and the turn renders as it did
     // before MCP Apps.
-    const enableMcpApp = useServerConfigStore(serverConfigSelectors.enableMcpApp);
+    const enableMcpApps = useServerConfigStore(serverConfigSelectors.enableMcpApps);
 
     const views = useMemo(
       () =>
         chainsWithFinishTypes.map((chain, index) =>
           buildChainView(chain, {
-            enableMcpApp,
+            enableMcpApps,
             hasActiveOperation: !!activeFlags[index],
             isGenerating: !!generatingFlags[index],
           }),
         ),
-      [activeFlags, chainsWithFinishTypes, enableMcpApp, generatingFlags],
+      [activeFlags, chainsWithFinishTypes, enableMcpApps, generatingFlags],
     );
     const lastView = views.at(-1)!;
     const isGenerating = lastView.isGenerating;
@@ -182,7 +182,7 @@ const Group = memo<GroupChildrenProps>(
         {/* Keyed by the segment's place in the whole turn, not in this slice:
             folding changes the slice, and a positional key would remount a
             lifted view that stays on screen. The key does not depend on the
-            mcp_app flag, so flags arriving after the first paint don't remount
+            mcp_apps flag, so flags arriving after the first paint don't remount
             every segment. */}
         {segments.map((segment) => (
           <Fragment key={getChainSegmentKey(view, segment)}>
@@ -209,7 +209,7 @@ const Group = memo<GroupChildrenProps>(
     // reload) a view the user may already be using.
     const splits = views.map((view) => {
       const split = splitAssistantGroupFinalAnswer(view.segments);
-      const { folded, lifted } = enableMcpApp
+      const { folded, lifted } = enableMcpApps
         ? liftMcpAppSegments(split.processSegments)
         : { folded: split.processSegments, lifted: [] };
 

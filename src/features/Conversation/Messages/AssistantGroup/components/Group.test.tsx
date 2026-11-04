@@ -30,9 +30,9 @@ vi.mock('@/store/chat/slices/operation/selectors', () => ({
   },
 }));
 
-// The `mcp_app` flag's default: these cases cover the layout without MCP App views.
+// The `mcp_apps` flag's default: these cases cover the layout without MCP App views.
 vi.mock('@/store/serverConfig', () => ({
-  serverConfigSelectors: { enableMcpApp: () => false },
+  serverConfigSelectors: { enableMcpApps: () => false },
   useServerConfigStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 

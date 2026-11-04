@@ -113,7 +113,7 @@ export const mcpRouter = router({
    * Read an MCP Apps `ui://` resource so the chat can render a tool result's
    * interactive view. A mutation, though it only reads: the params carry the
    * plugin's auth and headers, which must travel in a POST body, not a GET URL.
-   * Refused while the `mcp_app` flag is off, since the read opens a session
+   * Refused while the `mcp_apps` flag is off, since the read opens a session
    * that advertises MCP Apps.
    */
   readUiResource: mcpProcedure

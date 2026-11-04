@@ -111,7 +111,7 @@ describe('callConnectorToolById', () => {
     );
   });
 
-  it.each([true, false])('passes the caller mcp_app flag (%s) through', async (enabled) => {
+  it.each([true, false])('passes the caller mcp_apps flag (%s) through', async (enabled) => {
     mcpAppEnabled.mockResolvedValueOnce(enabled);
     vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
     const ctx = { ...makeCtx([connector], [tool()]), userId: 'user-1' };
@@ -248,7 +248,7 @@ describe('readConnectorUiResourceById', () => {
     mcpAppEnabled.mockResolvedValue(true);
   });
 
-  it('refuses to read a view while the mcp_app flag is off', async () => {
+  it('refuses to read a view while the mcp_apps flag is off', async () => {
     mcpAppEnabled.mockResolvedValue(false);
     const ctx = { ...makeCtx([connector], []), userId: 'user-1' };
 
