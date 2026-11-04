@@ -6,27 +6,10 @@ import { useTranslation } from 'react-i18next';
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { usePublishDynamicRouteMeta } from './usePublishDynamicRouteMeta';
+import { useRouteTopicTitle } from './useRouteTopicTitle';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from './workspaceScope';
-
-const useTopicTitle = (
-  agentId: string | undefined,
-  topicId: string | undefined,
-  routeWorkspaceId: string | null | undefined,
-): string | undefined =>
-  useChatStore((state) => {
-    if (!agentId || !topicId || routeWorkspaceId === undefined) return undefined;
-
-    // Archived (completed) topics are excluded from the list fetch — fall back
-    // to the by-id detail cache filled by `useFetchTopicDetail`.
-    const topic =
-      state.topicDataMap[topicMapKey({ agentId })]?.items?.find((item) => item.id === topicId) ??
-      state.topicDetailMap[topicId];
-    return topic?.title || undefined;
-  });
 
 const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   const routeWorkspaceId = useRouteWorkspaceId(params);
@@ -38,15 +21,23 @@ const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
 
     return agentSelectors.getAgentMetaById(agentId)(state);
   });
-  const topicTitle = useTopicTitle(params.aid, params.topicId ?? params.topic, routeWorkspaceId);
+  const topicId = params.topicId ?? params.topic;
+  const topicTitle = useRouteTopicTitle(topicId, routeWorkspaceId);
   const hasMeta = Object.keys(meta).length > 0;
   const agentTitle = hasMeta ? agentDisplayName(meta) : undefined;
+  // While a named topic's row is missing (its list bucket replaced on
+  // revalidation or a cache-scope switch), publish no title: the desktop tab
+  // cache keeps any non-empty title, so the bare agent name would overwrite
+  // the topic title for good.
+  const topicPending = !!topicId && topicTitle === undefined;
 
   usePublishDynamicRouteMeta(
     {
       avatar: meta.avatar,
       backgroundColor: meta.backgroundColor,
-      title: [topicTitle, agentTitle].filter(Boolean).join(' · ') || undefined,
+      title: topicPending
+        ? undefined
+        : [topicTitle, agentTitle].filter(Boolean).join(' · ') || undefined,
     },
     onResolve,
   );

@@ -3,30 +3,15 @@
 import { useTranslation } from 'react-i18next';
 
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
-import { useChatStore } from '@/store/chat';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useSessionStore } from '@/store/session';
 import { sessionGroupSelectors } from '@/store/session/slices/sessionGroup/selectors';
 
 import { usePublishDynamicRouteMeta } from './usePublishDynamicRouteMeta';
+import { useRouteTopicTitle } from './useRouteTopicTitle';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from './workspaceScope';
 
 const getWorkspaceId = (item: unknown): string | null | undefined =>
   (item as { workspaceId?: string | null } | undefined)?.workspaceId;
-
-const useTopicTitle = (
-  groupId: string | undefined,
-  topicId: string | undefined,
-  routeWorkspaceId: string | null | undefined,
-): string | undefined =>
-  useChatStore((state) => {
-    if (!groupId || !topicId || routeWorkspaceId === undefined) return undefined;
-
-    const topic = state.topicDataMap[topicMapKey({ groupId })]?.items?.find(
-      (item) => item.id === topicId,
-    );
-    return topic?.title || undefined;
-  });
 
 const GroupDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   const routeWorkspaceId = useRouteWorkspaceId(params);
@@ -34,11 +19,15 @@ const GroupDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
     const item = sessionGroupSelectors.getGroupById(params.gid ?? '')(state);
     return matchesRouteWorkspace(getWorkspaceId(item), routeWorkspaceId) ? item : undefined;
   });
-  const topicTitle = useTopicTitle(params.gid, params.topicId ?? params.topic, routeWorkspaceId);
+  const topicId = params.topicId ?? params.topic;
+  const topicTitle = useRouteTopicTitle(topicId, routeWorkspaceId);
+  // Same rule as AgentDynamicMeta: a missing topic row must not let the group
+  // name overwrite the desktop tab's cached topic title.
+  const topicPending = !!topicId && topicTitle === undefined;
 
   usePublishDynamicRouteMeta(
     {
-      title: topicTitle || group?.name || undefined,
+      title: topicPending ? undefined : topicTitle || group?.name || undefined,
     },
     onResolve,
   );
