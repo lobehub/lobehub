@@ -88,7 +88,6 @@ interface McpCallHandler {
     apiName: string;
     arguments: string;
     identifier: string;
-    mcpApps?: boolean;
     params: GatewayMcpParams;
   }): Promise<ToolCallResult>;
 }
@@ -1314,7 +1313,7 @@ export default class GatewayConnectionService extends ServiceModule {
     client: GatewayClient,
   ) => {
     const { operationId, requestId, toolCall } = request;
-    const { apiName, arguments: argsStr, identifier, mcpApps, params, type } = toolCall;
+    const { apiName, arguments: argsStr, identifier, params, type } = toolCall;
 
     logger.info(
       `Received tool call: apiName=${apiName}, requestId=${requestId}, type=${type ?? 'tool'}`,
@@ -1336,13 +1335,7 @@ export default class GatewayConnectionService extends ServiceModule {
           if (!params) {
             throw new Error('MCP tool call missing connection params');
           }
-          return this.mcpCallHandler({
-            apiName,
-            arguments: argsStr,
-            identifier,
-            mcpApps: mcpApps === true,
-            params,
-          });
+          return this.mcpCallHandler({ apiName, arguments: argsStr, identifier, params });
         } else {
           if (!this.toolCallHandler) {
             throw new Error('No tool call handler configured');

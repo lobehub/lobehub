@@ -493,9 +493,6 @@ export class ToolExecutionService {
         arguments: args,
         deviceId: target.deviceId,
         identifier,
-        // Whether the device's session announces MCP Apps and marks the
-        // result's view; a device that doesn't read it runs without them
-        mcpApps: await isMcpAppsEnabled(context.userId),
         params:
           mcpParams.type === 'stdio'
             ? {
@@ -543,9 +540,14 @@ export class ToolExecutionService {
       });
     }
 
+    // An MCP App view is read and driven from the client that opens the
+    // conversation, not from the device that ran the tool, so a result from a
+    // device offers none.
+    const { mcpApp: _deviceView, ...state } = (result.state as Record<string, any>) ?? {};
+
     return {
       content: result.content,
-      state: (result.state as Record<string, any>) ?? undefined,
+      state: result.state ? state : undefined,
       success: true,
     };
   }

@@ -531,6 +531,24 @@ describe('ToolExecutionService', () => {
       );
     });
 
+    it('drops the MCP App view a device marked on its result', async () => {
+      vi.mocked(deviceGateway.executeMcpCall).mockResolvedValueOnce({
+        content: 'ok',
+        state: { content: [], mcpApp: { resourceUri: 'ui://dash/view' } },
+        success: true,
+      } as any);
+      const result = await makeService().executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'dash-mcp', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'device-1' },
+        ),
+      );
+
+      // Another client opening the conversation would serve it from its own machine
+      expect(result.state).toEqual({ content: [] });
+    });
+
     it('tunnels a local-network HTTP MCP call and narrows the auth payload', async () => {
       const service = makeService();
       await service.executeTool(

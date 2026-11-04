@@ -1398,33 +1398,9 @@ describe('GatewayConnectionCtr', () => {
       expect(mockMcpCtr.runStdioMcpTool).toHaveBeenCalledWith({
         args: '{"symbol":"AAPL"}',
         env: { TOKEN: 'secret' },
-        // A server that sends no `mcpApps` runs the call without MCP Apps
-        mcpApps: false,
         params: { args: ['stock-mcp'], command: 'npx', name: 'kimi-datasource' },
         toolName: 'getStock',
       });
-    });
-
-    it("passes the server's mcp_apps flag through to the MCP call", async () => {
-      const client = await connectAndOpen();
-
-      client.emit('tool_call_request', {
-        requestId: 'mcp-apps-on',
-        toolCall: {
-          apiName: 'getStock',
-          arguments: '{}',
-          identifier: 'kimi-datasource',
-          mcpApps: true,
-          params: { args: ['stock-mcp'], command: 'npx', name: 'kimi-datasource' },
-          type: 'mcp',
-        },
-        type: 'tool_call_request',
-      });
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(mockMcpCtr.runStdioMcpTool).toHaveBeenCalledWith(
-        expect.objectContaining({ mcpApps: true, toolName: 'getStock' }),
-      );
     });
 
     it('should NOT route to MCP when params are present but type is not mcp', async () => {

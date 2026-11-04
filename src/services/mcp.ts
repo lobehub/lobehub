@@ -58,6 +58,23 @@ const throwIfAborted = (signal?: AbortSignal) => {
 };
 
 /**
+ * A view this machine's MCP process (stdio, localhost / LAN) marked on its
+ * result can only be served here, where the view and its calls run: record
+ * which desktop that is, so another one falls back to the plain result.
+ */
+const markLocalView = async <T>(result: T): Promise<T> => {
+  const mcpApp = (result as { state?: { mcpApp?: { deviceId?: string } } } | undefined)?.state
+    ?.mcpApp;
+  if (!mcpApp) return result;
+
+  const { getElectronStoreState } = await import('@/store/electron');
+  const deviceId = await getElectronStoreState().resolveGatewayDeviceId();
+  if (deviceId) mcpApp.deviceId = deviceId;
+
+  return result;
+};
+
+/**
  * Build the MCP client params for an installed/custom plugin: its stored
  * connection plus the user's plugin settings as HTTP headers or stdio env.
  */
@@ -195,7 +212,7 @@ class MCPService {
             toolName: apiName,
           }),
         );
-        return deserializeMcpIpcPayload<MCPToolCallResult>(result);
+        return markLocalView(deserializeMcpIpcPayload<MCPToolCallResult>(result));
       }
       try {
         return (await lambdaClient.connector.callTool.mutate(
@@ -294,7 +311,7 @@ class MCPService {
         // Note: IPC doesn't support AbortSignal yet
         const serialized = serializeMcpIpcPayload({ ...data, mcpApps });
         const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
-        result = deserializeMcpIpcPayload(serializedResult) as any;
+        result = await markLocalView(deserializeMcpIpcPayload(serializedResult) as any);
       } else if (isLocalHttp) {
         // Same routing as the manifest fetch: the server relay can't reach it
         const serialized = serializeMcpIpcPayload({
@@ -305,7 +322,7 @@ class MCPService {
           toolName: apiName,
         });
         const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
-        result = deserializeMcpIpcPayload(serializedResult) as any;
+        result = await markLocalView(deserializeMcpIpcPayload(serializedResult) as any);
       } else {
         // For other types, use the toolsClient
         result = await toolsClient.mcp.callTool.mutate(data, { signal });

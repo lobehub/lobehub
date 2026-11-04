@@ -179,12 +179,6 @@ export interface ToolCallRequestMessage {
     apiName: string;
     arguments: string;
     identifier: string;
-    /**
-     * For `type === 'mcp'`: the user's `mcp_apps` flag, whether the device's
-     * session announces MCP Apps. A gateway that doesn't forward it leaves
-     * them off.
-     */
-    mcpApps?: boolean;
     /** MCP connection params (stdio or http) — present only when `type === 'mcp'`. */
     params?: GatewayMcpParams;
     /**

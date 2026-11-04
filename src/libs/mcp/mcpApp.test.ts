@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canServeMcpAppHere,
   getMcpAppFromState,
   getToolUiResourceUri,
   isToolVisibleToApp,
@@ -50,5 +51,25 @@ describe('isToolVisibleToApp', () => {
     expect(isToolVisibleToApp({ _meta: { ui: { visibility: ['app'] } } })).toBe(true);
     expect(isToolVisibleToApp({ _meta: { ui: {} } })).toBe(true);
     expect(isToolVisibleToApp({})).toBe(true);
+  });
+});
+
+describe('MCP App views from a desktop', () => {
+  it('reads the desktop that produced a local view', () => {
+    expect(
+      getMcpAppFromState({ content: [], mcpApp: { deviceId: 'dev-a', resourceUri: 'ui://a' } }),
+    ).toEqual({ deviceId: 'dev-a', resourceUri: 'ui://a' });
+  });
+
+  it('serves a local view only on the desktop that produced it', () => {
+    const local = { deviceId: 'dev-a', resourceUri: 'ui://a' };
+
+    expect(canServeMcpAppHere(local, 'dev-a')).toBe(true);
+    expect(canServeMcpAppHere(local, 'dev-b')).toBe(false);
+    // Web, or a desktop that can't tell which one it is
+    expect(canServeMcpAppHere(local, undefined)).toBe(false);
+    expect(canServeMcpAppHere(local, null)).toBe(false);
+    // A view the server reads is served anywhere
+    expect(canServeMcpAppHere({ resourceUri: 'ui://a' }, undefined)).toBe(true);
   });
 });

@@ -18,6 +18,12 @@ export const MCP_APPS_CLIENT_CAPABILITIES = {
 };
 
 export interface McpAppToolState {
+  /**
+   * The desktop whose local MCP process (stdio, localhost / LAN) produced the
+   * result. Its view and the view's calls run in that process, so only that
+   * desktop can serve them.
+   */
+  deviceId?: string;
   resourceUri: string;
 }
 
@@ -65,8 +71,23 @@ export const unwrapMcpToolState = <T = any>(state: T): T => {
 
 /** Read the MCP App reference a tool call stored on its result state. */
 export const getMcpAppFromState = (state: unknown): McpAppToolState | undefined => {
-  const mcpApp = (unwrapMcpToolState(state) as { mcpApp?: { resourceUri?: unknown } } | undefined)
-    ?.mcpApp;
+  const mcpApp = (
+    unwrapMcpToolState(state) as
+      { mcpApp?: { deviceId?: unknown; resourceUri?: unknown } } | undefined
+  )?.mcpApp;
+  if (!isUiUri(mcpApp?.resourceUri)) return;
 
-  return isUiUri(mcpApp?.resourceUri) ? { resourceUri: mcpApp.resourceUri } : undefined;
+  return typeof mcpApp.deviceId === 'string'
+    ? { deviceId: mcpApp.deviceId, resourceUri: mcpApp.resourceUri }
+    : { resourceUri: mcpApp.resourceUri };
 };
+
+/**
+ * Whether this client can serve a result's view: one from a desktop's local
+ * MCP process only on that desktop (`currentDeviceId` is this desktop's
+ * stable device id, if any).
+ */
+export const canServeMcpAppHere = (
+  mcpApp: McpAppToolState,
+  currentDeviceId: string | null | undefined,
+): boolean => !mcpApp.deviceId || mcpApp.deviceId === currentDeviceId;
