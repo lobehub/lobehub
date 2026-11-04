@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isGoalArchiveBlocked, isGoalStatusInMotion } from './goalArchive';
+import { isGoalArchiveBlocked } from './goalArchive';
 
 describe('isGoalArchiveBlocked', () => {
   it('lets a signed-off or canceled goal be archived', () => {
@@ -24,14 +24,5 @@ describe('isGoalArchiveBlocked', () => {
       'paused',
     ])
       expect(isGoalArchiveBlocked({ signedOff: true, status })).toBe(true);
-  });
-});
-
-describe('isGoalStatusInMotion', () => {
-  it('treats only the settled outcomes as standing still', () => {
-    for (const status of ['achieved', 'canceled', 'failed'])
-      expect(isGoalStatusInMotion(status)).toBe(false);
-    for (const status of ['draft', 'planning', 'running', 'verifying', 'review', 'paused'])
-      expect(isGoalStatusInMotion(status)).toBe(true);
   });
 });

@@ -18,12 +18,3 @@ export interface GoalArchiveGuardInput {
  */
 export const isGoalArchiveBlocked = ({ signedOff, status }: GoalArchiveGuardInput): boolean =>
   !(status === 'canceled' || (status === 'achieved' && !!signedOff));
-
-const SETTLED_GOAL_STATUSES = new Set<string>(['achieved', 'canceled', 'failed']);
-
-/**
- * Whether moving a goal to `status` puts it back in motion. An archived goal
- * never gets there until restored (`GoalModel.updateStatus`).
- */
-export const isGoalStatusInMotion = (status: GoalStatus | string): boolean =>
-  !SETTLED_GOAL_STATUSES.has(status);

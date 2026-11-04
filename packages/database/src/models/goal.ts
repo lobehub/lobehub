@@ -10,7 +10,6 @@ import type {
   GoalSupervisionState,
   GoalUnderstanding,
 } from '@lobechat/types';
-import { isGoalStatusInMotion } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
@@ -345,8 +344,11 @@ export class GoalModel {
   update = async (
     id: string,
     value: Partial<Omit<GoalItem, 'id' | 'userId'>>,
-    /** Match only a goal that is not archived (see `updateStatus`). */
-    options: { unlessArchived?: boolean } = {},
+    /**
+     * Match an archived goal only when its status already is this one — an
+     * archived goal's status is frozen until it is restored (see `updateStatus`).
+     */
+    options: { archivedKeepsStatus?: GoalStatus } = {},
   ) => {
     // Policy editors may carry a pre-claim or pre-release snapshot. Runtime
     // ownership always comes from the current row, never that snapshot, and
@@ -386,7 +388,9 @@ export class GoalModel {
         and(
           eq(goals.id, id),
           this.ownership(),
-          options.unlessArchived ? isNull(goals.archivedAt) : undefined,
+          options.archivedKeepsStatus
+            ? or(isNull(goals.archivedAt), eq(goals.status, options.archivedKeepsStatus))
+            : undefined,
         ),
       )
       .returning();
@@ -472,11 +476,11 @@ export class GoalModel {
     const existing = await this.findById(id);
     if (!existing) return undefined;
 
-    // Every path that puts a goal back in motion — resume, pause, a sign-off
-    // sent back, the coordinator — lands here, so this is where an archived
-    // goal is kept put. The archive check is part of the UPDATE, which
-    // serializes with the guarded archive write (`GoalArchiveModel`).
-    const unlessArchived = isGoalStatusInMotion(status);
+    // Every status write — resume, pause, close, a sign-off sent back, the
+    // coordinator — lands here, so this is where an archived goal is kept put:
+    // its status is frozen until it is restored, which keeps the archive's own
+    // rule (signed off or canceled) true while it is hidden. The check is part
+    // of the UPDATE, which serializes with the guarded archive write.
     const row = await this.update(
       id,
       {
@@ -486,10 +490,9 @@ export class GoalModel {
         startedAt: existing.startedAt ?? (status === 'running' ? new Date() : null),
         status,
       },
-      { unlessArchived },
+      { archivedKeepsStatus: status },
     );
-    if (!row && unlessArchived && (await this.findById(id))?.archivedAt)
-      throw new GoalArchivedError(id);
+    if (!row && (await this.findById(id))?.archivedAt) throw new GoalArchivedError(id);
     return row;
   };
 

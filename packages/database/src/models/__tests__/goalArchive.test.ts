@@ -131,11 +131,19 @@ describe('GoalModel.updateStatus on an archived goal', () => {
     expect((await goalModel.findById(goal.id))?.status).toBe('canceled');
   });
 
-  it('still lets it move between ended statuses', async () => {
+  it('freezes it in its archived status, ended ones included', async () => {
     const goal = await createListedGoal('Put away', 'canceled');
     await archiveModel.archive(goal.id);
 
-    expect((await goalModel.updateStatus(goal.id, 'failed'))?.status).toBe('failed');
+    // A stale "mark achieved" would leave a hidden goal achieved but never signed off.
+    for (const status of ['achieved', 'failed'] as const) {
+      await expect(goalModel.updateStatus(goal.id, status)).rejects.toBeInstanceOf(
+        GoalArchivedError,
+      );
+    }
+    // Writing the status it already has is not a change.
+    expect((await goalModel.updateStatus(goal.id, 'canceled'))?.status).toBe('canceled');
+    expect((await goalModel.findById(goal.id))?.status).toBe('canceled');
   });
 
   it('moves an unarchived goal as before', async () => {

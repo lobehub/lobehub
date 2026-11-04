@@ -333,6 +333,10 @@ export const close = async (
   await ctx.db.transaction(async (db) => {
     const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
+    // An archived goal's status is frozen until it is restored; refuse before
+    // interrupting anything. (`updateStatus` refuses it too, should an archive
+    // land after this lock is released.)
+    if (current) assertGoalNotArchived(current);
     // Only a goal that can still dispatch needs fencing.
     if (!current || ['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) return;
     await model.updateStatus(goalId, 'paused');

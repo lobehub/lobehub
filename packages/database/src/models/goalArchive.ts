@@ -8,9 +8,8 @@ import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
- * Thrown when a write would move an archived goal back into a status in which
- * it can move on its own (`isGoalStatusInMotion`). Archived goals are hidden
- * from every list, so they stay put until restored.
+ * Thrown when a write would change an archived goal's status. Archived goals
+ * are hidden from every list, so they stay put until restored.
  */
 export class GoalArchivedError extends Error {
   readonly goalId: string;
