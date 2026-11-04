@@ -1,4 +1,4 @@
-import type { DeviceCliBatchEntry } from '@lobechat/types';
+import { DEVICE_CLI_BATCH_MAX_TARGETS, type DeviceCliBatchEntry } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
@@ -20,9 +20,6 @@ import { canOperateWorkspaceDevice } from '../deviceWorkspaceGuard';
 import { deviceProcedure } from './procedures';
 
 const log = debug('lobe-server:device-gateway');
-
-/** Bounds one update request; a workspace pool is far smaller. */
-const MAX_BATCH_DEVICES = 200;
 
 interface CliBatchContext {
   deviceModel: DeviceModel;
@@ -113,7 +110,7 @@ export const cliBatchUpdateRouter = router({
           targets: z
             .array(z.object({ deviceId: z.string(), requestId: z.string().uuid() }).strict())
             .min(1)
-            .max(MAX_BATCH_DEVICES)
+            .max(DEVICE_CLI_BATCH_MAX_TARGETS)
             .refine((targets) => new Set(targets.map((t) => t.deviceId)).size === targets.length, {
               message: 'Each device can only be updated once per request.',
             }),

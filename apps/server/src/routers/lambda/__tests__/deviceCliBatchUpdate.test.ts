@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEVICE_CLI_BATCH_MAX_TARGETS } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceRouter } from '../device';
@@ -177,6 +178,12 @@ describe('batch CLI update', () => {
 
     it.each([
       { targets: [] },
+      {
+        targets: Array.from({ length: DEVICE_CLI_BATCH_MAX_TARGETS + 1 }, (_, i) => ({
+          deviceId: `device-${i}`,
+          requestId: REQUEST_ID,
+        })),
+      },
       { targets: [{ deviceId: 'shared-a', requestId: 'not-a-uuid' }] },
       {
         targets: [

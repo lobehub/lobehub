@@ -1147,6 +1147,12 @@ export interface DeviceCliBatchEntry {
   state?: DeviceCliUpdateState;
 }
 
+/**
+ * Most devices one `updateClis` request may target. Larger pools are sent in
+ * chunks, which also keeps each request well inside a function's time limit.
+ */
+export const DEVICE_CLI_BATCH_MAX_TARGETS = 50;
+
 export interface DeviceCliBatchTarget {
   deviceId: string;
   /** Idempotency key for this device's restart; reuse it to retry. */

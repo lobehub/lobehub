@@ -1,7 +1,8 @@
-import type {
-  DeviceCliBatchEntry,
-  DeviceCliUpdateStateResult,
-  DeviceVisibility,
+import {
+  DEVICE_CLI_BATCH_MAX_TARGETS,
+  type DeviceCliBatchEntry,
+  type DeviceCliUpdateStateResult,
+  type DeviceVisibility,
 } from '@lobechat/types';
 import { useEffect, useRef, useState } from 'react';
 
@@ -127,18 +128,34 @@ export const useCliBatchUpdate = (visibility: DeviceVisibility) => {
     lock.current = true;
     setSending(true);
     setSendError(undefined);
+    const targets = ready.map(({ entry }) => ({
+      deviceId: entry.deviceId,
+      requestId: crypto.randomUUID(),
+    }));
+    const entries: DeviceCliBatchEntry[] = [];
+    let failure: string | undefined;
     try {
-      const entries = await deviceService.updateClis({
-        targets: ready.map(({ entry }) => ({
-          deviceId: entry.deviceId,
-          requestId: crypto.randomUUID(),
-        })),
-      });
+      // Each chunk is independent: one failed request leaves the others sent.
+      for (let i = 0; i < targets.length; i += DEVICE_CLI_BATCH_MAX_TARGETS) {
+        const chunk = targets.slice(i, i + DEVICE_CLI_BATCH_MAX_TARGETS);
+        try {
+          entries.push(...(await deviceService.updateClis({ targets: chunk })));
+        } catch (error) {
+          failure = (error as Error).message;
+          // Unknown whether this chunk reached the devices; a fresh check tells.
+          entries.push(
+            ...chunk.map(({ deviceId }): DeviceCliBatchEntry => ({
+              deviceId,
+              message: failure,
+              outcome: 'failed',
+            })),
+          );
+        }
+      }
       lastFollow.current = {};
       setTimedOut(false);
+      setSendError(failure);
       setBatch({ entries, id: crypto.randomUUID() });
-    } catch (error) {
-      setSendError((error as Error).message);
     } finally {
       lock.current = false;
       setSending(false);

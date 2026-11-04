@@ -2,7 +2,6 @@
 
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
 import {
-  Alert,
   Block,
   Button,
   Center,
@@ -28,6 +27,7 @@ import AsyncError from '@/components/AsyncError';
 import RingLoadingIcon from '@/components/RingLoading';
 import { useDeviceList } from '@/store/device';
 
+import ErrorDetails from '../ErrorDetails';
 import type { BatchRowView } from './deriveBatchRowView';
 import { type BatchRow, useCliBatchUpdate } from './useCliBatchUpdate';
 
@@ -76,12 +76,8 @@ const RowItem = ({ device, row }: { device?: DeviceListItem; row: BatchRow }) =>
   const { entry, view } = row;
   const name = device?.friendlyName || device?.hostname || entry.deviceId;
   const version = versionText(row, device);
-  const detail =
-    view === 'timedOut'
-      ? t('devices.cliBatch.timedOutDetail')
-      : view === 'failed' || view === 'unsupported'
-        ? failureReason(row)
-        : undefined;
+  // The status label is the readable summary; a device's raw reason is folded away.
+  const details = view === 'failed' || view === 'unsupported' ? failureReason(row) : undefined;
 
   return (
     <Flexbox gap={2} paddingBlock={8} paddingInline={12}>
@@ -105,15 +101,15 @@ const RowItem = ({ device, row }: { device?: DeviceListItem; row: BatchRow }) =>
           {t(`devices.cliBatch.status.${view}`)}
         </Text>
       </Flexbox>
-      {detail && (
-        <Text
-          ellipsis={{ tooltip: detail }}
-          fontSize={12}
-          style={{ paddingInlineStart: 24 }}
-          type={'secondary'}
-        >
-          {detail}
+      {view === 'timedOut' && (
+        <Text fontSize={12} style={{ paddingInlineStart: 24 }} type={'secondary'}>
+          {t('devices.cliBatch.timedOutDetail')}
         </Text>
+      )}
+      {details && (
+        <Flexbox style={{ paddingInlineStart: 16 }}>
+          <ErrorDetails details={details} />
+        </Flexbox>
       )}
     </Flexbox>
   );
@@ -174,11 +170,13 @@ const CliBatchUpdateContent = ({ visibility }: { visibility: DeviceVisibility })
       </Flexbox>
 
       {batch.sendError && (
-        <Alert
-          description={batch.sendError}
-          title={t('devices.cliBatch.sendFailed')}
-          type={'error'}
-        />
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Icon color={cssVar.colorError} icon={CircleX} size={14} />
+          <Text fontSize={12} type={'danger'}>
+            {t('devices.cliBatch.sendFailed')}
+          </Text>
+          <ErrorDetails details={batch.sendError} />
+        </Flexbox>
       )}
 
       {rows.length > 0 && (

@@ -1,4 +1,8 @@
-import type { DeviceCliBatchEntry, DeviceCliUpdateStateResult } from '@lobechat/types';
+import {
+  DEVICE_CLI_BATCH_MAX_TARGETS,
+  type DeviceCliBatchEntry,
+  type DeviceCliUpdateStateResult,
+} from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
@@ -171,7 +175,7 @@ describe('useCliBatchUpdate', () => {
     unmount();
   });
 
-  it('keeps the plan and offers a fresh check when sending fails', async () => {
+  it('marks the devices of a failed request and offers a fresh check', async () => {
     vi.mocked(deviceService.updateClis).mockRejectedValue(new Error('network'));
     const { result, unmount } = render();
     await flush();
@@ -180,13 +184,55 @@ describe('useCliBatchUpdate', () => {
     });
 
     expect(result.current.sendError).toBe('network');
-    expect(result.current.phase).toBe('review');
+    expect(result.current.phase).toBe('done');
+    expect(result.current.rows.map((row) => [row.entry.deviceId, row.view])).toEqual([
+      ['a', 'failed'],
+      ['b', 'failed'],
+      ['c', 'busy'],
+      ['d', 'offline'],
+    ]);
 
     act(() => result.current.recheck());
     expect(result.current.phase).toBe('checking');
     await flush();
     expect(deviceService.checkCliUpdates).toHaveBeenCalledTimes(2);
     expect(result.current.sendError).toBeUndefined();
+    unmount();
+  });
+
+  it('sends a pool larger than one request allows in chunks', async () => {
+    const pool = Array.from({ length: DEVICE_CLI_BATCH_MAX_TARGETS + 3 }, (_, i) => `dev-${i}`);
+    vi.mocked(deviceService.checkCliUpdates).mockResolvedValue(
+      pool.map((deviceId) => ({
+        deviceId,
+        outcome: 'ready',
+        state: state(`${deviceId}-old`, '0.0.70'),
+      })),
+    );
+    vi.mocked(deviceService.updateClis)
+      .mockImplementationOnce(async ({ targets }) => targets.map((t) => requested(t.deviceId)))
+      .mockRejectedValueOnce(new Error('function timeout'));
+    vi.mocked(deviceService.getCliUpdateState).mockResolvedValue({
+      message: 'restarting',
+      status: 'unavailable',
+    });
+    const { result, unmount } = render();
+    await flush();
+    await act(async () => {
+      await result.current.update();
+    });
+
+    const sizes = vi
+      .mocked(deviceService.updateClis)
+      .mock.calls.map(([input]) => input.targets.length);
+    expect(sizes).toEqual([DEVICE_CLI_BATCH_MAX_TARGETS, 3]);
+    // The first chunk is followed; only the failed chunk's devices are marked failed.
+    expect(result.current.summary).toMatchObject({
+      failed: 3,
+      pending: DEVICE_CLI_BATCH_MAX_TARGETS,
+    });
+    expect(result.current.sendError).toBe('function timeout');
+    expect(result.current.phase).toBe('following');
     unmount();
   });
 });
