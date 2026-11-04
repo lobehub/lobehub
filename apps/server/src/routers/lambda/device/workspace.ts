@@ -1,4 +1,4 @@
-import { workingDirConfigSchema } from '@lobechat/types';
+import { isManagedCloudDevice, workingDirConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -19,6 +19,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
 import { assertWorkspaceDeviceEditable, canEditWorkspaceDevice } from '../deviceWorkspaceGuard';
+import { clientIdentitySourceSchema, parseReportedIdentitySource } from './guards';
 import { reportManagedDevicesRemoved } from './managedDeviceRemoval';
 
 /**
@@ -79,7 +80,7 @@ export const workspaceRouter = router({
         architecture: z.string().max(20).nullish(),
         deviceId: z.string().min(1).max(64),
         hostname: z.string().nullish(),
-        identitySource: z.enum(['machine-id', 'fallback']),
+        identitySource: clientIdentitySourceSchema,
         /** Extensible client-reported info bag; free-form, size-capped to guard the column. */
         metadata: z
           .record(z.string().max(64), z.string().max(200))
@@ -146,6 +147,12 @@ export const workspaceRouter = router({
       if (!personal || personal.workspaceId) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Personal device not found.' });
       }
+      if (isManagedCloudDevice(personal)) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'A managed cloud device cannot be shared to a workspace.',
+        });
+      }
 
       const token = await signWorkspaceDeviceToken(ctx.workspaceId);
       // Identity-only probe: learn the machine's workspace deviceId WITHOUT the
@@ -166,6 +173,7 @@ export const workspaceRouter = router({
           message: probe.error ?? 'Device is offline or does not support workspace sharing.',
         });
       }
+      parseReportedIdentitySource(probe.identity.identitySource);
 
       // Fail a cross-user PRIVATE collision NOW, before the machine opens and
       // persists a workspace share connection — rejecting only at the later
@@ -183,6 +191,12 @@ export const workspaceRouter = router({
       // Caller-invisible rows (another member's private enrollment) were
       // rejected above, so an undefined here really means "no row yet".
       const existing = await model.findWorkspaceDeviceById(probe.identity.deviceId);
+      if (existing && isManagedCloudDevice(existing)) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This workspace device is a managed cloud device and cannot be overwritten.',
+        });
+      }
       if (existing) {
         if (!input.confirmOverwrite) {
           return {
@@ -241,7 +255,7 @@ export const workspaceRouter = router({
         row = await model.registerWorkspaceDevice({
           deviceId: result.identity.deviceId,
           hostname: personal.hostname,
-          identitySource: result.identity.identitySource,
+          identitySource: parseReportedIdentitySource(result.identity.identitySource),
           platform: personal.platform,
           sharedFromDeviceId: personal.deviceId,
           visibility: input.visibility,

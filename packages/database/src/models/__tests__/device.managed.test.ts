@@ -49,7 +49,7 @@ const clientRegistration = {
   platform: 'darwin',
 };
 
-describe('DeviceModel registration of a managed cloud device id', () => {
+describe('DeviceModel client writes to a managed cloud device row', () => {
   beforeEach(async () => {
     await cleanup();
     await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -150,6 +150,40 @@ describe('DeviceModel registration of a managed cloud device id', () => {
       });
 
       expect(row).toMatchObject({ hostname: 'renamed-host' });
+    });
+  });
+
+  describe('overwriteSharedWorkspaceDevice', () => {
+    it('leaves a managed workspace row unchanged', async () => {
+      await insertManaged({ userId, workspaceId });
+      const before = await findManaged({ workspaceId });
+
+      const row = await new DeviceModel(
+        serverDB,
+        otherUserId,
+        workspaceId,
+      ).overwriteSharedWorkspaceDevice(managedId, {
+        sharedFromDeviceId: 'other-laptop',
+        visibility: 'private',
+      });
+
+      expect(row).toBeUndefined();
+      expect(await findManaged({ workspaceId })).toEqual(before);
+    });
+  });
+
+  describe('updateDeviceInfo', () => {
+    it('leaves a managed personal row unchanged', async () => {
+      await insertManaged({ userId });
+      const before = await findManaged({});
+
+      const row = await new DeviceModel(serverDB, userId).updateDeviceInfo(managedId, {
+        architecture: 'arm64',
+        hostname: 'client-host',
+      });
+
+      expect(row).toBeUndefined();
+      expect(await findManaged({})).toEqual(before);
     });
   });
 });

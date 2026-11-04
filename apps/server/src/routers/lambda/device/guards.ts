@@ -1,9 +1,28 @@
 import { TRPCError } from '@trpc/server';
+import { z } from 'zod';
 
 import { type WorkspaceRole } from '@/business/server/trpc-middlewares/workspaceAuth';
 import type { DeviceModel } from '@/database/models/device';
 
 import { canOperateWorkspaceDevice } from '../deviceWorkspaceGuard';
+
+/**
+ * Identity sources a client may claim for itself. The managed cloud device
+ * source is written only by the server that creates such a device.
+ */
+export const clientIdentitySourceSchema = z.enum(['machine-id', 'fallback']);
+
+/** Check an identity source a device reported over RPC (share flow). */
+export const parseReportedIdentitySource = (value: unknown) => {
+  const parsed = clientIdentitySourceSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'Device reported an identity source it may not claim.',
+    });
+  }
+  return parsed.data;
+};
 
 /**
  * A workspace device's user-editable fields (rename, working dirs, remove) may

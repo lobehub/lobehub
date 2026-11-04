@@ -145,7 +145,8 @@ export async function enrollWorkspace(
   },
 ): Promise<{
   error?: string;
-  identity?: { deviceId: string; identitySource: 'fallback' | 'machine-id' };
+  /** As the device reported it; callers validate `identitySource`. */
+  identity?: { deviceId: string; identitySource: string };
   success: boolean;
 }> {
   const { deviceId, identityOnly, timeout = 30_000, token, userId, workspaceId } = params;
@@ -153,10 +154,7 @@ export async function enrollWorkspace(
   if (!client) return { error: 'Device Gateway is not configured', success: false };
 
   try {
-    const result = await client.invokeRpc<{
-      deviceId: string;
-      identitySource: 'fallback' | 'machine-id';
-    }>(
+    const result = await client.invokeRpc<{ deviceId: string; identitySource: string }>(
       { deviceId, timeout, userId },
       {
         method: 'enrollWorkspace',

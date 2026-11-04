@@ -28,6 +28,7 @@ import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/
 
 import { loadAgentDeviceBindings, loadDeviceBoundAgents } from '../deviceBoundAgents';
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
+import { clientIdentitySourceSchema } from './guards';
 import { reportManagedDevicesRemoved } from './managedDeviceRemoval';
 import { deviceProcedure } from './procedures';
 
@@ -412,7 +413,7 @@ export const registryRouter = router({
         architecture: z.string().max(20).nullish(),
         deviceId: z.string().min(1).max(64),
         hostname: z.string().nullish(),
-        identitySource: z.enum(['machine-id', 'fallback']),
+        identitySource: clientIdentitySourceSchema,
         /** Extensible client-reported info bag; free-form, size-capped to guard the column. */
         metadata: z
           .record(z.string().max(64), z.string().max(200))

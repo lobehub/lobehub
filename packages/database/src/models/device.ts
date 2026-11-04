@@ -384,6 +384,7 @@ export class DeviceModel {
           eq(devices.userId, this.userId),
           eq(devices.deviceId, deviceId),
           isNull(devices.workspaceId),
+          notManagedRow,
         ),
       )
       .returning();
@@ -509,7 +510,13 @@ export class DeviceModel {
         userId: this.userId,
         visibility: params.visibility,
       })
-      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)))
+      .where(
+        and(
+          eq(devices.workspaceId, this.workspaceId),
+          eq(devices.deviceId, deviceId),
+          notManagedRow,
+        ),
+      )
       .returning();
     return row;
   };
