@@ -143,6 +143,17 @@ describe('connector slice replica', () => {
     expect(useToolStore.getState().isConnectorsInit).toBe(false);
   });
 
+  it("loads an agent's own tools once, for callers that need them before acting", async () => {
+    listByAgentQuery.mockResolvedValue([connector('c1', 'needs_approval')]);
+
+    await useToolStore.getState().ensureAgentConnectors('a1');
+    await useToolStore.getState().ensureAgentConnectors('a1');
+
+    expect(listByAgentQuery).toHaveBeenCalledTimes(1);
+    expect(useToolStore.getState().agentConnectorsInit.a1).toBe(true);
+    expect(useToolStore.getState().agentConnectors.a1).toHaveLength(1);
+  });
+
   // These resources have no `useSync` mount: nothing re-renders them on a scope
   // switch, so the engine would keep the previous identity's views — and their
   // init flags, which is what makes every gated consumer skip the fetch for the

@@ -254,6 +254,15 @@ export class ConnectorActionImpl {
     await pending;
   };
 
+  /**
+   * Load an agent's own tools unless they are loaded already, for callers that
+   * must resolve an identifier the way that agent's runs do before acting on it.
+   */
+  ensureAgentConnectors = async (agentId: string): Promise<void> => {
+    if (this.#get().agentConnectorsInit[agentId]) return;
+    await this.fetchAgentConnectors(agentId);
+  };
+
   /** Copy a user connector into an agent-owned, independently editable row. */
   copyConnectorToAgent = async (connectorId: string, agentId: string): Promise<string> => {
     const { id } = await lambdaClient.connector.copyToAgent.mutate({ agentId, connectorId });

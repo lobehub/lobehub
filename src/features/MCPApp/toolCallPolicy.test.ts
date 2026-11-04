@@ -12,7 +12,7 @@ const { agentTools, connectors, plugins, toolStore, userIntervention } = vi.hois
     connectors: new Map<string, unknown>(),
     plugins: new Map<string, unknown>(),
     toolStore: {
-      fetchAgentConnectors: vi.fn(async (agentId: string) => {
+      ensureAgentConnectors: vi.fn(async (agentId: string) => {
         loaded.add(agentId);
       }),
       loaded,
@@ -64,7 +64,7 @@ describe('getAppToolCallPolicy', () => {
     connectors.clear();
     plugins.clear();
     toolStore.loaded.clear();
-    toolStore.fetchAgentConnectors.mockClear();
+    toolStore.ensureAgentConnectors.mockClear();
     userIntervention.allowList = [];
     userIntervention.approvalMode = 'manual';
   });
@@ -115,21 +115,19 @@ describe('getAppToolCallPolicy', () => {
       agentTools.set('agt_1', new Map([['mail', connector('needs_approval')]]));
 
       expect(await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_1' })).toBe('confirm');
-      expect(toolStore.fetchAgentConnectors).toHaveBeenCalledWith('agt_1');
+      expect(toolStore.ensureAgentConnectors).toHaveBeenCalledWith('agt_1');
     });
 
-    it('does not reload tools the client already has', async () => {
+    it('uses the base connector once the agent turns out to have no copy of it', async () => {
       connectors.set('mail', connector('auto'));
-      toolStore.loaded.add('agt_1');
 
       expect(await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_1' })).toBe('allow');
-      expect(toolStore.fetchAgentConnectors).not.toHaveBeenCalled();
     });
 
     it("asks when the agent's tools can't be loaded rather than trust the base connector", async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {});
       connectors.set('mail', connector('auto'));
-      toolStore.fetchAgentConnectors.mockRejectedValueOnce(new Error('offline'));
+      toolStore.ensureAgentConnectors.mockRejectedValueOnce(new Error('offline'));
 
       expect(await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_1' })).toBe('confirm');
     });

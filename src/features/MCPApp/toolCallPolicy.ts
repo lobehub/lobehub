@@ -117,10 +117,10 @@ const findToolIntervention = (
  * policy asks.
  */
 const ensureAgentConnectors = async (agentId: string | undefined) => {
-  if (!agentId || connectorSelectors.isAgentConnectorsInit(agentId)(getToolStoreState())) return;
+  if (!agentId) return;
 
   try {
-    await getToolStoreState().fetchAgentConnectors(agentId);
+    await getToolStoreState().ensureAgentConnectors(agentId);
   } catch (error) {
     console.warn(`[MCPApp] failed to load the tools of agent ${agentId}:`, error);
   }

@@ -333,6 +333,19 @@ class MCPService {
     const { getToolStoreState } = await import('@/store/tool/store');
     let s = getToolStoreState();
 
+    // An agent's own connectors (e.g. a stdio one only it has) may not be loaded
+    // in a conversation opened cold; without them the view would be read from
+    // the base connector, or sent to the server route. Unloadable means the
+    // base resolution below, as before.
+    if (agentId) {
+      try {
+        await s.ensureAgentConnectors(agentId);
+        s = getToolStoreState();
+      } catch (error) {
+        console.warn(`[MCPApp] failed to load the tools of agent ${agentId}:`, error);
+      }
+    }
+
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
     const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
 

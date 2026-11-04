@@ -28,6 +28,7 @@ const {
   relayRead: vi.fn(),
   // The tool store as the service reads it: plugins are visible once loaded.
   toolState: {
+    ensureAgentConnectors: vi.fn(async (_agentId: string) => {}),
     pluginsLoaded: true,
     refreshPlugins: vi.fn(async () => {
       toolState.pluginsLoaded = true;
@@ -195,6 +196,24 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
       await expect(mcpService.readMcpAppResource('files', 'ui://app')).resolves.toBeUndefined();
     }
     expect(ipcRead).not.toHaveBeenCalled();
+  });
+
+  it("loads the agent's own stdio connector in a cold conversation before choosing the route", async () => {
+    connectors.clear();
+    // Only known once the agent's tools are loaded
+    toolState.ensureAgentConnectors.mockImplementationOnce(async (agentId: string) => {
+      connectors.set(`${agentId}:files`, stdioConnector);
+    });
+
+    await expect(mcpService.readMcpAppResource('files', 'ui://app', 'agt_1')).resolves.toEqual(
+      view,
+    );
+
+    expect(toolState.ensureAgentConnectors).toHaveBeenCalledWith('agt_1');
+    expect(connectorRead).not.toHaveBeenCalled();
+    expect(deserializeMcpIpcPayload(ipcRead.mock.calls[0][0])).toMatchObject({
+      params: { command: 'node', name: 'files', type: 'stdio' },
+    });
   });
 
   it('falls back without a request off the desktop, where nothing can run the command', async () => {
