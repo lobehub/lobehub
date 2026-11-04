@@ -11,6 +11,7 @@ import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { GoalArchiveRepository } from '@/database/repositories/goalArchive';
 import { agents, goalEvents, goals, tasks, topics, users, workspaces } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -636,7 +637,7 @@ describe('archiving a signed-off goal with its Tasks', () => {
   it('archives the goal’s Tasks with it, and restores them with it', async () => {
     const { acceptanceTaskId, goalId, taskModel, workTaskId } = await achieveGoal();
     await signOff(acceptanceTaskId);
-    const archive = new GoalArchiveModel(serverDB, userId);
+    const archive = new GoalArchiveRepository(serverDB, userId);
 
     const goal = await archive.archive(goalId);
 
@@ -657,7 +658,7 @@ describe('archiving a signed-off goal with its Tasks', () => {
     const { acceptanceTaskId, goalId, taskModel, workTaskId } = await achieveGoal();
     await signOff(acceptanceTaskId);
     expect(await new TaskArchiveModel(serverDB, userId).archive(workTaskId)).not.toBeNull();
-    const archive = new GoalArchiveModel(serverDB, userId);
+    const archive = new GoalArchiveRepository(serverDB, userId);
 
     await archive.archive(goalId);
     await archive.unarchive(goalId);
@@ -671,7 +672,7 @@ describe('archiving a signed-off goal with its Tasks', () => {
     await signOff(acceptanceTaskId);
     await taskModel.updateStatus(workTaskId, 'running');
 
-    expect(await new GoalArchiveModel(serverDB, userId).archive(goalId)).not.toBeNull();
+    expect(await new GoalArchiveRepository(serverDB, userId).archive(goalId)).not.toBeNull();
 
     expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
     expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeInstanceOf(Date);

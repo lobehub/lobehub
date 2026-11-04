@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { GoalArchiveModel } from '@/database/models/goalArchive';
+import { GoalArchiveRepository } from '@/database/repositories/goalArchive';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { advanceGoal } from '@/server/services/goal/advanceGoal';
@@ -182,7 +182,11 @@ export const lifecycleRouter = router({
         if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
         assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
 
-        const model = new GoalArchiveModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const model = new GoalArchiveRepository(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
         // The status check is part of the UPDATE, so a resume racing it can't slip past.
         const data = archived ? await model.archive(id) : await model.unarchive(id);
         if (!data) {

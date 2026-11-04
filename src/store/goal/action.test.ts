@@ -7,6 +7,7 @@ import { revalidateReplica } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiChatService } from '@/services/aiChat';
 import { goalService } from '@/services/goal';
+import { taskGroupListResource, taskListResource } from '@/store/task/slices/list/projection';
 
 import { useGoalStore } from './index';
 import { initialState } from './initialState';
@@ -425,6 +426,9 @@ describe('GoalAction', () => {
     expect(goalService.archive).toHaveBeenCalledWith('goal-1', true);
     const list = useGoalStore.getState().goalListByAgentId['agent-1'];
     expect(list?.goals.map((item) => item.goal.id)).toEqual(['goal-2']);
+    // Its Tasks move with it, so the task lists and boards re-read as well.
+    expect(revalidateReplica).toHaveBeenCalledWith(taskListResource);
+    expect(revalidateReplica).toHaveBeenCalledWith(taskGroupListResource);
   });
 
   it('reports an archive that landed as done even when the refresh after it fails', async () => {
