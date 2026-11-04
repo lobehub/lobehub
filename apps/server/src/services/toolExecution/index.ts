@@ -362,7 +362,7 @@ export class ToolExecutionService {
         }
       : undefined;
     const deadline = Date.now() + (context.executionTimeoutMs ?? 60_000);
-    let legacyToolMessageId: string | undefined;
+    let toolMessageId = context.toolMessageId;
     try {
       // Check if this is a cloud MCP endpoint
       if (mcpParams.type === 'cloud') {
@@ -370,8 +370,9 @@ export class ToolExecutionService {
       }
 
       if (elicitationService && identity) {
-        const toolMessageId = await elicitationService.ensureToolMessage(identity);
-        await elicitationService.messages.updatePluginState(toolMessageId, {
+        const ensuredMessageId = await elicitationService.ensureToolMessage(identity);
+        toolMessageId = ensuredMessageId;
+        await elicitationService.messages.updatePluginState(ensuredMessageId, {
           mcpInvocationDeadline: deadline,
         });
       }
@@ -385,6 +386,7 @@ export class ToolExecutionService {
           const message = `MCP server '${identifier}' uses stdio and must run on a desktop device, but this server's device gateway is not configured. Configure a device gateway on the server and connect the desktop app on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
+            toolMessageId,
             error: { code: 'MCP_GATEWAY_NOT_CONFIGURED', message },
             success: false,
           };
@@ -398,11 +400,18 @@ export class ToolExecutionService {
           const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online ${BRANDING_NAME} desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the ${BRANDING_NAME} desktop app on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
+            toolMessageId,
             error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
             success: false,
           };
         }
-        return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelTarget);
+        const result = await this.executeMcpViaDevice(
+          payload,
+          { ...context, toolMessageId },
+          mcpParams,
+          tunnelTarget,
+        );
+        return { ...result, toolMessageId: result.toolMessageId ?? toolMessageId };
       }
 
       // HTTP MCP endpoints can execute through the server-side MCP service.
@@ -425,12 +434,8 @@ export class ToolExecutionService {
             elicitationService && identity
               ? {
                   request: async (request, requestContext) => {
-                    legacyToolMessageId = await elicitationService.ensureToolMessage(identity);
                     return elicitationService
-                      .createLegacyHost(
-                        { ...identity, toolMessageId: legacyToolMessageId },
-                        deadline,
-                      )
+                      .createLegacyHost({ ...identity, toolMessageId }, deadline)
                       .request(request, requestContext);
                   },
                 }
@@ -452,7 +457,7 @@ export class ToolExecutionService {
             }
           : {}),
         state: typeof result === 'object' ? result : undefined,
-        ...(legacyToolMessageId && { toolMessageId: legacyToolMessageId }),
+        ...(toolMessageId && { toolMessageId }),
         success: result?.success !== false,
       };
     } catch (error) {
@@ -478,7 +483,7 @@ export class ToolExecutionService {
       }
       log('MCP tool execution failed for %s:%s: %O', identifier, apiName, error);
       const existingMessageId =
-        legacyToolMessageId ??
+        toolMessageId ??
         (elicitationService && identity
           ? await elicitationService.messages.findToolMessageIdByToolCallId(
               identity.toolCallId,
@@ -491,6 +496,7 @@ export class ToolExecutionService {
         });
         return {
           content,
+          toolMessageId: existingMessageId ?? undefined,
           error: { code: 'UNAUTHORIZED', message: (error as Error).message },
           success: false,
         };
