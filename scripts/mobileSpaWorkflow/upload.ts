@@ -15,6 +15,31 @@ interface UploadConfig {
   secretAccessKey: string;
 }
 
+export async function verifyUploadedAssets(urls: string[]) {
+  if (urls.length === 0) {
+    throw new Error('No mobile assets were uploaded');
+  }
+
+  const responses = await Promise.all(
+    urls.map(async (url) => {
+      try {
+        return { response: await fetch(url, { method: 'HEAD' }), url };
+      } catch (error) {
+        return { error, response: undefined, url };
+      }
+    }),
+  );
+  const missing = responses.filter(({ response }) => !response?.ok);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Uploaded mobile assets are not publicly reachable: ${missing
+        .map(({ error, response, url }) => `${url} (${response?.status ?? String(error)})`)
+        .join(', ')}`,
+    );
+  }
+}
+
 function collectFiles(dir: string): string[] {
   const results: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -67,6 +92,7 @@ export async function uploadAssets(assetsDir: string, config: UploadConfig) {
     { concurrency: 10 },
   );
 
+  await verifyUploadedAssets(results.map(({ url }) => url));
   console.log(`Successfully uploaded ${results.length} files`);
   return results;
 }
