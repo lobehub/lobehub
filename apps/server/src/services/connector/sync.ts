@@ -68,16 +68,11 @@ export const buildHttpAuthFromCredentials = (
 
   switch (credentials.type) {
     case 'oauth2': {
-      return {
-        auth: {
-          accessToken: credentials.accessToken,
-          clientId: undefined,
-          clientSecret: credentials.clientSecret,
-          refreshToken: credentials.refreshToken,
-          tokenExpiresAt: credentials.expiresAt,
-          type: 'oauth2',
-        },
-      };
+      // Only the access token: callers refresh it first (ensureFreshConnectorToken),
+      // and the MCP client sends nothing else. Refresh metadata here would also
+      // make these params, and so the cached MCP session, differ from the agent
+      // runtime's for the same connector.
+      return { auth: { accessToken: credentials.accessToken, type: 'oauth2' } };
     }
     case 'bearer': {
       return { auth: { token: credentials.token, type: 'bearer' } };

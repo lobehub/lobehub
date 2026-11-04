@@ -36,7 +36,7 @@ describe('buildHttpAuthFromCredentials', () => {
     expect(buildHttpAuthFromCredentials(null)).toEqual({});
   });
 
-  it('maps oauth2 to bearer auth with refresh metadata', () => {
+  it('maps oauth2 to the access token alone, already refreshed by the caller', () => {
     const result = buildHttpAuthFromCredentials({
       accessToken: 'access',
       clientSecret: 'secret',
@@ -45,16 +45,7 @@ describe('buildHttpAuthFromCredentials', () => {
       type: 'oauth2',
     });
 
-    expect(result).toEqual({
-      auth: {
-        accessToken: 'access',
-        clientId: undefined,
-        clientSecret: 'secret',
-        refreshToken: 'refresh',
-        tokenExpiresAt: 123,
-        type: 'oauth2',
-      },
-    });
+    expect(result).toEqual({ auth: { accessToken: 'access', type: 'oauth2' } });
     expect(result.headers).toBeUndefined();
   });
 
@@ -82,6 +73,22 @@ describe('buildHttpAuthFromCredentials', () => {
 });
 
 describe('buildConnectorMcpParams', () => {
+  it('matches the params agent runs use for an OAuth connector too', () => {
+    const connector = httpConnector({
+      accessToken: 'access',
+      clientSecret: 'secret',
+      expiresAt: 123,
+      refreshToken: 'refresh',
+      type: 'oauth2',
+    });
+    const [manifest] = buildConnectorManifests(
+      [connector],
+      [{ toolName: 'do_thing', userConnectorId: 'c1' } as any],
+    );
+
+    expect(buildConnectorMcpParams(connector)).toEqual((manifest as any).mcpParams);
+  });
+
   it('matches the params agent runs use, so a view reaches the same MCP session', () => {
     // Display name differs from the identifier: the session key must not depend on it
     const connector = httpConnector(
