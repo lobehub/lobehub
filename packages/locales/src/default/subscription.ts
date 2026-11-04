@@ -650,6 +650,8 @@ export default {
   'plans.payonce.upgradeHint.blocked':
     'Your current plan is worth more than this. Choose a longer duration',
   'plans.payonce.upgradeHint.credit': '{{amount}} credit from your current plan applied',
+  'plans.payonce.upgradeHint.error':
+    "Couldn't load your upgrade price. Checkout shows the final amount",
   'plans.payonce.upgradeHint.fullPrice': 'Full price. Replaces your current plan',
   'plans.payonce.upgradeHint.noProration': "Days left on your current plan aren't credited",
   'plans.plan.enterprise.contactSales': 'Contact Sales',

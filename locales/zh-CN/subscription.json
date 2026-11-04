@@ -576,6 +576,7 @@
   "plans.payonce.upgradeCheckoutCredit": "已抵扣当前套餐剩余价值 {{credit}}（原价 {{original}}）",
   "plans.payonce.upgradeHint.blocked": "当前套餐剩余价值高于此价格，请选择更长时长",
   "plans.payonce.upgradeHint.credit": "已抵扣当前套餐剩余 {{amount}}",
+  "plans.payonce.upgradeHint.error": "暂时无法获取升级价格，结账页会显示最终金额",
   "plans.payonce.upgradeHint.fullPrice": "按全价购买，当前套餐将被替换",
   "plans.payonce.upgradeHint.noProration": "当前套餐剩余天数不折算",
   "plans.pendingDowngrade": "已预约降级",
