@@ -639,7 +639,7 @@ describe('WorkspaceMemberModel', () => {
       expect(result.role).toBe('admin');
       expect(result.email).toBeNull();
       const expectedMs = INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
-      const diff = result.expiresAt.getTime() - before;
+      const diff = result.expiresAt!.getTime() - before;
       // allow generous slack for test execution time
       expect(diff).toBeGreaterThan(expectedMs - 60_000);
       expect(diff).toBeLessThan(expectedMs + 60_000);
@@ -691,6 +691,82 @@ describe('WorkspaceMemberModel', () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
 
       expect(await model.findInvitationByToken('does-not-exist')).toBeUndefined();
+    });
+  });
+
+  describe('reusable link invitations', () => {
+    it('rotateLinkInvitation creates a reusable link and revokes the previous one atomically', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+
+      const first = await model.rotateLinkInvitation({ expiresAt: null, workspaceId });
+      expect(first.revokedIds).toEqual([]);
+      expect(first.invitation).toMatchObject({
+        email: null,
+        expiresAt: null,
+        inviterId,
+        reusable: true,
+        role: 'member',
+        status: 'pending',
+      });
+      expect(first.invitation.token).toHaveLength(32);
+
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const second = await model.rotateLinkInvitation({ expiresAt, role: 'viewer', workspaceId });
+      expect(second.revokedIds).toEqual([first.invitation.id]);
+      expect(second.invitation.token).not.toBe(first.invitation.token);
+      expect(second.invitation.role).toBe('viewer');
+      expect(second.invitation.expiresAt?.getTime()).toBe(expiresAt.getTime());
+
+      expect((await model.findInvitationByToken(first.invitation.token))?.status).toBe('revoked');
+      expect((await model.findLatestLinkInvitation(workspaceId))?.id).toBe(second.invitation.id);
+    });
+
+    it('enforces at most one active link per workspace at the database level', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.rotateLinkInvitation({ expiresAt: null, workspaceId });
+
+      await expect(
+        serverDB.insert(workspaceInvitations).values({
+          inviterId,
+          reusable: true,
+          token: 'second-active-link',
+          workspaceId,
+        }),
+      ).rejects.toThrow();
+
+      // Other workspaces and single-use invitations are unaffected.
+      const other = new WorkspaceMemberModel(serverDB, otherUserId);
+      await expect(
+        other.rotateLinkInvitation({ expiresAt: null, workspaceId: otherWorkspaceId }),
+      ).resolves.toBeDefined();
+      await expect(model.createInvitation({ workspaceId })).resolves.toBeDefined();
+    });
+
+    it('revokeLinkInvitations revokes the active link and is a no-op when none exists', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      expect(await model.revokeLinkInvitations(workspaceId)).toEqual([]);
+      expect(await model.findLatestLinkInvitation(workspaceId)).toBeUndefined();
+      const { invitation } = await model.rotateLinkInvitation({ expiresAt: null, workspaceId });
+      const single = await model.createInvitation({ workspaceId });
+
+      expect(await model.revokeLinkInvitations(workspaceId)).toEqual([invitation.id]);
+      // The revoked link is still reported, so callers can show "revoked".
+      expect(await model.findLatestLinkInvitation(workspaceId)).toMatchObject({
+        id: invitation.id,
+        status: 'revoked',
+      });
+      // Single-use invitations are left alone.
+      expect((await model.findInvitationByToken(single.token))?.status).toBe('pending');
+    });
+
+    it('listPendingInvitations excludes reusable links', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      const single = await model.createInvitation({ workspaceId });
+      await model.rotateLinkInvitation({ expiresAt: null, workspaceId });
+
+      const rows = await model.listPendingInvitations(workspaceId);
+
+      expect(rows.map((row) => row.id)).toEqual([single.id]);
     });
   });
 

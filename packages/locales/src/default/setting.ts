@@ -2687,6 +2687,9 @@ When I am ___, I need ___
   'workspace.auditLog.actions.integration.disabled': 'Integration disabled',
   'workspace.auditLog.actions.integration.disconnected': 'Integration disconnected',
   'workspace.auditLog.actions.integration.updated': 'Integration updated',
+  'workspace.auditLog.actions.invitation.link_created': 'Invite link created',
+  'workspace.auditLog.actions.invitation.link_revoked': 'Invite link revoked',
+  'workspace.auditLog.actions.invitation.link_rotated': 'Invite link reset',
   'workspace.auditLog.actions.invitation.resent': 'Invitation resent',
   'workspace.auditLog.actions.invitation.revoked': 'Invitation revoked',
   'workspace.auditLog.actions.market_identity.published': 'Market identity published',
@@ -3273,6 +3276,19 @@ When I am ___, I need ___
   'workspace.invitePage.workspaceLimitSubtitle':
     "You've reached the maximum of {{limit}} workspaces. Leave one before joining another.",
   'workspace.invitePage.workspaceLimitTitle': 'Workspace limit reached',
+  'workspace.invitePage.acceptFailed': "Couldn't join the workspace. Please try again.",
+  'workspace.invitePage.alreadyMemberSubtitle':
+    "You're already in {{workspace}}. Open it to pick up where you left off.",
+  'workspace.invitePage.alreadyMemberTitle': "You're already a member",
+  'workspace.invitePage.linkExpiredSubtitle':
+    'This invite link has expired. Ask a workspace admin for a new link.',
+  'workspace.invitePage.linkExpiredTitle': 'Invite link expired',
+  'workspace.invitePage.linkResetSubtitle':
+    'A workspace admin has reset this link, so it no longer works. Ask them for the new one.',
+  'workspace.invitePage.linkResetTitle': 'Invite link no longer valid',
+  'workspace.invitePage.linkRevokedSubtitle':
+    'A workspace admin has revoked this link. Ask them for a new one if you still need to join.',
+  'workspace.invitePage.linkRevokedTitle': 'Invite link revoked',
   'workspace.waitlistPage.badge': 'Workspace · Private Beta',
   'workspace.waitlistPage.createWorkspaceCta': 'Create workspace',
   'workspace.waitlistPage.enabledSubtitle': 'Workspace is already enabled for your account.',
@@ -3363,6 +3379,49 @@ When I am ___, I need ___
     '{{success}} invited, {{failed}} failed. Check the addresses and try again.',
   'workspace.members.invite.success': 'Invitations sent. Invitation links expire after 1 week.',
   'workspace.members.invite.title': 'Invite Members',
+  'workspace.members.inviteLink.activeMeta': 'Joins as {{role}} · {{expiry}}',
+  'workspace.members.inviteLink.conflict':
+    'Another admin just changed the invite link. The latest link is now shown.',
+  'workspace.members.inviteLink.copied': 'Invite link copied',
+  'workspace.members.inviteLink.copy': 'Copy link',
+  'workspace.members.inviteLink.copyFailed':
+    "Couldn't copy the link. Select it and copy it manually.",
+  'workspace.members.inviteLink.create': 'Create invite link',
+  'workspace.members.inviteLink.createFailed': "Couldn't create the invite link. Try again.",
+  'workspace.members.inviteLink.created': 'Invite link created. Copy it to share.',
+  'workspace.members.inviteLink.description':
+    'Anyone with this link can join the workspace after signing in. No email invitation needed.',
+  'workspace.members.inviteLink.expiredNote':
+    'The previous link expired on {{date}}. Create a new one to keep inviting.',
+  'workspace.members.inviteLink.expiresOn': 'Expires {{date}}',
+  'workspace.members.inviteLink.expiry.30d': '30 days',
+  'workspace.members.inviteLink.expiry.7d': '7 days',
+  'workspace.members.inviteLink.expiry.never': 'Never expires',
+  'workspace.members.inviteLink.expiryLabel': 'Expires after',
+  'workspace.members.inviteLink.loadFailed': "Couldn't load the invite link.",
+  'workspace.members.inviteLink.neverExpires': 'Never expires',
+  'workspace.members.inviteLink.noPermission':
+    'Only workspace admins and owners can create or share the invite link.',
+  'workspace.members.inviteLink.reset': 'Reset link',
+  'workspace.members.inviteLink.resetConfirm.content':
+    'A new link replaces the current one, and the current link stops working right away. People who already joined stay in the workspace.',
+  'workspace.members.inviteLink.resetConfirm.title': 'Reset the invite link?',
+  'workspace.members.inviteLink.resetFailed':
+    "Couldn't reset the invite link. The link shown below is the current one.",
+  'workspace.members.inviteLink.resetSuccess':
+    'Invite link reset. The previous link no longer works.',
+  'workspace.members.inviteLink.retry': 'Retry',
+  'workspace.members.inviteLink.revoke': 'Revoke link',
+  'workspace.members.inviteLink.revokeConfirm.content':
+    'The link stops working right away. People who already joined stay in the workspace. You can create a new link later.',
+  'workspace.members.inviteLink.revokeConfirm.title': 'Revoke the invite link?',
+  'workspace.members.inviteLink.revokeFailed': "Couldn't revoke the invite link. Try again.",
+  'workspace.members.inviteLink.revoked': 'Invite link revoked',
+  'workspace.members.inviteLink.revokedNote':
+    'The previous link was revoked. Create a new one to invite people by link.',
+  'workspace.members.inviteLink.roleLabel': 'Joins as',
+  'workspace.members.inviteLink.title': 'Invite link',
+  'workspace.members.inviteLink.unappliedHint': 'Reset the link to apply the new role and expiry.',
   'workspace.members.pending.columns.email': 'Email',
   'workspace.members.pending.columns.expiresAt': 'Expires',
   'workspace.members.pending.empty': 'No pending invitations',
