@@ -1,8 +1,7 @@
 // @vitest-environment node
+import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
 
 import { getTestDB } from '@/database/core/getTestDB';
 import { AgentOperationModel } from '@/database/models/agentOperation';
