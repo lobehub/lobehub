@@ -15,6 +15,11 @@ export const nextOpen = (
   return undefined;
 };
 
+export const nextSelection = (
+  items: Array<{ key: string; state: string }>,
+  current: string | undefined,
+): string | undefined => nextOpen(items, current);
+
 const KEYS: Record<string, 'next' | 'pass' | 'previous' | 'rework'> = {
   j: 'next',
   k: 'previous',

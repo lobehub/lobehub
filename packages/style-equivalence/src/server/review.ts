@@ -10,8 +10,15 @@ import {
   reviewItems,
   reworkRecord,
 } from '../review/state';
-import { readReviews, type ReworkRecord, writeReviews } from '../review/store';
-import { ApiError, currentVerdict, defaultSigner, type StoredRun } from './api';
+import { type ReworkRecord, writeReviews } from '../review/store';
+import {
+  ApiError,
+  currentVerdict,
+  defaultSigner,
+  readRunReviews,
+  runPr,
+  type StoredRun,
+} from './api';
 
 interface CaseEntry {
   category: string;
@@ -98,8 +105,7 @@ export type ReviewView = ReturnType<typeof describe>;
 
 export const reviewState = async (stored: StoredRun) => {
   const verdict = await currentVerdict(stored);
-  const files = stored.items.map((item) => item.file);
-  const reviews = await readReviews(stored.recordsDir, files);
+  const reviews = await readRunReviews(stored);
   const resolved = resolvedReworks(verdict.items, reviews, new Date().toISOString());
   for (const rework of resolved) {
     await writeReviews(stored.recordsDir, rework.file, { reworks: [rework] });
@@ -169,7 +175,7 @@ export const applyReview = async (
         reworks,
       });
     } else {
-      const pr = (stored.run.pr as { number?: number } | undefined)?.number;
+      const pr = runPr(stored);
       const record = reworkRecord(
         item,
         {

@@ -61,6 +61,24 @@ describe('review state', () => {
     expect(stateOf([item({ hash: 'h2' })], reviews)).toBe('passed');
   });
 
+  it('shows a send-back made after a pass as reworked', () => {
+    const reviews = empty();
+    const [entry] = reviewItems(verdictOf([item()], reviews).items, reviews, context());
+    reviews.passes.set(entry.key, passRecord(entry, '', 'innei', '2026-11-05T01:00:00Z'));
+    reviews.reworks.set(entry.key, { ...rework(), at: '2026-11-05T02:00:00Z' });
+    expect(stateOf([item()], reviews)).toBe('reworked');
+  });
+
+  it('keeps a file-level send-back as reworked when neither side has an element signature', () => {
+    const reviews = empty();
+    const fileItem = item({ flags: ['STYLE_OUTSIDE_JSX'], key: 'src/A.tsx|file' });
+    reviews.reworks.set(fileItem.key, { ...rework(), elementSignature: '', key: fileItem.key });
+    const ctx = { combos: new Map<string, number>(), signatures: new Map<string, string>() };
+    expect(reviewItems(verdictOf([fileItem], reviews).items, reviews, ctx)[0].state).toBe(
+      'reworked',
+    );
+  });
+
   it('marks a rework changed when the element at that key is a different element', () => {
     const reviews = empty();
     reviews.reworks.set('src/A.tsx|A#0', rework('h1', 'div|styles.card'));

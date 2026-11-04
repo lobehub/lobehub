@@ -3,7 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchReview, postReview, type ReviewPayload } from '../api';
-import { keyAction, nextOpen } from '../review';
+import { keyAction, nextSelection } from '../review';
 import { ReviewBar } from './ReviewBar';
 import { ReviewItemView } from './ReviewItemView';
 import { ReviewQueue } from './ReviewQueue';
@@ -88,7 +88,7 @@ export const ReviewPage = () => {
     fetchReview()
       .then((next) => {
         setPayload(next);
-        setCurrent(nextOpen(next.items, undefined) ?? next.items[0]?.key);
+        setCurrent(nextSelection(next.items, undefined));
       })
       .catch((reason: unknown) => setError(String(reason)));
   }, []);
@@ -109,7 +109,7 @@ export const ReviewPage = () => {
       try {
         const next = await postReview({ action, key: item.key, note });
         setPayload(next);
-        select(nextOpen(next.items, item.key) ?? item.key);
+        select(nextSelection(next.items, item.key));
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : String(reason));
       } finally {

@@ -167,6 +167,30 @@ describe('placementPreserved', () => {
     ).toBe(false);
   });
 
+  it('rejects a bare stylex.props object passed where a class string is expected', () => {
+    expect(
+      placementPreserved(
+        [el('Menu', [prop('itemClassName', 'styles.a')])],
+        [el('Menu', [prop('itemClassName', 'stylex.props(styles.a)')])],
+      ),
+    ).toBe(false);
+    expect(
+      placementPreserved(
+        [el('Checkbox', [prop('classNames', '{ text: styles.a }')])],
+        [el('Checkbox', [prop('classNames', '{ text: stylex.props(styles.a) }')])],
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects style slots left outside the single stylex.props call', () => {
+    expect(
+      placementPreserved(
+        [el('Row', [cls('cx(styles.a, styles.b)')])],
+        [el('Row', [cls('cx(styles.a, stylex.props(styles.b).className)')])],
+      ),
+    ).toBe(false);
+  });
+
   it('fails closed on shapes it does not understand', () => {
     expect(
       placementPreserved(

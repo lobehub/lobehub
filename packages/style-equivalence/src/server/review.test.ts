@@ -181,6 +181,31 @@ describe('review API', () => {
   });
 });
 
+describe('rework scope', () => {
+  it('does not resolve or show a send-back that belongs to another PR', async () => {
+    const file = path.join(root, 'reviews/src/A.tsx.json');
+    const stored = JSON.parse(await readFile(file, 'utf8'));
+    stored.reworks.push({
+      at: '2026-11-05T00:00:00Z',
+      base: 'x',
+      elementSignature: 'div|styles.box',
+      file: 'src/A.tsx',
+      hash: 'other-hash',
+      head: 'y',
+      key: 'src/A.tsx|A#3',
+      note: '别的 PR 的打回',
+      pr: 99_999,
+      reviewer: 'innei',
+      runId: 'other-run',
+    });
+    await writeFile(file, JSON.stringify(stored));
+    const payload = await queue();
+    expect(payload.resolved.map((entry: any) => entry.key)).not.toContain('src/A.tsx|A#3');
+    const after = JSON.parse(await readFile(file, 'utf8'));
+    expect(after.reworks.find((entry: any) => entry.pr === 99_999).resolvedAt).toBeUndefined();
+  });
+});
+
 describe('rework and annotate commands', () => {
   it('prints open reworks with the element and the reviewer note', async () => {
     const text = await reworkList(await loadRun(runDir));

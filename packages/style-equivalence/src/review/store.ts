@@ -58,21 +58,46 @@ const readReviewFile = async (recordsDir: string, file: string): Promise<ReviewF
   }
 };
 
-export const readReviews = async (recordsDir: string, files: string[]): Promise<Reviews> => {
+export interface ReviewScope {
+  hashes?: Map<string, string>;
+  pr?: number;
+}
+
+export const reviewScope = (items: Array<{ hash: string; key: string }>, pr?: number) => ({
+  hashes: new Map(items.map((item) => [item.key, item.hash])),
+  pr,
+});
+
+const matchesHash = (scope: ReviewScope | undefined, record: { hash: string; key: string }) => {
+  const expected = scope?.hashes?.get(record.key);
+  return expected === undefined || expected === record.hash;
+};
+
+export const readReviews = async (
+  recordsDir: string,
+  files: string[],
+  scope?: ReviewScope,
+): Promise<Reviews> => {
   const reviews: Reviews = { notes: new Map(), passes: new Map(), reworks: new Map() };
   for (const file of new Set(files)) {
     const stored = await readReviewFile(recordsDir, file);
-    for (const record of stored.passes) reviews.passes.set(record.key, record);
-    for (const record of stored.reworks) reviews.reworks.set(record.key, record);
-    for (const record of stored.notes) reviews.notes.set(record.key, record);
+    for (const record of stored.passes)
+      if (matchesHash(scope, record)) reviews.passes.set(record.key, record);
+    for (const record of stored.notes)
+      if (matchesHash(scope, record)) reviews.notes.set(record.key, record);
+    for (const record of stored.reworks)
+      if (!scope || record.pr === scope.pr) reviews.reworks.set(record.key, record);
   }
   return reviews;
 };
 
-const mergeByKey = <T extends { key: string }>(current: T[], next: T[] = []) => {
-  const merged = new Map(current.map((record) => [record.key, record]));
-  for (const record of next) merged.set(record.key, record);
-  return [...merged.values()].sort((a, b) => a.key.localeCompare(b.key));
+const hashId = (record: { hash: string; key: string }) => `${record.key}@${record.hash}`;
+const reworkId = (record: ReworkRecord) => `${record.key}@${record.pr ?? record.runId}`;
+
+const mergeById = <T>(current: T[], next: T[] = [], id: (record: T) => string) => {
+  const merged = new Map(current.map((record) => [id(record), record]));
+  for (const record of next) merged.set(id(record), record);
+  return [...merged].sort(([a], [b]) => a.localeCompare(b)).map(([, record]) => record);
 };
 
 const queues = new Map<string, Promise<unknown>>();
@@ -80,9 +105,9 @@ const queues = new Map<string, Promise<unknown>>();
 const writeNow = async (recordsDir: string, file: string, patch: Partial<ReviewFile>) => {
   const current = await readReviewFile(recordsDir, file);
   const next: ReviewFile = {
-    notes: mergeByKey(current.notes, patch.notes),
-    passes: mergeByKey(current.passes, patch.passes),
-    reworks: mergeByKey(current.reworks, patch.reworks),
+    notes: mergeById(current.notes, patch.notes, hashId),
+    passes: mergeById(current.passes, patch.passes, hashId),
+    reworks: mergeById(current.reworks, patch.reworks, reworkId),
   };
   const target = reviewPath(recordsDir, file);
   await mkdir(path.dirname(target), { recursive: true });

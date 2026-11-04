@@ -5,6 +5,8 @@ import type { StyleBinding, StyleElement } from '../extract';
 type Canonical = { entries: Record<string, Canonical> } | { terms: string[] };
 
 interface Context {
+  depth: number;
+  outside: number;
   propsCalls: number;
 }
 
@@ -40,20 +42,28 @@ const termsOfAll = (nodes: readonly ts.Expression[], ctx: Context) => {
 const prefixed = (node: ts.Expression, prefix: string, ctx: Context) =>
   termsOf(node, ctx)?.map((term) => `${prefix}${term}`);
 
+const propsTerms = (call: ts.CallExpression, ctx: Context) => {
+  ctx.propsCalls += 1;
+  ctx.depth += 1;
+  const terms = termsOfAll(call.arguments, ctx);
+  ctx.depth -= 1;
+  return terms;
+};
+
 function termsOf(raw: ts.Expression, ctx: Context): string[] | undefined {
   const node = unwrap(raw);
   if (EMPTY.has(compact(node))) return [];
   if (ts.isIdentifier(node)) return [node.text];
   if (ts.isPropertyAccessExpression(node)) {
     const target = unwrap(node.expression);
-    if (node.name.text === 'className' && isStylexProps(target)) return termsOf(target, ctx);
-    return ts.isIdentifier(target) ? [compact(node)] : undefined;
+    if (node.name.text === 'className' && ts.isCallExpression(target) && isStylexProps(target))
+      return propsTerms(target, ctx);
+    if (!ts.isIdentifier(target)) return undefined;
+    if (ctx.depth === 0) ctx.outside += 1;
+    return [compact(node)];
   }
   if (ts.isCallExpression(node)) {
-    if (isStylexProps(node)) {
-      ctx.propsCalls += 1;
-      return termsOfAll(node.arguments, ctx);
-    }
+    if (isStylexProps(node)) return undefined;
     return ts.isIdentifier(node.expression) && MERGERS.has(node.expression.text)
       ? termsOfAll(node.arguments, ctx)
       : undefined;
@@ -72,7 +82,7 @@ function termsOf(raw: ts.Expression, ctx: Context): string[] | undefined {
   return undefined;
 }
 
-const canonicalOf = (raw: ts.Expression): Canonical | undefined => {
+const canonicalOf = (raw: ts.Expression, spread = false): Canonical | undefined => {
   const node = unwrap(raw);
   if (ts.isObjectLiteralExpression(node)) {
     const entries: Record<string, Canonical> = {};
@@ -90,9 +100,13 @@ const canonicalOf = (raw: ts.Expression): Canonical | undefined => {
     }
     return { entries };
   }
-  const ctx: Context = { propsCalls: 0 };
-  const terms = termsOf(node, ctx);
-  return terms && ctx.propsCalls <= 1 ? { terms } : undefined;
+  const ctx: Context = { depth: 0, outside: 0, propsCalls: 0 };
+  const terms =
+    spread && ts.isCallExpression(node) && isStylexProps(node)
+      ? propsTerms(node, ctx)
+      : termsOf(node, ctx);
+  if (!terms || ctx.propsCalls > 1) return undefined;
+  return ctx.propsCalls === 1 && ctx.outside > 0 ? undefined : { terms };
 };
 
 const normalize = (binding: StyleBinding) => {
@@ -100,7 +114,7 @@ const normalize = (binding: StyleBinding) => {
   if (!expression) return undefined;
   if (binding.spread) {
     if (!isStylexProps(expression)) return undefined;
-    const value = canonicalOf(expression);
+    const value = canonicalOf(expression, true);
     return value && { prop: 'className', value };
   }
   const value = canonicalOf(expression);

@@ -54,12 +54,14 @@ const stateOf = (
   rework: ReworkRecord | undefined,
   note: AgentNote | undefined,
   signature: string | undefined,
+  pass: SignoffRecord | undefined,
 ): ReviewState => {
-  if (item.signoff === 'valid') return 'passed';
-  if (rework)
-    return rework.hash === item.hash && rework.elementSignature === signature
+  const passed = item.signoff === 'valid';
+  if (rework && (!passed || !pass || rework.at > pass.signedAt))
+    return rework.hash === item.hash && (rework.elementSignature || '') === (signature || '')
       ? 'reworked'
       : 'changed';
+  if (passed) return 'passed';
   if (agent && note?.hash !== item.hash) return 'waiting-agent';
   return 'todo';
 };
@@ -74,7 +76,14 @@ export const reviewItems = (
     const rework = reviews.reworks.get(item.key);
     const openRework = rework && !rework.resolvedAt ? rework : undefined;
     const note = reviews.notes.get(item.key);
-    const state = stateOf(item, agent, openRework, note, context.signatures.get(item.key));
+    const state = stateOf(
+      item,
+      agent,
+      openRework,
+      note,
+      context.signatures.get(item.key),
+      reviews.passes.get(item.key),
+    );
     return {
       ...item,
       canPass: canPassItem(item) && state !== 'waiting-agent',

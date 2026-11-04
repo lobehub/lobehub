@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { readReviews, writeReviews } from '../review/store';
+import { readReviews, reviewScope, writeReviews } from '../review/store';
 import { decideVerdict, signCases, type VerdictItem } from '../verdict';
 
 const run = promisify(execFile);
@@ -49,11 +49,18 @@ export const loadRun = async (runDir: string): Promise<StoredRun> => {
 export const readSelfTest = async (file: string) =>
   readJson<unknown>(path.dirname(file), path.basename(file), null);
 
-export const currentVerdict = async (stored: StoredRun) => {
-  const reviews = await readReviews(
+export const runPr = (stored: StoredRun) =>
+  (stored.run.pr as { number?: number } | undefined)?.number;
+
+export const readRunReviews = (stored: StoredRun) =>
+  readReviews(
     stored.recordsDir,
     stored.items.map((item) => item.file),
+    reviewScope(stored.items, runPr(stored)),
   );
+
+export const currentVerdict = async (stored: StoredRun) => {
+  const reviews = await readRunReviews(stored);
   return decideVerdict({
     calibration: stored.calibration,
     items: stored.items,
@@ -105,12 +112,7 @@ export const applySignoff = async (
   let records;
   try {
     records = signCases({
-      existing: (
-        await readReviews(
-          stored.recordsDir,
-          stored.items.map((item) => item.file),
-        )
-      ).passes,
+      existing: (await readRunReviews(stored)).passes,
       items: stored.items,
       keys: body.keys.map(String),
       note: body.note,

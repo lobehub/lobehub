@@ -81,6 +81,25 @@ describe('review store', () => {
     expect((await readReviews(records, ['src/A.tsx'])).passes.size).toBe(4);
   });
 
+  it('keeps passes for different hashes and picks the one matching the current hash', async () => {
+    await writeReviews(records, 'src/A.tsx', { passes: [pass('src/A.tsx|A#0', 'h1')] });
+    await writeReviews(records, 'src/A.tsx', { passes: [pass('src/A.tsx|A#0', 'h2')] });
+    const scoped = await readReviews(records, ['src/A.tsx'], {
+      hashes: new Map([['src/A.tsx|A#0', 'h1']]),
+    });
+    expect(scoped.passes.get('src/A.tsx|A#0')?.hash).toBe('h1');
+  });
+
+  it('only reads reworks of the requested PR', async () => {
+    await writeReviews(records, 'src/A.tsx', { reworks: [{ ...rework('src/A.tsx|A#2'), pr: 1 }] });
+    await writeReviews(records, 'src/A.tsx', {
+      reworks: [{ ...rework('src/A.tsx|A#2'), note: 'PR 2 的原因', pr: 2 }],
+    });
+    const scoped = await readReviews(records, ['src/A.tsx'], { pr: 1 });
+    expect(scoped.reworks.get('src/A.tsx|A#2')?.pr).toBe(1);
+    expect((await readReviews(records, ['src/A.tsx'], { pr: 3 })).reworks.size).toBe(0);
+  });
+
   it('reads an unknown file as empty', async () => {
     const reviews = await readReviews(records, ['src/missing.tsx']);
     expect(reviews.passes.size + reviews.reworks.size + reviews.notes.size).toBe(0);

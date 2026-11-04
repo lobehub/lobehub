@@ -1,7 +1,7 @@
 import type { CaseResult } from '../analyze/diff';
 import type { FileExtraction } from '../extract';
 import type { FilePlan, PlanCase, Side } from '../plan/planFile';
-import { readReviews } from '../review/store';
+import { readReviews, reviewScope } from '../review/store';
 import {
   type CaseHashInput,
   collectCaseHashInput,
@@ -25,6 +25,7 @@ export interface AssembleInput {
   extractions: Record<string, Record<Side, FileExtraction>>;
   mutation: { passed: boolean };
   plans: FilePlan[];
+  pr?: number;
   recordsDir: string;
   roots: Record<Side, string>;
   scope: ScopeFile[];
@@ -98,6 +99,7 @@ export const assembleVerdict = async (input: AssembleInput) => {
   const { passes: signoffs, reworks } = await readReviews(
     input.recordsDir,
     items.map((item) => item.file),
+    reviewScope(items, input.pr),
   );
   const verdict: Verdict = decideVerdict({
     calibration: input.calibration,

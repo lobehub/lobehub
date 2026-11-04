@@ -99,6 +99,22 @@ export const caseSnapshot = async (request: CaseRequest) => {
 
 const CROP_PADDING = 16;
 
+interface Rect {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
+export const cropClip = (section: Rect, box: number[], padding: number): Rect => {
+  const [x, y, width, height] = box;
+  const left = Math.max(section.x, section.x + x - padding);
+  const top = Math.max(section.y, section.y + y - padding);
+  const right = Math.min(section.x + section.width, section.x + x + width + padding);
+  const bottom = Math.min(section.y + section.height, section.y + y + height + padding);
+  return { height: bottom - top, width: right - left, x: left, y: top };
+};
+
 export const caseShot = async (
   request: CaseRequest & { crop?: boolean; side: 'base' | 'head' },
 ) => {
@@ -119,12 +135,9 @@ export const caseShot = async (
     const origin = target ? await section.boundingBox() : null;
     if (!target || !origin || target.box[2] <= 0 || target.box[3] <= 0)
       return await section.screenshot({ animations: 'disabled' });
-    const [x, y, width, height] = target.box;
-    const left = Math.max(0, origin.x + x - CROP_PADDING);
-    const top = Math.max(0, origin.y + y - CROP_PADDING);
     return await page.screenshot({
       animations: 'disabled',
-      clip: { height: height + CROP_PADDING * 2, width: width + CROP_PADDING * 2, x: left, y: top },
+      clip: cropClip(origin, target.box, CROP_PADDING),
     });
   } finally {
     await page.close();

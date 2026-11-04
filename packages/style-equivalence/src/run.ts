@@ -233,6 +233,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       extractions: synthesis.extractions,
       mutation,
       plans: synthesis.plans,
+      pr: options.pr?.number,
       recordsDir: options.recordsDir,
       roots,
       scope,

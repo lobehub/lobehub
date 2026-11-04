@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { keyAction, nextOpen, reviewGrid } from './review';
+import { keyAction, nextOpen, nextSelection, reviewGrid } from './review';
 
 const item = (key: string, state: string) => ({ key, state });
 
@@ -24,6 +24,14 @@ describe('nextOpen', () => {
 
   it('starts from the first open item without a current one', () => {
     expect(nextOpen(items, undefined)).toBe('b');
+  });
+});
+
+describe('nextSelection', () => {
+  it('leaves nothing selected once every item is handled, so the completion state shows', () => {
+    expect(nextSelection([item('a', 'passed'), item('b', 'reworked')], 'b')).toBeUndefined();
+    expect(nextSelection([item('a', 'passed')], undefined)).toBeUndefined();
+    expect(nextSelection([item('a', 'passed'), item('b', 'todo')], 'a')).toBe('b');
   });
 });
 
