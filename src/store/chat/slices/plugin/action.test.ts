@@ -1350,6 +1350,37 @@ describe('ChatPluginAction', () => {
         );
       });
 
+      it("resolves connectors for the message's agent, like the agent's runs do", async () => {
+        const mcpService = await import('@/services/mcp');
+        const invoke = vi
+          .spyOn(mcpService.mcpService, 'invokeMcpToolCall')
+          .mockResolvedValue({ content: 'ok', state: { content: [] }, success: true } as any);
+
+        act(() => {
+          useChatStore.setState({
+            dbMessagesMap: {
+              [messageMapKey({ agentId: 'agt_1' })]: [
+                // No topic: the oversized-result archive (a server call) stays out of it
+                { agentId: 'agt_1', id: messageId, role: 'tool' } as any,
+              ],
+            },
+            messageOperationMap: {},
+            messagesMap: { [messageMapKey({ agentId: 'agt_1' })]: [] },
+            operations: {},
+            optimisticUpdateToolMessage: vi.fn().mockResolvedValue(undefined),
+            replaceMessages: vi.fn(),
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.invokeMCPTypePlugin(messageId, payload);
+        });
+
+        // A connector linked to an agent serves only that agent
+        expect(invoke).toHaveBeenCalledWith(payload, expect.objectContaining({ agentId: 'agt_1' }));
+      });
+
       it('should use optimisticUpdateToolMessage for error result', async () => {
         const mockResult = {
           content: 'error content',
