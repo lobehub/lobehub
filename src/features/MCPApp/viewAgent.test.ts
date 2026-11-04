@@ -1,0 +1,24 @@
+import { describe, expect, it } from 'vitest';
+
+import type { State } from '@/features/Conversation/store/initialState';
+
+import { mcpAppAgentIdSelector } from './viewAgent';
+
+const groupState = (dbMessages: unknown[]) =>
+  // A group conversation's context carries the supervisor
+  ({ context: { agentId: 'supervisor' }, dbMessages }) as unknown as State;
+
+describe('mcpAppAgentIdSelector', () => {
+  it('acts as the member whose message carries the result, not the group supervisor', () => {
+    const s = groupState([{ agentId: 'member', id: 'tool-msg', role: 'tool' }]);
+
+    expect(mcpAppAgentIdSelector('tool-msg')(s)).toBe('member');
+  });
+
+  it("falls back to the conversation's agent when the message names none", () => {
+    expect(mcpAppAgentIdSelector('tool-msg')(groupState([{ id: 'tool-msg', role: 'tool' }]))).toBe(
+      'supervisor',
+    );
+    expect(mcpAppAgentIdSelector(undefined)(groupState([]))).toBe('supervisor');
+  });
+});

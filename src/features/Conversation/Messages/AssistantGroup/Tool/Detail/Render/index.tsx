@@ -90,6 +90,7 @@ const ToolRender = memo<ToolRenderProps>(
           arguments={plugin.arguments}
           fallback={fallback}
           identifier={plugin.identifier}
+          messageId={messageId}
           resourceUri={mcpApp.resourceUri}
           result={{ content: resolvedContent, state: unwrapMcpToolState(resolvedState) }}
           toolCallId={toolCallId}

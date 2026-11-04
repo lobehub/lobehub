@@ -18,6 +18,7 @@ import { connectAppView, getAppViewPhase } from './appHost';
 import { buildHostContext } from './bridge';
 import { buildAppFrameDocument, VIEW_FRAME_SANDBOX } from './frameDocument';
 import { APP_IFRAME_ALLOW, buildAppCsp, pickAppResource } from './utils';
+import { mcpAppAgentIdSelector } from './viewAgent';
 
 const DEFAULT_HEIGHT = 320;
 
@@ -49,6 +50,8 @@ export interface McpAppViewProps {
   /** Rendered instead when the view can't be loaded. */
   fallback: ReactNode;
   identifier: string;
+  /** The message carrying the result; its agent is the one the view acts as. */
+  messageId?: string;
   resourceUri: string;
   /** Tool call result envelope (`{ content, state, success }`). */
   result: { content: string; state?: any };
@@ -60,14 +63,24 @@ export interface McpAppViewProps {
  * sandboxed iframe that talks to LobeHub over the MCP Apps postMessage protocol.
  */
 const McpAppView = memo<McpAppViewProps>(
-  ({ apiName, arguments: args, fallback, identifier, resourceUri, result, toolCallId }) => {
+  ({
+    apiName,
+    arguments: args,
+    fallback,
+    identifier,
+    messageId,
+    resourceUri,
+    result,
+    toolCallId,
+  }) => {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [height, setHeight] = useState(DEFAULT_HEIGHT);
     // This view's requests still waiting for the user's answer
     const [waitingApprovals, setWaitingApprovals] = useState(0);
     const isDark = useIsDark();
     const sendMessage = useConversationStore((s) => s.sendMessage);
-    const agentId = useConversationStore((s) => s.context.agentId) || undefined;
+    // The agent that produced the result: in a group, the member, not the supervisor
+    const agentId = useConversationStore(mcpAppAgentIdSelector(messageId));
     const { t } = useTranslation('plugin');
 
     const { data, error, isLoading } = useClientDataSWR(
