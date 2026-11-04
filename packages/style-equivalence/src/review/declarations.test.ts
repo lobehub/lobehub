@@ -70,12 +70,46 @@ describe('parseDeclarations', () => {
     expect(parseDeclarations('root: css`\n    color: red;;; {{\n  `')).toEqual([]);
   });
 
+  it('reads a stylex pseudo-element block as a selector, not a property', () => {
+    const rows = parseDeclarations(
+      "header: {\n  'height': '44px',\n  '::before': {\n    content: '\"\"',\n    zIndex: -1,\n    height: 'var(--bar)',\n  },\n}",
+    );
+    expect(rows).toEqual([
+      { property: 'height', selector: '', value: '44px' },
+      { property: 'content', selector: '::before', value: '""' },
+      { property: 'z-index', selector: '::before', value: '-1' },
+      { property: 'height', selector: '::before', value: 'var(--bar)' },
+    ]);
+  });
+
+  it('keeps non-token interpolations readable on both sides', () => {
+    expect(parseDeclarations('a: css`\n    height: ${HEADER_HEIGHT}px;\n  `')).toEqual([
+      { property: 'height', selector: '', value: '${HEADER_HEIGHT}px' },
+    ]);
+    expect(parseDeclarations('a: { height: `${HEADER_HEIGHT}px` }')).toEqual([
+      { property: 'height', selector: '', value: '${HEADER_HEIGHT}px' },
+    ]);
+  });
+
   it('returns nothing for text it cannot read', () => {
     expect(parseDeclarations('chip: someHelper()')).toEqual([]);
   });
 });
 
 describe('declarationBlocks', () => {
+  it('marks a family written on only one side', () => {
+    const [block] = declarationBlocks(
+      {
+        'styles.h': 'h: css`\n    color: red;\n    > * {\n      pointer-events: auto;\n    }\n  `',
+      },
+      { 'styles.h': "h: { color: 'red' }" },
+    );
+    expect(block.rows.find((row) => row.label === '> * pointer-events')).toMatchObject({
+      oneSided: true,
+    });
+    expect(block.rows.find((row) => row.label === 'color')).toMatchObject({ oneSided: false });
+  });
+
   it('aligns both sides by property family per style block and marks differing families', () => {
     const [block] = declarationBlocks({ 'styles.chip': emotion }, { 'styles.chip': stylex }, [
       'border-block-end-color',

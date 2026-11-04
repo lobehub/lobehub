@@ -67,9 +67,9 @@ describe('reviewGrid', () => {
     const grid = reviewGrid(combos, conditions, [
       { combo: 1, condition: 'light/1280/default', summary: ['边框 无 → 1px solid'] },
     ]);
-    expect(grid.columns.map((column) => column.label)).toEqual([
-      'light/1280/default',
-      'dark/1280/default',
+    expect(grid.columns.map((column) => [column.label, column.title])).toEqual([
+      ['light/1280/default', '亮色'],
+      ['dark/1280/default', '暗色'],
     ]);
     expect(grid.rows[1].cells[0]).toMatchObject({
       differs: true,
@@ -78,11 +78,28 @@ describe('reviewGrid', () => {
     expect(grid.rows[0].cells[0].differs).toBe(false);
   });
 
+  it('shows the interaction states of the light theme at the same width', () => {
+    const grid = reviewGrid(
+      combos,
+      [...conditions, 'light/1280/focus-visible', 'dark/1280/hover-target'],
+      [{ combo: 0, condition: 'light/1280/focus-visible', summary: ['描边 无 → 2px'] }],
+    );
+    expect(grid.states.columns.map((column) => [column.label, column.title])).toEqual([
+      ['light/1280/hover-target', '鼠标悬停'],
+      ['light/1280/focus-visible', '键盘聚焦'],
+    ]);
+    expect(grid.states.rows[0].cells[1]).toMatchObject({
+      differs: true,
+      summary: ['描边 无 → 2px'],
+    });
+    expect(grid.restDifferences).toEqual([]);
+  });
+
   it('counts the other conditions and lists only the ones that differ', () => {
     const grid = reviewGrid(combos, conditions, [
       { combo: 0, condition: 'light/375/default', summary: ['间距 0px → 8px'] },
     ]);
-    expect(grid.restCount).toBe(8);
+    expect(grid.restCount).toBe(6);
     expect(grid.restDifferences).toEqual([
       {
         combo: 0,

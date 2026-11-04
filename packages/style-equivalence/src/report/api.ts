@@ -165,7 +165,13 @@ export interface ReviewView {
   state: ReviewState;
   styles: {
     blocks: Array<{
-      rows: Array<{ after: string[]; before: string[]; differs: boolean; label: string }>;
+      rows: Array<{
+        after: string[];
+        before: string[];
+        differs: boolean;
+        label: string;
+        oneSided: boolean;
+      }>;
       slot: string;
       standIn?: string;
     }>;

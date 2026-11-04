@@ -55,6 +55,7 @@ const styles = stylex.create({
   heading: { fontSize: 15, fontWeight: 600, marginBlockEnd: 4, marginBlockStart: 32 },
   label: { color: cssVar.colorTextSecondary, fontFamily: mono, fontSize: 12.5 },
   line: { display: 'block' },
+  moved: { color: cssVar.colorWarningText, fontSize: 12 },
   no: { color: cssVar.colorError, fontSize: 12, whiteSpace: 'nowrap' },
   ok: { color: cssVar.colorSuccess, fontSize: 12, whiteSpace: 'nowrap' },
   pane: { minWidth: 0 },
@@ -156,8 +157,12 @@ const DeclarationTable = ({ blocks }: { blocks: ReviewView['styles']['blocks'] }
                 <Lines label={row.label} lines={row.after} />
               </td>
               <td {...stylex.props(styles.cell)}>
-                <span {...stylex.props(row.differs ? styles.no : styles.ok)}>
-                  {row.differs ? '不一样' : '一致'}
+                <span
+                  {...stylex.props(
+                    row.differs ? styles.no : row.oneSided ? styles.moved : styles.ok,
+                  )}
+                >
+                  {row.differs ? '不一样' : row.oneSided ? '只写在一边，渲染一致' : '一致'}
                 </span>
               </td>
             </tr>

@@ -12,6 +12,7 @@ export interface DeclarationRow {
   before: string[];
   differs: boolean;
   label: string;
+  oneSided: boolean;
 }
 
 export interface DeclarationBlock {
@@ -22,14 +23,22 @@ export interface DeclarationBlock {
 
 const kebab = (name: string) => name.replaceAll(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
 
-const token = (text: string) => text.trim().replace(/^cssVar\./, '');
+const token = (text: string) => {
+  const trimmed = text.trim();
+  return trimmed.startsWith('cssVar.') ? trimmed.slice('cssVar.'.length) : `\${${trimmed}}`;
+};
 
-const fromCss = (css: string, selector = ''): Declaration[] => {
+const PLACEHOLDER = /__I(\d+)__/g;
+
+const scopeOf = (selector: string, key: string) =>
+  key.startsWith('@') ? `${selector} ${key}`.trim() : `${selector}${key}`;
+
+const fromCss = (css: string, selector = '', restore = (value: string) => value): Declaration[] => {
   const rows: Declaration[] = [];
   const walk = (nodes: ChildNode[], scope: string) => {
     for (const node of nodes) {
       if (node.type === 'decl')
-        rows.push({ property: node.prop, selector: scope, value: node.value.trim() });
+        rows.push({ property: node.prop, selector: scope, value: restore(node.value.trim()) });
       else if (node.type === 'rule')
         walk(node.nodes, `${scope}${node.selector.replace(/^&/, '').trim()}`.trim());
       else if (node.type === 'atrule')
@@ -45,8 +54,17 @@ const fromEmotion = (template: string) => {
     /^(\s*)\$\{([^{}]*)\}\s*;?\s*$/gm,
     (_match, indent: string, inner: string) => `${indent}composes: ${inner.trim()};`,
   );
+  const interpolations: string[] = [];
+  const masked = composed.replaceAll(/\$\{([^{}]*)\}/g, (_match, inner: string) => {
+    const text = token(inner);
+    if (!text.startsWith('${')) return text;
+    interpolations.push(text);
+    return `__I${interpolations.length - 1}__`;
+  });
   try {
-    return fromCss(composed.replaceAll(/\$\{([^{}]*)\}/g, (_match, inner: string) => token(inner)));
+    return fromCss(masked, '', (value) =>
+      value.replaceAll(PLACEHOLDER, (_match, index: string) => interpolations[Number(index)]),
+    );
   } catch {
     return [];
   }
@@ -65,7 +83,7 @@ const fromCssModule = (text: string) => {
 const expressionText = (node: ts.Expression, source: ts.SourceFile): string | undefined => {
   if (ts.isStringLiteralLike(node) || ts.isNumericLiteral(node)) return node.text;
   if (ts.isPrefixUnaryExpression(node)) return node.getText(source);
-  if (ts.isPropertyAccessExpression(node)) return token(node.getText(source));
+  if (ts.isPropertyAccessExpression(node)) return node.getText(source).replace(/^cssVar\./, '');
   if (ts.isTemplateExpression(node))
     return [
       node.head.text,
@@ -93,15 +111,17 @@ const fromObject = (
     const key = keyText(member.name);
     if (key === undefined) continue;
     if (property === undefined) {
-      if (ts.isObjectLiteralExpression(member.initializer))
-        rows.push(...fromObject(member.initializer, source, kebab(key)));
+      if (/^[:@]/.test(key) && ts.isObjectLiteralExpression(member.initializer))
+        rows.push(...fromObject(member.initializer, source, undefined, scopeOf(selector, key)));
+      else if (ts.isObjectLiteralExpression(member.initializer))
+        rows.push(...fromObject(member.initializer, source, kebab(key), selector));
       else {
         const value = expressionText(member.initializer, source);
         if (value !== undefined) rows.push({ property: kebab(key), selector, value });
       }
       continue;
     }
-    const scope = key === 'default' ? selector : `${selector}${key}`;
+    const scope = key === 'default' ? selector : scopeOf(selector, key);
     if (ts.isObjectLiteralExpression(member.initializer))
       rows.push(...fromObject(member.initializer, source, property, scope));
     else {
@@ -166,13 +186,20 @@ export const declarationBlocks = (
       for (const { property, selector, value } of text ? parseDeclarations(text) : []) {
         const name = family(property);
         const label = selector ? `${selector} ${name}` : name;
-        const row = rows.get(label) ?? { after: [], before: [], differs: changed.has(name), label };
+        const row = rows.get(label) ?? {
+          after: [],
+          before: [],
+          differs: changed.has(name),
+          label,
+          oneSided: false,
+        };
         row[side].push(`${property}: ${value}`);
         rows.set(label, row);
       }
     };
     add('before', before[slot]);
     add('after', after[slot]);
+    for (const row of rows.values()) row.oneSided = !row.before.length || !row.after.length;
     return {
       key: slot,
       rows: [...rows.values()].sort((a, b) => Number(b.differs) - Number(a.differs)),

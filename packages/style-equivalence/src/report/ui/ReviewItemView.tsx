@@ -37,7 +37,14 @@ const styles = stylex.create({
   colHead: { color: cssVar.colorTextTertiary, fontSize: 12, paddingInlineStart: 4 },
   diff: { borderColor: cssVar.colorError, boxShadow: `0 0 0 3px ${cssVar.colorErrorBg}` },
   error: { color: cssVar.colorError },
-  grid: { alignItems: 'stretch', columnGap: 16, display: 'grid', rowGap: 12 },
+  grid: {
+    alignItems: 'stretch',
+    columnGap: 16,
+    display: 'grid',
+    marginBlockStart: 20,
+    rowGap: 12,
+  },
+  heading: { fontSize: 15, fontWeight: 600, marginBlockEnd: 0, marginBlockStart: 28 },
   gridColumns: (count: number) => ({ gridTemplateColumns: `96px repeat(${count}, 1fr)` }),
   ok: { color: cssVar.colorSuccess },
   pair: { columnGap: 8, display: 'grid', gridTemplateColumns: '1fr 1fr' },
@@ -67,7 +74,12 @@ const styles = stylex.create({
   },
 });
 
-const THEMES: Record<string, string> = { dark: '暗色', light: '亮色' };
+type Grid = ReturnType<typeof reviewGrid>;
+
+const sidesOf = (item: ReviewView) => {
+  const unpaired = /\|unpaired:(base|head):/.exec(item.key)?.[1] as 'base' | 'head' | undefined;
+  return unpaired ? [unpaired] : (['base', 'head'] as const);
+};
 
 const Pair = ({
   combo,
@@ -79,7 +91,7 @@ const Pair = ({
   item: ReviewView;
 }) => (
   <div {...stylex.props(styles.pair)}>
-    {(['base', 'head'] as const).map((side) => (
+    {sidesOf(item).map((side) => (
       <div key={side}>
         <div {...stylex.props(styles.side)}>{side === 'base' ? '改之前' : '改之后'}</div>
         <img
@@ -90,6 +102,41 @@ const Pair = ({
         />
       </div>
     ))}
+  </div>
+);
+
+const ShotGrid = ({
+  columns,
+  item,
+  rows,
+}: {
+  columns: Grid['columns'];
+  item: ReviewView;
+  rows: Grid['rows'];
+}) => (
+  <div {...stylex.props(styles.grid, styles.gridColumns(columns.length))}>
+    <div />
+    {columns.map((column) => (
+      <div key={column.label} {...stylex.props(styles.colHead)}>
+        {column.title}
+      </div>
+    ))}
+    {rows.map((row) => [
+      <div key={`${row.index}-head`} {...stylex.props(styles.rowHead)}>
+        {row.label}
+      </div>,
+      ...row.cells.map((cell) => (
+        <div
+          key={`${row.index}-${cell.condition}`}
+          {...stylex.props(styles.cell, cell.differs && styles.diff)}
+        >
+          <Pair combo={cell.combo} condition={cell.condition} item={item} />
+          <div {...stylex.props(styles.verdict, cell.differs ? styles.error : styles.ok)}>
+            {cell.differs ? `不一样：${cell.summary.join('；')}` : '一致'}
+          </div>
+        </div>
+      )),
+    ])}
   </div>
 );
 
@@ -108,7 +155,7 @@ const AgentNote = ({ item }: { item: ReviewView }) =>
     </div>
   ) : (
     <div {...stylex.props(styles.agent)}>
-      截图看不出这一项。agent 还没读这段代码，读完会写一句结论，这里才能操作。
+      截图之外还要读代码确认。agent 还没读，读完会在这里写一句结论，之后才能操作。
     </div>
   );
 
@@ -120,7 +167,7 @@ export const ReviewItemView = ({
   item: ReviewView;
 }) => {
   const grid = reviewGrid(item.combos, conditions, item.comboDifferences);
-  const visual = !item.needsAgent && item.category !== 'blocking' && item.category !== 'unpaired';
+  const visual = item.category !== 'blocking';
   return (
     <section>
       <h1 {...stylex.props(styles.title)}>{item.title}</h1>
@@ -132,31 +179,12 @@ export const ReviewItemView = ({
         <div {...stylex.props(styles.agent, styles.error)}>{item.errors[0] ?? '渲染失败'}</div>
       )}
       {item.needsAgent && <AgentNote item={item} />}
-      {visual && (
-        <div {...stylex.props(styles.grid, styles.gridColumns(grid.columns.length))}>
-          <div />
-          {grid.columns.map((column) => (
-            <div key={column.label} {...stylex.props(styles.colHead)}>
-              {THEMES[column.theme] ?? column.theme}
-            </div>
-          ))}
-          {grid.rows.map((row) => [
-            <div key={`${row.index}-head`} {...stylex.props(styles.rowHead)}>
-              {row.label}
-            </div>,
-            ...row.cells.map((cell) => (
-              <div
-                key={`${row.index}-${cell.condition}`}
-                {...stylex.props(styles.cell, cell.differs && styles.diff)}
-              >
-                <Pair combo={cell.combo} condition={cell.condition} item={item} />
-                <div {...stylex.props(styles.verdict, cell.differs ? styles.error : styles.ok)}>
-                  {cell.differs ? `不一样：${cell.summary.join('；')}` : '一致'}
-                </div>
-              </div>
-            )),
-          ])}
-        </div>
+      {visual && <ShotGrid columns={grid.columns} item={item} rows={grid.rows} />}
+      {visual && grid.states.columns.length > 0 && (
+        <>
+          <h2 {...stylex.props(styles.heading)}>交互状态</h2>
+          <ShotGrid columns={grid.states.columns} item={item} rows={grid.states.rows} />
+        </>
       )}
       {visual && (
         <div {...stylex.props(styles.rest)}>

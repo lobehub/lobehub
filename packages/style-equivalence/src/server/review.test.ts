@@ -180,8 +180,20 @@ describe('review API', () => {
     expect(difference.styles.blocks).toEqual([
       {
         rows: [
-          { after: ['color: red'], before: ['color: black'], differs: true, label: 'color' },
-          { after: ['padding: 4px'], before: ['padding: 4px'], differs: false, label: 'padding' },
+          {
+            after: ['color: red'],
+            before: ['color: black'],
+            differs: true,
+            label: 'color',
+            oneSided: false,
+          },
+          {
+            after: ['padding: 4px'],
+            before: ['padding: 4px'],
+            differs: false,
+            label: 'padding',
+            oneSided: false,
+          },
         ],
         slot: 'a',
       },

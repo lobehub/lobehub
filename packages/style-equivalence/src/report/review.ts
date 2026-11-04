@@ -38,41 +38,59 @@ export interface ComboDifference {
 
 const DEFAULT_WIDTH = 1280;
 
+const THEME_TITLES: Record<string, string> = { dark: '暗色', light: '亮色' };
+
+const STATE_TITLES: Array<[string, string]> = [
+  ['hover-target', '鼠标悬停'],
+  ['hover-chain', '悬停在外层'],
+  ['focus-visible', '键盘聚焦'],
+];
+
 export const reviewGrid = (
   combos: Array<{ index: number; label: string }>,
   conditions: string[],
   differences: ComboDifference[],
 ) => {
-  const plain = conditionColumns(conditions).filter(
-    (column) => column.state === 'default' && !column.variant,
-  );
+  const all = conditionColumns(conditions).filter((column) => !column.variant);
+  const plain = all.filter((column) => column.state === 'default');
   const widths = plain.map((column) => column.width);
   const width = widths.includes(DEFAULT_WIDTH) ? DEFAULT_WIDTH : Math.max(...widths);
-  const columns = plain.filter((column) => column.width === width);
-  const shown = new Set(columns.map((column) => column.label));
+  const columns = plain
+    .filter((column) => column.width === width)
+    .map((column) => ({ ...column, title: THEME_TITLES[column.theme] ?? column.theme }));
+  const stateColumns = STATE_TITLES.flatMap(([state, title]) =>
+    all
+      .filter(
+        (column) => column.theme === 'light' && column.width === width && column.state === state,
+      )
+      .map((column) => ({ ...column, title })),
+  );
   const differenceOf = (combo: number, condition: string) =>
     differences.find((entry) => entry.combo === combo && entry.condition === condition);
-  const rows = combos.map((combo) => ({
-    ...combo,
-    cells: columns.map((column) => {
-      const difference = differenceOf(combo.index, column.label);
-      return {
-        combo: combo.index,
-        condition: column.label,
-        differs: Boolean(difference),
-        summary: difference?.summary ?? [],
-        theme: column.theme,
-      };
-    }),
-  }));
+  const rowsFor = (shownColumns: typeof columns) =>
+    combos.map((combo) => ({
+      ...combo,
+      cells: shownColumns.map((column) => {
+        const difference = differenceOf(combo.index, column.label);
+        return {
+          combo: combo.index,
+          condition: column.label,
+          differs: Boolean(difference),
+          summary: difference?.summary ?? [],
+          theme: column.theme,
+        };
+      }),
+    }));
+  const shown = new Set([...columns, ...stateColumns].map((column) => column.label));
   const labels = new Map(combos.map((combo) => [combo.index, combo.label]));
   return {
     columns,
-    restCount: (new Set(conditions).size - columns.length) * combos.length,
+    restCount: (new Set(conditions).size - shown.size) * combos.length,
     restDifferences: differences
       .filter((entry) => !shown.has(entry.condition))
       .map((entry) => ({ ...entry, label: labels.get(entry.combo) ?? '默认' })),
-    rows,
+    rows: rowsFor(columns),
+    states: { columns: stateColumns, rows: rowsFor(stateColumns) },
   };
 };
 
