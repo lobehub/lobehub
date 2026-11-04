@@ -32,6 +32,7 @@
     "./cometapi": "./src/aiModels/cometapi.ts",
     "./comfyui": "./src/aiModels/comfyui.ts",
     "./deepseek": "./src/aiModels/deepseek.ts",
+    "./dothoosh": "./src/aiModels/dothoosh.ts",
     "./fal": "./src/aiModels/fal.ts",
     "./fireworksai": "./src/aiModels/fireworksai.ts",
     "./giteeai": "./src/aiModels/giteeai.ts",

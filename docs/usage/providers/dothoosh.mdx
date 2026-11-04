@@ -1,0 +1,49 @@
+---
+title: Using DotHoosh in LobeHub
+description: Configure the DotHoosh AI gateway in LobeHub to chat with Claude, GPT, Gemini, DeepSeek, and Kimi models.
+tags:
+  - LobeHub
+  - DotHoosh
+  - API Key
+  - AI Gateway
+---
+
+# Using DotHoosh in LobeHub
+
+[DotHoosh](https://gateway.dothoosh.com) is an AI API gateway for users in Iran. One API key reaches models from Anthropic, OpenAI, Google, DeepSeek, and Moonshot AI. Usage is billed in Toman from a prepaid wallet; see the [model and price list](https://gateway.dothoosh.com/models) for current prices and the [DotHoosh docs](https://gateway.dothoosh.com/docs) for the API reference.
+
+<Steps>
+  ### Step 1: Create an API key
+
+  - Sign in to [DotHoosh](https://gateway.dothoosh.com) and add credit to your wallet.
+  - Open the [API keys page](https://gateway.dothoosh.com/api-keys) and create a key.
+  - Copy the key and store it securely.
+
+  ### Step 2: Configure DotHoosh in LobeHub
+
+  - Open **Settings → AI Providers**, find **DotHoosh**, and enable it.
+  - Enter your API key. If your self-hosted administrator has already configured a server key, you can use that configuration without entering a personal key.
+  - Keep the default API base URL, `https://gateway.dothoosh.com/v1`, unless you use a compatible proxy.
+  - Run the connection check, then select a DotHoosh model for your assistant and send a short message.
+</Steps>
+
+## API compatibility
+
+LobeHub reads the model list, context windows, abilities and prices live from the DotHoosh gateway, and enables image input for a model only when its listing advertises it. All current DotHoosh models are text-only, so image and file attachments are not available for them. LobeHub picks the API for each model from the same listing:
+
+- Models served only on the Anthropic-compatible route, such as Claude, use the Anthropic Messages API. LobeHub derives its URL from the base URL by replacing the trailing `/v1` with `/anthropic` (`https://gateway.dothoosh.com/anthropic` by default).
+- Models whose listing offers the OpenAI Responses API, such as GPT-6, use it. DotHoosh accepts function tools for GPT-6 only on this route.
+- All other models use the OpenAI-compatible Chat Completions API. This includes DeepSeek, which is listed on both routes.
+
+Without an API key, LobeHub reads the public model list from `https://www.dothoosh.com/gateway`, because the Iran-hosted API is not reachable from outside Iran. With a key it reads the list from your base URL, so a key restricted to certain models only sees those.
+
+A custom proxy must serve all three paths relative to its base URL; do not enter a full endpoint such as `/v1/chat/completions` as the base URL. Requests go through the LobeHub server, so that server must be able to reach the API. Direct browser requests are disabled for this provider.
+
+The models a key may call depend on your DotHoosh account. Use the model list in the provider settings to fetch them.
+
+## Self-hosting and troubleshooting
+
+Administrators can set `DOTHOOSH_API_KEY` on the server to enable DotHoosh with a shared key. `DOTHOOSH_PROXY_URL` overrides the base URL, and `DOTHOOSH_MODEL_LIST` sets the models shown by default (Fetch Models still lists every model the key can call). See the [DotHoosh environment variables](/docs/self-hosting/environment-variables/model-provider#dothoosh).
+
+- If authentication fails, check that the key is valid, has not been revoked, and that your wallet has credit.
+- If a connection check fails, verify the selected model is available to your key and that your server or proxy can reach `gateway.dothoosh.com`.

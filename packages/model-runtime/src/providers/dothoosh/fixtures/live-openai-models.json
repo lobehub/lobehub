@@ -1,0 +1,693 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "deepseek-flash",
+      "object": "model",
+      "created": 1792062221,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "prompt-caching",
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "anthropic-messages",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_My2RTfsQFOnkD8C7C5cxdJemONw_avtMCP0Sr1O4sDs",
+          "last_verified_at": "2026-10-15T11:03:43Z",
+          "expires_at": "2026-11-14T11:03:43Z"
+        },
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_Y9YF51n-dN4iEe1-DPRrwK2u8JJ3TDBdzOOqwsk6D3k",
+          "last_verified_at": "2026-10-15T11:03:43Z",
+          "expires_at": "2026-11-14T11:03:43Z"
+        }
+      ],
+      "context_window": 1048576,
+      "max_output_tokens": 393216,
+      "name": "deepseek-flash",
+      "context_length": 1048576,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 393216,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000000385001",
+        "completion": "0.00000154",
+        "input_cache_read": "0.000000007701",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "object": "model",
+      "created": 1792062221,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "prompt-caching",
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "anthropic-messages",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_Mx2WzC_tDYpJ4M6Uij8_zVxZtYANsHgPwvYmGehr-4M",
+          "last_verified_at": "2026-10-15T11:03:44Z",
+          "expires_at": "2026-11-14T11:03:44Z"
+        },
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_w-quExGsMv5hrR4F4AGYQDR5x86kh3lffN5f8b1hPLI",
+          "last_verified_at": "2026-10-15T11:03:44Z",
+          "expires_at": "2026-11-14T11:03:44Z"
+        }
+      ],
+      "context_window": 1048576,
+      "max_output_tokens": 393216,
+      "name": "deepseek-v4-pro",
+      "context_length": 1048576,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 393216,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000001694002",
+        "completion": "0.000005082003",
+        "input_cache_read": "0.000000056467",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "gemini-3.5-flash-lite",
+      "object": "model",
+      "created": 1792089257,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_GZjdjIFI02Tk8xLQa_FUtIeEb2g9AxAaARfDJd9Lmt4",
+          "last_verified_at": "2026-10-15T18:34:38Z",
+          "expires_at": "2026-11-14T18:34:38Z"
+        }
+      ],
+      "context_window": 1048576,
+      "max_output_tokens": 65536,
+      "name": "gemini-3.5-flash-lite",
+      "context_length": 1048576,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 65536,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000000385001",
+        "completion": "0.000003208337",
+        "input_cache_read": "0.000000038502",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "object": "model",
+      "created": 1792089257,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_dUUI_u_7J5slxo7jIaNTgnYxuPM93NhPB8Y6LVQlFIQ",
+          "last_verified_at": "2026-10-15T18:34:32Z",
+          "expires_at": "2026-11-14T18:34:32Z"
+        }
+      ],
+      "context_window": 1048576,
+      "max_output_tokens": 65536,
+      "name": "gemini-3.8-flash",
+      "context_length": 1048576,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 65536,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000000962503",
+        "completion": "0.000004812501",
+        "input_cache_read": "0.000000096252",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "gemini-4-argon",
+      "object": "model",
+      "created": 1792421437,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_fNBBeNC8kFBeoyF-FZE8R-i-WNGOCf8M04nZtGLqUX4",
+          "last_verified_at": "2026-10-19T14:50:39Z",
+          "expires_at": "2026-11-18T14:50:39Z"
+        }
+      ],
+      "context_window": 1048576,
+      "max_output_tokens": 65536,
+      "name": "gemini-4-argon",
+      "context_length": 1048576,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 65536,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000002566667",
+        "completion": "0.000012833336",
+        "input_cache_read": "0.000000128336",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "gpt-6-astra",
+      "object": "model",
+      "created": 1787853604,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "prompt-caching",
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_YesjNH1KKwCA6d9AaALo0b4a95YCofTv3PSnZG1AS-4",
+          "last_verified_at": "2026-10-15T13:49:24Z",
+          "expires_at": "2026-11-14T13:49:24Z"
+        },
+        {
+          "protocol": "openai-responses",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_4Km2PtRuqBkDpiXTadO33qFLtLfgGbYBEBlkhn_7J3s",
+          "last_verified_at": "2026-10-15T13:49:24Z",
+          "expires_at": "2026-11-14T13:49:24Z"
+        }
+      ],
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "name": "gpt-6-astra",
+      "context_length": 1050000,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1050000,
+        "max_completion_tokens": 128000,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000012833336",
+        "completion": "0.000064166668",
+        "input_cache_read": "0.000001283335",
+        "input_cache_write": "0.000016041669",
+        "request": "0"
+      },
+      "pricing_tiers": [
+        {
+          "above_input_tokens": 272000,
+          "prompt": "0.000025666668",
+          "completion": "0.000096250002",
+          "input_cache_read": "0.000002566667",
+          "input_cache_write": "0.000032083334"
+        }
+      ],
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "gpt-6-luna",
+      "object": "model",
+      "created": 1789406102,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "prompt-caching",
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_UBBDnnjXoyLYYsMA9ZITRjjPE2CBl9t45TvTQ5-9WtA",
+          "last_verified_at": "2026-10-15T13:49:23Z",
+          "expires_at": "2026-11-14T13:49:23Z"
+        },
+        {
+          "protocol": "openai-responses",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_BpUaC5YX2pMH4g45Ox59NoZGvQBFVRmVjTLsoZJyNl4",
+          "last_verified_at": "2026-10-15T13:49:23Z",
+          "expires_at": "2026-11-14T13:49:23Z"
+        }
+      ],
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "name": "gpt-6-luna",
+      "context_length": 1050000,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1050000,
+        "max_completion_tokens": 128000,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000000128336",
+        "completion": "0.00000064167",
+        "input_cache_read": "0.000000012837",
+        "input_cache_write": "0.00000016042",
+        "request": "0"
+      },
+      "pricing_tiers": [
+        {
+          "above_input_tokens": 272000,
+          "prompt": "0.000000256669",
+          "completion": "0.000000962503",
+          "input_cache_read": "0.000000025669",
+          "input_cache_write": "0.000000320837"
+        }
+      ],
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "gpt-6.1-sol",
+      "object": "model",
+      "created": 1790552874,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "prompt-caching",
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_A-NnMeRHkwY2tAF6DDTwgtkxVGpI15djJByd-gNhXpg",
+          "last_verified_at": "2026-10-15T13:49:23Z",
+          "expires_at": "2026-11-14T13:49:23Z"
+        },
+        {
+          "protocol": "openai-responses",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_JxAFhNCLgx38hdu-cNEzpoY0nw3vOkisHanPM2C4JFM",
+          "last_verified_at": "2026-10-15T13:49:23Z",
+          "expires_at": "2026-11-14T13:49:23Z"
+        }
+      ],
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "name": "gpt-6.1-sol",
+      "context_length": 1050000,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1050000,
+        "max_completion_tokens": 128000,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000002566667",
+        "completion": "0.000012833336",
+        "input_cache_read": "0.000000128336",
+        "input_cache_write": "0.000003208337",
+        "request": "0"
+      },
+      "pricing_tiers": [
+        {
+          "above_input_tokens": 272000,
+          "prompt": "0.000005133334",
+          "completion": "0.000019250002",
+          "input_cache_read": "0.000000256669",
+          "input_cache_write": "0.00000641667"
+        }
+      ],
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "kimi-k2.6",
+      "object": "model",
+      "created": 1792749921,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "prompt-caching",
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_-sd9GJHX4M0agTtD1LK1UKe7w_O0590j2WLMl3NLfdY",
+          "last_verified_at": "2026-10-15T13:49:25Z",
+          "expires_at": "2026-11-14T13:49:25Z"
+        }
+      ],
+      "context_window": 262144,
+      "name": "kimi-k2.6",
+      "context_length": 262144,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 262144,
+        "max_completion_tokens": null,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000001219167",
+        "completion": "0.000005133334",
+        "input_cache_read": "0.000000205333",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "kimi-k2.7-code",
+      "object": "model",
+      "created": 1792749920,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "prompt-caching",
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_R0LJZL8-LxymPO1d-MQXqcp76cJhm-aF0F_9cgnOmBY",
+          "last_verified_at": "2026-10-15T13:49:25Z",
+          "expires_at": "2026-11-14T13:49:25Z"
+        }
+      ],
+      "context_window": 262144,
+      "name": "kimi-k2.7-code",
+      "context_length": 262144,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 262144,
+        "max_completion_tokens": null,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000001219167",
+        "completion": "0.000005133334",
+        "input_cache_read": "0.000000243836",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "id": "kimi-k3",
+      "object": "model",
+      "created": 1792749920,
+      "owned_by": "dothoosh",
+      "status": "active",
+      "capabilities": [
+        "prompt-caching",
+        "reasoning",
+        "streaming",
+        "structured-output",
+        "text",
+        "tools"
+      ],
+      "protocols": [
+        {
+          "protocol": "openai-chat-completions",
+          "conformance_status": "verified",
+          "conformance_reference": "conformance-reference-v1_E3BGLA4iDzpxpg0JkpWBefWsE1UgVw_OUmM6Ti3qhGE",
+          "last_verified_at": "2026-10-19T14:49:00Z",
+          "expires_at": "2026-11-18T14:49:00Z"
+        }
+      ],
+      "context_window": 1048576,
+      "name": "kimi-k3",
+      "context_length": 1048576,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": null,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000003850003",
+        "completion": "0.000019250002",
+        "input_cache_read": "0.000000385001",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ]
+    }
+  ],
+  "catalog_version": "sha256:p3vXqdVoEaXMJepixI695n1LvHy7S8NuqxwchwUIbMo",
+  "pricing_version": "public-v286"
+}
