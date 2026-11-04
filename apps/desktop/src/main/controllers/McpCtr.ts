@@ -4,7 +4,9 @@ import path from 'node:path';
 import {
   getMcpToolVisibility,
   isMcpToolVisibleTo,
+  lacksUiResourceMeta,
   partitionMcpToolsForViews,
+  withListingUiMeta,
 } from '@lobechat/const/mcpApp';
 import {
   deserializeMcpIpcPayload,
@@ -763,7 +765,17 @@ export default class McpCtr extends ControllerModule {
     }
 
     const read = (client: MCPClient) =>
-      this.withClientLease(client, () => client.readResource(input.uri));
+      this.withClientLease(client, async () => {
+        const result = await client.readResource(input.uri);
+        // A view's _meta.ui may be declared once, on its resources/list entry
+        if (!lacksUiResourceMeta(result)) return result;
+
+        const listed = await client.listResources().catch((error) => {
+          logger.warn('Failed to list resources for MCP App metadata:', { error });
+          return [];
+        });
+        return withListingUiMeta(result, input.uri, listed);
+      });
     // Reading is idempotent, so unlike tool calls a dead transport is retried
     // too: the stale session is evicted and the read runs once on a fresh one.
     const isSessionFailure = (error: unknown) =>

@@ -36,6 +36,7 @@ const makeClient = (overrides: Record<string, unknown> = {}) => ({
   getToolUiResourceUri: vi.fn().mockResolvedValue('ui://weather/view'),
   initialize: vi.fn().mockResolvedValue(undefined),
   isToolCallableByApp: vi.fn().mockResolvedValue(true),
+  listResources: vi.fn().mockResolvedValue([]),
   readResource: vi.fn().mockResolvedValue({ contents: [{ text: '<html />', uri: 'ui://x' }] }),
   ...overrides,
 });
@@ -256,6 +257,26 @@ describe('McpCtr MCP Apps', () => {
     } as any);
 
     expect(client.isToolCallableByApp).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the resource's listing entry for the view's metadata", async () => {
+    const csp = { connectDomains: ['https://api.example.com'] };
+    mcpClientMocks.mockReturnValue(
+      makeClient({
+        listResources: vi.fn().mockResolvedValue([{ _meta: { ui: { csp } }, uri: 'ui://x' }]),
+        readResource: vi
+          .fn()
+          .mockResolvedValue({ contents: [{ text: '<html />', uri: 'ui://x' }] }),
+      }),
+    );
+
+    const result = deserializeMcpIpcPayload<any>(
+      (await ctr.readUiResource(
+        serializeMcpIpcPayload({ params: stdioParams, uri: 'ui://x' }) as any,
+      )) as any,
+    );
+
+    expect(result.contents[0]._meta).toEqual({ ui: { csp } });
   });
 
   it('reads ui:// resources over IPC and refuses other URIs', async () => {

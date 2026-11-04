@@ -1,5 +1,9 @@
 import { isDesktop } from '@lobechat/const';
-import { partitionMcpToolsForViews } from '@lobechat/const/mcpApp';
+import {
+  lacksUiResourceMeta,
+  partitionMcpToolsForViews,
+  withListingUiMeta,
+} from '@lobechat/const/mcpApp';
 import {
   type CheckMcpInstallResult,
   ConnectorErrorCode,
@@ -226,7 +230,13 @@ export class MCPService {
     return this.withSessionRetry(
       params,
       `reading resource "${uri}"`,
-      (client) => client.readResource(uri),
+      async (client) => {
+        const result = await client.readResource(uri);
+        // A view's _meta.ui may be declared once, on its resources/list entry
+        if (!lacksUiResourceMeta(result)) return result;
+
+        return withListingUiMeta(result, uri, await client.listResources());
+      },
       { mcpApps: true },
     );
   }

@@ -773,6 +773,32 @@ describe('MCPService', () => {
       expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
     });
 
+    it("falls back to the resource's listing entry for the view's metadata", async () => {
+      const csp = { connectDomains: ['https://api.example.com'] };
+      mockClient.readResource = vi
+        .fn()
+        .mockResolvedValue({ contents: [{ text: '<html />', uri: 'ui://app' }] });
+      mockClient.listResources = vi
+        .fn()
+        .mockResolvedValue([{ _meta: { ui: { csp } }, name: 'app', uri: 'ui://app' }]);
+
+      const result = await mcpService.readUiResource(mockParams, 'ui://app');
+
+      // Without it the CSP would block every domain the app declared
+      expect(result.contents[0]._meta).toEqual({ ui: { csp } });
+    });
+
+    it("doesn't list resources when the read declares the view's metadata", async () => {
+      const own = { _meta: { ui: { prefersBorder: false } }, text: '<html />', uri: 'ui://app' };
+      mockClient.readResource = vi.fn().mockResolvedValue({ contents: [own] });
+      mockClient.listResources = vi.fn();
+
+      await expect(mcpService.readUiResource(mockParams, 'ui://app')).resolves.toEqual({
+        contents: [own],
+      });
+      expect(mockClient.listResources).not.toHaveBeenCalled();
+    });
+
     it('rejects non-ui:// URIs without touching the server', async () => {
       mockClient.readResource = vi.fn();
 

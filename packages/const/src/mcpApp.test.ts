@@ -5,7 +5,9 @@ import {
   getMcpToolVisibility,
   isMcpToolVisibleTo,
   isSyncedMcpToolVisibleTo,
+  lacksUiResourceMeta,
   partitionMcpToolsForViews,
+  withListingUiMeta,
 } from './mcpApp';
 
 describe('getMcpToolVisibility', () => {
@@ -69,5 +71,32 @@ describe('partitionMcpToolsForViews', () => {
 
     expect(appOnlyTools.map((t) => t.name)).toEqual(['app']);
     expect(modelOnlyToolNames).toEqual(['model']);
+  });
+});
+
+describe('withListingUiMeta', () => {
+  const csp = { connectDomains: ['https://api.example.com'] };
+
+  it("fills a view's metadata from its resources/list entry when the read declares none", () => {
+    const result = { contents: [{ text: '<html />', uri: 'ui://app' }] };
+
+    expect(lacksUiResourceMeta(result)).toBe(true);
+    expect(
+      withListingUiMeta(result, 'ui://app', [
+        { _meta: { ui: { csp: { connectDomains: [] } } }, uri: 'ui://other' },
+        { _meta: { ui: { csp } }, uri: 'ui://app' },
+      ]).contents,
+    ).toEqual([{ _meta: { ui: { csp } }, text: '<html />', uri: 'ui://app' }]);
+  });
+
+  it("keeps the read's own metadata, which the listing only backs up", () => {
+    const own = { _meta: { ui: { csp: { connectDomains: [] } } }, text: '', uri: 'ui://app' };
+
+    expect(lacksUiResourceMeta({ contents: [own] })).toBe(false);
+    expect(
+      withListingUiMeta({ contents: [own] }, 'ui://app', [
+        { _meta: { ui: { csp } }, uri: 'ui://app' },
+      ]).contents,
+    ).toEqual([own]);
   });
 });

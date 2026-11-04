@@ -73,3 +73,39 @@ export const partitionMcpToolsForViews = <T extends { _meta?: unknown; name: str
       .map(({ tool }) => tool.name),
   };
 };
+
+interface UiResourceItem {
+  _meta?: unknown;
+  uri?: string;
+}
+
+const uiMetaOf = (item: UiResourceItem | undefined) =>
+  (item?._meta as { ui?: unknown } | undefined)?.ui;
+
+/** Whether some `resources/read` content item declares no `_meta.ui` of its own. */
+export const lacksUiResourceMeta = (result: { contents?: readonly UiResourceItem[] }): boolean =>
+  (result.contents ?? []).some((item) => !uiMetaOf(item));
+
+/**
+ * MCP Apps reads a view's `_meta.ui` (CSP, permissions, border) from its
+ * `resources/read` content item, with its `resources/list` entry as the
+ * fallback: a server may declare it once where it registers the resource.
+ * Fill content items that declare none from the listing entry for `uri`.
+ */
+export const withListingUiMeta = <R extends { contents?: UiResourceItem[] }>(
+  result: R,
+  uri: string,
+  listed: readonly UiResourceItem[] | undefined,
+): R => {
+  const listingUi = uiMetaOf(listed?.find((entry) => entry.uri === uri));
+  if (!listingUi || !result.contents) return result;
+
+  return {
+    ...result,
+    contents: result.contents.map((item) =>
+      uiMetaOf(item)
+        ? item
+        : { ...item, _meta: { ...(item._meta as object | undefined), ui: listingUi } },
+    ),
+  };
+};
