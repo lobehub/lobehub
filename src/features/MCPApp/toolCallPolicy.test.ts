@@ -109,6 +109,49 @@ describe('getAppToolCallPolicy', () => {
     });
   });
 
+  describe('MCP Apps tool visibility', () => {
+    it('lets a view call a plugin tool kept from the model, under its own setting', async () => {
+      plugins.set('weather', {
+        manifest: {
+          api: [{ name: 'forecast' }],
+          mcpAppOnlyApi: [
+            { humanIntervention: 'required', name: 'load_page' },
+            { name: 'refresh' },
+          ],
+        },
+      });
+
+      expect(await getAppToolCallPolicy('weather', 'load_page')).toBe('confirm');
+      expect(await getAppToolCallPolicy('weather', 'refresh')).toBe('allow');
+    });
+
+    it('refuses a view a plugin tool only the model may call', async () => {
+      plugins.set('weather', {
+        manifest: { api: [{ name: 'delete_all' }], mcpModelOnlyTools: ['delete_all'] },
+      });
+
+      expect(await getAppToolCallPolicy('weather', 'delete_all')).toBe('deny');
+    });
+
+    it('refuses a view a connector tool only the model may call', async () => {
+      connectors.set('mail', {
+        ...connector('auto'),
+        tools: [{ metadata: { visibility: ['model'] }, permission: 'auto', toolName: 'send' }],
+      });
+
+      expect(await getAppToolCallPolicy('mail', 'send')).toBe('deny');
+    });
+
+    it('lets a view call a connector tool kept from the model', async () => {
+      connectors.set('mail', {
+        ...connector('auto'),
+        tools: [{ metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'send' }],
+      });
+
+      expect(await getAppToolCallPolicy('mail', 'send')).toBe('allow');
+    });
+  });
+
   describe('agent-owned connectors', () => {
     it("loads the agent's tools before judging, so its stricter copy decides", async () => {
       connectors.set('mail', connector('auto'));

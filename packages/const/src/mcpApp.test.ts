@@ -5,6 +5,7 @@ import {
   getMcpToolVisibility,
   isMcpToolVisibleTo,
   isSyncedMcpToolVisibleTo,
+  partitionMcpToolsForViews,
 } from './mcpApp';
 
 describe('getMcpToolVisibility', () => {
@@ -49,5 +50,24 @@ describe('synced tool metadata', () => {
     expect(buildMcpToolMetadata(undefined)).toBeNull();
     expect(isSyncedMcpToolVisibleTo({ metadata: null }, 'model')).toBe(true);
     expect(isSyncedMcpToolVisibleTo({}, 'model')).toBe(true);
+  });
+});
+
+describe('partitionMcpToolsForViews', () => {
+  const tool = (name: string, visibility?: string[]) => ({
+    _meta: visibility ? { ui: { visibility } } : undefined,
+    name,
+  });
+
+  it("keeps what views may call beyond the model's list, and what they may not", () => {
+    const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews([
+      tool('both'),
+      tool('model', ['model']),
+      tool('app', ['app']),
+      tool('none', []),
+    ]);
+
+    expect(appOnlyTools.map((t) => t.name)).toEqual(['app']);
+    expect(modelOnlyToolNames).toEqual(['model']);
   });
 });

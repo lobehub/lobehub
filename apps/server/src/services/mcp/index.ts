@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { partitionMcpToolsForViews } from '@lobechat/const/mcpApp';
 import {
   type CheckMcpInstallResult,
   ConnectorErrorCode,
@@ -440,11 +441,13 @@ export class MCPService {
       (mcpParams as any).headers = headers;
     }
 
-    const tools = await this.listTools(mcpParams);
+    const rawTools = await this.listRawTools(mcpParams);
+    const tools = this.transformMCPToolToLobeAPI(rawTools);
 
     return {
       api: tools,
       identifier,
+      ...this.toMcpAppsManifestFields(rawTools),
       // @ts-ignore
       mcpParams,
       meta: {
@@ -488,6 +491,7 @@ export class MCPService {
         title: metadata?.name || identifier,
       },
       ...manifest,
+      ...this.toMcpAppsManifestFields(manifest.tools ?? []),
       // @ts-ignore
       mcpParams,
       // TODO: temporary
@@ -563,14 +567,32 @@ export class MCPService {
    * leaves out "model" exist only for their view, which calls them through the
    * MCP session, so they never enter the manifest.
    */
-  private transformMCPToolToLobeAPI = (data: McpTool[]) => {
-    return data.filter(isToolVisibleToModel).map<LobeChatPluginApi>((item) => ({
+  private transformMCPToolToLobeAPI = (data: McpTool[]) =>
+    this.toLobeApi(data.filter(isToolVisibleToModel));
+
+  /**
+   * MCP Apps: what a plugin's views may call beyond its model-facing `api`,
+   * and which `api` tools they may not, so the view-call policy finds every
+   * tool a view may reach without the model seeing the view-only ones.
+   */
+  private toMcpAppsManifestFields = (
+    data: McpTool[],
+  ): Pick<ToolManifest, 'mcpAppOnlyApi' | 'mcpModelOnlyTools'> => {
+    const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(data);
+
+    return {
+      ...(appOnlyTools.length > 0 && { mcpAppOnlyApi: this.toLobeApi(appOnlyTools) }),
+      ...(modelOnlyToolNames.length > 0 && { mcpModelOnlyTools: modelOnlyToolNames }),
+    };
+  };
+
+  private toLobeApi = (data: McpTool[]) =>
+    data.map<LobeChatPluginApi>((item) => ({
       // Assuming identifier is the unique name/id
       description: item.description,
       name: item.name,
       parameters: item.inputSchema as ToolManifestSettings,
     }));
-  };
 }
 
 // Export a singleton instance

@@ -31,6 +31,9 @@ const tools = [
   },
 ];
 
+// Kept from the model's `api`, still known to the view-call policy
+const appOnlyToolNames = ['load_page'];
+
 const makeClient = () => ({
   disconnect: vi.fn().mockResolvedValue(undefined),
   initialize: vi.fn().mockResolvedValue(undefined),
@@ -57,6 +60,9 @@ describe('McpCtr tool visibility', () => {
 
     expect(manifest.api.map((api: { name: string }) => api.name)).toEqual(['show_dashboard']);
     expect(manifest.meta.description).toBe('dash MCP server has 1 tool');
+    expect(manifest.mcpAppOnlyApi.map((api: { name: string }) => api.name)).toEqual(
+      appOnlyToolNames,
+    );
   });
 
   it('keeps view-only tools out of the HTTP manifest the model reads', async () => {
@@ -68,6 +74,9 @@ describe('McpCtr tool visibility', () => {
 
     expect(manifest.api.map((api: { name: string }) => api.name)).toEqual(['show_dashboard']);
     expect(manifest.meta.description).toBe('dash MCP server has 1 tool, like "show_dashboard"');
+    expect(manifest.mcpAppOnlyApi.map((api: { name: string }) => api.name)).toEqual(
+      appOnlyToolNames,
+    );
   });
 
   it.each([

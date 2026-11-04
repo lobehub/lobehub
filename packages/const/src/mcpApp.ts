@@ -48,3 +48,28 @@ export const isSyncedMcpToolVisibleTo = (
     audience,
   );
 };
+
+/**
+ * What a plugin manifest keeps beside its model-facing `api` for MCP Apps
+ * views: the tools only views may call (visibility with "app" but not
+ * "model"), and the `api` tools views may not call (no "app").
+ */
+export const partitionMcpToolsForViews = <T extends { _meta?: unknown; name: string }>(
+  tools: readonly T[],
+) => {
+  const audiences = tools.map((tool) => {
+    const visibility = getMcpToolVisibility(tool._meta);
+    return {
+      app: isMcpToolVisibleTo(visibility, 'app'),
+      model: isMcpToolVisibleTo(visibility, 'model'),
+      tool,
+    };
+  });
+
+  return {
+    appOnlyTools: audiences.filter(({ app, model }) => app && !model).map(({ tool }) => tool),
+    modelOnlyToolNames: audiences
+      .filter(({ app, model }) => model && !app)
+      .map(({ tool }) => tool.name),
+  };
+};

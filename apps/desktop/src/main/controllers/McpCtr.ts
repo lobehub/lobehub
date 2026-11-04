@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import {
+  getMcpToolVisibility,
+  isMcpToolVisibleTo,
+  partitionMcpToolsForViews,
+} from '@lobechat/const/mcpApp';
 import {
   deserializeMcpIpcPayload,
   type McpIpcPayload,
@@ -174,14 +178,31 @@ interface McpCallOptions extends McpSessionOptions {
  * leaves out "model" exist only for their view, which reaches them through
  * `callTool`, so they stay out of it.
  */
+const toPluginApi = (tools: McpTool[]) =>
+  tools.map((item) => ({
+    description: item.description,
+    name: item.name,
+    parameters: item.inputSchema as any,
+  }));
+
 const toModelApi = (tools: McpTool[]) =>
-  tools
-    .filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model'))
-    .map((item) => ({
-      description: item.description,
-      name: item.name,
-      parameters: item.inputSchema as any,
-    }));
+  toPluginApi(
+    tools.filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model')),
+  );
+
+/**
+ * MCP Apps: what a plugin's views may call beyond its model-facing `api`, and
+ * which `api` tools they may not, so the view-call policy finds every tool a
+ * view may reach without the model seeing the view-only ones.
+ */
+const toMcpAppsManifestFields = (tools: McpTool[]) => {
+  const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(tools);
+
+  return {
+    ...(appOnlyTools.length > 0 && { mcpAppOnlyApi: toPluginApi(appOnlyTools) }),
+    ...(modelOnlyToolNames.length > 0 && { mcpModelOnlyTools: modelOnlyToolNames }),
+  };
+};
 
 const deserializePayload = deserializeMcpIpcPayload;
 
@@ -588,6 +609,7 @@ export default class McpCtr extends ControllerModule {
           title: input.metadata?.name || identifier,
         },
         ...manifest,
+        ...toMcpAppsManifestFields(manifest.tools || []),
         mcpParams: params,
         type: 'mcp' as any,
       });
@@ -632,12 +654,14 @@ export default class McpCtr extends ControllerModule {
 
     const client = await this.createClient(params);
     try {
-      const api = toModelApi(await client.listTools());
+      const tools = await client.listTools();
+      const api = toModelApi(tools);
       const identifier = input.identifier;
 
       return serializePayload({
         api,
         identifier,
+        ...toMcpAppsManifestFields(tools),
         mcpParams: params,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',

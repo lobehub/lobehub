@@ -146,5 +146,8 @@ describe('MCP manifests leave out tools only views may call', () => {
 
     expect(manifest.api.map((api) => api.name)).toEqual(['hello']);
     expect(manifest.meta.description).toMatch(/^test-mcp MCP server has 1 tool/);
+    // Still known to the view-call policy, outside the model's `api`
+    expect(manifest.mcpAppOnlyApi?.map((api) => api.name)).toEqual(['load_page']);
+    expect(manifest.mcpModelOnlyTools).toBeUndefined();
   });
 });

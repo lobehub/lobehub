@@ -1,5 +1,10 @@
 import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '@lobechat/agent-runtime';
-import type { HumanInterventionConfig, HumanInterventionPolicy } from '@lobechat/types';
+import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import type {
+  HumanInterventionConfig,
+  HumanInterventionPolicy,
+  ToolManifest,
+} from '@lobechat/types';
 
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
@@ -90,7 +95,10 @@ const findToolIntervention = (
       return { intervention: 'required' };
     }
     const tool = connector.tools.find((t) => t.toolName === toolName);
-    if (!tool || tool.permission === 'disabled') return null;
+    // A tool only the model may call is refused before anyone is asked about it
+    if (!tool || tool.permission === 'disabled' || !isSyncedMcpToolVisibleTo(tool, 'app')) {
+      return null;
+    }
     // Same mapping as the connector manifest (`patchManifestWithPermissions`)
     return { intervention: tool.permission === 'needs_approval' ? 'required' : undefined };
   }
@@ -103,9 +111,17 @@ const findToolIntervention = (
   if (!plugin) return agentId ? { intervention: 'required' } : null;
 
   const manifest = plugin.manifest as
-    | { api?: { humanIntervention?: unknown; name: string }[]; humanIntervention?: unknown }
+    | (Pick<ToolManifest, 'mcpAppOnlyApi' | 'mcpModelOnlyTools'> & {
+        api?: { humanIntervention?: unknown; name: string }[];
+        humanIntervention?: unknown;
+      })
     | undefined;
-  const api = manifest?.api?.find((item) => item.name === toolName);
+  // MCP Apps visibility: a tool only the model may call is refused to views, and
+  // one kept from the model is still the view's to call
+  if (manifest?.mcpModelOnlyTools?.includes(toolName)) return null;
+  const api = [...(manifest?.api ?? []), ...(manifest?.mcpAppOnlyApi ?? [])].find(
+    (item) => item.name === toolName,
+  );
   if (!api) return null;
 
   return { intervention: api.humanIntervention ?? manifest?.humanIntervention };
