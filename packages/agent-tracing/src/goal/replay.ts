@@ -79,6 +79,8 @@ export const replayGoalTrajectory = (
 
   for (const advance of trajectory.advances) {
     for (const tick of advance.ticks) {
+      // The main Agent planner's own ticks are not the coordinator's to reproduce.
+      if (tick.branch === 'manager_turn') continue;
       ticks += 1;
       const graph: GoalGraphState = reconstructGraphAt(trajectory, advance.seq, tick.index);
       const replayed = decide({

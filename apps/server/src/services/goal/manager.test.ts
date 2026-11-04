@@ -12,7 +12,6 @@ import { getTestDB } from '@/database/core/getTestDB';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
-import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import {
   acceptances,
@@ -1566,50 +1565,6 @@ describe('CLI main Agent planning', () => {
     expect(prompt).toContain('<previousTurn outcome="never_started" />');
   });
 
-  it('keeps pausing when the planning message is deleted after a dispatch that had started', async () => {
-    // The message was written and the call failed later, so a run may be live.
-    // The owner then deletes the message from their conversation; a later
-    // lookup must not turn that into "never started".
-    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(async (params) => {
-      await new MessageModel(db, userId).create(
-        {
-          agentId: params.agentId,
-          content: 'plan',
-          role: 'user',
-          topicId: params.appContext!.topicId!,
-        },
-        params.clientIds!.userMessageId,
-      );
-      throw new Error('Topic metadata update failed');
-    });
-    const { id, state } = await start();
-    expect(state.dispatchNeverStarted).toBeUndefined();
-    await db.delete(messages).where(eq(messages.id, `msg_goal_manager_${state.token}`));
-
-    const now = Date.now();
-    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
-    expect((await service().tick(id)).outcome).toBe('no_progress');
-    const fresh = (await model().findById(id))!;
-    expect(fresh.status).toBe('paused');
-    expect(fresh.config!.managerState!.consumed).not.toBe(true);
-    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps pausing a turn whose dispatch failed for any reason other than a refused reservation', async () => {
-    // No message and no operation, but an ordinary failure can come after a run
-    // went live; only the error decides, never the absence of rows.
-    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(async () => {
-      throw new Error('Something failed while starting');
-    });
-    const { id, state } = await start();
-    expect(state.dispatchNeverStarted).toBeUndefined();
-
-    const now = Date.now();
-    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
-    expect((await service().tick(id)).outcome).toBe('no_progress');
-    expect((await model().findById(id))!.status).toBe('paused');
-  });
-
   /**
    * Regression: the pause asked the owner to "confirm its exit before resuming"
    * with no way to do so, so a Goal paused on a turn recorded before the
@@ -1625,6 +1580,15 @@ describe('CLI main Agent planning', () => {
         }) as any,
     );
     const { id, state } = await start();
+    // An adopted turn has no minted token to rotate, so it is never replaced
+    // on its own; a dispatched one without a run record is (see
+    // manager.unconfirmedTurn.test.ts).
+    await db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(${goals.config}, '{managerState,adopted}', 'true'::jsonb)`,
+      })
+      .where(eq(goals.id, id));
     const now = Date.now();
     vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
     await service().tick(id);
@@ -1648,59 +1612,6 @@ describe('CLI main Agent planning', () => {
     const { id } = await start();
     await expect(manager().confirmTurnExit(id)).rejects.toMatchObject({ code: 'CONFLICT' });
     expect((await model().findById(id))!.config!.managerState!.consumed).not.toBe(true);
-  });
-
-  it('keeps pausing a timed-out turn whose dispatch never reported failure', async () => {
-    // No message and no operation, but the dispatch call never ended in an
-    // error: it may still be initialising and start a paid run later, so the
-    // turn cannot be replaced.
-    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(
-      async (params) =>
-        ({
-          agentId: params.agentId!,
-          operationId: 'op-still-starting',
-          topicId: params.appContext!.topicId!,
-        }) as any,
-    );
-    const { id, state, op } = await start();
-    expect(op).toBeUndefined();
-
-    const now = Date.now();
-    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
-    expect((await service().tick(id)).outcome).toBe('no_progress');
-    const fresh = (await model().findById(id))!;
-    expect(fresh.status).toBe('paused');
-    expect(fresh.config!.managerState!.token).toBe(state.token);
-    expect(fresh.config!.managerState!.consumed).not.toBe(true);
-    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps pausing a timed-out turn whose message exists but whose operation row is missing', async () => {
-    // The runtime keeps running when its operation insert fails, so a written
-    // planning message with no operation is still an unconfirmed process.
-    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(async (params) => {
-      await new MessageModel(db, userId).create(
-        {
-          agentId: params.agentId,
-          content: 'plan',
-          role: 'user',
-          topicId: params.appContext!.topicId!,
-        },
-        params.clientIds!.userMessageId,
-      );
-      throw new Error('Operation insert failed');
-    });
-    const { id, state, op } = await start();
-    expect(op).toBeUndefined();
-
-    const now = Date.now();
-    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
-    expect((await service().tick(id)).outcome).toBe('no_progress');
-    const fresh = (await model().findById(id))!;
-    expect(fresh.status).toBe('paused');
-    expect(fresh.config!.managerState!.token).toBe(state.token);
-    expect(fresh.config!.managerState!.consumed).not.toBe(true);
-    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
   });
 
   it('rejects an open human Gate without planning or dispatching work', async () => {
