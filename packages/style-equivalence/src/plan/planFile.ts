@@ -2,6 +2,7 @@ import type { FileExtraction, StyleElement, VariableKind } from '../extract';
 import { mergeKinds } from '../extract/identifiers';
 import { type Combo, combosFor } from './combos';
 import { alignElements } from './pair';
+import { placementPreserved } from './placement';
 
 export type Side = 'base' | 'head';
 
@@ -22,6 +23,7 @@ export interface PlanVariable {
 export interface PlanCase {
   combos: Combo[];
   elementIds: Record<Side, string>;
+  evidence?: string[];
   file: string;
   flags: string[];
   key: string;
@@ -98,6 +100,15 @@ export const planFile = (
         flags.add('PLACEMENT_NEUTRAL_PROP');
       item.flags.forEach((flag) => flags.add(flag));
     }
+    const evidence: string[] = [];
+    if (
+      (flags.has('PLACEMENT_SUBSTITUTED') || flags.has('PLACEMENT_NEUTRAL_PROP')) &&
+      placementPreserved(chains.base, chains.head)
+    ) {
+      flags.delete('PLACEMENT_SUBSTITUTED');
+      flags.delete('PLACEMENT_NEUTRAL_PROP');
+      evidence.push('PLACEMENT_PRESERVED');
+    }
     const variables = new Map<string, PlanVariable>();
     for (const side of ['base', 'head'] as const)
       for (const item of chains[side])
@@ -121,6 +132,7 @@ export const planFile = (
     return {
       combos,
       elementIds: { base: left.id, head: right.id },
+      ...(evidence.length ? { evidence } : {}),
       file,
       flags: [...flags].sort(),
       key: `${file}|${left.id}`,
