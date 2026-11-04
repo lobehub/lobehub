@@ -1,3 +1,4 @@
+import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelListItem } from '@lobechat/types';
 import {
   AccordionHeader,
@@ -30,7 +31,7 @@ import { channelActions, channelSelectors, useChannelStore } from '@/store/chann
 
 import { channelsInScope } from './channelScope';
 import { openCreateChannel } from './CreateChannel';
-import { channelPath, matchChannel } from './paths';
+import { matchChannel } from './paths';
 import { threadTitle } from './threadTitle';
 import { useChannelEvents } from './useChannelEvents';
 import { useChannelMenu } from './useChannelMenu';
@@ -101,7 +102,7 @@ const ChannelThreads = ({
   return (
     <Flexbox aria-label={t('thread')} gap={1} paddingBlock={1}>
       {shown.map(({ thread, index }, position) => {
-        const path = channelPath(channelId, thread.id, projectId);
+        const path = CHANNEL_URL(channelId, thread.id, projectId);
         const active = thread.id === threadId;
         const items = threadMenu(detail.channel, thread);
         return (
@@ -171,12 +172,12 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const [showArchived, setShowArchived] = useState(false);
   const activeChannelId = matchChannel(pathname);
   const create = () =>
-    openCreateChannel((id) => navigate(channelPath(id, null, projectId)), projectId);
+    openCreateChannel((id) => navigate(CHANNEL_URL(id, null, projectId)), projectId);
   const activeThreadId = new URLSearchParams(search).get('thread');
   const menuItems = useChannelMenu();
 
   const renderChannel = (channel: ChannelListItem) => {
-    const path = channelPath(channel.id, null, channel.projectId);
+    const path = CHANNEL_URL(channel.id, null, channel.projectId);
     const open = activeChannelId === channel.id;
     return (
       <Flexbox key={channel.id}>

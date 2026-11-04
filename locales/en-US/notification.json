@@ -38,6 +38,8 @@
   "category.schedule": "Scheduled tasks",
   "category.system": "System notifications",
   "category.workspace": "Workspace updates",
+  "channel_mentioned": "{{actorLabel}} mentioned you in the channel \"{{channelTitle}}\".",
+  "channel_mentioned_title": "You were mentioned in a channel",
   "checkout_abandoned_subscription": "You started upgrading to {{plan}} but did not finish checkout. Your upgrade is still available whenever you are ready.",
   "checkout_abandoned_subscription_action": "Finish upgrade",
   "checkout_abandoned_subscription_title": "Your upgrade is unfinished",
