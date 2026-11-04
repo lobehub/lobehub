@@ -117,6 +117,16 @@ describe('describeUploadFailure', () => {
       ).kind,
     ).toBe('auth');
   });
+
+  it('keeps the quota and recovery links the CLI prints with a storage block', () => {
+    const line =
+      'storage_block:upgrade_required. 0 B of 1.0 GB remaining (1.2 GB used). Free space: https://lobehub.com/resource';
+
+    expect(describeUploadFailure(execFileError('/tmp/cat.png', `[ERROR] ${line}\n`))).toEqual({
+      kind: 'storage_quota',
+      reason: line,
+    });
+  });
 });
 
 describe('RemoteFileUploadService.uploadLocalFile', () => {
