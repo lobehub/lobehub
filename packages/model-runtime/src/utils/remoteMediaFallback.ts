@@ -18,6 +18,9 @@ const MEDIA_FETCH_ERROR_PATTERNS = [
 
 const INLINE_IMAGE_TIMEOUT_MS = 15_000;
 
+/** `data:<mime>;base64,` plus base64 padding, reserved before converting to binary bytes. */
+const DATA_URI_OVERHEAD_BYTES = 64;
+
 /**
  * Reuses the request-size budget the Anthropic context builder already enforces: 5 MB of
  * base64 per image and 20 MB in total. A topic can hold many distinct images, so the
@@ -122,32 +125,13 @@ export interface InlineRemoteImagesOptions {
   signal?: AbortSignal;
 }
 
-const collectRemoteImageUrls = (messages: OpenAIChatMessage[]) => {
-  const urls: string[] = [];
-  const seen = new Set<string>();
-
-  const add = (url?: null | string) => {
-    if (!url || seen.has(url) || parseDataUri(url).type !== 'url') return;
-    seen.add(url);
-    urls.push(url);
-  };
-
-  for (const message of messages) {
-    if (Array.isArray(message.content))
-      for (const part of message.content) if (part?.type === 'image_url') add(part.image_url.url);
-
-    for (const item of outputItems(message) ?? []) if (isOutputImage(item)) add(item.image_url);
-  }
-
-  return urls;
-};
-
 const downloadDataUri = async (
   url: string,
   remainingBase64Bytes: number,
   signal?: AbortSignal,
 ): Promise<string | undefined> => {
-  const maxBytes = Math.floor((Math.min(MAX_IMAGE_BASE64_BYTES, remainingBase64Bytes) * 3) / 4);
+  const base64Allowance = Math.min(MAX_IMAGE_BASE64_BYTES, remainingBase64Bytes);
+  const maxBytes = Math.floor((Math.max(0, base64Allowance - DATA_URI_OVERHEAD_BYTES) * 3) / 4);
   // `imageUrlToBase64` reads 0 as "no limit", so a leftover allowance below one byte has to
   // skip the download instead of passing it a value that disables the cap.
   if (maxBytes <= 0) return undefined;
@@ -166,57 +150,98 @@ const downloadDataUri = async (
 };
 
 /**
- * Downloads remote images on our side, sequentially and in message order, so peak memory
- * stays under the aggregate budget plus one image and the same conversation always
- * produces the same inlining. URLs that do not fit the budget are left to become
- * placeholders instead of being sent as base64.
- */
-const inlineRemoteImageUrls = async (urls: string[], signal?: AbortSignal) => {
-  const dataUris = new Map<string, string | undefined>();
-  let remainingBase64Bytes = MAX_TOTAL_BASE64_BYTES;
-
-  for (const url of urls) {
-    const dataUri =
-      remainingBase64Bytes > 0
-        ? await downloadDataUri(url, remainingBase64Bytes, signal)
-        : undefined;
-
-    dataUris.set(url, dataUri);
-    if (dataUri) remainingBase64Bytes -= dataUri.length;
-  }
-
-  return dataUris;
-};
-
-/**
  * Downloads remote images on our side and sends them as data URIs, so the request no
  * longer depends on the provider reaching the URL. An image we cannot download, or that
  * does not fit the request budget, becomes a text placeholder.
+ *
+ * Downloads are deduplicated per URL, but every emitted occurrence is charged against the
+ * aggregate budget: a topic that repeats one 5 MB image seven times would otherwise send
+ * 35 MB of base64 while only 5 MB was accounted for. Parts are visited in message order,
+ * so the same conversation always produces the same inlining.
  */
 export const inlineRemoteImages = async (
   messages: OpenAIChatMessage[],
   { signal }: InlineRemoteImagesOptions = {},
 ): Promise<OpenAIChatMessage[]> => {
-  const dataUris = await inlineRemoteImageUrls(collectRemoteImageUrls(messages), signal);
+  const cache = new Map<string, string | undefined>();
+  let remainingBase64Bytes = MAX_TOTAL_BASE64_BYTES;
 
-  return mapMessageMedia(
-    messages,
-    (part) => {
-      if (part?.type !== 'image_url' || !isRemoteImagePart(part)) return part;
+  const resolve = async (url: string) => {
+    if (!cache.has(url)) {
+      cache.set(
+        url,
+        remainingBase64Bytes > 0
+          ? await downloadDataUri(
+              url,
+              Math.min(MAX_IMAGE_BASE64_BYTES, remainingBase64Bytes),
+              signal,
+            )
+          : undefined,
+      );
+    }
 
-      const dataUri = dataUris.get(part.image_url.url);
-      if (!dataUri) return toPlaceholder(part);
+    const dataUri = cache.get(url);
+    if (!dataUri || dataUri.length > remainingBase64Bytes) return undefined;
 
-      return { ...part, image_url: { ...part.image_url, url: dataUri } };
-    },
-    (item) => {
-      if (item?.type !== 'input_image' || !item.image_url) return item;
-      if (parseDataUri(item.image_url).type !== 'url') return item;
+    remainingBase64Bytes -= dataUri.length;
+    return dataUri;
+  };
 
-      const dataUri = dataUris.get(item.image_url);
-      return dataUri ? { ...item, image_url: dataUri } : toOutputPlaceholder(item);
-    },
-  );
+  const result: OpenAIChatMessage[] = [];
+
+  for (const message of messages) {
+    const parts = Array.isArray(message.content)
+      ? (message.content as UserMessageContentPart[])
+      : undefined;
+    const output = outputItems(message);
+
+    if (!parts && !output) {
+      result.push(message);
+      continue;
+    }
+
+    const next: OpenAIChatMessage = { ...message };
+
+    if (parts) {
+      const mapped: UserMessageContentPart[] = [];
+      for (const part of parts) {
+        if (part?.type !== 'image_url' || parseDataUri(part.image_url.url).type !== 'url') {
+          mapped.push(part);
+          continue;
+        }
+
+        const dataUri = await resolve(part.image_url.url);
+        mapped.push(
+          dataUri
+            ? { ...part, image_url: { ...part.image_url, url: dataUri } }
+            : toPlaceholder(part),
+        );
+      }
+      next.content = mapped;
+    }
+
+    if (output) {
+      const mapped: ResponsesOutputItem[] = [];
+      for (const item of output) {
+        if (
+          item?.type !== 'input_image' ||
+          !item.image_url ||
+          parseDataUri(item.image_url).type !== 'url'
+        ) {
+          mapped.push(item);
+          continue;
+        }
+
+        const dataUri = await resolve(item.image_url);
+        mapped.push(dataUri ? { ...item, image_url: dataUri } : toOutputPlaceholder(item));
+      }
+      next.responsesOutput = mapped;
+    }
+
+    result.push(next);
+  }
+
+  return result;
 };
 
 /** Last resort: keep the conversation usable as text by replacing every media part. */

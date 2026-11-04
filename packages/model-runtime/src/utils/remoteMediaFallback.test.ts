@@ -156,9 +156,15 @@ describe('remoteMediaFallback', () => {
   });
 
   it('stops inlining once the aggregate request budget is spent', async () => {
-    // 4 MB of base64 per image: five fit the 20 MB budget, the sixth must not be downloaded.
+    // 4 MB of base64 (3 MB binary) per image: four fit the 20 MB budget, the rest become
+    // placeholders.
     const base64 = 'A'.repeat(4 * 1024 * 1024);
-    vi.mocked(imageUrlToBase64).mockResolvedValue({ base64, mimeType: 'image/png' });
+    const binaryBytes = 3 * 1024 * 1024;
+    vi.mocked(imageUrlToBase64).mockImplementation(async (_url, options) => {
+      if ((options?.maxBytes ?? Infinity) < binaryBytes) throw new Error('over the size cap');
+
+      return { base64, mimeType: 'image/png' };
+    });
 
     const many: OpenAIChatMessage[] = Array.from({ length: 6 }, (_, index) => ({
       content: [
@@ -169,14 +175,18 @@ describe('remoteMediaFallback', () => {
 
     const result = await inlineRemoteImages(many);
 
-    expect(imageUrlToBase64).toHaveBeenCalledTimes(5);
-    expect(result.slice(0, 5).every((message) => (message.content as any[])[0].image_url)).toBe(
+    expect(result.slice(0, 4).every((message) => (message.content as any[])[0].image_url)).toBe(
       true,
     );
-    expect((result[5].content as any[])[0]).toEqual({
-      text: '[Image omitted: the model provider could not download or process it. Original URL: https://files.example.com/5.png]',
-      type: 'text',
-    });
+    expect(result.slice(4).every((message) => (message.content as any[])[0].type === 'text')).toBe(
+      true,
+    );
+    // Every later download is capped by what is left of the budget instead of the 5 MB cap.
+    const budgetCaps = vi
+      .mocked(imageUrlToBase64)
+      .mock.calls.slice(4)
+      .map(([, options]) => options?.maxBytes ?? Infinity);
+    expect(budgetCaps.every((cap) => cap < 4 * 1024 * 1024)).toBe(true);
   });
 
   it('skips a download whose remaining allowance rounds to zero', async () => {
@@ -205,6 +215,30 @@ describe('remoteMediaFallback', () => {
     expect(imageUrlToBase64).toHaveBeenCalledTimes(4);
     expect((result[4].content as any[])[0]).toEqual({
       text: '[Image omitted: the model provider could not download or process it. Original URL: https://files.example.com/4.png]',
+      type: 'text',
+    });
+  });
+
+  it('charges every occurrence of a repeated image against the budget', async () => {
+    const base64 = 'A'.repeat(5 * 1024 * 1024);
+    vi.mocked(imageUrlToBase64).mockResolvedValue({ base64, mimeType: 'image/png' });
+
+    const repeated: OpenAIChatMessage[] = Array.from({ length: 7 }, () => ({
+      content: [{ image_url: { url: URL_A }, type: 'image_url' }],
+      role: 'user',
+    }));
+
+    const result = await inlineRemoteImages(repeated);
+
+    const dataUriLength = base64.length + 'data:image/png;base64,'.length;
+    const inlineable = Math.floor(DEFAULT_INLINE_IMAGE_BUDGET.maxTotalBase64Bytes / dataUriLength);
+
+    expect(imageUrlToBase64).toHaveBeenCalledTimes(1);
+    expect(result.filter((m) => (m.content as any[])[0].type === 'image_url')).toHaveLength(
+      inlineable,
+    );
+    expect((result[inlineable].content as any[])[0]).toEqual({
+      text: `[Image omitted: the model provider could not download or process it. Original URL: ${URL_A}]`,
       type: 'text',
     });
   });
