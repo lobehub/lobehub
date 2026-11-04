@@ -43,6 +43,7 @@ export interface FileExtraction {
   outsideReferences: string[];
   prelude: string;
   rules: StyleRule[];
+  slotProperties?: Record<string, string[]>;
   styleSymbols: string[];
 }
 
@@ -50,6 +51,7 @@ export interface StyleAdapter {
   importedStyleSymbols?: (source: string, clause: ts.ImportClause) => string[];
   markerIdentifiers: string[];
   name: string;
+  propertiesOf?: (symbol: string, factory: ts.CallExpression) => Record<string, string[]>;
   recognizeFactory: (call: ts.CallExpression) => boolean;
   rulesOf?: (symbol: string, factory: ts.CallExpression) => StyleRule[];
   stylesheet?: (

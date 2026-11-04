@@ -52,7 +52,7 @@ export const parseRules = (css: string, rootSelector?: string) => {
   return { error: false, rules };
 };
 
-const templateText = (template: ts.TemplateLiteral) => {
+export const templateText = (template: ts.TemplateLiteral) => {
   if (ts.isNoSubstitutionTemplateLiteral(template)) return template.text;
   let text = template.head.text;
   template.templateSpans.forEach((span, index) => {
@@ -61,7 +61,7 @@ const templateText = (template: ts.TemplateLiteral) => {
   return text;
 };
 
-const returnedObject = (factory: ts.CallExpression) => {
+export const returnedObject = (factory: ts.CallExpression) => {
   const callback = factory.arguments[0];
   if (!callback) return undefined;
   if (ts.isObjectLiteralExpression(callback)) return callback;

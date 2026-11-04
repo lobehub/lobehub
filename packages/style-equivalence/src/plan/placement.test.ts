@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { StyleBinding, StyleElement } from '../extract';
+import { extractFile, type StyleBinding, type StyleElement } from '../extract';
+import { emotionStaticAdapter } from '../extract/adapters/emotionStatic';
+import { stylexAdapter } from '../extract/adapters/stylex';
 import { placementPreserved } from './placement';
 import { planFile } from './planFile';
 
@@ -274,6 +276,154 @@ describe('placementPreserved on replaced elements only', () => {
   });
 });
 
+describe('placementPreserved on hand-joined classes', () => {
+  const disjoint = {
+    base: {
+      'styles.activated': ['color', 'background'],
+      'styles.badge': ['display', 'padding-inline', 'border-radius'],
+    },
+    head: {
+      'styles.activated': ['color', 'background-color', 'background-image'],
+      'styles.badge': ['display', 'padding-inline', 'border-radius'],
+    },
+  };
+  const badge = (expr: string) => [el('Badge', [cls(expr)])];
+
+  it('accepts an array join of separate stylex.props calls whose slots do not overlap', () => {
+    expect(
+      placementPreserved(
+        badge("[styles.badge, styles.activated].join(' ')"),
+        badge(
+          "[stylex.props(styles.badge).className, stylex.props(styles.activated).className].join(' ')",
+        ),
+        { properties: disjoint },
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts a join on one side and one merge with the same ordered terms on the other', () => {
+    expect(
+      placementPreserved(
+        badge("[styles.badge, styles.activated].join(' ')"),
+        badge('stylex.props(styles.badge, styles.activated).className'),
+        { properties: disjoint },
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts a template literal join with a condition in one source', () => {
+    const properties = {
+      'styles.code': ['margin-inline-start', 'font-family', 'font-size'],
+      'styles.error': ['color'],
+      'styles.success': ['color'],
+    };
+    expect(
+      placementPreserved(
+        badge('`${styles.code} ${success ? styles.success : styles.error}`'),
+        badge(
+          '`${stylex.props(styles.code).className} ${stylex.props(success ? styles.success : styles.error).className}`',
+        ),
+        { properties: { base: properties, head: properties } },
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts cx over the className of separate stylex.props calls', () => {
+    expect(
+      placementPreserved(
+        badge('cx(styles.badge, styles.activated)'),
+        badge('cx(stylex.props(styles.badge).className, stylex.props(styles.activated).className)'),
+        { properties: disjoint },
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects joined sources that set the same property in any branch', () => {
+    const properties = {
+      'styles.statusDot': ['width', 'border-width', 'border-style', 'border-color'],
+      'styles.statusDotOnline': ['border-style', 'background-color'],
+    };
+    const base = badge(
+      "[styles.statusDot, online ? styles.statusDotOnline : undefined].filter(Boolean).join(' ')",
+    );
+    const head = badge(
+      "[stylex.props(styles.statusDot).className, online ? stylex.props(styles.statusDotOnline).className : undefined].filter(Boolean).join(' ')",
+    );
+    expect(
+      placementPreserved(base, head, { properties: { base: properties, head: properties } }),
+    ).toBe(false);
+    const apart = { ...properties, 'styles.statusDotOnline': ['background-color'] };
+    expect(placementPreserved(base, head, { properties: { base: apart, head: apart } })).toBe(true);
+  });
+
+  it('rejects joined sources that overlap only through a shorthand', () => {
+    const properties = { 'styles.a': ['padding-inline'], 'styles.b': ['padding-left'] };
+    expect(
+      placementPreserved(
+        badge("[styles.a, styles.b].join(' ')"),
+        badge("[stylex.props(styles.a).className, stylex.props(styles.b).className].join(' ')"),
+        { properties: { base: properties, head: properties } },
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a join when one side does not know what a slot sets', () => {
+    expect(
+      placementPreserved(
+        badge("[styles.badge, styles.activated].join(' ')"),
+        badge(
+          "[stylex.props(styles.badge).className, stylex.props(styles.activated).className].join(' ')",
+        ),
+        { properties: { base: disjoint.base, head: { 'styles.badge': ['display'] } } },
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects joins that do not separate the classes with whitespace', () => {
+    const properties = { base: disjoint.base, head: disjoint.head };
+    expect(
+      placementPreserved(
+        badge('`${styles.badge}${styles.activated}`'),
+        badge(
+          '`${stylex.props(styles.badge).className}${stylex.props(styles.activated).className}`',
+        ),
+        { properties },
+      ),
+    ).toBe(false);
+    expect(
+      placementPreserved(
+        badge("[styles.badge, styles.activated].join('')"),
+        badge(
+          "[stylex.props(styles.badge).className, stylex.props(styles.activated).className].join('')",
+        ),
+        { properties },
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects swapped sources even when they do not overlap', () => {
+    expect(
+      placementPreserved(
+        badge("[styles.badge, styles.activated].join(' ')"),
+        badge(
+          "[stylex.props(styles.activated).className, stylex.props(styles.badge).className].join(' ')",
+        ),
+        { properties: disjoint },
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a joined source that leaves a slot outside its stylex.props call', () => {
+    expect(
+      placementPreserved(
+        badge("[cx(styles.badge, styles.activated)].join(' ')"),
+        badge("[cx(stylex.props(styles.badge).className, styles.activated)].join(' ')"),
+        { properties: disjoint },
+      ),
+    ).toBe(false);
+  });
+});
+
 describe('planFile placement evidence', () => {
   it('drops placement flags and records evidence for an identical chain', () => {
     const base = el('SkillsIcon', [cls('styles.skillIcon')], { slots: ['styles.skillIcon'] });
@@ -327,5 +477,39 @@ describe('planFile placement evidence', () => {
     ).cases;
     expect(plan.flags).toEqual([]);
     expect(plan.evidence).toEqual(['PLACEMENT_PRESERVED']);
+  });
+
+  it('proves a hand-joined class on a replaced component from the extracted declarations', () => {
+    const options = { adapters: [emotionStaticAdapter, stylexAdapter], layoutComponents: [] };
+    const base = (online: string) =>
+      extractFile(
+        `import { createStaticStyles } from '@lobehub/ui';
+const styles = createStaticStyles(({ css }) => ({
+  badge: css\`display: inline-flex; padding-inline: 8px;\`,
+  activated: css\`${online}\`,
+}));
+export const A = () => <Badge className={[styles.badge, styles.activated].join(' ')} />;
+`,
+        'a.tsx',
+        options,
+      );
+    const head = (online: string) =>
+      extractFile(
+        `import * as stylex from '@stylexjs/stylex';
+const styles = stylex.create({
+  badge: { display: 'inline-flex', paddingInline: '8px' },
+  activated: { ${online} },
+});
+export const A = () => <Badge className={[stylex.props(styles.badge).className, stylex.props(styles.activated).className].join(' ')} />;
+`,
+        'a.tsx',
+        options,
+      );
+    const plan = (left: string, right: string) =>
+      planFile('a.tsx', base(left), head(right), { layoutComponents: [] }).cases[0];
+    expect(plan('color: green;', "color: 'green'").flags).toEqual([]);
+    expect(plan('padding-left: 4px;', "paddingLeft: '4px'").flags).toEqual([
+      'PLACEMENT_SUBSTITUTED',
+    ]);
   });
 });

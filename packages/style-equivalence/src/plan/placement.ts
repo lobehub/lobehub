@@ -1,14 +1,26 @@
 import ts from 'typescript';
 
 import type { StyleBinding, StyleElement } from '../extract';
+import { propertiesOverlap } from './properties';
 
 type Canonical = { entries: Record<string, Canonical> } | { terms: string[] };
 
-interface Context {
-  depth: number;
+export type SlotProperties = Record<string, string[]>;
+
+interface Unit {
   outside: number;
   propsCalls: number;
+  slots: Set<string>;
 }
+
+interface Context {
+  depth: number;
+  joins: Array<Array<Set<string>>>;
+  unit: Unit;
+  units: Unit[];
+}
+
+const newUnit = (): Unit => ({ outside: 0, propsCalls: 0, slots: new Set() });
 
 const EMPTY = new Set(['false', 'null', 'undefined']);
 const MERGERS = new Set(['clsx', 'cx']);
@@ -43,23 +55,80 @@ const prefixed = (node: ts.Expression, prefix: string, ctx: Context) =>
   termsOf(node, ctx)?.map((term) => `${prefix}${term}`);
 
 const propsTerms = (call: ts.CallExpression, ctx: Context) => {
-  ctx.propsCalls += 1;
+  ctx.unit.propsCalls += 1;
   ctx.depth += 1;
   const terms = termsOfAll(call.arguments, ctx);
   ctx.depth -= 1;
   return terms;
 };
 
+const containsProps = (root: ts.Node): boolean =>
+  (ts.isCallExpression(root) && isStylexProps(root)) || !!ts.forEachChild(root, containsProps);
+
+const isSpaceLiteral = (node: ts.Expression | undefined) =>
+  !!node && ts.isStringLiteralLike(node) && node.text === ' ';
+
+const joinedSources = (node: ts.Expression): readonly ts.Expression[] | undefined => {
+  if (ts.isTemplateExpression(node)) {
+    const literals = node.templateSpans.map((span) => span.literal.text);
+    const separated = literals.slice(0, -1).every((text) => /^\s+$/.test(text));
+    return separated && /^\s*$/.test(node.head.text) && /^\s*$/.test(literals.at(-1) ?? '')
+      ? node.templateSpans.map((span) => span.expression)
+      : undefined;
+  }
+  if (!ts.isCallExpression(node)) return undefined;
+  if (ts.isIdentifier(node.expression) && MERGERS.has(node.expression.text))
+    return node.arguments.filter(containsProps).length > 1 ? node.arguments : undefined;
+  if (!ts.isPropertyAccessExpression(node.expression) || node.expression.name.text !== 'join')
+    return undefined;
+  if (node.arguments.length !== 1 || !isSpaceLiteral(node.arguments[0])) return undefined;
+  let target = unwrap(node.expression.expression);
+  if (
+    ts.isCallExpression(target) &&
+    ts.isPropertyAccessExpression(target.expression) &&
+    target.expression.name.text === 'filter' &&
+    target.arguments.length === 1 &&
+    compact(target.arguments[0]) === 'Boolean'
+  )
+    target = unwrap(target.expression.expression);
+  if (!ts.isArrayLiteralExpression(target)) return undefined;
+  return target.elements.some(ts.isSpreadElement) ? undefined : target.elements;
+};
+
+const joinTerms = (sources: readonly ts.Expression[], ctx: Context) => {
+  if (ctx.depth > 0) return undefined;
+  const outer = ctx.unit;
+  const groups: Array<Set<string>> = [];
+  const terms: string[] = [];
+  for (const source of sources) {
+    ctx.unit = newUnit();
+    ctx.units.push(ctx.unit);
+    groups.push(ctx.unit.slots);
+    const part = termsOf(source, ctx);
+    ctx.unit = outer;
+    if (!part) return undefined;
+    terms.push(...part);
+  }
+  ctx.joins.push(groups);
+  return terms;
+};
+
 function termsOf(raw: ts.Expression, ctx: Context): string[] | undefined {
   const node = unwrap(raw);
   if (EMPTY.has(compact(node))) return [];
-  if (ts.isIdentifier(node)) return [node.text];
+  if (ts.isIdentifier(node)) {
+    ctx.unit.slots.add(node.text);
+    return [node.text];
+  }
+  const sources = joinedSources(node);
+  if (sources) return joinTerms(sources, ctx);
   if (ts.isPropertyAccessExpression(node)) {
     const target = unwrap(node.expression);
     if (node.name.text === 'className' && ts.isCallExpression(target) && isStylexProps(target))
       return propsTerms(target, ctx);
     if (!ts.isIdentifier(target)) return undefined;
-    if (ctx.depth === 0) ctx.outside += 1;
+    if (ctx.depth === 0) ctx.unit.outside += 1;
+    ctx.unit.slots.add(compact(node));
     return [compact(node)];
   }
   if (ts.isCallExpression(node)) {
@@ -82,7 +151,21 @@ function termsOf(raw: ts.Expression, ctx: Context): string[] | undefined {
   return undefined;
 }
 
-const canonicalOf = (raw: ts.Expression, spread = false): Canonical | undefined => {
+const joinsDisjoint = (joins: Context['joins'], properties: SlotProperties | undefined) =>
+  joins.every((groups) => {
+    const sets = groups.map((slots) => [...slots].map((slot) => properties?.[slot]));
+    if (sets.some((set) => set.some((entry) => !entry))) return false;
+    const flat = sets.map((set) => (set as string[][]).flat());
+    return flat.every((left, index) =>
+      flat.slice(index + 1).every((right) => !propertiesOverlap(left, right)),
+    );
+  });
+
+const canonicalOf = (
+  raw: ts.Expression,
+  properties: SlotProperties | undefined,
+  spread = false,
+): Canonical | undefined => {
   const node = unwrap(raw);
   if (ts.isObjectLiteralExpression(node)) {
     const entries: Record<string, Canonical> = {};
@@ -94,30 +177,34 @@ const canonicalOf = (raw: ts.Expression, spread = false): Canonical | undefined 
       if (!ts.isPropertyAssignment(property)) return undefined;
       const { name } = property;
       if (!ts.isIdentifier(name) && !ts.isStringLiteral(name)) return undefined;
-      const value = canonicalOf(property.initializer);
+      const value = canonicalOf(property.initializer, properties);
       if (!value) return undefined;
       entries[name.text] = value;
     }
     return { entries };
   }
-  const ctx: Context = { depth: 0, outside: 0, propsCalls: 0 };
+  const unit = newUnit();
+  const ctx: Context = { depth: 0, joins: [], unit, units: [unit] };
   const terms =
     spread && ts.isCallExpression(node) && isStylexProps(node)
       ? propsTerms(node, ctx)
       : termsOf(node, ctx);
-  if (!terms || ctx.propsCalls > 1) return undefined;
-  return ctx.propsCalls === 1 && ctx.outside > 0 ? undefined : { terms };
+  if (!terms) return undefined;
+  const merged = ctx.units.every(
+    (item) => item.propsCalls <= 1 && !(item.propsCalls === 1 && item.outside > 0),
+  );
+  return merged && joinsDisjoint(ctx.joins, properties) ? { terms } : undefined;
 };
 
-const normalize = (binding: StyleBinding) => {
+const normalize = (binding: StyleBinding, properties?: SlotProperties) => {
   const expression = parse(binding.expr);
   if (!expression) return undefined;
   if (binding.spread) {
     if (!isStylexProps(expression)) return undefined;
-    const value = canonicalOf(expression, true);
+    const value = canonicalOf(expression, properties, true);
     return value && { prop: 'className', value };
   }
-  const value = canonicalOf(expression);
+  const value = canonicalOf(expression, properties);
   return value && { prop: binding.prop, value };
 };
 
@@ -128,19 +215,22 @@ const sortedJson = (value: unknown) =>
       : inner,
   );
 
-const sameElement = (base: StyleElement, head: StyleElement) => {
+const sameElement = (base: StyleElement, head: StyleElement, properties: SideProperties) => {
   if (base.tag !== head.tag) return false;
   if (sortedJson(base.literalProps) !== sortedJson(head.literalProps)) return false;
   if (base.bindings.length !== head.bindings.length) return false;
   return base.bindings.every((binding, index) => {
-    const left = normalize(binding);
-    const right = normalize(head.bindings[index]);
+    const left = normalize(binding, properties.base);
+    const right = normalize(head.bindings[index], properties.head);
     return !!left && !!right && sortedJson(left) === sortedJson(right);
   });
 };
 
+type SideProperties = Partial<Record<'base' | 'head', SlotProperties>>;
+
 export interface PlacementOptions {
   layoutComponents?: string[];
+  properties?: SideProperties;
 }
 
 export const isIntrinsicTag = (tag: string) => /^[a-z][\w-]*$/.test(tag);
@@ -161,7 +251,7 @@ export const placementPreserved = (
       const other = head[index];
       if (element.tag !== other.tag) return false;
       return placementSensitive(element, layout) || placementSensitive(other, layout)
-        ? sameElement(element, other)
+        ? sameElement(element, other, options.properties ?? {})
         : true;
     })
   );

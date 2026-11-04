@@ -90,10 +90,13 @@ export const extractFile = (
 
   const gaps: string[] = [];
   const rules: StyleRule[] = [];
+  const slotProperties: Record<string, string[]> = {};
   for (const [symbol, factory] of top.styleFactories)
     for (const adapter of options.adapters)
-      if (adapter.recognizeFactory(factory))
+      if (adapter.recognizeFactory(factory)) {
         rules.push(...(adapter.rulesOf?.(symbol, factory) ?? []));
+        Object.assign(slotProperties, adapter.propertiesOf?.(symbol, factory));
+      }
   const globalClasses = new Set<string>();
   for (const { binding, source } of top.stylesheets) {
     const css = options.readStylesheet?.(file, source);
@@ -279,6 +282,7 @@ export const extractFile = (
     outsideReferences,
     prelude: top.prelude(),
     rules,
+    slotProperties,
     styleSymbols: [...top.styleSymbols].sort(),
   };
 };

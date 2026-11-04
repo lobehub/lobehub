@@ -103,7 +103,10 @@ export const planFile = (
     const evidence: string[] = [];
     if (
       (flags.has('PLACEMENT_SUBSTITUTED') || flags.has('PLACEMENT_NEUTRAL_PROP')) &&
-      placementPreserved(chains.base, chains.head, config)
+      placementPreserved(chains.base, chains.head, {
+        layoutComponents: config.layoutComponents,
+        properties: { base: base.slotProperties, head: head.slotProperties },
+      })
     ) {
       flags.delete('PLACEMENT_SUBSTITUTED');
       flags.delete('PLACEMENT_NEUTRAL_PROP');
