@@ -333,6 +333,38 @@ describe('recent direct-provider models', () => {
     });
   });
 
+  it.each([
+    ['solar-pro4', 0.3, 0.06, 1.2],
+    ['solar-mini4', 0.1, 0.01, 0.4],
+  ])('registers Upstage %s with its published limits and pricing', (id, input, cached, output) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === ModelProvider.Upstage && entry.id === id,
+    );
+
+    expect(model).toMatchObject({
+      abilities: { functionCall: true, reasoning: true, structuredOutput: true },
+      contextWindowTokens: 512_000,
+      enabled: true,
+      maxOutput: 128_000,
+      type: 'chat',
+    });
+    expect(model?.pricing?.units).toEqual([
+      { name: 'textInput_cacheRead', rate: cached, strategy: 'fixed', unit: 'millionTokens' },
+      { name: 'textInput', rate: input, strategy: 'fixed', unit: 'millionTokens' },
+      { name: 'textOutput', rate: output, strategy: 'fixed', unit: 'millionTokens' },
+    ]);
+  });
+
+  it('stops enabling Upstage models scheduled for deprecation by default', () => {
+    const legacyIds = ['solar-mini', 'solar-pro'];
+    const models = LOBE_DEFAULT_MODEL_LIST.filter(
+      (entry) => entry.providerId === ModelProvider.Upstage && legacyIds.includes(entry.id),
+    );
+
+    expect(models).toHaveLength(2);
+    expect(models.every((entry) => entry.enabled === false)).toBe(true);
+  });
+
   it.each(['qwen3.8-max', 'qwen3.8-max-0902'])(
     'exposes exactly one %s card with effort and thinking preservation controls',
     (id) => {
