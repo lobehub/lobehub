@@ -1151,6 +1151,21 @@ describe('fileRouter', () => {
       expect(KnowledgeRepo).toHaveBeenCalledWith(expect.anything(), 'test-user', 'workspace-1');
     });
 
+    // Regression for the Images grid rendering empty: the explorer offers a
+    // "name" sort and stale links can carry "updatedAt", both of which the
+    // knowledge repo already orders by. A schema rejection here fails the
+    // whole list query, so the view shows nothing instead of sorted items.
+    it.each(['name', 'updatedAt'] as const)(
+      'should accept the %s sorter instead of failing the list query',
+      async (sorter) => {
+        await expect(caller.getKnowledgeItems({ sorter, sortType: 'asc' })).resolves.toBeDefined();
+
+        expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith(
+          expect.objectContaining({ sorter, sortType: 'asc' }),
+        );
+      },
+    );
+
     it('should reject preview pages larger than the server limit', async () => {
       await expect(
         caller.getKnowledgeItems({ includeContentPreview: true, limit: 101 }),
