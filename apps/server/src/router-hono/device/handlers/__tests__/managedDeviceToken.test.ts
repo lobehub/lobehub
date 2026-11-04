@@ -71,7 +71,10 @@ describe('POST /api/device/managed/token', () => {
   it('refuses an oversized body', async () => {
     makeAvailable();
 
-    expect((await post({ ...credentials, padding: 'x'.repeat(32 * 1024) })).status).toBe(413);
+    const response = await post({ ...credentials, padding: 'x'.repeat(32 * 1024) });
+
+    expect(response.status).toBe(413);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(mocks.exchange).not.toHaveBeenCalled();
   });
 

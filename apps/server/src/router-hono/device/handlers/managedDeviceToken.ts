@@ -9,7 +9,7 @@ const requestSchema = z.object({
   secret: z.string().min(1).max(1024),
 });
 
-const NO_STORE = { 'Cache-Control': 'no-store' };
+export const NO_STORE = { 'Cache-Control': 'no-store' };
 
 /**
  * POST /api/device/managed/token — a managed cloud device trades its device id

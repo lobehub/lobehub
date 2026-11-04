@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 
-import { managedDeviceToken } from './handlers/managedDeviceToken';
+import { managedDeviceToken, NO_STORE } from './handlers/managedDeviceToken';
 
 /**
  * Hono app for `/api/device/*` endpoints called by devices themselves, outside
@@ -16,7 +16,7 @@ app.use(
   '*',
   bodyLimit({
     maxSize: MAX_BODY_BYTES,
-    onError: (c) => c.json({ error: 'Request body is too large' }, 413),
+    onError: (c) => c.json({ error: 'Request body is too large' }, 413, NO_STORE),
   }),
 );
 
