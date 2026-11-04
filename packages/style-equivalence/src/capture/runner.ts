@@ -5,7 +5,7 @@ import type { Browser, Page } from '@playwright/test';
 import type { ConditionConfig, ConditionVariant } from '../config';
 import type { Side } from '../plan/planFile';
 import { caseGapsOf } from './gaps';
-import { inspectRules } from './inspect';
+import { inspectRules, type RuleInspection } from './inspect';
 import { captureInPage, type StyleSnapshot } from './snapshot';
 import { applyState, type CaptureState, planStates } from './states';
 import { planWidths } from './widths';
@@ -381,6 +381,33 @@ const captureConditions = async ({
   };
 };
 
+const unmodeledRules = (found: RuleInspection) =>
+  Object.fromEntries(
+    Object.entries(found.unmodeled).map(([section, indices]) => [
+      section,
+      indices.map((index) => found.rules[index]),
+    ]),
+  );
+
+export const inspectCaseGaps = async (
+  browser: Browser,
+  urls: Record<Side, string>,
+  options: PageCondition,
+  pageErrors: string[],
+) => {
+  const [base, head] = await Promise.all(
+    [urls.base, urls.head].map(async (url) => {
+      const page = await openPage(browser, url, { ...options, state: 'default' }, pageErrors);
+      try {
+        return unmodeledRules(await inspectRules(page));
+      } finally {
+        await page.close();
+      }
+    }),
+  );
+  return caseGapsOf(base, head);
+};
+
 export const captureRun = async ({
   browser,
   conditions,
@@ -405,12 +432,7 @@ export const captureRun = async ({
     const found = await inspectRules(page);
     media.push(...found.media);
     pseudoRules[side] = found.pseudoRules;
-    unmodeled[side] = Object.fromEntries(
-      Object.entries(found.unmodeled).map(([section, indices]) => [
-        section,
-        indices.map((index) => found.rules[index]),
-      ]),
-    );
+    unmodeled[side] = unmodeledRules(found);
     containerRules += found.containers;
     await page.close();
   }

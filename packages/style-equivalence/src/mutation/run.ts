@@ -10,6 +10,7 @@ import {
   CONDITION_CONCURRENCY,
   type ConditionCapture,
   conditionLabel,
+  inspectCaseGaps,
   type SectionSnapshots,
 } from '../capture/runner';
 import { compareSnapshots } from '../capture/snapshot';
@@ -22,11 +23,12 @@ import { moduleReader, RUNTIME, stylesheetReader } from '../pipeline/synthesize'
 import type { FilePlan } from '../plan/planFile';
 import type { ScopeFile } from '../source/scope';
 import { applyMutation, type MutationOperator } from './operators';
+import { type MutantOutcome, mutantOutcome } from './outcome';
 import type { MutationCandidate } from './plan';
 
 export const MUTANT_HOST_DIR = '.style-equivalence-host-mutants';
 
-export type MutantOutcome = 'caught' | 'equivalent' | 'error' | 'missed';
+export type { MutantOutcome } from './outcome';
 
 export interface MutantResult {
   caseKey: string;
@@ -34,6 +36,7 @@ export interface MutantResult {
   detected: string[];
   errors: string[];
   expected: string[];
+  gaps: string[];
   operator: MutationOperator;
   outcome: MutantOutcome;
   site: MutationCandidate['site'];
@@ -202,6 +205,12 @@ export const runMutations = async (context: MutationContext): Promise<MutationRe
   const plan = context.config.conditions.themes.flatMap((theme) =>
     context.widths.flatMap((width) => context.states.map((state) => ({ state, theme, width }))),
   );
+  const gaps = await inspectCaseGaps(
+    context.browser,
+    { base: urls.head, head: urls.mutant },
+    plan[0],
+    pageErrors,
+  );
   const conditions: Array<ConditionCapture & { original: SectionSnapshots }> = [];
   let next = 0;
   await Promise.all(
@@ -251,21 +260,15 @@ export const runMutations = async (context: MutationContext): Promise<MutationRe
       result?.comboDifferences.map((item) => `${item.condition}#${item.combo}`) ?? [],
     );
     const errors = result ? result.errors : ['MUTANT_NOT_CAPTURED'];
-    const sameSets =
-      expected.size === detected.size && [...expected].every((item) => detected.has(item));
-    const outcome: MutantOutcome = errors.length
-      ? 'error'
-      : !expected.size
-        ? 'equivalent'
-        : sameSets
-          ? 'caught'
-          : 'missed';
+    const caseGaps = gaps[candidate.caseKey] ?? [];
+    const outcome = mutantOutcome({ detected, errors, expected, gaps: caseGaps });
     return {
       caseKey: candidate.caseKey,
       description: candidate.mutation.description,
       detected: [...detected].sort(),
       errors,
       expected: [...expected].sort(),
+      gaps: caseGaps,
       operator: candidate.mutation.operator,
       outcome,
       site: candidate.site,

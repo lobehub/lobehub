@@ -6,7 +6,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { analyzeRun, createRunAnalyzer } from '../analyze/diff';
 import { launchBrowser } from './browser';
-import { capturePage, captureRun, captureSections, conditionFromLabel } from './runner';
+import {
+  capturePage,
+  captureRun,
+  captureSections,
+  conditionFromLabel,
+  inspectCaseGaps,
+} from './runner';
 import type { StyleSnapshot } from './snapshot';
 import { serveDirectories } from './staticServer';
 
@@ -49,6 +55,12 @@ beforeAll(async () => {
     page('.t { color: black; } .row:focus-visible .t { color: red; }'),
   );
   await write('head-ancestor-focus', page('.t { color: black; }'));
+  await write('base-checked', page('.t { color: black; } .t:checked { background-color: red; }'));
+  await write('head-checked', page('.t { color: black; } .t:checked { background-color: blue; }'));
+  await write(
+    'static-pseudo',
+    page('.t { color: black; } .t:first-child:not(:empty) { color: black; }'),
+  );
   const pair = (css: string) => `<!doctype html><html><head><style>
 body { margin: 0; font: 14px Arial; }
 ${css}
@@ -124,6 +136,26 @@ describe('captureRun + analyzeRun', () => {
     const [result] = await run('base-ancestor-focus', 'head-ancestor-focus');
     expect(result.status).toBe('difference');
     expect(result.differingConditions).toContain('light/1280/force-chain:focus-visible');
+  });
+
+  it('flags a case whose state-dependent pseudo-class rules differ as a coverage gap', async () => {
+    const [result] = await run('base-checked', 'head-checked');
+    expect(result).toMatchObject({ gaps: ['STATE_UNMODELED'], status: 'equal' });
+  });
+
+  it('reports state gaps between any two pages, such as an original head and its mutant', async () => {
+    const gaps = await inspectCaseGaps(
+      browser,
+      { base: `${server.url}/base-checked/`, head: `${server.url}/head-checked/` },
+      conditionFromLabel('light/1280/hover-target'),
+      [],
+    );
+    expect(gaps).toEqual({ 'a.tsx|A#0': ['STATE_UNMODELED'] });
+  });
+
+  it('does not flag structural pseudo-classes the default capture already evaluates', async () => {
+    const [result] = await run('static-pseudo', 'head-media');
+    expect(result.gaps).toEqual([]);
   });
 
   it('reports a theme-only difference only in that theme', async () => {

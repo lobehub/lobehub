@@ -29,6 +29,7 @@ export interface RunPayload {
       description: string;
       expected: string[];
       detected: string[];
+      gaps?: string[];
       operator: string;
       outcome: string;
     }>;

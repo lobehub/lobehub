@@ -10,10 +10,40 @@ export interface RuleInspection {
 
 export const FORCEABLE = ['active', 'focus', 'focus-visible', 'focus-within', 'hover'];
 export const MODELED_PSEUDO_ELEMENTS = ['after', 'before', 'marker', 'placeholder'];
+export const STATIC_PSEUDO_CLASSES = [
+  'after',
+  'any-link',
+  'before',
+  'defined',
+  'dir',
+  'empty',
+  'first-child',
+  'first-letter',
+  'first-line',
+  'first-of-type',
+  'has',
+  'host',
+  'host-context',
+  'is',
+  'lang',
+  'last-child',
+  'last-of-type',
+  'link',
+  'not',
+  'nth-child',
+  'nth-last-child',
+  'nth-last-of-type',
+  'nth-of-type',
+  'only-child',
+  'only-of-type',
+  'root',
+  'scope',
+  'where',
+];
 
 export const inspectRules = (page: Page): Promise<RuleInspection> =>
   page.evaluate(
-    ({ forceable, pseudoElements }) => {
+    ({ forceable, pseudoElements, staticClasses }) => {
       const sections = [...document.querySelectorAll('[data-case]')];
       const root = document.querySelector('[data-synthetic-cases]') ?? document.body;
       const broaden = (selector: string) =>
@@ -96,6 +126,18 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
               candidates.push(rule);
               rules.push(`PSEUDO_UNMODELED|${rule.cssText}`);
             }
+            const classes = [
+              ...rule.selectorText
+                .replaceAll(/\\./g, '')
+                .replaceAll(/\[[^\]]*\]/g, '')
+                .matchAll(/(?<!:):([a-z-]+)/gi),
+            ].map((match) => match[1].toLowerCase());
+            if (
+              classes.some((name) => !forceable.includes(name) && !staticClasses.includes(name))
+            ) {
+              candidates.push(rule);
+              rules.push(`STATE_UNMODELED|${rule.cssText}`);
+            }
             for (const part of rule.selectorText.split(',')) {
               const compounds = part.trim().split(/\s*[\s>+~]\s*/);
               compounds.forEach((compound, index) => {
@@ -126,5 +168,9 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
       }
       return { containers, media: [...new Set(media)], pseudoRules, rules, unmodeled };
     },
-    { forceable: FORCEABLE, pseudoElements: MODELED_PSEUDO_ELEMENTS },
+    {
+      forceable: FORCEABLE,
+      pseudoElements: MODELED_PSEUDO_ELEMENTS,
+      staticClasses: STATIC_PSEUDO_CLASSES,
+    },
   );

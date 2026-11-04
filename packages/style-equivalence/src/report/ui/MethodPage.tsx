@@ -178,7 +178,9 @@ export const MethodPage = ({ anchor, payload }: { anchor?: string; payload: RunP
               </a>
             </span>
             <span {...stylex.props(styles.muted)}>
-              {conditionScope(mutant.expected, conditions.length)}
+              {mutant.gaps?.length
+                ? mutant.gaps.map(flagLabel).join('、')
+                : conditionScope(mutant.expected, conditions.length)}
             </span>
           </div>
         ))}

@@ -33,6 +33,7 @@ export const FLAG_LABELS: Record<string, string> = {
   PLACEMENT_NEUTRAL_PROP: '非 className 属性',
   PLACEMENT_SUBSTITUTED: '组件替换成 div',
   PSEUDO_UNMODELED: '伪元素读不到',
+  STATE_UNMODELED: '状态伪类未建模',
   STYLE_OUTSIDE_JSX: 'JSX 外的样式引用',
   TAG_CHANGED: '标签变了',
   TOOL_FALSE_POSITIVE: '工具误报',
@@ -69,7 +70,9 @@ export const FLAG_EXPLANATIONS: Record<string, string> = {
   PLACEMENT_SUBSTITUTED:
     '元素是非布局组件，合成时换成了 div，只证明了样式槽本身等价，没证明组件把样式放在哪里。',
   PSEUDO_UNMODELED:
-    '两侧命中这个元素的伪类或伪元素规则不同（比如 ::selection、::-webkit-scrollbar），读不到计算样式。',
+    '两侧命中这个元素的伪元素规则不同（比如 ::selection、::-webkit-scrollbar），读不到计算样式。',
+  STATE_UNMODELED:
+    '两侧命中这个元素的状态伪类规则不同（比如 :checked、:disabled、:invalid），采集时元素不在这些状态，这部分样式没有被比较。',
   STYLE_OUTSIDE_JSX:
     '文件在 JSX 之外引用了样式（比如先算出 className 再传给元素），合成环境不知道它落在哪个元素上，这部分样式没有被比较。',
   STYLESHEET_UNPARSEABLE: '文件引入的样式表解析失败，里面的规则没有被比较。',
