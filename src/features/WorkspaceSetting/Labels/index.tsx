@@ -314,6 +314,41 @@ const WorkspaceLabelsContent = memo(() => {
     onClick: () => setScope(value),
   }));
 
+  // Empty-copy resolution: a search with no hits reads differently from an
+  // empty registry, and an empty archive differently from an active scope.
+  const emptyDescription = () => {
+    if (keyword.trim()) return t('workspaceSetting.labels.filterEmpty');
+    if (scope === 'archived') return t('workspaceSetting.labels.archivedEmpty');
+    return t('workspaceSetting.labels.empty');
+  };
+
+  const renderContent = () => {
+    if (!isInit && isLoading) return <SkeletonList rows={4} />;
+
+    if (error && !isInit) {
+      // A failed load must not read as "you have no labels" — the two look
+      // identical here and lead the user to create duplicates of labels that
+      // already exist.
+      return (
+        <Flexbox align={'center'} gap={12} paddingBlock={40}>
+          <Empty description={t('workspaceSetting.labels.loadFailed')} />
+          <Button onClick={() => mutate()}>{t('retry', { ns: 'common' })}</Button>
+        </Flexbox>
+      );
+    }
+
+    if (visibleLabels.length === 0) {
+      return <Empty description={emptyDescription()} style={{ paddingBlock: 40 }} />;
+    }
+
+    return (
+      <Flexbox gap={2}>
+        <LabelTableHeader />
+        {visibleLabels.map(renderRow)}
+      </Flexbox>
+    );
+  };
+
   return (
     <Flexbox gap={16}>
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
@@ -337,33 +372,7 @@ const WorkspaceLabelsContent = memo(() => {
           </Tooltip>
         )}
       </Flexbox>
-      {!isInit && isLoading ? (
-        <SkeletonList rows={4} />
-      ) : error && !isInit ? (
-        // A failed load must not read as "you have no labels" — the two look
-        // identical here and lead the user to create duplicates of labels that
-        // already exist.
-        <Flexbox align={'center'} gap={12} paddingBlock={40}>
-          <Empty description={t('workspaceSetting.labels.loadFailed')} />
-          <Button onClick={() => mutate()}>{t('retry', { ns: 'common' })}</Button>
-        </Flexbox>
-      ) : visibleLabels.length === 0 ? (
-        <Empty
-          style={{ paddingBlock: 40 }}
-          description={
-            keyword.trim()
-              ? t('workspaceSetting.labels.filterEmpty')
-              : scope === 'archived'
-                ? t('workspaceSetting.labels.archivedEmpty')
-                : t('workspaceSetting.labels.empty')
-          }
-        />
-      ) : (
-        <Flexbox gap={2}>
-          <LabelTableHeader />
-          {visibleLabels.map(renderRow)}
-        </Flexbox>
-      )}
+      {renderContent()}
     </Flexbox>
   );
 });
