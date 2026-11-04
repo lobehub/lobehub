@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { keyAction, nextOpen, nextSelection, reviewGrid } from './review';
+import { completionText, keyAction, nextOpen, nextSelection, reviewGrid } from './review';
 
 const item = (key: string, state: string) => ({ key, state });
 
@@ -100,5 +100,44 @@ describe('reviewGrid', () => {
       [],
     );
     expect(grid.columns.map((column) => column.label)).toEqual(['light/991/default']);
+  });
+});
+
+describe('completionText', () => {
+  const counts = (extra: object) => ({
+    'changed': 0,
+    'passed': 0,
+    'reworked': 0,
+    'todo': 0,
+    'waiting-agent': 0,
+    ...extra,
+  });
+
+  it('says the PR can merge when nothing is left', () => {
+    expect(completionText(counts({ passed: 13 }), { mergeable: true, reasons: [] })).toEqual([
+      '全部看完了，可以合并。',
+    ]);
+  });
+
+  it('counts each send-back once and says who acts next', () => {
+    expect(
+      completionText(counts({ passed: 12, reworked: 1 }), {
+        mergeable: false,
+        reasons: ['needs sign-off 1', 'rework open 1'],
+      }),
+    ).toEqual(['全部看完了。', '1 项已打回，等 agent 改完会回到这里请你复看。']);
+  });
+
+  it('turns tool problems into plain sentences', () => {
+    expect(
+      completionText(counts({ passed: 3 }), {
+        mergeable: false,
+        reasons: ['mutation not fully caught', 'calibration mismatch 2'],
+      }),
+    ).toEqual([
+      '全部看完了。',
+      '工具自检没通过：注入的已知改动没有全部被发现。',
+      '工具自检没通过：2 处合成渲染和真实挂载不一致。',
+    ]);
   });
 });

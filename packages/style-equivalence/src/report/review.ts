@@ -75,3 +75,28 @@ export const reviewGrid = (
     rows,
   };
 };
+
+const TOOL_REASONS: Array<[RegExp, (count: string) => string]> = [
+  [/^mutation not fully caught$/, () => '工具自检没通过：注入的已知改动没有全部被发现。'],
+  [
+    /^calibration mismatch (\d+)$/,
+    (count) => `工具自检没通过：${count} 处合成渲染和真实挂载不一致。`,
+  ],
+];
+
+export const completionText = (
+  counts: Record<string, number>,
+  verdict: { mergeable: boolean; reasons: string[] },
+) => {
+  if (verdict.mergeable) return ['全部看完了，可以合并。'];
+  const lines = ['全部看完了。'];
+  if (counts.reworked) lines.push(`${counts.reworked} 项已打回，等 agent 改完会回到这里请你复看。`);
+  if (counts.changed) lines.push(`${counts.changed} 项已修改，在左侧队列里复看。`);
+  if (counts['waiting-agent']) lines.push(`${counts['waiting-agent']} 项等 agent 读完代码。`);
+  for (const reason of verdict.reasons)
+    for (const [pattern, text] of TOOL_REASONS) {
+      const match = pattern.exec(reason);
+      if (match) lines.push(text(match[1] ?? ''));
+    }
+  return lines;
+};

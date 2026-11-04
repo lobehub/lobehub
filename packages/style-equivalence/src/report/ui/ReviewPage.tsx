@@ -3,7 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchReview, postReview, type ReviewPayload } from '../api';
-import { keyAction, nextSelection } from '../review';
+import { completionText, keyAction, nextSelection } from '../review';
 import { ReviewBar } from './ReviewBar';
 import { ReviewItemView } from './ReviewItemView';
 import { ReviewQueue } from './ReviewQueue';
@@ -167,7 +167,7 @@ export const ReviewPage = () => {
             onClick={() => setPanel(true)}
             {...stylex.props(styles.reworkButton)}
           >
-            处理打回（{counts.reworked}）
+            查看打回（{counts.reworked}）
           </button>
         </div>
       </header>
@@ -179,11 +179,9 @@ export const ReviewPage = () => {
           <ReviewItemView conditions={payload.conditions} item={item} />
         ) : (
           <div {...stylex.props(styles.done)}>
-            这个 PR 没有要你看的了。
-            <br />
-            {payload.verdict.mergeable
-              ? '合并条件已满足。'
-              : `还不能合并：${payload.verdict.reasons.join(' · ')}`}
+            {completionText(counts, payload.verdict).map((line) => (
+              <div key={line}>{line}</div>
+            ))}
           </div>
         )}
       </main>

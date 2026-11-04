@@ -7,37 +7,55 @@ const styles = stylex.create({
   close: {
     backgroundColor: 'transparent',
     borderStyle: 'none',
+    color: cssVar.colorTextSecondary,
     cursor: 'pointer',
+    fontFamily: 'inherit',
     fontSize: 13,
-    marginInlineStart: 'auto',
   },
-  code: {
+  empty: { color: cssVar.colorTextTertiary, fontSize: 13, paddingBlock: 24, textAlign: 'center' },
+  file: { color: cssVar.colorTextTertiary, fontSize: 12 },
+  footer: {
     backgroundColor: cssVar.colorFillQuaternary,
-    borderRadius: 6,
-    display: 'block',
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: 12.5,
-    marginBlock: 8,
-    padding: 10,
-    userSelect: 'all',
-  },
-  head: { alignItems: 'center', display: 'flex', marginBlockEnd: 12 },
-  item: {
-    borderBlockStartColor: cssVar.colorBorderSecondary,
-    borderBlockStartStyle: 'solid',
-    borderBlockStartWidth: 1,
+    color: cssVar.colorTextSecondary,
     fontSize: 13,
-    paddingBlock: 10,
+    lineHeight: 1.6,
+    paddingBlock: 12,
+    paddingInline: 20,
   },
-  muted: { color: cssVar.colorTextTertiary, fontSize: 12.5, lineHeight: 1.7 },
+  head: {
+    alignItems: 'center',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: 1,
+    display: 'flex',
+    justifyContent: 'space-between',
+    paddingBlock: 16,
+    paddingInline: 20,
+  },
+  item: {
+    display: 'grid',
+    paddingBlock: 14,
+    paddingInline: 20,
+    rowGap: 8,
+  },
+  itemHead: { alignItems: 'baseline', columnGap: 8, display: 'flex' },
+  list: { maxHeight: '56vh', overflowY: 'auto' },
+  name: { fontSize: 14, fontWeight: 600 },
   panel: {
     backgroundColor: cssVar.colorBgElevated,
     borderRadius: 12,
     boxShadow: '0 12px 40px rgba(0, 0, 0, 0.18)',
-    maxHeight: '80vh',
-    overflowY: 'auto',
-    padding: 20,
-    width: 560,
+    overflow: 'hidden',
+    width: 520,
+  },
+  reason: {
+    borderInlineStartColor: cssVar.colorError,
+    borderInlineStartStyle: 'solid',
+    borderInlineStartWidth: 3,
+    color: cssVar.colorText,
+    fontSize: 14,
+    lineHeight: 1.6,
+    paddingInlineStart: 10,
   },
   scrim: {
     alignItems: 'center',
@@ -47,8 +65,22 @@ const styles = stylex.create({
     justifyContent: 'center',
     position: 'fixed',
   },
+  separator: {
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderBlockStartStyle: 'solid',
+    borderBlockStartWidth: 1,
+  },
+  time: { color: cssVar.colorTextTertiary, fontSize: 12, marginInlineStart: 'auto' },
   title: { fontSize: 16, fontWeight: 600 },
 });
+
+const timeOf = (iso: string) =>
+  new Date(iso).toLocaleString('zh-CN', {
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: 'numeric',
+  });
 
 export const ReworkPanel = ({
   onClose,
@@ -58,34 +90,39 @@ export const ReworkPanel = ({
   payload: ReviewPayload;
 }) => {
   const open = payload.items.filter((item) => item.state === 'reworked' && item.rework);
-  const target = payload.pr ? `--pr ${payload.pr.number}` : payload.run.runId;
   return (
     <div role="presentation" onClick={onClose} {...stylex.props(styles.scrim)}>
       <div
-        aria-label="处理打回"
+        aria-label="已打回"
         role="dialog"
         onClick={(event) => event.stopPropagation()}
         {...stylex.props(styles.panel)}
       >
         <div {...stylex.props(styles.head)}>
-          <span {...stylex.props(styles.title)}>处理打回（{open.length}）</span>
+          <span {...stylex.props(styles.title)}>已打回 {open.length} 项</span>
           <button type="button" onClick={onClose} {...stylex.props(styles.close)}>
             关闭
           </button>
         </div>
-        <div {...stylex.props(styles.muted)}>
-          在终端对 agent 说「处理打回」。agent 会读下面这份清单，到 PR
-          分支上改、推送、重跑；改过的项会回到队列，标成「已修改」。
+        <div {...stylex.props(styles.list)}>
+          {open.length === 0 && <div {...stylex.props(styles.empty)}>现在没有打回的项。</div>}
+          {open.map((item, index) => (
+            <div key={item.key} {...stylex.props(styles.item, index > 0 && styles.separator)}>
+              <div {...stylex.props(styles.itemHead)}>
+                <span {...stylex.props(styles.name)}>{item.title}</span>
+                <span {...stylex.props(styles.file)}>{item.file.split('/').pop()}</span>
+                <span {...stylex.props(styles.time)}>{timeOf(item.rework!.at)}</span>
+              </div>
+              <div {...stylex.props(styles.reason)}>{item.rework!.note}</div>
+            </div>
+          ))}
         </div>
-        <code {...stylex.props(styles.code)}>bun run style-eq rework {target}</code>
-        {open.length === 0 && <div {...stylex.props(styles.muted)}>现在没有打回的项。</div>}
-        {open.map((item) => (
-          <div key={item.key} {...stylex.props(styles.item)}>
-            <b>{item.title}</b>
-            <div {...stylex.props(styles.muted)}>{item.file}</div>
-            <div>原因：{item.rework!.note}</div>
+        {open.length > 0 && (
+          <div {...stylex.props(styles.footer)}>
+            下一步：在终端对 agent
+            说「处理打回」。改完重跑后，这些项会标成「已修改」回到左侧队列，请你再看一眼。
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
