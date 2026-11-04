@@ -1,22 +1,22 @@
 'use client';
 
 import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
-import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
+import { cssVar, Flexbox } from '@lobehub/ui';
+import type { FC, MouseEvent, ReactNode, UIEvent } from 'react';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import type { ComposerTarget } from '@/features/Conversation/types';
+import CharLimitBanner from '@/features/EditorCanvas/CharLimitBanner';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import PageMetaBar from '@/features/PageEditor/PageMetaBar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { usePermission } from '@/hooks/usePermission';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 import { pageActions } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
+import { focusEditorAtBlankPoint } from './blankAreaClick';
+import { usePageCollabEligible, usePageCollabEnabled } from './collab/usePageCollab';
 import DocumentComments from './DocumentComments';
 import BlockCommentMarker from './DocumentComments/BlockCommentMarker';
 import { DocumentCommentsProvider } from './DocumentComments/context';
@@ -33,8 +33,9 @@ import { PageAgentProvider } from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
-import TableOfContents, { TOC_RAIL_GUTTER } from './TableOfContents';
+import TableOfContents from './TableOfContents';
 import TitleSection from './TitleSection';
+import { usePageBodyInteractions } from './usePageBodyInteractions';
 import { usePageEditable } from './usePageEditable';
 
 /**
@@ -47,9 +48,6 @@ import { usePageEditable } from './usePageEditable';
  * call hooks like `usePageEditorStore` and reuse internal pieces such as `useMenu`.
  */
 type PageEditorHeader = ReactNode | null;
-
-const WIDE_SCREEN_CONTAINER_PADDING = 16;
-const TABLE_BASE_BLEED = DEFAULT_BLOCK_ANCHOR_PADDING + WIDE_SCREEN_CONTAINER_PADDING;
 
 const getMaxScrollTop = (node: HTMLElement) => Math.max(node.scrollHeight - node.clientHeight, 0);
 
@@ -94,30 +92,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
 });
-
-const overrideStyles = createStaticStyles(({ css }) => ({
-  editorContent: css`
-    .lobe-editor-table-scroll-wrapper.lobe-editor-table-scroll-wrapper {
-      --lobe-block-anchor-padding: var(--lobe-pageeditor-table-bleed-inline);
-
-      position: relative;
-      box-sizing: border-box;
-
-      /* Tables bleed to the pane edge; stop short of the TOC rail when it is shown. */
-      width: calc(100cqi - var(--lobe-pageeditor-toc-gutter, 0px));
-      margin-inline: calc(var(--lobe-pageeditor-table-bleed-inline) * -1);
-
-      /* The TOC rail is hidden at this width (see TableOfContents). */
-      @media (width <= 1024px) {
-        width: 100cqi;
-      }
-    }
-
-    .lobe-editor-table-scroll-wrapper .editor_table {
-      width: max-content;
-    }
-  `,
-}));
 
 interface PageEditorProps {
   /** Composer that receives selections created by the Ask Copilot toolbar item. */
@@ -174,16 +148,6 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
   const isHtmlPage = useIsHtmlPage(documentId);
-  const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
-  const tableBleedInline = wideScreen
-    ? `${TABLE_BASE_BLEED}px`
-    : `calc(${TABLE_BASE_BLEED}px + max((100cqi - ${CONVERSATION_MIN_WIDTH}px) / 2, 0px))`;
-  const [tocVisible, setTocVisible] = useState(false);
-  const editorContentStyle = {
-    ...styles.editorContent,
-    '--lobe-pageeditor-table-bleed-inline': tableBleedInline,
-    '--lobe-pageeditor-toc-gutter': tocVisible ? `${TOC_RAIL_GUTTER}px` : '0px',
-  } as CSSProperties;
   const resizeFrameRef = useRef<number | undefined>(undefined);
   const restoreScrollFrameRef = useRef<number | undefined>(undefined);
   const isRestoringScrollRef = useRef(false);
@@ -368,6 +332,27 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   // Register Files scope and save document hotkey
   useRegisterFilesHotkeys();
 
+  // ArrowUp / Backspace from the top of the body into the title, and a click
+  // below the last block to keep writing.
+  usePageBodyInteractions(editor, editorContentRef);
+
+  // A click on the column's blank space (page margins, below the body). Only
+  // clicks that land on a layout wrapper of the content count: anything inside
+  // it — the title, banners, the line comment marker, likes, comments — is a
+  // control of its own and must keep its focus.
+  const handleBlankAreaClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (!editable) return;
+
+      const content = editorContentRef.current;
+      const target = event.target;
+      if (!content || !(target instanceof Node) || !target.contains(content)) return;
+
+      focusEditorAtBlankPoint(editor, event);
+    },
+    [editable, editor],
+  );
+
   const headerSlot = header === undefined ? <Header /> : header;
 
   const editorPane = (
@@ -407,17 +392,12 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
           <WideScreenContainer
             wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
             onChange={notifyEditorLayoutChange}
-            onClick={() => {
-              if (!editable) return;
-
-              editor?.focus();
-            }}
+            onClick={handleBlankAreaClick}
           >
             <Flexbox
-              className={overrideStyles.editorContent}
               flex={1}
               ref={editorContentRef}
-              style={editorContentStyle}
+              style={styles.editorContent}
               {...{ [GUTTER_COLUMN_ATTRIBUTE]: true }}
             >
               <TitleSection />
@@ -428,6 +408,8 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
               {/* Prominent in-body notice when another member holds the lock; the
                   compact status badge lives in the Header (EditingIndicator). */}
               <LockedAlert />
+              {/* Plan page-size limit: refused-save notice and near-limit warning. */}
+              <CharLimitBanner sticky documentId={documentId} />
               <EditorCanvas askCopilotTarget={askCopilotTarget} />
               <BlockCommentMarker hostRef={editorContentRef} />
               {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
@@ -437,11 +419,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
         )}
       </Flexbox>
       {!isHtmlPage && (
-        <TableOfContents
-          contentRef={editorContentRef}
-          scrollRef={contentWrapperRef}
-          onVisibleChange={setTocVisible}
-        />
+        <TableOfContents contentRef={editorContentRef} scrollRef={contentWrapperRef} />
       )}
       {documentId && <DiffAllToolbar documentId={documentId} editor={editor} />}
     </Flexbox>
@@ -510,10 +488,19 @@ export const PageEditor: FC<PageEditorProps> = ({
   syncPageAgentActiveState,
 }) => {
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const collabEnabled = usePageCollabEnabled();
+  // Known once the document loads; a SKILL.md then leaves the room path.
+  const collabEligible = usePageCollabEligible(pageId);
+  const [collabEpoch, setCollabEpoch] = useState(0);
+  const handleCollabReset = useCallback(() => setCollabEpoch((epoch) => epoch + 1), []);
 
   return (
     <PageAgentProvider pageId={pageId} syncActiveAgent={syncPageAgentActiveState}>
-      <EditorProvider>
+      {/* A collaboration binding lives for the editor kernel's lifetime, so each room gets a
+          fresh kernel, and a document that leaves the room path drops the binding. */}
+      <EditorProvider
+        key={collabEnabled ? `${pageId}:${collabEligible ? collabEpoch : 'stored'}` : undefined}
+      >
         <PageEditorProvider
           emoji={emoji}
           knowledgeBaseId={knowledgeBaseId}
@@ -521,6 +508,7 @@ export const PageEditor: FC<PageEditorProps> = ({
           pageId={pageId}
           title={title}
           onBack={onBack}
+          onCollabReset={collabEnabled ? handleCollabReset : undefined}
           onDocumentIdChange={onDocumentIdChange}
           onDelete={() => {
             if (!canEdit) return;

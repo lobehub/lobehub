@@ -20,6 +20,7 @@ import {
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
 } from '@/store/chat/slices/agentRun/actions/entries/commandBus';
+import { ensureFullHistoryForClientRun } from '@/store/chat/slices/agentRun/actions/entries/ensureFullHistoryForClientRun';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import {
@@ -265,10 +266,15 @@ const regenerateUserMessageFromSource = async (
     }
 
     // ── Client mode: run agent locally ──
+    const reloaded = await ensureFullHistoryForClientRun(context, chatStore.refreshMessages);
+    const fullMessages = reloaded
+      ? useChatStore.getState().messagesMap[messageMapKey(context)]
+      : undefined;
+    const fullIndex = fullMessages?.findIndex((m) => m.id === messageId) ?? -1;
     await chatStore.executeClientAgent({
       context,
       initialContext,
-      messages: contextMessages,
+      messages: fullIndex >= 0 ? fullMessages!.slice(0, fullIndex + 1) : contextMessages,
       parentMessageId: messageId,
       parentMessageType: 'user',
       parentOperationId: operationId,
@@ -747,9 +753,12 @@ export const generationSlice: StateCreator<
       }
 
       // ── Client mode: run agent locally ──
+      const reloaded = await ensureFullHistoryForClientRun(context, chatStore.refreshMessages);
       await chatStore.executeClientAgent({
         context,
-        messages: displayMessages,
+        messages:
+          (reloaded && useChatStore.getState().messagesMap[messageMapKey(context)]) ||
+          displayMessages,
         parentMessageId: dbMessageId,
         parentMessageType: message.role as 'assistant' | 'tool' | 'user',
         parentOperationId: operationId,

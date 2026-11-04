@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import ShareButton from '@/business/client/features/PageShare/ShareButton';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
+import { FavoriteButton } from '@/features/Favorites';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { usePermission } from '@/hooks/usePermission';
@@ -34,6 +35,7 @@ import { useIsHtmlPage } from '../HtmlPageBody';
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { selectors, usePageEditorStore } from '../store';
 import Breadcrumb from './Breadcrumb';
+import PresenceStack from './PresenceStack';
 import { useMenu } from './useMenu';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -90,6 +92,17 @@ const Header = memo(() => {
               </Text>
             </>
           )}
+          {documentId && (
+            <FavoriteButton
+              icon={emoji ?? null}
+              path={`/page/${documentId}`}
+              // An untitled page is loaded too; only `undefined` means still loading.
+              snapshotReady={title !== undefined}
+              targetId={documentId}
+              title={title || t('pageEditor.titlePlaceholder')}
+              type={'page'}
+            />
+          )}
           {/* An artifact's body is never edited here, so a save status would only
               ever read "latest version"; name what the page is instead. */}
           {isHtmlPage ? (
@@ -104,6 +117,7 @@ const Header = memo(() => {
       right={
         <>
           <EditingIndicator />
+          <PresenceStack />
           {documentId && <ShareButton documentId={documentId} />}
           {/* Three-dot menu */}
           <DropdownMenu

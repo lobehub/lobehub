@@ -18,6 +18,7 @@ import AsyncError from '@/components/AsyncError';
 import CodeEditorPane from '@/components/CodeEditorPane';
 import { HtmlDocumentFrame } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
+import CharLimitBanner from '@/features/EditorCanvas/CharLimitBanner';
 import FileNotFound from '@/features/FileNotFound';
 import { FileDocumentPreview } from '@/features/FileViewer/FileDocumentPreview';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -110,7 +111,9 @@ const SkillFrontmatterBlock = memo<SkillFrontmatterBlockProps>(({ documentId, fr
       await performSave(documentId, undefined, { saveSource: 'manual' });
       const latestDocument = useDocumentStore.getState().documents[documentId];
       if (latestDocument?.isDirty) {
-        setError(t('skillFrontmatter.saveFailed'));
+        // A length refusal already has its toast and banner; a second, vaguer
+        // "save failed" line would only repeat it.
+        setError(latestDocument.charLimitError ? undefined : t('skillFrontmatter.saveFailed'));
         return;
       }
 
@@ -298,6 +301,12 @@ const DocumentBody = memo(() => {
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
+      {/* Above the scroll host, so the plan page-size notice stays in view. */}
+      {(renderMode.mode === 'editor' || renderMode.mode === 'highlight') && (
+        <Flexbox paddingInline={16}>
+          <CharLimitBanner documentId={documentId} />
+        </Flexbox>
+      )}
       <div className={fullPage ? styles.contentFull : styles.content}>
         {fullPage && renderMode.mode !== 'file' ? (
           <WideScreenContainer>{editorContent}</WideScreenContainer>

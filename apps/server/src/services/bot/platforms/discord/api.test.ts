@@ -85,3 +85,20 @@ describe('DiscordApi.getBotNames', () => {
     await expect(api.getBotNames()).resolves.toEqual(['arvin']);
   });
 });
+
+describe('DiscordApi.getGuildNickname', () => {
+  it("reads the bot's own member in one server", async () => {
+    const { api, get } = makeApi();
+    get.mockResolvedValue({ nick: ' Nasa ' });
+
+    await expect(api.getGuildNickname('guild-1', 'bot-1')).resolves.toBe('Nasa');
+    expect(get).toHaveBeenCalledWith('/guilds/guild-1/members/bot-1');
+  });
+
+  it('has no nickname when the server never set one', async () => {
+    const { api, get } = makeApi();
+    get.mockResolvedValue({ nick: null });
+
+    await expect(api.getGuildNickname('guild-1', 'bot-1')).resolves.toBeUndefined();
+  });
+});

@@ -59,6 +59,7 @@ const getVideoGenerationRoute = (value: unknown): VideoGenerationRoute | undefin
 
   return {
     apiType: value.apiType,
+    ...(typeof value.attemptId === 'string' ? { attemptId: value.attemptId } : {}),
     ...(typeof value.channelId === 'string' ? { channelId: value.channelId } : {}),
     ...(typeof value.routerId === 'string' ? { routerId: value.routerId } : {}),
   };

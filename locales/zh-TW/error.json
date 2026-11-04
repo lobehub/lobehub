@@ -89,7 +89,6 @@
   "response.GoogleAIBlockReason.SAFETY": "內容因安全原因被屏蔽。請進行調整後再試一次。",
   "response.GoogleAIBlockReason.SPII": "內容可能包含敏感的個人信息（SPII）。請移除敏感細節後再試一次。",
   "response.GoogleAIBlockReason.default": "內容被屏蔽（{{blockReason}}）。請進行調整後再試一次。",
-  "response.InsufficientBudgetForModel": "您的剩餘點數不足以使用此模型。請充值點數、升級您的方案，或嘗試使用價格較低的模型。",
   "response.InvalidAccessCode": "密碼不正確或為空，請輸入正確的訪問密碼，或添加自定義 API 金鑰",
   "response.LobeHubModelDeprecated": "模型 \"{{model}}\" 已不再可用。請從模型選擇器中選擇一個當前的模型。",
   "response.ModelContentModerationCooldown": "由於臨時的內容安全限制，此請求無法使用所選模型或相關模型。請稍後再試或選擇其他模型。",
@@ -122,8 +121,6 @@
   "response.RemoteServerTimeout": "與伺服器的連線已逾時。這通常表示本地網路問題——請檢查您的網路品質、代理伺服器或 VPN 設定，然後再試一次。",
   "response.RemoteServerUnreachable": "無法連接到伺服器。這通常表示本地網路問題——請檢查您的網路連線、代理伺服器或 VPN 設定，然後再試一次。",
   "response.ServerAgentRuntimeError": "很抱歉，目前的 Agent 服務暫時無法使用，請稍後再試，或透過電子郵件聯絡我們以獲得支援",
-  "response.SubscriptionPlanLimit": "您的訂閱積分已用盡，無法使用該功能，請升級到更高計劃，或配置自訂模型 API 後繼續使用",
-  "response.SubscriptionPlanLimitUltimate": "您的訂閱點數已用盡，無法使用此功能。請儲值點數或設定自訂模型 API 以繼續使用。",
   "response.SystemTimeNotMatchError": "很抱歉，您的系統時間與伺服器不匹配，請檢查您的系統時間後重試",
   "response.UnknownChatFetchError": "很抱歉，遇到未知請求錯誤，請根據以下資訊排查或重試",
   "response.UnreadableServerResponse": "伺服器返回了一個應用程式無法讀取的回應。這通常是暫時的網路或閘道問題——請稍後再試一次。",
@@ -213,13 +210,9 @@
   "workspaceFrozenByAdmin.frozenAt": "凍結時間",
   "workspaceFrozenByAdmin.reason": "原因",
   "workspaceFrozenByAdmin.title": "工作區已被凍結",
-  "workspaceFrozenByRiskControl.available": "可用餘額",
-  "workspaceFrozenByRiskControl.bannerDescription": "充值餘額以恢復支出。",
   "workspaceFrozenByRiskControl.bannerHint": "點擊查看詳情",
   "workspaceFrozenByRiskControl.bannerTitle": "工作區已被風險控制凍結",
   "workspaceFrozenByRiskControl.contactSupport": "聯繫支援",
-  "workspaceFrozenByRiskControl.description": "此工作區因檢測到異常消費而被風險控制自動凍結。請聯繫支援以檢視並申請解凍。",
   "workspaceFrozenByRiskControl.frozenAt": "凍結時間",
-  "workspaceFrozenByRiskControl.title": "工作區因風險控制自動凍結",
-  "workspaceFrozenByRiskControl.topup": "充值點數"
+  "workspaceFrozenByRiskControl.title": "工作區因風險控制自動凍結"
 }

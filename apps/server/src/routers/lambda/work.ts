@@ -16,6 +16,7 @@ import { WorkModel } from '@/database/models/work';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/services/canvas';
+import { deleteCanvas } from '@/server/services/canvas/delete';
 import { registerShellWorksForLocalRun } from '@/server/services/workRegistration';
 
 const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -208,20 +209,25 @@ export const workRouter = router({
   deleteWork: skillWorkProcedureWrite
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const removed = await ctx.workModel.deleteWork(input);
-      const canvases = removed.flatMap((row) =>
-        row.resourceType === 'canvas' && row.resourceId
-          ? [{ id: row.resourceId, manifestKeys: row.canvasManifestKeys }]
-          : [],
-      );
-      if (canvases.length === 0) return;
+      // A canvas Work is the canvas itself: delete it the one way that also
+      // takes its public site offline and frees its files.
+      const canvasId = await ctx.workModel.findCanvasIdByWorkId(input.id);
+      if (canvasId) {
+        await deleteCanvas(canvasId, {
+          db: ctx.serverDB,
+          storage: createCanvasStorageService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ),
+          userId: ctx.userId,
+          workModel: ctx.workModel,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return;
+      }
 
-      const storage = createCanvasStorageService(
-        ctx.serverDB,
-        ctx.userId,
-        ctx.workspaceId ?? undefined,
-      );
-      for (const canvas of canvases) await storage.removeCanvas(canvas.id, canvas.manifestKeys);
+      await ctx.workModel.deleteWork(input);
     }),
 
   registerTask: taskWorkProcedureWrite

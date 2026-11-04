@@ -124,6 +124,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
           {children.map((topic) => (
             <TopicItem
               fav={topic.favorite}
+              hasGoal={topic.hasGoal}
               id={topic.id}
               key={topic.id}
               metadata={topic.metadata}

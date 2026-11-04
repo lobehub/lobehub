@@ -88,6 +88,20 @@ export {
   toTomlBasicString,
 } from './codexShellEnv';
 export {
+  buildCopilotAcpArgs,
+  buildCopilotAcpPrompt,
+  type CopilotAcpImagePromptBlock,
+  type CopilotAcpModelCatalog,
+  type CopilotAcpPromptBlock,
+  CopilotAcpSession,
+  type CopilotAcpSessionOptions,
+  type CopilotAcpTextPromptBlock,
+  isCopilotAcpSessionNotFoundError,
+  listCopilotAcpModels,
+  type ListCopilotAcpModelsOptions,
+  parseCopilotAcpModelCatalog,
+} from './copilotAcpSession';
+export {
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
   CursorAcpSession,
@@ -161,6 +175,17 @@ export {
   type NormalizeImageOptions,
 } from './input';
 export { JsonlStreamProcessor } from './jsonlProcessor';
+export {
+  buildLobeHubCliPluginFiles,
+  CLAUDE_CODE_PLUGIN_SKILLS_MIN_VERSION,
+  claudeCodeLoadsPluginSkills,
+  type ClaudeCodeLobeHubCliDelivery,
+  LOBEHUB_CLI_PLUGIN_NAME,
+  LOBEHUB_CLI_SKILL_NAME,
+  omitLobeHubCliGuide,
+  prepareClaudeCodeLobeHubCli,
+  resolveLobeHubCliPluginDir,
+} from './lobeHubCliPlugin';
 // NOTE: `resolveCliCommand` is intentionally NOT re-exported here. It runs
 // `promisify(execFile)` at module load, which throws under a partial
 // `node:child_process` mock — and this barrel is widely imported (e.g. for

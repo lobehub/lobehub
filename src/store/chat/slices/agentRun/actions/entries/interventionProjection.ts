@@ -16,7 +16,7 @@ import { type ChatStore } from '@/store/chat/store';
  * terminal settle it is the fast half: the durable write follows separately,
  * and the card must not wait on it to leave the screen.
  */
-const dispatchInterventionState = (
+export const dispatchInterventionState = (
   get: () => ChatStore,
   toolMessageId: string,
   patch: Partial<ToolIntervention>,

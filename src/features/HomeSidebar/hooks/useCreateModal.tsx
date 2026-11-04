@@ -1,5 +1,13 @@
-import { Block, cssVar, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, createModal, type ModalInstance, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  createModal,
+  cssVar,
+  Flexbox,
+  type ModalInstance,
+  Text,
+} from '@lobehub/ui';
 import { Blocks, CheckCircle2, Lightbulb, PencilLineIcon, RefreshCw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

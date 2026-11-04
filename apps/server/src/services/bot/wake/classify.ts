@@ -24,6 +24,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { describeLine } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import type {
   WakeClassification,
+  WakeClassifierInput,
   WakeClassify,
 } from '@/server/services/agentSignal/scenarios/botWake/policies/classifier';
 
@@ -36,7 +37,7 @@ const ClassificationSchema = z.object({
 });
 
 /** A decision answer is a probability; anything outside 0..1 is a malformed answer, not a score. */
-const ProbabilitySchema = z.number().min(0).max(1);
+export const ProbabilitySchema = z.number().min(0).max(1);
 
 /**
  * How long a prepared model runtime is reused. Preparing one reads the provider's settings and
@@ -59,6 +60,68 @@ export interface CreateWakeClassifyOptions {
   userId: string;
   workspaceId?: string;
 }
+
+/**
+ * A model runtime prepared once and reused for {@link RUNTIME_TTL_MS}. A failed preparation is not
+ * remembered: the next call prepares it again.
+ */
+export const createRuntimeCache = ({
+  db,
+  provider,
+  userId,
+  workspaceId,
+}: Pick<CreateWakeClassifyOptions, 'db' | 'provider' | 'userId' | 'workspaceId'> & {
+  provider: string;
+}) => {
+  let prepared: { expiresAt: number; runtime: Promise<ModelRuntime> } | undefined;
+
+  return (): Promise<ModelRuntime> => {
+    if (!prepared || prepared.expiresAt <= Date.now()) {
+      const runtime = initModelRuntimeFromDB(db, userId, provider, workspaceId);
+      const entry = { expiresAt: Date.now() + RUNTIME_TTL_MS, runtime };
+      prepared = entry;
+      // A failure must not stick: the next message prepares it again.
+      runtime.catch(() => {
+        if (prepared === entry) prepared = undefined;
+      });
+    }
+
+    return prepared.runtime;
+  };
+};
+
+/** Whose message the judged one replies to, as the prompt names it. */
+const describeReplyTo = ({
+  conversation,
+  signal,
+}: Pick<WakeClassifierInput, 'conversation' | 'signal'>): BotWakeClassifierInput['replyTo'] => {
+  const { replyToAuthorId: id, replyToAuthorName: name } = signal;
+  if (!id) return;
+  if (id === signal.applicationId) return { name, who: 'assistant' };
+  if (id === signal.author?.id) return { name, who: 'author' };
+  if (conversation?.ownerId && id === conversation.ownerId) return { name, who: 'owner' };
+
+  return { name, who: 'other' };
+};
+
+/** The classifier input as the prompt chains take it. */
+export const toPromptInput = ({
+  conversation,
+  customInstructions,
+  signal,
+}: WakeClassifierInput): BotWakeClassifierInput => ({
+  agent: conversation?.agent,
+  botNames: conversation?.botNames,
+  customInstructions,
+  lastBotMessage: conversation?.lastBotMessage,
+  message: signal.message,
+  messageFromOwner: signal.author?.isOwner === true,
+  ownerNames: conversation?.ownerNames,
+  recentMessages: conversation?.recent.map((line) =>
+    describeLine(line, signal.applicationId, conversation.ownerId),
+  ),
+  replyTo: describeReplyTo({ conversation, signal }),
+});
 
 /**
  * Builds the model call behind the classifier policy.
@@ -87,21 +150,7 @@ export const createWakeClassify = ({
   userId,
   workspaceId,
 }: CreateWakeClassifyOptions): WakeClassify => {
-  let prepared: { expiresAt: number; runtime: Promise<ModelRuntime> } | undefined;
-
-  const getRuntime = (): Promise<ModelRuntime> => {
-    if (!prepared || prepared.expiresAt <= Date.now()) {
-      const runtime = initModelRuntimeFromDB(db, userId, provider, workspaceId);
-      const entry = { expiresAt: Date.now() + RUNTIME_TTL_MS, runtime };
-      prepared = entry;
-      // A failure must not stick: the next message prepares it again.
-      runtime.catch(() => {
-        if (prepared === entry) prepared = undefined;
-      });
-    }
-
-    return prepared.runtime;
-  };
+  const getRuntime = createRuntimeCache({ db, provider, userId, workspaceId });
 
   const classifyWithDecision = async (
     input: BotWakeClassifierInput,
@@ -169,25 +218,15 @@ export const createWakeClassify = ({
     return ClassificationSchema.parse(result);
   };
 
-  return async ({ conversation, customInstructions, signal }, abortSignal) => {
-    const input: BotWakeClassifierInput = {
-      agent: conversation?.agent,
-      botNames: conversation?.botNames,
-      customInstructions,
-      lastBotMessage: conversation?.lastBotMessage,
-      message: signal.message,
-      ownerNames: conversation?.ownerNames,
-      recentMessages: conversation?.recent.map((line) =>
-        describeLine(line, signal.applicationId, conversation.ownerId),
-      ),
-    };
+  return async (classifierInput, abortSignal) => {
+    const input = toPromptInput(classifierInput);
 
     log(
       'classify engine=%s model=%s provider=%s thread=%s',
       engine,
       model,
       provider,
-      signal.platformThreadId,
+      classifierInput.signal.platformThreadId,
     );
 
     return engine === 'decision'

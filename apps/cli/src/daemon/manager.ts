@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { x, xSync } from 'tinyexec';
 
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+import { assertExternalDaemonRestart } from './restartGuard';
 
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
 const STARTUP_TIMEOUT_MS = 30_000;
@@ -28,6 +30,10 @@ function getLogFilePath() {
 }
 
 export interface DaemonStatus {
+  /** Canonical entry path only; never persist argv or credentials for diagnostics. */
+  cliPath?: string;
+  /** Captured by the running process, never inferred from the installed package. */
+  cliVersion?: string;
   connectionStatus: string;
   deviceId?: string;
   /** Where `gatewayUrl` came from: `server`, `manual`, `official` or `override`. */
@@ -47,8 +53,8 @@ function ensureDir() {
 export function readPid(): number | null {
   try {
     const raw = fs.readFileSync(getPidPath(), 'utf8').trim();
-    const pid = Number.parseInt(raw, 10);
-    return Number.isNaN(pid) ? null : pid;
+    const pid = Number(raw);
+    return Number.isSafeInteger(pid) && pid > 0 ? pid : null;
   } catch {
     return null;
   }
@@ -56,10 +62,14 @@ export function readPid(): number | null {
 
 export function writePid(pid: number): void {
   ensureDir();
-  fs.writeFileSync(getPidPath(), String(pid), { mode: 0o600 });
+  const temporary = `${getPidPath()}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, String(pid), { mode: 0o600 });
+  fs.renameSync(temporary, getPidPath());
 }
 
-export function removePid(): void {
+/** Check ownership before cleanup; restarts must still wait for the predecessor to exit. */
+export function removePid(expectedPid: number): void {
+  if (readPid() !== expectedPid) return;
   try {
     fs.unlinkSync(getPidPath());
   } catch {
@@ -102,7 +112,11 @@ export function isDaemonProcess(pid: number): boolean {
       nodePath: false,
     });
     const command = stdout.trim();
-    return command.includes('--daemon-child') && command.includes('connect');
+    return (
+      /(?:^|\s)connect(?:\s|$)/.test(command) &&
+      /(?:^|\s)--daemon-child(?:\s|$)/.test(command) &&
+      !/(?:^|\s)--service-child(?:\s|$)/.test(command)
+    );
   } catch {
     return false;
   }
@@ -114,16 +128,36 @@ export function isDaemonProcess(pid: number): boolean {
  */
 export function getRunningDaemonPid(): number | null {
   const pid = readPid();
-  if (pid === null) return null;
+  if (pid !== null) {
+    // Require both liveness AND identity before using a recorded process.
+    if (isProcessAlive(pid) && isDaemonProcess(pid)) return pid;
+    removePid(pid);
+    removeStatus(pid);
+  }
 
-  // Require both liveness AND identity — a live-but-reused PID is treated as
-  // stale so we never act on a process that isn't ours.
-  if (isProcessAlive(pid) && isDaemonProcess(pid)) return pid;
+  // Older restarts could lose daemon.pid when the predecessor cleaned up late.
+  // Status alone is not authority: services and foreground connections share it.
+  const reportedPid = readStatus()?.pid;
+  if (
+    !reportedPid ||
+    !Number.isSafeInteger(reportedPid) ||
+    reportedPid <= 0 ||
+    !isProcessAlive(reportedPid) ||
+    !isDaemonProcess(reportedPid)
+  )
+    return null;
 
-  // Stale PID file — process is dead or the PID now belongs to someone else.
-  removePid();
-  removeStatus();
-  return null;
+  try {
+    // Never overwrite a concurrent launch's PID. A read-only status directory
+    // still permits inspection using the verified process without repairing it.
+    fs.writeFileSync(getPidPath(), String(reportedPid), { flag: 'wx', mode: 0o600 });
+  } catch {
+    const currentPid = readPid();
+    if (currentPid !== null && currentPid !== reportedPid) {
+      return isProcessAlive(currentPid) && isDaemonProcess(currentPid) ? currentPid : null;
+    }
+  }
+  return reportedPid;
 }
 
 // --- Status file ---
@@ -144,7 +178,8 @@ export function readStatus(): DaemonStatus | null {
   }
 }
 
-export function removeStatus(): void {
+export function removeStatus(expectedPid: number): void {
+  if (readStatus()?.pid !== expectedPid) return;
   try {
     fs.unlinkSync(getStatusPath());
   } catch {
@@ -236,8 +271,8 @@ export function spawnDaemon(args: string[]): Promise<number> {
       child.unref();
 
       if (error) {
-        removePid();
-        removeStatus();
+        removePid(pid);
+        removeStatus(pid);
         reject(error);
         return;
       }
@@ -309,21 +344,49 @@ export function reportDaemonStartupReady(): Promise<void> {
   return sendStartupMessage({ type: 'startup-ready' });
 }
 
-/**
- * Stop the running daemon process.
- * Returns true if a process was killed, false if none was running.
- */
+function signalDaemonStop(pid: number): void {
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch (error) {
+    // A permission failure is not a stopped process: retain its records.
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+  }
+}
+
+/** Request a stop of the verified daemon; false when no daemon is running. */
 export function stopDaemon(): boolean {
   const pid = getRunningDaemonPid();
   if (pid === null) return false;
+  signalDaemonStop(pid);
+  removePid(pid);
+  removeStatus(pid);
+  return true;
+}
 
-  try {
-    process.kill(pid, 'SIGTERM');
-  } catch {
-    // Process may have exited between check and kill
+/** Also protects upgrades from legacy daemons whose cleanup is unconditional. */
+export async function stopDaemonAndWait(timeoutMs = 30_000): Promise<boolean> {
+  const pid = getRunningDaemonPid();
+  if (pid === null) return false;
+  await assertExternalDaemonRestart(pid);
+  // The ancestry check yielded; do not signal a PID reused during that interval.
+  if (isProcessAlive(pid) && !isDaemonProcess(pid)) {
+    throw new Error(
+      'Daemon identity changed during inspection. No connector was stopped; retry after checking lh connect status.',
+    );
   }
-
-  removePid();
-  removeStatus();
+  signalDaemonStop(pid);
+  const deadline = Date.now() + timeoutMs;
+  // Failure to inspect argv is not proof of exit. Be conservative even if the
+  // PID is reused: timing out is safer than launching a competing connector.
+  while (isProcessAlive(pid)) {
+    if (Date.now() >= deadline) {
+      throw new Error(
+        'The previous daemon did not exit. No replacement was started; check lh connect logs before retrying.',
+      );
+    }
+    await delay(100);
+  }
+  removePid(pid);
+  removeStatus(pid);
   return true;
 }

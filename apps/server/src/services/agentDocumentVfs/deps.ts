@@ -1,6 +1,9 @@
+import type { DocumentWriteSource } from '@lobechat/types';
+
 import type { AgentDocumentModel } from '@/database/models/agentDocuments';
 
 import type { FileService } from '../file';
+import type { PageBody } from '../pageCollab/bodyWriter';
 import type { SkillMount } from './mounts/skills/SkillMount';
 
 /**
@@ -15,6 +18,24 @@ import type { SkillMount } from './mounts/skills/SkillMount';
  */
 export interface AgentDocumentVfsDeps {
   agentDocumentModel: AgentDocumentModel;
+  /**
+   * Refuses a write that would leave a document over the plan's character limit.
+   * Run it before anything is persisted or pushed to a collaboration room.
+   */
+  assertWithinCharLimit: (params: {
+    charCount: number;
+    previousCharCount?: number;
+    source: DocumentWriteSource;
+  }) => Promise<void>;
   getFileService: () => FileService;
   skillMount: SkillMount;
+  /**
+   * Writes a body into the document's live collaboration room, whose projection
+   * would otherwise overwrite a row write. False when there is no live room.
+   */
+  writeThroughRoom: (
+    documentId: string,
+    body: PageBody,
+    writeSource: DocumentWriteSource,
+  ) => Promise<boolean>;
 }

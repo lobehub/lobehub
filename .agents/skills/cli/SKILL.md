@@ -56,6 +56,7 @@ apps/cli/src/
 │   ├── message.ts            # Message management
 │   ├── migrate/              # Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)
 │   ├── model.ts              # AI model management
+│   ├── notification.ts       # Notification delivery settings (personal / workspace)
 │   ├── notify.ts             # Send a callback message to a topic to trigger the agent
 │   ├── plugin.ts             # Plugin management
 │   ├── project.ts            # Goal-oriented project management
@@ -117,6 +118,7 @@ apps/cli/src/
 | `lh message`       | -     | Message list, search, delete, count, heatmap                                       |
 | `lh topic`         | -     | Topic CRUD + search + recent                                                       |
 | `lh notify`        | -     | Send a callback message to a topic and trigger the agent to process it             |
+| `lh notification`  | -     | Notification settings: show, enable/disable channels, IM platforms and types       |
 | `lh migrate`       | -     | Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)                  |
 | `lh bot`           | -     | Manage bot integrations (channels, access policies, messengers)                    |
 | `lh skill`         | -     | Skill CRUD + import (GitHub/URL/market)                                            |
@@ -137,8 +139,13 @@ apps/cli/src/
 
 Every command runs against one scope, resolved in this order:
 
-1. an explicit `--workspace <id>` on the commands that take it
-2. the `LOBEHUB_WORKSPACE_ID` env var
+1. an explicit `--workspace <id|slug>` on the `workspace`, `device` and `topic`
+   commands that take it (a slug is resolved against `lh workspace list`; one
+   that matches nothing fails). A credential that cannot call `workspace.list`
+   (no `workspace:read`, such as a workspace-bound API key) skips resolution and
+   sends the value as an id with a warning, so it must pass the id.
+   `lh connect --workspace` takes an id only.
+2. the `LOBEHUB_WORKSPACE_ID` env var (an id only)
 3. the scope persisted by `lh workspace use <id|slug>`
 4. personal content (no workspace)
 

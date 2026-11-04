@@ -89,7 +89,6 @@
   "response.GoogleAIBlockReason.SAFETY": "Il contenuto è stato bloccato per motivi di sicurezza. Per favore, modificalo e riprova.",
   "response.GoogleAIBlockReason.SPII": "Il contenuto potrebbe includere informazioni personali sensibili (SPII). Per favore, rimuovi i dettagli sensibili e riprova.",
   "response.GoogleAIBlockReason.default": "Il contenuto è stato bloccato ({{blockReason}}). Per favore, modificalo e riprova.",
-  "response.InsufficientBudgetForModel": "I tuoi crediti rimanenti non sono sufficienti per questo modello. Per favore, ricarica i crediti, aggiorna il tuo piano o prova un modello meno costoso.",
   "response.InvalidAccessCode": "Codice di accesso non valido o vuoto. Inserisci il codice corretto o aggiungi una API Key personalizzata.",
   "response.LobeHubModelDeprecated": "Il modello \"{{model}}\" non è più disponibile. Si prega di scegliere un modello attuale dal selettore di modelli.",
   "response.ModelContentModerationCooldown": "Questa richiesta non ha potuto utilizzare il modello selezionato o i modelli correlati a causa di una restrizione temporanea sulla sicurezza dei contenuti. Riprova più tardi o scegli un modello diverso.",
@@ -122,8 +121,6 @@
   "response.RemoteServerTimeout": "La connessione al server è scaduta. Questo di solito indica un problema con la rete locale — controlla la qualità della rete, il proxy o le impostazioni VPN e riprova.",
   "response.RemoteServerUnreachable": "Non è stato possibile raggiungere il server. Questo di solito indica un problema con la rete locale — controlla la connessione a Internet, il proxy o le impostazioni VPN e riprova.",
   "response.ServerAgentRuntimeError": "Spiacenti, il servizio Agent non è disponibile. Riprova più tardi o contattaci via email.",
-  "response.SubscriptionPlanLimit": "Hai esaurito i punti del tuo abbonamento e non puoi usare questa funzione. Passa a un piano superiore o configura una API personalizzata.",
-  "response.SubscriptionPlanLimitUltimate": "Hai esaurito i punti del tuo abbonamento e non puoi usare questa funzione. Ricarica i crediti o configura una API personalizzata.",
   "response.SystemTimeNotMatchError": "Spiacenti, l'orario del tuo sistema non corrisponde a quello del server. Verifica l'orologio e riprova.",
   "response.UnknownChatFetchError": "Spiacenti, si è verificato un errore sconosciuto nella richiesta. Verifica le informazioni seguenti o riprova.",
   "response.UnreadableServerResponse": "Il server ha restituito una risposta che l'app non è riuscita a leggere. Di solito si tratta di un problema temporaneo di rete o di gateway — riprova tra un momento.",
@@ -213,13 +210,9 @@
   "workspaceFrozenByAdmin.frozenAt": "Bloccato il",
   "workspaceFrozenByAdmin.reason": "Motivo",
   "workspaceFrozenByAdmin.title": "Lo spazio di lavoro è bloccato",
-  "workspaceFrozenByRiskControl.available": "Crediti disponibili",
-  "workspaceFrozenByRiskControl.bannerDescription": "Ricarica i crediti per riprendere le spese.",
   "workspaceFrozenByRiskControl.bannerHint": "Clicca per i dettagli",
   "workspaceFrozenByRiskControl.bannerTitle": "Workspace bloccato dal controllo del rischio",
   "workspaceFrozenByRiskControl.contactSupport": "Contatta il supporto",
-  "workspaceFrozenByRiskControl.description": "Questo spazio di lavoro è stato bloccato automaticamente dal controllo dei rischi dopo che è stata rilevata una spesa anomala. Contatta il supporto per esaminare e richiedere lo sblocco.",
   "workspaceFrozenByRiskControl.frozenAt": "Bloccato il",
-  "workspaceFrozenByRiskControl.title": "Spazio di lavoro bloccato automaticamente dal controllo dei rischi",
-  "workspaceFrozenByRiskControl.topup": "Ricarica crediti"
+  "workspaceFrozenByRiskControl.title": "Spazio di lavoro bloccato automaticamente dal controllo dei rischi"
 }

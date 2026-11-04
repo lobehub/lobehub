@@ -22,14 +22,16 @@ import type { LobeChatDatabase } from '../../type';
 import { ProjectModel } from '../project';
 import type { TaskListFilterOptions, TaskListOptions } from '../taskListFilters';
 import * as activities from './activities';
+import { checkpointTaskMatcher } from './checkpoint';
 import * as comments from './comments';
 import * as config from './config';
 import { getTaskVisibility, type TaskModelContext, taskOwnership } from './context';
 import * as dependencies from './dependencies';
 import * as documents from './documents';
 import * as queries from './queries';
+import { resolveRefs } from './refs';
 import * as rows from './rows';
-import type { OrphanedRunningTopic } from './scheduling';
+import type { InterruptedRunningTopic, OrphanedRunningTopic } from './scheduling';
 import * as scheduling from './scheduling';
 import * as transfer from './transfer';
 import * as tree from './tree';
@@ -42,7 +44,7 @@ import {
   withStaleReposCleared,
 } from './utils';
 
-export type { OrphanedRunningTopic } from './scheduling';
+export type { InterruptedRunningTopic, OrphanedRunningTopic } from './scheduling';
 export { isTaskIdentifierUniqueViolation, taskActivityActor } from './utils';
 
 export class TaskModel {
@@ -125,18 +127,14 @@ export class TaskModel {
     return rows.findAssigneesByIds(this.ctx, ids);
   }
 
-  async resolveMany(idsOrIdentifiers: string[]): Promise<TaskItem[]> {
-    return rows.resolveMany(this.ctx, idsOrIdentifiers);
+  async resolveRefs(refs: string[]) {
+    return resolveRefs(this.ctx, refs);
   }
 
-  // Resolve id or identifier (e.g. 'T-1') to a task
-  async resolve(idOrIdentifier: string): Promise<TaskItem | null> {
-    if (idOrIdentifier.startsWith('task_')) return this.findById(idOrIdentifier);
-    return this.findByIdentifier(idOrIdentifier.toUpperCase());
-  }
-
-  async findByIdentifier(identifier: string): Promise<TaskItem | null> {
-    return rows.findByIdentifier(this.ctx, identifier);
+  async resolve(ref: string): Promise<TaskItem | null> {
+    const result = await this.resolveRefs([ref]);
+    if (result.ambiguous.length) throw new Error(`Ambiguous task reference: ${ref}`);
+    return result.byRef.get(ref) ?? null;
   }
 
   async update(
@@ -194,6 +192,14 @@ export class TaskModel {
     return rows.countTasksBlockingAgentDemotion(this.ctx, assigneeAgentId, agentOwnerUserId);
   }
 
+  async lockWholeSubtree(rootId: string): Promise<{ id: string; status: string }[]> {
+    return tree.lockWholeSubtree(this.ctx, rootId);
+  }
+
+  async takeOverSubtree(taskIds: string[]): Promise<void> {
+    return tree.takeOverSubtree(this.ctx, taskIds);
+  }
+
   async subtreeHasOtherCreators(rootTaskId: string, creatorUserId: string): Promise<boolean> {
     return rows.subtreeHasOtherCreators(this.ctx, rootTaskId, creatorUserId);
   }
@@ -204,6 +210,10 @@ export class TaskModel {
 
   async deleteIfStatus(id: string, status: string): Promise<boolean> {
     return rows.deleteIfStatus(this.ctx, id, status);
+  }
+
+  async deleteIfStatusForIds(expected: { id: string; status: string }[]): Promise<string[]> {
+    return rows.deleteIfStatusForIds(this.ctx, expected);
   }
 
   async deleteAll(options?: { restrictToCreator?: boolean }): Promise<number> {
@@ -290,6 +300,13 @@ export class TaskModel {
     return rows.updateStatusIfCurrent(this.ctx, id, currentStatus, status, extra);
   }
 
+  async updateStatusIfCurrentForIds(
+    expected: { id: string; status: string }[],
+    status: string,
+  ): Promise<string[]> {
+    return rows.updateStatusIfCurrentForIds(this.ctx, expected, status);
+  }
+
   async completeIfCompletionRequested(id: string, operationId: string): Promise<TaskItem | null> {
     return rows.completeIfCompletionRequested(this.ctx, id, operationId);
   }
@@ -308,6 +325,18 @@ export class TaskModel {
     extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem[]> {
     return rows.updateStatusForIds(this.ctx, ids, status, extra);
+  }
+
+  async lockForBulkEdit(ids: string[]) {
+    return rows.lockForBulkEdit(this.ctx, ids);
+  }
+
+  async updateFieldsForIds(
+    ids: string[],
+    data: Parameters<typeof rows.updateFieldsForIds>[2],
+    configById?: ReadonlyMap<string, unknown>,
+  ): Promise<TaskItem[]> {
+    return rows.updateFieldsForIds(this.ctx, ids, data, configById);
   }
 
   // ========== Config ==========
@@ -408,15 +437,21 @@ export class TaskModel {
   }
 
   // Check if a task should be paused before starting (parent's tasks.beforeIds)
-  shouldPauseBeforeStart(parentTask: TaskItem, childIdentifier: string): boolean {
+  shouldPauseBeforeStart(
+    parentTask: TaskItem,
+    child: Pick<TaskItem, 'id' | 'identifier'>,
+  ): boolean {
     const checkpoint = this.getCheckpointConfig(parentTask);
-    return checkpoint.tasks?.beforeIds?.includes(childIdentifier) ?? false;
+    return checkpointTaskMatcher(checkpoint.tasks?.beforeIds, checkpoint.tasks?.beforeTasks)(child);
   }
 
   // Check if a task should be paused after completing (parent's tasks.afterIds)
-  shouldPauseAfterComplete(parentTask: TaskItem, childIdentifier: string): boolean {
+  shouldPauseAfterComplete(
+    parentTask: TaskItem,
+    child: Pick<TaskItem, 'id' | 'identifier'>,
+  ): boolean {
     const checkpoint = this.getCheckpointConfig(parentTask);
-    return checkpoint.tasks?.afterIds?.includes(childIdentifier) ?? false;
+    return checkpointTaskMatcher(checkpoint.tasks?.afterIds, checkpoint.tasks?.afterTasks)(child);
   }
 
   // ========== Heartbeat ==========
@@ -447,6 +482,13 @@ export class TaskModel {
     options: { limit?: number; staleBefore: Date },
   ): Promise<OrphanedRunningTopic[]> {
     return scheduling.findOrphanedRunningTopics(db, options);
+  }
+
+  static async findInterruptedRunningTopics(
+    db: LobeChatDatabase,
+    options: { limit?: number; staleBefore: Date },
+  ): Promise<InterruptedRunningTopic[]> {
+    return scheduling.findInterruptedRunningTopics(db, options);
   }
 
   // ========== Dependencies ==========
@@ -546,6 +588,13 @@ export class TaskModel {
 
   async addComment(data: Omit<NewTaskComment, 'id'>): Promise<TaskCommentItem> {
     return comments.addComment(this.ctx, data);
+  }
+
+  async addComments(
+    taskId: string,
+    rows: Omit<NewTaskComment, 'id' | 'taskId'>[],
+  ): Promise<TaskCommentItem[]> {
+    return comments.addComments(this.ctx, taskId, rows);
   }
 
   async findCommentById(id: string): Promise<TaskCommentItem | undefined> {

@@ -60,7 +60,6 @@ const make = (
     db: {} as never,
     operatorUserId: OWNER,
     platform: 'discord',
-    rollout: async () => true,
     settings,
     state,
     userId: 'u1',
@@ -75,25 +74,14 @@ describe('bot-wake recorder policy set', () => {
     mockRecordSignalDecision.mockResolvedValue({ persisted: false });
   });
 
-  it('leaves a bot without bot-wake exactly as before: one verdict, no state, no model call', async () => {
+  it('does nothing at all for a bot with bot-wake switched off: no row, no state read or write, no model call', async () => {
     const state = fakeState();
-    make({}, state).record(observation());
-    await flush();
-
-    expect(recorded()[0].verdicts).toHaveLength(1);
-    expect(recorded()[0].verdicts[0]).toMatchObject({ policyId: 'legacy-router', verdict: 'deny' });
-    expect(state.readChannel).not.toHaveBeenCalled();
-    expect(classify).not.toHaveBeenCalled();
-  });
-
-  it('does nothing at all while the rollout is off: no row, no state read or write, no model call', async () => {
-    const state = fakeState();
-    const recorder = make({ botWake: { enabled: true } }, state, { rollout: async () => false });
+    const recorder = make({ botWakeDisabled: true }, state);
 
     recorder.record(observation({ outcome: 'wake', reason: 'watch-keyword' }));
     await flush();
 
-    expect(await recorder.isRolledOut()).toBe(false);
+    expect(recorder.enabled).toBe(false);
     expect(await recorder.judge(observation())).toBeUndefined();
     expect(mockRecordSignalDecision).not.toHaveBeenCalled();
     expect(state.readChannel).not.toHaveBeenCalled();
@@ -119,7 +107,7 @@ describe('bot-wake recorder policy set', () => {
   });
 
   it('runs the same policies from the keys the settings form writes', async () => {
-    make({ botWakeClassifierMode: 'shadow', botWakeEnabled: true }).record(observation());
+    make({ botWakeClassifierMode: 'shadow', botWakeDisabled: false }).record(observation());
     await flush();
 
     const { verdicts } = recorded()[0];
@@ -132,14 +120,49 @@ describe('bot-wake recorder policy set', () => {
     expect(classify).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps a bot whose form was saved with bot-wake off to the router verdict alone', async () => {
+  it('never lets the classifier veto a watch-keyword wake: a keyword exists to wake the bot unaddressed', async () => {
+    const lowScore: WakeClassify = vi.fn(async () => ({
+      addressedToBot: 0,
+      kind: 'other',
+      reason: 'not for the bot',
+    }));
+    const recorder = make({ botWake: { enabled: true } }, fakeState(), { classify: lowScore });
+
+    const decision = await recorder.judge(
+      observation(
+        { outcome: 'wake', reason: 'watch-keyword' },
+        { text: 'we have a bug in checkout' },
+      ),
+    );
+
+    // The rules still judge it (they enforce by default); the classifier is not asked at all.
+    expect(decision).toBeDefined();
+    expect(decision!.verdict).not.toBe('deny');
+    expect(lowScore).not.toHaveBeenCalled();
+  });
+
+  it('still lets an enforcing owner rule veto a watch-keyword wake', async () => {
+    const recorder = make(
+      { botWake: { enabled: true, rules: { denyChannels: ['c1'] } } },
+      fakeState(),
+      { classify },
+    );
+
+    const decision = await recorder.judge(
+      observation({ outcome: 'wake', reason: 'watch-keyword', threadId: 'discord:g1:c1' }),
+    );
+
+    expect(decision).toMatchObject({ decidedBy: 'bot-wake:owner-rules', verdict: 'deny' });
+  });
+
+  it('records nothing for a bot whose form was saved with bot-wake off', async () => {
     const state = fakeState();
-    make({ botWakeEnabled: false, botWakeMode: 'shadow', botWakeScope: 'all' }, state).record(
+    make({ botWakeDisabled: true, botWakeMode: 'shadow', botWakeScope: 'all' }, state).record(
       observation(),
     );
     await flush();
 
-    expect(recorded()[0].verdicts).toHaveLength(1);
+    expect(mockRecordSignalDecision).not.toHaveBeenCalled();
     expect(state.readChannel).not.toHaveBeenCalled();
     expect(classify).not.toHaveBeenCalled();
   });
@@ -253,25 +276,21 @@ describe('bot-wake recorder policy set', () => {
     );
   });
 
-  it('stamps the message with the time it was seen, not when a slow flag read finished', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    try {
-      vi.setSystemTime(1_000);
-      let release!: () => void;
-      const slowFlag = new Promise<boolean>((resolve) => (release = () => resolve(true)));
-      const state = fakeState();
+  it('remembers who woke the bot on the conversation it will reply in, and nobody it skipped', async () => {
+    const state = { ...fakeState(), recordWakeAuthor: vi.fn(async () => {}) };
+    const recorder = make({ botWake: { enabled: true } }, state);
 
-      make({ botWake: { enabled: true } }, state, { rollout: () => slowFlag }).record(
-        observation({}, { author: { isBot: false, isMe: false, userId: OWNER } }),
-      );
-      vi.setSystemTime(9_000);
-      release();
-      await flush();
+    recorder.record(
+      observation(
+        { outcome: 'wake', reason: 'explicit-mention', threadId: 'discord:g1:c1:t9' },
+        { isMention: true, text: '<@555> hi' },
+      ),
+    );
+    recorder.record(observation({ threadId: 'discord:g1:c1:t9' }, { id: 'm2' }));
+    await flush();
 
-      expect(state.recordOwnerSpoke).toHaveBeenCalledWith(expect.any(Array), 1_000);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(state.recordWakeAuthor).toHaveBeenCalledOnce();
+    expect(state.recordWakeAuthor).toHaveBeenCalledWith('discord:app:g1:c1:t9', 'alice-id');
   });
 
   it('feeds recorded channel state into the owner rules', async () => {
@@ -308,15 +327,17 @@ describe('bot-wake recorder policy set', () => {
 describe('bot-wake recorder judge (enforcement)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('is silent while everything shadows (the default)', async () => {
-    const recorder = make({ botWake: { enabled: true } });
+  it('is silent when an operator override has everything shadowing', async () => {
+    const recorder = make({
+      botWake: { classifier: { mode: 'shadow' }, enabled: true, mode: 'shadow' },
+    });
 
     expect(await recorder.judge(observation({ outcome: 'wake' }))).toBeUndefined();
     expect(classify).not.toHaveBeenCalled();
   });
 
-  it('is silent for a bot without bot-wake', async () => {
-    expect(await make({}).judge(observation())).toBeUndefined();
+  it('is silent for a bot with bot-wake switched off', async () => {
+    expect(await make({ botWakeDisabled: true }).judge(observation())).toBeUndefined();
   });
 
   it('denies a follow-up wake when the owner switched the rules to enforce', async () => {
@@ -331,11 +352,13 @@ describe('bot-wake recorder judge (enforcement)', () => {
     });
   });
 
-  it('lets an enforcing classifier block a low score, but a shadow one only scores', async () => {
-    const enforcing = await make({
+  it('does not ask the classifier about a keyword wake, however it is set', async () => {
+    const decision = await make({
       botWake: { classifier: { mode: 'enforce' }, enabled: true },
     }).judge(observation({ outcome: 'wake', reason: 'watch-keyword' }));
-    expect(enforcing).toMatchObject({ decidedBy: 'bot-wake:classifier', verdict: 'deny' });
+
+    expect(decision?.verdict).not.toBe('deny');
+    expect(classify).not.toHaveBeenCalled();
   });
 
   it('fails open when the policies throw', async () => {
@@ -345,5 +368,48 @@ describe('bot-wake recorder judge (enforcement)', () => {
     expect(
       await make({ botWake: { enabled: true, mode: 'enforce' } }, state).judge(observation()),
     ).toBeUndefined();
+  });
+
+  describe('edits', () => {
+    const signals = () => mockRecordSignalDecision.mock.calls.map(([, params]) => params.signal);
+
+    it('records the wake an edit started apart from the decision made when it was sent', async () => {
+      const recorder = make({ botWake: { enabled: true } });
+      recorder.record(observation());
+      recorder.record(
+        observation(
+          { entryPoint: 'onNewMention', outcome: 'wake', reason: 'explicit-mention' },
+          { metadata: { edited: true, editedAt: new Date(1_700_000_000_000) } },
+        ),
+      );
+      await flush();
+
+      expect(signals().map((signal) => signal.externalId)).toEqual([
+        'app:discord:g1:c1:m1',
+        'app:discord:g1:c1:m1:edit:1700000000000',
+      ]);
+      expect(signals()[0].metadata.trigger).toBeUndefined();
+      expect(signals()[1].metadata.trigger).toBe('edit');
+    });
+
+    it('remembers the messages the bot answers even while the wake switch is off', async () => {
+      const state = { ...fakeState(), markEditWakeEngaged: vi.fn(async () => {}) };
+      const recorder = make({}, state);
+
+      await recorder.rememberEngaged(['m1', 'm2']);
+
+      expect(state.markEditWakeEngaged).toHaveBeenCalledWith('app', ['m1', 'm2']);
+    });
+
+    it('never throws when remembering fails', async () => {
+      const state = {
+        ...fakeState(),
+        markEditWakeEngaged: vi.fn(async () => {
+          throw new Error('redis down');
+        }),
+      };
+
+      await expect(make({}, state).rememberEngaged(['m1'])).resolves.toBeUndefined();
+    });
   });
 });

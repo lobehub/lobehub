@@ -8,6 +8,7 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { ProjectModel } from '@/database/models/project';
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
 import { router } from '@/libs/trpc/lambda';
 import { type BatchTaskResult } from '@/types/service';
@@ -155,6 +156,9 @@ export const createRouter = router({
           // The topic's pinned model snapshot, persisted to the top-level
           // `topics.model`/`provider` columns (config source of truth).
           model: z.string().optional(),
+          // Bind the new row to a project, conversation-only — a project "+"
+          // with no directory the agent can run in. A directory wins.
+          projectId: z.string().optional(),
           // Bind the new row to a project working directory. Resolved and
           // pinned below, mirroring `projectWorkingDirectory.startTopic`.
           projectWorkingDirectoryId: z.string().optional(),
@@ -165,7 +169,7 @@ export const createRouter = router({
         .extend(basicContextSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { agentId, projectWorkingDirectoryId, ...rest } = input;
+      const { agentId, projectId, projectWorkingDirectoryId, ...rest } = input;
       const resolved = await resolveContextWithAgentId(
         { agentId, groupId: rest.groupId, sessionId: rest.sessionId },
         ctx.serverDB,
@@ -200,8 +204,19 @@ export const createRouter = router({
             })
         : undefined;
 
+      // Read access is enough: everyone who can read a project collaborates in it.
+      if (
+        !directory &&
+        projectId &&
+        !(await new ProjectModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).findById(
+          projectId,
+        ))
+      )
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+
       const data = await ctx.topicRepo.create({
         ...rest,
+        ...(!directory && projectId && { projectId }),
         agentId: resolved.agentId,
         sessionId: resolved.sessionId,
         ...(directory

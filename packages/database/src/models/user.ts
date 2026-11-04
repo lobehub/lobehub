@@ -1,4 +1,5 @@
 import type {
+  NotificationSettings,
   SSOProvider,
   SystemAgentItem,
   UserGeneralConfig,
@@ -8,6 +9,7 @@ import type {
   UserSettings,
   WidgetDryRunGrant,
 } from '@lobechat/types';
+import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
 import { and, asc, eq, gt, inArray, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
@@ -481,6 +483,30 @@ export class UserModel {
         },
         target: userSettings.id,
       });
+  };
+
+  getNotificationSetting = async (): Promise<NotificationSettings> => {
+    const row = await this.db.query.userSettings.findFirst({
+      columns: { notification: true },
+      where: eq(userSettings.id, this.userId),
+    });
+    return (row?.notification as NotificationSettings | null) ?? {};
+  };
+
+  /**
+   * Merge a notification patch over the stored personal settings and return
+   * the result. `updateSetting` replaces the whole column, so a caller holding
+   * only the switch it wants to flip would wipe every other toggle. Read →
+   * merge → write like `WorkspaceUserSettingsModel.updatePreference`: only the
+   * owner writes this row, so a lost update needs the same user racing itself.
+   */
+  mergeNotificationSetting = async (patch: NotificationSettings) => {
+    const notification = mergeNotificationSettings(await this.getNotificationSetting(), patch);
+    await this.db
+      .insert(userSettings)
+      .values({ id: this.userId, notification })
+      .onConflictDoUpdate({ set: { notification }, target: userSettings.id });
+    return notification;
   };
 
   updatePreference = async (value: Partial<UserPreference>) => {

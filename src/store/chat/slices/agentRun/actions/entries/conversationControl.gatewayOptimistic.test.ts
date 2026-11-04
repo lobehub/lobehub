@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
+import * as roundCursorPage from '@/services/message/roundCursorPage';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -402,6 +403,34 @@ describe('Client runtime approval cards', () => {
 
     expect(interventionOf('tool-1')).toMatchObject({ status: 'pending' });
     expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+  });
+
+  it('reloads a partial head window before resuming the client runtime', async () => {
+    seedPendingTools(['tool-1']);
+    const { result } = renderHook(() => useChatStore());
+    vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(false);
+    vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined as any);
+    const order: string[] = [];
+    vi.spyOn(result.current, 'refreshMessages').mockImplementation(async () => {
+      order.push('refresh');
+    });
+    vi.spyOn(result.current, 'executeClientAgent').mockImplementation(async () => {
+      order.push('run');
+      return undefined as any;
+    });
+    vi.spyOn(result.current, 'internal_createAgentState').mockReturnValue({
+      context: {},
+      state: {},
+    } as any);
+    vi.spyOn(roundCursorPage, 'isPartialHeadWindow').mockImplementation(
+      (context) => context.topicId === topicId,
+    );
+
+    await act(async () => {
+      await result.current.approveToolCalling('tool-1', '');
+    });
+
+    expect(order).toEqual(['refresh', 'run']);
   });
 
   it('restores the pending card when persisting the rejection fails', async () => {

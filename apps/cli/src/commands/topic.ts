@@ -8,6 +8,7 @@ import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/for
 import { log } from '../utils/logger';
 import { resolveUrlBuilder, resourcePath, withUrls } from './resourceUrl';
 import { registerTopicExportCommand } from './topic/export';
+import { registerTopicSendCommand } from './topic/send';
 import { registerTopicViewCommand } from './topic/view';
 
 export function registerTopicCommand(program: Command) {
@@ -353,4 +354,5 @@ export function registerTopicCommand(program: Command) {
 
   registerTopicExportCommand(topic);
   registerTopicViewCommand(topic);
+  registerTopicSendCommand(topic);
 }

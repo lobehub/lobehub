@@ -422,6 +422,35 @@ describe('AgentRuntimeService', () => {
       expect(query).toHaveBeenCalledTimes(1);
     });
 
+    it.each(['queryMessagesFromDB', 'queryStepEntryMessages'])(
+      'keeps durable Work payloads outside %s runtime hydration',
+      async (method) => {
+        const state = {
+          ...mockState,
+          messages: [],
+          origin: { agentId: 'agent', topicId: 'topic' },
+        };
+        const messages = buildPersistedToolChain('stored answer');
+        const tool = messages.find((message) => message.role === 'tool')!;
+        const intent = {
+          type: 'skill' as const,
+          provider: 'example',
+          toolName: 'create',
+          data: { body: 'untruncated Work payload' },
+        };
+        tool.metadata = { ...tool.metadata, toolWorkRegistration: intent };
+        (service as any).messageModel.query.mockResolvedValue(messages);
+        vi.spyOn((service as any).messageService, 'prepareUiMessages').mockImplementation(
+          async (rows) => rows,
+        );
+        const result = await (service as any)[method](state);
+        expect(JSON.stringify(result)).not.toContain('untruncated Work payload');
+        expect(JSON.stringify(state.messages)).not.toContain('untruncated Work payload');
+        expect(JSON.stringify(result)).toContain('stored answer');
+        expect(tool.metadata.toolWorkRegistration).toEqual(intent);
+      },
+    );
+
     it('keeps ephemeral input while preparing the persisted UI snapshot', async () => {
       const messages = [{ role: 'user', content: 'transient prompt' }];
       const state = { ...mockState, messages, origin: { agentId: 'agent', topicId: 'topic' } };

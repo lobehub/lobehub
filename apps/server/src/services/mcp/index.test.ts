@@ -1,10 +1,16 @@
 import { inspect } from 'node:util';
 
 import type * as LobeConst from '@lobechat/const';
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import {
+  ProtocolError,
+  ProtocolErrorCode,
+  SdkError,
+  SdkErrorCode,
+} from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as McpModule from '@/libs/mcp';
 import { MCPClient, type MCPClientParams } from '@/libs/mcp';
 
 import { MCPService } from './index';
@@ -96,6 +102,7 @@ describe('MCPService stdio authorization', () => {
 
   it('rejects connector tool sync on the web before initializing a stdio client', async () => {
     await expect(new MCPService().listRawTools(stdioParams)).rejects.toMatchObject({
+      cause: { data: { code: 'StdioDesktopOnly' } },
       code: 'BAD_REQUEST',
       message: 'Stdio MCP type is not supported in web environment.',
     });
@@ -200,6 +207,23 @@ describe('MCPService log redaction', () => {
     expect(logOutput).toContain("name: 'Error'");
   });
 
+  it.each([
+    ['AUTHORIZATION_ERROR', 'FORBIDDEN'],
+    ['INITIALIZATION_TIMEOUT', 'TIMEOUT'],
+    ['CONNECTION_FAILED', 'SERVICE_UNAVAILABLE'],
+  ] as const)('exposes %s without an HTTP 500 or retry', async (type, code) => {
+    // The module is auto-mocked in this suite; retain the actual error contract.
+    const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
+    vi.mocked(MCPClient.prototype.initialize).mockRejectedValueOnce(
+      actual.createMCPError(type, 'MCP connection needs attention'),
+    );
+    await expect(new MCPService().listRawTools(sensitiveHttpParams)).rejects.toMatchObject({
+      code,
+      message: 'MCP connection needs attention',
+    });
+    expect(MCPClient.prototype.initialize).toHaveBeenCalledOnce();
+  });
+
   it('redacts stdio environment variables from rejected server operations', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -255,6 +279,7 @@ describe('MCPService', () => {
     // 创建 mock 客户端
     mockClient = {
       callTool: vi.fn(),
+      listManifests: vi.fn(),
       listPrompts: vi.fn(),
       listResources: vi.fn(),
       listTools: vi.fn(),
@@ -262,6 +287,43 @@ describe('MCPService', () => {
 
     // Mock getClient 方法返回 mock 客户端
     getClientSpy = vi.spyOn(mcpService as any, 'getClient').mockResolvedValue(mockClient);
+  });
+
+  describe('manifest descriptions', () => {
+    it.each(['My server description'])(
+      'keeps stdio descriptions as metadata (%s)',
+      async (description) => {
+        mockClient.listManifests.mockResolvedValue({
+          prompts: undefined,
+          resources: undefined,
+          tools: [{ inputSchema: { type: 'object' }, name: 'hello' }],
+        });
+
+        const manifest = await mcpService.getStdioMcpServerManifest(
+          { command: 'test-command', name: 'tools-only' },
+          { description },
+        );
+
+        expect(manifest.api).toHaveLength(1);
+        expect(manifest.meta.description).toBe(description);
+      },
+    );
+
+    it.each(['My server description'])(
+      'keeps HTTP descriptions as metadata (%s)',
+      async (description) => {
+        mockClient.listTools.mockResolvedValue([]);
+
+        const manifest = await mcpService.getStreamableMcpServerManifest(
+          'empty-server',
+          'https://mcp.example.com',
+          { description },
+        );
+
+        expect(manifest.api).toEqual([]);
+        expect(manifest.meta.description).toBe(description);
+      },
+    );
   });
 
   describe('callTool', () => {
@@ -417,8 +479,9 @@ describe('MCPService', () => {
         argsStr: '{}',
       });
 
+      expect(result.error?.message).toBe('Error occurred');
       expect(result.content).toBe('Error occurred');
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.state).toEqual(errorResult);
     });
 
@@ -490,8 +553,8 @@ describe('MCPService', () => {
       expect(mockClient.callTool).toHaveBeenCalledTimes(4);
     });
 
-    it('should NOT retry tool-level McpError and return it as a failed tool result', async () => {
-      const mcpError = new McpError(ErrorCode.InvalidParams, 'tool blew up');
+    it('should NOT retry tool-level ProtocolError and return it as a failed tool result', async () => {
+      const mcpError = new ProtocolError(ProtocolErrorCode.InvalidParams, 'tool blew up');
       mockClient.callTool.mockRejectedValue(mcpError);
 
       const result = await mcpService.callTool({
@@ -503,9 +566,24 @@ describe('MCPService', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe(mcpError);
       expect(result.state.isError).toBe(true);
-      // McpError is a tool result, not a session error → must not retry
+      // ProtocolError is a tool result, not a session error → must not retry
       expect(mockClient.callTool).toHaveBeenCalledTimes(1);
     });
+
+    it.each([SdkErrorCode.RequestTimeout, SdkErrorCode.ConnectionClosed])(
+      'returns SDK %s as a failed result without retry',
+      async (code) => {
+        const error = new SdkError(code, 'transport failed');
+        mockClient.callTool.mockRejectedValue(error);
+        const result = await mcpService.callTool({
+          clientParams: mockParams,
+          toolName: 'testTool',
+          argsStr: '{}',
+        });
+        expect(result).toMatchObject({ success: false, error, state: { isError: true } });
+        expect(mockClient.callTool).toHaveBeenCalledTimes(1);
+      },
+    );
 
     it('should bail immediately on client initialization failure without retrying', async () => {
       // getClient throws (e.g. bad URL/token, stdio spawn error) — not a stale session

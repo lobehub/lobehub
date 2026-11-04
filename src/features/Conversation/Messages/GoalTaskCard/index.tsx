@@ -1,6 +1,9 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import type { OperationGoal } from '@lobechat/builtin-tools/operationArtifacts';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +13,6 @@ import GoalStatusGlyph from '@/features/AgentGoals/GoalStatusGlyph';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useChatStore } from '@/store/chat';
 
-import type { OperationGoal } from './deriveOperationGoals';
 import { buildGoalCardModel } from './goalCardModel';
 import GoalElapsedTime from './GoalElapsedTime';
 import type { GoalTaskPhase } from './goalTaskProgress';
@@ -20,38 +22,28 @@ import { useGoalTaskStatus } from './useGoalTaskStatus';
 
 const ACTIVE_PHASES = new Set<GoalTaskPhase>(['planning', 'repairing', 'running', 'verifying']);
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    cursor: pointer;
-
-    width: 100%;
-    padding-block: 12px;
-    padding-inline: 14px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 10px;
-
-    background: ${cssVar.colorBgElevated};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  chevron: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  meta: css`
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-    white-space: nowrap;
-  `,
-  title: css`
-    min-width: 0;
-    font-size: 14px;
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    cursor: 'pointer',
+    width: '100%',
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: '10px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  chevron: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  meta: {
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+    whiteSpace: 'nowrap',
+  },
+  title: { minWidth: '0', fontSize: '14px', fontWeight: 500 },
+});
 
 const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
   const { t } = useTranslation('chat');
@@ -68,7 +60,7 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
 
   return (
     <Flexbox
-      className={styles.card}
+      className={stylex.props(styles.card).className}
       gap={12}
       role={'button'}
       tabIndex={0}
@@ -86,14 +78,17 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
           ) : (
             <GoalStatusGlyph size={14} status={snapshot.goal.status} />
           )}
-          <Text ellipsis className={styles.title} style={{ flex: 1 }}>
+          <Text ellipsis className={stylex.props(styles.title).className} style={{ flex: 1 }}>
             {title ?? goal.name}
           </Text>
-          <Text className={styles.meta} style={{ color: cssVar.colorTextSecondary }}>
+          <Text
+            className={stylex.props(styles.meta).className}
+            style={{ color: cssVar.colorTextSecondary }}
+          >
             {t(`goalTask.status.${progress.phase}`)}
           </Text>
           {isActive && <GoalElapsedTime startedAt={startedAt} />}
-          <ChevronRightIcon className={styles.chevron} size={16} />
+          <ChevronRightIcon className={stylex.props(styles.chevron).className} size={16} />
         </Flexbox>
         {requirement && requirement !== (title ?? goal.name) && (
           <Text ellipsis fontSize={12} style={{ paddingInlineStart: 22 }} type={'secondary'}>
@@ -108,22 +103,25 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
           {(model.taskTotal > 0 || model.needsYou > 0 || model.totalCost > 0) && (
             <Flexbox horizontal align={'center'} gap={12}>
               {model.needsYou > 0 && (
-                <span className={styles.meta} style={{ color: cssVar.colorWarning }}>
+                <span
+                  className={stylex.props(styles.meta).className}
+                  style={{ color: cssVar.colorWarning }}
+                >
                   {t('goalList.needsYou', { count: model.needsYou })}
                 </span>
               )}
               {model.taskTotal > 0 && (
-                <span className={styles.meta}>
+                <span {...stylex.props(styles.meta)}>
                   {t('goalList.taskProgress', { done: model.taskDone, total: model.taskTotal })}
                 </span>
               )}
               {model.findingCount > 0 && (
-                <span className={styles.meta}>
+                <span {...stylex.props(styles.meta)}>
                   {t('goalList.findings', { count: model.findingCount })}
                 </span>
               )}
               {model.totalCost > 0 && (
-                <span className={styles.meta}>{formatGoalCost(model.totalCost)}</span>
+                <span {...stylex.props(styles.meta)}>{formatGoalCost(model.totalCost)}</span>
               )}
             </Flexbox>
           )}

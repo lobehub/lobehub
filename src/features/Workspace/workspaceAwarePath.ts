@@ -77,6 +77,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'storage',
   'subscription-accounts',
   'teams',
+  // Trashed rows are recorded per workspace; the bin follows the active one.
+  'trash',
   'usage',
 ]);
 

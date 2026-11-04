@@ -73,4 +73,5 @@ copy-profile: consumer; /settings, /resource, /dashboard, /eval → saas
 - 人称：**你**（现有 zh-CN 文案以「你」为主）；涉及企业采购、发票、合同的页面才用「您」，并在此登记。
 - 用户的词优先：「对话」「助手 / Agent」「话题」「记忆」，不写实现词（会话实例、向量存储）。
 - 可创建、命名、搜索、分享、迁移和删除的 Topic 实体统一称为 **topic /topics（话题）**；conversation（对话）仅用于聊天行为或消息内容，不作为 Topic 的同义名称。
+- Channel 内承接某条消息的独立讨论统一称为 **thread（线程）**，不称「分支」或「分支讨论」；Git 分支、Topic 分支及其他产品概念不受此规则影响。
 - i18n：默认文案写在 `packages/locales/src/default/*.ts`，手工同步 `locales/en-US` 与 `locales/zh-CN`，其余语言由 CI 翻译（见 `i18n` skill）。术语以已有 locale 为准。

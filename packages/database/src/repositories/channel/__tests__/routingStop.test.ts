@@ -24,14 +24,14 @@ const messageById = async (messageId: string) => {
 };
 
 describe('routing write-back', () => {
-  it('delivers a current Jev decision to the chosen candidates only', async () => {
+  it('delivers a current routing decision to the chosen candidates only', async () => {
     const { asMember, channel, member } = await fixture.createTeamChannel();
     const coder = await fixture.addAgent(channel.id, 'Coder');
     await fixture.addAgent(channel.id, 'Reviewer');
     const message = await asMember.send(channel.id, {
       content: 'Who knows?',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
 
     expect(
@@ -44,7 +44,7 @@ describe('routing write-back', () => {
 
     expect(await messageById(message.id)).toMatchObject({
       recipientMemberIds: [coder.id],
-      routingSource: 'jev',
+      routingSource: 'decision',
       routingStatus: 'assigned',
     });
     expect(await jobsOf(db, message.id)).toEqual([
@@ -58,7 +58,7 @@ describe('routing write-back', () => {
     const message = await asMember.send(channel.id, {
       content: 'Who knows?',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     await execution.resolveRouting(channel.id, message.id, 1, {
       reason: 'Unclear',
@@ -83,7 +83,7 @@ describe('routing write-back', () => {
     const message = await asOwner.send(channel.id, {
       content: 'Who knows?',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     await execution.resolveRouting(channel.id, message.id, 1, {
       reason: 'Unclear',
@@ -107,11 +107,11 @@ describe('stop', () => {
       content: 'Do it',
       mentions: [coder.id],
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [job] = await jobsOf(db, message.id);
     await execution.claim(channel.id, job.id, lease);
-    await execution.accepted(channel.id, job.id, { nativeSessionId: 's' });
+    await execution.accepted(channel.id, job.id);
     await execution.saveDraft(channel.id, job.id, 'Draft');
 
     await expect(asMember.stop(channel.id, { jobId: job.id })).rejects.toMatchObject({
@@ -137,13 +137,13 @@ describe('stop', () => {
   });
 
   it('stops a branch: closes pending routing and cancels queued jobs there only', async () => {
-    const { asMember, asOwner, channel } = await fixture.createTeamChannel();
+    const { asOwner, channel } = await fixture.createTeamChannel();
     const coder = await fixture.addAgent(channel.id, 'Coder');
     const root = await asOwner.send(channel.id, {
       content: 'Root',
       mentions: [coder.id],
       requestKey: 'root',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [thread] = await db
       .insert(channelThreads)
@@ -158,18 +158,15 @@ describe('stop', () => {
       content: 'In thread',
       mentions: [coder.id],
       requestKey: 'thread',
-      routing: 'jev',
+      routing: 'decision',
       threadId: thread.id,
     });
     const pending = await asOwner.send(channel.id, {
       content: 'Anyone?',
       requestKey: 'pending',
-      routing: 'jev',
+      routing: 'decision',
     });
 
-    await expect(asMember.stop(channel.id, { threadId: null })).rejects.toMatchObject({
-      code: 'FORBIDDEN',
-    });
     await asOwner.stop(channel.id, { threadId: null });
 
     expect(await messageById(pending.id)).toMatchObject({
@@ -187,5 +184,48 @@ describe('stop', () => {
     const [threadJob] = await jobsOf(db, inThread.id);
     expect(mainJob.status).toBe('cancelled');
     expect(threadJob.status).toBe('queued');
+  });
+
+  it("narrows a member's branch stop to its own requests", async () => {
+    const { asMember, asOwner, channel } = await fixture.createTeamChannel();
+    const coder = await fixture.addAgent(channel.id, 'Coder');
+    const ownerRequest = await asOwner.send(channel.id, {
+      content: 'Owner asks',
+      mentions: [coder.id],
+      requestKey: 'owner',
+      routing: 'decision',
+    });
+    const memberRequest = await asMember.send(channel.id, {
+      content: 'Member asks',
+      mentions: [coder.id],
+      requestKey: 'member',
+      routing: 'decision',
+    });
+    const ownerPending = await asOwner.send(channel.id, {
+      content: 'Owner: anyone?',
+      requestKey: 'owner-pending',
+      routing: 'decision',
+    });
+    const memberPending = await asMember.send(channel.id, {
+      content: 'Member: anyone?',
+      requestKey: 'member-pending',
+      routing: 'decision',
+    });
+    const [ownerJob] = await jobsOf(db, ownerRequest.id);
+    const [memberJob] = await jobsOf(db, memberRequest.id);
+
+    const canStop = async (repository: typeof asOwner) =>
+      Object.fromEntries(
+        (await repository.detail(channel.id)).jobs.map((job) => [job.id, job.canStop]),
+      );
+    expect(await canStop(asMember)).toEqual({ [memberJob.id]: true, [ownerJob.id]: false });
+    expect(await canStop(asOwner)).toEqual({ [memberJob.id]: true, [ownerJob.id]: true });
+
+    await asMember.stop(channel.id, { threadId: null });
+
+    expect((await jobById(db, memberJob.id)).status).toBe('cancelled');
+    expect((await jobById(db, ownerJob.id)).status).toBe('queued');
+    expect(await messageById(memberPending.id)).toMatchObject({ routingStatus: 'unassigned' });
+    expect(await messageById(ownerPending.id)).toMatchObject({ routingStatus: 'pending' });
   });
 });

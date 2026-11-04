@@ -1427,29 +1427,25 @@ describe('GatewayMuxClient', () => {
       expect(mockWsInstances).toHaveLength(4);
     });
 
-    it('does not spend the budget on a healthy socket that drops', async () => {
+    it('recovers a previously healthy socket after more than the initial dial budget', async () => {
       const { mux } = createMux();
       const onUnavailable = vi.fn();
       mux.on('unavailable', onUnavailable);
-      mux.subscribe('op-1');
-
-      // A working connection that later drops is a network event, not evidence
-      // that this deployment cannot serve v2.
+      const sub = mux.subscribe('op-1');
       let ws = await connectAndReady(mux);
-      ws.simulateClose(1006);
-      await vi.advanceTimersByTimeAsync(500);
-      ws = await settle();
-      ws.simulateClose(1006);
-      await vi.advanceTimersByTimeAsync(1000);
-      ws = await settle();
-      ws.simulateClose(1006);
-      expect(onUnavailable).not.toHaveBeenCalled();
 
-      // Three dials that never reached `ready` do spend it.
-      await vi.advanceTimersByTimeAsync(2000);
-      ws = await settle();
-      ws.simulateClose(1006);
-      expect(onUnavailable).toHaveBeenCalledOnce();
+      // A restart can outlast three dials; v2 support was already established.
+      for (const delay of [500, 1000, 2000, 4000, 8000]) {
+        ws.simulateClose(1006);
+        await vi.advanceTimersByTimeAsync(delay);
+        ws = await settle();
+      }
+      expect(onUnavailable).not.toHaveBeenCalled();
+      expect(mux.isUnavailable).toBe(false);
+      ws.simulateMessage(READY);
+      expect(mux.status).toBe('connected');
+      expect(sub.active).toBe(true);
+      expect(ws.ofType('subscribe')).toHaveLength(1);
     });
 
     it('counts token failures that follow a healthy socket', async () => {

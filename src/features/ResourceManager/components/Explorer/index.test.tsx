@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/features/ResourceManager/hooks/useFolderPath', () => ({
-  useFolderPath: () => ({ currentFolderSlug: null }),
+  useFolderPath: () => ({ currentFolderId: null }),
 }));
 
 vi.mock('@/features/ResourceManager/hooks/useResourceManagerUrlSync', () => ({

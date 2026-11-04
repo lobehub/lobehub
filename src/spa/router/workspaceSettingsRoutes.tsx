@@ -5,6 +5,7 @@ import { WORKSPACE_SETTINGS_SECTION_SHAPES } from '@/components/Skeleton/Setting
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import DevicesPageSkeleton from '@/features/DeviceManager/Skeleton';
 import { routeMeta } from '@/spa/router/routeMeta';
+import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
 import { dynamicElement, dynamicLayout, redirectElement } from '@/utils/router';
 
 // Workspace settings tabs made of stacked filled groups. The content layout
@@ -201,6 +202,14 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/trash'),
+        'Desktop > Workspace > Settings > Trash',
+      ),
+      handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+      path: 'trash',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/devices'),
         'Desktop > Workspace > Settings > Devices',
       ),
@@ -232,14 +241,8 @@ export const workspaceSettingsContentRoute: RouteObject = {
       handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
       path: 'environments',
     },
-    {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/drive'),
-        'Desktop > Workspace > Settings > Drive',
-      ),
-      handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
-      path: 'drive',
-    },
+    // Sandbox storage moved to Docs (`/:slug/resource/sandbox-storage`).
+    { element: <LegacySandboxStorageRedirect />, path: 'drive' },
     // Account-level tabs mirrored inside the workspace so members can
     // adjust user settings without leaving the workspace. Same pages
     // as personal `/settings/*`; only the chrome is workspace-owned.

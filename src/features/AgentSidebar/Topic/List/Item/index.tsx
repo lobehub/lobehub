@@ -1,4 +1,4 @@
-import { AGENT_CHAT_TOPIC_URL, DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { formatElapsedClockTime } from '@lobechat/utils';
 import {
@@ -19,13 +19,13 @@ import {
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
-import { MessageSquareDashed } from 'lucide-react';
+import { MessageSquareDashed, TargetIcon } from 'lucide-react';
 import type { CSSProperties, DragEvent, MouseEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import DotsLoading from '@/components/DotsLoading';
 import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
@@ -48,11 +48,11 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+import { useTopicHoverPrefetch } from '../../hooks/topicHoverPrefetch/useTopicHoverPrefetch';
 import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
-import { useVisibleTopicPrefetch } from '../../hooks/useVisibleTopicPrefetch';
 import ThreadList from '../../TopicListContent/ThreadList';
 import { useTopicListScope } from '../../TopicListScope';
 import { useScopedTopic } from '../../useScopedTopics';
@@ -107,7 +107,7 @@ const styles = createStaticStyles(({ css }) => ({
       }
     }
   `,
-  prIcon: css`
+  markerIcon: css`
     position: relative;
     display: inline-flex;
     flex: none;
@@ -212,6 +212,8 @@ RunningElapsedTime.displayName = 'RunningElapsedTime';
 
 interface TopicItemProps {
   fav?: boolean;
+  /** A goal was planned in this conversation — marks the row's identity slot. */
+  hasGoal?: boolean;
   id?: string;
   metadata?: ChatTopicMetadata;
   /**
@@ -256,6 +258,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     id,
     title,
     fav,
+    hasGoal,
     metadata,
     runStartedAt,
     status,
@@ -268,13 +271,11 @@ const TopicItemRow = memo<TopicItemRowProps>(
     suppressAgentAvatar,
   }) => {
     const scopedTopic = useScopedTopic(id);
-    // Warm this row's transcript as soon as it is on screen, so clicking it is
-    // a cache hit instead of a visible load.
-    const prefetchRef = useVisibleTopicPrefetch(id);
     const scope = useTopicListScope();
     const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
+    const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
     // Rows render by the dozen, so agent-level reads share ONE subscription.
     // Only workspace-shared (`public`) agents get the creator avatar — a
     // workspace-private agent's topics all belong to the viewer.
@@ -400,6 +401,11 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // `status` is the row's own copy: a project list keeps its topics outside
     // the chat store, so `isUnreadCompleted` never sees them there.
     const hasUnread = id && (isUnreadCompleted || status === 'unread' || isRunningTailUnread);
+    const hoverPrefetchHandlers = useTopicHoverPrefetch({
+      agentId: activeAgentId,
+      status,
+      topicId: id,
+    });
 
     useEffect(() => {
       if (!activeAgentId || !id || !isUnreadCompleted || hasLocalRunningRuntime) return;
@@ -520,10 +526,26 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return null;
     })();
 
-    // Identity-flavored icons the row owns (bot platform, PR marker) — these
+    // Identity-flavored icons the row owns (goal, PR marker, bot platform) — these
     // keep the leading slot even in workspace mode, with the creator shrunk to
     // a corner badge.
     const identityIconNode = (() => {
+      // The conversation a goal was planned in says more about the row than
+      // the PR it produced, so it outranks the PR marker (which stays in the
+      // meta hover card).
+      if (hasGoal && goalsEnabled) {
+        return (
+          <Tooltip title={t('metaCard.goal')}>
+            <span aria-label={t('metaCard.goal')} className={styles.markerIcon}>
+              <Icon
+                icon={TargetIcon}
+                size={'small'}
+                style={{ color: cssVar.colorTextDescription }}
+              />
+            </span>
+          </Tooltip>
+        );
+      }
       // GitHub PR state marker (open=green, merged=purple, closed=red),
       // like Codex. It is secondary metadata, so only an idle topic uses it
       // as the leading icon.
@@ -537,7 +559,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
           : t(prVisual.labelKey);
         return (
           <Tooltip title={tooltip}>
-            <span className={styles.prIcon}>
+            <span className={styles.markerIcon}>
               <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
               {showCiBadge && (
                 <span className={styles.ciBadge}>
@@ -572,13 +594,15 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const ownIconNode = statusIconNode ?? identityIconNode;
     const leadingIconNode =
       scopedTopic && !suppressAgentAvatar ? (
-        <Avatar
+        <AgentAvatar
+          agentId={scopedTopic.agentId}
           name={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
+          shape={'circle'}
           size={20}
           title={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
           avatar={
             scopedTopic.agentAvatar ||
-            (activeAgentId === inboxId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR)
+            (activeAgentId === inboxId ? DEFAULT_INBOX_AVATAR : undefined)
           }
         />
       ) : author ? (
@@ -643,8 +667,8 @@ const TopicItemRow = memo<TopicItemRowProps>(
       <Flexbox
         data-testid="topic-item"
         data-topic-id={id}
-        ref={prefetchRef}
         style={{ position: 'relative' }}
+        {...hoverPrefetchHandlers}
       >
         {metaCard ? (
           <Popover

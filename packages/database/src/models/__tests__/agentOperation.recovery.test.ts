@@ -271,4 +271,56 @@ describe('AgentOperationModel recovery lookups', () => {
       });
     });
   });
+
+  describe('settleUnconfirmedRunning', () => {
+    const startBefore = async (operationId: string, dispatchedAt: Date) => {
+      await model().recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date(dispatchedAt.getTime() - 1000) })
+        .where(eq(agentOperations.id, operationId));
+    };
+
+    it('fails a run nothing has touched since dispatch', async () => {
+      const dispatchedAt = new Date(Date.now() - 60_000);
+      await startBefore('op-unconfirmed', dispatchedAt);
+
+      expect(
+        await model(otherUserId).settleUnconfirmedRunning('op-unconfirmed', dispatchedAt),
+      ).toBe(false);
+      expect(await model().settleUnconfirmedRunning('op-unconfirmed', dispatchedAt)).toBe(true);
+      expect(await model().findById('op-unconfirmed')).toMatchObject({
+        completionReason: 'error',
+        status: 'error',
+      });
+      // The completion lifecycle then persists onto the same status.
+      expect(
+        await model().recordCompletion('op-unconfirmed', {
+          completionReason: 'error',
+          status: 'error',
+        }),
+      ).toBe(true);
+    });
+
+    it('leaves a run alone once an ingest refreshed it after dispatch', async () => {
+      const dispatchedAt = new Date(Date.now() - 60_000);
+      await startBefore('op-confirmed', dispatchedAt);
+      await model().touchRunning('op-confirmed');
+
+      expect(await model().settleUnconfirmedRunning('op-confirmed', dispatchedAt)).toBe(false);
+      expect((await model().findById('op-confirmed'))?.status).toBe('running');
+    });
+
+    it('never rewrites a settled run', async () => {
+      const dispatchedAt = new Date(Date.now() - 60_000);
+      await startBefore('op-finished', dispatchedAt);
+      await serverDB
+        .update(agentOperations)
+        .set({ status: 'done', updatedAt: new Date(dispatchedAt.getTime() - 1000) })
+        .where(eq(agentOperations.id, 'op-finished'));
+
+      expect(await model().settleUnconfirmedRunning('op-finished', dispatchedAt)).toBe(false);
+      expect((await model().findById('op-finished'))?.status).toBe('done');
+    });
+  });
 });

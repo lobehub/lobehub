@@ -8,6 +8,7 @@ export const BrowserApiName = {
   readPage: 'readPage',
   screenshot: 'screenshot',
   scroll: 'scroll',
+  setViewport: 'setViewport',
   snapshot: 'snapshot',
 } as const;
 
@@ -68,4 +69,9 @@ export interface BrowserPressArgs {
 export interface BrowserScrollArgs {
   dx?: number;
   dy: number;
+}
+
+export interface BrowserSetViewportArgs {
+  height?: number;
+  width?: number;
 }

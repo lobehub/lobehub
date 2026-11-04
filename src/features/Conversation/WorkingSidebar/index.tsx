@@ -1,7 +1,16 @@
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  ActionIcon,
+  createStaticStyles,
+  cssVar,
+  cx,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Skeleton,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   BoxesIcon,
@@ -13,7 +22,6 @@ import {
   GlobeIcon,
   MessageCircleIcon,
   PanelRightCloseIcon,
-  PanelsTopLeftIcon,
   PlusIcon,
   SearchIcon,
   Settings2Icon,
@@ -34,7 +42,6 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useBusinessWorkingSidebarTabs } from '@/business/client/features/WorkingSidebarTabs';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
@@ -43,6 +50,7 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
@@ -90,6 +98,7 @@ import { useLinkedPullRequest } from './PullRequest/useLinkedPullRequest';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
 import { TopicSearchPane } from './Search';
+import { useExtraWorkingSidebarTabs } from './useExtraWorkingSidebarTabs';
 import { useRetainAfterHide } from './useRetainAfterHide';
 import { useSandboxFilesDirectory } from './useSandboxFilesDirectory';
 import { useTabContextMenuItems } from './useTabContextMenuItems';
@@ -143,6 +152,18 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgContainer};
     box-shadow: ${cssVar.boxShadowTertiary};
+  `,
+  // `im_layout`: docked as a full-height right column (the agent's profile),
+  // not a floating card, so it reads as the conversation's side panel.
+  overviewPanelDocked: css`
+    max-height: none;
+    height: 100%;
+    margin: 0;
+    border: none;
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 0;
+
+    box-shadow: none;
   `,
   overviewSlot: css`
     overflow: hidden;
@@ -201,6 +222,7 @@ interface AgentWorkingSidebarProps {
 
 const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) => {
   const { t } = useTranslation(['chat', 'setting']);
+  const imLayout = useImLayout();
   // Keep the panel frame + tabs on the navigation commit; the pane contents
   // mount in a deferred follow-up pass behind a skeleton.
   const contentReady = useDeferredMount();
@@ -311,14 +333,23 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
     workspaceScoped,
   });
-  const repoType = useRepoType(workingDirectory, targetDeviceId);
+  const topicWorkingDirectoryConfig = useChatStore(
+    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
+  );
+  // A topic on its own worktree matches no device `workingDirs` entry (the
+  // device keeps one `activeWorktree` per repo), and a remote device can't be
+  // probed — so fall back to the repoType the topic persisted for that checkout,
+  // or Review disappears on web.
+  const deviceRepoType = useRepoType(workingDirectory, targetDeviceId);
+  const repoType =
+    deviceRepoType ??
+    (getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === workingDirectory
+      ? topicWorkingDirectoryConfig?.repoType
+      : undefined);
   // The SOURCE repo, not the checkout — same fallback chain as
   // WorkingDirectorySection: a persisted-worktree topic has no matching
   // `workingDirs` entry, and committing the worktree path as sourcePath would
   // rewrite the topic's repo source (see that component's comment).
-  const topicWorkingDirectoryConfig = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
-  );
   const topicDeviceId = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.boundDeviceId);
   const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const sourceWorkingDirectory = useMemo(() => {
@@ -419,7 +450,12 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     {},
   );
 
-  const businessTabs = useBusinessWorkingSidebarTabs({ activeAgentId, topicId });
+  const extraTabs = useExtraWorkingSidebarTabs({
+    activeAgentId,
+    environmentWorkingDirectory,
+    remoteDeviceId,
+    topicId,
+  });
   const commentsAvailable = !!workspaceId && !!topicId;
   const currentCommentTopicId =
     currentPortalView?.type === PortalViewType.TopicComments ||
@@ -478,15 +514,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             },
           ]
         : []),
-      ...businessTabs.map((tab) => ({
-        icon: PanelsTopLeftIcon,
-        key: tab.key,
-        label: tab.label,
-      })),
+      ...extraTabs,
     ],
     [
       browserAvailable,
-      businessTabs,
+      extraTabs,
       commentsAvailable,
       filesAvailable,
       isHetero,
@@ -513,8 +545,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const pinnedTabsAgentKey = activeAgentId ?? 'default';
   const defaultOpenedTabs = useMemo(
     () =>
-      [filesAvailable ? 'files' : undefined, 'skills', isHetero ? undefined : 'documents'].filter(
-        (tab): tab is string => Boolean(tab) && isAvailableTab(tab!),
+      [filesAvailable && 'files', 'skills', isHetero ? 'claudeMemory' : 'documents'].filter(
+        (tab): tab is string => !!tab && isAvailableTab(tab),
       ),
     [filesAvailable, isAvailableTab, isHetero],
   );
@@ -885,7 +917,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       'skills',
       'documents',
       'web',
-      ...businessTabs.map((tab) => tab.key),
+      ...extraTabs.map((tab) => tab.key),
     ]);
     const toolChildren = [itemOf('browser')].filter((item): item is DropdownItem => Boolean(item));
     if (terminalAvailable) {
@@ -915,7 +947,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       );
   }, [
     availableTabs,
-    businessTabs,
+    extraTabs,
     openBrowserTab,
     openTab,
     openedTabs,
@@ -925,13 +957,15 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
   ]);
 
-  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - 32);
+  // The floating card keeps a 16px margin on each side; the docked panel has none.
+  const overviewGutter = imLayout ? 0 : 32;
+  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - overviewGutter);
   const overviewPanel = (
     <OverviewSlot>
       <AnimatePresence initial={false}>
         {showWorkingOverview && overviewFits && (
           <m.div
-            animate={{ width: overviewWidth + 32 }}
+            animate={{ width: overviewWidth + overviewGutter }}
             className={styles.overviewSlot}
             exit={{ transition: overviewExitTransition, width: 0 }}
             initial={{ width: 0 }}
@@ -939,7 +973,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           >
             <m.div
               animate={{ opacity: 1, x: 0 }}
-              className={styles.overviewPanel}
+              className={cx(styles.overviewPanel, imLayout && styles.overviewPanelDocked)}
               exit={{ opacity: 0, transition: overviewExitTransition, x: 12 }}
               initial={{ opacity: 0, x: 12 }}
               role={'complementary'}
@@ -1139,7 +1173,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     );
                   }}
                 />
-                {businessTabs.map((tab) => (
+                {extraTabs.map((tab) => (
                   <Flexbox
                     className={activeTab === tab.key ? styles.pane : styles.paneHidden}
                     key={tab.key}

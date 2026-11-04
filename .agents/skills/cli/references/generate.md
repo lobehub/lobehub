@@ -9,7 +9,10 @@ Generate text, images, videos, speech, and transcriptions.
 ```
 lh generate (alias: gen)
 ├── text <prompt>                          # Text generation
+├── json <prompt>                          # Structured output (JSON Schema)
+├── decide [state]                         # Decision model: typed questions → probabilities
 ├── image <prompt>                         # Image generation
+├── image-params                           # Parameters an image model accepts
 ├── video <prompt>                         # Video generation
 ├── tts <text>                             # Text-to-speech
 ├── asr <audio-file>                       # Audio-to-text (speech recognition)
@@ -90,6 +93,39 @@ rejected up front.
 
 ---
 
+## `lh generate decide [state]` / `lh gen decide [state]`
+
+Ask a decision model (e.g. Jev) typed questions about one state. Each answer comes back as a probability,
+not generated text: `boolean` → `probability`, `choice` → the picked option with `probabilities`, `score`
+→ a rubric level.
+
+**Source**: `apps/cli/src/commands/generate/decide.ts`
+
+```bash
+lh gen decide [state] -m <model> -q <json|path> [-p <provider>] [--state-file <path>] [--pipe]
+```
+
+```bash
+lh gen decide "Newest message: is the queue mode ready?" -m lobehub/jev-1.14.0 \
+  -q '{"addressed":{"type":"boolean","instructions":"Is the message directed at the assistant?"}}'
+```
+
+| Option                         | Description                                                             | Default |
+| ------------------------------ | ----------------------------------------------------------------------- | ------- |
+| `-m, --model <model>`          | Decision model ID, `provider/model` (required)                          | -       |
+| `-p, --provider <provider>`    | Provider name                                                           | -       |
+| `-q, --questions <json\|path>` | Question name → `{type, instructions, criteria}`, inline or from a file | -       |
+| `--state-file <path>`          | Read the state from a file instead of the argument                      | -       |
+| `--pipe`                       | Read the state (or more of it) from stdin                               | `false` |
+
+Question shapes mirror `DecisionQuestion` in `@lobechat/model-runtime`: `boolean` takes optional
+`criteria: {true, false}`, `choice` takes `criteria: {option: guidance | null}`, `score` takes
+`criteria: [level0, level1, ...]`. The command calls the `aiChat.decide` mutation, the same
+`runtime.decide` path bot wake and channel routing use, so a prompt can be replayed on the production
+model. A provider without a decision endpoint fails with `CapabilityNotSupported` and exit code 1.
+
+---
+
 ## `lh generate image <prompt>` / `lh gen image <prompt>`
 
 Generate images from text prompt. This is an async operation — the command submits the task and returns a generation ID + async task ID for tracking.
@@ -97,28 +133,35 @@ Generate images from text prompt. This is an async operation — the command sub
 **Source**: `apps/cli/src/commands/generate/image.ts`
 
 ```bash
-lh gen image <prompt> [-m <model>] [-p <provider>] [-n <n>] [--width <px>] [--height <px>] [--steps <n>] [--seed <n>] [--json]
+lh gen image <prompt> [-m <model>] [-p <provider>] [-n <n>] [--param <key=value>...] [--width <px>] [--height <px>] [--steps <n>] [--seed <n>] [--json]
 ```
 
 ```bash
-lh gen image "A cute cat" --model dall-e-3 --provider openai --json
+lh gen image "A cute cat" --json
+lh gen image "A cute cat" -m gpt-image-2.5 -p lobehub --param size=1536x1024 --param quality=high
 ```
 
-| Option                      | Description      | Default    |
-| --------------------------- | ---------------- | ---------- |
-| `-m, --model <model>`       | Model ID         | `dall-e-3` |
-| `-p, --provider <provider>` | Provider name    | `openai`   |
-| `-n, --num <n>`             | Number of images | `1`        |
-| `--width <px>`              | Width in pixels  | -          |
-| `--height <px>`             | Height in pixels | -          |
-| `--steps <n>`               | Number of steps  | -          |
-| `--seed <n>`                | Random seed      | -          |
-| `--json`                    | Output raw JSON  | `false`    |
+Without `-m`, the server picks the same default image model as the web image page from the user's enabled image models (`gemini-3.1-flash-image:image`, preferring the `google` provider, otherwise any enabled provider serving it, otherwise the first enabled image model; rule in `src/utils/defaultImageModel.ts`). With only `-m`, the server uses the first enabled provider serving that model. The non-JSON output prints the model that was used.
+
+Parameters are model-specific: list them with `lh gen image-params -m <model> -p <provider>`. The server rejects parameters the model does not declare (for example `width`/`height` on gpt-image models, which take `size`) and empty prompts, before the task is queued or charged.
+
+| Option                      | Description                                                    | Default                              |
+| --------------------------- | -------------------------------------------------------------- | ------------------------------------ |
+| `-m, --model <model>`       | Model ID                                                       | Web image page default (server-side) |
+| `-p, --provider <provider>` | Provider name                                                  | First enabled provider for the model |
+| `-n, --num <n>`             | Number of images                                               | `1`                                  |
+| `--param <key=value>`       | Model parameter, repeatable; values parse as JSON, else string | -                                    |
+| `--width <px>`              | Shortcut for `--param width=<px>`                              | -                                    |
+| `--height <px>`             | Shortcut for `--param height=<px>`                             | -                                    |
+| `--steps <n>`               | Shortcut for `--param steps=<n>`                               | -                                    |
+| `--seed <n>`                | Shortcut for `--param seed=<n>`                                | -                                    |
+| `--json`                    | Output raw JSON                                                | `false`                              |
 
 **Output** (non-JSON):
 
 ```
 ✓ Image generation started
+  Model: lobehub/gemini-3.1-flash-image:image
   Batch ID: gb_xxx
   1 image(s) queued
   Generation gen_xxx → Task 7ad0eb13-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -138,6 +181,24 @@ lh gen image "A cute cat"
 # 2. Wait & download using generationId + asyncTaskId (the UUID)
 lh gen download gen_abc123 7ad0eb13-e9a5-4403-8070-1f7fe95b2f95 -o cat.png
 ```
+
+---
+
+## `lh generate image-params` / `lh gen image-params`
+
+Show the parameters an image model declares, with allowed values and defaults.
+
+**Source**: `apps/cli/src/commands/generate/image.ts`
+
+```bash
+lh gen image-params -m <model> -p <provider> [--json]
+```
+
+| Option                      | Description                     | Required |
+| --------------------------- | ------------------------------- | -------- |
+| `-m, --model <model>`       | Model ID                        | Yes      |
+| `-p, --provider <provider>` | Provider name                   | Yes      |
+| `--json`                    | Output the raw parameter schema | No       |
 
 ---
 
@@ -202,16 +263,29 @@ Text-to-speech generation.
 **Source**: `apps/cli/src/commands/generate/tts.ts`
 
 ```bash
-lh gen tts <text> [-o <file>] [--voice <voice>] [--speed <n>] [-m <model>] [-p <provider>]
+lh gen tts <text> [-o <file>] [--voice <voice>] [-m <model>] [-p <provider>] \
+  [--speed <n>] [--pitch <n>] [--volume <n>] [--emotion <e>] [--format <f>] \
+  [--sample-rate <hz>] [--instructions <text>] [--params <json>]
 ```
 
-| Option                      | Description                              | Default      |
-| --------------------------- | ---------------------------------------- | ------------ |
-| `-o, --output <file>`       | Output audio file path                   | `output.mp3` |
-| `--voice <voice>`           | Voice name                               | `alloy`      |
-| `--speed <n>`               | Speed multiplier (0.25-4.0)              | `1`          |
-| `-m, --model <model>`       | Model ID (`provider/model` supported)    | `tts-1`      |
-| `-p, --provider <provider>` | Provider (derived from model if omitted) | `openai`     |
+| Option                      | Description                                                  | Default               |
+| --------------------------- | ------------------------------------------------------------ | --------------------- |
+| `-o, --output <file>`       | Output audio file path                                       | `output.<format>`     |
+| `--voice <voice>`           | Voice id from the model card's `voices`                      | model's default voice |
+| `--speed <n>`               | Speed multiplier                                             | model default         |
+| `--pitch <n>`               | Pitch adjustment (provider-specific unit)                    | model default         |
+| `--volume <n>`              | Volume adjustment (provider-specific unit)                   | model default         |
+| `--emotion <emotion>`       | Emotion, e.g. `happy`                                        | model default         |
+| `--format <format>`         | `mp3`, `opus`, `aac` (compressed only: audio returns inline) | `mp3`                 |
+| `--sample-rate <hz>`        | Output sample rate                                           | model default         |
+| `--instructions <text>`     | Style instructions (e.g. `gpt-4o-mini-tts`)                  | —                     |
+| `--params <json>`           | Standard TTS params as JSON; dedicated flags override it     | —                     |
+| `-m, --model <model>`       | Model ID (`provider/model` supported)                        | `tts-1`               |
+| `-p, --provider <provider>` | Provider (derived from model if omitted)                     | `openai`              |
+
+Params are standard TTS parameters (`TTSModelParamsMetaSchema` in model-bank). The server
+rejects params the model card does not declare or values outside its range. On success the
+command prints the file size plus usage (characters, tokens, cost) when the provider reports it.
 
 Uses the selected provider's saved configuration through ModelRuntime, with the same
 authenticated tRPC client as `lh gen asr`.

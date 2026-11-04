@@ -1,5 +1,4 @@
-import { DraggablePanel, type DraggablePanelProps, Drawer } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, DraggablePanel, type DraggablePanelProps, Drawer } from '@lobehub/ui';
 import { memo, Suspense, useState } from 'react';
 
 import SurfaceSkeleton from '@/components/Skeleton/Surface';

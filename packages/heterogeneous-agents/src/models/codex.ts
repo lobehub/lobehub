@@ -4,6 +4,7 @@ import type { HeterogeneousAgentModel } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
 import { CodexAppServerClient, CodexAppServerRpcError } from '../codex/CodexAppServerClient';
+import { resolveHeteroSpawnCwd } from '../spawn/workingDirectory';
 
 interface CodexModelCatalogOptions {
   args?: string[];
@@ -62,6 +63,8 @@ export const listCodexModels = async ({
   const config = catalogConfig(args, cwd);
   const client = new CodexAppServerClient({
     ...config,
+    // Discovery can use the host default when a saved project directory is gone.
+    cwd: resolveHeteroSpawnCwd(config.cwd) ?? process.cwd(),
     clientVersion: '1.0.0',
     commandPath,
     env,

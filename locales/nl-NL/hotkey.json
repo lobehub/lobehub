@@ -43,6 +43,8 @@
   "switchAgent.title": "Snel Wisselen van Agent",
   "switchTab.desc": "Spring naar een specifiek tabblad op basis van zijn positie (1–9) in de tabbladenbalk van de Desktop-app",
   "switchTab.title": "Schakel naar Tabblad op Nummer",
+  "toggleFavorite.desc": "Voeg de geopende pagina toe aan de sectie Favorieten in de zijbalk, of verwijder deze",
+  "toggleFavorite.title": "Toevoegen aan / Verwijderen uit Favorieten",
   "toggleLeftPanel.desc": "Toon of verberg het linker paneel",
   "toggleLeftPanel.title": "Linker Paneel Wisselen",
   "toggleRightPanel.desc": "Toon of verberg het rechter paneel",

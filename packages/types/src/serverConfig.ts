@@ -25,30 +25,35 @@ export type IFeatureFlagsState = {
    */
   enableAgentShare: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
+  /**
+   * Multi-agent Channels (`channel`). Off by default: the sidebar section and Channel pages are
+   * hidden and the Channel APIs answer FORBIDDEN.
+   */
+  enableChannels: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   /**
-   * Dashboards and the `lobe-dashboard` agent tool (`dashboard`). Off by
+   * Dashboards and the `builtin-dashboard` agent tool (`dashboard`). Off by
    * default: the pages, Portal view, in-chat previews and the tool are hidden
    * and the widget / dashboard APIs answer FORBIDDEN.
    */
   enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
-   * Rollout gate for the multiplexed gateway socket. Necessary but not
-   * sufficient: the transport also requires
-   * `GlobalServerConfig.agentGatewayProtocol === 2`.
+   * Rail layout trial (`im_layout`): icon rail, IM-style Messages list,
+   * Contacts, Tasks scope list and the agent profile side panel. Off keeps the
+   * current sidebar layout.
    */
-  enableGatewayMux: boolean | undefined;
+  enableImLayout: boolean | undefined;
+  /**
+   * New subscription tiers (`new_tier_plans`). Off by default: the plans page keeps
+   * selling the current tiers; listed users see and can buy the new tiers instead.
+   */
+  enableNewTierPlans: boolean | undefined;
   /**
    * LobeHub Mobile rollout gate for the multiplexed gateway socket and
-   * protocol-v2 payloads; independent from `enableGatewayMux`.
+   * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
    */
   enableGatewayMuxMobile: boolean | undefined;
-  /**
-   * Rollout gate for the bot-wake pipeline (`bot_wake`), evaluated for the bot's owner. Read only
-   * by the server; it is part of the state because the two flag types must not drift apart.
-   */
-  enableBotWake: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
   /**
    * Rollout gate for relaying LLM calls of device-only model providers to the
@@ -60,6 +65,8 @@ export type IFeatureFlagsState = {
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  /** Hover previews of a topic's final answer (`topic_preview`). */
+  enableTopicPreview: boolean | undefined;
   enableVoiceDictation: boolean | undefined;
   enableWorkspace: boolean | undefined;
   hideDocs: boolean | undefined;
@@ -160,6 +167,8 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableMultimodalUnderstanding?: boolean;
+  /** Pages collaborate live through the gateway's document rooms (LobeHub Cloud). */
+  enablePageCollab?: boolean;
   enableUploadFileToServer?: boolean;
   image?: PartialDeep<UserImageConfig>;
   /**
@@ -177,6 +186,11 @@ export interface GlobalServerConfig {
    * reverse proxy or on desktop.
    */
   oidcIssuer?: string;
+  /**
+   * The sandbox the page agent edits pages in: Market (needs the user's Market
+   * authorization unless the trusted client is configured), Onlyboxes, or none.
+   */
+  sandbox?: 'market' | 'onlyboxes' | 'unconfigured';
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;

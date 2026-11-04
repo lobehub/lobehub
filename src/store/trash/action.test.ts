@@ -12,11 +12,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheScope, createReplicaState } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { trashService, type TrashViewFilter } from '@/services/trash';
+import { channelActions } from '@/store/channel';
 
 import { TrashEmptyScopeChangedError } from './action';
 import type { TrashListData } from './initialState';
 import { initialState } from './initialState';
-import { trashListKey } from './projection';
+import { trashCountKey, trashListKey } from './projection';
 import { trashSelectors } from './selectors';
 import { useTrashStore } from './store';
 
@@ -29,6 +30,10 @@ vi.mock('@/libs/swr/useCacheScope', () => ({
   getCacheScope: () => 'u1:personal',
   isScopeTrusted: () => true,
   useCacheScope: () => 'u1:personal',
+}));
+
+vi.mock('@/store/channel', () => ({
+  channelActions: { forgetThreadRemovals: vi.fn() },
 }));
 
 vi.mock('@/services/trash', () => ({
@@ -78,7 +83,7 @@ const seed = (items: TrashItem[], filter: TrashViewFilter = {}) =>
 const ids = (filter: TrashViewFilter = {}) =>
   useTrashStore.getState().trashListMap[trashListKey(filter)]?.items.map((i) => i.id) ?? [];
 
-const syncKey = (name: string, key: string) => ['replica:sync', name, 2, 'u1:personal', key, {}];
+const syncKey = (name: string, key: string) => ['replica:sync', name, 3, 'u1:personal', key, {}];
 
 describe('TrashAction', () => {
   beforeEach(() => {
@@ -118,6 +123,21 @@ describe('TrashAction', () => {
       expect(restored('not-an-array')).toBe(false);
     });
 
+    it('lets the Channel store show restored threads again before the sweep', async () => {
+      vi.mocked(trashService.restore).mockResolvedValue({
+        failed: [],
+        restored: [
+          buildItem(),
+          buildItem({ id: 'trash_2', resourceId: 'thread_1', resourceType: 'channelThread' }),
+        ],
+      });
+      await useTrashStore.getState().restore(['trash_1', 'trash_2']);
+      expect(channelActions.forgetThreadRemovals).toHaveBeenCalledWith(['thread_1']);
+      expect(
+        vi.mocked(channelActions.forgetThreadRemovals).mock.invocationCallOrder[0],
+      ).toBeLessThan(vi.mocked(mutate).mock.invocationCallOrder.at(-1)!);
+    });
+
     it('also drops rows the server reported as already gone', async () => {
       vi.mocked(trashService.restore).mockResolvedValue({
         failed: [{ code: 'notFound', id: 'trash_1' }],
@@ -150,14 +170,36 @@ describe('TrashAction', () => {
 
   describe('purge / emptyTrash', () => {
     it('purge removes the rows from the active view', async () => {
-      vi.mocked(trashService.purge).mockResolvedValue({ purged: 1 });
+      vi.mocked(trashService.purge).mockResolvedValue({ blocked: [], purged: 1 });
       await useTrashStore.getState().purge(['trash_1']);
       expect(trashService.purge).toHaveBeenCalledWith(['trash_1']);
       expect(ids()).toEqual(['trash_2']);
     });
 
+    it('purge keeps a row the server could not delete yet and reports it', async () => {
+      vi.mocked(trashService.purge).mockResolvedValue({ blocked: ['trash_2'], purged: 1 });
+      const outcome = await useTrashStore.getState().purge(['trash_1', 'trash_2']);
+      expect(outcome).toEqual({ blocked: ['trash_2'], purged: 1 });
+      expect(ids()).toEqual(['trash_2']);
+    });
+
+    it('emptyTrash leaves the view in place when roots stayed in the bin', async () => {
+      vi.mocked(trashService.emptyTrash).mockResolvedValue({
+        blocked: 1,
+        hasMore: false,
+        purged: 1,
+      });
+      expect(await useTrashStore.getState().emptyTrash({})).toEqual({ blocked: 1 });
+      // The refresh that follows reloads what is still in the bin; nothing is collapsed here.
+      expect(ids()).toEqual(['trash_1', 'trash_2']);
+    });
+
     it('emptyTrash sweeps the given view in the scope it started in and clears it', async () => {
-      vi.mocked(trashService.emptyTrash).mockResolvedValue({ hasMore: false, purged: 2 });
+      vi.mocked(trashService.emptyTrash).mockResolvedValue({
+        blocked: 0,
+        hasMore: false,
+        purged: 2,
+      });
       const filter = { projectId: 'proj_a', resourceType: 'topic' } as const;
       seed([buildItem({ id: 'topic_only', resourceType: 'topic' })], filter);
       await useTrashStore.getState().emptyTrash(filter);
@@ -168,9 +210,9 @@ describe('TrashAction', () => {
 
     it('emptyTrash keeps calling while the server reports more batches', async () => {
       vi.mocked(trashService.emptyTrash)
-        .mockResolvedValueOnce({ hasMore: true, purged: 50 })
-        .mockResolvedValueOnce({ hasMore: true, purged: 50 })
-        .mockResolvedValueOnce({ hasMore: false, purged: 7 });
+        .mockResolvedValueOnce({ blocked: 0, hasMore: true, purged: 50 })
+        .mockResolvedValueOnce({ blocked: 0, hasMore: true, purged: 50 })
+        .mockResolvedValueOnce({ blocked: 0, hasMore: false, purged: 7 });
       await useTrashStore.getState().emptyTrash({});
       expect(trashService.emptyTrash).toHaveBeenCalledTimes(3);
       expect(ids()).toEqual([]);
@@ -192,9 +234,9 @@ describe('TrashAction', () => {
           useTrashStore
             .getState()
             .setFilter({ projectId: null, resourceType: 'agent' }, 'u1:personal');
-          return { hasMore: true, purged: 50 };
+          return { blocked: 0, hasMore: true, purged: 50 };
         })
-        .mockResolvedValueOnce({ hasMore: false, purged: 1 });
+        .mockResolvedValueOnce({ blocked: 0, hasMore: false, purged: 1 });
 
       await useTrashStore.getState().emptyTrash(started);
 
@@ -214,9 +256,9 @@ describe('TrashAction', () => {
       useTrashStore.setState({
         projectSelection: { projectId: 'proj_a', scope: 'u1:personal' },
         trashCountMap: {
-          'all': { topic: 9 },
-          'project:proj_a': { topic: 1 },
-          'project:proj_b': { topic: 4 },
+          [trashCountKey()]: { topic: 9 },
+          [trashCountKey(active)]: { topic: 1 },
+          [trashCountKey(other)]: { topic: 4 },
         },
         trashListMap: {
           [trashListKey(active)]: view([buildItem({ id: 'in_a' })]),
@@ -227,10 +269,14 @@ describe('TrashAction', () => {
 
       await useTrashStore.getState().purge(['in_a']);
       // Other views' counts are unknown now (not stale numbers); their rows stay.
-      expect(Object.keys(useTrashStore.getState().trashCountMap)).toEqual(['project:proj_a']);
+      expect(Object.keys(useTrashStore.getState().trashCountMap)).toEqual([trashCountKey(active)]);
       expect(ids(other)).toEqual(['in_b']);
 
-      vi.mocked(trashService.emptyTrash).mockResolvedValue({ hasMore: false, purged: 1 });
+      vi.mocked(trashService.emptyTrash).mockResolvedValue({
+        blocked: 0,
+        hasMore: false,
+        purged: 1,
+      });
       await useTrashStore.getState().emptyTrash(active);
       expect(Object.keys(useTrashStore.getState().trashListMap)).toEqual([trashListKey(active)]);
     });
@@ -241,7 +287,7 @@ describe('TrashAction', () => {
       seed([buildItem()], { projectId: null });
       vi.mocked(trashService.emptyTrash).mockImplementationOnce(async () => {
         scope = 'u1:ws_2';
-        return { hasMore: true, purged: 50 };
+        return { blocked: 0, hasMore: true, purged: 50 };
       });
 
       await expect(useTrashStore.getState().emptyTrash({ projectId: null })).rejects.toBeInstanceOf(
@@ -285,6 +331,21 @@ describe('TrashAction', () => {
       expect(list?.items.map((item) => item.id)).toEqual(['head']);
       expect(list?.currentPage).toBe(0);
       expect(list?.nextCursor).toBe('cursor-1');
+    });
+
+    it('keeps each side of a workspace bin in its own view and remembers the side', () => {
+      expect(trashListKey({ visibility: 'public' })).not.toBe(
+        trashListKey({ visibility: 'private' }),
+      );
+      expect(trashSelectors.activeVisibility(true)(useTrashStore.getState())).toBe('public');
+
+      useTrashStore.getState().setFilter({ visibility: 'private' }, 'u1:ws-1');
+      expect(trashSelectors.activeVisibility(true)(useTrashStore.getState())).toBe('private');
+
+      // A personal view has no side and leaves the workspace side as it was.
+      useTrashStore.getState().setFilter({}, 'u1:personal');
+      expect(trashSelectors.activeVisibility(false)(useTrashStore.getState())).toBeUndefined();
+      expect(trashSelectors.activeVisibility(true)(useTrashStore.getState())).toBe('private');
     });
 
     it('binds a project filter to the scope it was chosen in', () => {

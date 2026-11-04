@@ -1,27 +1,22 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import {
-  Avatar,
+  ActionIcon,
+  Button,
   Center,
   ContextMenuTrigger,
   createStaticStyles,
   cssVar,
+  type DropdownItem,
+  DropdownMenu,
   Empty,
   Flexbox,
   Icon,
   SearchBar,
-  Tooltip,
-} from '@lobehub/ui';
-import {
-  ActionIcon,
-  Button,
-  confirmModal,
-  type DropdownItem,
-  DropdownMenu,
   Text,
   toast,
+  Tooltip,
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
@@ -35,12 +30,14 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import { PROJECT_STATUS_VISUALS, resolveProjectStatus } from '@/components/ExecutionStatus';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
+import { createDeleteProjectModal } from '@/features/Projects/DeleteProjectModal';
 import ProjectDisabled from '@/features/Projects/ProjectDisabled';
 import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
@@ -133,13 +130,17 @@ const ProjectCoordinatorAvatar = memo<{ project: ProjectListItem }>(({ project }
     <span className={styles.owner}>
       {coordinatorAgent && label ? (
         <Tooltip title={label}>
-          <Avatar
-            avatar={coordinatorAgent.avatar || DEFAULT_AVATAR}
-            background={coordinatorAgent.backgroundColor || cssVar.colorBgContainer}
-            shape={'circle'}
-            size={20}
-            variant={'outlined'}
-          />
+          <span style={{ display: 'inline-flex' }}>
+            <AgentAvatar
+              agentId={project.coordinatorAgentId}
+              avatar={coordinatorAgent.avatar}
+              background={coordinatorAgent.backgroundColor || cssVar.colorBgContainer}
+              name={label}
+              shape={'circle'}
+              size={20}
+              variant={'outlined'}
+            />
+          </span>
         </Tooltip>
       ) : (
         // Rows without joined meta (a cleared main agent, which resolves to LobeAI,
@@ -164,12 +165,12 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
     setDeleting(true);
     try {
       await deleteProject(project.id);
-      toast.success(t('list.deleteSuccess', { name: project.name }));
     } catch (error) {
-      console.error('Failed to delete project', error);
-      toast.error(t('list.deleteError'));
+      // On success the row unmounts, so only a failure re-enables it.
       setDeleting(false);
+      throw error;
     }
+    toast.success(t('list.deleteSuccess', { name: project.name }));
   };
 
   const menuItems: DropdownItem[] = [
@@ -179,13 +180,9 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
       key: 'delete',
       label: t('list.deleteAction'),
       onClick: () => {
-        confirmModal({
-          cancelText: t('cancel', { ns: 'common' }),
-          content: t('list.deleteConfirmDescription', { name: project.name }),
-          okButtonProps: { danger: true },
-          okText: t('delete', { ns: 'common' }),
-          onOk: () => void handleDelete(),
-          title: t('list.deleteConfirmTitle'),
+        createDeleteProjectModal({
+          onConfirm: handleDelete,
+          project: { id: project.id, name: project.name },
         });
       },
     },

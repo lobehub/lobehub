@@ -7,6 +7,7 @@ export interface DeviceHoverSummary {
   /** Live connections; only meaningful while online. */
   connections: number;
   cores?: number;
+  diskTotalBytes?: number;
   /**
    * Who enrolled a workspace device. `null` names an enroller the list could
    * not resolve; `undefined` means the row has no enroller to show.
@@ -37,6 +38,7 @@ export const buildDeviceHoverSummary = (
     architecture: device.architecture || undefined,
     connections: channels.length,
     cores: series?.cpuCount || undefined,
+    diskTotalBytes: series?.diskTotalBytes || undefined,
     enrollerName:
       device.scope === 'workspace' && device.enroller
         ? device.enroller.fullName || device.enroller.username || null

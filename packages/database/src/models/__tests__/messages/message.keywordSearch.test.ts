@@ -36,6 +36,10 @@ beforeEach(async () => {
     { id: 'kw-task', title: 'T-472 daily report', trigger: 'task', userId },
     { id: 'kw-eval', title: 'BrowseComp', trigger: 'eval', userId },
     { id: 'kw-doc', title: 'Doc chat', trigger: 'document', userId },
+    // Verifier topics: no trigger, but always started under a task.
+    { id: 'kw-verify', metadata: { taskId: 'task_kw' }, title: 'Check to verify', userId },
+    // A plain chat that happens to have no trigger stays searchable.
+    { id: 'kw-legacy', title: 'Legacy chat', userId },
   ]);
 });
 
@@ -147,6 +151,44 @@ describe('MessageModel.searchByKeyword', () => {
 
     const byAgent = await messageModel.searchByKeyword({ ...range, agentId: 'kw-agent' });
     expect(byAgent.items.map(({ id }) => id)).toEqual(['kw-in']);
+  });
+
+  it('hides acceptance verifier prompts, which run in trigger-less task topics', async () => {
+    const messageModel = await seed([
+      {
+        content: '## Check to verify checkItemId: x — goal STAMP',
+        id: 'kw-verify-prompt',
+        role: 'user',
+        topicId: 'kw-verify',
+        userId,
+      },
+      {
+        content: 'STAMP check passed',
+        id: 'kw-verify-reply',
+        role: 'assistant',
+        topicId: 'kw-verify',
+        userId,
+      },
+      {
+        content: 'what is STAMP',
+        id: 'kw-legacy-prompt',
+        role: 'user',
+        topicId: 'kw-legacy',
+        userId,
+      },
+    ]);
+
+    const visible = await messageModel.searchByKeyword({ keyword: 'STAMP' });
+    expect(visible.items.map(({ id }) => id).sort()).toEqual([
+      'kw-legacy-prompt',
+      'kw-verify-reply',
+    ]);
+
+    const all = await messageModel.searchByKeyword({
+      includeAutomatedPrompts: true,
+      keyword: 'STAMP',
+    });
+    expect(all.items.map(({ id }) => id)).toContain('kw-verify-prompt');
   });
 
   it('hides system-written prompts of automation topics unless asked', async () => {

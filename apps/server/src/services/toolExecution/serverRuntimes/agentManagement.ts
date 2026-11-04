@@ -7,6 +7,7 @@ import {
   type GetAgentDetailParams,
   type InstallPluginParams,
   type SearchAgentParams,
+  type SearchMarketToolsParams,
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
@@ -28,6 +29,7 @@ import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
 import { startBackgroundSubAgent } from './backgroundSubAgent';
+import { searchMarketTools } from './marketToolSearch';
 import {
   NEXT_RUN_NOTE,
   resolveOrInstallMarketPlugin,
@@ -441,6 +443,9 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           return handleError(error, 'Failed to search agents');
         }
       },
+
+      searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
+        searchMarketTools({ discoverService, pluginModel }, params),
 
       updateAgent: async (params: UpdateAgentParams): Promise<ToolExecutionResult> => {
         try {

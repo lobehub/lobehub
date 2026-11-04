@@ -219,7 +219,17 @@ function startHeteroAgentRun(
       // task — a newer run that reused the same operationId must not be
       // cleared by a stale exit event.
       if (pid !== undefined && getTask(operationId)?.pid === pid) {
-        removeTask(operationId);
+        // The wrapper can exit before a background tool. Keep its process-group
+        // identity until cancellation can confirm all descendants have exited.
+        let groupExited = process.platform === 'win32';
+        if (!groupExited) {
+          try {
+            process.kill(-pid, 0);
+          } catch (error) {
+            groupExited = (error as NodeJS.ErrnoException).code === 'ESRCH';
+          }
+        }
+        if (groupExited) removeTask(operationId);
       }
       logger?.info?.(`hetero exec exited (op=${operationId}) code=${code} signal=${signal}`);
     });

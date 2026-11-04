@@ -1,3 +1,7 @@
+/** Decision model selecting the Agents that reply in a channel. */
+export const DEFAULT_CHANNEL_ROUTING_MODEL = 'jev-1.14.0';
+export const DEFAULT_CHANNEL_ROUTING_PROVIDER = 'typesafe';
+
 export const DEFAULT_EMBEDDING_PROVIDER = 'openai';
 
 export const DEFAULT_MODEL = 'deepseek-v4-flash';

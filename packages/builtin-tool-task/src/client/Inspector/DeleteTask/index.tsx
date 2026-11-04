@@ -29,10 +29,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export const DeleteTaskInspector = memo<BuiltinInspectorProps<DeleteTaskParams, DeleteTaskState>>(
-  ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+  ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
     const { t } = useTranslation('plugin');
 
-    const identifier = args?.identifier || partialArgs?.identifier;
+    const identifier = pluginState?.identifier ?? args?.identifier ?? partialArgs?.identifier;
 
     return (
       <div className={inspectorTextStyles.root}>

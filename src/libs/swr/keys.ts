@@ -41,6 +41,19 @@ interface LocalFilePreviewKeyParams {
   workingDirectory: string;
 }
 
+export const channelKeys = {
+  agentEnvironment: def(
+    'channel:agentEnvironment',
+    (channelId: string, memberId: string) =>
+      ['channel:agentEnvironment', channelId, memberId] as const,
+  ),
+  userCandidates: def(
+    'channel:userCandidates',
+    (channelId: string | undefined, search: string) =>
+      ['channel:userCandidates', channelId ?? null, search] as const,
+  ),
+};
+
 // ---- message ------------------------------------------------------------
 export interface MessageListQueryContext {
   agentId?: string | null;
@@ -261,8 +274,6 @@ export const goalKeys = {
   pendingClarifications: def('goal:pendingClarifications', () => ['goal:pendingClarifications']),
   /** Gates and sign-offs waiting on the user across every goal, for the approval island. */
   pendingForIsland: def('goal:pendingForIsland', () => ['goal:pendingForIsland']),
-  /** Goals whose planning conversation is this topic (`subject_type = 'topic'`). */
-  topicGoals: def('goal:topicGoals', (topicId: string) => ['goal:topicGoals', topicId]),
 };
 
 // ---- work ---------------------------------------------------------------
@@ -479,6 +490,8 @@ export const userMemoryKeys = {
     taskId,
   ]),
   contexts: def('userMemory:contexts', (params: unknown) => ['userMemory:contexts', params]),
+  contextStories: def('userMemory:contextStories', () => ['userMemory:contextStories']),
+  contextStory: def('userMemory:contextStory', (id: string) => ['userMemory:contextStory', id]),
   experiences: def('userMemory:experiences', (params: unknown) => [
     'userMemory:experiences',
     params,
@@ -730,6 +743,11 @@ export const inboxKeys = {
     'inbox:unreadCount',
     workspaceId,
   ]),
+  /** Desktop mention-banner watcher: unread `mention` rows of the active workspace. */
+  unreadMentions: def('inbox:unreadMentions', (workspaceId: string | null) => [
+    'inbox:unreadMentions',
+    workspaceId,
+  ]),
 };
 
 // ---- share (shared agent / topic / page) ---------------------------------
@@ -764,6 +782,7 @@ export const shareKeys = {
     agentId,
   ]),
   artifact: def('share:artifact', (id: string) => ['share:artifact', id]),
+  file: def('share:file', (shareId: string) => ['share:file', shareId]),
   pageDocument: def('share:pageDocument', (documentId: string) => [
     'share:pageDocument',
     documentId,
@@ -782,6 +801,21 @@ export const forkKeys = {
 
 // ---- local file ---------------------------------------------------------
 export const localFileKeys = {
+  claudeCodeMemory: def(
+    'localFile:claudeCodeMemory',
+    (
+      deviceId: string | undefined,
+      workingDirectory: string,
+      configDir?: string,
+      projectDirName?: string,
+    ) => [
+      'localFile:claudeCodeMemory',
+      deviceId ?? 'local',
+      workingDirectory,
+      configDir ?? '',
+      projectDirName ?? '',
+    ],
+  ),
   gitWorkingTreeFiles: def(
     'localFile:gitWorkingTreeFiles',
     (deviceId: string | undefined, dirPath: string) => [
@@ -827,6 +861,10 @@ export const favoriteKeys = {
 };
 
 // ---- changelog ----------------------------------------------------------
+export const canvasKeys = {
+  storage: def('canvas:storage', () => ['canvas:storage']),
+};
+
 export const changelogKeys = {
   modalIndex: def('changelog:modalIndex', () => ['changelog:modalIndex']),
   post: def('changelog:post', (id: string, locale: string) => ['changelog:post', id, locale]),
@@ -865,13 +903,31 @@ export const agentSignalKeys = {
   ]),
 };
 
+// ---- bot wake records (one bot's judged messages; never persisted) ----
+export const botWakeKeys = {
+  decisions: def(
+    'botWake:decisions',
+    (
+      botId: string,
+      filters: { followupOnly: boolean; outcome?: string; unmarkedOnly: boolean },
+      page: number,
+    ) => [
+      'botWake:decisions',
+      botId,
+      filters.outcome ?? null,
+      filters.followupOnly,
+      filters.unmarkedOnly,
+      page,
+    ],
+  ),
+  summary: def('botWake:summary', (botId: string) => ['botWake:summary', botId]),
+};
+
 // ---- misc UI singletons -------------------------------------------------
 export const ollamaKeys = {
   downloadModel: def('ollama:downloadModel', (model: string) => ['ollama:downloadModel', model]),
 };
 export const authKeys = {
-  oauthAppById: def('auth:oauthAppById', (id: string) => ['auth:oauthAppById', id]),
-  oauthAppList: def('auth:oauthAppList', () => ['auth:oauthAppList']),
   oidcClientMetadata: def('auth:oidcClientMetadata', (clientId: string) => [
     'auth:oidcClientMetadata',
     clientId,
@@ -919,6 +975,7 @@ export const imessageKeys = {
 export const electronKeys = {
   /** Claude Code logins held on this machine (device-local, never persisted). */
   claudeCodeAccounts: def('electron:claudeCodeAccounts', () => ['electron:claudeCodeAccounts']),
+  appMenu: def('electron:getAppMenu', () => ['electron:getAppMenu']),
   appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
   desktopHotkeys: def('electron:getDesktopHotkeys', () => ['electron:getDesktopHotkeys']),
   gatewayDeviceInfo: def('electron:getGatewayDeviceInfo', () => ['electron:getGatewayDeviceInfo']),
@@ -948,6 +1005,7 @@ export const swrKeys = {
   agentSignal: agentSignalKeys,
   auth: authKeys,
   brief: briefKeys,
+  canvas: canvasKeys,
   changelog: changelogKeys,
   cron: cronKeys,
   device: deviceKeys,

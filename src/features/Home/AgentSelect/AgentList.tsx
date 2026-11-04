@@ -16,9 +16,8 @@ import { PinIcon, SearchIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncBoundary from '@/components/AsyncBoundary';
-import Avatar from '@/components/Avatar';
-import { DEFAULT_AVATAR } from '@/const/meta';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
@@ -169,16 +168,16 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
         <div className={styles.empty}>{t('navPanel.searchResultEmpty')}</div>
       ) : (
         <DropdownMenuScrollViewport
-          getItemLabel={(_, index) => {
-            const item = rows[index];
-            return item?.kind === 'agent' ? item.row.title : undefined;
-          }}
           // virtua sizes itself on mount; remount when the filtered count changes
           // so a narrowed list never leaves stale rows undrawn.
           virtual
           key={rows.length}
           listItemHeight={ROW_HEIGHT}
           style={{ height: listHeight }}
+          getItemLabel={(_, index) => {
+            const item = rows[index];
+            return item?.kind === 'agent' ? item.row.title : undefined;
+          }}
         >
           {rows.map((item) =>
             item.kind === 'section' ? (
@@ -193,8 +192,9 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
                 key={item.key}
                 onClick={() => onSelect(item.row.id)}
               >
-                <Avatar
-                  avatar={item.row.avatar || DEFAULT_AVATAR}
+                <AgentAvatar
+                  agentId={item.row.id}
+                  avatar={item.row.avatar}
                   background={item.row.backgroundColor}
                   name={item.row.title}
                   shape={'square'}

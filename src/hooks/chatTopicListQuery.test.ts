@@ -9,11 +9,18 @@ const agentStateMock = vi.hoisted(() => ({
   agentMap: {} as Record<string, any>,
   builtinAgentIdMap: { inbox: 'agt_inbox' } as Record<string, string>,
 }));
-const globalStateMock = vi.hoisted(() => ({ topicPageSize: 20 }));
+const globalStateMock = vi.hoisted(() => ({
+  topicOnlyMineByAgent: {} as Record<string, boolean>,
+  topicPageSize: 20,
+}));
 const userStateMock = vi.hoisted(() => ({
   topicGroupMode: 'byTime' as string,
   topicIncludeCompleted: false,
-  topicOnlyMine: false,
+}));
+const workspaceMock = vi.hoisted(() => ({ activeWorkspaceId: 'ws-1' as string | null }));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => workspaceMock.activeWorkspaceId,
 }));
 
 vi.mock('@/store/agent', () => ({ useAgentStore: { getState: () => agentStateMock } }));
@@ -31,7 +38,11 @@ vi.mock('@/store/agent/selectors', () => ({
 vi.mock('@/store/global', () => ({ useGlobalStore: { getState: () => globalStateMock } }));
 
 vi.mock('@/store/global/selectors', () => ({
-  systemStatusSelectors: { topicPageSize: (s: typeof globalStateMock) => s.topicPageSize },
+  systemStatusSelectors: {
+    topicOnlyMine: (ownerId?: string) => (s: typeof globalStateMock) =>
+      !!ownerId && !!s.topicOnlyMineByAgent[ownerId],
+    topicPageSize: (s: typeof globalStateMock) => s.topicPageSize,
+  },
 }));
 
 vi.mock('@/store/user', () => ({ useUserStore: { getState: () => userStateMock } }));
@@ -40,9 +51,6 @@ vi.mock('@/store/user/selectors', () => ({
   preferenceSelectors: {
     topicGroupMode: (s: typeof userStateMock) => s.topicGroupMode,
     topicIncludeCompleted: (s: typeof userStateMock) => s.topicIncludeCompleted,
-  },
-  workspaceUserSettingsSelectors: {
-    topicOnlyMine: () => (s: typeof userStateMock) => s.topicOnlyMine,
   },
 }));
 
@@ -118,10 +126,11 @@ describe('getSidebarTopicListParams', () => {
   beforeEach(() => {
     agentStateMock.activeAgentId = 'agent-1';
     agentStateMock.agentMap = {};
+    globalStateMock.topicOnlyMineByAgent = {};
     globalStateMock.topicPageSize = 20;
     userStateMock.topicGroupMode = 'byTime';
     userStateMock.topicIncludeCompleted = false;
-    userStateMock.topicOnlyMine = false;
+    workspaceMock.activeWorkspaceId = 'ws-1';
   });
 
   it('returns nothing without a session', () => {
@@ -154,10 +163,25 @@ describe('getSidebarTopicListParams', () => {
     expect(getSidebarTopicListParams({ agentId: 'agent-7' })?.sortBy).toBe('status');
   });
 
-  it('carries the workspace only-mine filter into the pre-paint request', () => {
-    userStateMock.topicOnlyMine = true;
+  it("carries the route agent's own only-mine choice into the pre-paint request", () => {
+    globalStateMock.topicOnlyMineByAgent = { 'agent-7': true };
 
     expect(getSidebarTopicListParams({ agentId: 'agent-7' })?.onlyMine).toBe(true);
+    expect(getSidebarTopicListParams({ agentId: 'agent-8' })?.onlyMine).toBeUndefined();
+  });
+
+  it('keys a group session by its group id', () => {
+    globalStateMock.topicOnlyMineByAgent = { grp_1: true };
+
+    expect(getSidebarTopicListParams({ groupId: 'grp_1' })?.onlyMine).toBe(true);
+  });
+
+  /** @example Personal mode has nobody else's topics to hide, whatever the device remembers. */
+  it('ignores a remembered choice outside a workspace', () => {
+    globalStateMock.topicOnlyMineByAgent = { 'agent-7': true };
+    workspaceMock.activeWorkspaceId = null;
+
+    expect(getSidebarTopicListParams({ agentId: 'agent-7' })?.onlyMine).toBeUndefined();
   });
 
   it('never flags a group session as inbox and keeps its default ordering', () => {

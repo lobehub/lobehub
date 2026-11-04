@@ -23,6 +23,7 @@ import { SCM_WRITE_ROLES } from './scope';
  *    (`works.resourceId = owner/repo#number`). Gives topic + agent.
  * 3. The acceptance round that recorded this PR url in its coding context
  *    (`verify_runs.context.pullRequest.url`), written by `lh acceptance run ingest`.
+ *    Fenced by tenant, like 4: whoever ingested the round need not be the author.
  * 4. The acceptance this PR was linked to by hand (`lh acceptance link-pr`,
  *    stored in `acceptances.metadata.pullRequests`). The acceptance already
  *    bound to the row wins over the newest link, so a link that lost the
@@ -275,7 +276,11 @@ export const resolveChangeRequestLinks = async (
     if (!links.topicId && work.originTopicId) links.topicId = work.originTopicId;
   }
 
-  // 3. The acceptance round in this scope that ingested this PR url.
+  // 3. The acceptance round in this scope that ingested this PR url. Like a
+  // hand link, the round is often ingested by someone other than the PR's
+  // author — a teammate verifies, the author opens the PR — so the fence is
+  // the tenant: a workspace round the author can write to, or their own
+  // personal one.
   if (!links.acceptanceId) {
     const [run] = await db
       .select({ acceptanceId: verifyRuns.acceptanceId, workspaceId: verifyRuns.workspaceId })
@@ -283,7 +288,7 @@ export const resolveChangeRequestLinks = async (
       .where(
         and(
           isNotNull(verifyRuns.acceptanceId),
-          inScope(db, verifyRuns, params.scope, pin),
+          inTenantScope(db, verifyRuns, params.scope, pin),
           sql`${verifyRuns.context} -> 'pullRequest' ->> 'url' = ${params.url}`,
         ),
       )

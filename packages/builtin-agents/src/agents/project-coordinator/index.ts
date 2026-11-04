@@ -6,9 +6,10 @@ export interface ProjectCoordinatorContext {
 }
 
 /**
- * Project coordinators are provisioned once per project, so they cannot use a
- * shared reserved builtin slug. Keep their default configuration here with the
- * other product-owned agents, then materialize it into each project's agent row.
+ * The main agent a project creates for itself is provisioned once per project,
+ * so it cannot use a shared reserved builtin slug. Keep its default
+ * configuration here with the other product-owned agents, then materialize it
+ * into the project's agent row.
  *
  * The systemRole only states the role. Everything about the project itself —
  * name, members, linked knowledge, open tasks — is injected live on every turn
@@ -26,5 +27,5 @@ export const createProjectCoordinatorAgentConfig = ({
     'The current project, its member agents, linked knowledge bases and open tasks are provided with each message; rely on them over anything you remember.',
     'Help the user resume work, turn intent into concrete tasks and goals, use project resources, and coordinate project agents.',
   ].join('\n'),
-  title: `${name} Coordinator`,
+  title: `${name} Project Agent`,
 });

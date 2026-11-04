@@ -177,6 +177,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   agent: rw('agent:read', 'agent:write'),
   // bot channel wiring carries channel credentials
   agentBotProvider: 'blocked',
+  // a bot's wake records: channel message previews and the owner's marks, read through the same
+  // bot lookup as agentBotProvider
+  agentBotWake: 'blocked',
   agentDocument: rw('knowledge:read', 'knowledge:write'),
   agentEval: 'blocked',
   agentEvalExternal: 'blocked',
@@ -209,6 +212,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // publish opens a public site from stored files; no key-based client drives canvases
   canvas: 'blocked',
   changelog: 'open',
+  // Sending wakes Agent runs on members' devices; no key-based client drives Channels yet
+  channel: 'blocked',
   chunk: rw('knowledge:read', 'knowledge:write'),
   comfyui: rw('model:read', 'model:write'),
   // third-party integrations hold external credentials
@@ -230,7 +235,12 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   expertise: rw('agent:read', 'agent:write'),
   // whole-account backup dump (settings incl. market tokens, providers, agents)
   exporter: 'blocked',
+  // Personal sidebar shortcuts, like other per-user preferences.
+  favorite: rw('user:read', 'user:write'),
   file: rw('file:read', 'file:write'),
+  // a link share opens one file to anyone holding the link — the same authority
+  // as the file itself
+  fileShare: rw('file:read', 'file:write'),
   followUpAction: rw('chat:read', 'chat:write'),
   generation: { any: 'model:invoke' },
   generationBatch: { any: 'model:invoke' },
@@ -438,6 +448,18 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
 };
 
 /**
+ * Single procedures opened to restricted keys inside a namespace half that is
+ * otherwise closed to them (a `null` side of `rw`). The grant is the base scope
+ * for that one path; the rest of the namespace half stays blocked. Keep entries
+ * narrow and only for procedures that enforce their own authorization.
+ */
+export const TRPC_PROCEDURE_SCOPE_GRANTS: Record<string, ApiKeyScope> = {
+  // a member's workspace title and responsibilities — the procedure still
+  // requires self or Admin, while invite / remove / role changes stay closed
+  'workspaceMember.updateProfile': 'workspace:write',
+};
+
+/**
  * Nested sub-surfaces denied to restricted keys regardless of the parent
  * namespace rule. The namespace table only sees the first path segment, so
  * sensitive subrouters mounted inside an otherwise-scoped namespace must be
@@ -488,7 +510,8 @@ export const requiredApiKeyScopeForTrpc = (
   if (!rule || rule === 'blocked') return { blocked: true };
 
   const base =
-    rule === 'open' ? null : 'any' in rule ? rule.any : type === 'query' ? rule.read : rule.write;
+    TRPC_PROCEDURE_SCOPE_GRANTS[path] ??
+    (rule === 'open' ? null : 'any' in rule ? rule.any : type === 'query' ? rule.read : rule.write);
 
   // a namespace half with no scope grants nothing to restricted keys
   if (rule !== 'open' && !base) return { blocked: true };

@@ -6,6 +6,7 @@ import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 import { resolveAcceptanceForWrite } from '../acceptance';
 import { dispatchAcceptanceRepair } from './acceptanceRepairDispatch';
+import { archiveSignedOffGoalTasks } from './acceptanceStatus';
 
 type GoalBriefContext = Parameters<typeof dispatchAcceptanceRepair>[0] & {
   serverDB: LobeChatDatabase;
@@ -65,6 +66,7 @@ export const applyGoalBriefAction = async (
       action,
       comment,
     );
+    if (action === 'signOff') await archiveSignedOffGoalTasks(ctx.serverDB, acceptance);
     return true;
   }
 

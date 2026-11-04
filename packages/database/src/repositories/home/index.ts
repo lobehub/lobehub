@@ -21,13 +21,21 @@ import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { notShareVisitorTopic } from '../../utils/shareVisitor';
+import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import type { FtsSearchCandidateSource } from '../ftsSearch';
 
 // Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
 // task_manager trigger. These topics are surfaced in their own product surfaces,
 // so counting them here can leave a badge the regular agent topic list cannot clear.
-const HOME_UNREAD_EXCLUDE_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
+const HOME_UNREAD_EXCLUDE_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
+  'cron',
+  'eval',
+  'task_manager',
+  'task',
+  'document',
+];
 
 // Re-export types for backward compatibility
 export type {
@@ -92,6 +100,7 @@ export class HomeRepository {
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
+        forkedFromIdentifier: sql<string | null>`${agents.params}->>'forkedFromIdentifier'`,
         id: agents.id,
         name: agents.name,
         model: agents.model,
@@ -289,6 +298,7 @@ export class HomeRepository {
       avatar: string | null;
       backgroundColor: string | null;
       description: string | null;
+      forkedFromIdentifier: string | null;
       id: string;
       name: string | null;
       model: string | null;
@@ -346,6 +356,7 @@ export class HomeRepository {
           avatar: meta.avatar,
           backgroundColor: a.backgroundColor,
           description: a.description,
+          forkedFromIdentifier: a.forkedFromIdentifier,
           groupId: a.sessionGroupId,
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,

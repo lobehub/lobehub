@@ -15,6 +15,7 @@ import { documents } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import {
   documentOwnership,
@@ -59,27 +60,6 @@ const versionSnapshotSelection = {
   status: workVersions.status,
   title: workVersions.title,
   url: workVersions.url,
-};
-
-const isUniqueViolation = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  const code =
-    typeof error === 'object' && error && 'code' in error
-      ? String((error as { code?: unknown }).code)
-      : '';
-  const cause = error instanceof Error ? error.cause : undefined;
-  const causeCode =
-    typeof cause === 'object' && cause && 'code' in cause
-      ? String((cause as { code?: unknown }).code)
-      : '';
-
-  return (
-    code === '23505' ||
-    causeCode === '23505' ||
-    message.includes('23505') ||
-    message.includes('duplicate') ||
-    message.includes('unique')
-  );
 };
 
 const findVersionByToolCall = async (
@@ -370,6 +350,35 @@ export const setTaskWorksVisibility = async (
           { userId: ctx.userId, workspaceId: ctx.workspaceId },
           { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
         ),
+      ),
+    );
+};
+
+/**
+ * Re-home the Work rows of tasks whose creator changed (a member taking a task
+ * over), in the same transaction as the task write. A task Work's `userId` is
+ * the task owner, so a row left on the previous creator would stay theirs and
+ * drop out of the new owner's lists once the task goes private.
+ *
+ * Scoped by workspace only: the caller is authorized on the tasks, not on the
+ * previous creator's Work rows.
+ */
+export const reassignTaskWorksOwner = async (
+  ctx: WorkContext,
+  taskIds: string[],
+  fromUserId: string,
+): Promise<void> => {
+  if (taskIds.length === 0 || !ctx.workspaceId) return;
+
+  await ctx.db
+    .update(works)
+    .set({ userId: ctx.userId })
+    .where(
+      and(
+        eq(works.resourceType, 'task'),
+        inArray(works.resourceId, taskIds),
+        eq(works.userId, fromUserId),
+        eq(works.workspaceId, ctx.workspaceId),
       ),
     );
 };

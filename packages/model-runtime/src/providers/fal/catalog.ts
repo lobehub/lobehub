@@ -40,9 +40,10 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Delay before retrying a 429: fal's `Retry-After` seconds when sent, else exponential backoff */
 const retryDelay = (response: Response, attempt: number) => {
   const retryAfter = Number(response.headers.get('retry-after'));
-  const delay = Number.isFinite(retryAfter) && response.headers.has('retry-after')
-    ? retryAfter * 1000
-    : 1000 * 2 ** attempt;
+  const delay =
+    Number.isFinite(retryAfter) && response.headers.has('retry-after')
+      ? retryAfter * 1000
+      : 1000 * 2 ** attempt;
   return Math.min(Math.max(delay, 0), MAX_RETRY_DELAY_MS);
 };
 

@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +30,7 @@ const {
       invite: { mutate: vi.fn() },
       list: { query: vi.fn() },
       listInvitations: { query: vi.fn() },
+      updateProfile: { mutate: vi.fn() },
     },
     workspaceUsage: { getCurrentUsage: { query: vi.fn() } },
   },
@@ -73,6 +78,10 @@ describe('workspace command', () => {
     scopedTo(undefined);
     mockResolveIdentityFingerprint.mockReturnValue('user:u1');
     mockGetTrpcClient.mockResolvedValue(mockClient);
+    mockClient.workspace.list.query.mockResolvedValue([
+      { id: 'ws_1', name: 'Acme', role: 'owner', slug: 'acme' },
+      { id: 'ws_9', name: 'Ops', role: 'member', slug: 'ops' },
+    ]);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit');
@@ -213,6 +222,23 @@ describe('workspace command', () => {
       expect(consoleSpy).toHaveBeenCalledWith('No members found.');
     });
 
+    it('resolves a --workspace slug to its id', async () => {
+      mockClient.workspaceMember.list.query.mockResolvedValue([]);
+
+      await run('workspace', 'members', '-w', 'ops');
+
+      expect(mockGetTrpcClient).toHaveBeenLastCalledWith('ws_9');
+    });
+
+    // Passing an unknown value through would hit a server that quietly falls
+    // back to personal scope, so it has to fail before any scoped read.
+    it('rejects a --workspace the account does not belong to', async () => {
+      await expect(run('workspace', 'members', '-w', 'nope')).rejects.toThrow('process.exit');
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('nope'));
+      expect(mockClient.workspaceMember.list.query).not.toHaveBeenCalled();
+    });
+
     it('lists members of the active workspace', async () => {
       scopedTo('ws_1');
       mockClient.workspaceMember.list.query.mockResolvedValue([
@@ -230,6 +256,177 @@ describe('workspace command', () => {
       const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
       expect(output).toContain('Ada');
       expect(output).toContain('a@example.com');
+    });
+  });
+
+  describe('member update', () => {
+    const roster = () => [
+      {
+        responsibilities: null,
+        role: 'owner',
+        title: null,
+        user: { email: 'ada@example.com', fullName: 'Ada', username: 'ada' },
+        userId: 'user_1',
+      },
+      {
+        responsibilities: 'IM, SDK',
+        role: 'admin',
+        title: 'Engineer',
+        user: { email: 'Bob@Example.com', fullName: 'Bob', username: null },
+        userId: 'user_2',
+      },
+    ];
+
+    const writeFile = (rows: unknown) => {
+      const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ws-member-')), 'rows.json');
+      fs.writeFileSync(file, JSON.stringify(rows));
+      return file;
+    };
+
+    beforeEach(() => {
+      scopedTo('ws_1');
+      mockClient.workspaceMember.list.query.mockResolvedValue(roster());
+      mockClient.workspaceMember.updateProfile.mutate.mockImplementation(
+        async ({ userId, ...fields }: { userId: string }) => ({
+          ...roster().find((m) => m.userId === userId),
+          ...fields,
+        }),
+      );
+    });
+
+    it('resolves members by username or email and writes the fields', async () => {
+      await run(
+        'workspace',
+        'member',
+        'update',
+        'ada',
+        'bob@example.com',
+        '--title',
+        ' Lead ',
+        '--responsibilities',
+        'Ship it',
+      );
+
+      expect(mockClient.workspaceMember.updateProfile.mutate).toHaveBeenCalledWith({
+        responsibilities: 'Ship it',
+        title: 'Lead',
+        userId: 'user_1',
+      });
+      expect(mockClient.workspaceMember.updateProfile.mutate).toHaveBeenCalledWith({
+        responsibilities: 'Ship it',
+        title: 'Lead',
+        userId: 'user_2',
+      });
+    });
+
+    it('applies a --file batch and skips rows that already match', async () => {
+      const file = writeFile([
+        { member: 'user_1', responsibilities: 'Ops', title: 'CEO' },
+        { member: 'user_2', responsibilities: 'IM, SDK', title: 'Engineer' },
+      ]);
+
+      await run('workspace', 'member', 'update', '--file', file, '--json');
+
+      expect(mockClient.workspaceMember.updateProfile.mutate).toHaveBeenCalledTimes(1);
+      const results = JSON.parse(String(consoleSpy.mock.calls.at(-1)![0]));
+      expect(results.map((r: { status: string }) => r.status)).toEqual(['updated', 'unchanged']);
+      expect(results[0]).toMatchObject({ responsibilities: 'Ops', title: 'CEO' });
+    });
+
+    it('sends only the fields that changed', async () => {
+      await run('workspace', 'member', 'update', 'user_2', '-t', 'Engineer', '-r', 'IM');
+
+      expect(mockClient.workspaceMember.updateProfile.mutate).toHaveBeenCalledWith({
+        responsibilities: 'IM',
+        userId: 'user_2',
+      });
+    });
+
+    it('treats an empty value as clearing the field', async () => {
+      await run('workspace', 'member', 'update', 'user_2', '--title', '');
+
+      expect(mockClient.workspaceMember.updateProfile.mutate).toHaveBeenCalledWith({
+        title: null,
+        userId: 'user_2',
+      });
+    });
+
+    it('writes nothing when any reference is unknown', async () => {
+      const file = writeFile([
+        { member: 'ada', title: 'CEO' },
+        { member: 'ghost', title: 'Nobody' },
+      ]);
+
+      await expect(run('workspace', 'member', 'update', '-f', file)).rejects.toThrow(
+        'process.exit',
+      );
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('ghost'));
+      expect(mockClient.workspaceMember.updateProfile.mutate).not.toHaveBeenCalled();
+    });
+
+    // Cloud answers a workspace the caller is not in with an empty list rather
+    // than an error, so that has to be named instead of "no member matches".
+    it('names an inaccessible workspace instead of blaming each member', async () => {
+      mockClient.workspaceMember.list.query.mockResolvedValue([]);
+
+      await expect(run('workspace', 'member', 'update', 'ada', '-t', 'CEO')).rejects.toThrow(
+        'process.exit',
+      );
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('not a member'));
+      expect(mockClient.workspaceMember.updateProfile.mutate).not.toHaveBeenCalled();
+    });
+
+    it('rejects a malformed file entry before hitting the server', async () => {
+      const file = writeFile([{ member: 'ada' }]);
+
+      await expect(run('workspace', 'member', 'update', '-f', file)).rejects.toThrow(
+        'process.exit',
+      );
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('entry #1'));
+      expect(mockClient.workspaceMember.list.query).not.toHaveBeenCalled();
+    });
+
+    it('requires a field to update', async () => {
+      await expect(run('workspace', 'member', 'update', 'ada')).rejects.toThrow('process.exit');
+
+      expect(mockClient.workspaceMember.list.query).not.toHaveBeenCalled();
+    });
+
+    it('previews with --dry-run without writing', async () => {
+      await run('workspace', 'member', 'update', 'ada', '-t', 'CEO', '--dry-run', '--json');
+
+      expect(mockClient.workspaceMember.updateProfile.mutate).not.toHaveBeenCalled();
+      const results = JSON.parse(String(consoleSpy.mock.calls.at(-1)![0]));
+      expect(results[0]).toMatchObject({ status: 'would-update', title: 'CEO' });
+    });
+
+    // Permission depends on the target: a non-admin is refused for someone
+    // else but may still edit themselves, so a refusal must not skip later rows.
+    it('keeps going after a permission error and exits non-zero', async () => {
+      mockClient.workspaceMember.updateProfile.mutate.mockImplementation(
+        async ({ userId, ...fields }: { userId: string }) => {
+          if (userId === 'user_1')
+            throw Object.assign(
+              new Error("Requires admin role or higher to edit another member's profile"),
+              { data: { code: 'FORBIDDEN' } },
+            );
+          return { ...roster().find((m) => m.userId === userId), ...fields };
+        },
+      );
+
+      await expect(
+        run('workspace', 'member', 'update', 'ada', 'user_2', '-t', 'X', '--json'),
+      ).rejects.toThrow('process.exit');
+
+      expect(mockClient.workspaceMember.updateProfile.mutate).toHaveBeenCalledTimes(2);
+      const results = JSON.parse(String(consoleSpy.mock.calls.at(-1)![0]));
+      // The refused row reports what is stored, not the value it never wrote.
+      expect(results[0]).toMatchObject({ status: 'failed', title: null, userId: 'user_1' });
+      expect(results[1]).toMatchObject({ status: 'updated', title: 'X', userId: 'user_2' });
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Permission denied'));
     });
   });
 
@@ -251,6 +448,18 @@ describe('workspace command', () => {
           2,
         ),
       );
+    });
+
+    it('accepts a slug as the argument', async () => {
+      mockClient.workspace.getById.query.mockResolvedValue({
+        id: 'ws_1',
+        name: 'Acme',
+        slug: 'acme',
+      });
+
+      await run('workspace', 'view', 'acme');
+
+      expect(mockGetTrpcClient).toHaveBeenLastCalledWith('ws_1');
     });
 
     it('exits when the workspace is gone', async () => {

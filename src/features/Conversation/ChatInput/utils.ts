@@ -246,6 +246,9 @@ export const sendQueuedMessageNow = async ({
     context,
     editorData: msg.editorData,
     files,
+    // Keep the runtime the item was queued for (a task-run drawer forces the
+    // gateway), as the queue drain does.
+    ...(msg.forceRuntime ? { forceRuntime: msg.forceRuntime } : {}),
     message: msg.content,
     metadata: { ...msg.metadata, steer: true },
   });

@@ -18,7 +18,6 @@ export enum WorkspaceSettingsTabs {
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
-  Drive = 'drive',
   Environments = 'environments',
   General = 'general',
   Hotkey = 'hotkey',
@@ -38,6 +37,7 @@ export enum WorkspaceSettingsTabs {
   Storage = 'storage',
   SubscriptionAccounts = 'subscription-accounts',
   Teams = 'teams',
+  Trash = 'trash',
   Usage = 'usage',
 }
 

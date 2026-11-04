@@ -81,6 +81,8 @@ export interface ContextFactRequest {
   agent: {
     chatConfig?: LobeAgentChatConfig | null;
     description?: string | null;
+    /** Personal name the agent is addressed by; wins over `title` as its label. */
+    name?: string | null;
     slug?: string | null;
     title?: string | null;
   };
@@ -98,6 +100,8 @@ export interface ContextFactRequest {
   executionTarget?: string;
   /** Which connector families this deployment offers. */
   features: { composio: boolean; lobehubSkill: boolean };
+  /** Disable unsolicited workspace-agent inventory, not explicit discovery or delegation tools. */
+  includeRecentAgents?: boolean;
   /**
    * The run is a sub-agent (`origin.lineage.isSubAgent`). Nested agent
    * dispatch is rejected there, so no fact may invite delegation.
@@ -153,7 +157,10 @@ export interface ContextFactProviders {
   /** Recently used agents, most recent first. */
   listRecentAgents?: (
     limit: number,
-  ) => Promise<{ description?: string | null; id: string; title?: string | null }[] | undefined>;
+  ) => Promise<
+    | { description?: string | null; id: string; name?: string | null; title?: string | null }[]
+    | undefined
+  >;
   /** Files synced into the topic's sandbox upload dir. */
   listSandboxFiles?: (topicId: string) => Promise<{ name: string; size?: number }[] | undefined>;
   /** Messages of a referenced topic, oldest first. */

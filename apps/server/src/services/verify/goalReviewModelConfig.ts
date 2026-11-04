@@ -12,7 +12,12 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveGoalModelConfig } from '@/server/services/goal/modelConfig';
 
 import type { VerifyModelConfig } from './modelConfig';
-import { isHeterogeneousVerifyProvider, REVIEW_PREDICT_MODEL_CONFIG } from './modelConfig';
+import {
+  isHeterogeneousVerifyProvider,
+  resolveVerifyServiceModel,
+  REVIEW_PREDICT_MODEL_CONFIG,
+  VERIFY_FALLBACK_MODEL_CONFIG,
+} from './modelConfig';
 
 type ModelCandidate = { model?: string | null; provider?: string | null } | null | undefined;
 
@@ -75,7 +80,9 @@ async function* reviewModelCandidates(
 ): AsyncGenerator<ModelCandidate> {
   const agents = new AgentModel(db, userId, workspaceId);
   if (params.verifierAgentId) yield agents.getAgentModelConfig(params.verifierAgentId);
+  yield await resolveVerifyServiceModel(db, userId);
   yield REVIEW_PREDICT_MODEL_CONFIG;
+  yield VERIFY_FALLBACK_MODEL_CONFIG;
   yield agents.getAgentModelConfig(BUILTIN_AGENT_SLUGS.verifyAgent);
 
   // Program checks may never have needed a verifier model. Fall back to the

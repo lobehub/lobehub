@@ -1,3 +1,3 @@
-import { prettier } from '@lobehub/lint';
+import prettier from '@lobehub/prettier-config';
 
 export default prettier;

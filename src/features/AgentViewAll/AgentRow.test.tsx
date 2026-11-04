@@ -20,7 +20,7 @@ vi.mock('@/features/Workspace/WorkspaceLink', () => ({
   ),
 }));
 
-vi.mock('./AgentAvatar', () => ({ default: () => <span /> }));
+vi.mock('./SidebarItemAvatar', () => ({ default: () => <span /> }));
 vi.mock('./ItemActions', () => ({ default: () => <button type={'button'}>more</button> }));
 
 const baseItem = {

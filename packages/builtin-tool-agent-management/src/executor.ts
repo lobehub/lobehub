@@ -33,6 +33,7 @@ import {
   type GetAgentDetailParams,
   type InstallPluginParams,
   type SearchAgentParams,
+  type SearchMarketToolsParams,
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from './types';
@@ -101,6 +102,10 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
 
   searchAgent = async (params: SearchAgentParams): Promise<BuiltinToolResult> => {
     return runtime.searchAgents(params);
+  };
+
+  searchMarketTools = async (params: SearchMarketToolsParams): Promise<BuiltinToolResult> => {
+    return runtime.searchMarketTools(params);
   };
 
   // ==================== Execution ====================

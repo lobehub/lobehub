@@ -2,7 +2,7 @@
 
 import { useTranslation } from 'react-i18next';
 
-import { ModelAssignmentsForm } from '@/features/ServiceModel';
+import { ServiceModelForm } from '@/features/ServiceModel';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -19,7 +19,7 @@ const Page = ({ hidePersonalPreferences, showSettingHeader = true }: PageProps) 
   return (
     <>
       {showSettingHeader && <SettingHeader title={t('tab.serviceModel')} />}
-      <ModelAssignmentsForm hidePersonalPreferences={hidePersonalPreferences} />
+      <ServiceModelForm hidePersonalPreferences={hidePersonalPreferences} />
       {showAiImage && <Image />}
     </>
   );

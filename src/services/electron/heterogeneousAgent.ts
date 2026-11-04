@@ -7,8 +7,8 @@ import type {
   KimiCodeQuotaSnapshot,
 } from '@lobechat/electron-client-ipc';
 import type {
+  HeterogeneousAgentType,
   HeterogeneousProviderBindingReference,
-  LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type {
   HeterogeneousAgentModelCatalog,
@@ -27,7 +27,7 @@ class HeterogeneousAgentService {
   }
 
   async startSession(params: {
-    agentType?: LocalHeterogeneousAgentType;
+    agentType?: HeterogeneousAgentType;
     args?: string[];
     command: string;
     cwd?: string;

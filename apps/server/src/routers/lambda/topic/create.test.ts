@@ -8,10 +8,27 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 const mockTopicBatchCreate = vi.fn();
+const mockTopicCreate = vi.fn();
 vi.mock('@/database/repositories/topic', () => ({
   TopicRepository: vi.fn(function () {
-    return { batchCreate: mockTopicBatchCreate };
+    return { batchCreate: mockTopicBatchCreate, create: mockTopicCreate };
   }),
+}));
+
+const mockProjectFindById = vi.fn();
+vi.mock('@/database/models/project', () => ({
+  ProjectModel: vi.fn(function () {
+    return { findById: mockProjectFindById };
+  }),
+}));
+
+vi.mock('../_helpers/conversationResourceGuard', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertCanUseConversationTargets: vi.fn(),
+}));
+vi.mock('../_helpers/shareVisitorTargetGuard', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertCreatorMessageTargets: vi.fn(),
 }));
 
 let inFlight = 0;
@@ -55,5 +72,33 @@ describe('topic.batchCreateTopics', () => {
     );
     expect(maxInFlight).toBeGreaterThan(1);
     expect(maxInFlight).toBeLessThanOrEqual(5);
+  });
+});
+
+describe('topic.createTopic', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTopicCreate.mockResolvedValue({ id: 'tpc_new' });
+  });
+
+  /** @example User report: a project "+" with no runnable directory left an untitled topic behind. */
+  it('creates a conversation-only topic inside a project the user can read', async () => {
+    mockProjectFindById.mockResolvedValue({ id: 'prj_1' });
+
+    await caller().createTopic({ agentId: 'agent-1', projectId: 'prj_1', title: 'Hi' });
+
+    expect(mockProjectFindById).toHaveBeenCalledWith('prj_1');
+    expect(mockTopicCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agent-1', projectId: 'prj_1', title: 'Hi' }),
+    );
+  });
+
+  it('refuses a project the user cannot read', async () => {
+    mockProjectFindById.mockResolvedValue(undefined);
+
+    await expect(
+      caller().createTopic({ agentId: 'agent-1', projectId: 'prj_other', title: 'Hi' }),
+    ).rejects.toThrow('Project not found');
+    expect(mockTopicCreate).not.toHaveBeenCalled();
   });
 });

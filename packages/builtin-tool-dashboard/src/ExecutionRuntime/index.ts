@@ -1,9 +1,18 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import {
+  applyWidgetParamValues,
+  BUILTIN_WIDGET_PRESETS,
+  findBuiltinWidgetPreset,
+  widgetParamValue,
+} from '@lobechat/widget-spec';
 
 import {
   type AddWidgetToDashboardParams,
   type AddWidgetToDashboardState,
+  type CreateDashboardParams,
+  type CreateDashboardState,
   type CreateWidgetDraftParams,
+  DASHBOARD_DESCRIPTION_MAX_LENGTH,
   DASHBOARD_TITLE_MAX_LENGTH,
   type DashboardSummary,
   type DashboardWidgetRecord,
@@ -13,8 +22,12 @@ import {
   type GetWidgetRunsParams,
   type GetWidgetRunsState,
   type ListDashboardsState,
+  type ListWidgetPresetsParams,
+  type ListWidgetPresetsState,
   type RequestPublishParams,
   type RequestPublishState,
+  type UpdateDashboardParams,
+  type UpdateDashboardState,
   type UpdateWidgetDraftParams,
   type WidgetDraftState,
   type WidgetRunRecord,
@@ -33,6 +46,19 @@ export interface DashboardToolService {
     widgetId: string,
   ) => Promise<{ projectId?: string | null; title: string }>;
   /**
+   * Create an empty board on the conversation's level (its project in a
+   * project topic, else the home level).
+   */
+  createDashboard: (
+    title: string,
+    description?: string,
+  ) => Promise<{
+    description?: string | null;
+    id: string;
+    projectId?: string | null;
+    title: string;
+  }>;
+  /**
    * Create a board and place the widget on it atomically: when the widget
    * cannot be placed nothing is created. The board lives on the
    * conversation's project in a project topic, else on the home level.
@@ -40,6 +66,7 @@ export interface DashboardToolService {
   createDashboardWithWidget: (
     title: string,
     widgetId: string,
+    description?: string,
   ) => Promise<{ id: string; projectId?: string | null; title: string }>;
   /** Validate the content, create the widget and record its first draft. */
   createWidgetDraft: (input: {
@@ -68,6 +95,14 @@ export interface DashboardToolService {
     widgetId: string,
     input: WidgetVersionContent & { changeNote?: string | null; parentVersionId?: string | null },
   ) => Promise<WidgetVersionRecord>;
+  /**
+   * Rename a board or rewrite its description. Only boards listDashboards
+   * offers are reachable; an empty description clears it.
+   */
+  updateDashboard: (
+    dashboardId: string,
+    patch: { description?: string | null; title?: string },
+  ) => Promise<{ description?: string | null; projectId?: string | null; title: string }>;
   updateWidget: (
     widgetId: string,
     patch: { description?: string; title?: string },
@@ -129,6 +164,25 @@ const fail = (error: unknown, action: string): BuiltinServerRuntimeOutput => {
   return { content: `Failed to ${action}: ${message}`, error: { message }, success: false };
 };
 
+/** Refuse an over-long board title / description before anything is written. */
+const checkDashboardMeta = (
+  meta: { description?: string; title?: string },
+  fields: {
+    description: string;
+    title: string;
+  },
+) => {
+  if (meta.title !== undefined && meta.title.length > DASHBOARD_TITLE_MAX_LENGTH) {
+    return `${fields.title} must be at most ${DASHBOARD_TITLE_MAX_LENGTH} characters (got ${meta.title.length})`;
+  }
+  if (
+    meta.description !== undefined &&
+    meta.description.length > DASHBOARD_DESCRIPTION_MAX_LENGTH
+  ) {
+    return `${fields.description} must be at most ${DASHBOARD_DESCRIPTION_MAX_LENGTH} characters (got ${meta.description.length})`;
+  }
+};
+
 const formatRunHead = (run: WidgetRunRecord, version?: number) =>
   [
     `run ${run.id}`,
@@ -181,7 +235,8 @@ export class DashboardExecutionRuntime {
         ? dashboards.map((board) => {
             const placed = board.widgets.map((w) => `"${w.title}" (${w.id})`).join(', ');
             const level = board.projectId ? ' [project]' : '';
-            return `- "${board.title}" (${board.id})${level}: ${placed || 'no widgets'}`;
+            const description = board.description ? ` — ${board.description}` : ' — no description';
+            return `- "${board.title}" (${board.id})${level}${description}: ${placed || 'no widgets'}`;
           })
         : ['- none yet (addWidgetToDashboard with newDashboardTitle creates one)'];
       const widgetLines = widgets.length
@@ -214,18 +269,82 @@ export class DashboardExecutionRuntime {
     }
   }
 
+  async listWidgetPresets(
+    params: ListWidgetPresetsParams = {},
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const presets = BUILTIN_WIDGET_PRESETS.filter(
+      (preset) => !params.category || preset.category === params.category,
+    );
+    const state: ListWidgetPresetsState = {
+      presets: presets.map(({ category, id, title }) => ({ category, id, title })),
+    };
+    if (presets.length === 0) {
+      return { content: 'No presets in this category.', state, success: true };
+    }
+
+    const lines = presets.map((preset) => {
+      const settings = (preset.widget.manifest?.params ?? []).map((param) => {
+        const fallback = widgetParamValue(param);
+        const choices = param.options
+          ? ` one of ${param.options.map((o) => o.value).join('|')}`
+          : '';
+        return `${param.name} (${param.type}${choices}${param.required ? ', required' : ''}${fallback === undefined ? '' : `, default ${JSON.stringify(fallback)}`})`;
+      });
+      return [
+        `- ${preset.id} [${preset.category}] ${preset.title}: ${preset.description}`,
+        settings.length > 0 ? `  params: ${settings.join('; ')}` : '  params: none',
+      ].join('\n');
+    });
+    return {
+      content: [
+        'Presets you can install with createWidgetDraft({presetId, params}); then dry-run, request publish and place it as usual:',
+        ...lines,
+      ].join('\n'),
+      state,
+      success: true,
+    };
+  }
+
   async createWidgetDraft(params: CreateWidgetDraftParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const { description, title, ...content } = params;
+      const { description, params: values, presetId, title, ...explicit } = params;
+      const preset = presetId ? findBuiltinWidgetPreset(presetId) : undefined;
+      if (presetId && !preset)
+        throw new Error(`Unknown preset "${presetId}"; see listWidgetPresets`);
+
+      const base = preset?.widget;
+      const manifest = explicit.manifest ?? base?.manifest;
+      const content: WidgetVersionContent = {
+        ...base,
+        ...explicit,
+        manifest:
+          manifest?.params && values
+            ? { ...manifest, params: applyWidgetParamValues(manifest.params, values) }
+            : manifest,
+      } as WidgetVersionContent;
+      const name = title ?? preset?.title;
+      const definition = description ?? preset?.description;
+      if (
+        name === undefined ||
+        definition === undefined ||
+        !content.script ||
+        !content.runtime ||
+        !content.outputType
+      ) {
+        throw new Error(
+          'Pass title, description, script, runtime and outputType, or a presetId to install',
+        );
+      }
+
       const { version, widgetId } = await this.service.createWidgetDraft({
         content,
-        description,
-        title,
+        description: definition,
+        title: name,
       });
       const state: WidgetDraftState = { version: version.version, versionId: version.id, widgetId };
 
       return {
-        content: `Created widget "${title}" (${widgetId}) with draft ${versionLabel(version)}, version id ${version.id}. Nothing runs yet — call dryRunWidget to execute it.`,
+        content: `Created widget "${name}" (${widgetId})${preset ? ` from preset ${preset.id}` : ''} with draft ${versionLabel(version)}, version id ${version.id}. Nothing runs yet — call dryRunWidget to execute it.`,
         state,
         success: true,
       };
@@ -397,22 +516,22 @@ export class DashboardExecutionRuntime {
     params: AddWidgetToDashboardParams,
   ): Promise<BuiltinServerRuntimeOutput> {
     const newTitle = params.newDashboardTitle?.trim();
+    const newDescription = params.newDashboardDescription?.trim() || undefined;
     if (!params.dashboardId && !newTitle) {
       return fail(
         new Error('Pass dashboardId (from listDashboards) or newDashboardTitle'),
         'add widget to dashboard',
       );
     }
-    // The API refuses titles beyond 200 characters — refuse here too, before
-    // a board is created, so a retry cannot pile malformed boards up.
-    if (newTitle && newTitle.length > DASHBOARD_TITLE_MAX_LENGTH) {
-      return fail(
-        new Error(
-          `newDashboardTitle must be at most ${DASHBOARD_TITLE_MAX_LENGTH} characters (got ${newTitle.length})`,
-        ),
-        'add widget to dashboard',
+    // The API refuses over-long titles and descriptions — refuse here too,
+    // before a board is created, so a retry cannot pile malformed boards up.
+    const invalid =
+      !params.dashboardId &&
+      checkDashboardMeta(
+        { description: newDescription, title: newTitle },
+        { description: 'newDashboardDescription', title: 'newDashboardTitle' },
       );
-    }
+    if (invalid) return fail(new Error(invalid), 'add widget to dashboard');
     try {
       const createdDashboard = !params.dashboardId;
       // A new board is created together with the placement, so a widget that
@@ -426,7 +545,7 @@ export class DashboardExecutionRuntime {
             id: params.dashboardId,
             ...(await this.service.addToDashboard(params.dashboardId, params.widgetId)),
           }
-        : await this.service.createDashboardWithWidget(newTitle!, params.widgetId);
+        : await this.service.createDashboardWithWidget(newTitle!, params.widgetId, newDescription);
       const state: AddWidgetToDashboardState = {
         createdDashboard,
         dashboardId,
@@ -442,6 +561,78 @@ export class DashboardExecutionRuntime {
       };
     } catch (error) {
       return fail(error, 'add widget to dashboard');
+    }
+  }
+
+  async createDashboard(params: CreateDashboardParams): Promise<BuiltinServerRuntimeOutput> {
+    const title = params.title?.trim();
+    const description = params.description?.trim() || undefined;
+    if (!title) return fail(new Error('title is required'), 'create dashboard');
+    const invalid = checkDashboardMeta(
+      { description, title },
+      { description: 'description', title: 'title' },
+    );
+    if (invalid) return fail(new Error(invalid), 'create dashboard');
+
+    try {
+      const board = await this.service.createDashboard(title, description);
+      const state: CreateDashboardState = {
+        dashboardId: board.id,
+        description: board.description ?? null,
+        projectId: board.projectId ?? null,
+        title: board.title,
+      };
+      return {
+        content: `Created dashboard "${board.title}" (${board.id})${
+          board.projectId ? ' in this project' : ''
+        }. Place widgets on it with addWidgetToDashboard and dashboardId ${board.id}.`,
+        state,
+        success: true,
+      };
+    } catch (error) {
+      return fail(error, 'create dashboard');
+    }
+  }
+
+  async updateDashboard(params: UpdateDashboardParams): Promise<BuiltinServerRuntimeOutput> {
+    const title = params.title?.trim();
+    const description = params.description?.trim();
+    if (!params.dashboardId) {
+      return fail(new Error('dashboardId is required (from listDashboards)'), 'update dashboard');
+    }
+    if (title === undefined && description === undefined) {
+      return fail(new Error('Pass title and/or description to change'), 'update dashboard');
+    }
+    if (title === '') return fail(new Error('title cannot be empty'), 'update dashboard');
+    const invalid = checkDashboardMeta(
+      { description, title },
+      { description: 'description', title: 'title' },
+    );
+    if (invalid) return fail(new Error(invalid), 'update dashboard');
+
+    try {
+      const board = await this.service.updateDashboard(params.dashboardId, {
+        // An empty description clears it instead of storing a blank string.
+        ...(description !== undefined && { description: description || null }),
+        ...(title !== undefined && { title }),
+      });
+      const state: UpdateDashboardState = {
+        dashboardId: params.dashboardId,
+        description: board.description ?? null,
+        projectId: board.projectId ?? null,
+        title: board.title,
+      };
+      const changed = [title !== undefined && 'title', description !== undefined && 'description']
+        .filter(Boolean)
+        .join(' and ');
+
+      return {
+        content: `Updated the ${changed} of dashboard "${board.title}" (${params.dashboardId}).`,
+        state,
+        success: true,
+      };
+    } catch (error) {
+      return fail(error, 'update dashboard');
     }
   }
 

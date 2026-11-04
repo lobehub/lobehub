@@ -121,8 +121,11 @@ export interface WorkspaceUserPreference {
    */
   sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
   /**
-   * Topic sidebars list only the topics this member created, hiding the other
-   * members' topics under the same agent / group.
+   * Topic sidebars list only the topics this member created.
+   *
+   * @deprecated The filter is a device-local, per-agent choice now
+   *   (`systemStatus.topicOnlyMineByAgent`). Existing values are ignored;
+   *   nothing reads or writes this key.
    */
   topicOnlyMine?: boolean;
 }
@@ -196,7 +199,9 @@ export const UserLabSchema = z.object({
    */
   enableImessage: z.boolean().optional(),
   /**
-   * enable markdown rendering in chat input editor
+   * @deprecated The chat input always uses the rich editor; paste conversion moved to
+   * `settings.general.enablePasteAutoConvert`. Kept so a write from an older released
+   * client is not stripped by the schema, and to seed that setting for users who had it off.
    */
   enableInputMarkdown: z.boolean().optional(),
   /**
@@ -204,8 +209,8 @@ export const UserLabSchema = z.object({
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
   /**
-   * show the Integrations settings page (GitHub App and the coming-soon
-   * directory); hidden until the closed loop leaves alpha
+   * @deprecated Integrations left Labs and is always shown. Kept so a write
+   * from an older released client is not stripped by the schema.
    */
   enableIntegrations: z.boolean().optional(),
   /**
@@ -248,12 +253,6 @@ export const UserLabSchema = z.object({
    * running there can be opened from this UI
    */
   enableDeviceTunnel: z.boolean().optional(),
-  /**
-   * opt this user's cloud-sandbox runs into a persistent workspace: the working
-   * directory survives session recycling and is shared across their topics,
-   * instead of being thrown away with the sandbox
-   */
-  enablePersistentSandbox: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;

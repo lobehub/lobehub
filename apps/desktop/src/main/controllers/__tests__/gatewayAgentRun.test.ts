@@ -4,7 +4,6 @@ import { executeGatewayAgentRun, type GatewayAgentRunDeps } from '../gatewayAgen
 
 const createDeps = (ctr: Partial<GatewayAgentRunDeps['heterogeneousAgentCtr']> = {}) =>
   ({
-    getAccessToken: vi.fn().mockResolvedValue('access-token'),
     getServerUrl: vi.fn().mockResolvedValue('https://app.lobehub.com'),
     heterogeneousAgentCtr: {
       getClaudeCodeInheritedRoutingEnv: vi.fn().mockResolvedValue({}),
@@ -27,16 +26,29 @@ const request = (extra: Record<string, unknown> = {}) =>
     ...extra,
   }) as Parameters<typeof executeGatewayAgentRun>[0];
 
-describe('executeGatewayAgentRun Claude Code account routing', () => {
+describe('executeGatewayAgentRun', () => {
   it('spawns an unrouted run without reading the local logins', async () => {
     const deps = createDeps();
 
     expect(await executeGatewayAgentRun(request(), deps)).toEqual({ status: 'accepted' });
     expect(deps.heterogeneousAgentCtr.listClaudeCodeAccounts).not.toHaveBeenCalled();
     expect(deps.heterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-      expect.objectContaining({ accountEnv: {}, jwt: 'access-token' }),
+      expect.objectContaining({ accountEnv: {}, jwt: 'dispatch-jwt' }),
     );
   });
+
+  it.each([undefined, '', '   '])(
+    'rejects a missing/blank dispatch token (%j) without launching',
+    async (jwt) => {
+      const deps = createDeps();
+
+      expect(await executeGatewayAgentRun(request({ jwt }), deps)).toEqual({
+        reason: 'Missing operation token',
+        status: 'rejected',
+      });
+      expect(deps.heterogeneousAgentCtr.spawnLhHeteroExec).not.toHaveBeenCalled();
+    },
+  );
 
   it('spawns a routed run on the profile of its account', async () => {
     const deps = createDeps({

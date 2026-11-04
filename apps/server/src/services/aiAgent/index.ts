@@ -75,6 +75,7 @@ import {
 } from './pipeline/groupMemberApproval';
 import { resolveNewThread } from './pipeline/newThread';
 import { createGroupAgentTopic, type PrecreatedTopicDeps } from './pipeline/precreatedTopic';
+import { releaseUnstartedRunSlot, type RunSlotClaim } from './pipeline/runSlot';
 import { scheduleAgentRun } from './pipeline/scheduleAgentRun';
 import { runWithTopicStart, type TopicStartDeps } from './pipeline/topicStart';
 import { bindTopicWorkingDirectory } from './pipeline/topicWorkingDirectory';
@@ -342,6 +343,14 @@ export class AiAgentService {
     return this.agentRuntimeService.executeStep(params);
   }
 
+  /**
+   * Whether someone already asked this run to stop. The run may still be
+   * finishing its current step, so its row can read `running` for a moment.
+   */
+  isOperationInterrupted(operationId: string): Promise<boolean> {
+    return this.agentRuntimeService.isOperationInterrupted(operationId);
+  }
+
   /** Continue a run parked in `waiting_for_client` (see AgentRuntimeService). */
   resumeFromClientLlmWait(
     params: Parameters<AgentRuntimeService['resumeFromClientLlmWait']>[0],
@@ -519,9 +528,12 @@ export class AiAgentService {
       rollbackSnapshot: [],
     };
 
+    const runSlot: RunSlotClaim = {};
+
     try {
-      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim);
+      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim, runSlot);
     } finally {
+      await releaseUnstartedRunSlot(runSlot, this.userId);
       if (
         !approvalClaim.continuationPrepared &&
         !approvalClaim.continuationStarted &&
@@ -547,11 +559,13 @@ export class AiAgentService {
    * 2. Delegate to execAgent for the rest
    */
   async execGroupAgent(
-    params: ExecGroupAgentParams & Pick<InternalExecAgentParams, 'clientIds' | 'interactiveStart'>,
+    params: ExecGroupAgentParams &
+      Pick<InternalExecAgentParams, 'clientIds' | 'fileIds' | 'interactiveStart'>,
   ): Promise<ExecGroupAgentResult> {
     const {
       agentId,
       clientIds,
+      fileIds,
       groupId,
       interactiveStart,
       message,
@@ -594,6 +608,7 @@ export class AiAgentService {
       appContext: { groupId, orchestrationRole: 'supervisor', topicId },
       autoStart: true,
       clientIds,
+      fileIds,
       interactiveStart,
       prompt: message,
       trigger: RequestTrigger.Chat,
@@ -634,6 +649,7 @@ export class AiAgentService {
           ?.visibility ?? null,
       findOperation: (operationId) => this.agentOperationModel.findById(operationId),
       findTopic: (topicId) => this.topicModel.findById(topicId),
+      findTriggerHop: (params) => this.messageModel.findLatestUserTurnHop(params),
       userId: this.userId,
       workspaceId: this.workspaceId,
     });

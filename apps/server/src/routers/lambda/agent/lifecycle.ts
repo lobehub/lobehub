@@ -9,6 +9,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
+import { createAgentDirectChannel } from '@/server/services/channel/defaultChannel';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { TrashService } from '@/server/services/trash';
 import { TransferErrorCode } from '@/types/transferError';
@@ -50,7 +51,9 @@ export const lifecycleRouter = router({
       return ctx.agentModel.countAgents(input);
     }),
   /**
-   * Create a standalone agent. Returns the created agent ID.
+   * Create a standalone agent, with the creator's direct Channel to it while Channels are on
+   * (none for a hidden `virtual` agent).
+   * Returns the created agent ID.
    */
   createAgent: agentProcedure
     .use(withScopedPermission('agent:create'))
@@ -58,11 +61,25 @@ export const lifecycleRouter = router({
       z.object({
         config: CreateAgentSchema.optional(),
         groupId: z.string().optional(),
+        /** The caller's own desktop, where a direct Channel to a local Agent runs. */
+        localDeviceId: z.string().min(1).optional(),
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.agentService.createAgent(input);
+      const { localDeviceId, ...params } = input;
+      const result = await ctx.agentService.createAgent(params);
+      // A hidden (virtual) copy, such as a Market agent run from an @ mention, is
+      // never a conversation of its own, so it gets no direct Channel.
+      if (params.config?.virtual) return result;
+      await createAgentDirectChannel({
+        agentId: result.agentId,
+        db: ctx.serverDB,
+        localDeviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return result;
     }),
   /**
    * Create an agent without session.
@@ -143,10 +160,13 @@ export const lifecycleRouter = router({
     .input(
       z.object({
         forkedFromIdentifier: z.string(),
+        virtual: z.boolean().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.agentModel.getAgentByForkedFromIdentifier(input.forkedFromIdentifier);
+      return ctx.agentModel.getAgentByForkedFromIdentifier(input.forkedFromIdentifier, {
+        virtual: input.virtual,
+      });
     }),
   /**
    * Get an agent by marketIdentifier

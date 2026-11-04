@@ -10,6 +10,7 @@ export type HotkeyId =
   | 'openChatSettings'
   | 'prevTab'
   | 'openHotkeyHelper'
+  | 'openTaskFilter'
   | 'regenerateMessage'
   | 'saveDocument'
   | 'saveTopic'
@@ -17,6 +18,7 @@ export type HotkeyId =
   | 'showApp'
   | 'switchAgent'
   | 'switchTab'
+  | 'toggleFavorite'
   | 'toggleLeftPanel'
   | 'toggleRightPanel'
   | 'toggleTerminalPanel';

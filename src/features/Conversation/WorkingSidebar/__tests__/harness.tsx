@@ -28,6 +28,7 @@ const rightPanel = vi.hoisted(() => ({
 
 const agentStore = vi.hoisted(() => ({
   activeAgentId: undefined as string | undefined,
+  heterogeneousType: undefined as string | undefined,
   isHeterogeneous: false,
   rawAgencyConfig: undefined as
     { boundDeviceId?: string; executionTarget?: 'device' | 'local' } | undefined,
@@ -85,6 +86,8 @@ const filesPrefetchProps = vi.hoisted(() => ({
 const reviewState = vi.hoisted(() => ({
   repoType: undefined as string | undefined,
   setRepoType: undefined as ((repoType?: string) => void) | undefined,
+  /** The directory only comes from the desktop home fallback, not a user choice. */
+  isHomeFallback: false,
   showTree: false,
   workingDirectory: undefined as string | undefined,
 }));
@@ -258,6 +261,7 @@ vi.mock('@/store/agent/selectors', () => ({
     isWorkspaceAgentById: () => () => false,
   },
   agentSelectors: {
+    currentAgentHeterogeneousProviderType: () => agentStore.heterogeneousType,
     isCurrentAgentHeterogeneous: () => agentStore.isHeterogeneous,
   },
   chatConfigByIdSelectors: {
@@ -286,6 +290,12 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => workspace.id,
 }));
 
+vi.mock('@/features/Conversation/WorkingSidebar/Memory/MemoryPane', () => ({
+  MemoryPane: (props: { deviceId?: string; workingDirectory: string }) => (
+    <div data-testid="memory-pane">{props.workingDirectory}</div>
+  ),
+}));
+
 vi.mock('@/business/client/features/WorkingSidebarTabs', () => ({
   useBusinessWorkingSidebarTabs: () => businessTabs.current,
 }));
@@ -302,7 +312,10 @@ vi.mock('@/features/ChatInput/ControlBar/useRepoType', async () => {
   };
 });
 vi.mock('@/hooks/useEffectiveWorkingDirectory', () => ({
-  useEffectiveWorkingDirectory: () => reviewState.workingDirectory,
+  useEffectiveWorkingDirectory: (_agentId?: string, options?: { homeFallback?: boolean }) =>
+    options?.homeFallback === false && reviewState.isHomeFallback
+      ? undefined
+      : reviewState.workingDirectory,
 }));
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => ({
@@ -455,6 +468,7 @@ beforeEach(() => {
   chatStore.threadMaps = {};
   chatStore.openTopicComments.mockReset();
   agentStore.activeAgentId = undefined;
+  agentStore.heterogeneousType = undefined;
   agentStore.isHeterogeneous = false;
   agentStore.rawAgencyConfig = undefined;
   effectiveConfig.agencyConfig = undefined;
@@ -474,6 +488,7 @@ beforeEach(() => {
   reviewState.setRepoType = undefined;
   reviewState.showTree = false;
   reviewState.workingDirectory = undefined;
+  reviewState.isHomeFallback = false;
   dropdownMenuState.onOpenChangeComplete = undefined;
   dropdownMenuState.items = [];
   globalStore.status.workingSidebarWidth = 360;

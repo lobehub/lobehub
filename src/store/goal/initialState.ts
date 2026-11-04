@@ -49,6 +49,8 @@ export interface GoalState {
   goalMetricSeriesById: Record<string, MetricSeriesWithPoints[]>;
   /** Local-first bookkeeping for `goalMetricSeriesById`. */
   goalMetricSeriesReplica: ReplicaState<MetricSeriesWithPoints[]>;
+  /** Goals whose title is being generated right now, for the header's loading state. */
+  goalTitleRenamingIds: string[];
   goalViewMode: GoalViewMode;
   /**
    * Every agent's goals, for the home rail's cross-agent roll-up — keyed by
@@ -59,6 +61,10 @@ export interface GoalState {
   homeGoalsByScope: Record<string, GoalListValue>;
   /** Local-first bookkeeping for `homeGoalsByScope`. */
   homeGoalsReplica: ReplicaState<GoalListValue>;
+  /** Goals created from one conversation, keyed by topic id. */
+  topicGoalsByTopicId: Record<string, GoalListValue>;
+  /** Local-first bookkeeping for `topicGoalsByTopicId`. */
+  topicGoalsReplica: ReplicaState<GoalListValue>;
 }
 
 export const initialState: GoalState = {
@@ -70,7 +76,10 @@ export const initialState: GoalState = {
   goalListVisibleLimit: 10,
   goalMetricSeriesById: {},
   goalMetricSeriesReplica: createReplicaState(),
+  goalTitleRenamingIds: [],
   goalViewMode: 'list',
   homeGoalsByScope: {},
   homeGoalsReplica: createReplicaState(),
+  topicGoalsByTopicId: {},
+  topicGoalsReplica: createReplicaState(),
 };

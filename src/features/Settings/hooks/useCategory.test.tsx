@@ -73,6 +73,7 @@ describe('settings useCategory', () => {
       SettingsTabs.Profile,
       SettingsTabs.Appearance,
       SettingsTabs.Hotkey,
+      SettingsTabs.Integrations,
     ]);
     // Environments is there with no lab switch: a code environment is a
     // definition, written down whether or not there is a drive to run it on.
@@ -116,39 +117,22 @@ describe('settings useCategory', () => {
     expect(getItemKeys()).not.toContain(SettingsTabs.OAuthApps);
   });
 
-  it('hides Integrations by default and shows it in the Account group once the Labs flag is on', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.Integrations);
-
-    useUserStore.setState({
-      preference: {
-        ...initialUserStoreState.preference,
-        lab: { ...initialUserStoreState.preference.lab, enableIntegrations: true },
-      },
-    });
+  it('shows Integrations in the Account group without any Labs flag', () => {
     const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
     const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
     expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Integrations);
   });
 
-  // The drives are what a persistent sandbox run keeps files on, so the tab
-  // that sets them out follows the same lab switch as the composer's picker.
-  it('shows Storage beside Environments once persistent sandboxes are switched on', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.Drive);
-
-    useUserStore.setState({
-      preference: {
-        ...initialUserStoreState.preference,
-        lab: { ...initialUserStoreState.preference.lab, enablePersistentSandbox: true },
-      },
+  // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
+  // environment definitions.
+  it('keeps Environments in settings without a sandbox storage tab', () => {
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true, true),
     });
-    const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
     const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
-    expect(generalGroup?.items.map((item) => item.key)).toEqual([
-      SettingsTabs.Stats,
-      SettingsTabs.Devices,
-      SettingsTabs.Environments,
-      SettingsTabs.Drive,
-    ]);
+    const keys = generalGroup!.items.map((item) => item.key);
+    expect(keys).toContain(SettingsTabs.Environments);
+    expect(keys).not.toContain('drive');
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {

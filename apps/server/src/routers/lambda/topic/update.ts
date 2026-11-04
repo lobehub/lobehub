@@ -16,6 +16,7 @@ import {
   assertCanUseConversationTargets,
   assertCanUseTopicTargets,
 } from '../_helpers/conversationResourceGuard';
+import { isOperationOwnedByAnotherUser } from '../_helpers/operationReadGuard';
 import { resolveContext } from '../_helpers/resolveContext';
 import { assertCreatorTopicTargets } from '../_helpers/shareVisitorTargetGuard';
 import { guardCtx, topicProcedure } from './procedures';
@@ -128,8 +129,10 @@ export const updateRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const rows = await ctx.topicModel.findOwnersByIds(input.topicIds);
+      // Admins may re-home teammates' topics (e.g. consolidating a team's
+      // topics under one agent); everything else stays creator/owner-only.
       for (const userId of new Set(rows.map((row) => row.userId))) {
-        assertWorkspaceRowManageable(ctx, userId, 'topic');
+        assertWorkspaceRowManageable(ctx, userId, 'topic', { allowAdmin: true });
       }
       // Moving needs `use` on both the source conversations and the target agent.
       await assertCanUseTopicTargets(guardCtx(ctx), input.topicIds);
@@ -152,7 +155,8 @@ export const updateRouter = router({
         );
         const goalHandoff = new GoalTopicHandoffService(tx, ctx.userId, workspaceId);
         const goals = await goalHandoff.lockFollowing(input.topicIds, input.targetAgentId);
-        for (const goal of goals) assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        for (const goal of goals)
+          assertWorkspaceRowManageable(ctx, goal.userId, 'goal', { allowAdmin: true });
         return { movedGoalIds: await goalHandoff.handOver(goals, input.targetAgentId) };
       });
     }),
@@ -184,6 +188,21 @@ export const updateRouter = router({
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       // Same visitor guard as `batchMoveTopics`/`cloneTopic` above.
       await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+
+      // Only the member who started the run may report its end. A teammate's
+      // tab watching the same workspace topic has no stream to learn the end
+      // from (the gateway refuses it), so any terminal it reports is a guess;
+      // the in-flight check below does not cover `idle` / `waiting_for_human`,
+      // where such a guess would drop a live run's marker.
+      if (
+        await isOperationOwnedByAnotherUser({
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+        })
+      ) {
+        return { activeOperationId: input.operationId, status: 'not_owner' as const };
+      }
 
       // Client-reported end: never clear the marker of a run the server is still
       // driving (an early / mirrored terminal event would otherwise drop the
