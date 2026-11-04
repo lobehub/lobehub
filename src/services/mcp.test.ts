@@ -9,6 +9,7 @@ const mockElectronIpc = {
     callTool: vi.fn(),
     getStreamableMcpServerManifest: vi.fn(),
     getStdioMcpServerManifest: vi.fn(),
+    listTools: vi.fn(),
     validMcpServerInstallable: vi.fn(),
   },
 };
@@ -237,6 +238,11 @@ describe('MCPService', () => {
         { ...detail, isEnabled: false },
         { ...detail, tools: [] },
         { ...detail, tools: [{ toolName: 'read_file', permission: 'disabled' }] },
+        // Only its view may call it, and this call came from the model
+        {
+          ...detail,
+          tools: [{ metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'read_file' }],
+        },
       ])('rejects a newly disabled connector or unavailable tool before IPC', async (current) => {
         const { lambdaClient } = await import('@/libs/trpc/client');
         vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(current as never);
@@ -746,6 +752,17 @@ describe('MCPService', () => {
         params,
         expect.any(Object),
       );
+    });
+  });
+
+  describe('listLocalMcpTools', () => {
+    it('returns every tool the desktop main process lists, with its visibility', async () => {
+      const tools = [{ inputSchema: { type: 'object' }, name: 'load_page', visibility: ['app'] }];
+      mockElectronIpc.mcp.listTools.mockResolvedValue(superjson.serialize(tools));
+      const input = { stdio: { command: 'dash-mcp', name: 'dash' } };
+
+      await expect(mcpService.listLocalMcpTools(input)).resolves.toEqual(tools);
+      expect(superjson.deserialize(mockElectronIpc.mcp.listTools.mock.calls[0][0])).toEqual(input);
     });
   });
 

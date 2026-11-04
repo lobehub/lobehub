@@ -1,4 +1,5 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import {
   type ChatToolPayload,
   type CheckMcpInstallResult,
@@ -33,6 +34,15 @@ function calculateObjectSizeBytes(obj: any): number {
     console.warn('Failed to calculate object size:', error);
     return 0;
   }
+}
+
+/** A tool a local MCP server lists, as the desktop main process reports it. */
+export interface LocalMcpTool {
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  name: string;
+  /** The tool's MCP Apps `_meta.ui.visibility`, when it declares one. */
+  visibility?: string[];
 }
 
 /**
@@ -161,6 +171,9 @@ class MCPService {
         const tool = detail.tools.find((item) => item.toolName === apiName);
         if (!tool || tool.permission === 'disabled') {
           throw new Error(`Tool '${apiName}' is unavailable or disabled for this connector`);
+        }
+        if (!fromMcpApp && !isSyncedMcpToolVisibleTo(tool, 'model')) {
+          throw new Error(`Tool '${apiName}' can only be called from its interactive view`);
         }
         const config = detail.mcpStdioConfig;
         if (detail.mcpConnectionType !== 'stdio' || !config?.command) {
@@ -493,6 +506,29 @@ class MCPService {
 
     // Otherwise use toolsClient (via server relay)
     return toolsClient.mcp.getStreamableMcpServerManifest.query(params, { signal });
+  }
+
+  /**
+   * Every tool a server only this machine can reach (stdio or local-network
+   * HTTP) lists, including view-only ones, with each tool's MCP Apps
+   * visibility. Desktop only.
+   */
+  async listLocalMcpTools(
+    params:
+      | {
+          http: {
+            auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+            headers?: Record<string, string>;
+            name: string;
+            url: string;
+          };
+        }
+      | { stdio: { args?: string[]; command: string; env?: Record<string, string>; name: string } },
+  ): Promise<LocalMcpTool[]> {
+    const serializedResult = await ensureElectronIpc().mcp.listTools(
+      serializeMcpIpcPayload(params) as any,
+    );
+    return deserializeMcpIpcPayload<LocalMcpTool[]>(serializedResult);
   }
 
   async getStdioMcpServerManifest(

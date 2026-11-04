@@ -1,5 +1,6 @@
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -984,6 +985,8 @@ export const connectorRouter = router({
             description: z.string().optional(),
             inputSchema: z.record(z.string(), z.unknown()).optional(),
             toolName: z.string(),
+            /** The MCP tool's `_meta.ui.visibility`, when it declares one. */
+            visibility: z.array(z.string()).optional(),
           }),
         ),
       }),
@@ -998,6 +1001,7 @@ export const connectorRouter = router({
         crudType: inferCrudType(t.toolName),
         description: t.description,
         inputSchema: t.inputSchema,
+        metadata: buildMcpToolMetadata(t.visibility),
         toolName: t.toolName,
       }));
 

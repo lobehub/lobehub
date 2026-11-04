@@ -177,6 +177,21 @@ describe('ConnectorToolModel', () => {
       expect(row.isWorkArtifact).toBe(true);
     });
 
+    it('stores the synced metadata and replaces it on every re-sync', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+
+      await model.upsertMany(connectorId, [
+        tool({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
+      ]);
+      expect((await model.queryByConnector(connectorId))[0].metadata).toEqual({
+        visibility: ['app'],
+      });
+
+      // The server dropped its visibility: the tool is visible to the model again
+      await model.upsertMany(connectorId, [tool({ toolName: 'load_page' })]);
+      expect((await model.queryByConnector(connectorId))[0].metadata).toBeNull();
+    });
+
     it('writes workspaceId when the model is workspace-scoped', async () => {
       const model = new ConnectorToolModel(serverDB, userId, workspaceId);
 
