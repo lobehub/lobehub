@@ -898,6 +898,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
               <ControlsForm
                 hideReasoningParams
                 disabled={!canCreate}
+                labelClassName={styles.label}
                 model={model}
                 provider={provider}
                 onUpdatingChange={setUpdating}
@@ -1053,6 +1054,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   <ControlsForm
                     chatConfig={subAgentChatConfig}
                     disabled={!canCreate}
+                    labelClassName={styles.label}
                     model={subAgentModelValue.model}
                     provider={subAgentModelValue.provider}
                     onChatConfigChange={handleSubAgentChatConfigChange}
