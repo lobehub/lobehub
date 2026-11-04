@@ -71,6 +71,15 @@ export const managedStatusColor: Record<ManagedDeviceStatus, string> = {
   stopping: cssVar.colorInfo,
 };
 
+/**
+ * Color of a device's presence dot: its managed status color when it has one,
+ * else green when online and grey when offline.
+ */
+export const presenceDotColor = (managedStatus: ManagedDeviceStatus | null, online: boolean) => {
+  if (managedStatus) return managedStatusColor[managedStatus];
+  return online ? cssVar.colorSuccess : cssVar.colorTextQuaternary;
+};
+
 /** Status-pill background matching {@link managedStatusColor}. */
 export const managedStatusBackground: Record<ManagedDeviceStatus, string> = {
   deleting: cssVar.colorFillTertiary,

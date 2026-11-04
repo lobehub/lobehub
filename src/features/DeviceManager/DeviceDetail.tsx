@@ -48,8 +48,8 @@ import { getDeviceIcon } from './getDeviceIcon';
 import ManagedDeviceBadge from './ManagedDeviceBadge';
 import {
   getManagedDeviceStatus,
-  managedStatusColor,
   managedStatusLabelKey,
+  presenceDotColor,
 } from './managedDeviceStatus';
 import { useCanEditDevice, useCanOperateDevice } from './useCanEditDevice';
 
@@ -298,13 +298,7 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
           {getDeviceIcon(device.platform, 26)}
           <span
             className={styles.presence}
-            style={{
-              background: managedStatus
-                ? managedStatusColor[managedStatus]
-                : online
-                  ? cssVar.colorSuccess
-                  : cssVar.colorTextQuaternary,
-            }}
+            style={{ background: presenceDotColor(managedStatus, online) }}
             title={
               managedStatus
                 ? t(managedStatusLabelKey[managedStatus])

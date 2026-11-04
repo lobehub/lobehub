@@ -57,6 +57,7 @@ import {
   managedStatusBackground,
   managedStatusColor,
   managedStatusLabelKey,
+  presenceDotColor,
 } from './managedDeviceStatus';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -316,11 +317,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
             >
               <span
                 style={{
-                  background: managedStatus
-                    ? managedStatusColor[managedStatus]
-                    : online
-                      ? cssVar.colorSuccess
-                      : cssVar.colorTextQuaternary,
+                  background: presenceDotColor(managedStatus, online),
                   borderRadius: '50%',
                   height: 6,
                   width: 6,

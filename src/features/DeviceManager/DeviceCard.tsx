@@ -37,7 +37,7 @@ import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/
 import { latestUsageView } from './DeviceHealth/viewState';
 import { getDeviceIcon, getPlatformLabel } from './getDeviceIcon';
 import ManagedDeviceBadge from './ManagedDeviceBadge';
-import { getManagedDeviceStatus, managedStatusColor } from './managedDeviceStatus';
+import { getManagedDeviceStatus, presenceDotColor } from './managedDeviceStatus';
 import { openShareDeviceModal } from './ShareDeviceModal';
 import { useCanEditDevice } from './useCanEditDevice';
 import { useDeviceActivityText } from './useDeviceActivityText';
@@ -370,13 +370,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
         <span
           aria-hidden
           className={styles.presence}
-          style={{
-            background: managedStatus
-              ? managedStatusColor[managedStatus]
-              : online
-                ? cssVar.colorSuccess
-                : cssVar.colorTextQuaternary,
-          }}
+          style={{ background: presenceDotColor(managedStatus, online) }}
         />
         <Text
           ellipsis

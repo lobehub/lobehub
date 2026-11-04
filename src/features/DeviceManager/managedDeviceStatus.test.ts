@@ -3,12 +3,17 @@
  */
 import type { DeviceListItem, ManagedDevicePhase } from '@lobechat/types';
 import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
+import { cssVar } from '@lobehub/ui';
 import { renderHook } from '@testing-library/react';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { describe, expect, it } from 'vitest';
 
-import { getManagedDeviceStatus } from './managedDeviceStatus';
+import {
+  getManagedDeviceStatus,
+  managedStatusColor,
+  presenceDotColor,
+} from './managedDeviceStatus';
 import { useDeviceActivityText } from './useDeviceActivityText';
 
 dayjs.extend(relativeTime);
@@ -81,6 +86,14 @@ describe('getManagedDeviceStatus', () => {
 
   it('falls back to presence when the phase is unknown', () => {
     expect(getManagedDeviceStatus(buildDevice())).toBeNull();
+  });
+});
+
+describe('presenceDotColor', () => {
+  it('uses the managed status color, else the online and offline colors', () => {
+    expect(presenceDotColor('sleeping', true)).toBe(managedStatusColor.sleeping);
+    expect(presenceDotColor(null, true)).toBe(cssVar.colorSuccess);
+    expect(presenceDotColor(null, false)).toBe(cssVar.colorTextQuaternary);
   });
 });
 

@@ -31,8 +31,8 @@ import { buildDeviceHoverSummary } from './deviceHoverSummary';
 import { getDeviceIcon } from './getDeviceIcon';
 import {
   getManagedDeviceStatus,
-  managedStatusColor,
   managedStatusLabelKey,
+  presenceDotColor,
 } from './managedDeviceStatus';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -134,11 +134,7 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       <InfoRow icon={PowerIcon} label={t('devices.detail.status')}>
         <span
           style={{
-            background: managedStatus
-              ? managedStatusColor[managedStatus]
-              : online
-                ? cssVar.colorSuccess
-                : cssVar.colorTextQuaternary,
+            background: presenceDotColor(managedStatus, online),
             borderRadius: '50%',
             flex: 'none',
             height: 6,
