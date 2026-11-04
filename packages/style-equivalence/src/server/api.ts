@@ -49,18 +49,19 @@ export const loadRun = async (runDir: string): Promise<StoredRun> => {
 export const readSelfTest = async (file: string) =>
   readJson<unknown>(path.dirname(file), path.basename(file), null);
 
-export const currentVerdict = async (stored: StoredRun) =>
-  decideVerdict({
+export const currentVerdict = async (stored: StoredRun) => {
+  const reviews = await readReviews(
+    stored.recordsDir,
+    stored.items.map((item) => item.file),
+  );
+  return decideVerdict({
     calibration: stored.calibration,
     items: stored.items,
     mutation: stored.mutation,
-    signoffs: (
-      await readReviews(
-        stored.recordsDir,
-        stored.items.map((item) => item.file),
-      )
-    ).passes,
+    reworks: reviews.reworks,
+    signoffs: reviews.passes,
   });
+};
 
 export class ApiError extends Error {
   constructor(

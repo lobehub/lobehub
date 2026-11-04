@@ -95,7 +95,7 @@ export const assembleVerdict = async (input: AssembleInput) => {
       key,
     });
   }
-  const { passes: signoffs } = await readReviews(
+  const { passes: signoffs, reworks } = await readReviews(
     input.recordsDir,
     items.map((item) => item.file),
   );
@@ -103,6 +103,7 @@ export const assembleVerdict = async (input: AssembleInput) => {
     calibration: input.calibration,
     items,
     mutation: input.mutation,
+    reworks,
     signoffs,
   });
   return { evidence, verdict };

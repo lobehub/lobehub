@@ -1,3 +1,4 @@
+import type { ReworkRecord } from '../review/store';
 import type { SignoffRecord } from '../signoff/store';
 import type { CaseCategory } from './categorize';
 
@@ -83,6 +84,7 @@ export interface VerdictInput {
   calibration: Array<{ status: string }>;
   items: VerdictItem[];
   mutation: { passed: boolean };
+  reworks?: Map<string, ReworkRecord>;
   signoffs: Map<string, SignoffRecord>;
 }
 
@@ -96,6 +98,7 @@ export const decideVerdict = ({
   calibration,
   items,
   mutation,
+  reworks,
   signoffs,
 }: VerdictInput): Verdict => {
   const states = items.map((item) => ({
@@ -119,6 +122,11 @@ export const decideVerdict = ({
     const stale = unsigned.filter((item) => item.signoff === 'stale').length;
     reasons.push(`needs sign-off ${unsigned.length}${stale ? ` (${stale} stale)` : ''}`);
   }
+  const hashes = new Map(items.map((item) => [item.key, item.hash]));
+  const openReworks = [...(reworks?.values() ?? [])].filter(
+    (rework) => !rework.resolvedAt && hashes.get(rework.key) === rework.hash,
+  ).length;
+  if (openReworks) reasons.push(`rework open ${openReworks}`);
   const mismatches = calibration.filter((entry) => entry.status === 'mismatch').length;
   if (mismatches) reasons.push(`calibration mismatch ${mismatches}`);
   if (!mutation.passed) reasons.push('mutation not fully caught');
