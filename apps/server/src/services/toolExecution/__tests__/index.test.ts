@@ -775,6 +775,30 @@ describe('ToolExecutionService', () => {
       },
     );
 
+    it("gives the model only an HTTP MCP result's text, keeping view data in its state", async () => {
+      const raw = {
+        _meta: { view: { rows: ['secret'] } },
+        content: [{ text: 'Found 1 row', type: 'text' }],
+        structuredContent: { rows: ['secret'] },
+      };
+      const callTool = vi.fn().mockResolvedValue({
+        content: 'Found 1 row',
+        state: { ...raw, mcpApp: { resourceUri: 'ui://rows' } },
+        success: true,
+      });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
+      );
+
+      expect(result.content).toBe('Found 1 row');
+      expect(result.state).toMatchObject({
+        state: { _meta: raw._meta, mcpApp: { resourceUri: 'ui://rows' } },
+      });
+    });
+
     it.each([
       { name: 'my-mcp', type: 'http', url: 'http://localhost:8080/mcp' },
       { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },

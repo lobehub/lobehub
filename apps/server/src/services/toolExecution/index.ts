@@ -350,7 +350,10 @@ export class ToolExecutionService {
       log('MCP tool execution completed for: %s:%s', identifier, apiName);
 
       return {
-        content: typeof result === 'string' ? result : JSON.stringify(result),
+        // The model gets the result's text, as on the cloud and device routes.
+        // `structuredContent`, `_meta` and the result's view stay in `state`,
+        // which MCP Apps defines as the view's and never reaches the model.
+        content: typeof result === 'string' ? result : result.content,
         ...(result?.success === false
           ? { error: { code: 'MCP_TOOL_ERROR', message: result.error?.message ?? result.content } }
           : {}),
