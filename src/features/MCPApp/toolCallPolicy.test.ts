@@ -95,7 +95,6 @@ describe('getAppToolCallPolicy', () => {
 
       plugins.set('weather', plugin());
       expect(await getAppToolCallPolicy('weather', 'send')).toBe('allow');
-      expect(await getAppToolCallPolicy('weather', 'other')).toBe('deny');
     });
 
     it('runs an allow-listed tool without asking', async () => {
@@ -125,6 +124,15 @@ describe('getAppToolCallPolicy', () => {
 
       expect(await getAppToolCallPolicy('weather', 'load_page')).toBe('confirm');
       expect(await getAppToolCallPolicy('weather', 'refresh')).toBe('allow');
+    });
+
+    it('asks about a plugin tool its stored manifest lacks, as one stored before MCP Apps would', async () => {
+      plugins.set('weather', plugin());
+      expect(await getAppToolCallPolicy('weather', 'load_page')).toBe('confirm');
+
+      // Still refused once its connector disabled it
+      connectors.set('weather', { tools: [{ permission: 'disabled', toolName: 'load_page' }] });
+      expect(await getAppToolCallPolicy('weather', 'load_page')).toBe('deny');
     });
 
     it('refuses a view a plugin tool only the model may call', async () => {

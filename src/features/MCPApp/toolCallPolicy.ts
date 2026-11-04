@@ -15,8 +15,8 @@ import { toolInterventionSelectors } from '@/store/user/selectors';
 /**
  * What LobeHub does with a `tools/call` a view sends. A view can call tools on
  * load without any user gesture, so a call the conversation would stop for
- * approval must ask here too, and a tool the server doesn't offer is refused
- * before it reaches the server.
+ * approval must ask here too, and a tool known not to be offered to views is
+ * refused before it reaches the server.
  */
 export type AppToolCallPolicy = 'allow' | 'confirm' | 'deny';
 
@@ -121,7 +121,6 @@ const findToolIntervention = (
   const api = [...(manifest?.api ?? []), ...(manifest?.mcpAppOnlyApi ?? [])].find(
     (item) => item.name === toolName,
   );
-  if (!api) return null;
 
   // A plugin's tool permissions live on a connector of the same identifier
   // (syncPluginTools), applied as the conversation applies them
@@ -131,6 +130,11 @@ const findToolIntervention = (
   const permission = connector?.tools.find((t) => t.toolName === toolName)?.permission;
   if (permission === 'disabled') return null;
   if (permission === 'needs_approval') return { intervention: 'required' };
+
+  // A manifest stored before MCP Apps was on lacks the tools its server offers
+  // only to views. Ask rather than refuse: the session the call runs on still
+  // refuses any tool the server doesn't offer to views.
+  if (!api) return { intervention: 'required' };
 
   return { intervention: api.humanIntervention ?? manifest?.humanIntervention };
 };
