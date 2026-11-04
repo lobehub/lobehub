@@ -104,10 +104,10 @@ const buildPluginMcpParams = (
   } as any;
 
   if (connection?.type === 'http') {
-    params.headers = {
-      ...connection.headers,
-      ...pluginSettings,
-    };
+    const headers = { ...connection.headers, ...pluginSettings };
+    // Left out when empty, as the runtime's manifest params leave it: MCP
+    // sessions are cached by these params, so `{}` would open a second one
+    if (Object.keys(headers).length > 0) params.headers = headers;
   }
 
   if (connection?.type === 'stdio') {

@@ -149,6 +149,17 @@ describe('mcpService.readMcpAppResource on desktop', () => {
     expect(relayRead).toHaveBeenCalledWith(expect.objectContaining({ uri: 'ui://app' }));
   });
 
+  it("reads a headerless plugin's view with the runtime's params, so on its session", async () => {
+    plugins.set('remote', {
+      customParams: { mcp: { type: 'http', url: 'https://mcp.example.com/mcp' } },
+    });
+
+    await mcpService.readMcpAppResource('remote', 'ui://app');
+
+    // The runtime's manifest params carry no `headers` key, and sessions are keyed by params
+    expect(relayRead.mock.calls[0][0].params).not.toHaveProperty('headers');
+  });
+
   it('keeps public http servers on the server relay', async () => {
     plugins.set('remote', httpPlugin('https://mcp.example.com/mcp'));
 
