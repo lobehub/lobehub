@@ -557,16 +557,22 @@ export class ReviewPlaybookService {
       returned.start >= selected.start &&
       returned.start + returned.anchor.quote.length <=
         selected.start + selected.anchor.quote.length;
-    if (!insideSelected) {
+    if (!selected || !returned || !insideSelected) {
       throw new ReviewServiceError(
         'ANCHOR_LOST',
         'The suggested target text is not the quote selected for this item',
       );
     }
-    if (suggestion.replacementText === suggestion.targetQuote) {
+    // `locateQuote` trims the model's quote before matching, so persisting
+    // `suggestion.targetQuote` verbatim stores whitespace that both the
+    // occurrence count and `EditorRuntime.replaceInText` then fail to find —
+    // Apply raises ANCHOR_LOST on an unchanged document. Store the span that
+    // actually passed validation.
+    const original = returned.anchor.quote;
+    if (suggestion.replacementText === original) {
       throw new ReviewServiceError('NO_OP_SUGGESTION', 'The suggestion does not change the text');
     }
-    const maxLength = Math.max(400, suggestion.targetQuote.length * 3);
+    const maxLength = Math.max(400, original.length * 3);
     if (suggestion.replacementText.length > maxLength) {
       throw new ReviewServiceError(
         'SCHEMA_INVALID',
@@ -575,7 +581,7 @@ export class ReviewPlaybookService {
     }
 
     const updated = await this.reviewModel.updateSuggestion(input.checkResultId, {
-      original: suggestion.targetQuote,
+      original,
       replacement: suggestion.replacementText,
     });
     if (!updated) throw new ReviewServiceError('CHECK_RESULT_NOT_FOUND', 'Check result not found');

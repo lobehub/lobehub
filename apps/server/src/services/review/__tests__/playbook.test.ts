@@ -438,6 +438,32 @@ describe('ReviewPlaybookService (Playbook rule checks)', () => {
     expect((await model.findCheckResultById(failed.id))?.suggestion ?? null).toBeNull();
   });
 
+  it('persists the normalized target so Apply matches the document verbatim', async () => {
+    const { acceptance, session } = await confirmRulesFromDrafts();
+    verdicts.set(acceptance.id, {
+      confidence: 0.9,
+      evidence: [{ kind: 'violating', quote: VIOLATING_ACCEPTANCE }],
+      explanation: '第 4 条只写最终验收，没有分阶段验收。',
+      verdict: 'failed',
+    });
+
+    const checked = await service.runChecks({ sessionId: session.id });
+    const failed = checked.find((item) => item.ruleId === acceptance.id)!;
+
+    // The model wraps the quote in the whitespace that surrounds it in the
+    // document. Persisting it verbatim stores text `replaceInText` never finds,
+    // so Apply would report ANCHOR_LOST on an unchanged document.
+    suggestionTarget = `\n${VIOLATING_ACCEPTANCE}\n`;
+    const withSuggestion = await service.suggestFix({ checkResultId: failed.id });
+    expect(withSuggestion.suggestion?.original).toBe(VIOLATING_ACCEPTANCE);
+
+    const applied = await service.applySuggestion({
+      appliedText: EDITED_ACCEPTANCE,
+      checkResultId: failed.id,
+    });
+    expect(applied.status).toBe('needs_recheck');
+  });
+
   it('falls back to a pattern hint and flags duplicates when proposing from a description', async () => {
     const ruleSet = await model.createRuleSet({
       documentId,
