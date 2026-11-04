@@ -2070,6 +2070,7 @@ When I am ___, I need ___
   'trash.type.channelThread': 'Channel thread',
   'trash.type.dashboard': 'Dashboard',
   'trash.type.message': 'Message',
+  'trash.type.task': 'Task',
   'trash.type.topic': 'Topic',
   'trash.type.widget': 'Widget',
   'trash.untitled': 'Untitled',

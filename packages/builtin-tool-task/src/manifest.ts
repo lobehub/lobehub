@@ -527,7 +527,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Permanently delete a task by identifier. Subtasks are NOT cascaded — they become top-level tasks after deletion. Dependencies, topics, pinned documents, comments, and briefs attached to the task are cascade-deleted. This action is irreversible.',
+        'Delete a task by identifier. The task moves to the recycle bin together with its topics, and the user can restore it within 30 days; it is removed for good when the bin is emptied or the retention window ends. Subtasks are NOT cascaded — they stay in the list. A dependency on the deleted task stops blocking its dependents.',
       name: TaskApiName.deleteTask,
       parameters: {
         properties: {
