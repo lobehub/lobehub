@@ -148,7 +148,7 @@ const McpAppView = memo<McpAppViewProps>(
         // under the same approval rules as the conversation.
         callTool: async (name, toolArgs, request) => {
           const { agentId: currentAgentId, identifier: currentIdentifier, t: tr } = latest.current;
-          const policy = getAppToolCallPolicy(currentIdentifier, name, {
+          const policy = await getAppToolCallPolicy(currentIdentifier, name, {
             agentId: currentAgentId,
             toolArgs,
           });

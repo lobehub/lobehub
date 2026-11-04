@@ -84,6 +84,11 @@ const findToolIntervention = (
     connector?.isEnabled &&
     (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
   ) {
+    // Until the agent's own tools are known this is the base connector, while
+    // the server may run the agent's copy under stricter permissions: ask.
+    if (agentId && !connectorSelectors.isAgentConnectorsInit(agentId)(s)) {
+      return { intervention: 'required' };
+    }
     const tool = connector.tools.find((t) => t.toolName === toolName);
     if (!tool || tool.permission === 'disabled') return null;
     // Same mapping as the connector manifest (`patchManifestWithPermissions`)
@@ -106,11 +111,27 @@ const findToolIntervention = (
   return { intervention: api.humanIntervention ?? manifest?.humanIntervention };
 };
 
-export const getAppToolCallPolicy = (
+/**
+ * Load the agent's own tools first, so the policy and the call that follows
+ * resolve the same connector the server will run. If they can't be loaded, the
+ * policy asks.
+ */
+const ensureAgentConnectors = async (agentId: string | undefined) => {
+  if (!agentId || connectorSelectors.isAgentConnectorsInit(agentId)(getToolStoreState())) return;
+
+  try {
+    await getToolStoreState().fetchAgentConnectors(agentId);
+  } catch (error) {
+    console.warn(`[MCPApp] failed to load the tools of agent ${agentId}:`, error);
+  }
+};
+
+export const getAppToolCallPolicy = async (
   identifier: string,
   toolName: string,
   { agentId, toolArgs = {} }: { agentId?: string; toolArgs?: Record<string, unknown> } = {},
-): AppToolCallPolicy => {
+): Promise<AppToolCallPolicy> => {
+  await ensureAgentConnectors(agentId);
   const tool = findToolIntervention(identifier, toolName, agentId);
   if (!tool) return 'deny';
 
