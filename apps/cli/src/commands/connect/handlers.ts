@@ -14,6 +14,7 @@ import { executeDeviceOperation } from '@lobechat/local-file-shell/shell';
 import type { resolveToken } from '../../auth/resolveToken';
 import type { CliMaintenance } from '../../daemon/maintenance';
 import { appendLog } from '../../daemon/manager';
+import type { ActivityReporter } from '../../device/activityHook';
 import { spawnHeteroAgentRun } from '../../device/agentRun';
 import { collectSystemInfo } from '../../device/systemInfo';
 import { executeToolCall } from '../../tools';
@@ -23,6 +24,8 @@ import { log } from '../../utils/logger';
 
 /** Everything a gateway connection's request handlers need from the host process. */
 export interface GatewayHandlerContext {
+  /** Present when `LOBEHUB_DEVICE_ACTIVITY_COMMAND` reports this device's work. */
+  activity?: ActivityReporter;
   /** Present when an `agent-browser` binary enabled the browser tool on this device. */
   browser?: Awaited<ReturnType<typeof resolveBrowserDevice>>;
   /** Present when `--auv` enabled Computer Use on this device. */
@@ -31,6 +34,8 @@ export interface GatewayHandlerContext {
   error: (msg: string) => void;
   /** Read at dispatch time — the underlying auth may be refreshed mid-session. */
   getAuth: () => Awaited<ReturnType<typeof resolveToken>>;
+  /** Credentials tools may use against the server API (e.g. image upload); none when absent. */
+  getToolAuth: () => Awaited<ReturnType<typeof resolveToken>> | undefined;
   info: (msg: string) => void;
   isDaemonChild: boolean;
   maintenance: CliMaintenance;
@@ -51,11 +56,13 @@ export function bindGatewayClientHandlers(
   connectionWorkspaceId?: string,
 ) {
   const {
+    activity,
     browser,
     computerUse,
     deps,
     error,
     getAuth,
+    getToolAuth,
     info,
     isDaemonChild,
     maintenance,
@@ -75,6 +82,7 @@ export function bindGatewayClientHandlers(
   // Handle tool call requests
   client.on('tool_call_request', async (request: ToolCallRequestMessage) => {
     recordRequest();
+    const endActivity = activity?.begin();
     const { operationId, requestId, timeout, toolCall } = request;
     if (isDaemonChild) {
       appendLog(
@@ -96,7 +104,7 @@ export function bindGatewayClientHandlers(
           ? executeComputerUseCall(computerUse, toolCall.apiName, toolCall.arguments, timeout)
           : toolCall.identifier === BROWSER_IDENTIFIER
             ? executeBrowserCall(browser, toolCall.apiName, toolCall.arguments, timeout)
-            : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getAuth()),
+            : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getToolAuth()),
       ),
     ).catch((err: Error) => ({
       content: '',
@@ -104,6 +112,7 @@ export function bindGatewayClientHandlers(
       state: undefined,
       success: false,
     }));
+    endActivity?.();
     const executionTimeMs = Math.round(performance.now() - startedAt);
 
     if (isDaemonChild) {
@@ -134,6 +143,7 @@ export function bindGatewayClientHandlers(
     if (isDaemonChild) appendLog(`[RPC] ${method} (${requestId})`);
     else info(`Received rpc_request: method=${method} (${requestId})`);
 
+    const endActivity = activity?.begin();
     try {
       const run = () => executeDeviceRpc(method, params, deps);
       const isMaintenance = ['getCliUpdateState', 'checkCliUpdate', 'restartCli'].includes(method);
@@ -145,6 +155,8 @@ export function bindGatewayClientHandlers(
       if (isDaemonChild) appendLog(`[RPC ERROR] ${method}: ${message} (${requestId})`);
       else error(`rpc_request method=${method} failed: ${message}`);
       client.sendRpcResponse({ requestId, result: { error: message, success: false } });
+    } finally {
+      endActivity?.();
     }
   });
 
@@ -155,6 +167,8 @@ export function bindGatewayClientHandlers(
   // a failed dispatch surfaces as an error instead of a stuck assistant message.
   client.on('agent_run_request', async (request: AgentRunRequestMessage) => {
     recordRequest();
+    // Covers the dispatch; the run itself is polled through the task registry.
+    const endActivity = activity?.begin();
     info(
       `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
     );
@@ -187,6 +201,8 @@ export function bindGatewayClientHandlers(
       const reason = err instanceof Error ? err.message : String(err);
       error(`agent_run_request failed: ${reason}`);
       client.sendAgentRunAck({ operationId: request.operationId, reason, status: 'rejected' });
+    } finally {
+      endActivity?.();
     }
   });
 }

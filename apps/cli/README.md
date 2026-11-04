@@ -50,6 +50,65 @@ Diagnostics never dump the service's command line or environment. Older connecto
 on Linux use a conservative `/proc` lookup; an inaccessible or unsupported entry
 is reported as unknown instead of guessed.
 
+## Managed cloud devices
+
+A managed cloud device is a device that LobeHub creates and runs for you. The
+platform that runs it starts the agent with:
+
+```bash
+lh connect --managed
+```
+
+Managed mode reads everything from the environment. It does not use a stored
+login, a keychain or a browser, and it writes no credentials to disk, so it runs
+headless in a container. `lh connect service install` is not needed: the
+platform supervises the process and restarts it when it exits.
+
+| Variable                          | Required | Meaning                                                     |
+| --------------------------------- | -------- | ----------------------------------------------------------- |
+| `LOBEHUB_MANAGED_DEVICE_ID`       | yes      | The device id. It replaces the id derived from the machine. |
+| `LOBEHUB_MANAGED_DEVICE_SECRET`   | yes      | The bootstrap secret. The CLI never prints it.              |
+| `LOBEHUB_SERVER`                  | yes      | The LobeHub server URL.                                     |
+| `LOBEHUB_DEVICE_GATEWAY_URL`      | yes      | The device gateway URL.                                     |
+| `LOBEHUB_DEVICE_ACTIVITY_COMMAND` | no       | A command to run while the device does work (see below).    |
+
+If a required variable is missing, the CLI names it and exits with status 1.
+`--managed` cannot be used with `--token`, `--gateway`, `--device-id`,
+`--workspace`, `--public` or `--daemon`. The CLI removes the secret from its own
+environment after it reads it, so tool calls and agent runs do not inherit it.
+
+**Token.** The CLI sends `POST {LOBEHUB_SERVER}/api/device/managed/token` with
+`{ "deviceId", "secret" }` and gets `{ "token", "expiresAt" }`. The token's
+`workspace_id` claim, when present, makes the device a workspace device;
+otherwise its `sub` is the owning user.
+
+- The CLI gets a new token when 80% of the token's lifetime has passed (at least
+  5 s after it got the previous one). The open gateway connection stays up:
+  only the next connection uses the new token, so running tool calls, agent
+  runs and tunnels continue.
+- On HTTP 408, 429 or 5xx, a network error or an unreadable response, the CLI
+  tries again after 1 s, then 2 s, 4 s and so on, up to 60 s between attempts
+  (each delay ±20%). It continues until the server answers.
+- On HTTP 401 (wrong secret, or the device was deleted), 404 (the server has no
+  managed cloud devices) or another 4xx, the CLI exits with status 1.
+- If the gateway rejects a token, the CLI gets a new token and connects again.
+  If the gateway also rejects that token before a connection succeeds, the CLI
+  exits with status 1.
+
+**Activity command.** When `LOBEHUB_DEVICE_ACTIVITY_COMMAND` is set, the CLI runs
+it while the device serves a tool call, an RPC, an agent run or an open tunnel.
+It runs when the work starts and then every 30 s while work continues, never
+more than once in 30 s and never two at a time. The work does not wait for it.
+A run that takes longer than 10 s is stopped. Failures appear only in the debug
+log (`--verbose`).
+
+The CLI does not use a shell to run the command. It splits the value into words
+at spaces. Single quotes, double quotes and backslashes group and escape
+characters as in a POSIX shell, but there is no `$VAR`, `~` or glob expansion,
+and `|`, `;`, `&`, `>` and `<` are ordinary characters. If the value has an
+unclosed quote, the CLI exits with status 1 at startup. To use shell features,
+set the value to an explicit shell, for example `sh -c 'report-activity >> /var/log/activity'`.
+
 ## Publish local artifacts
 
 ```bash
