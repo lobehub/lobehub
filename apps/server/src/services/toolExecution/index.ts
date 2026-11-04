@@ -328,7 +328,7 @@ export class ToolExecutionService {
           : undefined;
         if (!tunnelTarget) {
           log('Device-only MCP %s:%s has no reachable device — failing fast', identifier, apiName);
-          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online ${BRANDING_NAME} desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the LobeHub desktop app on the machine that hosts this MCP server, then retry.`;
+          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online ${BRANDING_NAME} desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the ${BRANDING_NAME} desktop app on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
             error: { code: 'MCP_DEVICE_UNAVAILABLE', message },

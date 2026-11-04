@@ -1,5 +1,6 @@
 'use client';
 
+import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
@@ -78,7 +79,7 @@ const Body = memo(() => {
   const inboxTitle = useAgentStore((s) =>
     agentDisplayName(
       agentSelectors.getAgentMetaById(resolveInboxAgentRouteId(inboxAgentId))(s),
-      'Lobe AI',
+      DEFAULT_INBOX_TITLE,
     ),
   );
 
