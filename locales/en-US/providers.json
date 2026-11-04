@@ -20,6 +20,7 @@
   "comfyui.description": "A powerful open-source workflow engine for image, video, and audio generation, supporting models like SD, FLUX, Qwen, Hunyuan, and WAN with node-based editing and private deployment.",
   "deepseek.description": "DeepSeek focuses on AI research and applications. Its latest DeepSeek V4 family ships in Flash and Pro variants with a 1M context window and hybrid thinking — competitive with leading closed frontier models on reasoning and agent benchmarks.",
   "fal.description": "A generative media platform built for developers.",
+  "fikra.description": "Fikra API is an OpenAI-compatible inference service serving open-weight models (DeepSeek, GLM, Kimi, Qwen) with per-token billing in USD and M-Pesa, mobile money or card payments.",
   "fireworksai.description": "Fireworks AI provides advanced language model services with function calling and multimodal processing. Firefunction V2 (based on Llama-3) is optimized for function calls, chat, and instruction following, while FireLLaVA-13B supports mixed image-text inputs. Other notable models include the Llama and Mixtral families.",
   "giteeai.description": "Gitee AI Serverless APIs provide plug-and-play LLM inference services for developers.",
   "github.description": "With GitHub Models, developers can build as AI engineers using industry-leading models.",
