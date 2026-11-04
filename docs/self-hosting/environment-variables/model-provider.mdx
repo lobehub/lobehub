@@ -884,6 +884,29 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+straico-model-1,+straico-model-2=straico-special`
 
+## TokenLab
+
+### `TOKENLAB_API_KEY`
+
+- Type: Required
+- Description: This is the API key you created in the TokenLab dashboard.
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `TOKENLAB_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the OpenAI-compatible API base URL.
+- Default: `https://api.tokenlab.sh/v1`
+- Example: `https://api.tokenlab.sh/v1`
+
+### `TOKENLAB_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the TokenLab model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+claude-sonnet-5-5,+gpt-6-luna=GPT-6 Luna`
+
 ## Unsloth
 
 Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/docs/usage/providers/unsloth) for browser authentication and desktop CORS limitations.

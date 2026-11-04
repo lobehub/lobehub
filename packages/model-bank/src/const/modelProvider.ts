@@ -71,6 +71,7 @@ export enum ModelProvider {
   Taichu = 'taichu',
   TencentCloud = 'tencentcloud',
   TogetherAI = 'togetherai',
+  TokenLab = 'tokenlab',
   TypeSafe = 'typesafe',
   Unsloth = 'unsloth',
   Upstage = 'upstage',
