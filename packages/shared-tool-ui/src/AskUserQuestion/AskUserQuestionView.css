@@ -1,0 +1,8 @@
+/* Descendant selectors into the lobe-ui Tabs DOM: StyleX cannot target them. */
+.lobe-ask-user-question-view-dcd38325-tabs [role='tablist'] {
+  width: 100%;
+}
+
+.lobe-ask-user-question-view-dcd38325-tabs [role='tablist'] > [role='tab']:has([data-replace-all]) {
+  margin-inline-start: auto;
+}

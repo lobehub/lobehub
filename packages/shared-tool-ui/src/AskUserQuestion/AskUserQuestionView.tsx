@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Hotkey, Icon, KeyMapEnum } from '@lobehub/ui';
-import { Button, Tabs, Text, TextArea } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import './AskUserQuestionView.css';
+
+import { Button, Flexbox, Hotkey, Icon, KeyMapEnum, Tabs, Text, TextArea } from '@lobehub/ui';
 import { Check, PenLine, Replace, Send, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -15,18 +15,6 @@ import type { AskUserFormApi } from './useAskUserForm';
 
 const optionValue = (option: AskUserQuestionItem['options'][number]): string =>
   option.id ?? option.label;
-
-const styles = createStaticStyles(({ css }) => ({
-  tabs: css`
-    [role='tablist'] {
-      width: 100%;
-
-      > [role='tab']:has([data-replace-all]) {
-        margin-inline-start: auto;
-      }
-    }
-  `,
-}));
 
 /**
  * A focused interactive control keeps its native key activation — hijacking
@@ -326,7 +314,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       {questions.length > 0 && (
         <Tabs
           activeKey={escapeActive ? 'escape' : supplementActive ? 'supplement' : activeTab}
-          className={styles.tabs}
+          className={'lobe-ask-user-question-view-dcd38325-tabs'}
           variant="square"
           items={[
             ...questions.map((q, idx) => {
