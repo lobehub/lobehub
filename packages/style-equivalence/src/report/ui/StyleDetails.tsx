@@ -74,6 +74,13 @@ const styles = stylex.create({
     borderInlineStartWidth: 1,
   },
   sources: { display: 'grid', rowGap: 14 },
+  standIn: {
+    color: cssVar.colorWarningText,
+    fontFamily: 'inherit',
+    fontSize: 12,
+    fontWeight: 400,
+    marginInlineStart: 10,
+  },
   sub: { color: cssVar.colorTextTertiary, fontSize: 12.5, marginBlockEnd: 12 },
   swatch: (color: string) => ({
     backgroundColor: color,
@@ -131,6 +138,12 @@ const DeclarationTable = ({ blocks }: { blocks: ReviewView['styles']['blocks'] }
           <tr>
             <td colSpan={4} {...stylex.props(styles.group)}>
               {block.slot}
+              {block.standIn && (
+                <span {...stylex.props(styles.standIn)}>
+                  按替身渲染：没有加载 {block.standIn}{' '}
+                  自带的样式，这一块的「一致」只说明我们写的样式没变
+                </span>
+              )}
             </td>
           </tr>
           {block.rows.map((row) => (
@@ -208,7 +221,7 @@ export const StyleDetails = ({ item }: { item: ReviewView }) => (
       <section>
         <h2 {...stylex.props(styles.heading)}>样式对照</h2>
         <div {...stylex.props(styles.sub)}>
-          两边都换成 CSS 属性名，按样式块对齐。渲染结果那一列来自真实截图比对，不是看代码猜的。
+          两边都换成 CSS 属性名，按样式块对齐。渲染结果那一列来自截图比对，不是看代码猜的。
         </div>
         <DeclarationTable blocks={item.styles.blocks} />
       </section>

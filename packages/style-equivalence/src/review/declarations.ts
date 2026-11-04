@@ -15,6 +15,7 @@ export interface DeclarationRow {
 }
 
 export interface DeclarationBlock {
+  key: string;
   rows: DeclarationRow[];
   slot: string;
 }
@@ -173,6 +174,7 @@ export const declarationBlocks = (
     add('before', before[slot]);
     add('after', after[slot]);
     return {
+      key: slot,
       rows: [...rows.values()].sort((a, b) => Number(b.differs) - Number(a.differs)),
       slot: slotName(slot),
     };

@@ -67,6 +67,7 @@ const sendFile = async (response: ServerResponse, root: string, requestPath: str
 };
 
 export interface ServerOptions {
+  layoutComponents?: string[];
   port?: number;
   recordsDir?: string;
   runDir: string;
@@ -74,6 +75,7 @@ export interface ServerOptions {
 }
 
 export const startServer = async ({
+  layoutComponents = [],
   port = 0,
   recordsDir,
   runDir,
@@ -110,7 +112,7 @@ export const startServer = async ({
         verdict: await currentVerdict(stored),
       });
     if (pathname === '/api/review' && method === 'GET')
-      return json(response, 200, await reviewPayload(stored));
+      return json(response, 200, await reviewPayload(stored, layoutComponents));
     if (pathname === '/api/review' && method === 'POST')
       return json(response, 200, await applyReview(stored, (await readBody(request)) as never));
     if (pathname === '/api/method' && method === 'GET')

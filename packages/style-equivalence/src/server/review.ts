@@ -40,7 +40,10 @@ interface CaseEntry {
 interface CaseEvidence {
   declarations?: Partial<Record<'base' | 'head', Record<string, string>>>;
   elements?: Partial<
-    Record<'base' | 'head', Array<{ bindings: StyleElement['bindings']; tag: string }>>
+    Record<
+      'base' | 'head',
+      Array<{ bindings: StyleElement['bindings']; slots?: string[]; tag: string }>
+    >
   >;
 }
 
@@ -51,7 +54,20 @@ const usageOf = (element: { bindings: StyleElement['bindings']; tag: string }) =
   return `<${[element.tag, ...props].join(' ')}>`;
 };
 
-const stylesOf = (entry: CaseEntry | undefined, evidence: CaseEvidence | undefined) => {
+const standIns = (evidence: CaseEvidence | undefined, layout: Set<string>) => {
+  const tags = new Map<string, string>();
+  for (const side of ['head', 'base'] as const)
+    for (const element of evidence?.elements?.[side] ?? [])
+      if (!isIntrinsicTag(element.tag) && !layout.has(element.tag))
+        for (const slot of element.slots ?? []) if (!tags.has(slot)) tags.set(slot, element.tag);
+  return tags;
+};
+
+const stylesOf = (
+  entry: CaseEntry | undefined,
+  evidence: CaseEvidence | undefined,
+  layout: Set<string>,
+) => {
   const causes = [
     ...(entry?.result?.rootCauses ?? []),
     ...(entry?.result?.comboDifferences ?? []).flatMap((difference) => difference.rootCauses),
@@ -68,7 +84,7 @@ const stylesOf = (entry: CaseEntry | undefined, evidence: CaseEvidence | undefin
           evidence.declarations.base,
           evidence.declarations.head,
           causes.map((cause) => cause.property),
-        )
+        ).map(({ key, ...block }) => ({ ...block, standIn: standIns(evidence, layout).get(key) }))
       : [],
     source,
     usage: Object.fromEntries(
@@ -116,6 +132,7 @@ const describe = (
   entry: CaseEntry | undefined,
   element?: StyleElement,
   evidence?: CaseEvidence,
+  layout: Set<string> = new Set(),
 ) => {
   const component = element && !isIntrinsicTag(element.tag) ? element.tag : undefined;
   const binding = element?.bindings[0];
@@ -145,7 +162,7 @@ const describe = (
     component,
     differingConditions: entry?.result?.differingConditions ?? [],
     errors: entry?.result?.errors ?? [],
-    styles: stylesOf(entry, evidence),
+    styles: stylesOf(entry, evidence, layout),
     summary: differenceSummary(entry?.result?.rootCauses ?? []),
     title: titleOf(item.key, element),
   };
@@ -171,7 +188,8 @@ export const reviewState = async (stored: StoredRun) => {
   };
 };
 
-export const reviewPayload = async (stored: StoredRun) => {
+export const reviewPayload = async (stored: StoredRun, layoutComponents: string[] = []) => {
+  const layout = new Set(layoutComponents);
   const { context, items, reviews, verdict } = await reviewState(stored);
   const views = items.map((item) =>
     describe(
@@ -179,6 +197,7 @@ export const reviewPayload = async (stored: StoredRun) => {
       context.cases.get(item.key),
       context.elements.get(item.key),
       stored.evidence[item.key] as CaseEvidence | undefined,
+      layout,
     ),
   );
   const resolved = [...reviews.reworks.values()].filter((rework) => rework.resolvedAt);

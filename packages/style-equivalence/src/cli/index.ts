@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs, promisify } from 'node:util';
 
-import { runComparison } from '../run';
+import { loadConfig, runComparison } from '../run';
 import { runSelfTest } from '../selftest';
 import { formatSelfTest } from '../selftest/run';
 import { saveSelfTest } from '../selftest/store';
@@ -150,7 +150,16 @@ const main = async () => {
         maxBuffer: 64 * 1024 ** 2,
       });
     }
-    const server = await startServer({ port: Number(values.port ?? 0), recordsDir, runDir });
+    const layoutComponents = await loadConfig(configFile).then(
+      (config) => config.layoutComponents,
+      (): string[] => [],
+    );
+    const server = await startServer({
+      layoutComponents,
+      port: Number(values.port ?? 0),
+      recordsDir,
+      runDir,
+    });
     console.log(`Report: ${server.url}`);
     await new Promise<void>((resolve) => {
       process.once('SIGINT', resolve);

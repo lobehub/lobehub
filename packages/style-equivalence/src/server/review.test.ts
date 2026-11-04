@@ -129,8 +129,23 @@ beforeAll(async () => {
         ],
       },
     },
+    'src/A.tsx|A#2': {
+      declarations: {
+        base: {
+          'styles.icon': 'icon: css`\n    color: red;\n  `',
+          'styles.row': 'row: css`\n    gap: 4px;\n  `',
+        },
+        head: { 'styles.icon': "icon: { color: 'red' }", 'styles.row': "row: { gap: '4px' }" },
+      },
+      elements: {
+        head: [
+          { bindings: [], literalProps: {}, slots: ['styles.icon'], tag: 'SkillsIcon' },
+          { bindings: [], literalProps: {}, slots: ['styles.row'], tag: 'Flexbox' },
+        ],
+      },
+    },
   });
-  server = await startServer({ runDir });
+  server = await startServer({ layoutComponents: ['Flexbox'], runDir });
 });
 
 afterAll(async () => {
@@ -177,6 +192,11 @@ describe('review API', () => {
       head: ['<span {...stylex.props(styles.a)}>'],
     });
     expect(variable.styles).toEqual({ blocks: [], source: {}, usage: {} });
+    const placed = payload.items.find((entry: any) => entry.key === 'src/A.tsx|A#2');
+    expect(placed.styles.blocks.map((block: any) => [block.slot, block.standIn])).toEqual([
+      ['icon', 'SkillsIcon'],
+      ['row', undefined],
+    ]);
     expect(payload.items.find((entry: any) => entry.key === 'src/A.tsx|A#2').state).toBe(
       'waiting-agent',
     );

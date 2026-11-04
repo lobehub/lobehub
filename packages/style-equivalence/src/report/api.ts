@@ -167,6 +167,7 @@ export interface ReviewView {
     blocks: Array<{
       rows: Array<{ after: string[]; before: string[]; differs: boolean; label: string }>;
       slot: string;
+      standIn?: string;
     }>;
     source: Partial<Record<'base' | 'head', Record<string, string>>>;
     usage: Partial<Record<'base' | 'head', string[]>>;
