@@ -44,6 +44,13 @@ export const LINEAR_SYNC_MAX_ROUNDS = 50;
  * round near the end goes to a fresh request instead of being cut off.
  */
 export const LINEAR_SYNC_RUN_BUDGET_MS = 12 * 60 * 1000;
+/**
+ * Times one rule run may hand itself to a new request. Every hand-off extends
+ * a chain of requests started by the user's click, and Vercel never delivered
+ * a fifth one: four requests in all. A run that would need more ends as
+ * finished with issues left (`truncated`), and the next Sync carries on.
+ */
+export const LINEAR_SYNC_MAX_HAND_OFFS = 3;
 
 /**
  * The outcome of a run that took several rounds. What a round wrote happens
@@ -159,6 +166,8 @@ export class LinearSyncJobService {
     private readonly continueJob?: ContinueLinearSyncJob,
     /** How long this request keeps starting rounds before handing the run on. */
     private readonly runBudgetMs: number = LINEAR_SYNC_RUN_BUDGET_MS,
+    /** How many times one run may be handed to a new request. */
+    private readonly maxHandOffs: number = LINEAR_SYNC_MAX_HAND_OFFS,
   ) {}
 
   /** Run a recorded job to completion (async router side). */
@@ -218,6 +227,7 @@ export class LinearSyncJobService {
         const outcome = {
           ...current,
           cursor: undefined,
+          handOffs: undefined,
           reconcileOnly: undefined,
           result,
           rounds,
@@ -251,9 +261,19 @@ export class LinearSyncJobService {
             });
             return;
           }
-          // Out of time: a new request takes the next round.
-          const queued = await this.continueJob!(taskId, following);
-          if (queued) return;
+          // Out of time: a new request takes the next round, unless the chain
+          // of requests is as long as the host lets it get. Then the run ends
+          // here with issues left, and the next Sync starts a new chain.
+          const handOffs = current.handOffs ?? 0;
+          if (handOffs < this.maxHandOffs) {
+            const queued = await this.continueJob!(taskId, {
+              ...following,
+              handOffs: handOffs + 1,
+            });
+            if (queued) return;
+          } else {
+            log('sync %s stops after %d hand-offs, issues left', taskId, handOffs);
+          }
         }
         // The rule shows its last finished run; a round in between, or a run
         // stopped part-way, leaves the previous one in place. The job turns

@@ -20,6 +20,7 @@ import {
 } from '@/database/schemas';
 import { continueLinearRuleSyncJob } from '@/server/services/linear/startSyncJob';
 import {
+  LINEAR_SYNC_MAX_HAND_OFFS,
   LINEAR_SYNC_MAX_ROUNDS,
   LINEAR_SYNC_RUN_BUDGET_MS,
   LinearSyncJobService,
@@ -303,7 +304,7 @@ describe('linearRouter', () => {
        * round. With no time budget, every round is handed to a new request,
        * as a run that outlasts one request is.
        */
-      const routerService = (runBudgetMs = 0) =>
+      const routerService = (runBudgetMs = 0, maxHandOffs = Infinity) =>
         new LinearSyncJobService(
           serverDB,
           userId,
@@ -311,6 +312,7 @@ describe('linearRouter', () => {
           (taskId, metadata) =>
             continueLinearRuleSyncJob(serverDB, userId, undefined, taskId, metadata),
           runBudgetMs,
+          maxHandOffs,
         );
 
       const settle = async () => {
@@ -425,6 +427,42 @@ describe('linearRouter', () => {
         expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
           { error: null, result: { created: 100 }, status: 'pending' },
         ]);
+      });
+
+      it(`ends a run that keeps running out of time after ${LINEAR_SYNC_MAX_HAND_OFFS} hand-offs, with issues left`, async () => {
+        // Every round is slow, so each request runs one and hands the run on.
+        let clock = Date.now();
+        const now = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+        let page = 0;
+        mocks.syncByFilter.mockImplementation(async () => {
+          clock += 5 * 60 * 1000;
+          page += 1;
+          return round(100, true, String(page * 100));
+        });
+        let id: string;
+        try {
+          ({ id } = await startRule());
+          const service = routerService(LINEAR_SYNC_RUN_BUDGET_MS, LINEAR_SYNC_MAX_HAND_OFFS);
+          for (let handled = 0; handled < mocks.runSync.mock.calls.length; handled++) {
+            await service.run(mocks.runSync.mock.calls[handled][0].taskId);
+            await settle();
+          }
+        } finally {
+          now.mockRestore();
+        }
+
+        // The click, then three hand-offs: four requests, one round each.
+        expect(mocks.runSync).toHaveBeenCalledTimes(LINEAR_SYNC_MAX_HAND_OFFS + 1);
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(LINEAR_SYNC_MAX_HAND_OFFS + 1);
+        const [job] = await caller({ userId }).listSyncJobs({ projectId });
+        expect(job).toMatchObject({
+          error: null,
+          id: id!,
+          result: { created: 400, truncated: true },
+          status: 'success',
+        });
+        const [saved] = await caller({ userId }).listSyncRules({ projectId });
+        expect(saved.lastResult).toMatchObject({ created: 400, truncated: true });
       });
 
       it('stops after the current round when stopped during a run in one request', async () => {
