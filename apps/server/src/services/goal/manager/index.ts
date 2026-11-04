@@ -210,15 +210,16 @@ export class GoalManagerService {
   takeOver = async (
     graph: GoalGraphSnapshot,
     problem: GoalTakeoverProblem,
+    options?: { effects?: GoalAdvanceEffect[] },
   ): Promise<GoalTickResult | null> => {
     if (!this.eligible(graph)) return null;
     // Already answered: a takeover turn that ran for THIS problem has had its say,
     // so handing it over again would buy the same plan instead of asking a person.
     // `answeredProblem` is what the caller attaches to the gate.
     if (answeredProblem(graph.goal.config?.managerState)?.key === problemKey(problem)) return null;
-    const settled = await this.settleInFlight(graph);
+    const settled = await this.settleInFlight(graph, options?.effects);
     if (settled) return settled;
-    return this.startTurn(graph, problem);
+    return this.startTurn(graph, problem, undefined, { effects: options?.effects });
   };
 
   /**

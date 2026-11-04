@@ -2,6 +2,8 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
+
 import { getTestDB } from '@/database/core/getTestDB';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
@@ -20,7 +22,7 @@ import {
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import { GoalService } from './index';
-import { MAX_UNCONFIRMED_MANAGER_TURNS } from './manager';
+import { GoalManagerService, MAX_UNCONFIRMED_MANAGER_TURNS } from './manager';
 import * as scheduler from './scheduler';
 import type { GoalTickObservation } from './traceObservation';
 
@@ -221,6 +223,22 @@ describe('GoalManagerService with a planning turn that never left a run record',
     expect(paused.message).toContain('is still running');
     expect((await model().findById(id))!.status).toBe('paused');
     expect(exec()).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the takeover turn it dispatches as a trace effect', async () => {
+    const id = await goalAwaitingWrapUp();
+    const graph = (await new GoalGraphModel(db, userId).getGraph(id))!;
+    const effects: GoalAdvanceEffect[] = [];
+    const outcome = await new GoalManagerService(db, userId).takeOver(
+      graph,
+      { reason: 'acceptance failed after wrap-up', taskId: 'task_unknown' },
+      { effects },
+    );
+    // `startTurn` always parks the Goal waiting on the dispatched run.
+    expect(outcome?.outcome).toBe('waiting_external');
+    expect(effects).toEqual([
+      expect.objectContaining({ operationId: expect.any(String), type: 'started_planning_turn' }),
+    ]);
   });
 
   it('records the replacement and its dispatch as manager ticks in the trace', async () => {

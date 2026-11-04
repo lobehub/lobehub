@@ -420,6 +420,7 @@ export const gateOrTakeOver = async (
   const takeover = await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).takeOver(
     graph,
     { reason, taskId },
+    { effects },
   );
   if (takeover) return takeover;
   // When the main Agent already looked at THIS problem, the gate carries what it
