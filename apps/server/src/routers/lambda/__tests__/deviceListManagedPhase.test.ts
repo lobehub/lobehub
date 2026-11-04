@@ -3,6 +3,7 @@ import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceRouter } from '../device';
+import { MANAGED_PHASES_TIMEOUT_MS } from '../device/registry';
 
 const mocks = vi.hoisted(() => ({
   isAvailable: vi.fn(),
@@ -137,6 +138,23 @@ describe('device.listDevices managed device phases', () => {
 
     expect(devices.map((device) => device.deviceId)).toEqual(['managed']);
     expect(phaseOf(devices, 'managed')).toBeUndefined();
+  });
+
+  it('still lists managed devices when the provider does not answer in time', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.queryPersonal.mockResolvedValue([row('managed', MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE)]);
+      mocks.listStates.mockReturnValue(new Promise(() => {}));
+
+      const pending = personalCaller().listDevices();
+      await vi.advanceTimersByTimeAsync(MANAGED_PHASES_TIMEOUT_MS);
+      const devices = await pending;
+
+      expect(devices.map((device) => device.deviceId)).toEqual(['managed']);
+      expect(phaseOf(devices, 'managed')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('drops a phase the contract does not define', async () => {

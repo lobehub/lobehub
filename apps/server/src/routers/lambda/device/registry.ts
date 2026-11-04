@@ -38,25 +38,38 @@ const managedPhases = new Set<unknown>(MANAGED_DEVICE_PHASES);
 
 const isManagedPhase = (value: unknown): value is ManagedDevicePhase => managedPhases.has(value);
 
+/** How long the device list waits for managed device phases. */
+export const MANAGED_PHASES_TIMEOUT_MS = 3000;
+
 /**
  * Phases of the managed cloud devices in one pool of the device list. Asks the
  * provider only when the pool holds a managed row, so a list without managed
- * devices makes no provider call. Any provider failure leaves the phases
- * unknown: the list must still load, and a managed device then reads like any
- * other offline device.
+ * devices makes no provider call. A provider failure or a reply slower than
+ * {@link MANAGED_PHASES_TIMEOUT_MS} leaves the phases unknown: the list must
+ * still load, and a managed device then reads like any other offline device.
  */
 const loadManagedPhases = async (
   rows: { identitySource: string }[],
   scope: { userId: string; workspaceId?: string },
 ): Promise<Record<string, ManagedDevicePhase>> => {
   if (!rows.some(isManagedCloudDevice)) return {};
+  if (!managedDeviceProvider.isAvailable()) return {};
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<Record<string, ManagedDevicePhase>>((resolve) => {
+    timer = setTimeout(() => {
+      log('listStates timed out for scope=%o', scope);
+      resolve({});
+    }, MANAGED_PHASES_TIMEOUT_MS);
+  });
 
   try {
-    if (!managedDeviceProvider.isAvailable()) return {};
-    return await managedDeviceProvider.listStates(scope);
+    return await Promise.race([managedDeviceProvider.listStates(scope), timeout]);
   } catch (error) {
     log('listStates failed for scope=%o: %O', scope, error);
     return {};
+  } finally {
+    clearTimeout(timer);
   }
 };
 
