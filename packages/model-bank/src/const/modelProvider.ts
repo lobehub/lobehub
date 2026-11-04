@@ -32,6 +32,7 @@ export enum ModelProvider {
   Hunyuan = 'hunyuan',
   InfiniAI = 'infiniai',
   InternLM = 'internlm',
+  JalapenoCloud = 'jalapenocloud',
   Jina = 'jina',
   KimiCodingPlan = 'kimicodingplan',
   LMStudio = 'lmstudio',
