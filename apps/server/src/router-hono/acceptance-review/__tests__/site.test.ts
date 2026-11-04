@@ -137,6 +137,42 @@ describe('site review tokens', () => {
     });
   });
 
+  describe('install beacon', () => {
+    const beacon = (siteId: string, headers: Record<string, string> = {}) =>
+      app.request(`${BASE}/sites/${siteId}/beacon`, {
+        body: '',
+        headers: { 'content-type': 'text/plain', ...headers },
+        method: 'POST',
+      });
+    const lastSeen = async () =>
+      (await serverDB.select().from(projectSites).where(eq(projectSites.id, site.id)))[0]
+        .lastSeenAt;
+
+    it('records a load from a registered origin without any sign-in', async () => {
+      const response = await beacon(site.id, { origin: ORIGIN });
+      expect(response.status).toBe(204);
+      expect(await response.text()).toBe('');
+      expect(await lastSeen()).toBeInstanceOf(Date);
+    });
+
+    it('ignores a load from an origin the site does not list', async () => {
+      const response = await beacon(site.id, { origin: 'https://fieldnotes-mirror.net' });
+      expect(response.status).toBe(204);
+      expect(await lastSeen()).toBeNull();
+    });
+
+    it('ignores a request without an Origin header', async () => {
+      expect((await beacon(site.id)).status).toBe(204);
+      expect(await lastSeen()).toBeNull();
+    });
+
+    it('answers the same way for a site that does not exist', async () => {
+      const response = await beacon('psite_missing', { origin: ORIGIN });
+      expect(response.status).toBe(204);
+      expect(await response.text()).toBe('');
+    });
+  });
+
   it('reads a site that no longer lists the origin as gone', async () => {
     await serverDB
       .update(projectSites)
