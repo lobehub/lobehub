@@ -227,8 +227,14 @@ describe('DocumentModel.query — sortBy', () => {
     }
   });
 
-  const orderedIds = async (sortBy?: 'createdAt' | 'title' | 'updatedAt') => {
-    const result = await new DocumentModel(serverDB, userA, workspaceId).query({ sortBy });
+  const orderedIds = async (
+    sortBy?: 'createdAt' | 'title' | 'updatedAt',
+    sortOrder?: 'asc' | 'desc',
+  ) => {
+    const result = await new DocumentModel(serverDB, userA, workspaceId).query({
+      sortBy,
+      sortOrder,
+    });
     return result.items.map((item) => item.id);
   };
 
@@ -242,5 +248,32 @@ describe('DocumentModel.query — sortBy', () => {
 
   it('lists titles A→Z for title', async () => {
     expect(await orderedIds('title')).toEqual(['page-a', 'page-b', 'page-c']);
+  });
+
+  it('lists the oldest created first for createdAt asc', async () => {
+    expect(await orderedIds('createdAt', 'asc')).toEqual(['page-b', 'page-c', 'page-a']);
+  });
+
+  it('lists the least recently updated first for updatedAt asc', async () => {
+    expect(await orderedIds('updatedAt', 'asc')).toEqual(['page-b', 'page-a', 'page-c']);
+  });
+
+  it('lists titles Z→A for title desc', async () => {
+    expect(await orderedIds('title', 'desc')).toEqual(['page-c', 'page-b', 'page-a']);
+  });
+
+  it('pages oldest-first without overlap and keeps the total', async () => {
+    const model = new DocumentModel(serverDB, userA, workspaceId);
+    const pages = await Promise.all(
+      [0, 1].map((current) =>
+        model.query({ current, pageSize: 2, sortBy: 'createdAt', sortOrder: 'asc' }),
+      ),
+    );
+
+    expect(pages.map((page) => page.items.map((item) => item.id))).toEqual([
+      ['page-b', 'page-c'],
+      ['page-a'],
+    ]);
+    expect(pages.map((page) => page.total)).toEqual([3, 3]);
   });
 });

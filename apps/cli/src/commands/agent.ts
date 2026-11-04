@@ -8,6 +8,7 @@ import { getTrpcClient } from '../api/client';
 import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { formatPageFooter } from '../utils/pagination';
 import { resolveAgentId } from './agent/resolveAgentId';
 import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
@@ -54,58 +55,88 @@ export function registerAgentCommand(program: Command) {
   agent
     .command('list')
     .description('List agents')
-    .option('-L, --limit <n>', 'Maximum number of items', '30')
+    .option('-L, --limit <n>', 'Page size (max 100)', '30')
+    .option(
+      '-P, --page <n>',
+      'Page number (offset-based: when deleting while paging, keep re-reading page 1)',
+      '1',
+    )
     .option('-k, --keyword <keyword>', 'Filter by keyword')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (options: { json?: string | boolean; keyword?: string; limit?: string }) => {
-      const client = await getTrpcClient();
-
-      // The inbox (Lobe AI) is a real assistant the user can open, and this is
-      // exactly where they look for it — so opt in. `queryAgents` omits the
-      // product-owned inbox for callers that do not explicitly ask for it, so
-      // that older clients and CRUD/group surfaces keep their old behavior.
-      const input: {
-        includeInbox: boolean;
+    .action(
+      async (options: {
+        json?: string | boolean;
         keyword?: string;
-        limit?: number;
-        offset?: number;
-      } = { includeInbox: true };
-      if (options.keyword) input.keyword = options.keyword;
-      if (options.limit) input.limit = Number.parseInt(options.limit, 10);
+        limit?: string;
+        page?: string;
+      }) => {
+        const pageSize = Number.parseInt(options.limit || '30', 10);
+        if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+          log.error('--limit must be between 1 and 100; use --page for more.');
+          process.exit(1);
+          return;
+        }
+        const page = Number.parseInt(options.page || '1', 10);
+        if (!Number.isInteger(page) || page < 1) {
+          log.error('--page must be a positive integer.');
+          process.exit(1);
+          return;
+        }
 
-      const result = await client.agent.queryAgents.query(input);
-      const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+        const client = await getTrpcClient();
 
-      if (options.json !== undefined) {
-        const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(
-          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
-            resourcePath.agent(item.id),
-          ),
-          fields,
-        );
-        return;
-      }
+        // The inbox (Lobe AI) is a real assistant the user can open, and this is
+        // exactly where they look for it — so opt in. `queryAgents` omits the
+        // product-owned inbox for callers that do not explicitly ask for it, so
+        // that older clients and CRUD/group surfaces keep their old behavior.
+        const input: {
+          includeInbox: boolean;
+          keyword?: string;
+          limit?: number;
+          offset?: number;
+        } = { includeInbox: true };
+        if (options.keyword) input.keyword = options.keyword;
+        input.limit = pageSize;
+        if (page > 1) input.offset = (page - 1) * pageSize;
 
-      if (items.length === 0) {
-        console.log('No agents found.');
-        return;
-      }
+        const result = await client.agent.queryAgents.query(input);
+        const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+        const footer = formatPageFooter({ count: items.length, page, pageSize });
 
-      // `name` (user-facing display name) and `title` (role/identity) are separate
-      // fields and both are returned — collapsing them into one column hides the
-      // only handle the user knows an agent by, e.g. the inbox shows up as
-      // `Sienna` / `Lobe`. `model` is not part of the queryAgents payload, so the
-      // column that used to sit here was always empty.
-      const rows = items.map((a: any) => [
-        a.id || a.agentId || '',
-        truncate(a.name || a.meta?.name || '', 24),
-        truncate(a.title || a.meta?.title || '', 36),
-        truncate(a.description || a.meta?.description || '', 50),
-      ]);
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(
+            withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+              resourcePath.agent(item.id),
+            ),
+            fields,
+          );
+          // Keep stdout a plain JSON array for scripts; paging hints go to stderr.
+          console.error(pc.dim(footer));
+          return;
+        }
 
-      printTable(rows, ['ID', 'NAME', 'TITLE', 'DESCRIPTION']);
-    });
+        if (items.length === 0) {
+          console.log(page > 1 ? `No agents on page ${page}.` : 'No agents found.');
+          return;
+        }
+
+        // `name` (user-facing display name) and `title` (role/identity) are separate
+        // fields and both are returned — collapsing them into one column hides the
+        // only handle the user knows an agent by, e.g. the inbox shows up as
+        // `Sienna` / `Lobe`. `model` is not part of the queryAgents payload, so the
+        // column that used to sit here was always empty.
+        const rows = items.map((a: any) => [
+          a.id || a.agentId || '',
+          truncate(a.name || a.meta?.name || '', 24),
+          truncate(a.title || a.meta?.title || '', 36),
+          truncate(a.description || a.meta?.description || '', 50),
+        ]);
+
+        printTable(rows, ['ID', 'NAME', 'TITLE', 'DESCRIPTION']);
+        console.log(pc.dim(footer));
+      },
+    );
 
   // ── view ──────────────────────────────────────────────
 
