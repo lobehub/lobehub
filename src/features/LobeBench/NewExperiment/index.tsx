@@ -408,7 +408,8 @@ const NewExperiment = memo(() => {
         ),
       );
       if (!exclusive.ran) {
-        setLaunchError(t('lobeBench.new.launch.occupied'));
+        setConfirmationOpen(false);
+        toast.error(t('lobeBench.new.launch.occupied'));
         return;
       }
       const result = exclusive.result;
@@ -468,11 +469,12 @@ const NewExperiment = memo(() => {
     try {
       const begun = await beginLaunch(record);
       if (!begun.ok) {
-        setLaunchError(
-          begun.reason === 'occupied'
-            ? t('lobeBench.new.launch.occupied')
-            : t('lobeBench.new.launch.storageError'),
-        );
+        if (begun.reason === 'occupied') {
+          setConfirmationOpen(false);
+          toast.error(t('lobeBench.new.launch.occupied'));
+        } else {
+          setLaunchError(t('lobeBench.new.launch.storageError'));
+        }
         return;
       }
       await runLaunch(record);
@@ -520,10 +522,9 @@ const NewExperiment = memo(() => {
 
   return (
     <Flexbox className={stylex.props(styles.container).className} flex={1}>
-      {/* The imperative Modal API cannot disable Escape / the header close button. */}
+      {/* createModal cannot disable Escape / the header close button in @lobehub/ui 6.15. */}
       <Modal
         closable={!starting}
-        confirmLoading={starting}
         keyboard={!starting}
         maskClosable={!starting}
         open={confirmationOpen}
@@ -571,7 +572,7 @@ const NewExperiment = memo(() => {
               createdAt={progress.createdAt}
               progress={progress}
             />
-          ) : (
+          ) : !failureMessage ? (
             <Flexbox gap={8}>
               <Text>
                 {t('lobeBench.new.confirm.line', {
@@ -593,7 +594,7 @@ const NewExperiment = memo(() => {
               </Text>
               <Text type={'secondary'}>{t('lobeBench.new.confirm.billing')}</Text>
             </Flexbox>
-          )}
+          ) : null}
           {!starting && failureMessage && <Alert title={failureMessage} type={'warning'} />}
           {outcome && !outcome.complete && (
             <Text fontSize={12}>

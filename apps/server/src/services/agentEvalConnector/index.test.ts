@@ -321,10 +321,28 @@ describe('evaluation connector binding', () => {
         .catch((error: unknown) => error);
       expect(failure).toBeInstanceOf(EvalConnectorBindingError);
       expect((failure as Error).message).toContain('"notion"');
+      expect((failure as Error).message).toContain(connector.id);
       expect((failure as Error).message).toMatch(/timed out|interrupted/);
       expect((failure as Error).message).not.toMatch(/alpha-secret|https:|private\.test/);
     },
   );
+
+  it('identifies a shared connection when discovery leaves no permitted tools', async () => {
+    const connector = await create();
+    mocked.listRawTools.mockResolvedValue([]);
+    const failure = await service()
+      .checkBindingGroups([
+        { firstAlias: { connectorId: connector.id } },
+        { secondAlias: { connectorId: connector.id } },
+      ])
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(EvalConnectorBindingError);
+    expect((failure as Error).message).toContain(connector.id);
+    expect((failure as Error).message).toContain('alias "firstAlias"');
+    expect((failure as Error).message).toContain('no automatically permitted tools');
+    expect((failure as Error).message).not.toMatch(/alpha-secret|https:|mock\.test/);
+    expect(mocked.listRawTools).toHaveBeenCalledOnce();
+  });
 });
 
 describe('LobeBench route derivation', () => {

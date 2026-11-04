@@ -27,6 +27,12 @@ const unavailable = () =>
     'The selected mock connection is unavailable. Choose an enabled HTTP connection in this scope that is not assigned to an Agent.',
   );
 
+const bindingLabel = (identifier: string, connectorId: string) => {
+  const id = /^[\w-]{1,128}$/.test(connectorId) ? connectorId : 'unavailable';
+  const alias = /^[\w.-]{1,128}$/.test(identifier) ? ` (alias "${identifier}")` : '';
+  return `Mock connection "${id}"${alias}`;
+};
+
 const isEligible = (connector: PublicConnectorRecord | null): connector is PublicConnectorRecord =>
   !!connector &&
   connector.isEnabled &&
@@ -136,7 +142,7 @@ export class AgentEvalConnectorService {
       const snapshot = { connectorId: connector.id, fingerprint, transport };
       if (expected && stable(expected[identifier]) !== stable(snapshot)) {
         throw new EvalConnectorBindingError(
-          'The mock connection or its tools changed. Create a new experiment with the current connection.',
+          `${bindingLabel(identifier, connector.id)}: The mock connection or its tools changed. Create a new experiment with the current connection.`,
         );
       }
       const manifest = buildConnectorManifest({
@@ -147,7 +153,7 @@ export class AgentEvalConnectorService {
       });
       if (!manifest?.api.length) {
         throw new EvalConnectorBindingError(
-          'The mock connection has no automatically permitted tools. Sync its tools and review their permissions.',
+          `${bindingLabel(identifier, connector.id)}: The mock connection has no automatically permitted tools. Sync its tools and review their permissions.`,
         );
       }
       snapshots[identifier] = snapshot;
@@ -159,28 +165,44 @@ export class AgentEvalConnectorService {
 
   /** Share discovery only within this preflight, while validating every case's aliases. */
   async checkBindingGroups(groups: EvalConnectorBindings[]) {
+    const startedAt = performance.now();
+    const connectionCount = new Set(
+      groups.flatMap((bindings) => Object.values(bindings).map(({ connectorId }) => connectorId)),
+    ).size;
     const connections = new Map<string, Map<string, EvalConnectorBindings>>();
-    for (const bindings of groups) {
-      await this.validateBindings(bindings);
-      for (const [identifier, binding] of Object.entries(bindings)) {
-        let transports = connections.get(binding.connectorId);
-        if (!transports) {
-          transports = new Map();
-          connections.set(binding.connectorId, transports);
+    let status = 'failure';
+    try {
+      for (const bindings of groups) {
+        await this.validateBindings(bindings);
+        for (const [identifier, binding] of Object.entries(bindings)) {
+          let transports = connections.get(binding.connectorId);
+          if (!transports) {
+            transports = new Map();
+            connections.set(binding.connectorId, transports);
+          }
+          const transport = binding.transport ?? 'mcp';
+          if (!transports.has(transport)) transports.set(transport, { [identifier]: binding });
         }
-        const transport = binding.transport ?? 'mcp';
-        if (!transports.has(transport)) transports.set(transport, { [identifier]: binding });
       }
+      await pMap(
+        connections.values(),
+        async (transports) => {
+          // Different transports still sync the same connector's tools. Serialize
+          // them to avoid competing upserts, but check each protocol independently.
+          for (const bindings of transports.values()) await this.checkBindings(bindings);
+        },
+        { concurrency: 4 },
+      );
+      status = 'success';
+    } finally {
+      log(
+        'preflight batch groups=%d connections=%d elapsedMs=%d status=%s',
+        groups.length,
+        connectionCount,
+        Math.round(performance.now() - startedAt),
+        status,
+      );
     }
-    await pMap(
-      connections.values(),
-      async (transports) => {
-        // Different transports still sync the same connector's tools. Serialize
-        // them to avoid competing upserts, but check each protocol independently.
-        for (const bindings of transports.values()) await this.checkBindings(bindings);
-      },
-      { concurrency: 4 },
-    );
   }
 
   /** Authenticated discovery is run before creation, not inferred from cached health. */
@@ -239,9 +261,8 @@ export class AgentEvalConnectorService {
           binding.connectorId,
           error instanceof Error ? error.name : typeof error,
         );
-        // Report the local binding, never the upstream message (which may contain
-        // credentials or private URLs). Unusual aliases fall back to the UUID.
-        const label = /^[\w.-]{1,128}$/.test(identifier) ? identifier : binding.connectorId;
+        // Report the stable connection and its representative alias, never the
+        // upstream message (which may contain credentials or private URLs).
         const reason =
           error instanceof EvalConnectorBindingError
             ? error.message
@@ -250,7 +271,9 @@ export class AgentEvalConnectorService {
               : error instanceof Error && error.name === 'AbortError'
                 ? 'Could not verify the mock connection: the request was interrupted.'
                 : 'Could not verify the mock connection. Check its address, credentials and tool access.';
-        throw new EvalConnectorBindingError(`Mock connection "${label}": ${reason}`);
+        throw new EvalConnectorBindingError(
+          `${bindingLabel(identifier, binding.connectorId)}: ${reason}`,
+        );
       }
     }
     return this.resolveBindings(bindings);
