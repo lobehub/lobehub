@@ -2,6 +2,7 @@ import { TokenTag } from '@lobehub/ui/chat';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -11,6 +12,7 @@ import { useTokenBreakdown } from './useTokenBreakdown';
 
 const Token = memo(() => {
   const { t } = useTranslation('chat');
+  const isMobile = useIsMobile();
 
   const { chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken } =
     useTokenBreakdown();
@@ -36,7 +38,7 @@ const Token = memo(() => {
   if (!isDevMode && maxTokens > 0 && totalToken / maxTokens <= 0.5) return null;
 
   return (
-    <ActionPopover content={content}>
+    <ActionPopover content={content} trigger={isMobile ? 'click' : 'hover'}>
       <TokenTag
         maxValue={maxTokens}
         mode={'used'}
