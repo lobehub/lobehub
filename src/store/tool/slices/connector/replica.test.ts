@@ -179,6 +179,26 @@ describe('connector slice replica', () => {
     );
   });
 
+  it('loads the lists again after leaving a scope and coming back to it', async () => {
+    listQuery.mockResolvedValue([connector('c1')]);
+    listByAgentQuery.mockResolvedValue([connector('c1')]);
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+    const home = scope;
+
+    const elsewhere = `${scope.split(':')[0]}:ws-2`;
+    useScope(elsewhere);
+    broadcastCacheScope(elsewhere);
+    useScope(home);
+    broadcastCacheScope(home);
+
+    // Switching dropped the lists, so their confirmations can't stand
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(false);
+    listByAgentQuery.mockClear();
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+    expect(listByAgentQuery).toHaveBeenCalledTimes(1);
+    expect(useToolStore.getState().agentConnectors.a1).toHaveLength(1);
+  });
+
   it('leaves a list unconfirmed when the server fails, and tries again next time', async () => {
     listQuery.mockResolvedValue([]);
     listByAgentQuery.mockRejectedValueOnce(new Error('offline'));

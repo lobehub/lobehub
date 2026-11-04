@@ -172,6 +172,11 @@ export class ConnectorActionImpl {
     this.#connectors.ensureScope(scope);
     this.#agentBoundConnectors.ensureScope(scope);
     this.#agentConnectors.ensureScope(scope);
+    // The lists were dropped with the scope, so were their confirmations:
+    // coming back to a scope must load its lists from the server again
+    for (const id of this.#confirmed) {
+      if (!id.startsWith(`${scope}|`)) this.#confirmed.delete(id);
+    }
   };
 
   /**
