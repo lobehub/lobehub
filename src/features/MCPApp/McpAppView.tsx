@@ -20,15 +20,14 @@ import { anySignal } from './abortSignal';
 import { mcpAppNameSelector } from './appName';
 import { buildHostContext, connectMcpAppBridge } from './bridge';
 import { confirmAppMessage, confirmAppToolCall } from './confirm';
+import {
+  buildAppFrameDocument,
+  isAppFrameNavigatedNotice,
+  VIEW_FRAME_SANDBOX,
+} from './frameDocument';
 import { sendAppMessage } from './sendAppMessage';
 import { getAppToolCallPolicy } from './toolCallPolicy';
-import {
-  APP_IFRAME_ALLOW,
-  buildAppCsp,
-  injectCsp,
-  pickAppResource,
-  toCallToolResult,
-} from './utils';
+import { APP_IFRAME_ALLOW, buildAppCsp, pickAppResource, toCallToolResult } from './utils';
 
 const DEFAULT_HEIGHT = 320;
 const MAX_HEIGHT = 2000;
@@ -95,9 +94,12 @@ const McpAppView = memo<McpAppViewProps>(
 
     const resource = useMemo(() => pickAppResource(data, resourceUri), [data, resourceUri]);
     const srcDoc = useMemo(
-      () => resource && injectCsp(resource.html, buildAppCsp(resource.meta?.csp)),
+      () => resource && buildAppFrameDocument(resource.html, buildAppCsp(resource.meta?.csp)),
       [resource],
     );
+    // The document whose view tried to leave it, so the wrapper dropped the view
+    const [droppedDoc, setDroppedDoc] = useState<string>();
+    const navigated = !!srcDoc && droppedDoc === srcDoc;
 
     // Everything the bridge reads after mount goes through a ref, so the
     // iframe session is created once per document instead of per render.
@@ -107,7 +109,14 @@ const McpAppView = memo<McpAppViewProps>(
     useEffect(() => {
       const iframe = iframeRef.current;
       const target = iframe?.contentWindow;
-      if (!srcDoc || !iframe || !target) return;
+      if (!srcDoc || navigated || !iframe || !target) return;
+
+      const handleFrameNotice = (event: MessageEvent) => {
+        if (event.source === target && isAppFrameNavigatedNotice(event.data)) {
+          setDroppedDoc(srcDoc);
+        }
+      };
+      window.addEventListener('message', handleFrameNotice);
 
       // One message at a time, so a view can't line up runs behind a pending one
       let sending = false;
@@ -224,11 +233,12 @@ const McpAppView = memo<McpAppViewProps>(
       bridgeRef.current = bridge;
 
       return () => {
+        window.removeEventListener('message', handleFrameNotice);
         bridgeRef.current = undefined;
         approvals.abort();
         dispose();
       };
-    }, [latest, srcDoc, toolCallId]);
+    }, [latest, navigated, srcDoc, toolCallId]);
 
     useEffect(() => {
       bridgeRef.current?.setHostContext(buildHostContext(isDark));
@@ -236,8 +246,9 @@ const McpAppView = memo<McpAppViewProps>(
 
     if (isLoading) return <Skeleton height={DEFAULT_HEIGHT} width={'100%'} />;
 
-    if (error || !srcDoc) {
+    if (error || !srcDoc || navigated) {
       if (error) console.warn(`[MCPApp] failed to load ${resourceUri}:`, error);
+      if (navigated) console.warn(`[MCPApp] ${resourceUri} left its document and was removed`);
       return fallback;
     }
 
@@ -248,8 +259,9 @@ const McpAppView = memo<McpAppViewProps>(
             allow={APP_IFRAME_ALLOW}
             ref={iframeRef}
             // No `allow-same-origin`: the view runs on an opaque origin and can
-            // reach LobeHub only through the postMessage bridge.
-            sandbox="allow-scripts allow-forms"
+            // reach LobeHub only through the postMessage bridge. The frame loads
+            // the wrapper, which holds the view to its declared frame domains.
+            sandbox={VIEW_FRAME_SANDBOX}
             srcDoc={srcDoc}
             title={`${identifier} / ${apiName}`}
             {...stylex.props(styles.iframe, styles.iframeHeight(`${height}px`))}

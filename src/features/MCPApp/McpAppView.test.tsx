@@ -130,6 +130,53 @@ describe('McpAppView', () => {
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
   });
 
+  it('loads the view behind the wrapper that holds it to its declared frame domains', () => {
+    const { iframe } = setup();
+    const doc = iframe.getAttribute('srcdoc')!;
+
+    expect(doc.indexOf('Content-Security-Policy')).toBeLessThan(doc.indexOf('<script>'));
+    expect(doc).toContain(`frame-src 'none'`);
+    expect(doc).toContain('frame.srcdoc = ');
+    expect(doc).toContain('\\u003cp>weather\\u003c/p>');
+  });
+
+  it('falls back to the plain result once the wrapper drops a view that left its document', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { iframe } = setup();
+    const notice = { source: 'lobe-mcp-app-frame', type: 'navigated' };
+
+    // Only the view's own frame can report it
+    window.dispatchEvent(new MessageEvent('message', { data: notice, source: window }));
+    await flush();
+    expect(screen.queryByText('fallback')).toBeNull();
+
+    window.dispatchEvent(
+      new MessageEvent('message', { data: notice, source: iframe.contentWindow }),
+    );
+    expect(await screen.findByText('fallback')).toBeTruthy();
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('left its document'));
+  });
+
+  it('drops the approvals of a view that left its document', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    confirmAppToolCall.mockImplementation(() => new Promise(() => {}));
+    const { call, iframe } = setupToolCalls();
+
+    await call(1, 'Rome');
+    const { signal } = confirmAppToolCall.mock.calls[0][0] as { signal: AbortSignal };
+    expect(signal.aborted).toBe(false);
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { source: 'lobe-mcp-app-frame', type: 'navigated' },
+        source: iframe.contentWindow,
+      }),
+    );
+    await screen.findByText('fallback');
+    expect(signal.aborted).toBe(true);
+  });
+
   it('requires consent when another view activates the parent and the sender focuses itself', async () => {
     const clock = vi.spyOn(performance, 'now').mockReturnValue(0);
     Object.defineProperty(navigator, 'userActivation', {
