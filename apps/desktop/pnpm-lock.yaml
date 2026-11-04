@@ -637,6 +637,9 @@ importers:
 
   ../../packages/prompts:
     dependencies:
+      '@lobechat/business-const':
+        specifier: workspace:*
+        version: link:../business/const
       '@lobechat/const':
         specifier: workspace:*
         version: link:../const

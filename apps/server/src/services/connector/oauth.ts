@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type {
   AuthorizationServerMetadata,
@@ -153,7 +154,7 @@ export const registerDynamicClient = async (params: {
 }): Promise<OAuthClientInformationFull> => {
   return registerClient(params.authorizationServerUrl, {
     clientMetadata: {
-      client_name: params.clientName ?? 'LobeHub',
+      client_name: params.clientName ?? BRANDING_NAME,
       grant_types: ['authorization_code', 'refresh_token'],
       redirect_uris: [params.redirectUri],
       response_types: ['code'],
