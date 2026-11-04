@@ -2411,6 +2411,12 @@ export default {
   'goalEmpty.title': 'Chase goals without limits',
   'goalList.acceptanceProgress': '{{passed}}/{{total}} passed',
   'goalList.agentRuns': '{{count}} runs',
+  'goalList.archive': 'Archive',
+  'goalList.archiveBlocked': 'Sign off or cancel the goal before archiving it',
+  'goalList.archiveDenied': 'Only the goal creator or a workspace owner can archive it',
+  'goalList.archiveFailed': 'Failed to archive goal',
+  'goalList.archiveSuccess': 'Goal archived',
+  'goalList.archived': 'Archived',
   'goalList.contextMenu.copyConfirm': 'Copy',
   'goalList.contextMenu.copyDescription':
     'Copies the goal, its budget and acceptance criteria as a new draft. Progress, tasks and the agent are not copied; pick an agent there and start it.',
@@ -2459,6 +2465,9 @@ export default {
   'goalTask.stage.verifying': 'Accept',
   'goalTask.step.queued': 'Not started',
   'goalList.title': 'Goals',
+  'goalList.unarchive': 'Unarchive',
+  'goalList.unarchiveFailed': 'Failed to unarchive goal',
+  'goalList.unarchiveSuccess': 'Goal restored',
   'goalDetail.acceptance': 'Acceptance checks',
   'goalDetail.agentManagedByOwner':
     "Only the goal's creator or a Workspace admin can change its agents",
@@ -2757,6 +2766,7 @@ export default {
     'Fork a fresh recipe for the units that broke; the rest of the batch continues once the new gate passes.',
   'goalProcess.decision.effect.releaseBatch':
     'Release the next wave on the current recipe. Each later wave goes to the main Agent, which releases it or brings it back to you.',
+  'goalProcess.signOff.archivedBlocked': 'Restore this archived goal before requesting changes',
   'goalProcess.signOff.islandSubtitle': 'is done and waiting for your sign-off',
   'goalProcess.signOff.islandSummary':
     'Goal-level acceptance passed. Read the delivery report, then sign off or request changes.',
@@ -3076,6 +3086,7 @@ export default {
   'goalPage.filteredEmptyTitle': 'No goals in this view',
   'goalPage.filter.achieved': 'Completed',
   'goalPage.filter.all': 'All',
+  'goalPage.filter.archived': 'Archived',
   'goalPage.filter.review': 'Needs you',
   'goalPage.filter.running': 'In progress',
   'goalPage.loadingProgress': 'Loading acceptance progress…',
