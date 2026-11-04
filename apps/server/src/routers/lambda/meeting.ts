@@ -23,6 +23,8 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 
+import { assertFileNotInRestrictedKnowledgeBase } from './_helpers/knowledgeBaseAccess';
+
 const meetingProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
@@ -178,6 +180,10 @@ export const meetingRouter = router({
           if (!isAudioFileType(file.fileType)) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'File is not an audio recording' });
           }
+          // `findById` only checks file/workspace visibility: a file parked in a
+          // restricted knowledge base stays readable as a file row, so knowing its
+          // id must not be enough to turn it into a meeting recording.
+          await assertFileNotInRestrictedKnowledgeBase(ctx, location.audioFileId);
         }
 
         const previous = await ctx.meetingModel.findById(id);
@@ -275,6 +281,11 @@ export const meetingRouter = router({
           ? ((await ctx.fileModel.findById(meeting.audioFileId)) ??
             (await ctx.fileModel.findMeetingAudio(meeting.audioFileId, meeting.userId)))
           : undefined;
+        if (file) {
+          // Access can change after the audio was attached: gate playback on the
+          // same knowledge-base rule the file endpoints use.
+          await assertFileNotInRestrictedKnowledgeBase(ctx, file.id);
+        }
         const audio = file
           ? {
               fileType: file.fileType,
