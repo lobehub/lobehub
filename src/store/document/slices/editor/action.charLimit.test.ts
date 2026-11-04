@@ -225,6 +225,36 @@ describe('DocumentStore - Editor Actions (plan character limit)', () => {
       expect(result.current.documents['doc-1'].saveStatus).toBe('failed');
     });
 
+    // LOBE-15419: a page already over the limit is stored once it stops growing,
+    // while it is still longer than the limit.
+    it('clears the refusal when the server stores the still over-limit page', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      initRoomDoc(result);
+      act(() => result.current.setCharLimitRefusal('doc-1', { actual: 6, limit: 3 }));
+      act(() => result.current.handleContentChange());
+
+      act(() => result.current.clearCharLimitRefusal('doc-1'));
+
+      const doc = result.current.documents['doc-1'];
+      expect(doc.charLimitError).toBeUndefined();
+      expect(doc.saveStatus).toBe('saved');
+    });
+
+    it('clears the refusal when a manual version of the over-limit page is stored', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      initRoomDoc(result);
+      act(() => result.current.setCharLimitRefusal('doc-1', { actual: 6, limit: 3 }));
+      vi.mocked(documentService.snapshotPageVersion).mockResolvedValueOnce(undefined as any);
+
+      await act(async () => {
+        await result.current.saveVersion('doc-1');
+      });
+
+      const doc = result.current.documents['doc-1'];
+      expect(doc.charLimitError).toBeUndefined();
+      expect(doc.saveStatus).toBe('saved');
+    });
+
     it('tells the user why a manual save of the room did nothing', async () => {
       const { result } = renderHook(() => useDocumentStore());
       initRoomDoc(result);

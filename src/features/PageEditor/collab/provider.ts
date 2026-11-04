@@ -45,6 +45,11 @@ export interface PageCollabProviderEvents {
   onAccess?: (access: PageCollabAccess) => void;
   onBootstrap?: () => void;
   /**
+   * The server stored the room's page again after refusing it. A page already
+   * over the limit is stored when it does not grow, so only the server knows.
+   */
+  onCharLimitCleared?: () => void;
+  /**
    * The page grew past the plan's per-page limit: the room keeps the edits, but
    * the stored page stays at its last accepted version until it is shortened.
    */
@@ -356,6 +361,11 @@ export class PageCollabProvider extends Emitter {
 
       case 'doc_awareness': {
         this.awareness.setRemoteState(message.clientID, message.state);
+        return;
+      }
+
+      case 'doc_char_limit_cleared': {
+        this.events.onCharLimitCleared?.();
         return;
       }
 

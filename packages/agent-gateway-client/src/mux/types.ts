@@ -74,6 +74,8 @@ export type MuxDocServerMessage =
     }
   | { documentId: string; type: 'doc_update'; update: string }
   | { documentId: string; seq: number; type: 'doc_ack' }
+  /** The room's page is stored again after a `char_limit_exceeded` refusal. */
+  | { documentId: string; type: 'doc_char_limit_cleared' }
   | ({ documentId: string; type: 'doc_awareness' } & MuxDocAwarenessEntry)
   | {
       /**

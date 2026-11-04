@@ -293,6 +293,8 @@ export class EditorActionImpl {
     await waitForPageSynced(documentId, PAGE_SYNC_WAIT_MS);
     try {
       await documentService.snapshotPageVersion(documentId, 'manual');
+      // The version stored the room's page, which may still be over the limit when it did not grow.
+      this.#get().clearCharLimitRefusal(documentId);
     } catch (error) {
       const refusal = getCharLimitRefusal(
         error,
@@ -302,6 +304,23 @@ export class EditorActionImpl {
       this.#get().setCharLimitRefusal(documentId, refusal);
       notifyCharLimitRefused(refusal);
     }
+  };
+
+  /**
+   * The server stored a room page it had refused for its length. A page already
+   * over the limit is stored once it does not grow, so the client cannot tell
+   * this from the length alone.
+   */
+  clearCharLimitRefusal = (documentId: string): void => {
+    if (!this.#get().documents[documentId]?.charLimitError) return;
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { charLimitError: undefined, saveStatus: 'saved' },
+      },
+      n('clearCharLimitRefusal'),
+    );
   };
 
   /**

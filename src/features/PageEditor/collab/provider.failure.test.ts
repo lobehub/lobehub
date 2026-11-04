@@ -37,6 +37,7 @@ const setup = () => {
   const room = createMux();
   const events = {
     onAccess: vi.fn(),
+    onCharLimitCleared: vi.fn(),
     onCharLimitExceeded: vi.fn(),
     onFailure: vi.fn(),
     onStatus: vi.fn(),
@@ -94,6 +95,17 @@ describe('PageCollabProvider failures', () => {
       plan: 'plus',
     });
     expect(events.onStatus).not.toHaveBeenCalledWith('error');
+    expect(events.onFailure).not.toHaveBeenCalled();
+  });
+
+  // LOBE-15419: a page already over the limit is stored again once it stops growing.
+  it('reports when the server stores a refused page again', () => {
+    const { events, room } = setup();
+    room.deliver(synced());
+
+    room.deliver({ documentId: 'doc_1', type: 'doc_char_limit_cleared' });
+
+    expect(events.onCharLimitCleared).toHaveBeenCalledTimes(1);
     expect(events.onFailure).not.toHaveBeenCalled();
   });
 
