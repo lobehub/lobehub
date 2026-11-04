@@ -178,6 +178,7 @@ export interface ListWorkspaceMembersState {
 // ==================== viewTask ====================
 
 export interface ViewTaskParams {
+  commentId?: string;
   identifier?: string;
 }
 
