@@ -27,6 +27,14 @@ describe('sendAppMessage', () => {
     await expect(result).resolves.toBe(true);
   });
 
+  it('sends as a separate turn that leaves the composer draft alone', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+
+    await sendAppMessage(send, 'Follow up', 'weather');
+
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ preserveComposer: true }));
+  });
+
   it('does not acknowledge before the acceptance callback fires', async () => {
     let params!: SendMessageParams;
     const send = vi.fn((value: SendMessageParams) => {
