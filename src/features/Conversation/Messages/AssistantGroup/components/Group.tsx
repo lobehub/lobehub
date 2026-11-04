@@ -1,4 +1,3 @@
-import { splitAssistantGroupFinalAnswer } from '@lobechat/conversation-flow';
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
@@ -23,8 +22,8 @@ import type { GroupRenderSegment } from './segments';
 import {
   countAssistantLlmCalls,
   hasRenderableFinalAnswer,
-  liftMcpAppSegments,
   shouldFoldProcess,
+  splitProcessForFold,
 } from './segments';
 import SteerMessage from './SteerMessage';
 import type { WorkflowExpandLevelDefault } from './WorkflowCollapse';
@@ -207,14 +206,7 @@ const Group = memo<GroupChildrenProps>(
     // lifted out of the fold and sit between it and the answer. They stay in
     // the `process` chain in both states, so folding does not remount (and
     // reload) a view the user may already be using.
-    const splits = views.map((view) => {
-      const split = splitAssistantGroupFinalAnswer(view.segments);
-      const { folded, lifted } = enableMcpApps
-        ? liftMcpAppSegments(split.processSegments)
-        : { folded: split.processSegments, lifted: [] };
-
-      return { ...split, liftedSegments: lifted, processSegments: folded };
-    });
+    const splits = views.map((view) => splitProcessForFold(view.segments, { enableMcpApps }));
     const finalSegments = splits.at(-1)!.finalSegments;
     const foldProcess = shouldFoldProcess({
       enabled: enableProcessFold,

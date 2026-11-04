@@ -1,4 +1,5 @@
 import type { AssistantGroupSegment } from '@lobechat/conversation-flow';
+import { splitAssistantGroupFinalAnswer } from '@lobechat/conversation-flow';
 
 import { LOADING_FLAT } from '@/const/message';
 
@@ -118,4 +119,22 @@ export const resolveWorkflowExpandLevel = (
     typeof override === 'string' ? { completion: override, streaming: override } : override;
 
   return { ...explicit, streaming: explicit?.streaming ?? streamingSetting };
+};
+
+/**
+ * One turn's segments as the group lays them out once its process may fold:
+ * the final answer, the process steps that fold, and the MCP App views lifted
+ * out between the fold and the answer. With the `mcp_apps` flag off, nothing
+ * is lifted and a view folds with the rest of the process.
+ */
+export const splitProcessForFold = (
+  segments: GroupRenderSegment[],
+  { enableMcpApps }: { enableMcpApps: boolean },
+) => {
+  const split = splitAssistantGroupFinalAnswer(segments);
+  const { folded, lifted } = enableMcpApps
+    ? liftMcpAppSegments(split.processSegments)
+    : { folded: split.processSegments, lifted: [] };
+
+  return { ...split, liftedSegments: lifted, processSegments: folded };
 };
