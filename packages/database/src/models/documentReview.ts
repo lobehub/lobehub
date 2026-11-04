@@ -9,8 +9,9 @@ import type {
   DocumentReviewTextAnchor,
 } from '@lobechat/types';
 import { resolveDocumentReviewCheckTransition } from '@lobechat/types';
-import { and, asc, desc, eq, inArray, isNull, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 
+import { documentHistories } from '../schemas/documentHistory';
 import type {
   DocumentReviewCheckResultItem,
   DocumentReviewImpactItem,
@@ -874,6 +875,22 @@ const sessionIdsOf = (db: LobeChatDatabase, documentIds: string[]) =>
     .from(documentReviewSessions)
     .where(inArray(documentReviewSessions.documentId, documentIds));
 
+/**
+ * Snapshots pinned as a session's impact-analysis baseline. They live in
+ * `document_histories`, which `loadBaseline` reads under the caller's
+ * workspace, so they have to move with the session that pins them.
+ */
+const baseHistoryIdsOf = (db: LobeChatDatabase, documentIds: string[]) =>
+  db
+    .select({ id: documentReviewSessions.baseHistoryId })
+    .from(documentReviewSessions)
+    .where(
+      and(
+        inArray(documentReviewSessions.documentId, documentIds),
+        isNotNull(documentReviewSessions.baseHistoryId),
+      ),
+    );
+
 const ruleSetIdsOf = (db: LobeChatDatabase, documentIds: string[]) =>
   db
     .select({ id: documentReviewRuleSets.id })
@@ -939,6 +956,13 @@ export const rehomeDocumentReviews = async (
     .update(documentReviewRules)
     .set({ updatedAt: documentReviewRules.updatedAt, workspaceId })
     .where(inArray(documentReviewRules.ruleSetId, ruleSetIdsOf(db, documentIds)));
+  // `loadBaseline` requires the pinned snapshot to carry the caller's
+  // workspace, so a baseline left behind in the source workspace turns every
+  // later Analyze on a transferred review into BASELINE_NOT_FOUND.
+  await db
+    .update(documentHistories)
+    .set({ workspaceId })
+    .where(inArray(documentHistories.id, baseHistoryIdsOf(db, documentIds)));
 };
 
 /** Reviews cannot follow a document into personal scope; children cascade. */
