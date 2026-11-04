@@ -82,7 +82,6 @@ You stay in charge — without staying online.
 ## 👋🏻 Getting Started & Join Our Community
 
 We are a group of e/acc design-engineers, hoping to provide modern design components and tools for AIGC.
-By adopting the Bootstrapping approach, we aim to provide developers and users with a more open, transparent, and user-friendly product ecosystem.
 
 Whether for users or professional developers, LobeHub will be your AI Agent playground. Please be aware that LobeHub is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
 
