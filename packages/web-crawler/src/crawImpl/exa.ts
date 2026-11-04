@@ -23,13 +23,14 @@ interface ExaResponse {
 export const exa: CrawlImpl = async (url) => {
   // Get API key from environment variable
   const apiKey = process.env.EXA_API_KEY;
+  const baseUrl = process.env.EXA_URL || 'https://api.exa.ai';
 
   let res: Response;
 
   try {
     res = await withTimeout(
       (signal) =>
-        fetch('https://api.exa.ai/contents', {
+        fetch(`${baseUrl}/contents`, {
           body: JSON.stringify({
             livecrawl: 'fallback', // always, fallback
             text: true,
