@@ -387,6 +387,7 @@
   "ok": "OK",
   "openOnRight": "Open on the right",
   "openOnRightHint": "Release to open side-by-side on the right",
+  "openOriginalFile": "Open original file",
   "operationFailed": "Operation failed, please try again",
   "or": "or",
   "pageSizeItem": "{{count}} items",
