@@ -23,6 +23,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
+import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { wakeChannel } from './queue';
 import { resolveChannelRoutingConfig } from './routingConfig';
@@ -323,6 +324,7 @@ export class ChannelService {
       ...input,
       routing: config ? 'decision' : 'fallback',
     });
+    notifyChannelMentions(this.db, { userId: this.userId, workspaceId: this.workspaceId }, message);
     // Human quotes only update the public feed; they never schedule Agent work.
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
