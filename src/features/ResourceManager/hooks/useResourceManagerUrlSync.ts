@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { SortType } from '@/types/files';
 
+import { getResourceSortParams } from './resourceSortParams';
+
 /**
  * Hook to sync ResourceManager store state with URL query parameters
  * Store is the source of truth, URL is synced for bookmarking
@@ -20,9 +22,7 @@ export const useResourceManagerUrlSync = () => {
 
   // Initialize store from URL on mount (URL → Store)
   useEffect(() => {
-    const sorterParam = (searchParams.get('sorter') || 'createdAt') as
-      'name' | 'createdAt' | 'size';
-    const sortTypeParam = (searchParams.get('sortType') || SortType.Desc) as SortType;
+    const { sorter: sorterParam, sortType: sortTypeParam } = getResourceSortParams(searchParams);
 
     setSorter(sorterParam);
     setSortType(sortTypeParam);
