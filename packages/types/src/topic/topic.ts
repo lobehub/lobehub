@@ -628,7 +628,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
-  heteroSpeed: z.enum(['default', 'fast']).optional(),
+  heteroSpeed: z.enum(['default', 'normal', 'fast', 'ultrafast']).optional(),
   model: z.string().optional(),
   onboardingFeedback: z
     .object({
