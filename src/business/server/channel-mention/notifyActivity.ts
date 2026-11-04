@@ -1,7 +1,7 @@
 /**
  * Workspace members were @-mentioned in a Channel message. Fired once per sent
- * message; the caller has already narrowed recipients to the message's active
- * human members other than the sender.
+ * message; the caller has already narrowed recipients to mentioned people who are
+ * active members of both the Channel and its workspace, other than the sender.
  */
 export interface NotifyChannelMentionParams {
   actorUserId: string;

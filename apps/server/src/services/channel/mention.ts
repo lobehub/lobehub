@@ -1,8 +1,8 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { notifyChannelMention } from '@/business/server/channel-mention/notifyActivity';
-import { channelMembers } from '@/database/schemas';
+import { channelMembers, workspaceMembers } from '@/database/schemas';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 interface MentionedMessage {
@@ -29,13 +29,21 @@ export const notifyChannelMentions = (
       const members = await db
         .select({ userId: channelMembers.userId })
         .from(channelMembers)
+        // Leaving a workspace keeps the Channel member row, so membership is checked here.
+        .innerJoin(
+          workspaceMembers,
+          and(
+            eq(workspaceMembers.userId, channelMembers.userId),
+            eq(workspaceMembers.workspaceId, workspaceId),
+            isNull(workspaceMembers.deletedAt),
+          ),
+        )
         .where(
           and(
             eq(channelMembers.channelId, message.channelId),
             inArray(channelMembers.id, message.mentions),
             eq(channelMembers.actorType, 'user'),
             eq(channelMembers.status, 'active'),
-            isNotNull(channelMembers.userId),
           ),
         );
       const recipientUserIds = [

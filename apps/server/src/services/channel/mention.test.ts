@@ -12,7 +12,8 @@ vi.mock('@/business/server/channel-mention/notifyActivity', () => ({ notifyChann
 
 const dbReturning = (rows: { userId: string | null }[]) => {
   const where = vi.fn().mockResolvedValue(rows);
-  return { db: { select: () => ({ from: () => ({ where }) }) } as never, where };
+  const query = { innerJoin: () => query, where };
+  return { db: { select: () => ({ from: () => query }) } as never, where };
 };
 
 const runScheduled = async () => {
