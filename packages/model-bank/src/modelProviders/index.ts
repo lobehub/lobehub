@@ -72,6 +72,7 @@ import StreamLakeProvider from './streamlake';
 import SuperGrokProvider from './superGrok';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
+import TensorixProvider from './tensorix';
 import TogetherAIProvider from './togetherai';
 import { TypeSafeProvider } from './typesafe';
 import UnslothProvider from './unsloth';
@@ -110,6 +111,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   VLLMProvider.chatModels,
   XinferenceProvider.chatModels,
   OpenRouterProvider.chatModels,
+  TensorixProvider.chatModels,
   TogetherAIProvider.chatModels,
   FireworksAIProvider.chatModels,
   PerplexityProvider.chatModels,
@@ -187,6 +189,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   PPIOProvider,
   Ai302Provider,
   NvidiaProvider,
+  TensorixProvider,
   TogetherAIProvider,
   TypeSafeProvider,
   FireworksAIProvider,
@@ -376,6 +379,7 @@ export { default as StreamLakeProviderCard } from './streamlake';
 export { default as SuperGrokProviderCard } from './superGrok';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
+export { default as TensorixProviderCard } from './tensorix';
 export { default as TogetherAIProviderCard } from './togetherai';
 export { default as UnslothProviderCard } from './unsloth';
 export { default as UpstageProviderCard } from './upstage';
