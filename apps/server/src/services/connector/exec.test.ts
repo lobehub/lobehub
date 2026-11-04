@@ -40,8 +40,9 @@ const tool = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const makeCtx = (connectors: any[], tools: any[]) =>
+const makeCtx = (connectors: any[], tools: any[], { agentVisible = true } = {}) =>
   ({
+    agentModel: { existsById: vi.fn().mockResolvedValue(agentVisible) },
     connectorModel: {
       queryByIdentifiers: vi.fn().mockResolvedValue(connectors),
       resolveByIdentifiers: vi.fn().mockResolvedValue(connectors),
@@ -316,7 +317,43 @@ describe('callConnectorToolById agent resolution', () => {
       ctx,
     );
 
+    expect(ctx.agentModel.existsById).toHaveBeenCalledWith('agt_1');
     expect(ctx.connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(['my-conn'], 'agt_1');
     expect(ctx.connectorModel.queryByIdentifiers).not.toHaveBeenCalled();
+  });
+});
+
+// Connector rows are scoped by workspace only: another member's private agent
+// must not lend its connectors (and their credentials) to the caller.
+describe('agent-scoped connectors of an agent the caller cannot see', () => {
+  it('does not run a tool on them', async () => {
+    const ctx = makeCtx([connector], [tool()], { agentVisible: false });
+
+    await expect(
+      callConnectorToolById(
+        { agentId: 'agt_private', identifier: 'my-conn', toolName: 'do_thing' },
+        ctx,
+      ),
+    ).rejects.toHaveProperty('code', 'NOT_FOUND');
+
+    expect(ctx.agentModel.existsById).toHaveBeenCalledWith('agt_private');
+    expect(ctx.connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
+    expect(ensureFreshConnectorToken).not.toHaveBeenCalled();
+    expect(mcpService.callTool).not.toHaveBeenCalled();
+  });
+
+  it('does not read their views', async () => {
+    mcpAppEnabled.mockResolvedValue(true);
+    const ctx = makeCtx([connector], [], { agentVisible: false });
+
+    await expect(
+      readConnectorUiResourceById(
+        { agentId: 'agt_private', identifier: 'my-conn', uri: 'ui://app' },
+        ctx,
+      ),
+    ).rejects.toHaveProperty('code', 'NOT_FOUND');
+
+    expect(ctx.connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
+    expect(mcpService.readUiResource).not.toHaveBeenCalled();
   });
 });

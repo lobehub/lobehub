@@ -67,6 +67,7 @@ const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
   const wsId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
       connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId),
       pluginModel: new PluginModel(ctx.serverDB, ctx.userId, wsId),

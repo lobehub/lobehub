@@ -1,5 +1,6 @@
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
+import type { AgentModel } from '@/database/models/agent';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
@@ -22,18 +23,32 @@ export class ConnectorToolCallError extends Error {
   }
 }
 
+export interface ConnectorExecContext extends ConnectorToolSyncContext {
+  /** Visibility-aware: decides whether the caller may act as the given agent. */
+  agentModel: Pick<AgentModel, 'existsById'>;
+  /** `userId` decides the caller's `mcp_app` flag. */
+  userId?: string | null;
+}
+
 /**
  * The connector an identifier names. With an agent, resolve the way that agent's
  * runs do (agent-owned > mounted > free base row); without one, keep the base
  * lookup the classic chat path has always used.
+ *
+ * Connector rows are scoped by workspace only, so in a workspace another
+ * member's private agent would resolve to its connectors and their
+ * credentials. Only an agent the caller can see may be resolved; any other id
+ * reads as not found.
  */
-const findConnector = (
+const findConnector = async (
   params: { agentId?: string; identifier: string },
-  ctx: ConnectorToolSyncContext,
-) =>
-  params.agentId
-    ? ctx.connectorModel.resolveByIdentifiers([params.identifier], params.agentId)
-    : ctx.connectorModel.queryByIdentifiers([params.identifier]);
+  ctx: ConnectorExecContext,
+) => {
+  if (!params.agentId) return ctx.connectorModel.queryByIdentifiers([params.identifier]);
+  if (!(await ctx.agentModel.existsById(params.agentId))) return [];
+
+  return ctx.connectorModel.resolveByIdentifiers([params.identifier], params.agentId);
+};
 
 /**
  * Execute a single connector tool, enforcing the full permission model:
@@ -47,8 +62,7 @@ const findConnector = (
  */
 export const callConnectorToolById = async (
   params: { agentId?: string; args?: string; identifier: string; toolName: string },
-  /** `userId` decides the caller's `mcp_app` flag: whether the result may carry an MCP App view. */
-  ctx: ConnectorToolSyncContext & { userId?: string | null },
+  ctx: ConnectorExecContext,
 ): Promise<unknown> => {
   const [connector] = await findConnector(params, ctx);
   if (!connector) {
@@ -132,8 +146,7 @@ export const callConnectorToolById = async (
  */
 export const readConnectorUiResourceById = async (
   params: { agentId?: string; identifier: string; uri: string },
-  /** `userId` decides the caller's `mcp_app` flag: whether views may be read at all. */
-  ctx: ConnectorToolSyncContext & { userId?: string | null },
+  ctx: ConnectorExecContext,
 ) => {
   if (!(await isMcpAppEnabled(ctx.userId))) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Interactive views are turned off');
