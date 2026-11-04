@@ -86,9 +86,3 @@ export const FLAG_EXPLANATIONS: Record<string, string> = {
 
 export const flagExplanation = (flag: string) =>
   FLAG_EXPLANATIONS[flag] ?? FLAG_EXPLANATIONS[flag.split(':')[0]];
-
-export const SUBMIT_ERRORS: Record<string, string> = {
-  NOTE_REQUIRED: '写一句说明再签收：你是怎么确认的。',
-  NOTHING_SELECTED: '先勾选要签收的用例。',
-  UNPAIRED_ONE_BY_ONE: '两侧配不上的元素只能一条一条签收。',
-};

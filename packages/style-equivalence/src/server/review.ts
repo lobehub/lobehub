@@ -18,7 +18,11 @@ interface CaseEntry {
   key: string;
   plan: { combos?: Combo[]; elementIds?: { base: string; head: string }; file: string };
   result?: {
-    comboDifferences?: unknown[];
+    comboDifferences?: Array<{
+      combo: number;
+      condition: string;
+      rootCauses: Array<{ after?: string; before?: string; key: string; property: string }>;
+    }>;
     differingConditions?: string[];
     errors?: string[];
     rootCauses?: Array<{ after?: string; before?: string; key: string; property: string }>;
@@ -73,7 +77,11 @@ const describe = (item: ReviewItem, entry: CaseEntry | undefined, element?: Styl
       prop: binding && (binding.spread ? 'className' : binding.prop),
       variables,
     }),
-    comboDifferences: entry?.result?.comboDifferences ?? [],
+    comboDifferences: (entry?.result?.comboDifferences ?? []).map((difference) => ({
+      combo: difference.combo,
+      condition: difference.condition,
+      summary: differenceSummary(difference.rootCauses),
+    })),
     combos: (entry?.plan.combos ?? [{}]).map((combo, index) => ({
       index,
       label: comboLabel(combo),
@@ -114,6 +122,7 @@ export const reviewPayload = async (stored: StoredRun) => {
   );
   const resolved = [...reviews.reworks.values()].filter((rework) => rework.resolvedAt);
   return {
+    conditions: (stored.run.conditions as string[] | undefined) ?? [],
     counts: {
       proven: stored.items.length - items.length,
       total: stored.items.length,

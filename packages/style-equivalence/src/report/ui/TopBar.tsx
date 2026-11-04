@@ -75,8 +75,8 @@ export const TopBar = ({ run }: { run: RunPayload['run'] }) => (
     <span {...stylex.props(styles.muted)}>→</span>
     <span {...stylex.props(styles.rev)}>{run.head.slice(0, 7)}</span>
     <div {...stylex.props(styles.spacer)} />
-    <a href={hrefOf({ kind: 'signoff' })} {...stylex.props(styles.link)}>
-      签收
+    <a href={hrefOf({ kind: 'review' })} {...stylex.props(styles.link)}>
+      复查
     </a>
     <a href={hrefOf({ kind: 'method' })} {...stylex.props(styles.link)}>
       方法依据

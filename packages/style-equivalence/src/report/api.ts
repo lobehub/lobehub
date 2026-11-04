@@ -141,16 +141,59 @@ export const fetchMethod = async (): Promise<{ selfTest: SelfTestPayload | null 
   return response.json();
 };
 
-export const postSignoff = async (body: {
-  keys: string[];
+export const cropShotUrl = (key: string, side: 'base' | 'head', condition: string, combo: number) =>
+  `${shotUrl(key, side, condition, combo)}&crop=1`;
+
+export type ReviewState = 'changed' | 'passed' | 'reworked' | 'todo' | 'waiting-agent';
+
+export interface ReviewView {
+  ask: string;
+  canPass: boolean;
+  category: string;
+  comboDifferences: Array<{ combo: number; condition: string; summary: string[] }>;
+  combos: Array<{ index: number; label: string }>;
+  component?: string;
+  differingConditions: string[];
+  errors: string[];
+  file: string;
+  flags: string[];
+  hash: string;
+  key: string;
+  needsAgent: boolean;
+  note?: { finding: string; suggestion: 'pass' | 'rework' };
+  rework?: { at: string; note: string; reviewer: string };
+  state: ReviewState;
+  summary: string[];
+  title: string;
+}
+
+export interface ReviewPayload {
+  conditions: string[];
+  counts: Record<ReviewState | 'proven' | 'total', number>;
+  items: ReviewView[];
+  pr?: { branch: string; number: number; title: string };
+  resolved: Array<{ key: string; note: string; resolvedAt: string }>;
+  run: { base: string; head: string; runId: string };
+  verdict: { mergeable: boolean; reasons: string[] };
+}
+
+export const fetchReview = async (): Promise<ReviewPayload> => {
+  const response = await fetch('/api/review');
+  if (!response.ok) throw new Error(`/api/review ${response.status}`);
+  return response.json();
+};
+
+export const postReview = async (body: {
+  action: 'pass' | 'rework';
+  key: string;
   note: string;
-  reason: string;
-}): Promise<{ verdict: RunPayload['verdict'] }> => {
-  const response = await fetch('/api/signoff', {
+}): Promise<ReviewPayload> => {
+  const response = await fetch('/api/review', {
     body: JSON.stringify(body),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   });
-  if (!response.ok) throw new Error(`${response.status} ${(await response.json()).error ?? ''}`);
-  return response.json();
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error ?? `/api/review ${response.status}`);
+  return payload;
 };

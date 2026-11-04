@@ -9,7 +9,7 @@ import { FileTree } from './FileTree';
 import { FileView } from './FileView';
 import { MethodPage } from './MethodPage';
 import { OverviewMatrix } from './OverviewMatrix';
-import { SignoffPage } from './SignoffPage';
+import { ReviewPage } from './ReviewPage';
 import { TopBar, VerdictStrip } from './TopBar';
 
 const styles = stylex.create({
@@ -44,6 +44,15 @@ const styles = stylex.create({
 
 export const App = () => {
   const route = useRoute();
+  if (route.kind === 'review') return <ReviewPage />;
+  return <ReportApp route={route} />;
+};
+
+const ReportApp = ({
+  route,
+}: {
+  route: Exclude<ReturnType<typeof useRoute>, { kind: 'review' }>;
+}) => {
   const [payload, setPayload] = useState<RunPayload>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -70,11 +79,6 @@ export const App = () => {
         <main {...stylex.props(styles.main)}>
           {route.kind === 'method' ? (
             <MethodPage anchor={route.anchor} payload={payload} />
-          ) : route.kind === 'signoff' ? (
-            <SignoffPage
-              payload={payload}
-              onVerdict={(verdict) => setPayload({ ...payload, verdict })}
-            />
           ) : route.kind === 'case' ? (
             <CaseView caseKey={route.key} payload={payload} />
           ) : route.kind === 'file' ? (

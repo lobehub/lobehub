@@ -24,7 +24,7 @@ const unwrap = (node: ts.Expression): ts.Expression =>
 
 const compact = (node: ts.Node) => node.getText().replaceAll(/\s+/g, '');
 
-const isStylexProps = (node: ts.Expression): node is ts.CallExpression =>
+const isStylexProps = (node: ts.Expression) =>
   ts.isCallExpression(node) && compact(node.expression) === 'stylex.props';
 
 const termsOfAll = (nodes: readonly ts.Expression[], ctx: Context) => {
