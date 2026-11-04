@@ -756,8 +756,9 @@ export class FileModel {
    * so a file still referenced elsewhere would silently disappear from there.
    * A candidate is therefore preserved (excluded) when it is still attached:
    * - to a message in another topic (or a message with no topic),
-   * - at the session level (`files_to_sessions`), which outlives a single topic, or
-   * - to a public Channel message (`channel_message_files`).
+   * - at the session level (`files_to_sessions`), which outlives a single topic,
+   * - to a public Channel message (`channel_message_files`), or
+   * - as a meeting recording (`meetings.audio_file_id`), which outlives the topic too.
    *
    * Session-level files are likewise never returned, matching the behaviour
    * documented on {@link findFilesToInitInSandbox}.
@@ -772,7 +773,7 @@ export class FileModel {
     const candidateIds = candidates.map((row) => row.id);
     if (candidateIds.length === 0) return [];
 
-    const [messageRefsOutsideTopic, sessionRefs, channelRefs] = await Promise.all([
+    const [messageRefsOutsideTopic, sessionRefs, channelRefs, meetingRefs] = await Promise.all([
       // same file attached to a message in a different topic (or no topic)
       this.db
         .selectDistinct({ id: messagesFiles.fileId })
@@ -798,12 +799,20 @@ export class FileModel {
         .selectDistinct({ id: channelMessageFiles.fileId })
         .from(channelMessageFiles)
         .where(inArray(channelMessageFiles.fileId, candidateIds)),
+      // same file is the recording of a meeting — the FK would null it out
+      this.db
+        .selectDistinct({ id: meetings.audioFileId })
+        .from(meetings)
+        .where(inArray(meetings.audioFileId, candidateIds)),
     ]);
 
     const referencedElsewhere = new Set<string>([
       ...messageRefsOutsideTopic.map((row) => row.id),
       ...sessionRefs.map((row) => row.id),
       ...channelRefs.map((row) => row.id),
+      // `audio_file_id` is nullable; `inArray` already excludes NULL rows, the
+      // filter only narrows the type for the set below.
+      ...meetingRefs.map((row) => row.id).filter((id): id is string => Boolean(id)),
     ]);
 
     return candidateIds.filter((id) => !referencedElsewhere.has(id));
