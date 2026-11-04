@@ -1,3 +1,4 @@
+import type { EvalConnectorBindings } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
@@ -6,7 +7,11 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { users, workspaces } from '@/database/schemas';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
-import { AgentEvalConnectorService, getLobeBenchForwardingEndpoint } from './index';
+import {
+  AgentEvalConnectorService,
+  EvalConnectorBindingError,
+  getLobeBenchForwardingEndpoint,
+} from './index';
 
 const mocked = vi.hoisted(() => ({
   callTool: vi.fn(),
@@ -56,6 +61,68 @@ afterEach(async () => {
 });
 
 describe('evaluation connector binding', () => {
+  it('bounds batch preflights to four connections and serializes transports of the same connection', async () => {
+    const connections = [];
+    for (let i = 0; i < 8; i++) {
+      connections.push(await create(`token-${i}`, `https://mock.test/mcp/dataset/service-${i}`));
+    }
+    const groups: EvalConnectorBindings[] = connections.map((connector, i) => ({
+      [`alias-${i}`]: { connectorId: connector.id },
+    }));
+    groups.push({
+      sameMcp: { connectorId: connections[0].id, transport: 'mcp' },
+      bench: { connectorId: connections[0].id, transport: 'lobe-bench' },
+    });
+    let active = 0;
+    let maximum = 0;
+    let sameConnectionMaximum = 0;
+    const activeByUrl = new Map<string, number>();
+    const release: Array<() => void> = [];
+    let released = false;
+    mocked.listRawTools.mockImplementation(async ({ url }: { url: string }) => {
+      active++;
+      maximum = Math.max(maximum, active);
+      activeByUrl.set(url, (activeByUrl.get(url) ?? 0) + 1);
+      sameConnectionMaximum = Math.max(sameConnectionMaximum, activeByUrl.get(url)!);
+      if (!released) await new Promise<void>((resolve) => release.push(resolve));
+      active--;
+      activeByUrl.set(url, activeByUrl.get(url)! - 1);
+      return rawTools;
+    });
+    const current = service();
+    const checking = current.checkBindingGroups(groups);
+    try {
+      await vi.waitFor(() => expect(mocked.listRawTools).toHaveBeenCalledTimes(4));
+    } finally {
+      released = true;
+      release.forEach((resolve) => resolve());
+    }
+    await checking;
+    expect(maximum).toBe(4);
+    expect(sameConnectionMaximum).toBe(1);
+    expect(mocked.listRawTools).toHaveBeenCalledTimes(9);
+    expect(mocked.fetch).toHaveBeenCalledOnce();
+    const { snapshots } = await current.resolveBindings(groups.at(-1)!);
+    expect(snapshots.sameMcp.transport).toBe('mcp');
+    expect(snapshots.bench.transport).toBe('lobe-bench');
+    expect(snapshots.sameMcp.fingerprint).not.toBe(snapshots.bench.fingerprint);
+
+    mocked.fetch.mockResolvedValueOnce(new Response('', { status: 401 }));
+    await expect(current.checkBindingGroups([groups.at(-1)!])).rejects.toThrow('HTTP 401');
+    expect(mocked.listRawTools).toHaveBeenCalledTimes(11);
+  });
+
+  it('validates every alias before deduplicating a batch connection', async () => {
+    const connector = await create();
+    await expect(
+      service().checkBindingGroups([
+        { notion: { connectorId: connector.id } },
+        { 'lobe-user-memory': { connectorId: connector.id } },
+      ]),
+    ).rejects.toThrow('cannot be bound');
+    expect(mocked.listRawTools).not.toHaveBeenCalled();
+  });
+
   it('syncs an imported connection and freezes only its UUID and tool fingerprint', async () => {
     const connector = await create();
     const bindings = { notion: { connectorId: connector.id } };
@@ -241,6 +308,23 @@ describe('evaluation connector binding', () => {
       service().checkBindings({ notion: { connectorId: connector.id } }),
     ).rejects.not.toThrow('alpha-secret');
   });
+
+  it.each(['TimeoutError', 'AbortError'])(
+    'identifies the failing binding without exposing the upstream %s message',
+    async (name) => {
+      const connector = await create();
+      mocked.listRawTools.mockRejectedValue(
+        Object.assign(new Error('alpha-secret at https://private.test/mcp'), { name }),
+      );
+      const failure = await service()
+        .checkBindings({ notion: { connectorId: connector.id } })
+        .catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(EvalConnectorBindingError);
+      expect((failure as Error).message).toContain('"notion"');
+      expect((failure as Error).message).toMatch(/timed out|interrupted/);
+      expect((failure as Error).message).not.toMatch(/alpha-secret|https:|private\.test/);
+    },
+  );
 });
 
 describe('LobeBench route derivation', () => {

@@ -245,6 +245,17 @@ export interface LaunchServices {
 
 export type LaunchStage = 'experiment' | 'metadata' | 'run' | 'start';
 
+/** Acknowledged launch steps, not case execution or individual connection checks. */
+export interface LaunchProgress {
+  completedSteps: number;
+  contender?: ExperimentLaunchContender;
+  contenderCount: number;
+  contenderIndex?: number;
+  stage: LaunchStage | 'check' | 'complete';
+  status: 'working' | 'failed' | 'unconfirmed' | 'complete';
+  totalSteps: number;
+}
+
 export interface LaunchOutcome {
   /** Every run is accepted and the experiment holds the run ids. */
   complete: boolean;
@@ -282,6 +293,7 @@ const statusOf = (created: unknown): string | null | undefined => {
 export const launchExperiment = async (
   launch: ExperimentLaunch,
   services: LaunchServices,
+  onProgress?: (progress: LaunchProgress) => void,
 ): Promise<LaunchOutcome> => {
   const outcome: LaunchOutcome = {
     complete: false,
@@ -291,7 +303,25 @@ export const launchExperiment = async (
     started: [],
     unconfirmed: [],
   };
+  let progress: LaunchProgress = {
+    completedSteps: 0,
+    contenderCount: launch.contenders.length,
+    stage: 'experiment',
+    status: 'working',
+    // Experiment, existing run check, metadata, then prepare and submit each run.
+    totalSteps: 3 + launch.contenders.length * 2,
+  };
+  const report = (update: Partial<LaunchProgress>) => {
+    progress = { ...progress, ...update };
+    onProgress?.(progress);
+  };
+  const acknowledged = () => report({ completedSteps: progress.completedSteps + 1 });
+  const failed = () => {
+    report({ status: 'failed' });
+    return outcome;
+  };
 
+  report({});
   try {
     await services.createExperiment({
       benchmarkIds: launch.benchmarkIds ?? [launch.benchmarkId],
@@ -299,21 +329,28 @@ export const launchExperiment = async (
       metadata: launch.metadata,
       name: launch.name,
     });
+    acknowledged();
   } catch (error) {
     outcome.error = { message: messageOf(error), stage: 'experiment' };
-    return outcome;
+    return failed();
   }
 
   const status = new Map<string, string | null | undefined>();
+  report({ stage: 'check' });
   try {
     for (const run of await services.listRuns(launch.experimentId)) status.set(run.id, run.status);
+    acknowledged();
   } catch (error) {
     outcome.error = { message: messageOf(error), stage: 'run' };
-    return outcome;
+    return failed();
   }
 
-  for (const contender of launch.contenders) {
-    if (status.has(contender.runId)) continue;
+  for (const [index, contender] of launch.contenders.entries()) {
+    report({ contender, contenderIndex: index + 1, stage: 'run' });
+    if (status.has(contender.runId)) {
+      acknowledged();
+      continue;
+    }
     try {
       const created = await services.createRun({
         config: contender.config,
@@ -323,9 +360,10 @@ export const launchExperiment = async (
         name: contender.name,
       });
       status.set(contender.runId, statusOf(created));
+      acknowledged();
     } catch (error) {
       outcome.error = { contender, message: messageOf(error), stage: 'run' };
-      return outcome;
+      return failed();
     }
   }
 
@@ -340,6 +378,7 @@ export const launchExperiment = async (
   const parts = Array.isArray(launch.metadata.parts)
     ? (launch.metadata.parts as Array<Record<string, unknown>>)
     : undefined;
+  report({ contender: undefined, contenderIndex: undefined, stage: 'metadata' });
   try {
     await services.updateExperiment({
       id: launch.experimentId,
@@ -358,15 +397,18 @@ export const launchExperiment = async (
       },
     });
     outcome.metadataSaved = true;
+    acknowledged();
   } catch (error) {
     outcome.error = { message: messageOf(error), stage: 'metadata' };
-    return outcome;
+    return failed();
   }
 
-  for (const contender of launch.contenders) {
+  for (const [index, contender] of launch.contenders.entries()) {
+    report({ contender, contenderIndex: index + 1, stage: 'start' });
     const current = status.get(contender.runId);
     if (isAcceptedRunStatus(current)) {
       outcome.kept.push(contender);
+      acknowledged();
       continue;
     }
     if (!isStartableRunStatus(current)) {
@@ -376,13 +418,20 @@ export const launchExperiment = async (
     try {
       await services.startRun(contender.runId);
       outcome.started.push(contender);
+      acknowledged();
     } catch (error) {
       outcome.error = { contender, message: messageOf(error), stage: 'start' };
-      return outcome;
+      return failed();
     }
   }
 
   outcome.complete = outcome.unconfirmed.length === 0;
+  report({
+    contender: undefined,
+    contenderIndex: undefined,
+    stage: outcome.complete ? 'complete' : 'start',
+    status: outcome.complete ? 'complete' : 'unconfirmed',
+  });
   return outcome;
 };
 

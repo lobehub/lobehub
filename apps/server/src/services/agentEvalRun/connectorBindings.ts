@@ -42,19 +42,24 @@ export async function snapshotCaseConnectors(
 ) {
   const snapshots: Record<string, EvalConnectorSnapshots> = {};
   const service = new AgentEvalConnectorService(deps.db, deps.userId, deps.workspaceId);
-  const checked = new Map<string, Promise<{ snapshots: EvalConnectorSnapshots }>>();
-  for (const testCase of testCases) {
-    const bindings = getCaseConnectorBindings(testCase.content.environment);
-    if (!Object.keys(bindings).length) continue;
+  const casesWithBindings = testCases
+    .map((testCase) => ({
+      bindings: getCaseConnectorBindings(testCase.content.environment),
+      id: testCase.id,
+    }))
+    .filter(({ bindings }) => Object.keys(bindings).length > 0);
+  await service.checkBindingGroups(casesWithBindings.map(({ bindings }) => bindings));
+  const resolved = new Map<string, Promise<{ snapshots: EvalConnectorSnapshots }>>();
+  for (const { bindings, id } of casesWithBindings) {
     const cacheKey = JSON.stringify(
       Object.entries(bindings).sort(([a], [b]) => a.localeCompare(b)),
     );
-    let check = checked.get(cacheKey);
-    if (!check) {
-      check = service.checkBindings(bindings);
-      checked.set(cacheKey, check);
+    let resolution = resolved.get(cacheKey);
+    if (!resolution) {
+      resolution = service.resolveBindings(bindings);
+      resolved.set(cacheKey, resolution);
     }
-    snapshots[testCase.id] = (await check).snapshots;
+    snapshots[id] = (await resolution).snapshots;
   }
   return Object.keys(snapshots).length ? snapshots : undefined;
 }
@@ -94,18 +99,26 @@ export async function assertRunConnectorBindings(
       : selectCases(allCases, run.config?.caseSelection);
   const testCases = await withResolvedEnvironments(deps, selected);
   const checked = new Set<string>();
+  const checks: Array<{
+    bindings: EvalConnectorBindings;
+    environment: EvalCaseEnvironment | undefined;
+    expected: EvalConnectorSnapshots | undefined;
+  }> = [];
   for (const testCase of testCases) {
-    const key = JSON.stringify([
-      getCaseConnectorBindings(testCase.content.environment),
-      run.config?.connectorSnapshots?.[testCase.id],
-    ]);
+    const environment = testCase.content.environment;
+    const expected = run.config?.connectorSnapshots?.[testCase.id];
+    const bindings = getCaseConnectorBindings(environment);
+    const key = JSON.stringify([bindings, expected]);
     if (checked.has(key)) continue;
     checked.add(key);
-    await assertCaseConnectorBindings(
-      deps,
-      testCase.content.environment,
-      run.config?.connectorSnapshots?.[testCase.id],
-      true,
-    );
+    await assertCaseConnectorBindings(deps, environment, expected);
+    checks.push({ bindings, environment, expected });
+  }
+  const service = new AgentEvalConnectorService(deps.db, deps.userId, deps.workspaceId);
+  await service.checkBindingGroups(checks.map(({ bindings }) => bindings));
+  // Discovery can change tool schemas. Every original alias and frozen contract
+  // must still match after synchronization, even when its probe was shared.
+  for (const { environment, expected } of checks) {
+    await assertCaseConnectorBindings(deps, environment, expected);
   }
 }

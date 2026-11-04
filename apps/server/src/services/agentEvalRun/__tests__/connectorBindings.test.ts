@@ -125,6 +125,74 @@ describe('run-bound mock connections', () => {
     expect(saved.status).toBe(run.status);
   });
 
+  it('checks overlapping case connections once per create or start and preserves every alias', async () => {
+    const { cases, connector, connectorModel, dataset } = await fixture();
+    const second = await connectorModel.create({
+      credentials: JSON.stringify({ type: 'bearer', token: 'second-token' }),
+      identifier: 'second-mock',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://second.test/mcp',
+      name: 'Second mock',
+      sourceType: 'custom',
+      status: 'disconnected',
+    });
+    for (const [index, aliases] of [
+      ['notion', 'docs'],
+      ['linear', 'gmail'],
+    ].entries()) {
+      await serverDB
+        .update(agentEvalTestCases)
+        .set({
+          content: {
+            input: 'Read the fixture',
+            environment: {
+              mock: { services: aliases },
+              connectorBindings: {
+                [aliases[0]]: { connectorId: connector.id },
+                [aliases[1]]: { connectorId: second.id, transport: 'mcp' },
+              },
+            },
+          },
+        })
+        .where(eq(agentEvalTestCases.id, cases[index].id));
+    }
+
+    const service = new AgentEvalRunService(serverDB, userId);
+    const run = await service.createRun({ datasetId: dataset.id, mode: 'external' });
+    expect(listRawTools).toHaveBeenCalledTimes(2);
+    const snapshots = run.config!.connectorSnapshots!;
+    expect(Object.keys(snapshots[cases[0].id]).sort()).toEqual(['docs', 'notion']);
+    expect(Object.keys(snapshots[cases[1].id]).sort()).toEqual(['gmail', 'linear']);
+    expect(snapshots[cases[0].id].notion).toEqual(snapshots[cases[1].id].linear);
+    expect(snapshots[cases[0].id].docs).toEqual(snapshots[cases[1].id].gmail);
+
+    await service.assertConnectorBindings(run);
+    expect(listRawTools).toHaveBeenCalledTimes(4);
+    await connectorModel.update(connector.id, {
+      credentials: JSON.stringify({ type: 'bearer', token: 'rotated-token' }),
+    });
+    await service.assertConnectorBindings(run);
+    expect(listRawTools).toHaveBeenCalledTimes(6);
+    expect(
+      listRawTools.mock.calls
+        .slice(-2)
+        .map(([params]) => params.auth.token)
+        .sort(),
+    ).toEqual(['rotated-token', 'second-token']);
+
+    const secondCaseSnapshot = snapshots[cases[1].id].gmail;
+    snapshots[cases[1].id].gmail = { ...secondCaseSnapshot, fingerprint: 'stale' };
+    await expect(service.assertConnectorBindings(run)).rejects.toThrow('changed');
+    expect(listRawTools).toHaveBeenCalledTimes(6);
+    snapshots[cases[1].id].gmail = secondCaseSnapshot;
+
+    listRawTools.mockResolvedValue([{ name: 'changed_tool', inputSchema: { type: 'object' } }]);
+    await expect(service.assertConnectorBindings(run)).rejects.toThrow('changed');
+    const [saved] = await serverDB.select().from(agentEvalRuns).where(eq(agentEvalRuns.id, run.id));
+    expect(saved.config?.connectorSnapshots).toEqual(snapshots);
+  });
+
   it('keeps an unbound imported dataset editable but creates no run until it is connected', async () => {
     const { dataset } = await fixture(false);
     const service = new AgentEvalRunService(serverDB, userId);

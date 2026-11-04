@@ -10,6 +10,7 @@ import {
   isStartableRunStatus,
   LAUNCH_LEASE_MS,
   launchExperiment,
+  type LaunchProgress,
   launchResumeLockName,
   type LaunchServices,
   type LaunchStorage,
@@ -37,20 +38,31 @@ const snapshot = () => ({
 });
 
 /** An in-memory server: idempotent creates on caller ids, runs start once. */
-const fakeServer = () => {
+const fakeServer = (before?: (method: keyof LaunchServices) => Promise<void>) => {
   const runs = new Map<string, { id: string; status: string }>();
   const services: LaunchServices = {
-    createExperiment: vi.fn(async ({ id }) => ({ data: { id } })),
+    createExperiment: vi.fn(async ({ id }) => {
+      await before?.('createExperiment');
+      return { data: { id } };
+    }),
     createRun: vi.fn(async ({ id }) => {
+      await before?.('createRun');
       if (!runs.has(id)) runs.set(id, { id, status: 'idle' });
       return runs.get(id);
     }),
-    listRuns: vi.fn(async () => [...runs.values()]),
+    listRuns: vi.fn(async () => {
+      await before?.('listRuns');
+      return [...runs.values()];
+    }),
     startRun: vi.fn(async (id) => {
+      await before?.('startRun');
       runs.get(id)!.status = 'pending';
       return { success: true };
     }),
-    updateExperiment: vi.fn(async () => ({ success: true })),
+    updateExperiment: vi.fn(async () => {
+      await before?.('updateExperiment');
+      return { success: true };
+    }),
   };
   return { runs, services };
 };
@@ -64,6 +76,94 @@ const memoryStorage = (): LaunchStorage & { map: Map<string, string> } => {
     setItem: (key, value) => void map.set(key, value),
   };
 };
+
+describe('launch progress', () => {
+  it.each([
+    ['createExperiment', 'experiment', 0],
+    ['listRuns', 'check', 1],
+    ['createRun', 'run', 2],
+    ['updateExperiment', 'metadata', 4],
+    ['startRun', 'start', 5],
+  ] as const)(
+    'does not advance while %s is awaiting acknowledgement',
+    async (method, stage, completedSteps) => {
+      const launch = createExperimentLaunch(snapshot());
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let gated = false;
+      const { services } = fakeServer(async (called) => {
+        if (called !== method || gated) return;
+        gated = true;
+        await gate;
+      });
+      const events: LaunchProgress[] = [];
+      const task = launchExperiment(launch, services, (event) => events.push(event));
+      await vi.waitFor(() =>
+        expect(events.at(-1)).toMatchObject({
+          completedSteps,
+          stage,
+          status: 'working',
+          totalSteps: 7,
+        }),
+      );
+      const pending = events.at(-1);
+      await Promise.resolve();
+      expect(events.at(-1)).toBe(pending);
+      if (stage === 'run' || stage === 'start') {
+        expect(pending).toMatchObject({
+          contender: launch.contenders[0],
+          contenderIndex: 1,
+          contenderCount: 2,
+        });
+      }
+      release();
+      expect((await task).complete).toBe(true);
+      expect(events.at(-1)).toMatchObject({
+        completedSteps: 7,
+        stage: 'complete',
+        status: 'complete',
+      });
+    },
+  );
+
+  it('keeps the last confirmed progress and partial launch on a later start failure', async () => {
+    const launch = createExperimentLaunch(snapshot());
+    const { services } = fakeServer();
+    vi.mocked(services.startRun)
+      .mockResolvedValueOnce({ success: true })
+      .mockRejectedValueOnce(new Error('connection unavailable'));
+    const events: LaunchProgress[] = [];
+    const result = await launchExperiment(launch, services, (event) => events.push(event));
+    expect(result.started).toEqual([launch.contenders[0]]);
+    expect(result.error).toMatchObject({ contender: launch.contenders[1], stage: 'start' });
+    expect(events.at(-1)).toMatchObject({
+      completedSteps: 6,
+      contenderIndex: 2,
+      stage: 'start',
+      status: 'failed',
+      totalSteps: 7,
+    });
+    expect(events.some((event) => event.completedSteps === 7)).toBe(false);
+  });
+
+  it('does not report completion or submit again when a previous dispatch is unconfirmed', async () => {
+    const launch = createExperimentLaunch(snapshot());
+    const { runs, services } = fakeServer();
+    runs.set(launch.contenders[0].runId, { id: launch.contenders[0].runId, status: 'pending' });
+    const events: LaunchProgress[] = [];
+    const result = await launchExperiment(launch, services, (event) => events.push(event));
+    expect(result.complete).toBe(false);
+    expect(result.unconfirmed).toEqual([launch.contenders[0]]);
+    expect(services.startRun).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toMatchObject({
+      completedSteps: 6,
+      status: 'unconfirmed',
+      totalSteps: 7,
+    });
+  });
+});
 
 describe('createExperimentLaunch', () => {
   it('freezes the case set, name, metadata and each run config under stable server-shaped ids', () => {

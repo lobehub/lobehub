@@ -6,6 +6,7 @@ import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type { EvalConnectorBindings, EvalConnectorSnapshots, ToolManifest } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { ConnectorModel, type PublicConnectorRecord } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -156,13 +157,39 @@ export class AgentEvalConnectorService {
     return { manifests, snapshots };
   }
 
+  /** Share discovery only within this preflight, while validating every case's aliases. */
+  async checkBindingGroups(groups: EvalConnectorBindings[]) {
+    const connections = new Map<string, Map<string, EvalConnectorBindings>>();
+    for (const bindings of groups) {
+      await this.validateBindings(bindings);
+      for (const [identifier, binding] of Object.entries(bindings)) {
+        let transports = connections.get(binding.connectorId);
+        if (!transports) {
+          transports = new Map();
+          connections.set(binding.connectorId, transports);
+        }
+        const transport = binding.transport ?? 'mcp';
+        if (!transports.has(transport)) transports.set(transport, { [identifier]: binding });
+      }
+    }
+    await pMap(
+      connections.values(),
+      async (transports) => {
+        // Different transports still sync the same connector's tools. Serialize
+        // them to avoid competing upserts, but check each protocol independently.
+        for (const bindings of transports.values()) await this.checkBindings(bindings);
+      },
+      { concurrency: 4 },
+    );
+  }
+
   /** Authenticated discovery is run before creation, not inferred from cached health. */
   async checkBindings(bindings: EvalConnectorBindings = {}) {
     await this.validateBindings(bindings);
     if (Object.keys(bindings).length === 0) return this.resolveBindings(bindings);
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
     const connectorModel = new ConnectorModel(this.db, this.userId, this.workspaceId, gateKeeper);
-    for (const binding of Object.values(bindings)) {
+    for (const [identifier, binding] of Object.entries(bindings)) {
       try {
         const publicRow = await this.connectorModel.findPublicById(binding.connectorId);
         const credentialRow = await connectorModel.findById(binding.connectorId);
@@ -212,10 +239,18 @@ export class AgentEvalConnectorService {
           binding.connectorId,
           error instanceof Error ? error.name : typeof error,
         );
-        if (error instanceof EvalConnectorBindingError) throw error;
-        throw new EvalConnectorBindingError(
-          'Could not verify the mock connection. Check its address, credentials and tool access.',
-        );
+        // Report the local binding, never the upstream message (which may contain
+        // credentials or private URLs). Unusual aliases fall back to the UUID.
+        const label = /^[\w.-]{1,128}$/.test(identifier) ? identifier : binding.connectorId;
+        const reason =
+          error instanceof EvalConnectorBindingError
+            ? error.message
+            : error instanceof Error && error.name === 'TimeoutError'
+              ? 'Could not verify the mock connection: the request timed out.'
+              : error instanceof Error && error.name === 'AbortError'
+                ? 'Could not verify the mock connection: the request was interrupted.'
+                : 'Could not verify the mock connection. Check its address, credentials and tool access.';
+        throw new EvalConnectorBindingError(`Mock connection "${label}": ${reason}`);
       }
     }
     return this.resolveBindings(bindings);

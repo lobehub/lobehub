@@ -1048,6 +1048,20 @@ export default {
   'lobeBench.library.filter.search': 'Search cases',
   'lobeBench.library.filter.category': 'Category',
   'lobeBench.library.filter.count': '{{shown}} of {{total}} cases',
+  'lobeBench.new.launch.close': 'Close',
+  'lobeBench.new.launch.currentRun': 'Run {{index}} of {{total}} · {{name}}',
+  'lobeBench.new.launch.elapsed': 'Since first start: {{elapsed}}',
+  'lobeBench.new.launch.interrupted': 'Launch not finished',
+  'lobeBench.new.launch.stage.check': 'Checking saved runs',
+  'lobeBench.new.launch.stage.complete': 'All runs submitted. Opening the experiment…',
+  'lobeBench.new.launch.stage.experiment': 'Creating experiment',
+  'lobeBench.new.launch.stage.metadata': 'Saving experiment setup',
+  'lobeBench.new.launch.stage.run': 'Preparing run and checking connections',
+  'lobeBench.new.launch.stage.start': 'Checking connections and submitting run',
+  'lobeBench.new.launch.steps': '{{completed}} of {{total}} launch steps complete',
+  'lobeBench.new.launch.title': 'Starting experiment',
+  'lobeBench.new.launch.waiting':
+    'Waiting for the server. Progress advances only when a step is confirmed; connection checks may take longer. Keep this window open.',
   'lobeBench.new.launch.pending':
     'An experiment launch is unfinished. Settings are locked while it is being recovered.',
   'lobeBench.new.launch.unknown':

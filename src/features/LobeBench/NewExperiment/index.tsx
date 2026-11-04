@@ -10,6 +10,7 @@ import {
   Flexbox,
   Input,
   InputNumber,
+  Modal,
   Segmented,
   Select,
   Tag,
@@ -19,7 +20,7 @@ import {
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Plus, X } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -37,6 +38,7 @@ import {
   isResumableLaunch,
   launchExperiment,
   type LaunchOutcome,
+  type LaunchProgress,
 } from '@/features/LobeBench/experimentLaunch';
 import {
   caseCountOf,
@@ -77,6 +79,8 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import { useEvalStore } from '@/store/eval';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+
+import { LaunchProgressPanel } from './LaunchProgress';
 
 const styles = stylex.create({
   container: {
@@ -124,6 +128,11 @@ const NewExperiment = memo(() => {
   const enabledModels = useAiInfraStore((s) => s.enabledChatModelList);
   const modelsReady = useAiInfraStore((s) => s.isInitAiProviderRuntimeState);
   const [starting, setStarting] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [progress, setProgress] = useState<LaunchProgress & { createdAt: string }>();
+  const [launchError, setLaunchError] = useState<string>();
+  const launchInFlight = useRef(false);
+  const creatingLaunch = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const presetDatasetId = searchParams.get('dataset');
   const initialDataset =
@@ -298,7 +307,7 @@ const NewExperiment = memo(() => {
   // provider has no key on this server would otherwise burn every attempt on
   // `InvalidProviderAPIKey`.
   const confirmStart = async () => {
-    if (!canStart || checkingProviders) return;
+    if (!canStart || checkingProviders || starting || confirmationOpen) return;
     setCheckingProviders(true);
     let problems: string[];
     try {
@@ -315,34 +324,10 @@ const NewExperiment = memo(() => {
       toast.error(t('lobeBench.new.providerKeyMissing', { provider: problems.join(', ') }));
       return;
     }
-    confirmModal({
-      content: (
-        <Flexbox gap={8}>
-          <Text>
-            {t('lobeBench.new.confirm.line', {
-              attempts,
-              cases: caseCount,
-              contenders: contenders.length,
-              k,
-            })}
-          </Text>
-          <Text type={'secondary'}>
-            {estimate.known > 0
-              ? t('lobeBench.new.confirm.cost', { cost: `$${estimate.cost.toFixed(2)}` })
-              : t('lobeBench.new.confirm.costUnknown')}
-          </Text>
-          <Text type={'secondary'}>
-            {(judge ?? primaryMeta.judge)
-              ? t('lobeBench.new.confirm.judge', { model: (judge ?? primaryMeta.judge)!.model })
-              : t('lobeBench.new.confirm.judgeDefault')}
-          </Text>
-          <Text type={'secondary'}>{t('lobeBench.new.confirm.billing')}</Text>
-        </Flexbox>
-      ),
-      okText: t('lobeBench.new.confirm.ok'),
-      onOk: start,
-      title: t('lobeBench.new.confirm.title'),
-    });
+    setOutcome(undefined);
+    setProgress(undefined);
+    setLaunchError(undefined);
+    setConfirmationOpen(true);
   };
 
   // The parts as stored: the first also fills the one-dataset fields older readers know.
@@ -407,32 +392,28 @@ const NewExperiment = memo(() => {
   // every parameter was frozen when the launch began, so the draft, the case
   // set in the URL or the models available now cannot change what it sends.
   const runLaunch = async (record: ExperimentLaunch) => {
+    if (launchInFlight.current) return;
+    launchInFlight.current = true;
     setStarting(true);
+    setConfirmationOpen(true);
+    setOutcome(undefined);
+    setProgress(undefined);
+    setLaunchError(undefined);
     try {
       // One resume at a time for this launch: a second tab (or a double click)
       // is told it is busy instead of reading `idle` too and starting again.
       const exclusive = await resumeLaunch(record.experimentId, () =>
-        launchExperiment(record, launchServices),
+        launchExperiment(record, launchServices, (update) =>
+          setProgress({ ...update, createdAt: record.createdAt }),
+        ),
       );
       if (!exclusive.ran) {
-        toast.error(t('lobeBench.new.launch.occupied'));
+        setLaunchError(t('lobeBench.new.launch.occupied'));
         return;
       }
       const result = exclusive.result;
       setOutcome(result);
-      if (!result.complete) {
-        if (result.error) {
-          toast.error(
-            result.error.stage === 'metadata'
-              ? t('lobeBench.new.launch.metadataFailed', { error: result.error.message })
-              : t('lobeBench.new.launch.failed', {
-                  error: result.error.message,
-                  name: result.error.contender?.name ?? t('lobeBench.new.title'),
-                }),
-          );
-        }
-        return;
-      }
+      if (!result.complete) return;
       // Remember the contenders for the next experiment; a failure here must
       // not stop the experiment.
       try {
@@ -445,18 +426,20 @@ const NewExperiment = memo(() => {
       await refreshExperiments().catch(() => undefined);
       await clearLaunch(record.experimentId);
       clearDraft();
+      setConfirmationOpen(false);
       navigate(`${LOBE_BENCH_PATH}/experiments/${record.experimentId}`);
     } catch (error) {
-      toast.error(
+      setLaunchError(
         error instanceof Error && error.message ? error.message : t('lobeBench.new.error'),
       );
     } finally {
+      launchInFlight.current = false;
       setStarting(false);
     }
   };
 
   const start = async () => {
-    if (!canStart) return;
+    if (!canStart || creatingLaunch.current || launchInFlight.current) return;
     const all = metaParts();
     const record = createExperimentLaunch({
       benchmarkId: launchBenchmarkId ?? benchmarks[0].id,
@@ -480,16 +463,25 @@ const NewExperiment = memo(() => {
     });
     // No checkpoint, no spend: a launch this browser cannot remember cannot be
     // resumed, and a launch another tab already began must not be overwritten.
-    const begun = await beginLaunch(record);
-    if (!begun.ok) {
-      toast.error(
-        begun.reason === 'occupied'
-          ? t('lobeBench.new.launch.occupied')
-          : t('lobeBench.new.launch.storageError'),
-      );
-      return;
+    creatingLaunch.current = true;
+    setStarting(true);
+    try {
+      const begun = await beginLaunch(record);
+      if (!begun.ok) {
+        setLaunchError(
+          begun.reason === 'occupied'
+            ? t('lobeBench.new.launch.occupied')
+            : t('lobeBench.new.launch.storageError'),
+        );
+        return;
+      }
+      await runLaunch(record);
+    } catch (error) {
+      setLaunchError(error instanceof Error ? error.message : t('lobeBench.new.error'));
+    } finally {
+      creatingLaunch.current = false;
+      setStarting(false);
     }
-    await runLaunch(record);
   };
 
   const abandonLaunch = () => {
@@ -505,11 +497,114 @@ const NewExperiment = memo(() => {
     });
   };
   const openLaunch = () => {
-    if (launch) navigate(`${LOBE_BENCH_PATH}/experiments/${launch.experimentId}`);
+    if (launch) {
+      setConfirmationOpen(false);
+      navigate(`${LOBE_BENCH_PATH}/experiments/${launch.experimentId}`);
+    }
   };
+  const failureMessage =
+    launchError ??
+    (outcome?.error
+      ? outcome.error.stage === 'metadata'
+        ? t('lobeBench.new.launch.metadataFailed', { error: outcome.error.message })
+        : t('lobeBench.new.launch.failed', {
+            error: outcome.error.message,
+            name: outcome.error.contender?.name ?? t('lobeBench.new.title'),
+          })
+      : outcome && outcome.unconfirmed.length > 0
+        ? t('lobeBench.new.launch.unconfirmed', {
+            count: outcome.unconfirmed.length,
+            names: outcome.unconfirmed.map((c) => c.name).join(', '),
+          })
+        : undefined);
 
   return (
     <Flexbox className={stylex.props(styles.container).className} flex={1}>
+      {/* The imperative Modal API cannot disable Escape / the header close button. */}
+      <Modal
+        closable={!starting}
+        confirmLoading={starting}
+        keyboard={!starting}
+        maskClosable={!starting}
+        open={confirmationOpen}
+        footer={
+          <Flexbox horizontal gap={8} justify={'flex-end'} wrap={'wrap'}>
+            <Button disabled={starting} onClick={() => setConfirmationOpen(false)}>
+              {progress ? t('lobeBench.new.launch.close') : t('lobeBench.new.cancel')}
+            </Button>
+            {outcome && (
+              <Button disabled={starting} onClick={openLaunch}>
+                {t('lobeBench.new.launch.open')}
+              </Button>
+            )}
+            <Button
+              disabled={starting || (!!launch && !isResumableLaunch(launch))}
+              loading={starting}
+              type={'primary'}
+              onClick={() => (launch && isResumableLaunch(launch) ? runLaunch(launch) : start())}
+            >
+              {starting
+                ? t('lobeBench.new.launch.title')
+                : launch
+                  ? outcome && !outcome.error && outcome.unconfirmed.length > 0
+                    ? t('lobeBench.new.launch.recheck')
+                    : t('lobeBench.new.launch.continue')
+                  : t('lobeBench.new.confirm.ok')}
+            </Button>
+          </Flexbox>
+        }
+        title={
+          !starting && failureMessage
+            ? t('lobeBench.new.launch.interrupted')
+            : progress
+              ? t('lobeBench.new.launch.title')
+              : t('lobeBench.new.confirm.title')
+        }
+        onCancel={() => {
+          if (!starting) setConfirmationOpen(false);
+        }}
+      >
+        <Flexbox gap={16}>
+          {progress ? (
+            <LaunchProgressPanel
+              active={starting}
+              createdAt={progress.createdAt}
+              progress={progress}
+            />
+          ) : (
+            <Flexbox gap={8}>
+              <Text>
+                {t('lobeBench.new.confirm.line', {
+                  attempts,
+                  cases: caseCount,
+                  contenders: contenders.length,
+                  k,
+                })}
+              </Text>
+              <Text type={'secondary'}>
+                {estimate.known > 0
+                  ? t('lobeBench.new.confirm.cost', { cost: `$${estimate.cost.toFixed(2)}` })
+                  : t('lobeBench.new.confirm.costUnknown')}
+              </Text>
+              <Text type={'secondary'}>
+                {(judge ?? primaryMeta.judge)
+                  ? t('lobeBench.new.confirm.judge', { model: (judge ?? primaryMeta.judge)!.model })
+                  : t('lobeBench.new.confirm.judgeDefault')}
+              </Text>
+              <Text type={'secondary'}>{t('lobeBench.new.confirm.billing')}</Text>
+            </Flexbox>
+          )}
+          {!starting && failureMessage && <Alert title={failureMessage} type={'warning'} />}
+          {outcome && !outcome.complete && (
+            <Text fontSize={12}>
+              {t('lobeBench.new.launch.progress', {
+                started: outcome.started.length + outcome.kept.length,
+                total: launch?.contenders.length ?? contenders.length,
+              })}
+            </Text>
+          )}
+        </Flexbox>
+      </Modal>
       <Flexbox className={stylex.props(styles.form).className} gap={28}>
         <Flexbox gap={4}>
           <Text as={'h1'} fontSize={24} weight={600}>
@@ -539,21 +634,16 @@ const NewExperiment = memo(() => {
                     ? t('lobeBench.new.launch.legacy.hint')
                     : !outcome
                       ? t('lobeBench.new.launch.unknown')
-                      : outcome.error?.stage === 'metadata'
-                        ? t('lobeBench.new.launch.metadataFailed', { error: outcome.error.message })
-                        : outcome.unconfirmed.length > 0 && !outcome.error
-                          ? t('lobeBench.new.launch.unconfirmed', {
-                              count: outcome.unconfirmed.length,
-                              names: outcome.unconfirmed.map((c) => c.name).join(', '),
-                            })
-                          : t('lobeBench.new.launch.progress', {
-                              started: outcome.started.length + outcome.kept.length,
-                              total: launch.contenders.length,
-                            })}
+                      : (failureMessage ??
+                        t('lobeBench.new.launch.progress', {
+                          started: outcome.started.length + outcome.kept.length,
+                          total: launch.contenders.length,
+                        }))}
                 </Text>
                 <Flexbox horizontal gap={8} wrap={'wrap'}>
                   {isResumableLaunch(launch) && (
                     <Button
+                      disabled={starting}
                       loading={starting}
                       size={'small'}
                       type={'primary'}
@@ -852,9 +942,11 @@ const NewExperiment = memo(() => {
               </Flexbox>
             </Flexbox>
             <Flexbox horizontal gap={8}>
-              <Button onClick={() => navigate(LOBE_BENCH_PATH)}>{t('lobeBench.new.cancel')}</Button>
+              <Button disabled={starting} onClick={() => navigate(LOBE_BENCH_PATH)}>
+                {t('lobeBench.new.cancel')}
+              </Button>
               <Button
-                disabled={!canStart}
+                disabled={!canStart || starting}
                 loading={starting || checkingProviders}
                 type={'primary'}
                 onClick={confirmStart}
