@@ -22,6 +22,7 @@ export * from './dashboard';
 export * from './dbMigration';
 export * from './device';
 export * from './deviceFilePreviewFailure';
+export * from './deviceGatewayToken';
 export * from './deviceMetric';
 export * from './discover';
 export * from './document';

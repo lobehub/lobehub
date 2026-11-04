@@ -1,15 +1,15 @@
 import { acceptanceIdFromReviewResource, siteReviewFromResource } from '@lobechat/const';
-import { MANAGED_DEVICE_JWT_PURPOSE } from '@lobechat/types';
+import {
+  MANAGED_DEVICE_JWT_PURPOSE,
+  TUNNEL_ACCESS_JWT_PURPOSE,
+  WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { JSONWebKeySet, JWK, JWK_RSA_Public } from 'jose';
 import { calculateJwkThumbprint } from 'jose';
 
 import { authEnv } from '@/envs/auth';
-import {
-  TUNNEL_ACCESS_JWT_PURPOSE,
-  WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE,
-} from '@/libs/trpc/utils/internalJwt';
 
 import { isAcceptanceReviewClient, isAcceptanceReviewIssued } from './acceptanceReview';
 

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { TUNNEL_ACCESS_JWT_PURPOSE, WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE } from '@lobechat/types';
 import debug from 'debug';
 import type { JSONWebKeySet, JWK, JWK_RSA_Public, JWTVerifyOptions } from 'jose';
 import {
@@ -20,10 +21,6 @@ const INTERNAL_JWT_PURPOSE = 'lobe-internal-call';
 export const HETERO_OPERATION_JWT_ISSUER = 'urn:lobehub:internal';
 export const HETERO_OPERATION_JWT_AUDIENCE = 'urn:lobehub:hetero-operation';
 export const HETERO_OPERATION_JWT_PURPOSE = 'hetero-operation';
-/** `purpose` of a workspace device's connect token; only the device gateway accepts it. */
-export const WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE = 'workspace-device-connect';
-/** `purpose` of a tunnel link's entry ticket; only the device gateway accepts it. */
-export const TUNNEL_ACCESS_JWT_PURPOSE = 'tunnel-access';
 
 export type HeteroOperationCapability =
   | 'acceptance:evidence'
