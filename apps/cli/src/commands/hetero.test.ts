@@ -995,25 +995,16 @@ describe('hetero exec command', () => {
     });
   });
 
-  it('translates Codex --speed to native service_tier config', async () => {
+  it.each([
+    ['normal', 'default'],
+    ['fast', 'fast'],
+    ['ultrafast', 'ultrafast'],
+  ])('translates Codex %s to service_tier=%s', async (speed, tier) => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
-
-    await runCmd([
-      'hetero',
-      'exec',
-      '--type',
-      'codex',
-      '--prompt',
-      'hi',
-      '--model',
-      'gpt-5.5',
-      '--speed',
-      'fast',
-    ]);
-
+    await runCmd(['hetero', 'exec', '--type', 'codex', '--prompt', 'hi', '--speed', speed]);
     expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
     expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
-      extraArgs: ['--model', 'gpt-5.5', '-c', 'service_tier="fast"'],
+      extraArgs: ['-c', `service_tier="${tier}"`],
     });
   });
 
@@ -2800,53 +2791,56 @@ describe('hetero exec command', () => {
 
   it('--raw-dump writes a session folder with meta.json, wires onRawStdout, and tees stderr', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hetero-rawdump-'));
+    try {
+      mockSpawnAgent.mockReturnValue(
+        createFakeHandle({
+          events: [
+            {
+              data: { chunkType: 'text', content: 'hi' },
+              operationId: 'op-raw',
+              stepIndex: 0,
+              timestamp: 1,
+              type: 'stream_chunk',
+            },
+          ],
+          exitCode: 0,
+          stderrChunks: ['warning: something happened\n'],
+        }),
+      );
 
-    mockSpawnAgent.mockReturnValue(
-      createFakeHandle({
-        events: [
-          {
-            data: { chunkType: 'text', content: 'hi' },
-            operationId: 'op-raw',
-            stepIndex: 0,
-            timestamp: 1,
-            type: 'stream_chunk',
-          },
-        ],
-        exitCode: 0,
-        stderrChunks: ['warning: something happened\n'],
-      }),
-    );
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'hi',
+        '--operation-id',
+        'op-raw',
+        '--render',
+        'none',
+        '--raw-dump',
+        root,
+      ]);
 
-    await runCmd([
-      'hetero',
-      'exec',
-      '--type',
-      'claude-code',
-      '--prompt',
-      'hi',
-      '--operation-id',
-      'op-raw',
-      '--render',
-      'none',
-      '--raw-dump',
-      root,
-    ]);
+      // The raw stdout tee is handed to spawnAgent (the package captures the
+      // pre-adapter bytes — exercised in spawnAgent.test.ts).
+      expect(typeof mockSpawnAgent.mock.calls[0][0].onRawStdout).toBe('function');
 
-    // The raw stdout tee is handed to spawnAgent (the package captures the
-    // pre-adapter bytes — exercised in spawnAgent.test.ts).
-    expect(typeof mockSpawnAgent.mock.calls[0][0].onRawStdout).toBe('function');
+      // One session folder per exec, keyed by the operation id.
+      const sessions = await readdir(root);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0]).toContain('op-raw');
+      const sessionDir = path.join(root, sessions[0]!);
 
-    // One session folder per exec, keyed by the operation id.
-    const sessions = await readdir(root);
-    expect(sessions).toHaveLength(1);
-    expect(sessions[0]).toContain('op-raw');
-    const sessionDir = path.join(root, sessions[0]!);
+      const meta = JSON.parse(await readFile(path.join(sessionDir, 'meta.json'), 'utf8'));
+      expect(meta).toMatchObject({ agentType: 'claude-code', operationId: 'op-raw' });
 
-    const meta = JSON.parse(await readFile(path.join(sessionDir, 'meta.json'), 'utf8'));
-    expect(meta).toMatchObject({ agentType: 'claude-code', operationId: 'op-raw' });
-
-    // stderr is teed to the attempt's log file.
-    const stderrDump = await readFile(path.join(sessionDir, 'attempt-1.stderr.log'), 'utf8');
-    expect(stderrDump).toContain('warning: something happened');
+      // stderr is teed to the attempt's log file.
+      const stderrDump = await readFile(path.join(sessionDir, 'attempt-1.stderr.log'), 'utf8');
+      expect(stderrDump).toContain('warning: something happened');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
