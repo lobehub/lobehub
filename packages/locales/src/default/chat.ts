@@ -3135,6 +3135,17 @@ export default {
   'taskList.bulk.actions': 'Actions',
   'taskList.bulk.archive': 'Archive',
   'taskList.bulk.assignAgent': 'Assign to agent…',
+  'taskList.bulk.assignPrivate.hint_one':
+    'This agent is private, so {{count}} public task and its subtasks become private before it is assigned. Members assigned to them are unassigned.',
+  'taskList.bulk.assignPrivate.hint_other':
+    'This agent is private, so {{count}} public tasks and their subtasks become private before it is assigned. Members assigned to them are unassigned.',
+  'taskList.bulk.assignPrivate.ok': 'Make private and assign',
+  'taskList.bulk.assignPrivate.takeOverWarning_one':
+    '{{count}} of them was created by another member. It becomes your private task: its creator loses access, and its schedule or heartbeat is turned off.',
+  'taskList.bulk.assignPrivate.takeOverWarning_other':
+    '{{count}} of them were created by other members. They become your private tasks: their creators lose access, and their schedule or heartbeat is turned off.',
+  'taskList.bulk.assignPrivate.title_one': 'Assign {{count}} task to a private agent?',
+  'taskList.bulk.assignPrivate.title_other': 'Assign {{count}} tasks to a private agent?',
   'taskList.bulk.assignToMe': 'Assign to me',
   'taskList.bulk.changeStatus': 'Change status…',
   'taskList.bulk.clear': 'Clear selection',
