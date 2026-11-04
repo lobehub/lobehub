@@ -854,6 +854,9 @@ export default {
   'devices.health.status.pending': 'Not uploaded yet',
   'devices.health.title': 'Health · last 12 hours',
   'devices.lastSeen': 'Last connected {{time}}',
+  'devices.managed.badge': 'Cloud',
+  'devices.managed.badgeTooltip':
+    'A cloud device that LobeHub runs for you. It sleeps when idle and wakes when an agent needs it.',
   'devices.managed.create.button': 'Create in cloud',
   'devices.managed.create.class.label': 'Size',
   'devices.managed.create.class.notIncluded': 'Not in your plan',
@@ -875,6 +878,12 @@ export default {
   'devices.managed.create.submit': 'Create',
   'devices.managed.create.success': 'Cloud device created. It starts in about a minute.',
   'devices.managed.create.title': 'Create a cloud device',
+  'devices.managed.status.deleting': 'Deleting',
+  'devices.managed.status.failed': 'Unavailable',
+  'devices.managed.status.sleeping': 'Sleeping',
+  'devices.managed.status.sleepingHint': 'Sleeping · wakes when an agent needs it',
+  'devices.managed.status.starting': 'Starting',
+  'devices.managed.status.stopping': 'Going to sleep',
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':
     'This disconnects the device from your account. It does not sign the device out, and it can re-register on next connect.',

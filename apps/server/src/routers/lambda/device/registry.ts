@@ -5,12 +5,21 @@ import type {
   DeviceRunningSummary,
   DeviceScope,
   DeviceWorkspaceShare,
+  ManagedDevicePhase,
   WorkingDirEntry,
 } from '@lobechat/types';
-import { sortDevicesByActivity, workingDirConfigSchema } from '@lobechat/types';
+import {
+  isManagedCloudDevice,
+  MANAGED_DEVICE_PHASES,
+  sortDevicesByActivity,
+  workingDirConfigSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import debug from 'debug';
 import { z } from 'zod';
 
+import { managedDeviceProvider } from '@/business/server/managedDevice';
+import { ManagedDeviceRegistrationConflictError } from '@/database/models/device';
 import { getTopicDeviceId, TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
@@ -21,6 +30,34 @@ import { loadAgentDeviceBindings, loadDeviceBoundAgents } from '../deviceBoundAg
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
 import { reportManagedDevicesRemoved } from './managedDeviceRemoval';
 import { deviceProcedure } from './procedures';
+
+const log = debug('lobe-server:device-registry');
+
+const managedPhases = new Set<unknown>(MANAGED_DEVICE_PHASES);
+
+const isManagedPhase = (value: unknown): value is ManagedDevicePhase => managedPhases.has(value);
+
+/**
+ * Phases of the managed cloud devices in one pool of the device list. Asks the
+ * provider only when the pool holds a managed row, so a list without managed
+ * devices makes no provider call. Any provider failure leaves the phases
+ * unknown: the list must still load, and a managed device then reads like any
+ * other offline device.
+ */
+const loadManagedPhases = async (
+  rows: { identitySource: string }[],
+  scope: { userId: string; workspaceId?: string },
+): Promise<Record<string, ManagedDevicePhase>> => {
+  if (!rows.some(isManagedCloudDevice)) return {};
+
+  try {
+    if (!managedDeviceProvider.isAvailable()) return {};
+    return await managedDeviceProvider.listStates(scope);
+  } catch (error) {
+    log('listStates failed for scope=%o: %O', scope, error);
+    return {};
+  }
+};
 
 /**
  * Display info for the members behind a set of running topics. The ids come
@@ -180,6 +217,16 @@ export const registryRouter = router({
         wsId ? deviceGateway.queryDeviceList(ctx.userId, wsId) : Promise.resolve([]),
       ]);
 
+    // Personal and workspace managed devices belong to different provider
+    // scopes, so each pool that holds one asks once; a pool without managed
+    // rows asks nothing.
+    const [personalPhases, workspacePhases] = await Promise.all([
+      loadManagedPhases(personalRows, { userId: ctx.userId }),
+      wsId
+        ? loadManagedPhases(workspaceRows, { userId: ctx.userId, workspaceId: wsId })
+        : Promise.resolve({}),
+    ]);
+
     // Shares the caller created from their personal device list, grouped by the
     // source personal deviceId — attached to personal rows below so the list can
     // render "shared to N workspaces" and revoke individual shares.
@@ -243,6 +290,7 @@ export const registryRouter = router({
       rows: Awaited<ReturnType<typeof ctx.deviceModel.queryPersonal>>,
       onlineList: DeviceAttachment[],
       scope: DeviceScope,
+      phases: Record<string, ManagedDevicePhase>,
     ): DeviceListItem[] => {
       const registeredDeviceIds = new Set(rows.map((device) => device.deviceId));
       const channelsByDevice = new Map<string, DeviceChannel[]>();
@@ -276,6 +324,12 @@ export const registryRouter = router({
           hostname: d.hostname ?? live?.hostname ?? null,
           identitySource: d.identitySource,
           lastSeen: d.lastSeenAt.toISOString(),
+          // Only a managed row takes a phase, and only one the contract knows:
+          // the provider never relabels a machine a user connected.
+          managedPhase:
+            isManagedCloudDevice(d) && isManagedPhase(phases[d.deviceId])
+              ? phases[d.deviceId]
+              : undefined,
           metadata: d.metadata,
           online: channels.length > 0,
           platform: d.platform ?? live?.platform ?? null,
@@ -334,8 +388,8 @@ export const registryRouter = router({
     // Consumers (settings list, picker) filter this down to a single scope, and
     // filtering preserves order, so one pass serves every surface.
     return sortDevicesByActivity([
-      ...buildItems(personalRows, personalOnline, 'personal'),
-      ...buildItems(workspaceRows, workspaceOnline, 'workspace'),
+      ...buildItems(personalRows, personalOnline, 'personal', personalPhases),
+      ...buildItems(workspaceRows, workspaceOnline, 'workspace', workspacePhases),
     ]);
   }),
 
@@ -349,7 +403,8 @@ export const registryRouter = router({
   /**
    * Auto-register the calling device (desktop after OIDC login / CLI on first
    * `lh connect`). Upserts on (userId, deviceId); user-owned fields are
-   * preserved on conflict.
+   * preserved on conflict. A managed cloud device's id is refused with
+   * CONFLICT: the platform owns that row.
    */
   register: deviceProcedure
     .input(
@@ -367,7 +422,14 @@ export const registryRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.deviceModel.register(input);
+      try {
+        return await ctx.deviceModel.register(input);
+      } catch (error) {
+        if (error instanceof ManagedDeviceRegistrationConflictError) {
+          throw new TRPCError({ code: 'CONFLICT', message: error.message });
+        }
+        throw error;
+      }
     }),
   removeDevice: deviceProcedure
     .input(z.object({ deviceId: z.string() }))

@@ -7,7 +7,11 @@ import {
   type WorkspaceRole,
   wsProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { DeviceModel, WorkspaceDevicePrivateConflictError } from '@/database/models/device';
+import {
+  DeviceModel,
+  ManagedDeviceRegistrationConflictError,
+  WorkspaceDevicePrivateConflictError,
+} from '@/database/models/device';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
@@ -94,7 +98,10 @@ export const workspaceRouter = router({
       try {
         return await model.registerWorkspaceDevice({ ...input, workspaceId: ctx.workspaceId });
       } catch (error) {
-        if (error instanceof WorkspaceDevicePrivateConflictError) {
+        if (
+          error instanceof WorkspaceDevicePrivateConflictError ||
+          error instanceof ManagedDeviceRegistrationConflictError
+        ) {
           throw new TRPCError({ code: 'CONFLICT', message: error.message });
         }
         throw error;
@@ -251,7 +258,10 @@ export const workspaceRouter = router({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         });
-        if (error instanceof WorkspaceDevicePrivateConflictError) {
+        if (
+          error instanceof WorkspaceDevicePrivateConflictError ||
+          error instanceof ManagedDeviceRegistrationConflictError
+        ) {
           throw new TRPCError({ code: 'CONFLICT', message: error.message });
         }
         throw error;

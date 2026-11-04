@@ -1,6 +1,7 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
+import { isManagedCloudDevice } from '@lobechat/types';
 import {
   ActionIcon,
   confirmModal,
@@ -35,6 +36,8 @@ import { useDeviceMetricSeries } from './DeviceHealth/shared';
 import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
 import { getDeviceIcon, getPlatformLabel } from './getDeviceIcon';
+import ManagedDeviceBadge from './ManagedDeviceBadge';
+import { getManagedDeviceStatus, managedStatusColor } from './managedDeviceStatus';
 import { openShareDeviceModal } from './ShareDeviceModal';
 import { useCanEditDevice } from './useCanEditDevice';
 import { useDeviceActivityText } from './useDeviceActivityText';
@@ -141,6 +144,8 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
 
   const displayName = device.friendlyName || device.hostname || device.deviceId;
   const isFallback = device.identitySource === 'fallback';
+  const isManaged = isManagedCloudDevice(device);
+  const managedStatus = getManagedDeviceStatus(device);
   // Online when the device has at least one live connection in `device.channels`.
   const channels = device.channels ?? [];
   const online = channels.length > 0;
@@ -268,6 +273,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
                   {platformLabel}
                 </Text>
               )}
+              {isManaged && <ManagedDeviceBadge />}
               {isCurrent && <Tag size={'small'}>{t('devices.currentBadge')}</Tag>}
               {device.scope === 'workspace' && device.sharedFromPersonal && (
                 // Member-shared machine (vs directly enrolled infra) — mirrors the
@@ -364,9 +370,20 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
         <span
           aria-hidden
           className={styles.presence}
-          style={{ background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
+          style={{
+            background: managedStatus
+              ? managedStatusColor[managedStatus]
+              : online
+                ? cssVar.colorSuccess
+                : cssVar.colorTextQuaternary,
+          }}
         />
-        <Text ellipsis fontSize={13} style={{ minWidth: 0 }} type={'secondary'}>
+        <Text
+          ellipsis
+          fontSize={13}
+          style={{ minWidth: 0 }}
+          type={managedStatus === 'failed' ? 'danger' : 'secondary'}
+        >
           {activityText}
         </Text>
       </Flexbox>
