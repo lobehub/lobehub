@@ -17,13 +17,13 @@ class ImportService {
   importData = async (data: ImporterEntryData, callbacks?: OnImportCallbacks): Promise<void> => {
     const handleError = (e: unknown) => {
       callbacks?.onStageChange?.(ImportStage.Error);
-      const error = e as DefaultErrorShape;
+      const error = e as Partial<DefaultErrorShape> | null | undefined;
 
       callbacks?.onError?.({
-        code: error.data.code,
-        httpStatus: error.data.httpStatus,
-        message: error.message,
-        path: error.data.path,
+        code: error?.data?.code ?? 'INTERNAL_SERVER_ERROR',
+        httpStatus: error?.data?.httpStatus ?? 500,
+        message: error?.message ?? String(e),
+        path: error?.data?.path,
       });
     };
 
@@ -63,13 +63,13 @@ class ImportService {
 
     const handleError = (e: unknown) => {
       callbacks?.onStageChange?.(ImportStage.Error);
-      const error = e as DefaultErrorShape;
+      const error = e as Partial<DefaultErrorShape> | null | undefined;
 
       callbacks?.onError?.({
-        code: error.data.code,
-        httpStatus: error.data.httpStatus,
-        message: error.message,
-        path: error.data.path,
+        code: error?.data?.code ?? 'INTERNAL_SERVER_ERROR',
+        httpStatus: error?.data?.httpStatus ?? 500,
+        message: error?.message ?? String(e),
+        path: error?.data?.path,
       });
     };
 
@@ -114,8 +114,9 @@ class ImportService {
         pathname: `import_config/${filename}`,
       });
       pathname = result.data.path;
-    } catch {
-      throw new Error('Upload Error');
+    } catch (e) {
+      handleError(e);
+      return;
     }
 
     callbacks?.onStageChange?.(ImportStage.Importing);

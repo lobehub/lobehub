@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { uploadService } from '@/services/upload';
 import { useUserStore } from '@/store/user';
+import type { ImportPgDataStructure } from '@/types/export';
+import type { ImporterEntryData, OnImportCallbacks } from '@/types/importer';
 import { ImportStage } from '@/types/importer';
 
 import { importService } from './index';
@@ -47,6 +49,10 @@ describe('ImportService', () => {
     vi.clearAllMocks();
     vi.spyOn(Date, 'now').mockReturnValue(1000000);
     vi.spyOn(console, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('importSettings', () => {
@@ -224,23 +230,43 @@ describe('ImportService', () => {
         expect(callbacks.onSuccess).toHaveBeenCalled();
       });
 
-      it('should handle upload error', async () => {
-        const mockData = {
-          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
-          version: 1,
+      describe.each(['legacy', 'postgres'] as const)('%s import failures', (format) => {
+        const runImport = (count: number, callbacks?: OnImportCallbacks) => {
+          const messages = Array.from({ length: count }, () => ({ id: '1', content: 'test' }));
+          return format === 'legacy'
+            ? importService.importData({ messages, version: 1 } as ImporterEntryData, callbacks)
+            : importService.importPgData(
+                {
+                  data: { messages },
+                  mode: 'postgres',
+                  schemaHash: 'hash123',
+                } as ImportPgDataStructure,
+                { callbacks },
+              );
         };
 
-        vi.mocked(uploadService.uploadDataToS3).mockRejectedValue(new Error('S3 upload failed'));
+        it('reports upload failure and stops before importing', async () => {
+          vi.mocked(uploadService.uploadDataToS3).mockRejectedValue(
+            new Error('Network disconnected'),
+          );
+          const callbacks = { onError: vi.fn(), onStageChange: vi.fn(), onSuccess: vi.fn() };
 
-        const callbacks = {
-          onStageChange: vi.fn(),
-        };
+          await runImport(500, callbacks);
 
-        await expect(importService.importData(mockData as any, callbacks)).rejects.toThrow(
-          'Upload Error',
-        );
-
-        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Uploading);
+          expect(callbacks.onStageChange.mock.calls.flat()).toEqual([
+            ImportStage.Uploading,
+            ImportStage.Error,
+          ]);
+          expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith({
+            code: 'INTERNAL_SERVER_ERROR',
+            httpStatus: 500,
+            message: 'Network disconnected',
+            path: undefined,
+          });
+          expect(callbacks.onSuccess).not.toHaveBeenCalled();
+          expect(lambdaClient.importer.importByFile.mutate).not.toHaveBeenCalled();
+          await expect(runImport(500)).resolves.toBeUndefined();
+        });
       });
 
       it('should handle import error after successful upload', async () => {
