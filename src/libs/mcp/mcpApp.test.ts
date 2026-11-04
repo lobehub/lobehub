@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { getMcpAppFromState, getToolUiResourceUri, unwrapMcpToolState } from './mcpApp';
+import {
+  getMcpAppFromState,
+  getToolUiResourceUri,
+  isToolVisibleToApp,
+  unwrapMcpToolState,
+} from './mcpApp';
 
 describe('getToolUiResourceUri', () => {
   it('reads the nested and the deprecated flat key', () => {
@@ -35,5 +40,15 @@ describe('getMcpAppFromState', () => {
   it('ignores states without a valid reference', () => {
     expect(getMcpAppFromState(undefined)).toBeUndefined();
     expect(getMcpAppFromState({ mcpApp: { resourceUri: 'javascript:alert(1)' } })).toBeUndefined();
+  });
+});
+
+describe('isToolVisibleToApp', () => {
+  it('follows _meta.ui.visibility, which defaults to model and app', () => {
+    expect(isToolVisibleToApp({ _meta: { ui: { visibility: ['model'] } } })).toBe(false);
+    expect(isToolVisibleToApp({ _meta: { ui: { visibility: [] } } })).toBe(false);
+    expect(isToolVisibleToApp({ _meta: { ui: { visibility: ['app'] } } })).toBe(true);
+    expect(isToolVisibleToApp({ _meta: { ui: {} } })).toBe(true);
+    expect(isToolVisibleToApp({})).toBe(true);
   });
 });

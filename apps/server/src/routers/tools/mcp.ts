@@ -133,6 +133,8 @@ export const mcpRouter = router({
     .input(
       z.object({
         args: z.any(), // Arguments for the tool call
+        /** An MCP App view's `tools/call`: only tools visible to the app run. */
+        fromApp: z.boolean().optional(),
         meta: metaSchema, // Optional metadata for reporting
         params: mcpClientParamsSchema, // Use the unified schema for client params
         toolName: z.string(),
@@ -194,6 +196,7 @@ export const mcpRouter = router({
         result = await mcpService.callTool({
           argsStr: input.args,
           clientParams: input.params,
+          fromApp: input.fromApp,
           mcpApp: await isMcpAppEnabled(ctx.userId),
           processContentBlocks: boundProcessContentBlocks,
           toolName: input.toolName,

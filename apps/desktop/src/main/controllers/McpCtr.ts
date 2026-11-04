@@ -109,6 +109,8 @@ interface GetStreamableMcpServerManifestInput {
 export interface StdioCallToolInput {
   args: any;
   env: any;
+  /** An MCP App view's `tools/call`: only tools visible to the app run. */
+  fromApp?: boolean;
   http?: undefined;
   params: GetStdioMcpServerManifestInput;
   toolName: string;
@@ -117,6 +119,8 @@ export interface StdioCallToolInput {
 /** A call to an HTTP endpoint only this machine can reach (localhost / LAN). */
 export interface HttpCallToolInput {
   args: any;
+  /** An MCP App view's `tools/call`: only tools visible to the app run. */
+  fromApp?: boolean;
   http: {
     auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
     headers?: Record<string, string>;
@@ -616,7 +620,11 @@ export default class McpCtr extends ControllerModule {
   async callTool(payload: SuperJSONSerialized<CallToolInput>) {
     const input = deserializePayload<CallToolInput>(payload);
     if ('http' in input && input.http) {
-      return serializePayload(await this.runHttpMcpTool(input.http, input.toolName, input.args));
+      return serializePayload(
+        await this.runHttpMcpTool(input.http, input.toolName, input.args, {
+          fromApp: input.fromApp,
+        }),
+      );
     }
     return serializePayload(await this.runStdioMcpTool(input as StdioCallToolInput));
   }
@@ -675,6 +683,16 @@ export default class McpCtr extends ControllerModule {
     }
   }
 
+  /** Fails closed: a view's call is refused while the tool's visibility can't be learned. */
+  private async isToolCallableByApp(client: MCPClient, toolName: string) {
+    try {
+      return await client.isToolCallableByApp(toolName);
+    } catch (error) {
+      logger.warn('Failed to resolve MCP App visibility for tool:', { error, toolName });
+      return false;
+    }
+  }
+
   /** Never fails the tool call: an unknown UI resource only means no interactive view. */
   private async getToolUiResourceUri(client: MCPClient, toolName: string) {
     try {
@@ -705,6 +723,7 @@ export default class McpCtr extends ControllerModule {
       },
       input.toolName,
       input.args,
+      { fromApp: input.fromApp },
     );
   }
 
@@ -722,6 +741,7 @@ export default class McpCtr extends ControllerModule {
     },
     toolName: string,
     rawArgs: unknown,
+    options: { fromApp?: boolean } = {},
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     return this.runMcpTool(
       {
@@ -733,6 +753,7 @@ export default class McpCtr extends ControllerModule {
       },
       toolName,
       rawArgs,
+      options,
     );
   }
 
@@ -740,6 +761,7 @@ export default class McpCtr extends ControllerModule {
     params: MCPClientParams,
     toolName: string,
     rawArgs: unknown,
+    { fromApp = false }: { fromApp?: boolean } = {},
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     try {
       const args = safeParseToRecord(rawArgs);
@@ -755,6 +777,16 @@ export default class McpCtr extends ControllerModule {
       const runOn = (client: MCPClient) =>
         this.withClientLease(client, async () => {
           try {
+            // A view may only call tools whose visibility includes the app
+            if (fromApp && !(await this.isToolCallableByApp(client, toolName))) {
+              const message = `The tool "${toolName}" can't be called from an interactive view.`;
+              return {
+                content: message,
+                error: { message, name: 'MCPToolError' },
+                state: { content: [{ text: message, type: 'text' }], isError: true },
+                success: false,
+              };
+            }
             const uiResourceUri = await this.getToolUiResourceUri(client, toolName);
             const raw = (await client.callTool(toolName, args)) as ToolCallResult;
             const processed = raw.isError

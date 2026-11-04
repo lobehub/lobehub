@@ -36,6 +36,17 @@ export const getToolUiResourceUri = (tool: { _meta?: unknown } | undefined): str
 };
 
 /**
+ * Whether a view may call this tool (`tools/call` from the app). Its
+ * `_meta.ui.visibility` lists who may: unset means `["model", "app"]`, and a
+ * tool without `"app"` must be refused to views.
+ */
+export const isToolVisibleToApp = (tool: { _meta?: unknown } | undefined): boolean => {
+  const visibility = (tool?._meta as { ui?: { visibility?: unknown } } | undefined)?.ui?.visibility;
+
+  return !Array.isArray(visibility) || visibility.includes('app');
+};
+
+/**
  * The raw MCP tool result state. Server AgentRuntime calls persist the whole
  * processed result (`{ content, state, success }`) as the plugin state, so the
  * MCP result (with `mcpApp`) sits one level deeper there than on client calls.

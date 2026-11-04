@@ -312,6 +312,7 @@ describe('MCPService', () => {
     mockClient = {
       callTool: vi.fn(),
       getToolUiResourceUri: vi.fn().mockResolvedValue(undefined),
+      isToolCallableByApp: vi.fn().mockResolvedValue(true),
       listManifests: vi.fn(),
       listPrompts: vi.fn(),
       listResources: vi.fn(),
@@ -535,6 +536,54 @@ describe('MCPService', () => {
       expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApp: true });
       expect(mockClient.getToolUiResourceUri).toHaveBeenCalledWith('weather');
       expect(result.state.mcpApp).toEqual({ resourceUri: 'ui://weather/view.html' });
+    });
+
+    it("runs a view's call to a tool whose visibility includes the app", async () => {
+      mockClient.callTool.mockResolvedValue({
+        content: [{ type: 'text', text: 'sunny' }],
+        isError: false,
+      });
+
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        fromApp: true,
+        mcpApp: true,
+        toolName: 'weather',
+      });
+
+      expect(mockClient.isToolCallableByApp).toHaveBeenCalledWith('weather');
+      expect(mockClient.callTool).toHaveBeenCalledWith('weather', {});
+      expect(result.success).toBe(true);
+    });
+
+    it("refuses a view's call to a tool kept from views, without running it", async () => {
+      mockClient.isToolCallableByApp.mockResolvedValue(false);
+
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        fromApp: true,
+        mcpApp: true,
+        toolName: 'delete_all',
+      });
+
+      expect(mockClient.callTool).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.state.isError).toBe(true);
+    });
+
+    it("refuses a view's call while the mcp_app flag is off", async () => {
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        fromApp: true,
+        toolName: 'weather',
+      });
+
+      expect(mockClient.isToolCallableByApp).not.toHaveBeenCalled();
+      expect(mockClient.callTool).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
     });
 
     it('should neither look up nor attach a view while the mcp_app flag is off', async () => {

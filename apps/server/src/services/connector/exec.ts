@@ -61,7 +61,14 @@ const findConnector = async (
  * credentials. Shared by the `connector.callTool` tRPC procedure.
  */
 export const callConnectorToolById = async (
-  params: { agentId?: string; args?: string; identifier: string; toolName: string },
+  params: {
+    agentId?: string;
+    args?: string;
+    /** An MCP App view's `tools/call`: only tools visible to the app run. */
+    fromApp?: boolean;
+    identifier: string;
+    toolName: string;
+  },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
   const [connector] = await findConnector(params, ctx);
@@ -133,6 +140,7 @@ export const callConnectorToolById = async (
   return mcpService.callTool({
     argsStr: params.args ?? '{}',
     clientParams: buildConnectorMcpParams(fresh),
+    fromApp: params.fromApp,
     mcpApp: await isMcpAppEnabled(ctx.userId),
     toolName: params.toolName,
   });

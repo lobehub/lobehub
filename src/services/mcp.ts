@@ -84,19 +84,22 @@ class MCPService {
     payload: ChatToolPayload,
     {
       agentId,
-      localOverIpc,
+      fromMcpApp,
       signal,
       topicId,
     }: {
       /** Resolve connectors the way this agent's conversation does (agent-owned first). */
       agentId?: string;
       /**
-       * On desktop, run servers only this machine can reach (stdio connectors,
-       * localhost / LAN http plugins) over IPC, whether or not a device gateway
-       * is configured. Only an MCP App view's calls set it, as its HTML was read
-       * the same way; conversation calls keep their existing route.
+       * The call is an MCP App view's `tools/call`, not the model's:
+       * - only tools whose `_meta.ui.visibility` includes "app" run, which the
+       *   process holding the MCP session (server or desktop main) checks;
+       * - on desktop, servers only this machine can reach (stdio connectors,
+       *   localhost / LAN http plugins) run over IPC whether or not a device
+       *   gateway is configured, as the view's HTML was read the same way.
+       *   Conversation calls keep their existing route.
        */
-      localOverIpc?: boolean;
+      fromMcpApp?: boolean;
       signal?: AbortSignal;
       topicId?: string;
     },
@@ -133,8 +136,7 @@ class MCPService {
         connector &&
         isDesktop &&
         connector.mcpConnectionType === 'stdio' &&
-        (localOverIpc ||
-          getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false)
+        (fromMcpApp || getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false)
       ) {
         // Persisted connector projections omit env secrets and may be stale.
         // This protected read retains the connector's credential ownership gate.
@@ -152,6 +154,7 @@ class MCPService {
           serializeMcpIpcPayload({
             args: safeParseJSON(args) ?? {},
             env: config.env,
+            ...(fromMcpApp && { fromApp: true }),
             params: {
               args: config.args ?? [],
               command: config.command,
@@ -165,7 +168,7 @@ class MCPService {
       }
       try {
         return (await lambdaClient.connector.callTool.mutate(
-          { agentId, args, identifier, toolName: apiName },
+          { agentId, args, ...(fromMcpApp && { fromApp: true }), identifier, toolName: apiName },
           { signal },
         )) as MCPToolCallResult;
       } catch (error) {
@@ -193,7 +196,7 @@ class MCPService {
     const isCloud = plugin?.customParams?.mcp?.type === 'cloud';
     // localhost / LAN endpoints are only reachable from this machine
     const isLocalHttp =
-      !!localOverIpc &&
+      !!fromMcpApp &&
       isDesktop &&
       plugin?.customParams?.mcp?.type === 'http' &&
       isLocalOrPrivateUrl(params.url);
@@ -218,6 +221,7 @@ class MCPService {
       // (IPC layer serializes the whole payload into a JSON envelope).
       args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
       env: connection?.type === 'stdio' ? params.env : (pluginSettings ?? connection?.env),
+      ...(fromMcpApp && { fromApp: true }),
       meta,
       params,
       toolName: apiName,
@@ -231,6 +235,11 @@ class MCPService {
     let result: MCPToolCallResult | undefined;
 
     try {
+      // Cloud servers render no views, and their gateway can't check visibility
+      if (isCloud && fromMcpApp) {
+        throw new Error(`Tool '${apiName}' can't be called from an interactive view`);
+      }
+
       // For cloud type, call via cloud gateway
       if (isCloud) {
         // Parse args
@@ -256,6 +265,7 @@ class MCPService {
         // Same routing as the manifest fetch: the server relay can't reach it
         const serialized = serializeMcpIpcPayload({
           args: safeParseJSON(args) ?? {},
+          fromApp: true,
           http: { auth: params.auth, headers: params.headers, name: params.name, url: params.url },
           toolName: apiName,
         });

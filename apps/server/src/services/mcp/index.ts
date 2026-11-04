@@ -239,6 +239,12 @@ export class MCPService {
     argsStr: any;
     clientParams: MCPClientParams;
     /**
+     * The call comes from an MCP App view (`tools/call`), not the model. Only
+     * tools whose `_meta.ui.visibility` includes "app" run; others, and any
+     * call while `mcpApp` is off, return a failed result without reaching the tool.
+     */
+    fromApp?: boolean;
+    /**
      * Runtime flag `mcp_app` for the calling user. On: the session advertises
      * MCP Apps and the result carries the tool's `ui://` view. Off: the call
      * runs as it did before MCP Apps, with no capability and no tool lookup.
@@ -249,6 +255,7 @@ export class MCPService {
   }): Promise<any> {
     const {
       clientParams,
+      fromApp = false,
       mcpApp = false,
       toolName,
       argsStr,
@@ -262,6 +269,14 @@ export class MCPService {
 
       // Resolved before the call: a stale-session error here is retried by
       // withSessionRetry, which must never re-run a tool that already executed.
+      if (fromApp && !(mcpApp && (await client.isToolCallableByApp(toolName)))) {
+        const message = `The tool "${toolName}" can't be called from an interactive view.`;
+        return {
+          content: message,
+          state: { content: [{ text: message, type: 'text' }], isError: true },
+          success: false,
+        };
+      }
       const uiResourceUri = mcpApp ? await client.getToolUiResourceUri(toolName) : undefined;
 
       try {

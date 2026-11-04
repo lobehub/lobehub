@@ -361,6 +361,8 @@ export class MCPClient {
   private stdioParams?: { args?: string[]; command: string; env?: Record<string, string> };
   /** tool name → `ui://` resource URI, filled from the last `listTools` */
   private uiResourceUris?: Map<string, string>;
+  /** Tools a view may not call (`_meta.ui.visibility` without "app"), from the same listing */
+  private appHiddenTools?: Set<string>;
 
   constructor(params: MCPClientParams) {
     this.mcp = new Client(
@@ -742,7 +744,26 @@ export class MCPClient {
           : [];
       }),
     );
+    // `_meta.ui.visibility` unset means ["model", "app"]
+    this.appHiddenTools = new Set(
+      (tools || [])
+        .filter((tool) => {
+          const visibility = (tool._meta as Record<string, any> | undefined)?.ui?.visibility;
+          return Array.isArray(visibility) && !visibility.includes('app');
+        })
+        .map((tool) => tool.name),
+    );
     return (tools || []) as McpTool[];
+  }
+
+  /**
+   * Whether an MCP App view may call `toolName`: its `_meta.ui.visibility`
+   * includes "app", or is unset. Lists tools once per client to learn it.
+   */
+  async isToolCallableByApp(toolName: string): Promise<boolean> {
+    if (!this.appHiddenTools) await this.listTools();
+
+    return !this.appHiddenTools?.has(toolName);
   }
 
   /**

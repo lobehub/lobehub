@@ -264,6 +264,23 @@ describe('mcpService MCP App calls for agents', () => {
       expect.anything(),
     );
   });
+
+  it("marks a view's connector call so the server checks the tool's visibility", async () => {
+    connectors.set('agt_1:linear', {
+      isEnabled: true,
+      mcpServerUrl: 'https://mcp.linear.app/mcp',
+    });
+
+    await mcpService.invokeMcpToolCall(
+      { apiName: 'list', arguments: '{}', id: 't1', identifier: 'linear', type: 'mcp' },
+      { agentId: 'agt_1', fromMcpApp: true },
+    );
+
+    expect(connectorCall).toHaveBeenCalledWith(
+      { agentId: 'agt_1', args: '{}', fromApp: true, identifier: 'linear', toolName: 'list' },
+      expect.anything(),
+    );
+  });
 });
 
 describe('mcpService.invokeMcpToolCall on desktop', () => {
@@ -285,14 +302,36 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
   it('calls localhost / LAN http servers over IPC for a view, not the server relay', async () => {
     plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
 
-    await mcpService.invokeMcpToolCall(refresh, { localOverIpc: true });
+    await mcpService.invokeMcpToolCall(refresh, { fromMcpApp: true });
 
     expect(relayCall).not.toHaveBeenCalled();
     expect(deserializeMcpIpcPayload(ipcCall.mock.calls[0][0])).toEqual({
       args: { city: 'Paris' },
+      fromApp: true,
       http: { headers: { 'x-key': 'k' }, name: 'local', url: 'http://127.0.0.1:3000/mcp' },
       toolName: 'refresh',
     });
+  });
+
+  it("marks a view's relay call so the server checks the tool's visibility", async () => {
+    plugins.set('remote', httpPlugin('https://mcp.example.com/mcp'));
+    relayCall.mockResolvedValue({ content: 'ok', success: true });
+
+    await mcpService.invokeMcpToolCall({ ...refresh, identifier: 'remote' }, { fromMcpApp: true });
+
+    expect(relayCall).toHaveBeenCalledWith(
+      expect.objectContaining({ fromApp: true, toolName: 'refresh' }),
+      expect.anything(),
+    );
+  });
+
+  it('refuses a view call to a cloud server, whose gateway cannot check visibility', async () => {
+    plugins.set('cloud', { customParams: { mcp: { type: 'cloud' } } });
+
+    await expect(
+      mcpService.invokeMcpToolCall({ ...refresh, identifier: 'cloud' }, { fromMcpApp: true }),
+    ).rejects.toThrow("can't be called from an interactive view");
+    expect(relayCall).not.toHaveBeenCalled();
   });
 
   it('keeps conversation calls to localhost / LAN http servers on their existing route', async () => {
@@ -342,7 +381,7 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
   });
 
   it('runs a view call on this desktop, where its view was read', async () => {
-    await expect(mcpService.invokeMcpToolCall(list, { localOverIpc: true })).resolves.toEqual({
+    await expect(mcpService.invokeMcpToolCall(list, { fromMcpApp: true })).resolves.toEqual({
       content: 'ok',
       success: true,
     });
@@ -351,6 +390,7 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
     expect(deserializeMcpIpcPayload(ipcCall.mock.calls[0][0])).toEqual({
       args: { dir: '/tmp' },
       env: { TOKEN: 'fresh-secret' },
+      fromApp: true,
       params: { args: ['mcp.js'], command: 'node', name: 'files', type: 'stdio' },
       toolName: 'list',
     });
@@ -362,7 +402,7 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
       tools: [{ permission: 'disabled', toolName: 'list' }],
     });
 
-    await expect(mcpService.invokeMcpToolCall(list, { localOverIpc: true })).rejects.toThrow(
+    await expect(mcpService.invokeMcpToolCall(list, { fromMcpApp: true })).rejects.toThrow(
       'unavailable or disabled',
     );
     expect(ipcCall).not.toHaveBeenCalled();

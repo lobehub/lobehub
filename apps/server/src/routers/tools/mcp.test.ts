@@ -58,6 +58,24 @@ describe('tools mcpRouter.callTool', () => {
     expect(mockMcpAppEnabled).toHaveBeenCalledWith('user-1');
     expect(mockCallTool).toHaveBeenCalledWith(expect.objectContaining({ mcpApp: enabled }));
   });
+
+  it.each([true, undefined])(
+    'passes whether a view made the call (%s) to the MCP call',
+    async (fromApp) => {
+      mockMcpAppEnabled.mockResolvedValue(true);
+      mockCallTool.mockResolvedValue({ content: 'ok', state: { content: [] }, success: true });
+      const caller = mcpRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
+
+      await caller.callTool({
+        args: '{}',
+        fromApp,
+        params: { name: 'weather', type: 'http', url: 'https://mcp.example.com/mcp' },
+        toolName: 'forecast',
+      });
+
+      expect(mockCallTool).toHaveBeenCalledWith(expect.objectContaining({ fromApp }));
+    },
+  );
 });
 
 describe('tools mcpRouter.readUiResource', () => {

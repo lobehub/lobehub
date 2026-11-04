@@ -31,6 +31,7 @@ const makeClient = (overrides: Record<string, unknown> = {}) => ({
   disconnect: vi.fn().mockResolvedValue(undefined),
   getToolUiResourceUri: vi.fn().mockResolvedValue('ui://weather/view'),
   initialize: vi.fn().mockResolvedValue(undefined),
+  isToolCallableByApp: vi.fn().mockResolvedValue(true),
   readResource: vi.fn().mockResolvedValue({ contents: [{ text: '<html />', uri: 'ui://x' }] }),
   ...overrides,
 });
@@ -72,6 +73,64 @@ describe('McpCtr MCP Apps', () => {
     expect(client.callTool).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
     expect((result.state as any).mcpApp).toBeUndefined();
+  });
+
+  it("runs a view's call to a tool visible to the app", async () => {
+    const client = makeClient();
+    mcpClientMocks.mockReturnValue(client);
+
+    const result = deserializeMcpIpcPayload<any>(
+      await ctr.callTool(
+        serializeMcpIpcPayload({
+          args: {},
+          env: undefined,
+          fromApp: true,
+          params: stdioParams,
+          toolName: 'refresh',
+        }),
+      ),
+    );
+
+    expect(client.isToolCallableByApp).toHaveBeenCalledWith('refresh');
+    expect(client.callTool).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+  });
+
+  it.each([
+    ['kept from views', vi.fn().mockResolvedValue(false)],
+    ['of unknown visibility', vi.fn().mockRejectedValue(new Error('list failed'))],
+  ])("refuses a view's call to a tool %s without running it", async (_, isToolCallableByApp) => {
+    const client = makeClient({ isToolCallableByApp });
+    mcpClientMocks.mockReturnValue(client);
+
+    const result = deserializeMcpIpcPayload<any>(
+      await ctr.callTool(
+        serializeMcpIpcPayload({
+          args: {},
+          fromApp: true,
+          http: { name: 'local', url: 'http://127.0.0.1:3000/mcp' },
+          toolName: 'delete_all',
+        }),
+      ),
+    );
+
+    expect(client.callTool).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.state.isError).toBe(true);
+  });
+
+  it('does not check visibility for conversation calls', async () => {
+    const client = makeClient();
+    mcpClientMocks.mockReturnValue(client);
+
+    await ctr.runStdioMcpTool({
+      args: '{}',
+      env: undefined,
+      params: stdioParams,
+      toolName: 'show_weather',
+    } as any);
+
+    expect(client.isToolCallableByApp).not.toHaveBeenCalled();
   });
 
   it('reads ui:// resources over IPC and refuses other URIs', async () => {

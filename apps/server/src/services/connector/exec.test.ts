@@ -122,6 +122,18 @@ describe('callConnectorToolById', () => {
     expect(mcpService.callTool).toHaveBeenCalledWith(expect.objectContaining({ mcpApp: enabled }));
   });
 
+  it.each([true, undefined])(
+    'passes whether a view made the call (%s) through',
+    async (fromApp) => {
+      vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+      const ctx = makeCtx([connector], [tool()]);
+
+      await callConnectorToolById({ fromApp, identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+
+      expect(mcpService.callTool).toHaveBeenCalledWith(expect.objectContaining({ fromApp }));
+    },
+  );
+
   it('uses the refreshed token when the connector token was refreshed', async () => {
     vi.mocked(ensureFreshConnectorToken).mockResolvedValueOnce({
       ...connector,

@@ -393,7 +393,7 @@ describe('McpAppView', () => {
 
     expect(invokeMcpToolCall).toHaveBeenCalledWith(
       expect.objectContaining({ apiName: 'get_forecast', identifier: 'weather-demo' }),
-      { agentId: 'agt_1', localOverIpc: true, signal: expect.any(AbortSignal) },
+      { agentId: 'agt_1', fromMcpApp: true, signal: expect.any(AbortSignal) },
     );
   });
 

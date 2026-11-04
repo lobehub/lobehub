@@ -15,7 +15,7 @@ import { type Progress, type Transport } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import debug from 'debug';
 
-import { getToolUiResourceUri, MCP_APP_CLIENT_CAPABILITIES } from './mcpApp';
+import { getToolUiResourceUri, isToolVisibleToApp, MCP_APP_CLIENT_CAPABILITIES } from './mcpApp';
 import {
   type MCPClientParams,
   type MCPError,
@@ -184,6 +184,8 @@ export class MCPClient {
   private params: MCPClientParams;
   /** tool name → `ui://` resource URI, filled from the last successful `listTools` */
   private uiResourceUris?: Map<string, string>;
+  /** Tools a view may not call (`_meta.ui.visibility` without "app"), from the same listing */
+  private appHiddenTools?: Set<string>;
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
   private uiResourceListFailedAt?: number;
 
@@ -394,6 +396,9 @@ export class MCPClient {
           return uri ? [[tool.name, uri] as const] : [];
         }),
       );
+      this.appHiddenTools = new Set(
+        tools.filter((tool) => !isToolVisibleToApp(tool)).map((tool) => tool.name),
+      );
       log('Listed %d MCP tool(s)', tools.length);
       return tools as McpTool[];
     } catch (e) {
@@ -475,6 +480,25 @@ export class MCPClient {
    * the map: manifests are listed on a separate client without MCP Apps.
    */
   async getToolUiResourceUri(toolName: string): Promise<string | undefined> {
+    await this.ensureToolUiListed();
+
+    return this.uiResourceUris?.get(toolName);
+  }
+
+  /**
+   * Whether a view may call `toolName` (its `_meta.ui.visibility` includes
+   * "app", or is unset). Unknown while the tools can't be listed, which counts
+   * as no: a view's call is refused rather than run unchecked.
+   */
+  async isToolCallableByApp(toolName: string): Promise<boolean> {
+    await this.ensureToolUiListed();
+    if (!this.appHiddenTools) return false;
+
+    return !this.appHiddenTools.has(toolName);
+  }
+
+  /** List tools once per client for their MCP Apps metadata; see {@link getToolUiResourceUri}. */
+  private async ensureToolUiListed() {
     const failedAt = this.uiResourceListFailedAt;
     if (
       !this.uiResourceUris &&
@@ -483,8 +507,6 @@ export class MCPClient {
       await this.listTools();
       this.uiResourceListFailedAt = this.uiResourceUris ? undefined : Date.now();
     }
-
-    return this.uiResourceUris?.get(toolName);
   }
 
   async readResource(uri: string) {

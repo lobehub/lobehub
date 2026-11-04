@@ -832,6 +832,8 @@ export const connectorRouter = router({
         /** Resolve the identifier for this agent (agent-owned connector first). */
         agentId: z.string().optional(),
         args: z.string().optional(),
+        /** An MCP App view's `tools/call`: only tools visible to the app run. */
+        fromApp: z.boolean().optional(),
         identifier: z.string().min(1),
         toolName: z.string().min(1),
       }),

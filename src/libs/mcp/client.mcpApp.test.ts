@@ -114,3 +114,31 @@ describe('MCPClient.getToolUiResourceUri', () => {
     consoleError.mockRestore();
   });
 });
+
+describe('MCPClient.isToolCallableByApp', () => {
+  it('refuses tools whose visibility leaves out the app, and allows the default', async () => {
+    listTools.mockResolvedValue({
+      tools: [
+        { _meta: { ui: { visibility: ['model'] } }, name: 'delete_all' },
+        { _meta: { ui: { visibility: ['app'] } }, name: 'refresh' },
+        { _meta: { ui: { visibility: ['model', 'app'] } }, name: 'forecast' },
+        { name: 'search' },
+      ],
+    });
+    const client = new MCPClient(params, { mcpApp: true });
+
+    await expect(client.isToolCallableByApp('delete_all')).resolves.toBe(false);
+    await expect(client.isToolCallableByApp('refresh')).resolves.toBe(true);
+    await expect(client.isToolCallableByApp('forecast')).resolves.toBe(true);
+    await expect(client.isToolCallableByApp('search')).resolves.toBe(true);
+    expect(listTools).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses while the tools can not be listed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    listTools.mockRejectedValue(new Error('offline'));
+    const client = new MCPClient(params, { mcpApp: true });
+
+    await expect(client.isToolCallableByApp('search')).resolves.toBe(false);
+  });
+});
