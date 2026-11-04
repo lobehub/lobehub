@@ -281,9 +281,11 @@ export class MCPService {
         const result = await client.callTool(toolName, args); // Pass args directly
 
         // Use the common processing method
+        // A view gets the tool's own MCP result: its media stays base64 `data`,
+        // not the uploaded URLs the chat stores
         const processedResult = await MCPService.processToolCallResult(
           result,
-          processContentBlocksFn,
+          fromApp ? undefined : processContentBlocksFn,
         );
 
         // MCP Apps: let the chat UI know which `ui://` resource renders this result

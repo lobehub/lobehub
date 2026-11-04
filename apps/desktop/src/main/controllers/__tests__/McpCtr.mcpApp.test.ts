@@ -96,6 +96,27 @@ describe('McpCtr MCP Apps', () => {
     expect(mcpClientMocks.mock.calls).toEqual([[{ mcpApps: false }], [{ mcpApps: true }]]);
   });
 
+  it("returns a view the tool's own media, not the chat's uploaded copies", async () => {
+    const image = { data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' };
+    const client = makeClient({
+      callTool: vi.fn().mockResolvedValue({ content: [image, { text: 'done', type: 'text' }] }),
+    });
+    mcpClientMocks.mockReturnValue(client);
+
+    const result = await ctr.runStdioMcpTool({
+      args: '{}',
+      env: undefined,
+      fromApp: true,
+      mcpApps: true,
+      params: stdioParams,
+      toolName: 'snapshot',
+    } as any);
+
+    expect(result.success).toBe(true);
+    expect((result.state as any).content).toEqual([image, { text: 'done', type: 'text' }]);
+    expect(result.content).toBe('done');
+  });
+
   it("refuses a view's call while MCP Apps are off", async () => {
     const client = makeClient();
     mcpClientMocks.mockReturnValue(client);

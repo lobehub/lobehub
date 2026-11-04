@@ -899,12 +899,13 @@ export default class McpCtr extends ControllerModule {
               ? await this.getToolUiResourceUri(client, toolName)
               : undefined;
             const raw = (await client.callTool(toolName, args)) as ToolCallResult;
-            const processed = raw.isError
-              ? raw.content
-              : await this.processContentBlocks(raw.content);
-            const content = await toMarkdown(processed, (key) =>
-              this.fileService.getFileHTTPURL(key),
-            );
+            // A view gets the tool's own MCP result: its media stays base64
+            // `data`, not the uploaded keys the chat stores and renders
+            const processed =
+              raw.isError || fromApp ? raw.content : await this.processContentBlocks(raw.content);
+            const content = fromApp
+              ? processed.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+              : await toMarkdown(processed, (key) => this.fileService.getFileHTTPURL(key));
             const state = {
               ...raw,
               content: processed,

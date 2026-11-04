@@ -573,6 +573,26 @@ describe('MCPService', () => {
       expect(result.state.isError).toBe(true);
     });
 
+    it("returns a view the tool's own media, not the chat's uploaded copies", async () => {
+      const image = { data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' };
+      mockClient.callTool.mockResolvedValue({ content: [image], isError: false });
+      const processContentBlocks = vi.fn(async (blocks: any[]) =>
+        blocks.map((block) => ({ ...block, data: 'https://files.example.com/a.png' })),
+      );
+
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        fromApp: true,
+        mcpApps: true,
+        processContentBlocks,
+        toolName: 'snapshot',
+      });
+
+      expect(processContentBlocks).not.toHaveBeenCalled();
+      expect(result.state.content).toEqual([image]);
+    });
+
     it("refuses a view's call while the mcp_apps flag is off", async () => {
       const result = await mcpService.callTool({
         argsStr: '{}',
