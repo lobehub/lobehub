@@ -74,6 +74,8 @@ import {
   useRunResultsMap,
 } from '@/features/LobeBench/useLobeBench';
 
+import { LaunchPage } from './LaunchPage';
+
 const styles = stylex.create({
   container: {
     minWidth: 0,
@@ -1163,4 +1165,10 @@ const ExperimentDashboard = memo(() => {
 
 ExperimentDashboard.displayName = 'LobeBenchExperimentDashboard';
 
-export default ExperimentDashboard;
+const ExperimentPage = () => (
+  <LaunchPage>
+    <ExperimentDashboard />
+  </LaunchPage>
+);
+
+export default ExperimentPage;

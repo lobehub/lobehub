@@ -36,9 +36,7 @@ import {
   createExperimentLaunch,
   type ExperimentLaunch,
   isResumableLaunch,
-  launchExperiment,
   type LaunchOutcome,
-  type LaunchProgress,
 } from '@/features/LobeBench/experimentLaunch';
 import {
   caseCountOf,
@@ -80,7 +78,8 @@ import { useEvalStore } from '@/store/eval';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { LaunchProgressPanel } from './LaunchProgress';
+import { isExperimentLaunching, startBackgroundLaunch } from '../launchBackground';
+import { launchServices } from '../launchServices';
 
 const styles = stylex.create({
   container: {
@@ -129,7 +128,6 @@ const NewExperiment = memo(() => {
   const modelsReady = useAiInfraStore((s) => s.isInitAiProviderRuntimeState);
   const [starting, setStarting] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [progress, setProgress] = useState<LaunchProgress & { createdAt: string }>();
   const [launchError, setLaunchError] = useState<string>();
   const launchInFlight = useRef(false);
   const creatingLaunch = useRef(false);
@@ -193,7 +191,6 @@ const NewExperiment = memo(() => {
     clear: clearLaunch,
     launch,
     ready: launchReady,
-    resume: resumeLaunch,
   } = useExperimentLaunch({ benchmarkId: launchBenchmarkId, userId, workspaceId });
   const [outcome, setOutcome] = useState<LaunchOutcome>();
   // Providers this server cannot call for the account (no key), found by the
@@ -325,7 +322,6 @@ const NewExperiment = memo(() => {
       return;
     }
     setOutcome(undefined);
-    setProgress(undefined);
     setLaunchError(undefined);
     setConfirmationOpen(true);
   };
@@ -367,72 +363,34 @@ const NewExperiment = memo(() => {
     };
   };
 
-  const launchServices = {
-    createExperiment: (params: Parameters<typeof agentEvalService.createExperiment>[0]) =>
-      agentEvalService.createExperiment(params),
-    createRun: (params: {
-      config: Record<string, unknown>;
-      datasetId: string;
-      experimentId: string;
-      id: string;
-      name: string;
-    }) => agentEvalService.createRun(params as Parameters<typeof agentEvalService.createRun>[0]),
-    listRuns: async (experimentId: string) => {
-      const response = (await agentEvalService.listRuns({ experimentId })) as {
-        data?: Array<{ id: string; status?: string | null }>;
-      };
-      return response?.data ?? [];
-    },
-    startRun: (runId: string) => agentEvalService.startRun(runId),
-    updateExperiment: (params: { id: string; metadata: Record<string, unknown> }) =>
-      agentEvalService.updateExperiment(params),
-  };
-
   // Runs (or resumes) a launch record. It reads only the record: every id and
   // every parameter was frozen when the launch began, so the draft, the case
   // set in the URL or the models available now cannot change what it sends.
   const runLaunch = async (record: ExperimentLaunch) => {
-    if (launchInFlight.current) return;
+    if (launchInFlight.current || !userId) return;
     launchInFlight.current = true;
     setStarting(true);
-    setConfirmationOpen(true);
-    setOutcome(undefined);
-    setProgress(undefined);
+    setConfirmationOpen(false);
     setLaunchError(undefined);
+    clearDraft();
+    const task = startBackgroundLaunch(
+      { benchmarkId: record.benchmarkId, userId, workspaceId },
+      record,
+      launchServices,
+    );
+    navigate(`${LOBE_BENCH_PATH}/experiments/${record.experimentId}`);
     try {
-      // One resume at a time for this launch: a second tab (or a double click)
-      // is told it is busy instead of reading `idle` too and starting again.
-      const exclusive = await resumeLaunch(record.experimentId, () =>
-        launchExperiment(record, launchServices, (update) =>
-          setProgress({ ...update, createdAt: record.createdAt }),
-        ),
-      );
-      if (!exclusive.ran) {
-        setConfirmationOpen(false);
-        toast.error(t('lobeBench.new.launch.occupied'));
-        return;
-      }
-      const result = exclusive.result;
-      setOutcome(result);
+      const result = await task;
       if (!result.complete) return;
-      // Remember the contenders for the next experiment; a failure here must
-      // not stop the experiment.
       try {
         await saveContenders(upsertContenders(savedContenders, contenders));
       } catch {
-        /* the experiment still runs */
+        /* Optional preference save. */
       }
-      // The experiment exists whether or not the list refresh succeeds; the
-      // dashboard loads it by id.
       await refreshExperiments().catch(() => undefined);
       await clearLaunch(record.experimentId);
-      clearDraft();
-      setConfirmationOpen(false);
-      navigate(`${LOBE_BENCH_PATH}/experiments/${record.experimentId}`);
-    } catch (error) {
-      setLaunchError(
-        error instanceof Error && error.message ? error.message : t('lobeBench.new.error'),
-      );
+    } catch {
+      /* The experiment page displays the retained launch error. */
     } finally {
       launchInFlight.current = false;
       setStarting(false);
@@ -488,10 +446,15 @@ const NewExperiment = memo(() => {
 
   const abandonLaunch = () => {
     if (!launch) return;
+    if (isExperimentLaunching(launch.experimentId)) {
+      toast.error(t('lobeBench.new.launch.busy'));
+      return;
+    }
     confirmModal({
       content: t('lobeBench.new.launch.abandon.confirm'),
       okText: t('lobeBench.new.launch.abandon'),
       onOk: async () => {
+        if (isExperimentLaunching(launch.experimentId)) return;
         await clearLaunch(launch.experimentId);
         setOutcome(undefined);
       },
@@ -531,7 +494,7 @@ const NewExperiment = memo(() => {
         footer={
           <Flexbox horizontal gap={8} justify={'flex-end'} wrap={'wrap'}>
             <Button disabled={starting} onClick={() => setConfirmationOpen(false)}>
-              {progress ? t('lobeBench.new.launch.close') : t('lobeBench.new.cancel')}
+              {t('lobeBench.new.cancel')}
             </Button>
             {outcome && (
               <Button disabled={starting} onClick={openLaunch}>
@@ -557,22 +520,14 @@ const NewExperiment = memo(() => {
         title={
           !starting && failureMessage
             ? t('lobeBench.new.launch.interrupted')
-            : progress
-              ? t('lobeBench.new.launch.title')
-              : t('lobeBench.new.confirm.title')
+            : t('lobeBench.new.confirm.title')
         }
         onCancel={() => {
           if (!starting) setConfirmationOpen(false);
         }}
       >
         <Flexbox gap={16}>
-          {progress ? (
-            <LaunchProgressPanel
-              active={starting}
-              createdAt={progress.createdAt}
-              progress={progress}
-            />
-          ) : !failureMessage ? (
+          {!failureMessage ? (
             <Flexbox gap={8}>
               <Text>
                 {t('lobeBench.new.confirm.line', {

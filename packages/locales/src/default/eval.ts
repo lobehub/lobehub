@@ -1061,7 +1061,11 @@ export default {
   'lobeBench.new.launch.steps': '{{completed}} of {{total}} launch steps complete',
   'lobeBench.new.launch.title': 'Starting experiment',
   'lobeBench.new.launch.waiting':
-    'Waiting for the server. Progress advances only when a step is confirmed; connection checks may take longer. Keep this window open.',
+    'You can visit other pages while startup continues in this browser tab. Return to this experiment to check progress.',
+  'lobeBench.new.launch.busy': 'Another tab is starting this experiment. Check again shortly.',
+  'lobeBench.new.launch.back': 'Back to experiments',
+  'lobeBench.new.launch.recovery':
+    'Startup has not been confirmed. Check and continue from the saved checkpoint; existing runs will not be started again.',
   'lobeBench.new.launch.pending':
     'An experiment launch is unfinished. Settings are locked while it is being recovered.',
   'lobeBench.new.launch.unknown':

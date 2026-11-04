@@ -3,10 +3,15 @@
 import { confirmModal, toast } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { LOBE_BENCH_PATH } from '@/features/LobeBench/lobeBench';
 import { useLobeBenchExperiments } from '@/features/LobeBench/useLobeBench';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentEvalService } from '@/services/agentEval';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
+import { forgetExperimentLaunch, isExperimentLaunching } from './launchBackground';
 
 interface DeleteExperimentOptions {
   /** A run is still in flight: refuse and say to stop the experiment first. */
@@ -23,13 +28,15 @@ interface DeleteExperimentOptions {
 export const useDeleteExperiment = () => {
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
+  const userId = useUserStore(userProfileSelectors.userId);
+  const workspaceId = useActiveWorkspaceId();
   const { mutate } = useLobeBenchExperiments();
 
   return (
     experiment: { id: string; name?: string | null },
     { active, leave }: DeleteExperimentOptions = {},
   ) => {
-    if (active) {
+    if (active || isExperimentLaunching(experiment.id)) {
       toast.error(t('lobeBench.experiment.delete.active'));
       return;
     }
@@ -40,11 +47,16 @@ export const useDeleteExperiment = () => {
       okButtonProps: { danger: true },
       okText: t('common.delete'),
       onOk: async () => {
+        if (isExperimentLaunching(experiment.id)) {
+          toast.error(t('lobeBench.experiment.delete.active'));
+          return;
+        }
         const result = await agentEvalService.deleteExperiment(experiment.id, { withRuns: true });
         if (result.success === false) {
           toast.error(result.error || t('lobeBench.experiment.delete.failed'));
           return;
         }
+        if (userId) forgetExperimentLaunch(userId, workspaceId, experiment.id);
         toast.success(t('lobeBench.experiment.delete.done'));
         await mutate();
         if (leave) navigate(LOBE_BENCH_PATH);
