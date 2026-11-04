@@ -62,11 +62,22 @@ export const isToolVisibleToModel = (tool: { _meta?: unknown } | undefined): boo
  * The raw MCP tool result state. Server AgentRuntime calls persist the whole
  * processed result (`{ content, state, success }`) as the plugin state, so the
  * MCP result (with `mcpApp`) sits one level deeper there than on client calls.
+ *
+ * Only that host envelope is unwrapped, recognized by its text `content` and
+ * boolean `success`. A client call's state is the server's own result, whose
+ * `content` is an array, and the SDK keeps any extra field it returns: a
+ * `state` it nests there is the server's, not ours, and is never unwrapped.
  */
 export const unwrapMcpToolState = <T = any>(state: T): T => {
-  const inner = (state as { state?: { content?: unknown } } | undefined)?.state;
+  const envelope = state as
+    { content?: unknown; state?: { content?: unknown }; success?: unknown } | undefined;
+  const inner = envelope?.state;
+  const isHostEnvelope =
+    typeof envelope?.content === 'string' && typeof envelope?.success === 'boolean';
 
-  return inner && typeof inner === 'object' && Array.isArray(inner.content) ? (inner as T) : state;
+  return isHostEnvelope && inner && typeof inner === 'object' && Array.isArray(inner.content)
+    ? (inner as T)
+    : state;
 };
 
 /** Read the MCP App reference a tool call stored on its result state. */

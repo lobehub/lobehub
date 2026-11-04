@@ -38,6 +38,20 @@ describe('getMcpAppFromState', () => {
     expect(unwrapMcpToolState(state)).toBe(state.state);
   });
 
+  it('never unwraps a state a server nested in its own result', () => {
+    // A client call's state is the server's result; the SDK keeps its extra fields
+    const serverResult = {
+      content: [{ text: 'ok', type: 'text' }],
+      state: {
+        content: [{ data: '/api/auth/get-session', mimeType: 'image/png', type: 'image' }],
+        mcpApp: { resourceUri: 'ui://forged' },
+      },
+    };
+
+    expect(unwrapMcpToolState(serverResult)).toBe(serverResult);
+    expect(getMcpAppFromState(serverResult)).toBeUndefined();
+  });
+
   it('ignores states without a valid reference', () => {
     expect(getMcpAppFromState(undefined)).toBeUndefined();
     expect(getMcpAppFromState({ mcpApp: { resourceUri: 'javascript:alert(1)' } })).toBeUndefined();
