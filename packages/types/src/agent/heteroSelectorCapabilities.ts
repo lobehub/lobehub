@@ -113,32 +113,16 @@ export type HeterogeneousReasoningEffortLevel =
 export type HeterogeneousReasoningEffort =
   HeterogeneousReasoningEffortLevel | HeterogeneousAgentDefaultSelection;
 
-/**
- * Codex speed modes, mirrored to the CLI config key `service_tier`.
- *
- * `fast` maps to the Fast service tier (request value `priority`): ~1.5x
- * faster inference at a higher credit-consumption rate. Requires ChatGPT
- * sign-in; the Codex CLI silently omits the tier for unsupported models, so
- * passing it is always safe.
- */
-export type CodexSpeedMode = 'fast';
+/** Explicit Codex speed selections; normal sends the standard service tier. */
+export type CodexSpeedMode = 'normal' | 'fast' | 'ultrafast';
 
 export type HeterogeneousSpeedMode = CodexSpeedMode | HeterogeneousAgentDefaultSelection;
 
 export const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
-/**
- * Codex models whose catalog exposes the Fast (`priority`) service tier.
- * Sourced from the model catalog embedded in codex-cli.
- */
-const CODEX_FAST_SPEED_MODELS = [
-  'gpt-5.6',
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
-  'gpt-5.6-luna',
-  'gpt-5.5',
-  'gpt-5.4',
-] as const;
+/** Default is a selector sentinel; Normal explicitly requests standard processing. */
+export const toCodexServiceTier = (speed: string): string =>
+  speed === 'normal' ? 'default' : speed;
 
 /**
  * `service_tier` values the Codex CLI resolves to the Fast tier
@@ -204,15 +188,6 @@ export const getCodexReasoningEffortLevels = (model: string): readonly CodexReas
   return CODEX_COMMON_REASONING_EFFORT_LEVELS;
 };
 
-/**
- * Whether the Fast speed toggle applies to a selector model value. `default`
- * counts as supported so the CLI remains free to resolve its own model; an
- * unsupported resolved model simply ignores the tier.
- */
-export const codexModelSupportsFastSpeed = (model: string): boolean =>
-  model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION ||
-  CODEX_FAST_SPEED_MODELS.includes(model as (typeof CODEX_FAST_SPEED_MODELS)[number]);
-
 export interface HeteroSelectionSource {
   args?: string[];
   effort?: string | null;
@@ -275,6 +250,12 @@ export const resolveCodexSpeedMode = (
     getCliConfigValue(source?.args, CODEX_SERVICE_TIER_CONFIG_KEY) ?? source?.speed
   )?.trim();
 
+  if (
+    tier === 'default' &&
+    getCliConfigValue(source?.args, CODEX_SERVICE_TIER_CONFIG_KEY) !== undefined
+  )
+    return 'normal';
+  if (tier === 'normal' || tier === 'ultrafast') return tier;
   return isCodexFastServiceTier(tier) ? 'fast' : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
@@ -352,7 +333,6 @@ export interface HeteroSelectorEffortCapability {
 export interface HeteroSelectorSpeedCapability {
   encodings: readonly HeteroCliEncoding[];
   resolve: (source: HeteroSelectionSource | null | undefined) => HeterogeneousSpeedMode;
-  supported: (model: string) => boolean;
 }
 
 export interface HeteroSelectorModeCapability {
@@ -425,7 +405,6 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     speed: {
       encodings: [{ key: CODEX_SERVICE_TIER_CONFIG_KEY, kind: 'config' }],
       resolve: resolveCodexSpeedMode,
-      supported: codexModelSupportsFastSpeed,
     },
   },
   'copilot': {
@@ -672,6 +651,7 @@ const getExplicitCodexSpeedMode = (
   source: HeteroSelectionSource | null | undefined,
 ): CodexSpeedMode | undefined => {
   const speed = source?.speed?.trim();
+  if (speed === 'normal' || speed === 'ultrafast') return speed;
   return isCodexFastServiceTier(speed) ? 'fast' : undefined;
 };
 
@@ -733,7 +713,7 @@ export const buildHeteroSpawnArgs = (
 
     const speed = getExplicitCodexSpeedMode(provider);
     if (speed && !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)) {
-      extraArgs.push('-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${speed}"`);
+      extraArgs.push('-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${toCodexServiceTier(speed)}"`);
     }
   }
 

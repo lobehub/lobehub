@@ -36,6 +36,7 @@ import {
   spawnAgent,
   spawnDshAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { toCodexServiceTier } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
@@ -90,7 +91,6 @@ const SUPPORTED_AGENT_COMMANDS = HETEROGENEOUS_AGENT_CONFIGS.map(
 ).join(', ');
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
-
 /**
  * Runtime factories for `lh hetero exec`. Pi uses RPC; other agents fall
  * through to the generic one-shot `spawnAgent`.
@@ -263,7 +263,7 @@ const buildExtraArgs = (
                 ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
                 : []),
               ...(options.speed
-                ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
+                ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${toCodexServiceTier(options.speed)}"`]
                 : []),
             ]
           : options.type === 'claude-code' ||
@@ -1442,7 +1442,7 @@ export function registerHeteroCommand(program: Command) {
     .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
     .option(
       '--speed <mode>',
-      'Forward a resolved speed selection to the agent CLI (codex only; `fast` requests the Fast service tier)',
+      'Forward a resolved speed selection to the agent CLI (codex only; `normal`, `fast`, or `ultrafast` selects the service tier)',
     )
     .option(
       '--agent-arg <arg>',

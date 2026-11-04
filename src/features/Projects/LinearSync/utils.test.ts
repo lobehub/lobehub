@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatLinearSyncResult,
   isActiveLinearSyncJob,
+  linearIssueListCounts,
   linearSyncJobErrorMessage,
   linearSyncJobProgress,
 } from './utils';
@@ -91,5 +92,43 @@ describe('linearSyncJobProgress', () => {
     expect(linearSyncJobProgress({ result: result({ created: 200, truncated: true }) }, t)).toBe(
       'linear.sync.job.inProgressCreated:200',
     );
+  });
+});
+
+describe('linearIssueListCounts', () => {
+  it('reads the loaded count as the total once every page is in', () => {
+    expect(linearIssueListCounts({ hasMore: false, loaded: 12 }, t)).toEqual({
+      total: 'linear.sync.list.count:12',
+    });
+  });
+
+  it('shows the counted total and how many are loaded while pages remain', () => {
+    expect(
+      linearIssueListCounts({ hasMore: true, loaded: 50, total: { capped: false, count: 234 } }, t),
+    ).toEqual({ loaded: 'linear.sync.list.loaded:50', total: 'linear.sync.list.count:234' });
+  });
+
+  it('reads as "at least" while the total is being counted, so the first page does not look like all', () => {
+    expect(linearIssueListCounts({ hasMore: true, loaded: 50 }, t)).toEqual({
+      loaded: 'linear.sync.list.loaded:50',
+      total: 'linear.sync.list.countAtLeast:50',
+    });
+  });
+
+  it('reads as "at least" when the count stopped at its limit or fell behind the loaded pages', () => {
+    expect(
+      linearIssueListCounts({ hasMore: true, loaded: 50, total: { capped: true, count: 1000 } }, t)
+        .total,
+    ).toBe('linear.sync.list.countAtLeast:1000');
+    expect(
+      linearIssueListCounts(
+        { hasMore: true, loaded: 1050, total: { capped: true, count: 1000 } },
+        t,
+      ).total,
+    ).toBe('linear.sync.list.countAtLeast:1050');
+    expect(
+      linearIssueListCounts({ hasMore: true, loaded: 100, total: { capped: false, count: 100 } }, t)
+        .total,
+    ).toBe('linear.sync.list.countAtLeast:100');
   });
 });

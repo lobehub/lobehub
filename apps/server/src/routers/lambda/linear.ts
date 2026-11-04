@@ -20,7 +20,11 @@ import {
   LinearApiError,
   revokeLinearToken,
 } from '@/server/services/linear/client';
-import { listLinearProjects, listLinearTeams } from '@/server/services/linear/issues';
+import {
+  countLinearIssues,
+  listLinearProjects,
+  listLinearTeams,
+} from '@/server/services/linear/issues';
 import { LinearIssueSyncService } from '@/server/services/linear/issueSync';
 import { startLinearRuleSyncJob, startLinearSyncJob } from '@/server/services/linear/startSyncJob';
 import { toLinearSyncJobView } from '@/server/services/linear/syncJob';
@@ -143,6 +147,14 @@ export const linearRouter = router({
         ),
       );
     }),
+
+  /** How many issues match the picker filter, counted up to a limit. */
+  countIssues: linearProcedure.input(issueFilterInput).query(async ({ ctx, input }) => {
+    await requireConnection(ctx, input.connectionId);
+    return callLinear(async () =>
+      countLinearIssues(await getLinearAccessToken(ctx.serverDB, input.connectionId), input),
+    );
+  }),
 
   /**
    * Import (or re-sync) the picked issues into a LobeHub project. Runs in the

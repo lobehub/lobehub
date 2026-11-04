@@ -479,7 +479,7 @@ export class GoalModel {
     // Every status write — resume, pause, close, a sign-off sent back, the
     // coordinator — lands here, so this is where an archived goal is kept put:
     // its status is frozen until it is restored, which keeps the archive's own
-    // rule (signed off or canceled) true while it is hidden. The check is part
+    // rule (completed or canceled) true while it is hidden. The check is part
     // of the UPDATE, which serializes with the guarded archive write.
     const row = await this.update(
       id,

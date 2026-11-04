@@ -30,6 +30,7 @@ vi.mock('@/envs/linear', () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
+  countIssues: vi.fn(),
   getToken: vi.fn(),
   listTeams: vi.fn(),
   revoke: vi.fn(),
@@ -54,6 +55,7 @@ vi.mock('@/server/services/linear/token', () => ({
   LinearReconnectRequiredError: class LinearReconnectRequiredError extends Error {},
 }));
 vi.mock('@/server/services/linear/issues', () => ({
+  countLinearIssues: mocks.countIssues,
   listLinearProjects: vi.fn(),
   listLinearTeams: mocks.listTeams,
 }));
@@ -195,6 +197,26 @@ describe('linearRouter', () => {
         code: 'NOT_FOUND',
       });
       expect(mocks.getToken).not.toHaveBeenCalled();
+    });
+
+    it("counts the issues of the picker filter through the caller's connection", async () => {
+      const connection = await connect({ userId });
+      const other = await connect({ userId: otherUserId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.countIssues.mockResolvedValue({ capped: false, count: 234 });
+      const filter = { stateTypes: ['unstarted' as const], teamId: 'team-pkg' };
+
+      await expect(
+        caller({ userId }).countIssues({ connectionId: connection.id, ...filter }),
+      ).resolves.toEqual({ capped: false, count: 234 });
+      expect(mocks.countIssues).toHaveBeenCalledWith(
+        'token',
+        expect.objectContaining({ connectionId: connection.id, ...filter }),
+      );
+
+      await expect(
+        caller({ userId }).countIssues({ connectionId: other.id, ...filter }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
     it('asks to reconnect when Linear rejects the token', async () => {

@@ -114,21 +114,18 @@ describe('useGoalItemMenu', () => {
     const archiveItem = (items: DropdownItem[]) =>
       items.find((item) => item && 'key' in item && item.key === 'archive') as any;
 
-    it('is disabled, with the reason, until the goal is signed off or canceled', () => {
-      const cases = [
-        ...['draft', 'planning', 'running', 'verifying', 'review', 'paused', 'failed'].map(
-          (status) => ({ signedOff: true, status }),
-        ),
-        // Achieved but the owner has not signed it off yet.
-        { signedOff: false, status: 'achieved' },
-      ];
-      for (const { signedOff, status } of cases) {
+    it('is disabled, with the reason, until the goal is completed or canceled', () => {
+      for (const status of [
+        'draft',
+        'planning',
+        'running',
+        'verifying',
+        'review',
+        'paused',
+        'failed',
+      ]) {
         const { result } = renderHook(() =>
-          useGoalItemMenu({
-            agentId: 'agt_1',
-            goal: { ...goal, archivedAt: null, status },
-            signedOff,
-          }),
+          useGoalItemMenu({ agentId: 'agt_1', goal: { ...goal, archivedAt: null, status } }),
         );
         expect(archiveItem(result.current)).toMatchObject({
           desc: 'goalList.archiveBlocked',
@@ -136,6 +133,19 @@ describe('useGoalItemMenu', () => {
           label: 'goalList.archive',
         });
       }
+    });
+
+    // The list row and the detail header used to read the sign-off from two
+    // places; neither gates archiving any more.
+    it('is enabled for a completed goal, signed off or not', () => {
+      const { result } = renderHook(() =>
+        useGoalItemMenu({
+          agentId: 'agt_1',
+          goal: { ...goal, archivedAt: null, status: 'achieved' },
+        }),
+      );
+
+      expect(archiveItem(result.current)).toMatchObject({ desc: undefined, disabled: false });
     });
 
     it('is enabled for a canceled goal', () => {
@@ -149,14 +159,13 @@ describe('useGoalItemMenu', () => {
       expect(archiveItem(result.current)).toMatchObject({ disabled: false });
     });
 
-    it('archives a signed-off goal and refreshes the list it was opened from', async () => {
+    it('archives a completed goal and refreshes the list it was opened from', async () => {
       mocks.store.archiveGoal.mockResolvedValue(undefined);
       const { result } = renderHook(() =>
         useGoalItemMenu({
           agentId: 'agt_1',
           goal: { ...goal, archivedAt: null, status: 'achieved' },
           routeAgentId: 'agt_1',
-          signedOff: true,
         }),
       );
 

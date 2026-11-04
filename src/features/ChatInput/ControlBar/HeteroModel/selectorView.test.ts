@@ -29,7 +29,19 @@ const capabilityOf = (type: string): ModelCapability => {
 };
 
 const viewOf = (provider: HeterogeneousProviderConfig) =>
-  buildSelectorView({ capability: selectorCapabilityOf(provider.type), provider, t });
+  buildSelectorView({
+    capability: selectorCapabilityOf(provider.type),
+    provider,
+    t,
+    models: [
+      {
+        id: 'gpt-5.6-sol',
+        modelId: 'gpt-5.6-sol',
+        providerId: 'codex',
+        speedModes: ['normal', 'fast'],
+      },
+    ],
+  });
 
 const dimensionKeys = (provider: HeterogeneousProviderConfig) =>
   viewOf(provider).dimensions.map((dimension) => dimension.key);
@@ -109,8 +121,11 @@ describe('dimensions per provider', () => {
     expect(dimensionKeys({ model: 'gpt-5.6-sol', type: 'codex' })).toEqual(['reasoning', 'speed']);
   });
 
-  it('hides speed for codex models without a fast tier', () => {
-    expect(dimensionKeys({ model: 'gpt-5.3-codex-spark', type: 'codex' })).toEqual(['reasoning']);
+  it('keeps Normal available for codex models without a fast tier', () => {
+    expect(dimensionKeys({ model: 'gpt-5.3-codex-spark', type: 'codex' })).toEqual([
+      'reasoning',
+      'speed',
+    ]);
   });
 
   it('offers model and reasoning but never speed for claude-code', () => {
@@ -193,9 +208,9 @@ describe('current value surfaced on each dimension', () => {
     expect(viewOf({ model: 'gpt-5.6-sol', type: 'codex' }).isFastSpeed).toBe(false);
   });
 
-  it('ignores a fast speed the current model cannot serve', () => {
+  it('keeps an unavailable saved tier visible for correction', () => {
     expect(viewOf({ model: 'gpt-5.3-codex-spark', speed: 'fast', type: 'codex' }).isFastSpeed).toBe(
-      false,
+      true,
     );
   });
 
@@ -293,7 +308,7 @@ describe('resolveModelSwitchSelection', () => {
       resolveModelSwitchSelection({
         capability: capabilityOf('codex'),
         effort,
-        isFastSpeed: false,
+        speed: 'default',
         value: 'gpt-6-astra',
       }),
     ).toEqual(
@@ -305,17 +320,33 @@ describe('resolveModelSwitchSelection', () => {
     expect(
       resolveModelSwitchSelection({
         capability: capabilityOf('codex'),
-        isFastSpeed: true,
+        speed: 'fast',
+        models: [
+          {
+            id: 'gpt-5.4',
+            modelId: 'gpt-5.4',
+            providerId: 'codex',
+            speedModes: ['normal', 'fast'],
+          },
+        ],
         value: 'gpt-5.3-codex-spark',
       }),
-    ).toEqual({ model: 'gpt-5.3-codex-spark', speed: 'default' });
+    ).toEqual({ model: 'gpt-5.3-codex-spark', speed: 'normal' });
   });
 
   it('keeps a fast speed the newly picked codex model still serves', () => {
     expect(
       resolveModelSwitchSelection({
         capability: capabilityOf('codex'),
-        isFastSpeed: true,
+        speed: 'fast',
+        models: [
+          {
+            id: 'gpt-5.5',
+            modelId: 'gpt-5.5',
+            providerId: 'codex',
+            speedModes: ['normal', 'fast'],
+          },
+        ],
         value: 'gpt-5.5',
       }),
     ).toEqual({ model: 'gpt-5.5' });
@@ -326,7 +357,7 @@ describe('resolveModelSwitchSelection', () => {
       resolveModelSwitchSelection({
         capability: capabilityOf('codex'),
         effort: 'ultra',
-        isFastSpeed: false,
+        speed: 'default',
         value: 'gpt-5.4',
       }),
     ).toEqual({ effort: 'default', model: 'gpt-5.4' });
@@ -337,7 +368,7 @@ describe('resolveModelSwitchSelection', () => {
       resolveModelSwitchSelection({
         capability: capabilityOf('claude-code'),
         effort: 'max',
-        isFastSpeed: false,
+        speed: 'default',
         value: 'haiku',
       }),
     ).toEqual({ model: 'haiku' });
@@ -356,7 +387,7 @@ describe('what a pick persists', () => {
         provider,
         resolveModelSwitchSelection({
           capability: capabilityOf('claude-code'),
-          isFastSpeed: false,
+          speed: 'default',
           value: 'opus',
         }),
       ),
@@ -374,7 +405,7 @@ describe('what a pick persists', () => {
         provider,
         resolveModelSwitchSelection({
           capability: capabilityOf('codex'),
-          isFastSpeed: false,
+          speed: 'default',
           value: 'gpt-5.6-sol',
         }),
       ),
