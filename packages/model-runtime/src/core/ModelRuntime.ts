@@ -383,7 +383,7 @@ export class ModelRuntime {
       if (hasRemoteImage(payload.messages)) {
         console.warn('[ModelRuntime] provider could not fetch media, retrying with inlined images');
         try {
-          const messages = await inlineRemoteImages(payload.messages);
+          const messages = await inlineRemoteImages(payload.messages, { signal: options?.signal });
           return await chat({ ...payload, messages }, options);
         } catch (retryError) {
           if (!isMediaFetchError(retryError)) throw retryError;

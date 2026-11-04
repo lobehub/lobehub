@@ -28,6 +28,19 @@ const messages: OpenAIChatMessage[] = [
   { content: 'plain', role: 'assistant' },
 ];
 
+/** A Responses API tool message: the image lives in `responsesOutput`, which is replayed verbatim. */
+const toolOutputMessages: OpenAIChatMessage[] = [
+  {
+    content: 'readFile result',
+    responsesOutput: [
+      { text: 'readFile result', type: 'input_text' },
+      { detail: 'auto', image_url: URL_A, type: 'input_image' },
+    ],
+    role: 'tool',
+    tool_call_id: 'call-1',
+  },
+];
+
 describe('remoteMediaFallback', () => {
   beforeEach(() => {
     vi.mocked(imageUrlToBase64).mockReset();
@@ -109,5 +122,87 @@ describe('remoteMediaFallback', () => {
       },
     ]);
     expect(hasMediaPart(result)).toBe(false);
+  });
+
+  it('inlines images carried by a native Responses tool output', async () => {
+    vi.mocked(imageUrlToBase64).mockResolvedValue({ base64: 'QUJD', mimeType: 'image/png' });
+
+    const result = await inlineRemoteImages(toolOutputMessages);
+
+    expect(hasRemoteImage(toolOutputMessages)).toBe(true);
+    expect(hasMediaPart(toolOutputMessages)).toBe(true);
+    expect(result[0].responsesOutput).toEqual([
+      { text: 'readFile result', type: 'input_text' },
+      { detail: 'auto', image_url: 'data:image/png;base64,QUJD', type: 'input_image' },
+    ]);
+    // The textual content of the message is untouched.
+    expect(result[0].content).toBe('readFile result');
+  });
+
+  it('replaces a rejected Responses tool output image with a text placeholder', async () => {
+    vi.mocked(imageUrlToBase64).mockRejectedValue(new Error('download failed'));
+
+    const result = await replaceMediaWithPlaceholders(toolOutputMessages);
+
+    expect(result[0].responsesOutput).toEqual([
+      { text: 'readFile result', type: 'input_text' },
+      {
+        text: `[Image omitted: the model provider could not download or process it. Original URL: ${URL_A}]`,
+        type: 'input_text',
+      },
+    ]);
+    expect(hasMediaPart(result)).toBe(false);
+  });
+
+  it('stops inlining once the aggregate request budget is spent', async () => {
+    // 4 MB of base64 per image: five fit the 20 MB budget, the sixth must not be downloaded.
+    const base64 = 'A'.repeat(4 * 1024 * 1024);
+    vi.mocked(imageUrlToBase64).mockResolvedValue({ base64, mimeType: 'image/png' });
+
+    const many: OpenAIChatMessage[] = Array.from({ length: 6 }, (_, index) => ({
+      content: [
+        { image_url: { url: `https://files.example.com/${index}.png` }, type: 'image_url' },
+      ],
+      role: 'user',
+    }));
+
+    const result = await inlineRemoteImages(many);
+
+    expect(imageUrlToBase64).toHaveBeenCalledTimes(5);
+    expect(result.slice(0, 5).every((message) => (message.content as any[])[0].image_url)).toBe(
+      true,
+    );
+    expect((result[5].content as any[])[0]).toEqual({
+      text: '[Image omitted: the model provider could not download or process it. Original URL: https://files.example.com/5.png]',
+      type: 'text',
+    });
+  });
+
+  it('cancels pending downloads together with the caller', async () => {
+    vi.mocked(imageUrlToBase64).mockImplementation(
+      (_url, options) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+
+    const controller = new AbortController();
+    const pending = inlineRemoteImages(messages, { signal: controller.signal });
+    controller.abort();
+
+    const result = await pending;
+
+    expect(imageUrlToBase64).toHaveBeenCalledWith(
+      URL_A,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(result[0].content).toEqual([
+      {
+        text: `[Image omitted: the model provider could not download or process it. Original URL: ${URL_A}]`,
+        type: 'text',
+      },
+      { image_url: { url: 'data:image/png;base64,AAAA' }, type: 'image_url' },
+      { type: 'video_url', video_url: { url: 'https://files.example.com/v.mp4' } },
+    ]);
   });
 });

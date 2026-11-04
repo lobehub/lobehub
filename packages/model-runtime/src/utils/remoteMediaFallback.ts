@@ -1,3 +1,4 @@
+import { DEFAULT_INLINE_IMAGE_BUDGET } from '../core/contextBuilders/inlineImageBudget';
 import type { OpenAIChatMessage, UserMessageContentPart } from '../types';
 import { imageUrlToBase64 } from './imageToBase64';
 import { collectErrorStrings } from './routeFallback';
@@ -15,10 +16,23 @@ const MEDIA_FETCH_ERROR_PATTERNS = [
   'unable to download the file. please verify the url',
 ];
 
-const INLINE_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 const INLINE_IMAGE_TIMEOUT_MS = 15_000;
 
+/**
+ * Reuses the request-size budget the Anthropic context builder already enforces: 5 MB of
+ * base64 per image and 20 MB in total. A topic can hold many distinct images, so the
+ * fallback must not turn all of them into base64 at once.
+ */
+const { maxImageBase64Bytes: MAX_IMAGE_BASE64_BYTES, maxTotalBase64Bytes: MAX_TOTAL_BASE64_BYTES } =
+  DEFAULT_INLINE_IMAGE_BUDGET;
+
 type MediaPart = Extract<UserMessageContentPart, { type: 'image_url' | 'video_url' }>;
+
+/** Native Responses tool output parts, which `convertOpenAIResponseInputs` forwards verbatim. */
+type ResponsesOutputItem = Exclude<
+  NonNullable<OpenAIChatMessage['responsesOutput']>,
+  string
+>[number];
 
 const isMediaPart = (part: UserMessageContentPart): part is MediaPart =>
   part?.type === 'image_url' || part?.type === 'video_url';
@@ -28,6 +42,18 @@ const getMediaUrl = (part: MediaPart) =>
 
 const isRemoteImagePart = (part: UserMessageContentPart) =>
   part?.type === 'image_url' && parseDataUri(part.image_url.url).type === 'url';
+
+const isOutputImage = (
+  item: ResponsesOutputItem,
+): item is Extract<ResponsesOutputItem, { type: 'input_image' }> => item?.type === 'input_image';
+
+const isRemoteOutputImage = (item: ResponsesOutputItem) =>
+  isOutputImage(item) && !!item.image_url && parseDataUri(item.image_url).type === 'url';
+
+const outputItems = (message: OpenAIChatMessage) =>
+  Array.isArray(message.responsesOutput)
+    ? (message.responsesOutput as ResponsesOutputItem[])
+    : undefined;
 
 const toPlaceholder = (part: MediaPart): UserMessageContentPart => {
   const url = getMediaUrl(part);
@@ -40,22 +66,34 @@ const toPlaceholder = (part: MediaPart): UserMessageContentPart => {
   };
 };
 
-const mapContentParts = async (
-  messages: OpenAIChatMessage[],
-  mapPart: (part: UserMessageContentPart) => Promise<UserMessageContentPart>,
-): Promise<OpenAIChatMessage[]> =>
-  Promise.all(
-    messages.map(async (message) =>
-      Array.isArray(message.content)
-        ? { ...message, content: await Promise.all(message.content.map(mapPart)) }
-        : message,
-    ),
-  );
+const toOutputPlaceholder = (item: ResponsesOutputItem): ResponsesOutputItem => {
+  const url = item.type === 'input_image' ? item.image_url : undefined;
+  const source = url && parseDataUri(url).type === 'url' ? ` Original URL: ${url}` : '';
 
-const someContentPart = (
+  return {
+    text: `[Image omitted: the model provider could not download or process it.${source}]`,
+    type: 'input_text',
+  };
+};
+
+const mapMessageMedia = (
   messages: OpenAIChatMessage[],
-  predicate: (part: UserMessageContentPart) => boolean,
-) => messages.some((m) => Array.isArray(m.content) && m.content.some(predicate));
+  mapPart: (part: UserMessageContentPart) => UserMessageContentPart,
+  mapOutputItem: (item: ResponsesOutputItem) => ResponsesOutputItem,
+): OpenAIChatMessage[] =>
+  messages.map((message) => {
+    const hasParts = Array.isArray(message.content);
+    const hasOutput = Array.isArray(message.responsesOutput);
+    if (!hasParts && !hasOutput) return message;
+
+    const next: OpenAIChatMessage = { ...message };
+    if (hasParts) next.content = (message.content as UserMessageContentPart[]).map(mapPart);
+
+    const output = outputItems(message);
+    if (output) next.responsesOutput = output.map(mapOutputItem);
+
+    return next;
+  });
 
 export const isMediaFetchError = (error: unknown): boolean => {
   const combined = collectErrorStrings(error)
@@ -66,50 +104,126 @@ export const isMediaFetchError = (error: unknown): boolean => {
 };
 
 export const hasRemoteImage = (messages: OpenAIChatMessage[]) =>
-  someContentPart(messages, isRemoteImagePart);
+  messages.some(
+    (message) =>
+      (Array.isArray(message.content) && message.content.some(isRemoteImagePart)) ||
+      outputItems(message)?.some(isRemoteOutputImage),
+  );
 
 export const hasMediaPart = (messages: OpenAIChatMessage[]) =>
-  someContentPart(messages, isMediaPart);
+  messages.some(
+    (message) =>
+      (Array.isArray(message.content) && message.content.some(isMediaPart)) ||
+      outputItems(message)?.some(isOutputImage),
+  );
+
+export interface InlineRemoteImagesOptions {
+  /** Caller abort signal; stops pending downloads together with the per-image timeout. */
+  signal?: AbortSignal;
+}
+
+const collectRemoteImageUrls = (messages: OpenAIChatMessage[]) => {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (url?: null | string) => {
+    if (!url || seen.has(url) || parseDataUri(url).type !== 'url') return;
+    seen.add(url);
+    urls.push(url);
+  };
+
+  for (const message of messages) {
+    if (Array.isArray(message.content))
+      for (const part of message.content) if (part?.type === 'image_url') add(part.image_url.url);
+
+    for (const item of outputItems(message) ?? []) if (isOutputImage(item)) add(item.image_url);
+  }
+
+  return urls;
+};
+
+const downloadDataUri = async (
+  url: string,
+  remainingBase64Bytes: number,
+  signal?: AbortSignal,
+): Promise<string | undefined> => {
+  const timeout = AbortSignal.timeout(INLINE_IMAGE_TIMEOUT_MS);
+  const abort = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  const budgetBase64Bytes = Math.min(MAX_IMAGE_BASE64_BYTES, remainingBase64Bytes);
+
+  try {
+    const { base64, mimeType } = await imageUrlToBase64(url, {
+      maxBytes: Math.floor((budgetBase64Bytes * 3) / 4),
+      signal: abort,
+    });
+
+    // A failed fetch can still return an HTML error page; never send that as an image.
+    return mimeType.startsWith('image/') ? `data:${mimeType};base64,${base64}` : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Downloads remote images on our side, sequentially and in message order, so peak memory
+ * stays under the aggregate budget plus one image and the same conversation always
+ * produces the same inlining. URLs that do not fit the budget are left to become
+ * placeholders instead of being sent as base64.
+ */
+const inlineRemoteImageUrls = async (urls: string[], signal?: AbortSignal) => {
+  const dataUris = new Map<string, string | undefined>();
+  let remainingBase64Bytes = MAX_TOTAL_BASE64_BYTES;
+
+  for (const url of urls) {
+    const dataUri =
+      remainingBase64Bytes > 0
+        ? await downloadDataUri(url, remainingBase64Bytes, signal)
+        : undefined;
+
+    dataUris.set(url, dataUri);
+    if (dataUri) remainingBase64Bytes -= dataUri.length;
+  }
+
+  return dataUris;
+};
 
 /**
  * Downloads remote images on our side and sends them as data URIs, so the request no
- * longer depends on the provider reaching the URL. An image we cannot download either
- * becomes a text placeholder.
+ * longer depends on the provider reaching the URL. An image we cannot download, or that
+ * does not fit the request budget, becomes a text placeholder.
  */
 export const inlineRemoteImages = async (
   messages: OpenAIChatMessage[],
+  { signal }: InlineRemoteImagesOptions = {},
 ): Promise<OpenAIChatMessage[]> => {
-  const downloads = new Map<string, Promise<string | undefined>>();
+  const dataUris = await inlineRemoteImageUrls(collectRemoteImageUrls(messages), signal);
 
-  const download = (url: string) => {
-    let pending = downloads.get(url);
-    if (!pending) {
-      pending = imageUrlToBase64(url, {
-        maxBytes: INLINE_IMAGE_MAX_BYTES,
-        signal: AbortSignal.timeout(INLINE_IMAGE_TIMEOUT_MS),
-      })
-        // A failed fetch can still return an HTML error page; never send that as an image.
-        .then(({ base64, mimeType }) =>
-          mimeType.startsWith('image/') ? `data:${mimeType};base64,${base64}` : undefined,
-        )
-        .catch(() => undefined);
-      downloads.set(url, pending);
-    }
-    return pending;
-  };
+  return mapMessageMedia(
+    messages,
+    (part) => {
+      if (part?.type !== 'image_url' || !isRemoteImagePart(part)) return part;
 
-  return mapContentParts(messages, async (part) => {
-    if (part?.type !== 'image_url' || !isRemoteImagePart(part)) return part;
+      const dataUri = dataUris.get(part.image_url.url);
+      if (!dataUri) return toPlaceholder(part);
 
-    const dataUri = await download(part.image_url.url);
-    if (!dataUri) return toPlaceholder(part);
+      return { ...part, image_url: { ...part.image_url, url: dataUri } };
+    },
+    (item) => {
+      if (item?.type !== 'input_image' || !item.image_url) return item;
+      if (parseDataUri(item.image_url).type !== 'url') return item;
 
-    return { ...part, image_url: { ...part.image_url, url: dataUri } };
-  });
+      const dataUri = dataUris.get(item.image_url);
+      return dataUri ? { ...item, image_url: dataUri } : toOutputPlaceholder(item);
+    },
+  );
 };
 
 /** Last resort: keep the conversation usable as text by replacing every media part. */
-export const replaceMediaWithPlaceholders = (
+export const replaceMediaWithPlaceholders = async (
   messages: OpenAIChatMessage[],
 ): Promise<OpenAIChatMessage[]> =>
-  mapContentParts(messages, async (part) => (isMediaPart(part) ? toPlaceholder(part) : part));
+  mapMessageMedia(
+    messages,
+    (part) => (isMediaPart(part) ? toPlaceholder(part) : part),
+    (item) => (isOutputImage(item) ? toOutputPlaceholder(item) : item),
+  );
