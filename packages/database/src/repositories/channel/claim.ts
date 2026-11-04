@@ -278,6 +278,12 @@ export const claimJob = async (
     return null;
   }
 
+  // An external Agent runs on a device; its direct conversation can open before one is chosen.
+  if (executionConfig.runtime !== 'native' && !member.config?.deviceId) {
+    await block(tx, job, 'device_required', 'Choose a device for this Agent to run on');
+    return null;
+  }
+
   const blocked = (await deviceBlock(tx, channel, member)) ?? (await directoryBlock(tx, member));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);

@@ -95,7 +95,7 @@ jobs:
           done
 
       - name: Upload coverage to Codecov
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |

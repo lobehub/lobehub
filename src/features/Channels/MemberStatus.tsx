@@ -1,3 +1,4 @@
+import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelDetail } from '@lobechat/types';
 import { ActionIcon, Button, Flexbox, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
@@ -12,7 +13,6 @@ import { canInviteMembers } from './channelAccess';
 import { openInviteMembers } from './CreateChannel';
 import { FailureIndicator } from './FailureIndicator';
 import { MemberList, StatusAvatar, useMemberEntries } from './MemberList';
-import { channelPath } from './paths';
 import { statusStyles, styles } from './styles';
 
 /** Header avatars before the rest fold into a count; the list shows everyone. */
@@ -100,7 +100,7 @@ export function MemberStatus({
                 workspaceId: channel.workspaceId,
               },
               // Inviting from a direct conversation opens the group it starts.
-              (id) => navigate(channelPath(id)),
+              (id) => navigate(CHANNEL_URL(id)),
             )
           }
         />

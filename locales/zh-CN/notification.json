@@ -38,6 +38,8 @@
   "category.schedule": "定时任务",
   "category.system": "系统消息",
   "category.workspace": "工作区动态",
+  "channel_mentioned": "{{actorLabel}} 在频道「{{channelTitle}}」中提到了你。",
+  "channel_mentioned_title": "你在频道中被提及",
   "checkout_abandoned_subscription": "您开始升级到 {{plan}}，但还没有完成付款。随时可以回来继续升级。",
   "checkout_abandoned_subscription_action": "继续升级",
   "checkout_abandoned_subscription_title": "升级尚未完成",

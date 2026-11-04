@@ -116,6 +116,8 @@ export default {
   'document_comment_activity_thread_title': 'New reply in your comment thread',
   'document_comment_mentioned': '{{actorLabel}} mentioned you in a comment on "{{documentTitle}}".',
   'document_comment_mentioned_title': 'You were mentioned in a document comment',
+  'channel_mentioned': '{{actorLabel}} mentioned you in the channel "{{channelTitle}}".',
+  'channel_mentioned_title': 'You were mentioned in a channel',
   'document_mentioned': '{{actorLabel}} mentioned you in "{{documentTitle}}".',
   'document_mentioned_title': 'You were mentioned in a document',
   'document_liked': '{{actorLabel}} liked your document "{{documentTitle}}".',

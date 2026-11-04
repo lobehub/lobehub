@@ -1081,6 +1081,7 @@ export default {
   'notification.item.agent_task_run_failed': 'Task failed',
   'notification.item.agent_run_completed': 'Agent task completed',
   'notification.item.agent_transfer_result': 'Transfer request result',
+  'notification.item.channel_mentioned': 'Mentioned in a channel',
   'notification.item.checkout_abandoned': 'Unfinished checkout reminders',
   'notification.item.credit_balance_low': 'Balance running low',
   'notification.item.image_generation_completed': 'Image generation completed',

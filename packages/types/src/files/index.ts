@@ -28,6 +28,12 @@ export enum FileSource {
   /** Audio recording owned by a meeting (`meetings.audio_file_id`), not the resource library. */
   Meeting = 'meeting',
   PageEditor = 'page-editor',
+  /**
+   * Image an agent's tool returned — a Claude Code `Read` on an image file —
+   * uploaded so the tool card can preview it. Owned by that message, not by
+   * the user's library.
+   */
+  ToolResult = 'tool-result',
   VideoGeneration = 'video_generation',
 }
 
@@ -48,6 +54,7 @@ export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
   FileSource.AgentDocument,
   FileSource.Canvas,
   FileSource.Meeting,
+  FileSource.ToolResult,
 ];
 
 /** Sources a generation model wrote, as opposed to anything a human put there. */

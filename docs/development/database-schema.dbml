@@ -2371,6 +2371,7 @@ table goals {
   subject_id text
   started_at "timestamp with time zone"
   completed_at "timestamp with time zone"
+  archived_at "timestamp with time zone"
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
