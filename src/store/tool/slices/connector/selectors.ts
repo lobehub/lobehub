@@ -96,6 +96,13 @@ const agentConnectors =
  * over mounted), else the base connector. Agent tools are only known once that
  * agent's list has loaded.
  */
+/** Mounted (locked) to an agent other than `agentId`; without one, to any agent. */
+const isMountedByAnotherAgent = (connector: ConnectorWithTools, agentId?: string) => {
+  const mountedBy = connector.metadata?.mountedByAgentId;
+
+  return typeof mountedBy === 'string' && mountedBy !== '' && mountedBy !== agentId;
+};
+
 const connectorByIdentifierForAgent =
   (identifier: string, agentId?: string) =>
   (s: ToolStore): ConnectorWithTools | undefined => {
@@ -106,7 +113,11 @@ const connectorByIdentifierForAgent =
     return (
       agentRows.find((c) => c.agentId === agentId) ??
       agentRows[0] ??
-      connectorByIdentifier(identifier)(s)
+      // A base connector another agent mounted serves only that agent, as the
+      // server's scope rule has it (`ConnectorModel.scopePredicate`)
+      (s.connectors ?? []).find(
+        (c) => c.identifier === identifier && !isMountedByAnotherAgent(c, agentId),
+      )
     );
   };
 
