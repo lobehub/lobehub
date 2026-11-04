@@ -2,20 +2,43 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from './client';
 
-const { listTools } = vi.hoisted(() => ({ listTools: vi.fn() }));
+const { clientOptions, listTools } = vi.hoisted(() => ({
+  clientOptions: [] as unknown[],
+  listTools: vi.fn(),
+}));
 
 vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Client: class {
     getProtocolEra = () => 'legacy';
     listTools = listTools;
+    constructor(_info: unknown, options?: unknown) {
+      clientOptions.push(options);
+    }
   },
 }));
 
 const params = { name: 'local', type: 'http' as const, url: 'http://127.0.0.1:3000/mcp' };
 
 beforeEach(() => {
+  clientOptions.length = 0;
   listTools.mockReset();
+});
+
+describe('desktop MCPClient MCP Apps capability', () => {
+  it('announces MCP Apps only when asked to', () => {
+    new MCPClient(params);
+    new MCPClient(params, { mcpApps: true });
+
+    expect(
+      clientOptions.map((options) => (options as { capabilities?: unknown }).capabilities),
+    ).toEqual([
+      undefined,
+      {
+        extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] } },
+      },
+    ]);
+  });
 });
 
 describe('desktop MCPClient.isToolCallableByApp', () => {

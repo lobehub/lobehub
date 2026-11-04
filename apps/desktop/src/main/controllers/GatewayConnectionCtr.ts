@@ -582,21 +582,24 @@ export default class GatewayConnectionCtr extends ControllerModule {
     apiName: string;
     arguments: string;
     identifier: string;
+    mcpApps?: boolean;
     params: GatewayMcpParams;
   }): Promise<BuiltinServerRuntimeOutput> {
-    const { apiName, arguments: args, params } = mcpCall;
+    const { apiName, arguments: args, mcpApps, params } = mcpCall;
 
     if (params.type === 'http') {
       return this.mcpCtr.runHttpMcpTool(
         { auth: params.auth, headers: params.headers, name: params.name, url: params.url },
         apiName,
         args,
+        { mcpApps },
       );
     }
 
     return this.mcpCtr.runStdioMcpTool({
       args,
       env: params.env,
+      mcpApps,
       params: {
         args: params.args,
         command: params.command,

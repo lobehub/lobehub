@@ -364,16 +364,29 @@ export class MCPClient {
   /** Tools a view may not call (`_meta.ui.visibility` without "app"), from the same listing */
   private appHiddenTools?: Set<string>;
 
-  constructor(params: MCPClientParams) {
+  constructor(
+    params: MCPClientParams,
+    {
+      mcpApps = false,
+    }: {
+      /**
+       * Announce MCP Apps (SEP-1865), so servers expose their interactive views.
+       * Only for users with the `mcp_apps` flag: a server may answer an
+       * announcing client with app-specific results instead of its text fallback.
+       */
+      mcpApps?: boolean;
+    } = {},
+  ) {
     this.mcp = new Client(
       { name: 'lobehub-desktop-mcp-client', version: '1.0.0' },
       {
-        // Advertise MCP Apps (SEP-1865) so servers expose their interactive views.
-        capabilities: {
-          extensions: {
-            'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] },
+        ...(mcpApps && {
+          capabilities: {
+            extensions: {
+              'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] },
+            },
           },
-        },
+        }),
         // Do not add a probe subprocess/timeout to stdio installations or calls.
         versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
         inputRequired: { autoFulfill: false },

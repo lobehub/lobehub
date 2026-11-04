@@ -493,6 +493,9 @@ export class ToolExecutionService {
         arguments: args,
         deviceId: target.deviceId,
         identifier,
+        // Whether the device's session announces MCP Apps and marks the
+        // result's view; a device that doesn't read it runs without them
+        mcpApps: await isMcpAppsEnabled(context.userId),
         params:
           mcpParams.type === 'stdio'
             ? {

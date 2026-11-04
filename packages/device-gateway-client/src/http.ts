@@ -176,6 +176,8 @@ export class GatewayHttpClient {
     arguments: string;
     deviceId?: string;
     identifier: string;
+    /** Whether the device's MCP session announces MCP Apps (the user's `mcp_apps` flag). */
+    mcpApps?: boolean;
     params: GatewayMcpParams;
     timeout?: number;
     userId: string;
@@ -201,6 +203,7 @@ export class GatewayHttpClient {
       apiName: string;
       arguments: string;
       identifier: string;
+      mcpApps?: boolean;
       params?: GatewayMcpParams;
       type?: GatewayToolCallType;
     },

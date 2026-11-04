@@ -247,6 +247,8 @@ export async function executeMcpCall(
     arguments: string;
     deviceId: string;
     identifier: string;
+    /** The user's `mcp_apps` flag: whether the device's session announces MCP Apps. */
+    mcpApps?: boolean;
     params: GatewayMcpParams;
     userId: string;
     workspaceId?: string;

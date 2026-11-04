@@ -106,21 +106,17 @@ interface GetStreamableMcpServerManifestInput {
   url: string;
 }
 
-export interface StdioCallToolInput {
+export interface StdioCallToolInput extends McpCallOptions {
   args: any;
   env: any;
-  /** An MCP App view's `tools/call`: only tools visible to the app run. */
-  fromApp?: boolean;
   http?: undefined;
   params: GetStdioMcpServerManifestInput;
   toolName: string;
 }
 
 /** A call to an HTTP endpoint only this machine can reach (localhost / LAN). */
-export interface HttpCallToolInput {
+export interface HttpCallToolInput extends McpCallOptions {
   args: any;
-  /** An MCP App view's `tools/call`: only tools visible to the app run. */
-  fromApp?: boolean;
   http: {
     auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
     headers?: Record<string, string>;
@@ -146,6 +142,17 @@ export interface ReadUiResourceInput {
 }
 
 type SuperJSONSerialized<T = unknown> = McpIpcPayload<T>;
+
+interface McpSessionOptions {
+  /** Announce MCP Apps on the session: the user has the `mcp_apps` flag. */
+  mcpApps?: boolean;
+}
+
+/** How a tool call runs: whether a view made it, and whether MCP Apps are on. */
+interface McpCallOptions extends McpSessionOptions {
+  /** An MCP App view's `tools/call`: only tools visible to the app run. */
+  fromApp?: boolean;
+}
 
 const deserializePayload = deserializeMcpIpcPayload;
 
@@ -267,6 +274,8 @@ export default class McpCtr extends ControllerModule {
    * a call fails.
    */
   private mcpClientPool = new Map<string, MCPClient>();
+  /** The pool key each client was created under, so eviction finds its own entry. */
+  private mcpClientKeys = new WeakMap<MCPClient, string>();
   private mcpClientInitialization?: Map<string, Promise<MCPClient>>;
 
   /**
@@ -347,8 +356,12 @@ export default class McpCtr extends ControllerModule {
    * one when the pool has no healthy entry. Callers must NOT disconnect the
    * returned client — pooled sessions outlive a single tool call.
    */
-  private async acquireClient(params: MCPClientParams): Promise<MCPClient> {
-    const key = serializeMcpClientParams(params);
+  private async acquireClient(
+    params: MCPClientParams,
+    { mcpApps = false }: McpSessionOptions = {},
+  ): Promise<MCPClient> {
+    // Sessions that announce MCP Apps and ones that don't are pooled apart
+    const key = `${serializeMcpClientParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
 
     // Every acquire refreshes the session's idle clock (fire-and-forget —
     // reaping must never delay or fail the tool call it runs alongside).
@@ -365,8 +378,9 @@ export default class McpCtr extends ControllerModule {
     const inFlight = this.mcpClientInitialization?.get(key);
     if (inFlight) return inFlight;
 
-    const creating = this.createClient(params)
+    const creating = this.createClient(params, { mcpApps })
       .then((client) => {
+        this.mcpClientKeys.set(client, key);
         this.mcpClientPool.set(key, client);
         this.mcpClientLastUsedAt.set(key, Date.now());
         return client;
@@ -429,7 +443,7 @@ export default class McpCtr extends ControllerModule {
    */
   private async evictClient(params: MCPClientParams, client?: MCPClient): Promise<void> {
     if (!client) return;
-    const key = serializeMcpClientParams(params);
+    const key = this.mcpClientKeys.get(client) ?? serializeMcpClientParams(params);
     const pooled = this.mcpClientPool.get(key);
     // Only evict when the failing call ran on the pooled instance —
     // a concurrent recreate may have already replaced it.
@@ -452,9 +466,9 @@ export default class McpCtr extends ControllerModule {
     }
   }
 
-  private async createClient(params: MCPClientParams) {
+  private async createClient(params: MCPClientParams, options: McpSessionOptions = {}) {
     const { MCPClient } = await loadMcpClient();
-    const client = new MCPClient(params);
+    const client = new MCPClient(params, options);
     await client.initialize();
     return client;
   }
@@ -623,6 +637,7 @@ export default class McpCtr extends ControllerModule {
       return serializePayload(
         await this.runHttpMcpTool(input.http, input.toolName, input.args, {
           fromApp: input.fromApp,
+          mcpApps: input.mcpApps,
         }),
       );
     }
@@ -663,7 +678,8 @@ export default class McpCtr extends ControllerModule {
     const isSessionFailure = (error: unknown) =>
       isStaleSessionError(error) || isDeadTransportError(error);
 
-    const client = await this.acquireClient(params);
+    // Views are read only while MCP Apps are on, on a session that announces them
+    const client = await this.acquireClient(params, { mcpApps: true });
     try {
       return serializePayload(await read(client));
     } catch (error) {
@@ -673,7 +689,7 @@ export default class McpCtr extends ControllerModule {
         message: (error as Error).message,
       });
       await this.evictClient(params, client);
-      const retryClient = await this.acquireClient(params);
+      const retryClient = await this.acquireClient(params, { mcpApps: true });
       try {
         return serializePayload(await read(retryClient));
       } catch (retryError) {
@@ -723,7 +739,7 @@ export default class McpCtr extends ControllerModule {
       },
       input.toolName,
       input.args,
-      { fromApp: input.fromApp },
+      { fromApp: input.fromApp, mcpApps: input.mcpApps },
     );
   }
 
@@ -741,7 +757,7 @@ export default class McpCtr extends ControllerModule {
     },
     toolName: string,
     rawArgs: unknown,
-    options: { fromApp?: boolean } = {},
+    options: McpCallOptions = {},
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     return this.runMcpTool(
       {
@@ -761,7 +777,7 @@ export default class McpCtr extends ControllerModule {
     params: MCPClientParams,
     toolName: string,
     rawArgs: unknown,
-    { fromApp = false }: { fromApp?: boolean } = {},
+    { fromApp = false, mcpApps = false }: McpCallOptions = {},
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     try {
       const args = safeParseToRecord(rawArgs);
@@ -777,8 +793,9 @@ export default class McpCtr extends ControllerModule {
       const runOn = (client: MCPClient) =>
         this.withClientLease(client, async () => {
           try {
-            // A view may only call tools whose visibility includes the app
-            if (fromApp && !(await this.isToolCallableByApp(client, toolName))) {
+            // A view may only call tools whose visibility includes the app,
+            // and only while MCP Apps are on
+            if (fromApp && !(mcpApps && (await this.isToolCallableByApp(client, toolName)))) {
               const message = `The tool "${toolName}" can't be called from an interactive view.`;
               return {
                 content: message,
@@ -787,7 +804,9 @@ export default class McpCtr extends ControllerModule {
                 success: false,
               };
             }
-            const uiResourceUri = await this.getToolUiResourceUri(client, toolName);
+            const uiResourceUri = mcpApps
+              ? await this.getToolUiResourceUri(client, toolName)
+              : undefined;
             const raw = (await client.callTool(toolName, args)) as ToolCallResult;
             const processed = raw.isError
               ? raw.content
@@ -815,7 +834,7 @@ export default class McpCtr extends ControllerModule {
         });
 
       try {
-        return await runOn(await this.acquireClient(params));
+        return await runOn(await this.acquireClient(params, { mcpApps }));
       } catch (firstError) {
         const failedClient = (firstError as { ranOnClient?: MCPClient })?.ranOnClient;
         if (!isStaleSessionError(firstError, failedClient?.getProtocolEra())) {
@@ -848,7 +867,7 @@ export default class McpCtr extends ControllerModule {
         // per key, so two concurrent calls that shared the same stale client
         // and both failed build ONE replacement process — not two racing
         // create/set writes that strand the loser (and its established state).
-        const retryClient = await this.acquireClient(params);
+        const retryClient = await this.acquireClient(params, { mcpApps });
         try {
           return await runOn(retryClient);
         } catch (retryError) {

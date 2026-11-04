@@ -57,6 +57,7 @@ vi.mock('@/libs/trpc/client', () => ({
 
 vi.mock('@/store/serverConfig/store', () => ({
   getServerConfigStoreState: () => ({
+    featureFlags: { enableMcpApps: true },
     serverConfig: { deviceGatewayConfigured: environment.deviceGatewayConfigured },
   }),
 }));
@@ -309,6 +310,7 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
       args: { city: 'Paris' },
       fromApp: true,
       http: { headers: { 'x-key': 'k' }, name: 'local', url: 'http://127.0.0.1:3000/mcp' },
+      mcpApps: true,
       toolName: 'refresh',
     });
   });
@@ -402,6 +404,7 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
       args: { dir: '/tmp' },
       env: { TOKEN: 'fresh-secret' },
       fromApp: true,
+      mcpApps: true,
       params: { args: ['mcp.js'], command: 'node', name: 'files', type: 'stdio' },
       toolName: 'list',
     });

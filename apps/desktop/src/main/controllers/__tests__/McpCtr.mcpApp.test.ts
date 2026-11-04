@@ -12,8 +12,11 @@ const { mcpClientMocks } = vi.hoisted(() => ({
 
 vi.mock('../../libs/mcp/client', () => ({
   MCPClient: class {
-    constructor(public params: unknown) {
-      return mcpClientMocks();
+    constructor(
+      public params: unknown,
+      options?: unknown,
+    ) {
+      return mcpClientMocks(options);
     }
   },
   MCPConnectionError: class extends Error {
@@ -44,8 +47,24 @@ describe('McpCtr MCP Apps', () => {
     ctr = new McpCtr(mockApp);
   });
 
-  it('marks results of tools that declare a ui:// view', async () => {
+  it('marks results of tools that declare a ui:// view while MCP Apps are on', async () => {
     mcpClientMocks.mockReturnValue(makeClient());
+
+    const result = await ctr.runStdioMcpTool({
+      args: '{}',
+      env: undefined,
+      mcpApps: true,
+      params: stdioParams,
+      toolName: 'show_weather',
+    } as any);
+
+    expect(mcpClientMocks).toHaveBeenCalledWith({ mcpApps: true });
+    expect((result.state as any).mcpApp).toEqual({ resourceUri: 'ui://weather/view' });
+  });
+
+  it("neither announces MCP Apps nor looks up views while the user's flag is off", async () => {
+    const client = makeClient();
+    mcpClientMocks.mockReturnValue(client);
 
     const result = await ctr.runStdioMcpTool({
       args: '{}',
@@ -54,7 +73,43 @@ describe('McpCtr MCP Apps', () => {
       toolName: 'show_weather',
     } as any);
 
-    expect((result.state as any).mcpApp).toEqual({ resourceUri: 'ui://weather/view' });
+    expect(mcpClientMocks).toHaveBeenCalledWith({ mcpApps: false });
+    expect(client.getToolUiResourceUri).not.toHaveBeenCalled();
+    expect((result.state as any).mcpApp).toBeUndefined();
+  });
+
+  it('pools sessions that announce MCP Apps apart from ones that do not', async () => {
+    mcpClientMocks.mockImplementation(() => makeClient());
+    const run = (mcpApps: boolean) =>
+      ctr.runStdioMcpTool({
+        args: '{}',
+        env: undefined,
+        mcpApps,
+        params: stdioParams,
+        toolName: 'show_weather',
+      } as any);
+
+    await run(false);
+    await run(true);
+    await run(true);
+
+    expect(mcpClientMocks.mock.calls).toEqual([[{ mcpApps: false }], [{ mcpApps: true }]]);
+  });
+
+  it("refuses a view's call while MCP Apps are off", async () => {
+    const client = makeClient();
+    mcpClientMocks.mockReturnValue(client);
+
+    const result = await ctr.runStdioMcpTool({
+      args: '{}',
+      env: undefined,
+      fromApp: true,
+      params: stdioParams,
+      toolName: 'refresh',
+    } as any);
+
+    expect(client.callTool).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
   });
 
   it('still runs the tool when the view lookup fails', async () => {
@@ -85,6 +140,7 @@ describe('McpCtr MCP Apps', () => {
           args: {},
           env: undefined,
           fromApp: true,
+          mcpApps: true,
           params: stdioParams,
           toolName: 'refresh',
         }),
@@ -109,6 +165,7 @@ describe('McpCtr MCP Apps', () => {
           args: {},
           fromApp: true,
           http: { name: 'local', url: 'http://127.0.0.1:3000/mcp' },
+          mcpApps: true,
           toolName: 'delete_all',
         }),
       ),

@@ -14,6 +14,7 @@ import { type ReadResourceResult } from '@modelcontextprotocol/client';
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -123,6 +124,9 @@ class MCPService {
 
     const s = getToolStoreState();
     const { identifier, arguments: args, apiName } = payload;
+    // Calls run on this machine announce MCP Apps only under the user's flag
+    const serverConfigState = getServerConfigStoreState();
+    const mcpApps = !!serverConfigState && serverConfigSelectors.enableMcpApps(serverConfigState);
 
     // Connector-first: HTTP connectors use their server-held credentials.
     // Standalone desktop stdio connectors use local IPC; configured device
@@ -168,6 +172,7 @@ class MCPService {
             args: safeParseJSON(args) ?? {},
             env: config.env,
             ...(fromMcpApp && { fromApp: true }),
+            mcpApps,
             params: {
               args: config.args ?? [],
               command: config.command,
@@ -274,7 +279,7 @@ class MCPService {
       } else if (isDesktop && isStdio) {
         // For desktop and stdio, use IPC (main process)
         // Note: IPC doesn't support AbortSignal yet
-        const serialized = serializeMcpIpcPayload(data);
+        const serialized = serializeMcpIpcPayload({ ...data, mcpApps });
         const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
         result = deserializeMcpIpcPayload(serializedResult) as any;
       } else if (isLocalHttp) {
@@ -283,6 +288,7 @@ class MCPService {
           args: safeParseJSON(args) ?? {},
           fromApp: true,
           http: { auth: params.auth, headers: params.headers, name: params.name, url: params.url },
+          mcpApps,
           toolName: apiName,
         });
         const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);

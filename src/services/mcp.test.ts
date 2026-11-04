@@ -20,6 +20,7 @@ const environment = vi.hoisted(() => ({
 
 vi.mock('@/store/serverConfig/store', () => ({
   getServerConfigStoreState: () => ({
+    featureFlags: { enableMcpApps: false },
     serverConfig: { deviceGatewayConfigured: environment.deviceGatewayConfigured },
   }),
 }));
@@ -201,6 +202,8 @@ describe('MCPService', () => {
         expect(superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0])).toEqual({
           args: { path: 'test.txt' },
           env: detail.mcpStdioConfig.env,
+          // MCP Apps off for this user: the desktop session doesn't announce them
+          mcpApps: false,
           params: { command: 'node', args: ['mcp.js'], name: payload.identifier, type: 'stdio' },
           toolName: 'read_file',
         });
