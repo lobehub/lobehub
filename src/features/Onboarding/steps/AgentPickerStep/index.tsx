@@ -32,11 +32,16 @@ import { styles } from './style';
 
 interface AgentPickerStepProps {
   onBack: () => void;
+  /**
+   * Takes over the post-onboarding navigation (onboarding is already finished
+   * and tracked when it runs). Omit to navigate to the target directly.
+   */
+  onFinished?: (targetUrl: string) => void;
 }
 
 const EMPTY_TEMPLATES: AgentTemplate[] = [];
 
-const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
+const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack, onFinished }) => {
   const { t } = useTranslation('onboarding');
   const { t: tTool } = useTranslation('tool');
   const navigate = useNavigate();
@@ -112,9 +117,10 @@ const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
       // Restore the original signup target (threaded through onboarding), if any
       const targetUrl = resolvePostOnboardingTargetUrl();
       trackOnboardingCompleted({ flow: completionFlow, targetUrl });
-      navigate(targetUrl);
+      if (onFinished) onFinished(targetUrl);
+      else navigate(targetUrl);
     },
-    [completionFlow, finishOnboarding, isAgentSkipEntry, navigate],
+    [completionFlow, finishOnboarding, isAgentSkipEntry, navigate, onFinished],
   );
 
   const handleSkip = useCallback(async () => {
