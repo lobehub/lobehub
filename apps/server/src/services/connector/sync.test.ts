@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorCredentials } from '@/database/schemas';
+import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { mcpService } from '@/server/services/mcp';
 
 import {
@@ -81,11 +82,25 @@ describe('buildHttpAuthFromCredentials', () => {
 });
 
 describe('buildConnectorMcpParams', () => {
+  it('matches the params agent runs use, so a view reaches the same MCP session', () => {
+    // Display name differs from the identifier: the session key must not depend on it
+    const connector = httpConnector(
+      { token: 'tok', type: 'bearer' },
+      { customHeaders: { x: '1' } },
+    );
+    const [manifest] = buildConnectorManifests(
+      [connector],
+      [{ toolName: 'do_thing', userConnectorId: 'c1' } as any],
+    );
+
+    expect(buildConnectorMcpParams(connector)).toEqual((manifest as any).mcpParams);
+  });
+
   it('builds http params with bearer auth', () => {
     expect(buildConnectorMcpParams(httpConnector({ token: 'tok', type: 'bearer' }))).toEqual({
       auth: { token: 'tok', type: 'bearer' },
       headers: undefined,
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -99,7 +114,7 @@ describe('buildConnectorMcpParams', () => {
     ).toEqual({
       auth: undefined,
       headers: { Authorization: 'Token x' },
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -113,7 +128,7 @@ describe('buildConnectorMcpParams', () => {
     ).toEqual({
       auth: { token: 'tok', type: 'bearer' },
       headers: { 'X-Tenant': 't1' },
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -125,7 +140,7 @@ describe('buildConnectorMcpParams', () => {
     ).toEqual({
       auth: undefined,
       headers: { 'X-Api-Key': 'abc' },
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -142,7 +157,7 @@ describe('buildConnectorMcpParams', () => {
     ).toEqual({
       auth: undefined,
       headers: { Authorization: 'Token new' },
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -152,7 +167,7 @@ describe('buildConnectorMcpParams', () => {
     expect(buildConnectorMcpParams(httpConnector(null))).toEqual({
       auth: undefined,
       headers: undefined,
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -172,7 +187,7 @@ describe('buildConnectorMcpParams', () => {
       args: ['serve'],
       command: 'my-mcp',
       env: { FOO: 'bar' },
-      name: 'Local Connector',
+      name: 'local-conn',
       type: 'stdio',
     });
   });

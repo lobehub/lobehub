@@ -15,7 +15,14 @@ export interface ConnectorToolSyncContext {
   connectorToolModel: ConnectorToolModel;
 }
 
-/** Build the MCP client connection params (with auth) from a connector row. */
+/**
+ * Build the MCP client connection params (with auth) from a connector row.
+ *
+ * Must match the params agent runs use (`buildConnectorManifests`): the MCP
+ * client session is cached by these params, so a view's resource read and
+ * tool calls only reach the session its tool ran on when they are equal.
+ * `name` is therefore the stable identifier, not the editable display name.
+ */
 export const buildConnectorMcpParams = (
   connector: DecryptedConnector,
 ): Parameters<typeof mcpService.listRawTools>[0] => {
@@ -25,7 +32,7 @@ export const buildConnectorMcpParams = (
       args: connector.mcpStdioConfig.args ?? [],
       command: connector.mcpStdioConfig.command,
       env: connector.mcpStdioConfig.env,
-      name: connector.name,
+      name: connector.identifier,
       type: 'stdio',
     };
   }
@@ -40,7 +47,7 @@ export const buildConnectorMcpParams = (
   return {
     auth,
     headers: mergedHeaders,
-    name: connector.name,
+    name: connector.identifier,
     type: 'http',
     url: connector.mcpServerUrl,
   };
