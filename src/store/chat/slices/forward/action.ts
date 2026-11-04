@@ -1,10 +1,11 @@
-import type { UIChatMessage } from '@lobechat/types';
+import type { ChatTopic, UIChatMessage } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 
@@ -131,6 +132,15 @@ export class ChatForwardActionImpl {
         });
       return transcriptPromise;
     };
+    // The targets continue in the source topic's working directory. The list
+    // store is paginated, so an older source topic may only exist on the server.
+    let sourceTopicPromise: Promise<ChatTopic | null | undefined> | undefined;
+    const getSourceTopic = () => {
+      sourceTopicPromise ??= Promise.resolve(
+        topicSelectors.getTopicById(topicId)(this.#get()) ?? topicService.getTopicDetail(topicId),
+      );
+      return sourceTopicPromise;
+    };
     // Resolve configuration and context before touching the source schedule.
     const prepared = await Promise.allSettled(
       targets.map(async (target) => {
@@ -146,7 +156,7 @@ export class ChatForwardActionImpl {
           ? `${cliInstruction}\n\n${await getTranscript()}`
           : await getTranscript();
 
-        return { content, target };
+        return { content, sourceTopic: (await getSourceTopic()) ?? undefined, target };
       }),
     );
     const hasReadyTarget = prepared.some((item) => item.status === 'fulfilled');
@@ -168,11 +178,12 @@ export class ChatForwardActionImpl {
     const settled = await Promise.allSettled(
       prepared.map(async (item) => {
         if (item.status === 'rejected') throw item.reason;
-        const { content, target } = item.value;
+        const { content, sourceTopic, target } = item.value;
         const result = await this.#get().sendMessage({
           context: { agentId: target.id, isNew: true, isolatedTopic: true, scope: 'main' },
           message: content,
           messages: [],
+          sourceTopic,
           onTopicCreated: async (createdTopicId) => {
             accepted = true;
             createdTopicIds.set(target.id, createdTopicId);

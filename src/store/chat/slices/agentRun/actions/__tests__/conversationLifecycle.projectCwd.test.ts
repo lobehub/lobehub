@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
+import { deviceService } from '@/services/device';
+import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 import { getPendingTopicRepos, setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { type ProjectDirectory, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 import { getSessionStoreState } from '@/store/session';
@@ -338,5 +340,208 @@ describe('sendMessage in a project without a directory', () => {
     );
     // The refused first send hands the project back to the blank draft.
     expect(result.current.pendingNewTopicDirectory).toEqual({ agentId, projectId: 'prj-1' });
+  });
+});
+
+describe('sendMessage continuing a source topic', () => {
+  const OTHER_DEVICE_ID = 'device-other';
+  const SOURCE_PATH = '/repo/source';
+  const forwardContext = (agentId: string) => ({
+    agentId,
+    isNew: true,
+    isolatedTopic: true,
+    scope: 'main' as const,
+  });
+  const statPath = (exists: boolean | null) =>
+    vi
+      .spyOn(deviceService, 'statPath')
+      .mockResolvedValue(exists === null ? null : ({ exists, isDirectory: exists } as any));
+  beforeEach(() => {
+    statPath(true);
+  });
+  const sendForward = async (sourceTopic: any) => {
+    const executeGatewayAgentSpy = vi.fn().mockResolvedValue({ topicId: 'tpc_new' });
+    const agentId = TEST_IDS.SESSION_ID;
+    act(() => {
+      useChatStore.setState({
+        executeGatewayAgent: executeGatewayAgentSpy,
+        isGatewayModeEnabled: () => true,
+      });
+    });
+    const { result } = renderHook(() => useChatStore());
+    await act(async () => {
+      await result.current.sendMessage({
+        context: forwardContext(agentId),
+        message: 'Continue the handoff',
+        sourceTopic,
+      });
+    });
+    return executeGatewayAgentSpy.mock.calls[0][0];
+  };
+
+  // Regression (user report): a forwarded task started in the receiving
+  // agent's default directory instead of the one the source topic ran in.
+  it('starts a forwarded topic in the source project directory', async () => {
+    mockConstEnv.isDesktop = true;
+    setupMockSelectors({
+      agentConfig: {
+        agencyConfig: {
+          boundDeviceId: DEVICE_ID,
+          executionTarget: 'device',
+          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
+        },
+      },
+    });
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: PROJECT_PATH },
+      projectId: 'prj-1',
+      projectWorkingDirectoryId: 'dir-85',
+    });
+
+    expect(params.projectWorkingDirectoryId).toBe('dir-85');
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: PROJECT_PATH }),
+    );
+  });
+
+  it('carries the source bare directory to the server on the same machine', async () => {
+    mockConstEnv.isDesktop = true;
+    setupMockSelectors({
+      agentConfig: {
+        agencyConfig: {
+          boundDeviceId: DEVICE_ID,
+          executionTarget: 'device',
+          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
+        },
+      },
+    });
+
+    const params = await sendForward({
+      metadata: {
+        boundDeviceId: DEVICE_ID,
+        heteroSessionId: 'source-cli-session',
+        workingDirectory: SOURCE_PATH,
+        workingDirectoryConfig: { path: SOURCE_PATH },
+      },
+    });
+
+    expect(params.projectWorkingDirectoryId).toBeUndefined();
+    expect(params.newTopicMetadata).toEqual({
+      boundDeviceId: DEVICE_ID,
+      workingDirectory: SOURCE_PATH,
+      workingDirectoryConfig: { path: SOURCE_PATH },
+    });
+  });
+
+  // The path only exists on the machine it was recorded on.
+  it('keeps the agent default when the source directory is on another machine', async () => {
+    mockConstEnv.isDesktop = true;
+    setupMockSelectors({
+      agentConfig: {
+        agencyConfig: {
+          boundDeviceId: DEVICE_ID,
+          executionTarget: 'device',
+          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
+        },
+      },
+    });
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: OTHER_DEVICE_ID, workingDirectory: SOURCE_PATH },
+    });
+
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: AGENT_DEFAULT_PATH }),
+    );
+  });
+
+  // A source directory the receiving agent cannot resolve (deleted, gateway
+  // off) must not fail the handoff: it continues in the source's bare cwd.
+  it('falls back to the source cwd when its project directory cannot be resolved', async () => {
+    mockConstEnv.isDesktop = true;
+    setupMockSelectors({
+      agentConfig: {
+        agencyConfig: {
+          boundDeviceId: DEVICE_ID,
+          executionTarget: 'device',
+          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
+        },
+      },
+    });
+    useProjectDirectoryStore.setState({ directoriesMap: {} });
+    vi.spyOn(projectWorkingDirectoryService, 'resolve').mockRejectedValue(
+      new Error('Directory not found'),
+    );
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: PROJECT_PATH },
+      projectWorkingDirectoryId: 'dir-gone',
+    });
+
+    expect(params.projectWorkingDirectoryId).toBeUndefined();
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: PROJECT_PATH }),
+    );
+  });
+  // The source directory may have been deleted since it ran; the receiving
+  // agent then takes the handoff in its own default instead of a run that can
+  // only fail with "working directory not found".
+  const deviceAgent = () =>
+    setupMockSelectors({
+      agentConfig: {
+        agencyConfig: {
+          boundDeviceId: DEVICE_ID,
+          executionTarget: 'device',
+          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
+        },
+      },
+    });
+
+  it('falls back to the agent default when the source cwd no longer exists', async () => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+    statPath(false);
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: SOURCE_PATH },
+    });
+
+    expect(deviceService.statPath).toHaveBeenCalledWith(DEVICE_ID, SOURCE_PATH);
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: AGENT_DEFAULT_PATH }),
+    );
+  });
+
+  it('falls back to the agent default when the source project directory no longer exists', async () => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+    statPath(false);
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: PROJECT_PATH },
+      projectWorkingDirectoryId: 'dir-85',
+    });
+
+    expect(params.projectWorkingDirectoryId).toBeUndefined();
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: AGENT_DEFAULT_PATH }),
+    );
+  });
+
+  // An unreachable device cannot say the directory is gone; the spawn-time
+  // check stays the authority rather than silently moving the task elsewhere.
+  it('keeps the source cwd when its existence cannot be verified', async () => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+    statPath(null);
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: SOURCE_PATH },
+    });
+
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: SOURCE_PATH }),
+    );
   });
 });

@@ -39,12 +39,8 @@ import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
-import {
-  consumePendingSandboxSelection,
-  getPendingSandboxSelection,
-  toSandboxTopicMetadata,
-} from '@/store/chat/pendingSandboxSelection';
-import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
+import { consumePendingSandboxSelection } from '@/store/chat/pendingSandboxSelection';
+import { consumePendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import { leaveBlankConversationBucket } from '@/store/chat/slices/agentRun/actions/clearBlankBucket';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
@@ -78,6 +74,7 @@ import { createGatewayEventHandler } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler, mergeGroupSnapshot } from './gatewayMemberStreamHandler';
 import { awaitStartRequest, interruptGatewayTaskOrThrow } from './gatewayStartRequest';
+import { resolveInitialTopicMetadata } from './initialTopicMetadata';
 import {
   type GatewayMuxIdentity,
   getGatewayMux,
@@ -947,6 +944,8 @@ export class GatewayActionImpl {
     onTopicCreated?: (topicId: string) => void | Promise<void>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
+    /** New-topic cwd for a send without an optimistic row (an isolated handoff topic). */
+    newTopicMetadata?: ChatTopicMetadata;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
     optimisticTopic?: { id: string; metadata?: ChatTopicMetadata; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
@@ -1036,6 +1035,7 @@ export class GatewayActionImpl {
       metadata,
       onComplete,
       onMessageAccepted,
+      newTopicMetadata,
       onTopicCreated,
       optimisticTopic,
       parentMessageId,
@@ -1069,46 +1069,12 @@ export class GatewayActionImpl {
     // the turn persists onto the topic's main spine and the subtopic collapses
     // back into the main chat.
 
-    // If this is a new topic, read any repos the user pre-selected before
-    // sending the first message. We read without consuming yet — if execAgentTask
-    // fails or is aborted, the selection is preserved so a retry can still pick
-    // it up. We clear only after the server confirms the topic was created.
-    const pendingRepos =
-      isCreateNewTopic && messageContext.agentId
-        ? getPendingTopicRepos(messageContext.agentId)
-        : [];
-    // Pending repo selection wins; otherwise carry the caller-resolved topic
-    // metadata (e.g. the hetero cwd `conversationLifecycle` resolved from the
-    // effective device + per-user legacy slot) so the SERVER topic is born with
-    // it — the server can't read client-local state, and without this a
-    // workspace hetero run's first send would fall back to the device default
-    // cwd instead of the member's pick.
-    // The instance the composer bound before any topic existed. Merged rather
-    // than folded into the branches below: it is orthogonal to the cwd, and a
-    // conversation can start with one, the other, or both.
-    const pendingSandboxSelection =
-      isCreateNewTopic && executionContext.agentId
-        ? getPendingSandboxSelection(executionContext.agentId)
-        : undefined;
-    const sandboxTopicMetadata = toSandboxTopicMetadata(pendingSandboxSelection);
-    const cwdTopicMetadata =
-      pendingRepos.length > 0
-        ? {
-            repos: pendingRepos,
-            workingDirectory: pendingRepos[0],
-            workingDirectoryConfig: { path: pendingRepos[0], repoType: 'github' as const },
-          }
-        : isCreateNewTopic && optimisticTopic?.metadata?.workingDirectory
-          ? {
-              repos: optimisticTopic.metadata.repos,
-              workingDirectory: optimisticTopic.metadata.workingDirectory,
-              workingDirectoryConfig: optimisticTopic.metadata.workingDirectoryConfig,
-            }
-          : undefined;
-    const initialTopicMetadata =
-      cwdTopicMetadata || sandboxTopicMetadata
-        ? { ...cwdTopicMetadata, ...sandboxTopicMetadata }
-        : undefined;
+    const initialTopicMetadata = resolveInitialTopicMetadata({
+      callerTopicMetadata: optimisticTopic?.metadata ?? newTopicMetadata,
+      isCreateNewTopic,
+      repoAgentId: messageContext.agentId,
+      sandboxAgentId: executionContext.agentId,
+    });
 
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state is still running, so
