@@ -319,7 +319,7 @@ importers:
   ../../packages/const:
     dependencies:
       '@icons-pack/react-simple-icons':
-        specifier: ^13.8.0
+        specifier: ^13.15.1
         version: 13.15.1(react@19.2.7)
       '@lobechat/business-const':
         specifier: workspace:*
