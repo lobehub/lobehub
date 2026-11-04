@@ -274,6 +274,50 @@ export interface AgentDispatchMetadata {
 }
 
 /**
+ * A multi-member group-management call (`executeAgentTasks`, `broadcast`) parks
+ * the supervisor on one group tool message and writes one `role: 'tool'` anchor
+ * per member under it. The server backfills an anchor when its member finishes,
+ * and the supervisor resumes once every anchor is filled. An isolated member's
+ * thread uses its anchor as `sourceMessageId`.
+ *
+ * Anchors are bookkeeping, not tool calls of their own: no assistant lists them
+ * in `tools[]`, so the reader must hide them instead of rendering orphan tool
+ * calls.
+ */
+export interface GroupMemberAnchorMetadata {
+  /** The member's agent id. */
+  agentId: string;
+  /** Position of the member in the call's `tasks` / `agentIds`. */
+  index: number;
+}
+
+/** Legacy anchors (written before the marker) only carry this tool_call_id suffix. */
+const LEGACY_GROUP_MEMBER_ANCHOR_CALL_ID = /::m(\d+)$/;
+
+interface GroupMemberAnchorCandidate {
+  metadata?: { groupMemberAnchor?: GroupMemberAnchorMetadata } | null;
+  role: string;
+  tool_call_id?: string | null;
+}
+
+/**
+ * Member index of a group-member anchor row, or `undefined` when the row is not
+ * one. Rows written before the `groupMemberAnchor` marker are recognized by
+ * their `::m<index>` tool_call_id suffix under a `role: 'tool'` parent.
+ */
+export const getGroupMemberAnchorIndex = (
+  message: GroupMemberAnchorCandidate,
+  parentRole?: string,
+): number | undefined => {
+  if (message.role !== 'tool') return;
+  const marker = message.metadata?.groupMemberAnchor;
+  if (marker) return marker.index;
+  if (parentRole !== 'tool') return;
+  const legacy = message.tool_call_id?.match(LEGACY_GROUP_MEMBER_ANCHOR_CALL_ID);
+  return legacy ? Number(legacy[1]) : undefined;
+};
+
+/**
  * The agent that authored a user turn on another agent's behalf (agent → agent
  * dispatch: a sibling agent calling `lh agent run`). Such rows are persisted
  * inside the RECEIVING agent's conversation, where the joined `sender` is the
@@ -571,6 +615,11 @@ export interface MessageMetadata {
    */
   externalOrigin?: ExternalOriginMetadata;
   finishType?: string;
+  /**
+   * Marks a `role: 'tool'` row as one member's completion anchor under a
+   * multi-member group-management tool call. See {@link GroupMemberAnchorMetadata}.
+   */
+  groupMemberAnchor?: GroupMemberAnchorMetadata;
   /** Operation owning the durable heterogeneous tool-state watermark. */
   heterogeneousToolStateOperationId?: string;
   /** Last persisted replace-snapshot sequence for this tool message. */
