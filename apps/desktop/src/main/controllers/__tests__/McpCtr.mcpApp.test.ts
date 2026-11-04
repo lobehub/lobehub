@@ -32,6 +32,7 @@ const stdioParams = { args: ['--stdio'], command: 'weather-mcp', name: 'weather'
 const makeClient = (overrides: Record<string, unknown> = {}) => ({
   callTool: vi.fn().mockResolvedValue({ content: [{ text: 'sunny', type: 'text' }] }),
   disconnect: vi.fn().mockResolvedValue(undefined),
+  getProtocolEra: vi.fn().mockReturnValue('legacy'),
   getToolUiResourceUri: vi.fn().mockResolvedValue('ui://weather/view'),
   initialize: vi.fn().mockResolvedValue(undefined),
   isToolCallableByApp: vi.fn().mockResolvedValue(true),
@@ -195,6 +196,52 @@ describe('McpCtr MCP Apps', () => {
     expect(client.callTool).not.toHaveBeenCalled();
     expect(result.success).toBe(false);
     expect(result.state.isError).toBe(true);
+  });
+
+  it('recovers a view call whose session expired during the visibility check', async () => {
+    const stale = Object.assign(new Error('session expired'), { name: 'MCPConnectionError' });
+    const expired = makeClient({ isToolCallableByApp: vi.fn().mockRejectedValue(stale) });
+    const fresh = makeClient();
+    mcpClientMocks.mockReturnValueOnce(expired).mockReturnValueOnce(fresh);
+
+    const result = await ctr.runStdioMcpTool({
+      args: '{}',
+      env: undefined,
+      fromApp: true,
+      mcpApps: true,
+      params: stdioParams,
+      toolName: 'refresh',
+    } as any);
+
+    // Not taken for a refusal: the session is replaced and the call runs on it
+    expect(expired.disconnect).toHaveBeenCalled();
+    expect(fresh.callTool).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+  });
+
+  it("evicts a view call's dead session instead of reusing it for the next call", async () => {
+    const dead = makeClient({
+      isToolCallableByApp: vi
+        .fn()
+        .mockRejectedValue(new SdkError(SdkErrorCode.NotConnected, 'Not connected')),
+    });
+    const fresh = makeClient();
+    mcpClientMocks.mockReturnValueOnce(dead).mockReturnValueOnce(fresh);
+    const viewCall = () =>
+      ctr.runStdioMcpTool({
+        args: '{}',
+        env: undefined,
+        fromApp: true,
+        mcpApps: true,
+        params: stdioParams,
+        toolName: 'refresh',
+      } as any);
+
+    await viewCall().catch(() => {});
+    expect(dead.disconnect).toHaveBeenCalled();
+
+    await viewCall();
+    expect(fresh.callTool).toHaveBeenCalledTimes(1);
   });
 
   it('does not check visibility for conversation calls', async () => {

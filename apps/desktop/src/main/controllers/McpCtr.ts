@@ -811,6 +811,11 @@ export default class McpCtr extends ControllerModule {
     try {
       return await client.isToolCallableByApp(toolName);
     } catch (error) {
+      // A broken session is the call's own failure: let runMcpTool evict and
+      // recover it, or every later view call would reuse the dead session
+      if (isStaleSessionError(error, client.getProtocolEra()) || isDeadTransportError(error)) {
+        throw error;
+      }
       logger.warn('Failed to resolve MCP App visibility for tool:', { error, toolName });
       return false;
     }
