@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HookDispatcher } from '../HookDispatcher';
 import { matchesHook } from '../matcher';
+import * as serverHooks from '../serverHooks';
 import type { AgentHook, AgentHookEvent } from '../types';
 
 const { fetchMock, queueMode } = vi.hoisted(() => ({ fetchMock: vi.fn(), queueMode: vi.fn() }));
@@ -40,6 +41,19 @@ describe('hook registration and restoration', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+  it.each([false, true])(
+    'finishes without sending a notification when no hooks exist in queue=%s',
+    async (queue) => {
+      queueMode.mockReturnValue(queue);
+      vi.spyOn(serverHooks, 'getServerHooks').mockReturnValue([]);
+
+      await expect(
+        new HookDispatcher().dispatch('op', 'onComplete', event),
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
   it.each([false, true])('sends webhook-only hooks in queue=%s', async (queue) => {
     queueMode.mockReturnValue(queue);
     const dispatcher = new HookDispatcher();

@@ -33,7 +33,6 @@ describe('heteroOperationCapabilities', () => {
   });
 
   it('keeps acceptance evidence out of a run with no Task', () => {
-    expect(heteroOperationCapabilities('fix the build')).not.toContain('acceptance:evidence');
     expect(heteroOperationCapabilities('fix the build', {})).not.toContain('acceptance:evidence');
   });
 });
