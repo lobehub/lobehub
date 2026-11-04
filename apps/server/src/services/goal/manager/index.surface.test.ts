@@ -12,6 +12,7 @@ import {
   goalPlanSchema,
   managerSnapshot,
   MAX_FAILED_MANAGER_TURNS,
+  MAX_UNCONFIRMED_MANAGER_TURNS,
   problemKey,
 } from './index';
 
@@ -25,6 +26,7 @@ describe('goal manager public surface', () => {
     expect(Object.keys(managerModule).sort()).toEqual([
       'GoalManagerService',
       'MAX_FAILED_MANAGER_TURNS',
+      'MAX_UNCONFIRMED_MANAGER_TURNS',
       'answeredProblem',
       'decideFailedTurn',
       'goalPlanSchema',
@@ -32,6 +34,7 @@ describe('goal manager public surface', () => {
       'problemKey',
     ]);
     expect(MAX_FAILED_MANAGER_TURNS).toBe(5);
+    expect(MAX_UNCONFIRMED_MANAGER_TURNS).toBe(3);
   });
 
   it('exposes the same public members on the service', () => {
