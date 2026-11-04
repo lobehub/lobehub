@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
+import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import { toRecord } from '@lobechat/utils/object';
 import type { Progress, Transport } from '@modelcontextprotocol/client';
 import {
@@ -744,13 +745,9 @@ export class MCPClient {
           : [];
       }),
     );
-    // `_meta.ui.visibility` unset means ["model", "app"]
     this.appHiddenTools = new Set(
       (tools || [])
-        .filter((tool) => {
-          const visibility = (tool._meta as Record<string, any> | undefined)?.ui?.visibility;
-          return Array.isArray(visibility) && !visibility.includes('app');
-        })
+        .filter((tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'app'))
         .map((tool) => tool.name),
     );
     return (tools || []) as McpTool[];

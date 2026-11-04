@@ -10,7 +10,7 @@ import {
 } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { lambdaClient } from '@/libs/trpc/client';
-import { mcpService } from '@/services/mcp';
+import { type LocalMcpTool, mcpService } from '@/services/mcp';
 import type { StoreSetter } from '@/store/types';
 
 import type { ToolStore } from '../../store';
@@ -407,16 +407,19 @@ export class ConnectorActionImpl {
     const isLocalHttp = !!detail.mcpServerUrl && isLocalOrPrivateUrl(detail.mcpServerUrl);
     if (!isStdio && !isLocalHttp) return false;
 
-    let api: Array<{ description?: string; name: string; parameters?: Record<string, unknown> }>;
+    // The full tool list, not a manifest: a manifest leaves out view-only
+    // tools, yet a view's call must find its tool synced.
+    let tools: LocalMcpTool[];
     if (isStdio) {
       if (!detail.mcpStdioConfig?.command) throw new Error('Connector is missing stdio config');
-      const manifest = await mcpService.getStdioMcpServerManifest({
-        args: detail.mcpStdioConfig.args ?? [],
-        command: detail.mcpStdioConfig.command,
-        env: detail.mcpStdioConfig.env ?? undefined,
-        name: detail.identifier,
+      tools = await mcpService.listLocalMcpTools({
+        stdio: {
+          args: detail.mcpStdioConfig.args ?? [],
+          command: detail.mcpStdioConfig.command,
+          env: detail.mcpStdioConfig.env ?? undefined,
+          name: detail.identifier,
+        },
       });
-      api = manifest.api ?? [];
     } else {
       const credentials = detail.credentials;
       const auth =
@@ -432,21 +435,18 @@ export class ConnectorActionImpl {
       const customHeaders = detail.metadata?.customHeaders as Record<string, string> | undefined;
       const headers =
         headerCreds || customHeaders ? { ...headerCreds, ...customHeaders } : undefined;
-      const manifest = await mcpService.getStreamableMcpServerManifest({
-        auth,
-        headers,
-        identifier: detail.identifier,
-        url: detail.mcpServerUrl!,
+      tools = await mcpService.listLocalMcpTools({
+        http: { auth, headers, name: detail.identifier, url: detail.mcpServerUrl! },
       });
-      api = manifest.api ?? [];
     }
 
     await lambdaClient.connector.syncToolsFromClientById.mutate({
       id,
-      tools: api.map((a) => ({
-        description: a.description,
-        inputSchema: a.parameters,
-        toolName: a.name,
+      tools: tools.map((tool) => ({
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        toolName: tool.name,
+        visibility: tool.visibility,
       })),
     });
     return true;

@@ -24,6 +24,7 @@ import {
   type StdioMCPParams,
 } from '@/libs/mcp';
 import { MCPClient } from '@/libs/mcp';
+import { isToolVisibleToModel } from '@/libs/mcp/mcpApp';
 import {
   getMCPConnectionErrorType,
   getMCPErrorLogMetadata,
@@ -179,12 +180,7 @@ export class MCPService {
     return this.withSessionRetry(params, 'listing tools', async (client) => {
       const result = await client.listTools();
       log(`Tools listed successfully, result count: %d`, result.length);
-      return result.map<LobeChatPluginApi>((item) => ({
-        // Assuming identifier is the unique name/id
-        description: item.description,
-        name: item.name,
-        parameters: item.inputSchema as ToolManifestSettings,
-      }));
+      return this.transformMCPToolToLobeAPI(result);
     });
   }
 
@@ -480,13 +476,15 @@ export class MCPService {
     const manifest = await client.listManifests();
 
     const identifier = params.name;
+    const api = manifest.tools ? this.transformMCPToolToLobeAPI(manifest.tools) : [];
 
     return {
-      api: manifest.tools ? this.transformMCPToolToLobeAPI(manifest.tools) : [],
+      api,
       identifier,
       meta: {
         avatar: metadata?.avatar || 'MCP_AVATAR',
-        description: metadata?.description || getMcpServerDescription(identifier, manifest),
+        description:
+          metadata?.description || getMcpServerDescription(identifier, { ...manifest, tools: api }),
         title: metadata?.name || identifier,
       },
       ...manifest,
@@ -560,8 +558,13 @@ export class MCPService {
     }
   }
 
+  /**
+   * The model-facing api of a plugin manifest. Tools whose MCP Apps visibility
+   * leaves out "model" exist only for their view, which calls them through the
+   * MCP session, so they never enter the manifest.
+   */
   private transformMCPToolToLobeAPI = (data: McpTool[]) => {
-    return data.map<LobeChatPluginApi>((item) => ({
+    return data.filter(isToolVisibleToModel).map<LobeChatPluginApi>((item) => ({
       // Assuming identifier is the unique name/id
       description: item.description,
       name: item.name,

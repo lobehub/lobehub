@@ -1,3 +1,4 @@
+import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -94,6 +95,14 @@ export const callConnectorToolById = async (
     throw new ConnectorToolCallError(
       'FORBIDDEN',
       `Tool '${params.toolName}' is disabled for this connector`,
+    );
+  }
+  // A view-only tool never enters the model's tool list; refuse a model call
+  // that names it anyway.
+  if (!params.fromApp && !isSyncedMcpToolVisibleTo(tool, 'model')) {
+    throw new ConnectorToolCallError(
+      'FORBIDDEN',
+      `Tool '${params.toolName}' can only be called from its interactive view`,
     );
   }
 

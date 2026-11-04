@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
+import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import {
   deserializeMcpIpcPayload,
   type McpIpcPayload,
@@ -21,6 +22,7 @@ import type {
   AudioContent,
   ImageContent,
   MCPClientParams,
+  McpTool,
   ResourceContent,
   ToolCallContent,
   ToolCallResult,
@@ -132,6 +134,19 @@ export interface HttpCallToolInput {
 
 export type CallToolInput = StdioCallToolInput | HttpCallToolInput;
 
+/** List a stdio or local-network HTTP server's tools, as the server declares them. */
+export type ListToolsInput =
+  | { http: HttpCallToolInput['http']; stdio?: undefined }
+  | { http?: undefined; stdio: GetStdioMcpServerManifestInput };
+
+/** A tool as `listTools` reports it, with its MCP Apps `visibility` when declared. */
+export interface ListedMcpTool {
+  description?: string;
+  inputSchema: McpTool['inputSchema'];
+  name: string;
+  visibility?: string[];
+}
+
 export interface ReadUiResourceInput {
   env?: any;
   /** HTTP endpoint only this machine can reach (localhost / LAN). */
@@ -146,6 +161,20 @@ export interface ReadUiResourceInput {
 }
 
 type SuperJSONSerialized<T = unknown> = McpIpcPayload<T>;
+
+/**
+ * A manifest's api is what the model may call: tools whose MCP Apps visibility
+ * leaves out "model" exist only for their view, which reaches them through
+ * `callTool`, so they stay out of it.
+ */
+const toModelApi = (tools: McpTool[]) =>
+  tools
+    .filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model'))
+    .map((item) => ({
+      description: item.description,
+      name: item.name,
+      parameters: item.inputSchema as any,
+    }));
 
 const deserializePayload = deserializeMcpIpcPayload;
 
@@ -532,18 +561,16 @@ export default class McpCtr extends ControllerModule {
       const manifest = await this.withClientLease(client, () => client!.listManifests());
       const identifier = input.name;
 
-      const tools = manifest.tools || [];
+      const api = toModelApi(manifest.tools || []);
 
       return serializePayload({
-        api: tools.map((item) => ({
-          description: item.description,
-          name: item.name,
-          parameters: item.inputSchema as any,
-        })),
+        api,
         identifier,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
-          description: input.metadata?.description || getMcpServerDescription(identifier, manifest),
+          description:
+            input.metadata?.description ||
+            getMcpServerDescription(identifier, { ...manifest, tools: api }),
           title: input.metadata?.name || identifier,
         },
         ...manifest,
@@ -591,28 +618,68 @@ export default class McpCtr extends ControllerModule {
 
     const client = await this.createClient(params);
     try {
-      const tools = await client.listTools();
+      const api = toModelApi(await client.listTools());
       const identifier = input.identifier;
 
       return serializePayload({
-        api: tools.map((item) => ({
-          description: item.description,
-          name: item.name,
-          parameters: item.inputSchema as any,
-        })),
+        api,
         identifier,
         mcpParams: params,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
           description:
             input.metadata?.description ||
-            getMcpServerDescription(identifier, { tools }, { includeToolExample: true }),
+            getMcpServerDescription(identifier, { tools: api }, { includeToolExample: true }),
           title: identifier,
         },
         type: 'mcp' as any,
       });
     } finally {
       await client.disconnect();
+    }
+  }
+
+  /**
+   * Every tool a stdio or local-network HTTP server lists, including the ones
+   * only its views may call. A connector syncs this full list, since a view's
+   * call must find its tool synced; the model's manifest filters it later.
+   */
+  @IpcMethod()
+  async listTools(payload: SuperJSONSerialized<ListToolsInput>) {
+    const input = deserializePayload<ListToolsInput>(payload);
+    const toListed = (tools: McpTool[]): ListedMcpTool[] =>
+      tools.map((tool) => ({
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        name: tool.name,
+        visibility: getMcpToolVisibility(tool._meta),
+      }));
+
+    if (input.http) {
+      const client = await this.createClient({ ...input.http, type: 'http' });
+      try {
+        return serializePayload(toListed(await client.listTools()));
+      } finally {
+        await client.disconnect();
+      }
+    }
+
+    const params: MCPClientParams = {
+      args: input.stdio.args || [],
+      command: input.stdio.command,
+      env: input.stdio.env,
+      name: input.stdio.name,
+      type: 'stdio',
+    };
+    let client: MCPClient | undefined;
+    try {
+      client = await this.acquireClient(params);
+      const tools = await this.withClientLease(client, () => client!.listTools());
+      return serializePayload(toListed(tools));
+    } catch (error) {
+      // Same as the manifest refresh: drop a broken pooled session.
+      await this.evictClient(params, client);
+      throw error;
     }
   }
 

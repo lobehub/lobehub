@@ -88,6 +88,22 @@ describe('callConnectorToolById', () => {
     expect(mcpService.callTool).not.toHaveBeenCalled();
   });
 
+  it('refuses a model call to a tool only its view may call, and runs the view call', async () => {
+    const ctx = makeCtx([connector], [tool({ metadata: { visibility: ['app'] } })]);
+    vi.mocked(mcpService.callTool).mockResolvedValue({ content: 'ok' } as any);
+
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
+    ).rejects.toHaveProperty('code', 'FORBIDDEN');
+    expect(mcpService.callTool).not.toHaveBeenCalled();
+
+    await callConnectorToolById(
+      { fromApp: true, identifier: 'my-conn', toolName: 'do_thing' },
+      ctx,
+    );
+    expect(mcpService.callTool).toHaveBeenCalledWith(expect.objectContaining({ fromApp: true }));
+  });
+
   it('calls the remote MCP with the connector auth for an allowed tool', async () => {
     vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
     const ctx = makeCtx([connector], [tool()]);

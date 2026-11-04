@@ -1,3 +1,5 @@
+import { buildMcpToolMetadata, getMcpToolVisibility } from '@lobechat/const/mcpApp';
+
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { ConnectorCredentials } from '@/database/schemas';
@@ -34,8 +36,7 @@ export const buildConnectorMcpParams = (
   // type. Merge them on top of any header-type credential headers (older rows
   // stored custom headers as a 'header' credential before this split).
   const customHeaders = connector.metadata?.customHeaders as Record<string, string> | undefined;
-  const mergedHeaders =
-    headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
+  const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
   return {
     auth,
     headers: mergedHeaders,
@@ -122,6 +123,9 @@ export const syncConnectorToolsById = async (
     crudType: inferCrudType(t.name),
     description: t.description,
     inputSchema: t.inputSchema as Record<string, unknown>,
+    // Kept even for view-only tools: a view's call must find the tool synced,
+    // while the manifest build leaves it out of the model's tool list.
+    metadata: buildMcpToolMetadata(getMcpToolVisibility(t._meta)),
     toolName: t.name,
   }));
 

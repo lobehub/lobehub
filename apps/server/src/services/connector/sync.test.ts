@@ -1,9 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorCredentials } from '@/database/schemas';
+import { mcpService } from '@/server/services/mcp';
 
-import { buildConnectorMcpParams, buildHttpAuthFromCredentials } from './sync';
+import {
+  buildConnectorMcpParams,
+  buildHttpAuthFromCredentials,
+  syncConnectorToolsById,
+} from './sync';
+
+vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
+vi.mock('./tokens', () => ({ ensureFreshConnectorToken: async (connector: unknown) => connector }));
 
 const httpConnector = (
   credentials: ConnectorCredentials | null,
@@ -100,10 +108,7 @@ describe('buildConnectorMcpParams', () => {
   it('merges metadata.customHeaders alongside bearer auth', () => {
     expect(
       buildConnectorMcpParams(
-        httpConnector(
-          { token: 'tok', type: 'bearer' },
-          { customHeaders: { 'X-Tenant': 't1' } },
-        ),
+        httpConnector({ token: 'tok', type: 'bearer' }, { customHeaders: { 'X-Tenant': 't1' } }),
       ),
     ).toEqual({
       auth: { token: 'tok', type: 'bearer' },
@@ -116,9 +121,7 @@ describe('buildConnectorMcpParams', () => {
 
   it('applies metadata.customHeaders with no auth credential', () => {
     expect(
-      buildConnectorMcpParams(
-        httpConnector(null, { customHeaders: { 'X-Api-Key': 'abc' } }),
-      ),
+      buildConnectorMcpParams(httpConnector(null, { customHeaders: { 'X-Api-Key': 'abc' } })),
     ).toEqual({
       auth: undefined,
       headers: { 'X-Api-Key': 'abc' },
@@ -172,5 +175,32 @@ describe('buildConnectorMcpParams', () => {
       name: 'Local Connector',
       type: 'stdio',
     });
+  });
+});
+
+describe('syncConnectorToolsById', () => {
+  it("syncs view-only tools too, recording each tool's MCP Apps visibility", async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([
+      { description: 'Show', inputSchema: { type: 'object' }, name: 'show_dashboard' },
+      {
+        _meta: { ui: { visibility: ['app'] } },
+        description: 'Page',
+        inputSchema: { type: 'object' },
+        name: 'load_page',
+      },
+    ]);
+    const upsertMany = vi.fn();
+    const updateStatus = vi.fn();
+
+    const result = await syncConnectorToolsById('c1', {
+      connectorModel: { findById: async () => httpConnector(null), updateStatus } as any,
+      connectorToolModel: { upsertMany } as any,
+    });
+
+    expect(result).toEqual({ toolCount: 2 });
+    expect(upsertMany).toHaveBeenCalledWith('c1', [
+      expect.objectContaining({ metadata: null, toolName: 'show_dashboard' }),
+      expect.objectContaining({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
+    ]);
   });
 });
