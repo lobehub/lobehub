@@ -983,6 +983,11 @@ export const electronKeys = {
   remoteServerConfig: def('electron:getRemoteServerConfig', () => [
     'electron:getRemoteServerConfig',
   ]),
+  /** This machine's derived device id in a workspace (local, no network). */
+  workspaceDeviceId: def('electron:getWorkspaceDeviceId', (workspaceId: string) => [
+    'electron:getWorkspaceDeviceId',
+    workspaceId,
+  ]),
 };
 
 /**
