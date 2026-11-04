@@ -8,24 +8,11 @@ import {
   defaultSearchProjectFiles,
   type DeviceControlDeps,
   DeviceMetricsSampler,
-  executeDeviceRpc,
   pushMetrics,
 } from '@lobechat/device-control';
-import { BROWSER_IDENTIFIER } from '@lobechat/device-control/agent-browser';
-import { COMPUTER_USE_IDENTIFIER } from '@lobechat/device-control/computer-use';
-import type {
-  AgentRunRequestMessage,
-  RpcRequestMessage,
-  SystemInfoRequestMessage,
-  ToolCallRequestMessage,
-} from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
-import {
-  createRuntimeProbeCache,
-  type RuntimeProbeCache,
-} from '@lobechat/heterogeneous-agents/runtimeProbeCache';
-import { executeDeviceOperation } from '@lobechat/local-file-shell/shell';
+import { createRuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
 import type { Command } from 'commander';
 
 import { createLambdaClient } from '../../api/client';
@@ -53,7 +40,6 @@ import {
   writeStatus,
 } from '../../daemon/manager';
 import { listTasks } from '../../daemon/taskRegistry';
-import { spawnHeteroAgentRun } from '../../device/agentRun';
 import {
   describeDeviceGateway,
   describeDeviceGatewayFailure,
@@ -67,7 +53,7 @@ import {
   resolveDeviceIdentity,
   resolveWorkspaceDeviceIdentity,
 } from '../../device/register';
-import { collectSystemInfo, probeNativeRuntimes } from '../../device/systemInfo';
+import { probeNativeRuntimes } from '../../device/systemInfo';
 import { TerminalSessionManager } from '../../device/terminal';
 import { cliVersion } from '../../pkg';
 import {
@@ -86,18 +72,14 @@ import {
   removeWorkspaceEnrollment,
   resolveDeviceMetricsBacklogPath,
 } from '../../settings';
-import { executeToolCall } from '../../tools';
-import {
-  closeBrowserSessions,
-  executeBrowserCall,
-  resolveBrowserDevice,
-} from '../../tools/browser';
-import { executeComputerUseCall, resolveComputerUseDevice } from '../../tools/computerUse';
+import { closeBrowserSessions, resolveBrowserDevice } from '../../tools/browser';
+import { resolveComputerUseDevice } from '../../tools/computerUse';
 import { cleanupAllProcesses, getActiveShellCount } from '../../tools/shell';
 import { log, setVerbose } from '../../utils/logger';
 import { sweepLocalTraces } from '../../utils/traceMaintenance';
 import { restartConnector } from '../connectRestart';
 import { printConnectStatus } from '../connectStatus';
+import { bindGatewayClientHandlers, type GatewayHandlerContext } from './handlers';
 
 /** Longest a clean stop waits to push pending device health samples. */
 const SHUTDOWN_METRICS_FLUSH_MS = 3000;
@@ -993,176 +975,6 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Personal mode: re-open any workspace share connections from a previous run.
   // Best-effort after the main connection — a failed restore never blocks it.
   if (!workspaceId) void restoreWorkspaceEnrollments();
-}
-
-/** Everything a gateway connection's request handlers need from the host process. */
-interface GatewayHandlerContext {
-  /** Present when an `agent-browser` binary enabled the browser tool on this device. */
-  browser?: Awaited<ReturnType<typeof resolveBrowserDevice>>;
-  /** Present when `--auv` enabled Computer Use on this device. */
-  computerUse?: Awaited<ReturnType<typeof resolveComputerUseDevice>>;
-  deps: DeviceControlDeps;
-  error: (msg: string) => void;
-  /** Read at dispatch time — the underlying auth may be refreshed mid-session. */
-  getAuth: () => Awaited<ReturnType<typeof resolveToken>>;
-  info: (msg: string) => void;
-  isDaemonChild: boolean;
-  maintenance: CliMaintenance;
-  /** Process-wide native runtime probe, shared by every gateway connection. */
-  nativeRuntimes: RuntimeProbeCache;
-  recordRequest: () => void;
-}
-
-/**
- * Bind the request handlers shared by every gateway connection this process
- * owns — the personal connection and any workspace-share connections opened via
- * the `enrollWorkspace` RPC — so a workspace principal exposes exactly the same
- * tool / RPC / agent-run surface as the personal one.
- */
-function bindGatewayClientHandlers(
-  client: GatewayClient,
-  ctx: GatewayHandlerContext,
-  connectionWorkspaceId?: string,
-) {
-  const {
-    browser,
-    computerUse,
-    deps,
-    error,
-    getAuth,
-    info,
-    isDaemonChild,
-    maintenance,
-    recordRequest,
-  } = ctx;
-
-  // Handle system info requests
-  client.on('system_info_request', async (request: SystemInfoRequestMessage) => {
-    info(`Received system_info_request: requestId=${request.requestId}`);
-    const systemInfo = await collectSystemInfo(ctx.nativeRuntimes, computerUse, browser);
-    client.sendSystemInfoResponse({
-      requestId: request.requestId,
-      result: { success: true, systemInfo },
-    });
-  });
-
-  // Handle tool call requests
-  client.on('tool_call_request', async (request: ToolCallRequestMessage) => {
-    recordRequest();
-    const { operationId, requestId, timeout, toolCall } = request;
-    if (isDaemonChild) {
-      appendLog(
-        `[TOOL] ${toolCall.apiName}${operationId ? ` op=${operationId}` : ''} (${requestId})`,
-      );
-    } else {
-      log.toolCall(toolCall.apiName, requestId, toolCall.arguments, operationId);
-    }
-
-    // Timed on the DEVICE's clock. The server can only see the whole dispatch
-    // round trip, so reporting this back is what separates a slow tool from
-    // slow transport.
-    const startedAt = performance.now();
-    const result = await executeDeviceOperation({ apiName: toolCall.apiName, operationId }, () =>
-      maintenance.run(() =>
-        // Computer Use's `runCommand` shares its apiName with the shell tool, and
-        // the browser's apis (`click`, `screenshot`, …) are routed by identifier too.
-        toolCall.identifier === COMPUTER_USE_IDENTIFIER
-          ? executeComputerUseCall(computerUse, toolCall.apiName, toolCall.arguments, timeout)
-          : toolCall.identifier === BROWSER_IDENTIFIER
-            ? executeBrowserCall(browser, toolCall.apiName, toolCall.arguments, timeout)
-            : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getAuth()),
-      ),
-    ).catch((err: Error) => ({
-      content: '',
-      error: err.message,
-      state: undefined,
-      success: false,
-    }));
-    const executionTimeMs = Math.round(performance.now() - startedAt);
-
-    if (isDaemonChild) {
-      appendLog(
-        `[RESULT] ${result.success ? 'OK' : 'FAIL'} ${executionTimeMs}ms${operationId ? ` op=${operationId}` : ''} (${requestId})`,
-      );
-    } else {
-      log.toolResult(requestId, result.success, result.content, operationId);
-    }
-
-    client.sendToolCallResponse({
-      requestId,
-      result: {
-        content: result.content,
-        error: result.error,
-        executionTimeMs,
-        state: result.state,
-        success: result.success,
-      },
-    });
-  });
-
-  // Handle generic server-internal device RPCs (git / workspace / file ops).
-  // Shares the `@lobechat/device-control` dispatcher with the desktop app so the
-  // CLI exposes the same remote-device control surface.
-  client.on('rpc_request', async (request: RpcRequestMessage) => {
-    const { method, params, requestId } = request;
-    if (isDaemonChild) appendLog(`[RPC] ${method} (${requestId})`);
-    else info(`Received rpc_request: method=${method} (${requestId})`);
-
-    try {
-      const run = () => executeDeviceRpc(method, params, deps);
-      const isMaintenance = ['getCliUpdateState', 'checkCliUpdate', 'restartCli'].includes(method);
-      const data = await (isMaintenance ? run() : maintenance.run(run));
-      client.sendRpcResponse({ requestId, result: { data, success: true } });
-      if (method === 'restartCli') maintenance.afterResponse();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (isDaemonChild) appendLog(`[RPC ERROR] ${method}: ${message} (${requestId})`);
-      else error(`rpc_request method=${method} failed: ${message}`);
-      client.sendRpcResponse({ requestId, result: { error: message, success: false } });
-    }
-  });
-
-  // Handle gateway-dispatched agent runs (heterogeneous agents, e.g. Claude
-  // Code). Mirrors the desktop app: spawn `lh hetero exec`, which owns the full
-  // execution + server-ingest pipeline. Ack with the spawn outcome — `accepted`
-  // once the child starts, `rejected` if it fails to spawn (e.g. bad cwd) — so
-  // a failed dispatch surfaces as an error instead of a stuck assistant message.
-  client.on('agent_run_request', async (request: AgentRunRequestMessage) => {
-    recordRequest();
-    info(
-      `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
-    );
-    try {
-      const ack = await maintenance.run(() =>
-        spawnHeteroAgentRun(
-          {
-            agentId: request.agentId,
-            agentType: request.agentType,
-            assistantMessageId: request.assistantMessageId,
-            args: request.args,
-            claudeAccountRouting: request.claudeAccountRouting,
-            cwd: request.cwd,
-            imageList: request.imageList,
-            jwt: request.jwt,
-            operationId: request.operationId,
-            prompt: request.prompt,
-            resumeFallbackSystemContext: request.resumeFallbackSystemContext,
-            resumeSessionId: request.resumeSessionId,
-            serverUrl: getAuth().serverUrl,
-            systemContext: request.systemContext,
-            topicId: request.topicId,
-            workspaceId: request.ingestWorkspaceId ?? request.workspaceId ?? connectionWorkspaceId,
-          },
-          { error, info },
-        ),
-      );
-      client.sendAgentRunAck({ operationId: request.operationId, ...ack });
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      error(`agent_run_request failed: ${reason}`);
-      client.sendAgentRunAck({ operationId: request.operationId, reason, status: 'rejected' });
-    }
-  });
 }
 
 function createDaemonLogger() {
