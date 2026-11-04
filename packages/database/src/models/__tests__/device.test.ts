@@ -702,6 +702,30 @@ describe('DeviceModel', () => {
     it('should return nothing when no row matches', async () => {
       await expect(deviceModel.delete('missing-device')).resolves.toEqual([]);
     });
+
+    it('should keep a workspace device the user enrolled under the same deviceId', async () => {
+      const deleteWsId = 'device-model-ws-delete';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: deleteWsId, name: 'WS', primaryOwnerId: userId, slug: deleteWsId });
+      await deviceModel.register({ deviceId: 'both', identitySource: 'machine-id' });
+      await serverDB.insert(devices).values({
+        deviceId: 'both',
+        identitySource: 'machine-id',
+        userId,
+        workspaceId: deleteWsId,
+      });
+
+      const removed = await deviceModel.delete('both');
+
+      expect(removed).toHaveLength(1);
+      expect(removed[0].workspaceId).toBeNull();
+      const workspaceRows = await serverDB
+        .select()
+        .from(devices)
+        .where(eq(devices.workspaceId, deleteWsId));
+      expect(workspaceRows.map((row) => row.deviceId)).toEqual(['both']);
+    });
   });
 
   describe('mutateWorkspaceDeviceWorkingDirs', () => {

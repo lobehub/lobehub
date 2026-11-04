@@ -353,11 +353,20 @@ export class DeviceModel {
     return device;
   };
 
-  /** Returns the removed rows. */
+  /**
+   * Remove a PERSONAL device. Workspace devices the user enrolled keep their
+   * rows; they go through `deleteWorkspaceDevice`. Returns the removed rows.
+   */
   delete = async (deviceId: string): Promise<DeviceItem[]> => {
     return this.db
       .delete(devices)
-      .where(and(eq(devices.userId, this.userId), eq(devices.deviceId, deviceId)))
+      .where(
+        and(
+          eq(devices.userId, this.userId),
+          eq(devices.deviceId, deviceId),
+          isNull(devices.workspaceId),
+        ),
+      )
       .returning();
   };
 
