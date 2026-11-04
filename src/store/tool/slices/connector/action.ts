@@ -220,9 +220,18 @@ export class ConnectorActionImpl {
    * (delete / sync / permission reset) updates that list too. On base-only
    * pages `isAgentBoundInit` is false, so this stays a single query.
    */
+  /** Agents whose own connectors are loaded, so every write keeps them current. */
+  #loadedAgentIds = (): string[] => {
+    const init = this.#get().agentConnectorsInit;
+    return Object.keys(init).filter((agentId) => init[agentId]);
+  };
+
   #refreshConnectorLists = async (): Promise<void> => {
     const tasks = [this.fetchConnectors()];
     if (this.#get().isAgentBoundInit) tasks.push(this.fetchAgentBoundConnectors());
+    // The per-agent lists decide what a view's tool call needs (approval,
+    // availability), so they must not keep a connector's old state either
+    for (const agentId of this.#loadedAgentIds()) tasks.push(this.fetchAgentConnectors(agentId));
     await Promise.all(tasks);
   };
 
@@ -524,17 +533,22 @@ export class ConnectorActionImpl {
         tools: c.tools.map((t) => (t.id === toolId ? { ...t, permission } : t)),
       }));
 
-    const base = this.#connectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools);
-    const bound = this.#agentBoundConnectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools);
+    const overlays = [
+      this.#connectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools),
+      this.#agentBoundConnectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools),
+      // A loaded agent list may hold the same tool, and a view's tool call
+      // reads its permission there
+      ...this.#loadedAgentIds().map((agentId) =>
+        this.#agentConnectors.beginOptimistic(agentId, patchTools),
+      ),
+    ];
 
     try {
       await lambdaClient.connector.updateToolPermission.mutate({ permission, toolId });
-      base.commit();
-      bound.commit();
+      for (const overlay of overlays) overlay.commit();
     } catch {
       // Roll back the overlays, then rebuild from the server.
-      base.rollback();
-      bound.rollback();
+      for (const overlay of overlays) overlay.rollback();
       await this.#refreshConnectorLists();
     }
   };
