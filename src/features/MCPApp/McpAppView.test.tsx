@@ -407,6 +407,31 @@ describe('McpAppView', () => {
     );
   });
 
+  it('cancels an approved message the view gives up on before it is accepted', async () => {
+    confirmAppMessage.mockResolvedValue(true);
+    sendMessage.mockImplementation(() => new Promise(() => {}));
+    const { fromView, message } = setup();
+
+    await message(1, 'Follow up');
+    const { signal } = sendMessage.mock.calls[0][0] as { signal: AbortSignal };
+    expect(signal.aborted).toBe(false);
+
+    await fromView({ method: 'notifications/cancelled', params: { requestId: 1 } });
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('cancels an approved message before acceptance once the view goes away', async () => {
+    confirmAppMessage.mockResolvedValue(true);
+    sendMessage.mockImplementation(() => new Promise(() => {}));
+    const { message } = setup();
+
+    await message(1, 'Follow up');
+    const { signal } = sendMessage.mock.calls[0][0] as { signal: AbortSignal };
+
+    cleanup();
+    expect(signal.aborted).toBe(true);
+  });
+
   it('opens a link the view asks for only after the user allows it', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     const { fromView, response } = setup();

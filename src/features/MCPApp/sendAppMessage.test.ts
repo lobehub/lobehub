@@ -35,6 +35,15 @@ describe('sendAppMessage', () => {
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ preserveComposer: true }));
   });
 
+  it('lets the caller cancel the send until it is accepted', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const view = new AbortController();
+
+    await sendAppMessage(send, 'Follow up', 'weather', view.signal);
+
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ signal: view.signal }));
+  });
+
   it('does not acknowledge before the acceptance callback fires', async () => {
     let params!: SendMessageParams;
     const send = vi.fn((value: SendMessageParams) => {

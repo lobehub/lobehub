@@ -334,6 +334,17 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
     expect(relayCall).not.toHaveBeenCalled();
   });
 
+  it('does not dispatch a cancelled view call over IPC', async () => {
+    plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
+    const request = new AbortController();
+    request.abort();
+
+    await expect(
+      mcpService.invokeMcpToolCall(refresh, { fromMcpApp: true, signal: request.signal }),
+    ).rejects.toThrow();
+    expect(ipcCall).not.toHaveBeenCalled();
+  });
+
   it('keeps conversation calls to localhost / LAN http servers on their existing route', async () => {
     plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
     relayCall.mockResolvedValue({ content: 'ok', success: true });
@@ -394,6 +405,19 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
       params: { args: ['mcp.js'], command: 'node', name: 'files', type: 'stdio' },
       toolName: 'list',
     });
+  });
+
+  it('does not dispatch a view call cancelled while its connector was read', async () => {
+    const request = new AbortController();
+    connectorEdit.mockImplementation(async () => {
+      request.abort();
+      return detail;
+    });
+
+    await expect(
+      mcpService.invokeMcpToolCall(list, { fromMcpApp: true, signal: request.signal }),
+    ).rejects.toThrow();
+    expect(ipcCall).not.toHaveBeenCalled();
   });
 
   it('still refuses a view call to a tool the connector disabled', async () => {

@@ -252,7 +252,19 @@ const McpAppView = memo<McpAppViewProps>(
               return false;
             }
 
-            return await sendAppMessage(latest.current.sendMessage, text, currentIdentifier);
+            // Until the conversation accepts it, the view going away or giving up
+            // on the request cancels the send rather than starting a reply
+            const { dispose: disposeSend, signal } = anySignal([approvals.signal, request]);
+            try {
+              return await sendAppMessage(
+                latest.current.sendMessage,
+                text,
+                currentIdentifier,
+                signal,
+              );
+            } finally {
+              disposeSend();
+            }
           } finally {
             sending = false;
           }

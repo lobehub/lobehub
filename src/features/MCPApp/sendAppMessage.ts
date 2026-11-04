@@ -15,11 +15,17 @@ export const sendAppMessage = (
   sendMessage: SendMessage,
   text: string,
   identifier: string,
+  /**
+   * Cancels the send until the conversation accepts the message; once it has,
+   * the run belongs to the conversation and is stopped from there.
+   */
+  signal?: AbortSignal,
 ): Promise<boolean> =>
   new Promise((resolve, reject) => {
     void sendMessage({
       ...toAppMessage(text, identifier),
       onMessageAccepted: () => resolve(true),
       preserveComposer: true,
+      ...(signal && { signal }),
     }).then(() => resolve(false), reject);
   });

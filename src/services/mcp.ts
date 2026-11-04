@@ -35,6 +35,18 @@ function calculateObjectSizeBytes(obj: any): number {
 }
 
 /**
+ * IPC and cloud-gateway calls can't be cancelled once sent, so a request
+ * cancelled during the awaits before them must stop here.
+ */
+const throwIfAborted = (signal?: AbortSignal) => {
+  if (!signal?.aborted) return;
+
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The tool call was cancelled', 'AbortError');
+};
+
+/**
  * Build the MCP client params for an installed/custom plugin: its stored
  * connection plus the user's plugin settings as HTTP headers or stdio env.
  */
@@ -150,6 +162,7 @@ class MCPService {
         if (detail.mcpConnectionType !== 'stdio' || !config?.command) {
           throw new Error('Connector does not have a stdio command configured');
         }
+        throwIfAborted(signal);
         const result = await ensureElectronIpc().mcp.callTool(
           serializeMcpIpcPayload({
             args: safeParseJSON(args) ?? {},
@@ -226,6 +239,9 @@ class MCPService {
       params,
       toolName: apiName,
     };
+
+    // Before the timing starts: a call cancelled here never ran, so isn't reported
+    throwIfAborted(signal);
 
     // Record call start time
     const callStartTime = Date.now();
