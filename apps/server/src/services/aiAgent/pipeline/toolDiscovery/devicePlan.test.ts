@@ -50,7 +50,7 @@ const online = (deviceId: string) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.findWakeableManagedDevices.mockResolvedValue([]);
-  mocks.wakeManagedDevice.mockResolvedValue(true);
+  mocks.wakeManagedDevice.mockResolvedValue(undefined);
   mocks.deviceSystemInfo.mockResolvedValue({ supportedTools: [] });
 });
 

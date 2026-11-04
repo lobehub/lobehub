@@ -56,7 +56,7 @@ interface CallerScope {
  * A workspace row wins over a personal row with the same id, the same order
  * the dispatch paths use.
  */
-export const findManagedDevice = async (
+const findManagedDevice = async (
   { db, userId, workspaceId }: CallerScope,
   deviceId: string,
 ): Promise<ManagedDeviceTarget | undefined> => {
@@ -78,7 +78,7 @@ export const findManagedDevice = async (
 };
 
 /** Whether the gateway has a live connection for this managed device now. */
-export const isManagedDeviceOnline = async (
+const isManagedDeviceOnline = async (
   userId: string,
   target: ManagedDeviceTarget,
 ): Promise<boolean> => {
@@ -120,15 +120,15 @@ export const findWakeableManagedDevices = async (
 };
 
 /**
- * Ask the provider to start a managed device. Resolves `false` instead of
- * throwing: a failed or slow wake leaves the device offline, and every caller
- * already handles an offline device. Never holds the caller longer than
+ * Ask the provider to start a managed device. A failure is logged, not thrown:
+ * a failed or slow wake leaves the device offline, and every caller already
+ * handles an offline device. Never holds the caller longer than
  * `MANAGED_DEVICE_WAKE_REQUEST_TIMEOUT_MS`.
  */
 export const wakeManagedDevice = async (
   userId: string,
   target: ManagedDeviceTarget,
-): Promise<boolean> => {
+): Promise<void> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
@@ -144,84 +144,65 @@ export const wakeManagedDevice = async (
       }),
     ]);
     log('wakeManagedDevice: wake accepted for deviceId=%s', target.deviceId);
-    return true;
   } catch (error) {
     console.warn('[ManagedDeviceWake] Wake request failed', {
       deviceId: target.deviceId,
       error: error instanceof Error ? error.message : String(error),
       userId,
     });
-    return false;
   } finally {
     clearTimeout(timer);
   }
 };
 
-export interface WaitForDeviceOnlineOptions {
-  intervalMs?: number;
-  isOnline: () => Promise<boolean>;
-  /** Asked before each poll; `true` ends the wait early as not online. */
-  shouldStop?: () => Promise<boolean>;
-  timeoutMs?: number;
-}
-
 /**
- * Poll until `isOnline` answers true, `shouldStop` answers true, or the
- * timeout passes. A failed poll counts as "not online yet". Resolves `true`
- * when the device came online.
- */
-export const waitForDeviceOnline = async ({
-  intervalMs = MANAGED_DEVICE_WAKE_POLL_INTERVAL_MS,
-  isOnline,
-  shouldStop,
-  timeoutMs = MANAGED_DEVICE_WAKE_TIMEOUT_MS,
-}: WaitForDeviceOnlineOptions): Promise<boolean> => {
-  const deadline = Date.now() + timeoutMs;
-
-  while (true) {
-    try {
-      if (await shouldStop?.()) return false;
-      if (await isOnline()) return true;
-    } catch (error) {
-      log('waitForDeviceOnline: poll failed: %O', error);
-    }
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) return false;
-    await new Promise<void>((resolve) => setTimeout(resolve, Math.min(intervalMs, remaining)));
-  }
-};
-
-/**
- * Wait for a woken managed device to connect to the gateway.
+ * Poll the gateway until a woken managed device connects. Resolves `true` when
+ * it is online, and `false` when `timeoutMs` passes or `shouldStop` (asked
+ * before each poll) answers true. A failed poll counts as "not online yet".
  *
- * Long-running: call it only off the request path (after the response, or in
- * a background job). Resolves `'online'`, or `'timeout'` when the device did
- * not connect in time; the caller then dispatches as before and the existing
- * offline handling takes over.
+ * The default timeout is long: call it with that default only off the request
+ * path (after the response, or in a background job).
  */
 export const waitForManagedDeviceOnline = async (
   userId: string,
   target: ManagedDeviceTarget,
-  options: Omit<WaitForDeviceOnlineOptions, 'isOnline'> = {},
-): Promise<'online' | 'timeout'> => {
+  {
+    shouldStop,
+    timeoutMs = MANAGED_DEVICE_WAKE_TIMEOUT_MS,
+  }: { shouldStop?: () => Promise<boolean>; timeoutMs?: number } = {},
+): Promise<boolean> => {
   const startedAt = Date.now();
-  const online = await waitForDeviceOnline({
-    ...options,
-    isOnline: () => isManagedDeviceOnline(userId, target),
-  });
-  const waitedMs = Date.now() - startedAt;
-  if (online) {
-    log('waitForManagedDeviceOnline: deviceId=%s online after %dms', target.deviceId, waitedMs);
-  } else {
-    console.warn('[ManagedDeviceWake] Managed device did not come online in time', {
-      deviceId: target.deviceId,
-      scope: target.scope,
-      userId,
-      waitedMs,
-      workspaceId: target.workspaceId,
-    });
+  const deadline = startedAt + timeoutMs;
+
+  while (true) {
+    try {
+      if (await shouldStop?.()) return false;
+      if (await isManagedDeviceOnline(userId, target)) {
+        log(
+          'waitForManagedDeviceOnline: deviceId=%s online after %dms',
+          target.deviceId,
+          Date.now() - startedAt,
+        );
+        return true;
+      }
+    } catch (error) {
+      log('waitForManagedDeviceOnline: poll failed: %O', error);
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, Math.min(MANAGED_DEVICE_WAKE_POLL_INTERVAL_MS, remaining)),
+    );
   }
-  return online ? 'online' : 'timeout';
+
+  console.warn('[ManagedDeviceWake] Managed device did not come online in time', {
+    deviceId: target.deviceId,
+    scope: target.scope,
+    userId,
+    waitedMs: Date.now() - startedAt,
+    workspaceId: target.workspaceId,
+  });
+  return false;
 };
 
 /** The structured tool result for a call that reached a managed device while it starts. */
@@ -277,29 +258,25 @@ export const isDeviceUnreachableResult = (result: {
 
 /**
  * Handle a call that reached a managed cloud device without a live
- * connection: wake the device and wait up to `waitMs` for it.
+ * connection: wake the device and wait up to
+ * `MANAGED_DEVICE_TOOL_CALL_WAIT_MS` for it.
  *
- * - `undefined`: not a managed device (or none is available); report the
+ * - `undefined`: not a managed device, or none is available. Report the
  *   failure as before.
- * - `'online'`: the device is online now; the caller may retry the call once.
+ * - `'online'`: the device is online now. The caller can retry the call once.
  * - otherwise the `DEVICE_WAKING` result to return, so the model retries.
  */
 export const awaitManagedDeviceForToolCall = async (
   caller: CallerScope,
   deviceId: string,
-  waitMs: number = MANAGED_DEVICE_TOOL_CALL_WAIT_MS,
 ): Promise<'online' | ReturnType<typeof buildDeviceWakingResult> | undefined> => {
   const target = await findManagedDevice(caller, deviceId);
   if (!target) return;
   if (await isManagedDeviceOnline(caller.userId, target)) return 'online';
 
   await wakeManagedDevice(caller.userId, target);
-  if (waitMs > 0) {
-    const online = await waitForDeviceOnline({
-      isOnline: () => isManagedDeviceOnline(caller.userId, target),
-      timeoutMs: waitMs,
-    });
-    if (online) return 'online';
-  }
-  return buildDeviceWakingResult(deviceId);
+  const online = await waitForManagedDeviceOnline(caller.userId, target, {
+    timeoutMs: MANAGED_DEVICE_TOOL_CALL_WAIT_MS,
+  });
+  return online ? 'online' : buildDeviceWakingResult(deviceId);
 };

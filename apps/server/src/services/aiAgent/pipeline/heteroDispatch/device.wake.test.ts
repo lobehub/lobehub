@@ -121,8 +121,8 @@ beforeEach(() => {
   mocks.isRunningOnTopic.mockResolvedValue(true);
   mocks.resolveDeviceDispatchAuthorizationFailure.mockResolvedValue(undefined);
   mocks.selectCodexDeviceDispatch.mockResolvedValue({ kind: 'exec' });
-  mocks.waitForManagedDeviceOnline.mockResolvedValue('online');
-  mocks.wakeManagedDevice.mockResolvedValue(true);
+  mocks.waitForManagedDeviceOnline.mockResolvedValue(true);
+  mocks.wakeManagedDevice.mockResolvedValue(undefined);
 });
 
 describe('dispatchToWakingCliDevice', () => {
@@ -153,7 +153,7 @@ describe('dispatchToWakingCliDevice', () => {
   });
 
   it('dispatches after a timed-out wait so the offline handling takes over', async () => {
-    mocks.waitForManagedDeviceOnline.mockResolvedValue('timeout');
+    mocks.waitForManagedDeviceOnline.mockResolvedValue(false);
     mocks.dispatchAgentRun.mockResolvedValue({ error: 'DEVICE_OFFLINE', success: false });
     const { deps } = createDeps();
 

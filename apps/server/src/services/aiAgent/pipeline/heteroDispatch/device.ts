@@ -11,7 +11,6 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import {
   type ManagedDeviceTarget,
-  type WaitForDeviceOnlineOptions,
   waitForManagedDeviceOnline,
   wakeManagedDevice,
 } from '@/server/services/deviceGateway/managedDeviceWake';
@@ -313,17 +312,15 @@ export const dispatchToCliDevice = async (
 /**
  * Wake a managed cloud device, then dispatch to it once it is online.
  *
- * The wake request is sent before the response; the wait (up to
- * `MANAGED_DEVICE_WAKE_TIMEOUT_MS`, polling every
- * `MANAGED_DEVICE_WAKE_POLL_INTERVAL_MS`) and the dispatch run after it, off
- * the request's clock, like the timed-out dispatch confirmation. When the
- * device does not come online in time the dispatch still runs: the gateway
- * refuses it as offline, and the existing offline handling (the device error
- * on the run, the goal's device wait) takes over. A run stopped during the
- * wait is not dispatched.
+ * The wake request is sent before the response. The wait (see
+ * `waitForManagedDeviceOnline`) and the dispatch run after the response, like
+ * the timed-out dispatch confirmation. If the device does not come online in
+ * time, the dispatch still runs. The gateway refuses it as offline, and the
+ * existing offline handling (the device error on the run, the goal's device
+ * wait) takes over. A run stopped during the wait is not dispatched.
  *
- * Returns `undefined`: the run counts as started, and any failure settles it
- * through the same funnel an immediate dispatch failure uses.
+ * Returns `undefined`: the run counts as started. A later failure settles it
+ * through the same path as an immediate dispatch failure.
  */
 export const dispatchToWakingCliDevice = async (
   deps: HeteroDispatchDeps,
@@ -331,10 +328,9 @@ export const dispatchToWakingCliDevice = async (
   params: Omit<CliDispatchParams, 'heteroPlan'> & {
     device: ManagedDeviceTarget;
     heteroPlan: Extract<ExecutionPlan, { kind: 'device-wakeable' }>;
-    wait?: Omit<WaitForDeviceOnlineOptions, 'isOnline'>;
   },
 ): Promise<ExecAgentResult | undefined> => {
-  const { device, heteroPlan, wait, ...dispatchParams } = params;
+  const { device, heteroPlan, ...dispatchParams } = params;
 
   await wakeManagedDevice(deps.userId, device);
 
@@ -344,8 +340,7 @@ export const dispatchToWakingCliDevice = async (
 
   const dispatchWhenOnline = async () => {
     try {
-      const outcome = await waitForManagedDeviceOnline(deps.userId, device, {
-        ...wait,
+      const online = await waitForManagedDeviceOnline(deps.userId, device, {
         shouldStop: isStopped,
       });
       if (await isStopped()) {
@@ -356,9 +351,9 @@ export const dispatchToWakingCliDevice = async (
         return;
       }
       log(
-        'execAgent: managed device %s wake outcome=%s, dispatching op=%s',
+        'execAgent: managed device %s online=%s, dispatching op=%s',
         heteroPlan.deviceId,
-        outcome,
+        online,
         run.operationId,
       );
       await dispatchToCliDevice(deps, run, {
