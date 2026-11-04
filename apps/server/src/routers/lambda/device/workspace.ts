@@ -1,4 +1,4 @@
-import { isManagedCloudDevice, workingDirConfigSchema } from '@lobechat/types';
+import { workingDirConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -7,11 +7,7 @@ import {
   type WorkspaceRole,
   wsProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import {
-  DeviceModel,
-  ManagedDeviceRegistrationConflictError,
-  WorkspaceDevicePrivateConflictError,
-} from '@/database/models/device';
+import { DeviceModel, WorkspaceDevicePrivateConflictError } from '@/database/models/device';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
@@ -19,7 +15,12 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
 import { assertWorkspaceDeviceEditable, canEditWorkspaceDevice } from '../deviceWorkspaceGuard';
-import { clientIdentitySourceSchema, parseReportedIdentitySource } from './guards';
+import {
+  assertNotManagedDevice,
+  clientIdentitySourceSchema,
+  parseReportedIdentitySource,
+  toRegistrationError,
+} from './guards';
 import { reportManagedDevicesRemoved } from './managedDeviceRemoval';
 
 /**
@@ -99,13 +100,7 @@ export const workspaceRouter = router({
       try {
         return await model.registerWorkspaceDevice({ ...input, workspaceId: ctx.workspaceId });
       } catch (error) {
-        if (
-          error instanceof WorkspaceDevicePrivateConflictError ||
-          error instanceof ManagedDeviceRegistrationConflictError
-        ) {
-          throw new TRPCError({ code: 'CONFLICT', message: error.message });
-        }
-        throw error;
+        throw toRegistrationError(error);
       }
     }),
   /**
@@ -147,12 +142,7 @@ export const workspaceRouter = router({
       if (!personal || personal.workspaceId) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Personal device not found.' });
       }
-      if (isManagedCloudDevice(personal)) {
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message: 'A managed cloud device cannot be shared to a workspace.',
-        });
-      }
+      assertNotManagedDevice(personal, 'A managed cloud device cannot be shared to a workspace.');
 
       const token = await signWorkspaceDeviceToken(ctx.workspaceId);
       // Identity-only probe: learn the machine's workspace deviceId WITHOUT the
@@ -191,13 +181,11 @@ export const workspaceRouter = router({
       // Caller-invisible rows (another member's private enrollment) were
       // rejected above, so an undefined here really means "no row yet".
       const existing = await model.findWorkspaceDeviceById(probe.identity.deviceId);
-      if (existing && isManagedCloudDevice(existing)) {
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message: 'This workspace device is a managed cloud device and cannot be overwritten.',
-        });
-      }
       if (existing) {
+        assertNotManagedDevice(
+          existing,
+          'This workspace device is a managed cloud device and cannot be overwritten.',
+        );
         if (!input.confirmOverwrite) {
           return {
             alreadyEnrolled: true as const,
@@ -272,13 +260,7 @@ export const workspaceRouter = router({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         });
-        if (
-          error instanceof WorkspaceDevicePrivateConflictError ||
-          error instanceof ManagedDeviceRegistrationConflictError
-        ) {
-          throw new TRPCError({ code: 'CONFLICT', message: error.message });
-        }
-        throw error;
+        throw toRegistrationError(error);
       }
       // Carry the personal alias over on first share so the workspace list shows
       // the machine under the name its owner gave it; never clobber a name a

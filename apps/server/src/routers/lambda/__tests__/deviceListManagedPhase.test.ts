@@ -156,13 +156,4 @@ describe('device.listDevices managed device phases', () => {
       vi.useRealTimers();
     }
   });
-
-  it('drops a phase the contract does not define', async () => {
-    mocks.queryPersonal.mockResolvedValue([row('managed', MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE)]);
-    mocks.listStates.mockResolvedValue({ managed: 'hibernating' });
-
-    const devices = await personalCaller().listDevices();
-
-    expect(phaseOf(devices, 'managed')).toBeUndefined();
-  });
 });

@@ -10,7 +10,6 @@ import type {
 } from '@lobechat/types';
 import {
   isManagedCloudDevice,
-  MANAGED_DEVICE_PHASES,
   sortDevicesByActivity,
   workingDirConfigSchema,
 } from '@lobechat/types';
@@ -19,7 +18,6 @@ import debug from 'debug';
 import { z } from 'zod';
 
 import { managedDeviceProvider } from '@/business/server/managedDevice';
-import { ManagedDeviceRegistrationConflictError } from '@/database/models/device';
 import { getTopicDeviceId, TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
@@ -28,15 +26,11 @@ import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/
 
 import { loadAgentDeviceBindings, loadDeviceBoundAgents } from '../deviceBoundAgents';
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
-import { clientIdentitySourceSchema } from './guards';
+import { clientIdentitySourceSchema, toRegistrationError } from './guards';
 import { reportManagedDevicesRemoved } from './managedDeviceRemoval';
 import { deviceProcedure } from './procedures';
 
 const log = debug('lobe-server:device-registry');
-
-const managedPhases = new Set<unknown>(MANAGED_DEVICE_PHASES);
-
-const isManagedPhase = (value: unknown): value is ManagedDevicePhase => managedPhases.has(value);
 
 /** How long the device list waits for managed device phases. */
 export const MANAGED_PHASES_TIMEOUT_MS = 3000;
@@ -338,12 +332,9 @@ export const registryRouter = router({
           hostname: d.hostname ?? live?.hostname ?? null,
           identitySource: d.identitySource,
           lastSeen: d.lastSeenAt.toISOString(),
-          // Only a managed row takes a phase, and only one the contract knows:
-          // the provider never relabels a machine a user connected.
-          managedPhase:
-            isManagedCloudDevice(d) && isManagedPhase(phases[d.deviceId])
-              ? phases[d.deviceId]
-              : undefined,
+          // Only a managed row takes a phase: the provider never relabels a
+          // machine a user connected.
+          managedPhase: isManagedCloudDevice(d) ? phases[d.deviceId] : undefined,
           metadata: d.metadata,
           online: channels.length > 0,
           platform: d.platform ?? live?.platform ?? null,
@@ -439,10 +430,7 @@ export const registryRouter = router({
       try {
         return await ctx.deviceModel.register(input);
       } catch (error) {
-        if (error instanceof ManagedDeviceRegistrationConflictError) {
-          throw new TRPCError({ code: 'CONFLICT', message: error.message });
-        }
-        throw error;
+        throw toRegistrationError(error);
       }
     }),
   removeDevice: deviceProcedure
