@@ -88,6 +88,7 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
     const settle = vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
+    vi.spyOn(verifyServices, 'releaseUndeliveredRound').mockResolvedValue(false);
 
     await lifecycle.dispatchHooks(
       'repair-op',
@@ -96,5 +97,42 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     );
     await Promise.all(after.mock.calls.map(([callback]) => callback()));
     expect(settle).toHaveBeenCalledWith(expect.anything(), 'user-1', 'repair-op', undefined);
+  });
+
+  it('releases the round of a task run that failed before its plan landed', async () => {
+    // The device was offline: the run failed within a second, while the round
+    // its start opened was still being written.
+    let landPlan!: () => void;
+    const planLanded = new Promise<void>((resolve) => {
+      landPlan = resolve;
+    });
+    let planWritten = false;
+    vi.spyOn(verifyServices, 'instantiateVerifyPlanOnStart').mockImplementation(async () => {
+      await planLanded;
+      planWritten = true;
+    });
+    vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
+    const release = vi
+      .spyOn(verifyServices, 'releaseUndeliveredRound')
+      .mockImplementation(async () => planWritten);
+
+    const lifecycle = new CompletionLifecycle({} as any, 'user-1');
+    vi.spyOn(lifecycle['agentOperationModel'], 'recordStart').mockResolvedValue(undefined as any);
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+    await lifecycle.recordStart({ operationId: 'task-op', taskId: 'task-1' } as any);
+    await lifecycle.dispatchHooks(
+      'task-op',
+      { host: { hooks: [] }, origin: {}, status: 'error' },
+      'error',
+    );
+    const flushed = Promise.all(after.mock.calls.map(([callback]) => callback()));
+    landPlan();
+    await flushed;
+
+    expect(release).toHaveBeenCalledWith(expect.anything(), 'user-1', 'task-op', undefined);
+    expect(await release.mock.results[0].value).toBe(true);
   });
 });
