@@ -6,14 +6,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import McpAppView from './McpAppView';
 
-const { confirmAppMessage, confirmAppToolCall, invokeMcpToolCall, sendMessage } = vi.hoisted(
-  () => ({
-    confirmAppMessage: vi.fn(),
-    confirmAppToolCall: vi.fn(),
-    invokeMcpToolCall: vi.fn(),
-    sendMessage: vi.fn(),
-  }),
-);
+const {
+  confirmAppMessage,
+  confirmAppToolCall,
+  getAppToolCallPolicy,
+  invokeMcpToolCall,
+  sendMessage,
+} = vi.hoisted(() => ({
+  confirmAppMessage: vi.fn(),
+  confirmAppToolCall: vi.fn(),
+  getAppToolCallPolicy: vi.fn(),
+  invokeMcpToolCall: vi.fn(),
+  sendMessage: vi.fn(),
+}));
 
 vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -51,7 +56,7 @@ vi.mock('./appName', () => ({ mcpAppNameSelector: () => () => 'Weather Demo' }))
 
 vi.mock('./confirm', () => ({ confirmAppMessage, confirmAppToolCall }));
 
-vi.mock('./toolCallPolicy', () => ({ getAppToolCallPolicy: () => 'confirm' }));
+vi.mock('./toolCallPolicy', () => ({ getAppToolCallPolicy }));
 
 const originalUserActivation = Object.getOwnPropertyDescriptor(navigator, 'userActivation');
 
@@ -107,6 +112,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('McpAppView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getAppToolCallPolicy.mockResolvedValue('confirm');
     sendMessage.mockImplementation(async ({ onMessageAccepted }) => onMessageAccepted?.());
   });
 
@@ -387,7 +393,46 @@ describe('McpAppView', () => {
 
     expect(invokeMcpToolCall).toHaveBeenCalledWith(
       expect.objectContaining({ apiName: 'get_forecast', identifier: 'weather-demo' }),
-      { agentId: 'agt_1', localOverIpc: true },
+      { agentId: 'agt_1', localOverIpc: true, signal: expect.any(AbortSignal) },
     );
+  });
+
+  it('does not run an allowed call once the view went away while its policy loaded', async () => {
+    let decide!: (policy: string) => void;
+    getAppToolCallPolicy.mockReturnValue(new Promise((resolve) => (decide = resolve)));
+    const { call } = setupToolCalls();
+
+    await call(1, 'Rome');
+    cleanup();
+    decide('allow');
+    await flush();
+
+    expect(invokeMcpToolCall).not.toHaveBeenCalled();
+  });
+
+  it('does not run an allowed call the view cancelled while its policy loaded', async () => {
+    let decide!: (policy: string) => void;
+    getAppToolCallPolicy.mockReturnValue(new Promise((resolve) => (decide = resolve)));
+    const { call, fromView } = setupToolCalls();
+
+    await call(1, 'Rome');
+    await fromView({ method: 'notifications/cancelled', params: { requestId: 1 } });
+    decide('allow');
+    await flush();
+
+    expect(invokeMcpToolCall).not.toHaveBeenCalled();
+  });
+
+  it('cancels a running call once the view goes away', async () => {
+    getAppToolCallPolicy.mockResolvedValue('allow');
+    invokeMcpToolCall.mockReturnValue(new Promise(() => {}));
+    const { call } = setupToolCalls();
+
+    await call(1, 'Rome');
+    const { signal } = invokeMcpToolCall.mock.calls[0][1] as { signal: AbortSignal };
+    expect(signal.aborted).toBe(false);
+
+    cleanup();
+    expect(signal.aborted).toBe(true);
   });
 });

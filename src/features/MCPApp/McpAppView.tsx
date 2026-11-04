@@ -183,19 +183,28 @@ const McpAppView = memo<McpAppViewProps>(
             };
           }
 
-          return toCallToolResult(
-            await mcpService.invokeMcpToolCall(
-              {
-                apiName: name,
-                arguments: JSON.stringify(toolArgs),
-                id: `${toolCallId}:${name}`,
-                identifier: currentIdentifier,
-                type: 'mcp',
-              },
-              // The view's HTML came from this machine for a local server, so its calls do too
-              { agentId: currentAgentId, localOverIpc: true },
-            ),
-          );
+          // The view may have gone, or stopped waiting, while the policy loaded
+          // or an approval was open: nobody would read the result, so don't run it.
+          const { dispose: disposeCall, signal } = anySignal([approvals.signal, request]);
+          try {
+            if (signal.aborted) throw new DOMException('The view stopped waiting', 'AbortError');
+
+            return toCallToolResult(
+              await mcpService.invokeMcpToolCall(
+                {
+                  apiName: name,
+                  arguments: JSON.stringify(toolArgs),
+                  id: `${toolCallId}:${name}`,
+                  identifier: currentIdentifier,
+                  type: 'mcp',
+                },
+                // The view's HTML came from this machine for a local server, so its calls do too
+                { agentId: currentAgentId, localOverIpc: true, signal },
+              ),
+            );
+          } finally {
+            disposeCall();
+          }
         },
         hostContext: buildHostContext(latest.current.isDark),
         onSizeChange: (nextHeight) => setHeight(Math.min(nextHeight, MAX_HEIGHT)),
