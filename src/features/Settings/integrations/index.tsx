@@ -1,17 +1,13 @@
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import IntegrationsSettings from '@/features/Integrations';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 
-const styles = createStaticStyles(({ css }) => ({
-  header: css`
-    width: 100%;
-    max-width: 760px;
-    margin-inline: auto;
-  `,
-}));
+const styles = stylex.create({
+  header: { width: '100%', maxWidth: '760px', marginInline: 'auto' },
+});
 
 interface PageProps {
   showSettingHeader?: boolean;
@@ -26,7 +22,7 @@ const Page = ({ showSettingHeader = true }: PageProps) => {
   return (
     <>
       {showHeader && (
-        <div className={styles.header}>
+        <div {...stylex.props(styles.header)}>
           <SettingHeader description={t('overview.description')} title={t('overview.title')} />
         </div>
       )}
