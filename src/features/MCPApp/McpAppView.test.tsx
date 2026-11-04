@@ -12,12 +12,15 @@ const {
   getAppToolCallPolicy,
   invokeMcpToolCall,
   sendMessage,
+  swr,
 } = vi.hoisted(() => ({
   confirmAppMessage: vi.fn(),
   confirmAppToolCall: vi.fn(),
   getAppToolCallPolicy: vi.fn(),
   invokeMcpToolCall: vi.fn(),
   sendMessage: vi.fn(),
+  // A failed revalidation leaves the cached view in `data`
+  swr: { error: undefined as Error | undefined },
 }));
 
 vi.mock('react-i18next', async (importOriginal) => ({
@@ -37,6 +40,7 @@ vi.mock('@/libs/swr', () => ({
         },
       ],
     },
+    error: swr.error,
     isLoading: false,
   }),
 }));
@@ -61,7 +65,8 @@ vi.mock('./toolCallPolicy', () => ({ getAppToolCallPolicy }));
 const originalUserActivation = Object.getOwnPropertyDescriptor(navigator, 'userActivation');
 
 const setup = () => {
-  const { container } = render(
+  // Fresh props each time, so the memoized view renders again and reads the SWR state
+  const element = () => (
     <McpAppView
       apiName={'get_weather'}
       arguments={'{"city":"Paris"}'}
@@ -70,8 +75,10 @@ const setup = () => {
       resourceUri={'ui://weather/view'}
       result={{ content: 'sunny' }}
       toolCallId={'call_1'}
-    />,
+    />
   );
+  const { container, rerender: rerenderElement } = render(element());
+  const rerender = () => rerenderElement(element());
   const iframe = container.querySelector('iframe')!;
   const target = iframe.contentWindow!;
   const posted = vi.spyOn(target, 'postMessage');
@@ -92,7 +99,7 @@ const setup = () => {
       params: { content: [{ text, type: 'text' }], role: 'user' },
     });
 
-  return { fromView, iframe, message, response };
+  return { fromView, iframe, message, rerender, response };
 };
 
 const setupToolCalls = () => {
@@ -113,6 +120,7 @@ describe('McpAppView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getAppToolCallPolicy.mockResolvedValue('confirm');
+    swr.error = undefined;
     sendMessage.mockImplementation(async ({ onMessageAccepted }) => onMessageAccepted?.());
   });
 
@@ -395,6 +403,22 @@ describe('McpAppView', () => {
       expect.objectContaining({ apiName: 'get_forecast', identifier: 'weather-demo' }),
       { agentId: 'agt_1', fromMcpApp: true, signal: expect.any(AbortSignal) },
     );
+  });
+
+  it('keeps a loaded view connected when a revalidation of its HTML fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    getAppToolCallPolicy.mockResolvedValue('allow');
+    invokeMcpToolCall.mockResolvedValue({ content: 'rainy', success: true });
+    const view = setupToolCalls();
+
+    swr.error = new Error('revalidation failed');
+    view.rerender();
+    expect(screen.queryByText('fallback')).toBeNull();
+    expect(document.querySelector('iframe')).toBe(view.iframe);
+
+    // The bridge is still bound to the frame on screen
+    await view.call(1, 'Rome');
+    expect(invokeMcpToolCall).toHaveBeenCalledTimes(1);
   });
 
   it('does not run an allowed call once the view went away while its policy loaded', async () => {

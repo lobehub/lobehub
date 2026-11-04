@@ -113,6 +113,7 @@ const McpAppView = memo<McpAppViewProps>(
 
       const handleFrameNotice = (event: MessageEvent) => {
         if (event.source === target && isAppFrameNavigatedNotice(event.data)) {
+          console.warn(`[MCPApp] ${resourceUri} left its document and was removed`);
           setDroppedDoc(srcDoc);
         }
       };
@@ -247,19 +248,21 @@ const McpAppView = memo<McpAppViewProps>(
         approvals.abort();
         dispose();
       };
-    }, [latest, navigated, srcDoc, toolCallId]);
+    }, [latest, navigated, resourceUri, srcDoc, toolCallId]);
 
     useEffect(() => {
       bridgeRef.current?.setHostContext(buildHostContext(isDark));
     }, [isDark]);
 
+    useEffect(() => {
+      if (error) console.warn(`[MCPApp] failed to load ${resourceUri}:`, error);
+    }, [error, resourceUri]);
+
     if (isLoading) return <Skeleton height={DEFAULT_HEIGHT} width={'100%'} />;
 
-    if (error || !srcDoc || navigated) {
-      if (error) console.warn(`[MCPApp] failed to load ${resourceUri}:`, error);
-      if (navigated) console.warn(`[MCPApp] ${resourceUri} left its document and was removed`);
-      return fallback;
-    }
+    // A failed revalidation keeps a view that already loaded: whether the
+    // iframe (and the bridge bound to it) exists depends on the document alone.
+    if (!srcDoc || navigated) return fallback;
 
     return (
       <Flexbox gap={8}>
