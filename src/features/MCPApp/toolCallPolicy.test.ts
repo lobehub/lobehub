@@ -19,6 +19,7 @@ const { agentTools, connectors, plugins, toolStore, userIntervention } = vi.hois
       isConnectorListConfirmed: (agentId?: string) =>
         loaded.has('#base') && (!agentId || loaded.has(agentId)),
       loaded,
+      syncConnectorTools: vi.fn(async (_id: string) => {}),
     },
     userIntervention: { allowList: [] as string[], approvalMode: 'manual' },
   };
@@ -67,6 +68,7 @@ describe('getAppToolCallPolicy', () => {
     plugins.clear();
     toolStore.loaded.clear();
     toolStore.ensureConfirmedConnectors.mockClear();
+    toolStore.syncConnectorTools.mockClear();
     userIntervention.allowList = [];
     userIntervention.approvalMode = 'manual';
   });
@@ -78,7 +80,7 @@ describe('getAppToolCallPolicy', () => {
     });
 
     it('runs auto connector tools and refuses disabled or unknown ones', async () => {
-      connectors.set('mail', connector('auto'));
+      connectors.set('mail', { ...connector('auto'), id: 'conn_mail_unknown' });
       expect(await getAppToolCallPolicy('mail', 'send')).toBe('allow');
       expect(await getAppToolCallPolicy('mail', 'delete')).toBe('deny');
 
@@ -141,6 +143,27 @@ describe('getAppToolCallPolicy', () => {
       });
 
       expect(await getAppToolCallPolicy('weather', 'delete_all')).toBe('deny');
+    });
+
+    it("syncs a connector's tools again, once, for a tool its list synced before MCP Apps lacks", async () => {
+      connectors.set('stdio-app', { ...connector('auto'), id: 'conn_stdio' });
+      toolStore.syncConnectorTools.mockImplementationOnce(async () => {
+        connectors.set('stdio-app', {
+          ...connector('auto'),
+          id: 'conn_stdio',
+          tools: [
+            { permission: 'auto', toolName: 'send' },
+            { metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'load_page' },
+          ],
+        });
+      });
+
+      expect(await getAppToolCallPolicy('stdio-app', 'load_page')).toBe('allow');
+      expect(toolStore.syncConnectorTools).toHaveBeenCalledWith('conn_stdio');
+
+      // A tool the server doesn't offer at all is refused, without syncing again
+      expect(await getAppToolCallPolicy('stdio-app', 'missing')).toBe('deny');
+      expect(toolStore.syncConnectorTools).toHaveBeenCalledTimes(1);
     });
 
     it('refuses a view a connector tool only the model may call', async () => {

@@ -73,6 +73,13 @@ export const resolveAppToolCallPolicy = ({
 };
 
 /**
+ * What the conversation's lists say about a tool: its own approval setting,
+ * null when the server doesn't offer it to views, or `missingFrom` when its
+ * connector's synced tools lack it.
+ */
+type ToolLookup = { intervention?: unknown } | { missingFrom: string } | null;
+
+/**
  * The tool's own approval setting as the conversation's manifest carries it,
  * or null when the server doesn't offer the tool.
  */
@@ -82,7 +89,7 @@ const findToolIntervention = (
   agentId: string | undefined,
   /** The lists were just loaded from the server; if not, nothing here can waive approval. */
   revalidated: boolean,
-): { intervention?: unknown } | null => {
+): ToolLookup => {
   const s = getToolStoreState();
   const confirmed = revalidated && s.isConnectorListConfirmed(agentId);
 
@@ -97,10 +104,11 @@ const findToolIntervention = (
     // storage: neither can waive approval, so ask.
     if (!confirmed) return { intervention: 'required' };
     const tool = connector.tools.find((t) => t.toolName === toolName);
+    // Synced before MCP Apps was on, the list may lack the tools the server
+    // offers only to views
+    if (!tool) return { missingFrom: connector.id };
     // A tool only the model may call is refused before anyone is asked about it
-    if (!tool || tool.permission === 'disabled' || !isSyncedMcpToolVisibleTo(tool, 'app')) {
-      return null;
-    }
+    if (tool.permission === 'disabled' || !isSyncedMcpToolVisibleTo(tool, 'app')) return null;
     // Same mapping as the connector manifest (`patchManifestWithPermissions`)
     return { intervention: tool.permission === 'needs_approval' ? 'required' : undefined };
   }
@@ -158,14 +166,39 @@ const revalidateConnectors = async (agentId: string | undefined): Promise<boolea
   }
 };
 
+// Connectors whose tools a view's call already synced again on this page
+const resyncedConnectors = new Set<string>();
+
+/**
+ * Sync a connector's tools again, once per page, so a list synced before MCP
+ * Apps was on picks up the tools its server offers only to views (stdio ones
+ * too, which only this desktop can list). Whether it ran.
+ */
+const resyncConnectorTools = async (connectorId: string): Promise<boolean> => {
+  if (resyncedConnectors.has(connectorId)) return false;
+  resyncedConnectors.add(connectorId);
+  try {
+    await getToolStoreState().syncConnectorTools(connectorId);
+    return true;
+  } catch (error) {
+    console.warn('[MCPApp] failed to sync the tools of a connector for a view tool call:', error);
+    return false;
+  }
+};
+
 export const getAppToolCallPolicy = async (
   identifier: string,
   toolName: string,
   { agentId, toolArgs = {} }: { agentId?: string; toolArgs?: Record<string, unknown> } = {},
 ): Promise<AppToolCallPolicy> => {
   const revalidated = await revalidateConnectors(agentId);
-  const tool = findToolIntervention(identifier, toolName, agentId, revalidated);
-  if (!tool) return 'deny';
+  let tool = findToolIntervention(identifier, toolName, agentId, revalidated);
+  if (tool && 'missingFrom' in tool) {
+    tool = (await resyncConnectorTools(tool.missingFrom))
+      ? findToolIntervention(identifier, toolName, agentId, revalidated)
+      : null;
+  }
+  if (!tool || 'missingFrom' in tool) return 'deny';
 
   const userState = getUserStoreState();
 
