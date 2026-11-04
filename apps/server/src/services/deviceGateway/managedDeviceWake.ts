@@ -1,6 +1,7 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { isManagedCloudDevice } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { managedDeviceProvider } from '@/business/server/managedDevice';
 import { DeviceModel } from '@/database/models/device';
@@ -104,13 +105,15 @@ export const findWakeableManagedDevices = async (
   const ids = [...new Set(candidateIds.filter((id): id is string => !!id))].filter(
     (id) => !onlineDeviceIds?.includes(id),
   );
-  const targets = await Promise.all(
-    ids.map(async (deviceId) => {
+  const targets = await pMap(
+    ids,
+    async (deviceId) => {
       const target = await findManagedDevice(caller, deviceId);
       if (!target) return;
       if (!onlineDeviceIds && (await isManagedDeviceOnline(caller.userId, target))) return;
       return target;
-    }),
+    },
+    { concurrency: 3 },
   );
 
   return targets.filter((target): target is ManagedDeviceTarget => !!target);
