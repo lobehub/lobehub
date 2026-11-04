@@ -276,19 +276,19 @@ E2E tests live in the `e2e/` directory:
 
 ```
 e2e/
-├── features/             # Cucumber feature files (.feature)
+├── src/features/         # Cucumber feature files (.feature)
 │   ├── auth.feature
 │   └── chat.feature
-├── step-definitions/     # Step implementations
+├── src/steps/            # Step implementations
 │   ├── auth.steps.ts
 │   └── chat.steps.ts
-├── support/              # Shared helpers and hooks
-└── playwright.config.ts
+├── src/support/          # Shared helpers and hooks
+└── cucumber.config.js
 ```
 
 ### Writing E2E Tests
 
-**Feature file** (`e2e/features/chat.feature`):
+**Feature file** (`e2e/src/features/chat.feature`):
 
 ```gherkin
 Feature: Chat Functionality
@@ -302,7 +302,7 @@ Feature: Chat Functionality
     And I should see a response from the AI
 ```
 
-**Step definitions** (`e2e/step-definitions/chat.steps.ts`):
+**Step definitions** (`e2e/src/steps/chat.steps.ts`):
 
 ```typescript
 import { Given, When, Then } from '@cucumber/cucumber';
