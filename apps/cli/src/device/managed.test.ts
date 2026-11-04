@@ -4,7 +4,6 @@ import {
   exchangeManagedDeviceToken,
   getManagedTokenRefreshDelay,
   getManagedTokenRetryDelay,
-  type ManagedTokenExchangeResult,
   ManagedTokenFatalError,
   ManagedTokenSession,
   readManagedDeviceConfig,
@@ -13,6 +12,18 @@ import {
 
 const jwt = (payload: Record<string, unknown>) =>
   `h.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.s`;
+
+const fetchMock = vi.fn<typeof fetch>();
+
+beforeEach(() => {
+  fetchMock.mockReset();
+  vi.stubGlobal('fetch', fetchMock);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 const FULL_ENV = {
   LOBEHUB_DEVICE_GATEWAY_URL: 'https://gateway.example.com/',
@@ -98,32 +109,26 @@ describe('readManagedDeviceConfig', () => {
   });
 });
 
+const CONFIG = {
+  deviceId: 'device-1',
+  secret: 'top-secret',
+  serverUrl: 'https://app.example.com',
+};
+
 describe('exchangeManagedDeviceToken', () => {
-  const call = (response: Response | Error) =>
-    exchangeManagedDeviceToken({
-      deviceId: 'device-1',
-      fetchImpl: vi.fn(async () => {
-        if (response instanceof Error) throw response;
-        return response;
-      }) as unknown as typeof fetch,
-      now: () => 1000,
-      secret: 'top-secret',
-      serverUrl: 'https://app.example.com',
-    });
+  const call = (response: Response | Error) => {
+    if (response instanceof Error) fetchMock.mockRejectedValueOnce(response);
+    else fetchMock.mockResolvedValueOnce(response);
+    return exchangeManagedDeviceToken(CONFIG);
+  };
 
   it('posts the device id and secret to the token route', async () => {
-    const fetchImpl = vi.fn(async () =>
+    vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const result = await call(
       Response.json({ expiresAt: '2030-01-01T00:00:00.000Z', token: 'tok' }),
     );
-    const result = await exchangeManagedDeviceToken({
-      deviceId: 'device-1',
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      now: () => 1000,
-      secret: 'top-secret',
-      serverUrl: 'https://app.example.com',
-    });
 
-    expect(fetchImpl).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       'https://app.example.com/api/device/managed/token',
       expect.objectContaining({
         body: JSON.stringify({ deviceId: 'device-1', secret: 'top-secret' }),
@@ -216,41 +221,42 @@ describe('refresh and retry delays', () => {
   });
 
   it('doubles from 1 s to a 60 s cap with ±20% jitter', () => {
-    const mid = () => 0.5;
-    expect([1, 2, 3, 6, 7, 20].map((n) => getManagedTokenRetryDelay(n, mid))).toEqual([
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    expect([1, 2, 3, 6, 7, 20].map((n) => getManagedTokenRetryDelay(n))).toEqual([
       1000, 2000, 4000, 32_000, 60_000, 60_000,
     ]);
-    expect(getManagedTokenRetryDelay(1, () => 0)).toBe(800);
-    expect(getManagedTokenRetryDelay(1, () => 1)).toBe(1200);
+    random.mockReturnValue(0);
+    expect(getManagedTokenRetryDelay(1)).toBe(800);
+    random.mockReturnValue(1);
+    expect(getManagedTokenRetryDelay(1)).toBe(1200);
   });
 });
 
 describe('ManagedTokenSession', () => {
   const HOUR = 3_600_000;
-  let exchange: ReturnType<typeof vi.fn<() => Promise<ManagedTokenExchangeResult>>>;
   let onToken: ReturnType<typeof vi.fn>;
   let onFatal: ReturnType<typeof vi.fn>;
 
-  const issued = (token: string): ManagedTokenExchangeResult => ({
-    expiresAt: Date.now() + HOUR,
-    issuedAt: Date.now(),
-    status: 'issued',
-    token,
-  });
+  // The token route's answers, one per call. The token lives one hour from
+  // the moment it is fetched.
+  const issued = (token: string) => async () =>
+    Response.json({ expiresAt: new Date(Date.now() + HOUR).toISOString(), token });
+  const httpStatus = (status: number) => async () => new Response('{}', { status });
+  const networkError = async () => {
+    throw new TypeError('fetch failed');
+  };
 
   const createSession = () =>
     new ManagedTokenSession({
-      config: { deviceId: 'device-1', secret: 'top-secret', serverUrl: 'https://app.example.com' },
-      exchange,
+      config: CONFIG,
       logger: { debug: vi.fn(), warn: vi.fn() },
       onFatal,
       onToken,
-      random: () => 0.5,
     });
 
   beforeEach(() => {
     vi.useFakeTimers();
-    exchange = vi.fn<() => Promise<ManagedTokenExchangeResult>>();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
     onToken = vi.fn();
     onFatal = vi.fn();
   });
@@ -260,17 +266,17 @@ describe('ManagedTokenSession', () => {
   });
 
   it('refreshes at 80% of the lifetime and keeps doing so', async () => {
-    exchange
-      .mockResolvedValueOnce(issued('t1'))
-      .mockResolvedValueOnce(issued('t2'))
-      .mockResolvedValueOnce(issued('t3'));
+    fetchMock
+      .mockImplementationOnce(issued('t1'))
+      .mockImplementationOnce(issued('t2'))
+      .mockImplementationOnce(issued('t3'));
     const session = createSession();
 
     expect((await session.start()).token).toBe('t1');
     expect(onToken).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(0.8 * HOUR - 1);
-    expect(exchange).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(onToken).toHaveBeenLastCalledWith(expect.objectContaining({ token: 't2' }));
 
@@ -280,36 +286,34 @@ describe('ManagedTokenSession', () => {
   });
 
   it('retries 5xx and network failures with backoff', async () => {
-    exchange
-      .mockResolvedValueOnce({ reason: 'HTTP 503', status: 'retryable' })
-      .mockResolvedValueOnce({ reason: 'fetch failed', status: 'retryable' })
-      .mockResolvedValueOnce(issued('t1'));
+    fetchMock
+      .mockImplementationOnce(httpStatus(503))
+      .mockImplementationOnce(networkError)
+      .mockImplementationOnce(issued('t1'));
     const session = createSession();
     const started = session.start();
 
     await vi.advanceTimersByTimeAsync(999);
-    expect(exchange).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
-    expect(exchange).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(2000);
-    expect(exchange).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect((await started).token).toBe('t1');
     session.stop();
   });
 
   it('rejects start on a 401 without retrying', async () => {
-    exchange.mockResolvedValue({ status: 'invalid-credentials' });
+    fetchMock.mockImplementation(httpStatus(401));
     const session = createSession();
 
     await expect(session.start()).rejects.toBeInstanceOf(ManagedTokenFatalError);
     await vi.advanceTimersByTimeAsync(HOUR);
-    expect(exchange).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('reports a 401 during a scheduled refresh through onFatal', async () => {
-    exchange.mockResolvedValueOnce(issued('t1')).mockResolvedValue({
-      status: 'invalid-credentials',
-    });
+    fetchMock.mockImplementationOnce(issued('t1')).mockImplementation(httpStatus(401));
     const session = createSession();
     await session.start();
 
@@ -320,40 +324,40 @@ describe('ManagedTokenSession', () => {
   });
 
   it('keeps retrying a failing scheduled refresh until the server answers', async () => {
-    exchange
-      .mockResolvedValueOnce(issued('t1'))
-      .mockResolvedValueOnce({ reason: 'HTTP 500', status: 'retryable' })
-      .mockResolvedValueOnce({ reason: 'HTTP 500', status: 'retryable' })
-      .mockResolvedValueOnce(issued('t2'));
+    fetchMock
+      .mockImplementationOnce(issued('t1'))
+      .mockImplementationOnce(httpStatus(500))
+      .mockImplementationOnce(httpStatus(500))
+      .mockImplementationOnce(issued('t2'));
     const session = createSession();
     await session.start();
 
     await vi.advanceTimersByTimeAsync(0.8 * HOUR + 1000 + 2000);
-    expect(exchange).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(onToken).toHaveBeenCalledWith(expect.objectContaining({ token: 't2' }));
     expect(onFatal).not.toHaveBeenCalled();
     session.stop();
   });
 
   it('refreshNow replaces the scheduled refresh and shares one exchange', async () => {
-    exchange.mockResolvedValueOnce(issued('t1')).mockResolvedValueOnce(issued('t2'));
+    fetchMock.mockImplementationOnce(issued('t1')).mockImplementationOnce(issued('t2'));
     const session = createSession();
     await session.start();
 
     const [a, b] = await Promise.all([session.refreshNow(), session.refreshNow()]);
     expect(a.token).toBe('t2');
     expect(b.token).toBe('t2');
-    expect(exchange).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
     // The old schedule is gone; the next refresh is 80% after t2.
-    exchange.mockResolvedValueOnce(issued('t3'));
+    fetchMock.mockImplementationOnce(issued('t3'));
     await vi.advanceTimersByTimeAsync(0.8 * HOUR);
-    expect(exchange).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     session.stop();
   });
 
   it('stops retrying once stopped', async () => {
-    exchange.mockResolvedValue({ reason: 'HTTP 500', status: 'retryable' });
+    fetchMock.mockImplementation(httpStatus(500));
     const session = createSession();
     const started = session.start();
     await vi.advanceTimersByTimeAsync(0);
@@ -361,6 +365,6 @@ describe('ManagedTokenSession', () => {
     session.stop();
     await expect(started).rejects.toThrow(/stopped/);
     await vi.advanceTimersByTimeAsync(HOUR);
-    expect(exchange).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

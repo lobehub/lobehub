@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityReporter, splitCommandLine } from './activityHook';
 
+const spawn = vi.hoisted(() => vi.fn());
+vi.mock('node:child_process', () => ({ spawn }));
+
 describe('splitCommandLine', () => {
   it.each([
     ['report', ['report']],
@@ -34,7 +37,6 @@ class FakeChild extends EventEmitter {
 
 describe('ActivityReporter', () => {
   let children: FakeChild[];
-  let spawn: ReturnType<typeof vi.fn>;
   let debug: ReturnType<typeof vi.fn>;
   let busy: boolean;
 
@@ -43,7 +45,6 @@ describe('ActivityReporter', () => {
       command: 'report --device "dev 1"',
       isBusy: () => busy,
       logger: { debug },
-      spawn,
     });
 
   beforeEach(() => {
@@ -51,7 +52,7 @@ describe('ActivityReporter', () => {
     children = [];
     busy = false;
     debug = vi.fn();
-    spawn = vi.fn(() => {
+    spawn.mockReset().mockImplementation(() => {
       const child = new FakeChild();
       children.push(child);
       return child;
@@ -69,7 +70,11 @@ describe('ActivityReporter', () => {
   it('runs the split command without a shell when work starts', () => {
     const reporter = createReporter();
     reporter.begin();
-    expect(spawn).toHaveBeenCalledWith('report', ['--device', 'dev 1']);
+    expect(spawn).toHaveBeenCalledWith(
+      'report',
+      ['--device', 'dev 1'],
+      expect.objectContaining({ shell: false }),
+    );
   });
 
   it('runs at most once per 30 s however much work arrives', () => {

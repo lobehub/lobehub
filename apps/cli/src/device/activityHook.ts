@@ -1,7 +1,7 @@
-import { spawn as nodeSpawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 /** The hook runs at most once per this interval, however much work arrives. */
-export const ACTIVITY_REPORT_INTERVAL_MS = 30_000;
+const ACTIVITY_REPORT_INTERVAL_MS = 30_000;
 
 /**
  * How often ongoing work is checked, as a share of the interval. Checking more
@@ -11,7 +11,7 @@ export const ACTIVITY_REPORT_INTERVAL_MS = 30_000;
 const ACTIVITY_CHECKS_PER_INTERVAL = 6;
 
 /** A hook still running after this long is killed so it cannot pile up. */
-export const ACTIVITY_COMMAND_TIMEOUT_MS = 10_000;
+const ACTIVITY_COMMAND_TIMEOUT_MS = 10_000;
 
 /**
  * Split a command line into a program and its arguments, without a shell.
@@ -73,28 +73,13 @@ export function splitCommandLine(line: string): string[] {
   return words;
 }
 
-interface ActivityChild {
-  kill: (signal?: NodeJS.Signals) => boolean;
-  on: (event: 'error' | 'exit', listener: (...args: any[]) => void) => unknown;
-  unref?: () => void;
-}
-
 export interface ActivityReporterOptions {
-  /** The command line from the environment; see `splitCommandLine`. */
+  /** The command line from the environment. See `splitCommandLine`. */
   command: string;
-  /** Default {@link ACTIVITY_REPORT_INTERVAL_MS}. */
-  intervalMs?: number;
   /** Work the reporter cannot see through `begin()`: agent runs, tunnels, shells. */
   isBusy?: () => boolean;
   logger: { debug: (msg: string) => void };
-  now?: () => number;
-  spawn?: (file: string, args: string[]) => ActivityChild;
-  /** Default {@link ACTIVITY_COMMAND_TIMEOUT_MS}. */
-  timeoutMs?: number;
 }
-
-const defaultSpawn = (file: string, args: string[]): ActivityChild =>
-  nodeSpawn(file, args, { shell: false, stdio: 'ignore', windowsHide: true });
 
 /**
  * Report "this device is doing work" to the platform by running a configured
@@ -105,24 +90,19 @@ const defaultSpawn = (file: string, args: string[]): ActivityChild =>
 export class ActivityReporter {
   private active = 0;
   private readonly argv: string[];
-  private readonly intervalMs: number;
   private lastRunAt: number | undefined;
   private running = false;
   private ticker: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly options: ActivityReporterOptions) {
     this.argv = splitCommandLine(options.command);
-    this.intervalMs = options.intervalMs ?? ACTIVITY_REPORT_INTERVAL_MS;
   }
 
   /** Mark one unit of work as started; call the returned function when it ends. */
   begin(): () => void {
     this.active++;
     this.report();
-    let ended = false;
     return () => {
-      if (ended) return;
-      ended = true;
       this.active--;
     };
   }
@@ -141,7 +121,7 @@ export class ActivityReporter {
     if (this.ticker) return;
     this.ticker = setInterval(() => {
       if (this.isBusy()) this.report();
-    }, this.intervalMs / ACTIVITY_CHECKS_PER_INTERVAL);
+    }, ACTIVITY_REPORT_INTERVAL_MS / ACTIVITY_CHECKS_PER_INTERVAL);
     this.ticker.unref?.();
   }
 
@@ -151,27 +131,26 @@ export class ActivityReporter {
   }
 
   private report(): void {
-    const now = (this.options.now ?? Date.now)();
+    const now = Date.now();
     if (this.running) return;
-    if (this.lastRunAt !== undefined && now - this.lastRunAt < this.intervalMs) return;
+    if (this.lastRunAt !== undefined && now - this.lastRunAt < ACTIVITY_REPORT_INTERVAL_MS) return;
     this.lastRunAt = now;
 
     const { debug } = this.options.logger;
     const [file, ...args] = this.argv;
-    let child: ActivityChild;
+    let child: ReturnType<typeof spawn>;
     try {
-      child = (this.options.spawn ?? defaultSpawn)(file, args);
+      child = spawn(file, args, { shell: false, stdio: 'ignore', windowsHide: true });
     } catch (err) {
       debug(`Activity command could not start: ${(err as Error).message}`);
       return;
     }
 
     this.running = true;
-    const timeoutMs = this.options.timeoutMs ?? ACTIVITY_COMMAND_TIMEOUT_MS;
     const timer = setTimeout(() => {
-      debug(`Activity command ran longer than ${timeoutMs}ms; killed it`);
+      debug(`Activity command ran longer than ${ACTIVITY_COMMAND_TIMEOUT_MS}ms, killed it`);
       child.kill('SIGKILL');
-    }, timeoutMs);
+    }, ACTIVITY_COMMAND_TIMEOUT_MS);
     timer.unref?.();
 
     let settled = false;
@@ -189,6 +168,6 @@ export class ActivityReporter {
       if (!settle()) return;
       if (code !== 0) debug(`Activity command exited with ${code ?? signal ?? 'unknown status'}`);
     });
-    child.unref?.();
+    child.unref();
   }
 }

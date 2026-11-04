@@ -8,25 +8,25 @@
 
 import { splitCommandLine } from './activityHook';
 
-export const MANAGED_DEVICE_ID_ENV = 'LOBEHUB_MANAGED_DEVICE_ID';
+const MANAGED_DEVICE_ID_ENV = 'LOBEHUB_MANAGED_DEVICE_ID';
 export const MANAGED_DEVICE_SECRET_ENV = 'LOBEHUB_MANAGED_DEVICE_SECRET';
-export const MANAGED_SERVER_ENV = 'LOBEHUB_SERVER';
+const MANAGED_SERVER_ENV = 'LOBEHUB_SERVER';
 export const MANAGED_GATEWAY_ENV = 'LOBEHUB_DEVICE_GATEWAY_URL';
-export const DEVICE_ACTIVITY_COMMAND_ENV = 'LOBEHUB_DEVICE_ACTIVITY_COMMAND';
+const DEVICE_ACTIVITY_COMMAND_ENV = 'LOBEHUB_DEVICE_ACTIVITY_COMMAND';
 
-export const MANAGED_TOKEN_PATH = '/api/device/managed/token';
+const MANAGED_TOKEN_PATH = '/api/device/managed/token';
 
 /** Refresh when this share of the token's lifetime has passed. */
-export const MANAGED_TOKEN_REFRESH_RATIO = 0.8;
+const MANAGED_TOKEN_REFRESH_RATIO = 0.8;
 /** Never schedule a refresh sooner than this, even for a nearly expired token. */
-export const MANAGED_TOKEN_MIN_REFRESH_DELAY_MS = 5000;
+const MANAGED_TOKEN_MIN_REFRESH_DELAY_MS = 5000;
 /** A longer lifetime is malformed; the server issues 1 h tokens. */
-export const MANAGED_TOKEN_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const MANAGED_TOKEN_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
 /** Refresh delay used for a token whose lifetime is malformed. */
-export const MANAGED_TOKEN_FALLBACK_REFRESH_DELAY_MS = 5 * 60 * 1000;
-export const MANAGED_TOKEN_RETRY_INITIAL_DELAY_MS = 1000;
-export const MANAGED_TOKEN_RETRY_MAX_DELAY_MS = 60_000;
-export const MANAGED_TOKEN_REQUEST_TIMEOUT_MS = 15_000;
+const MANAGED_TOKEN_FALLBACK_REFRESH_DELAY_MS = 5 * 60 * 1000;
+const MANAGED_TOKEN_RETRY_INITIAL_DELAY_MS = 1000;
+const MANAGED_TOKEN_RETRY_MAX_DELAY_MS = 60_000;
+const MANAGED_TOKEN_REQUEST_TIMEOUT_MS = 15_000;
 
 export interface ManagedDeviceConfig {
   activityCommand?: string;
@@ -138,30 +138,21 @@ export type ManagedTokenExchangeResult =
   /** 408, 429, 5xx, a network error or an unreadable body. */
   | { reason: string; status: 'retryable' };
 
-export interface ExchangeManagedDeviceTokenParams {
-  deviceId: string;
-  fetchImpl?: typeof fetch;
-  now?: () => number;
-  secret: string;
-  serverUrl: string;
-  timeoutMs?: number;
-}
-
 export async function exchangeManagedDeviceToken({
   deviceId,
-  fetchImpl = fetch,
-  now = Date.now,
   secret,
   serverUrl,
-  timeoutMs = MANAGED_TOKEN_REQUEST_TIMEOUT_MS,
-}: ExchangeManagedDeviceTokenParams): Promise<ManagedTokenExchangeResult> {
+}: Pick<
+  ManagedDeviceConfig,
+  'deviceId' | 'secret' | 'serverUrl'
+>): Promise<ManagedTokenExchangeResult> {
   let response: Response;
   try {
-    response = await fetchImpl(`${serverUrl}${MANAGED_TOKEN_PATH}`, {
+    response = await fetch(`${serverUrl}${MANAGED_TOKEN_PATH}`, {
       body: JSON.stringify({ deviceId, secret }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(MANAGED_TOKEN_REQUEST_TIMEOUT_MS),
     });
   } catch (err) {
     return { reason: (err as Error).message || 'network error', status: 'retryable' };
@@ -181,7 +172,7 @@ export async function exchangeManagedDeviceToken({
       return { reason: 'the response has no token or expiresAt', status: 'retryable' };
     }
     const serverNow = Date.parse(response.headers.get('date') ?? '');
-    const issuedAt = Number.isNaN(serverNow) ? now() : serverNow;
+    const issuedAt = Number.isNaN(serverNow) ? Date.now() : serverNow;
     return { expiresAt, issuedAt, status: 'issued', token: body.token };
   } catch {
     return { reason: 'the response is not JSON', status: 'retryable' };
@@ -220,27 +211,25 @@ export function getManagedTokenRefreshDelay(token: ManagedDeviceToken): number {
 }
 
 /** Retry delay after `attempt` failures (1-based): 1 s doubling to 60 s, ±20% jitter. */
-export function getManagedTokenRetryDelay(attempt: number, random: () => number = Math.random) {
+export function getManagedTokenRetryDelay(attempt: number) {
   const base = Math.min(
     MANAGED_TOKEN_RETRY_MAX_DELAY_MS,
     MANAGED_TOKEN_RETRY_INITIAL_DELAY_MS * 2 ** (attempt - 1),
   );
-  return Math.round(base * (0.8 + 0.4 * random()));
+  return Math.round(base * (0.8 + 0.4 * Math.random()));
 }
+
+type FatalExchangeResult = Exclude<ManagedTokenExchangeResult, { status: 'issued' | 'retryable' }>;
 
 /** A token exchange answer that retrying cannot change. */
 export class ManagedTokenFatalError extends Error {
-  constructor(
-    readonly result: Exclude<ManagedTokenExchangeResult, { status: 'issued' | 'retryable' }>,
-  ) {
+  constructor(result: FatalExchangeResult) {
     super(describeFatalResult(result));
     this.name = 'ManagedTokenFatalError';
   }
 }
 
-function describeFatalResult(
-  result: Exclude<ManagedTokenExchangeResult, { status: 'issued' | 'retryable' }>,
-): string {
+function describeFatalResult(result: FatalExchangeResult): string {
   switch (result.status) {
     case 'invalid-credentials': {
       return `The server rejected ${MANAGED_DEVICE_ID_ENV} / ${MANAGED_DEVICE_SECRET_ENV} (HTTP 401).`;
@@ -256,13 +245,11 @@ function describeFatalResult(
 
 export interface ManagedTokenSessionOptions {
   config: Pick<ManagedDeviceConfig, 'deviceId' | 'secret' | 'serverUrl'>;
-  exchange?: (params: ExchangeManagedDeviceTokenParams) => Promise<ManagedTokenExchangeResult>;
   logger: { debug: (msg: string) => void; warn: (msg: string) => void };
   /** A background refresh got an answer that retrying cannot change. */
   onFatal: (error: ManagedTokenFatalError) => void;
   /** A new token arrived, from a scheduled refresh or `refreshNow()`. */
   onToken: (token: ManagedDeviceToken) => void;
-  random?: () => number;
 }
 
 /**
@@ -271,7 +258,6 @@ export interface ManagedTokenSessionOptions {
  * until the server answers. A 401, 404 or other 4xx is final.
  */
 export class ManagedTokenSession {
-  private current: ManagedDeviceToken | undefined;
   private inFlight: Promise<ManagedDeviceToken> | undefined;
   /** Ends the current retry wait early; set while one is pending. */
   private retryWait: { timer: ReturnType<typeof setTimeout>; wake: () => void } | undefined;
@@ -279,10 +265,6 @@ export class ManagedTokenSession {
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly options: ManagedTokenSessionOptions) {}
-
-  get token(): ManagedDeviceToken | undefined {
-    return this.current;
-  }
 
   /** Get the first token and schedule its refresh. Rejects only on a final answer. */
   async start(): Promise<ManagedDeviceToken> {
@@ -339,20 +321,16 @@ export class ManagedTokenSession {
   }
 
   private async exchangeWithRetry(): Promise<ManagedDeviceToken> {
-    const exchange = this.options.exchange ?? exchangeManagedDeviceToken;
-    const { deviceId, secret, serverUrl } = this.options.config;
-
     for (let attempt = 1; ; attempt++) {
       if (this.stopped) throw new Error('The managed device token session was stopped.');
-      const result = await exchange({ deviceId, secret, serverUrl });
+      const result = await exchangeManagedDeviceToken(this.options.config);
       switch (result.status) {
         case 'issued': {
           const { expiresAt, issuedAt, token } = result;
-          this.current = { expiresAt, issuedAt, token };
-          return this.current;
+          return { expiresAt, issuedAt, token };
         }
         case 'retryable': {
-          const delay = getManagedTokenRetryDelay(attempt, this.options.random);
+          const delay = getManagedTokenRetryDelay(attempt);
           this.options.logger.warn(
             `Could not get a managed device token (${result.reason}); retrying in ${Math.round(delay / 1000)}s`,
           );
