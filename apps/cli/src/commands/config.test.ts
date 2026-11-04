@@ -153,6 +153,38 @@ describe('config command', () => {
         ),
       );
     });
+    // Self-hosted servers older than this CLI have no `auth.getScope`; whoami
+    // must still print the identity rather than failing outright.
+    it('should fall back to the local scope when the server lacks auth.getScope', async () => {
+      process.env.LOBEHUB_WORKSPACE_ID = 'ws-local';
+      mockTrpcClient.auth.getScope.query.mockRejectedValue(
+        Object.assign(new Error('No "query"-procedure on path "auth.getScope"'), {
+          data: { code: 'NOT_FOUND' },
+        }),
+      );
+      mockTrpcClient.user.getUserState.query.mockResolvedValue({ userId: 'u1' });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'whoami', '--json']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          { userId: 'u1', scope: 'workspace', scopeSource: 'env', workspaceId: 'ws-local' },
+          null,
+          2,
+        ),
+      );
+    });
+
+    it('should surface other auth.getScope failures', async () => {
+      mockTrpcClient.auth.getScope.query.mockRejectedValue(
+        Object.assign(new Error('boom'), { data: { code: 'INTERNAL_SERVER_ERROR' } }),
+      );
+      mockTrpcClient.user.getUserState.query.mockResolvedValue({ userId: 'u1' });
+
+      const program = createProgram();
+      await expect(program.parseAsync(['node', 'test', 'whoami'])).rejects.toThrow('boom');
+    });
   });
 
   describe('usage', () => {

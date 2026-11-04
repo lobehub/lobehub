@@ -3,8 +3,10 @@ import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { getOpenApi } from '../api/openapi';
+import { resolveWorkspaceScope } from '../api/workspace';
 import { resolveWorkspaceRef } from '../api/workspaceRef';
 import { CLI_PRODUCT_NAME } from '../constants/identity';
+import { isMissingProcedure } from '../utils/error';
 import {
   type BoxTableRow,
   formatCost,
@@ -31,7 +33,17 @@ export function registerConfigCommand(program: Command) {
       // workspace".
       const [state, { scope, source, workspaceId }] = await Promise.all([
         client.user.getUserState.query(),
-        client.auth.getScope.query(),
+        client.auth.getScope.query().catch((error: unknown) => {
+          if (!isMissingProcedure(error)) throw error;
+          // Self-hosted servers older than this CLI have no `auth.getScope`;
+          // report the scope this CLI sends instead.
+          const local = resolveWorkspaceScope();
+          return {
+            scope: local.workspaceId ? 'workspace' : 'personal',
+            source: local.source,
+            workspaceId: local.workspaceId ?? null,
+          };
+        }),
       ]);
 
       if (options.json !== undefined) {
