@@ -347,6 +347,32 @@ describe('connect --managed', () => {
     expect(exitSpy).not.toHaveBeenCalled();
   });
 
+  it('gets a new token and reconnects when the gateway expires the token', async () => {
+    const refreshed = jwt({ sub: 'user-1', v: 2 });
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse(PERSONAL_TOKEN))
+      .mockResolvedValueOnce(tokenResponse(refreshed));
+    await run();
+
+    await handlers.auth_expired();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(client.updateToken).toHaveBeenCalledWith(refreshed);
+    expect(client.reconnect).toHaveBeenCalledTimes(1);
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it('exits 1 when the token exchange refuses the device after the gateway expires the token', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse(PERSONAL_TOKEN))
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }));
+    await run();
+
+    await handlers.auth_expired();
+    expect(client.reconnect).not.toHaveBeenCalled();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(client.disconnect).toHaveBeenCalled();
+  });
+
   it('reports tool calls, RPCs and agent dispatch through the activity hook', async () => {
     process.env.LOBEHUB_DEVICE_ACTIVITY_COMMAND = 'report-activity';
     await run();
