@@ -146,6 +146,7 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
         {rules.map((rule, index) => {
           // A disconnected workspace's rule can still be deleted, not run.
           const disconnected = !organizationOf(rule);
+          const running = starting === rule.id || runningRuleIds.has(rule.id);
           return (
             <Flexbox
               horizontal
@@ -174,13 +175,12 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
                   ].join(' · ')}
                 </Text>
               </Flexbox>
-              <SplitButton
-                disabled={isViewer || disconnected}
-                loading={starting === rule.id || runningRuleIds.has(rule.id)}
-                size={'small'}
-              >
+              {/* Only the main half spins while running; the options half just
+                  turns disabled (SplitButton-level `loading` spins both halves). */}
+              <SplitButton disabled={isViewer || disconnected} size={'small'}>
                 <SplitButton.Main
                   icon={<Icon icon={RefreshCwIcon} />}
+                  loading={running}
                   title={
                     viewerHint ?? (disconnected ? t('linear.sync.rules.disconnected') : undefined)
                   }
@@ -190,7 +190,11 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
                     ? t('linear.sync.rules.running')
                     : t('linear.sync.rules.run')}
                 </SplitButton.Main>
-                <SplitButton.Menu items={optionItems} placement={'bottomRight'} />
+                <SplitButton.Menu
+                  disabled={running}
+                  items={optionItems}
+                  placement={'bottomRight'}
+                />
               </SplitButton>
               <ActionIcon
                 disabled={isViewer || runningRuleIds.has(rule.id)}
