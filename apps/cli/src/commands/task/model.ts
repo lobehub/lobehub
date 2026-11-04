@@ -12,7 +12,7 @@ type ModelConfig = { model?: string | null; provider?: string | null };
 const CLEAR_VALUES = new Set(['none', 'null']);
 
 // An empty value is no flag at all; only an explicit none/null clears.
-const readFlag = (value: string | undefined): string | null | undefined => {
+export const readFlag = (value: string | undefined): string | null | undefined => {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
   return CLEAR_VALUES.has(trimmed.toLowerCase()) ? null : trimmed;

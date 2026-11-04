@@ -16,15 +16,22 @@ import { log } from '../../utils/logger';
 import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from '../resourceUrl';
 import { registerArchiveCommands } from './archive';
 import { resolveAssigneeUserId } from './assignee';
+import { registerBatchCommands } from './batch';
 import { registerCheckpointCommands } from './checkpoint';
 import { registerDepCommands } from './dep';
 import { registerDocCommands } from './doc';
-import { briefIcon, priorityLabel, statusBadge } from './helpers';
+import { briefIcon, priorityLabel, statusBadge, TASK_STATUSES } from './helpers';
 import { registerLifecycleCommands } from './lifecycle';
+import type { TaskListFilterOptions } from './listInput';
+import { splitValues, toTaskGroupListInput, toTaskListInput } from './listInput';
 import { formatTaskModel, toCreateModelConfig, toModelConfigPatch } from './model';
 import { registerReviewCommands } from './review';
+import type { TaskScheduleOptions } from './schedule';
+import { formatTaskSchedule, toCreateScheduleInput, toEditScheduleInput } from './schedule';
+import { registerSharingCommands } from './sharing';
 import { registerTopicCommands } from './topic';
 import { resolveAppUrl, resolveAppUrlBuilder, taskPath } from './url';
+import { registerVerifyCommands } from './verify';
 
 export function registerTaskCommand(program: Command) {
   const task = program.command('task').description('Manage agent tasks');
@@ -36,8 +43,23 @@ export function registerTaskCommand(program: Command) {
     .description('List tasks')
     .option(
       '--status <status>',
-      'Filter by status (pending/running/paused/completed/failed/canceled)',
+      'Filter by status, comma-separated (backlog/running/scheduled/paused/completed/failed/canceled)',
     )
+    .option(
+      '--priority <n>',
+      'Filter by priority, comma-separated (0=none, 1=urgent, 2=high, 3=normal, 4=low)',
+    )
+    .option('--project <id>', 'Filter by project ID')
+    .option(
+      '--assignee <idOrEmail>',
+      'Filter by member assignee, comma-separated (user id, email or username)',
+    )
+    .option('--content <text>', 'Search task content')
+    .option(
+      '--completed-within <window>',
+      'Keep completed and canceled tasks closed within (day/week/month)',
+    )
+    .option('--group-by <dimension>', 'Display grouped (agent/assignee/member/priority)')
     .option('--root', 'Only show root tasks (no parent)')
     .option('--parent <id>', 'Filter by parent task ID')
     .option('--agent <id>', 'Filter by assignee agent ID')
@@ -48,26 +70,70 @@ export function registerTaskCommand(program: Command) {
     .option('--board', 'Display as kanban board grouped by status')
     .option('--json [fields]', 'Output JSON')
     .action(
-      async (options: {
-        agent?: string;
-        archived?: boolean;
-        board?: boolean;
-        json?: string | boolean;
-        limit?: string;
-        offset?: string;
-        parent?: string;
-        root?: boolean;
-        status?: string;
-        tree?: boolean;
-      }) => {
+      async (
+        options: TaskListFilterOptions & {
+          assignee?: string;
+          board?: boolean;
+          groupBy?: string;
+          json?: string | boolean;
+          limit?: string;
+          offset?: string;
+          tree?: boolean;
+        },
+        command: Command,
+      ) => {
+        // `--limit` and `--offset` have defaults, so only their source tells if they were passed.
+        const isPaged = ['limit', 'offset'].some(
+          (name) => command.getOptionValueSource(name) === 'cli',
+        );
+        if (options.groupBy && (options.tree || options.board || isPaged)) {
+          throw new Error(
+            '--group-by cannot be combined with --tree, --board, --limit or --offset',
+          );
+        }
+
         const client = await getTrpcClient();
 
-        const input: Record<string, any> = {};
-        if (options.status) input.statuses = [options.status];
-        if (options.root) input.parentTaskId = null;
-        if (options.parent) input.parentTaskId = options.parent;
-        if (options.agent) input.assigneeAgentId = options.agent;
-        if (options.archived) input.includeArchived = true;
+        const assigneeUserIds: string[] = [];
+        for (const value of splitValues(options.assignee ?? '')) {
+          const userId = await resolveUserOption(client, value);
+          if (userId === false) return;
+          if (userId) assigneeUserIds.push(userId);
+        }
+
+        if (options.groupBy) {
+          const groups = await client.task.groupList.query(
+            toTaskGroupListInput(options.groupBy, options, assigneeUserIds) as any,
+          );
+          const buildUrl = await resolveUrlBuilder(client);
+
+          if (options.json !== undefined) {
+            outputJson(
+              groups.data.map((group) => ({
+                ...group,
+                tasks: withUrls(group.tasks, buildUrl, resourcePath.task),
+              })),
+              options.json,
+            );
+            return;
+          }
+
+          for (const group of groups.data) {
+            console.log(`\n${pc.bold(group.key)} ${pc.dim(`(${group.total})`)}`);
+            for (const t of group.tasks) {
+              console.log(
+                `  ${pc.dim(t.identifier)} ${statusBadge(t.status)} ${truncate(t.name || t.instruction, 60)}`,
+              );
+            }
+            if (group.hasMore) {
+              console.log(pc.dim(`  … ${group.total - group.tasks.length} more not shown`));
+            }
+          }
+          console.log();
+          return;
+        }
+
+        const input = toTaskListInput(options, assigneeUserIds);
         if (options.limit) input.limit = Number.parseInt(options.limit, 10);
         if (options.offset) input.offset = Number.parseInt(options.offset, 10);
 
@@ -94,26 +160,14 @@ export function registerTaskCommand(program: Command) {
 
         if (options.board) {
           // Kanban board grouped by status
-          const statusOrder = [
-            'backlog',
-            'blocked',
-            'running',
-            'paused',
-            'completed',
-            'failed',
-            'timeout',
-            'canceled',
-          ];
-
           const statusColors: Record<string, (s: string) => string> = {
             backlog: pc.dim,
-            blocked: pc.red,
             canceled: pc.dim,
             completed: pc.green,
             failed: pc.red,
             paused: pc.yellow,
             running: pc.blue,
-            timeout: pc.red,
+            scheduled: pc.cyan,
           };
 
           // Group tasks by status
@@ -125,9 +179,8 @@ export function registerTaskCommand(program: Command) {
             grouped.set(status, list);
           }
 
-          const kanbanColumns: KanbanColumn[] = statusOrder
-            .filter((s) => grouped.has(s))
-            .map((status) => ({
+          const kanbanColumns: KanbanColumn[] = TASK_STATUSES.filter((s) => grouped.has(s)).map(
+            (status) => ({
               color: statusColors[status],
               items: grouped.get(status)!.map((t: any) => ({
                 badge: pc.dim(t.identifier),
@@ -135,7 +188,8 @@ export function registerTaskCommand(program: Command) {
                 title: t.name || t.instruction,
               })),
               title: status.toUpperCase(),
-            }));
+            }),
+          );
 
           console.log();
           printKanban(kanbanColumns);
@@ -303,6 +357,7 @@ export function registerTaskCommand(program: Command) {
         ? await client.agent.getAgentConfigById.query({ agentId: t.agentId }).catch(() => null)
         : null;
       console.log(`${pc.dim('Model:')} ${formatTaskModel(t.config, agentConfig)}`);
+      console.log(`${pc.dim('Schedule:')} ${formatTaskSchedule(t.schedule)}`);
       if (t.userId) console.log(`${pc.dim('User:')} ${t.userId}`);
       if (t.parent) {
         console.log(`${pc.dim('Parent:')} ${t.parent.identifier} ${t.parent.name || ''}`);
@@ -503,7 +558,9 @@ export function registerTaskCommand(program: Command) {
               );
             } else if (act.type === 'comment') {
               const author = act.agentId ? `🤖 ${act.agentId}` : '👤 user';
-              console.log(`  💭 ${pc.dim(ago.padStart(7))} ${pc.cyan(author)} ${act.content}`);
+              console.log(
+                `  💭 ${pc.dim(ago.padStart(7))} ${pc.cyan(author)} ${act.content}${idSuffix}`,
+              );
             } else if (act.type === 'property') {
               const actor = act.author ? act.author.name || act.author.id : 'system';
               const change = act.propertyChange;
@@ -551,19 +608,26 @@ export function registerTaskCommand(program: Command) {
     .option('--priority <n>', 'Priority (0=none, 1=urgent, 2=high, 3=normal, 4=low)', '0')
     .option('--model <model>', "Model to run with (default: the assignee agent's model)")
     .option('--provider <provider>', 'Provider for --model (default: resolved from the agent)')
+    .option('--schedule <cron>', 'Run on a cron schedule (implies --automation schedule)')
+    .option('--timezone <tz>', 'IANA timezone of the schedule (e.g. Asia/Shanghai)')
+    .option('--automation <mode>', 'Automation mode (heartbeat, schedule)')
+    .option('--max-executions <n>', 'Stop the schedule after this many runs')
     .option('--json [fields]', 'Output JSON')
     .action(
-      async (options: {
-        agent?: string;
-        instruction: string;
-        json?: string | boolean;
-        model?: string;
-        name?: string;
-        parent?: string;
-        priority?: string;
-        provider?: string;
-        user?: string;
-      }) => {
+      async (
+        options: TaskScheduleOptions & {
+          agent?: string;
+          instruction: string;
+          json?: string | boolean;
+          model?: string;
+          name?: string;
+          parent?: string;
+          priority?: string;
+          provider?: string;
+          user?: string;
+        },
+      ) => {
+        const scheduleInput = toCreateScheduleInput(options);
         const client = await getTrpcClient();
         const buildUrl = await resolveAppUrlBuilder(client);
         const assigneeUserId = await resolveUserOption(client, options.user);
@@ -578,7 +642,10 @@ export function registerTaskCommand(program: Command) {
         if (options.parent) input.parentTaskId = options.parent;
         if (options.priority) input.priority = Number.parseInt(options.priority, 10);
         const modelConfig = toCreateModelConfig(options);
-        if (modelConfig) input.config = modelConfig;
+        if (modelConfig || scheduleInput.scheduleConfig) {
+          input.config = { ...modelConfig, ...scheduleInput.scheduleConfig };
+        }
+        Object.assign(input, scheduleInput.input);
 
         const result = await client.task.create.mutate(input);
         const url = buildUrl(taskPath(result.data.identifier, result.data.name));
@@ -609,15 +676,17 @@ export function registerTaskCommand(program: Command) {
     .option('--description <text>', 'Task description')
     .option('--model <model>', 'Model to run with ("null" to follow the assignee agent again)')
     .option('--provider <provider>', 'Provider for the model (default: resolved from the agent)')
-    .option(
-      '--status <status>',
-      'Set status (backlog, running, paused, completed, failed, canceled)',
-    )
+    .option('--schedule <cron>', 'Run on a cron schedule (implies --automation schedule)')
+    .option('--schedule-clear', 'Clear the cron and timezone (keeps the automation mode)')
+    .option('--timezone <tz>', 'IANA timezone of the schedule (e.g. Asia/Shanghai)')
+    .option('--automation <mode>', 'Automation mode (heartbeat, schedule, none)')
+    .option('--max-executions <n>', 'Stop the schedule after this many runs ("null" for no limit)')
+    .option('--status <status>', `Set status (${TASK_STATUSES.join(', ')})`)
     .option('--json [fields]', 'Output JSON')
     .action(
       async (
         id: string,
-        options: {
+        options: TaskScheduleOptions & {
           agent?: string;
           description?: string;
           heartbeatInterval?: string;
@@ -632,11 +701,12 @@ export function registerTaskCommand(program: Command) {
           user?: string;
         },
       ) => {
+        const scheduleInput = toEditScheduleInput(options);
         const client = await getTrpcClient();
         const assigneeUserId = await resolveUserOption(client, options.user);
         if (assigneeUserId === false) return;
 
-        const input: Record<string, any> = { id };
+        const input: Record<string, any> = { id, ...scheduleInput.input };
         if (options.name) input.name = options.name;
         if (options.instruction) input.instruction = options.instruction;
         if (options.description) input.description = options.description;
@@ -651,14 +721,16 @@ export function registerTaskCommand(program: Command) {
         }
         // Deep-merged into config, so checkpoint / review / execution keys survive.
         const configPatch = toModelConfigPatch(options);
-        if (configPatch) input.configPatch = configPatch;
+        if (configPatch || scheduleInput.configPatch) {
+          input.configPatch = { ...configPatch, ...scheduleInput.configPatch };
+        }
         const hasFieldEdits = Object.keys(input).length > 1;
 
         // Status-only edits use the lifecycle API. Combined edits go through
         // task.update so the server can apply the fields and lifecycle change
         // atomically.
         if (options.status) {
-          const valid = ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'];
+          const valid: readonly string[] = TASK_STATUSES;
           if (!valid.includes(options.status)) {
             log.error(`Invalid status "${options.status}". Must be one of: ${valid.join(', ')}`);
             return;
@@ -767,7 +839,7 @@ export function registerTaskCommand(program: Command) {
 
         const prefix = indent === 0 ? '' : '  '.repeat(indent) + '├── ';
         const name = t.name || t.identifier || '';
-        const status = t.status || 'pending';
+        const status = t.status || 'backlog';
         const identifier = t.identifier || t.id;
         console.log(`${prefix}${pc.dim(identifier)} ${statusBadge(status)} ${name}`);
 
@@ -823,6 +895,9 @@ export function registerTaskCommand(program: Command) {
   registerDepCommands(task);
   registerTopicCommands(task);
   registerDocCommands(task);
+  registerBatchCommands(task);
+  registerVerifyCommands(task);
+  registerSharingCommands(task);
 }
 
 /**

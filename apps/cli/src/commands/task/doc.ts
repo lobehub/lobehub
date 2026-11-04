@@ -2,12 +2,46 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../api/client';
+import { outputJson, printTable, timeAgo } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrls } from '../resourceUrl';
 
 export function registerDocCommands(task: Command) {
   // ── doc ──────────────────────────────────────────────
 
   const dc = task.command('doc').description('Manage task workspace documents');
+
+  dc.command('list <id>')
+    .description('List the documents pinned to a task')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (id: string, options: { json?: string | boolean }) => {
+      const client = await getTrpcClient();
+      const { data } = await client.task.getPinnedDocuments.query({ id });
+
+      if (options.json !== undefined) {
+        outputJson(
+          withUrls(data, await resolveUrlBuilder(client), (doc) =>
+            resourcePath.document({ id: doc.documentId }),
+          ),
+          options.json,
+        );
+        return;
+      }
+
+      if (data.length === 0) {
+        log.info('No pinned documents.');
+        return;
+      }
+
+      printTable(
+        data.map((doc) => [
+          pc.dim(doc.documentId),
+          doc.pinnedBy,
+          doc.createdAt ? timeAgo(doc.createdAt) : '',
+        ]),
+        ['DOCUMENT', 'PINNED BY', 'PINNED'],
+      );
+    });
 
   dc.command('create <id>')
     .description('Create a document and pin it to the task')
