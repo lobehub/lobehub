@@ -10,22 +10,23 @@ export const hashFileStream = async (
   onProgress?: HashProgress,
 ): Promise<string> => {
   const hasher = sha256.create();
-  const reader = file.stream().getReader({ mode: 'byob' });
-  let buffer = new ArrayBuffer(HASH_BUFFER_SIZE);
-  let loaded = 0;
+  const throwIfAborted = () => {
+    if (signal?.aborted) throw signal.reason ?? new Error('Upload cancelled by user');
+  };
 
-  try {
-    while (true) {
-      if (signal?.aborted) throw signal.reason ?? new Error('Upload cancelled by user');
+  // Check before the first read so an empty file still honours an aborted signal.
+  throwIfAborted();
 
-      const { done, value } = await reader.read(new Uint8Array(buffer));
-      if (done) return hasher.hex();
-      hasher.update(value);
-      loaded += value.byteLength;
-      onProgress?.(file.size > 0 ? Math.min(99, Math.floor((loaded / file.size) * 100)) : 0);
-      buffer = value.buffer as ArrayBuffer;
-    }
-  } finally {
-    reader.releaseLock();
+  // Read one slice at a time instead of a BYOB reader: Safari's `Blob.stream()` is not a
+  // byte stream, so `getReader({ mode: 'byob' })` throws there. Memory still stays at one chunk.
+  for (let loaded = 0; loaded < file.size;) {
+    const chunk = await file.slice(loaded, loaded + HASH_BUFFER_SIZE).arrayBuffer();
+    // Check after each read: an abort while the last slice loads must not return a digest.
+    throwIfAborted();
+    hasher.update(chunk);
+    loaded += chunk.byteLength;
+    onProgress?.(Math.min(99, Math.floor((loaded / file.size) * 100)));
   }
+
+  return hasher.hex();
 };
