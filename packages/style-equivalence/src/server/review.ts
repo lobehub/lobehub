@@ -1,0 +1,183 @@
+import type { StyleElement } from '../extract';
+import type { Combo } from '../plan/combos';
+import { isIntrinsicTag, PASS_THROUGH_VARIABLES } from '../plan/planFile';
+import { askSentence, comboLabel, differenceSummary } from '../report/plain';
+import {
+  elementSignature,
+  passRecord,
+  resolvedReworks,
+  type ReviewItem,
+  reviewItems,
+  reworkRecord,
+} from '../review/state';
+import { readReviews, type ReworkRecord, writeReviews } from '../review/store';
+import { ApiError, currentVerdict, defaultSigner, type StoredRun } from './api';
+
+interface CaseEntry {
+  category: string;
+  key: string;
+  plan: { combos?: Combo[]; elementIds?: { base: string; head: string }; file: string };
+  result?: {
+    comboDifferences?: unknown[];
+    differingConditions?: string[];
+    errors?: string[];
+    rootCauses?: Array<{ after?: string; before?: string; key: string; property: string }>;
+  };
+}
+
+type Extractions = Record<string, Partial<Record<'base' | 'head', { elements: StyleElement[] }>>>;
+
+const elementFor = (stored: StoredRun, key: string, entry: CaseEntry | undefined) => {
+  const extractions = stored.extractions as Extractions;
+  const unpaired = /^(.*)\|unpaired:(base|head):(.+)$/.exec(key);
+  const [file, side, id] = unpaired
+    ? [unpaired[1], unpaired[2] as 'base' | 'head', unpaired[3]]
+    : [entry?.plan.file ?? '', 'head' as const, entry?.plan.elementIds?.head];
+  return extractions[file]?.[side]?.elements.find((element) => element.id === id);
+};
+
+const titleOf = (key: string, element: StyleElement | undefined) => {
+  const id = key.slice(key.indexOf('|') + 1).replace(/^unpaired:\w+:/, '');
+  const slot = element?.slots[0]?.split('.').pop();
+  return slot ? `${id.split('#')[0]} · ${slot}` : id;
+};
+
+const contextOf = (stored: StoredRun) => {
+  const cases = new Map(
+    (stored.results.cases as unknown as CaseEntry[]).map((entry) => [entry.key, entry]),
+  );
+  const elements = new Map(
+    stored.items.map((item) => [item.key, elementFor(stored, item.key, cases.get(item.key))]),
+  );
+  const signatures = new Map(
+    [...elements].flatMap(([key, element]) => (element ? [[key, elementSignature(element)]] : [])),
+  ) as Map<string, string>;
+  const combos = new Map([...cases].map(([key, entry]) => [key, entry.plan.combos?.length ?? 1]));
+  return { cases, combos, elements, signatures };
+};
+
+const describe = (item: ReviewItem, entry: CaseEntry | undefined, element?: StyleElement) => {
+  const component = element && !isIntrinsicTag(element.tag) ? element.tag : undefined;
+  const binding = element?.bindings[0];
+  const variables = [
+    ...new Set(
+      (element?.variables ?? [])
+        .map((variable) => variable.name)
+        .filter((name) => !PASS_THROUGH_VARIABLES.has(name)),
+    ),
+  ];
+  return {
+    ...item,
+    ask: askSentence(item, {
+      component,
+      prop: binding && (binding.spread ? 'className' : binding.prop),
+      variables,
+    }),
+    comboDifferences: entry?.result?.comboDifferences ?? [],
+    combos: (entry?.plan.combos ?? [{}]).map((combo, index) => ({
+      index,
+      label: comboLabel(combo),
+    })),
+    component,
+    differingConditions: entry?.result?.differingConditions ?? [],
+    errors: entry?.result?.errors ?? [],
+    summary: differenceSummary(entry?.result?.rootCauses ?? []),
+    title: titleOf(item.key, element),
+  };
+};
+
+export type ReviewView = ReturnType<typeof describe>;
+
+export const reviewState = async (stored: StoredRun) => {
+  const verdict = await currentVerdict(stored);
+  const files = stored.items.map((item) => item.file);
+  const reviews = await readReviews(stored.recordsDir, files);
+  const resolved = resolvedReworks(verdict.items, reviews, new Date().toISOString());
+  for (const rework of resolved) {
+    await writeReviews(stored.recordsDir, rework.file, { reworks: [rework] });
+    reviews.reworks.set(rework.key, rework);
+  }
+  const context = contextOf(stored);
+  const items = reviewItems(verdict.items, reviews, context);
+  return {
+    context,
+    items,
+    reviews,
+    verdict: resolved.length ? await currentVerdict(stored) : verdict,
+  };
+};
+
+export const reviewPayload = async (stored: StoredRun) => {
+  const { context, items, reviews, verdict } = await reviewState(stored);
+  const views = items.map((item) =>
+    describe(item, context.cases.get(item.key), context.elements.get(item.key)),
+  );
+  const resolved = [...reviews.reworks.values()].filter((rework) => rework.resolvedAt);
+  return {
+    counts: {
+      proven: stored.items.length - items.length,
+      total: stored.items.length,
+      ...Object.fromEntries(
+        ['changed', 'passed', 'reworked', 'todo', 'waiting-agent'].map((state) => [
+          state,
+          items.filter((item) => item.state === state).length,
+        ]),
+      ),
+    },
+    items: views,
+    pr: stored.run.pr,
+    resolved: resolved.map(({ key, note, resolvedAt }) => ({ key, note, resolvedAt })),
+    run: { base: stored.run.base, head: stored.run.head, runId: stored.run.runId },
+    verdict: { mergeable: verdict.mergeable, reasons: verdict.reasons },
+  };
+};
+
+const failure = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return new ApiError(message.startsWith('NOTE_REQUIRED') ? 400 : 409, message);
+};
+
+export const applyReview = async (
+  stored: StoredRun,
+  body: { action?: unknown; key?: unknown; note?: unknown; reviewer?: unknown },
+) => {
+  if (typeof body.key !== 'string' || (body.action !== 'pass' && body.action !== 'rework'))
+    throw new ApiError(400, 'EXPECTED_KEY_AND_ACTION');
+  const note = typeof body.note === 'string' ? body.note : '';
+  const { context, items } = await reviewState(stored);
+  const item = items.find((entry) => entry.key === body.key);
+  if (!item) throw new ApiError(404, `UNKNOWN_CASE:${body.key}`);
+  const reviewer =
+    typeof body.reviewer === 'string' && body.reviewer
+      ? body.reviewer
+      : await defaultSigner(stored.run.repo ?? '.');
+  const now = new Date().toISOString();
+  try {
+    if (body.action === 'pass') {
+      const reworks: ReworkRecord[] = item.rework ? [{ ...item.rework, resolvedAt: now }] : [];
+      await writeReviews(stored.recordsDir, item.file, {
+        passes: [passRecord(item, note, reviewer, now)],
+        reworks,
+      });
+    } else {
+      const pr = (stored.run.pr as { number?: number } | undefined)?.number;
+      const record = reworkRecord(
+        item,
+        {
+          base: String(stored.run.base ?? ''),
+          head: String(stored.run.head ?? ''),
+          note,
+          pr,
+          reviewer,
+          runId: String(stored.run.runId ?? ''),
+          signature: context.signatures.get(item.key) ?? '',
+        },
+        now,
+      );
+      await writeReviews(stored.recordsDir, item.file, { reworks: [record] });
+    }
+  } catch (error) {
+    throw failure(error);
+  }
+  return reviewPayload(stored);
+};

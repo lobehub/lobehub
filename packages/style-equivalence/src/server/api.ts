@@ -86,7 +86,7 @@ export const caseDetail = async (stored: StoredRun, key: string) => {
   };
 };
 
-const defaultSigner = async (repo: string) => {
+export const defaultSigner = async (repo: string) => {
   try {
     return (await run('git', ['-C', repo, 'config', 'user.name'])).stdout.trim() || 'unknown';
   } catch {

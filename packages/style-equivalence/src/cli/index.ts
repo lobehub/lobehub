@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs, promisify } from 'node:util';
 
@@ -8,7 +9,9 @@ import { runSelfTest } from '../selftest';
 import { formatSelfTest } from '../selftest/run';
 import { saveSelfTest } from '../selftest/store';
 import { DEFAULT_UI_DIR, startServer } from '../server';
+import { loadRun } from '../server/api';
 import { runStack } from '../stack';
+import { annotateList, applyNotes, latestRunForPr, type NoteInput, reworkList } from './review';
 import { formatStack, formatSummary } from './summary';
 
 const run = promisify(execFile);
@@ -20,6 +23,8 @@ const HELP = `style-equivalence — compare styled elements between two revision
   bun run style-eq --stack [--stack-base <branch>]
   bun run style-eq self-test
   bun run style-eq serve <run-id|run-dir> [--port <n>]
+  bun run style-eq rework <run-id|run-dir|--pr <number>> [--json]
+  bun run style-eq annotate <run-id|run-dir> [--json] [--apply <notes.json>]
 
 Options:
   --config <file>     project config (default scripts/stylexMigration/style-equivalence.config.ts)
@@ -65,10 +70,12 @@ const main = async () => {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
     options: {
+      'apply': { type: 'string' },
       'base': { type: 'string' },
       'config': { type: 'string' },
       'head': { type: 'string' },
       'help': { short: 'h', type: 'boolean' },
+      'json': { type: 'boolean' },
       'keep-worktrees': { type: 'boolean' },
       'mutations': { type: 'string' },
       'port': { type: 'string' },
@@ -90,6 +97,42 @@ const main = async () => {
     await saveSelfTest(recordsDir, report, new Date().toISOString());
     console.log(formatSelfTest(report));
     process.exitCode = report.passed ? 0 : 1;
+    return;
+  }
+  const runDirOf = async (target: string | undefined) => {
+    if (!target && values.pr) return latestRunForPr(recordsDir, Number(values.pr));
+    if (!target) throw new Error('Specify a run id, a run directory or --pr <number>');
+    const dir = existsSync(path.resolve(target))
+      ? path.resolve(target)
+      : path.join(recordsDir, target);
+    if (!existsSync(path.join(dir, 'run.json'))) throw new Error(`No stored run at ${dir}`);
+    return dir;
+  };
+  if (positionals[0] === 'rework') {
+    const stored = await loadRun(await runDirOf(positionals[1]));
+    console.log(await reworkList(stored, values.json ? 'json' : 'text'));
+    return;
+  }
+  if (positionals[0] === 'annotate') {
+    const stored = await loadRun(await runDirOf(positionals[1]));
+    if (values.apply) {
+      const notes = JSON.parse(await readFile(path.resolve(values.apply), 'utf8')) as NoteInput[];
+      await applyNotes(stored, notes);
+      console.log(`Stored ${notes.length} notes.`);
+      return;
+    }
+    const list = await annotateList(stored);
+    if (values.json) return void console.log(JSON.stringify(list, null, 2));
+    if (!list.length) return void console.log('没有需要 agent 读码的项。');
+    for (const entry of list)
+      console.log(
+        [
+          `- ${entry.key} [${entry.state}]`,
+          `  ${entry.ask}`,
+          `  ${entry.source.base}`,
+          `  ${entry.source.head}`,
+        ].join('\n'),
+      );
     return;
   }
   if (positionals[0] === 'serve') {

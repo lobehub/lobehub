@@ -14,6 +14,7 @@ import type { ConditionConfig } from '../config';
 import { SELF_TEST_FILE } from '../selftest/store';
 import { ApiError, applySignoff, caseDetail, currentVerdict, loadRun, readSelfTest } from './api';
 import { caseShot, caseSnapshot, parseCombo, parseCondition } from './inspectCase';
+import { applyReview, reviewPayload } from './review';
 
 const TYPES: Record<string, string> = {
   '.css': 'text/css',
@@ -108,6 +109,10 @@ export const startServer = async ({
         run: stored.run,
         verdict: await currentVerdict(stored),
       });
+    if (pathname === '/api/review' && method === 'GET')
+      return json(response, 200, await reviewPayload(stored));
+    if (pathname === '/api/review' && method === 'POST')
+      return json(response, 200, await applyReview(stored, (await readBody(request)) as never));
     if (pathname === '/api/method' && method === 'GET')
       return json(response, 200, { selfTest: await readSelfTest(selfTestFile) });
     const caseMatch = /^\/api\/case\/([^/]+)(?:\/(rerun|snapshot|shot))?$/.exec(pathname);
@@ -128,7 +133,7 @@ export const startServer = async ({
         if (action === 'snapshot') return json(response, 200, await caseSnapshot(inspect));
         const side = searchParams.get('side');
         if (side !== 'base' && side !== 'head') throw new ApiError(400, 'INVALID_SIDE');
-        const image = await caseShot({ ...inspect, side });
+        const image = await caseShot({ ...inspect, crop: searchParams.get('crop') === '1', side });
         response.writeHead(200, { 'cache-control': 'max-age=3600', 'content-type': 'image/png' });
         response.end(image);
         return;

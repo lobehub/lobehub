@@ -97,9 +97,13 @@ export const caseSnapshot = async (request: CaseRequest) => {
   };
 };
 
-export const caseShot = async (request: CaseRequest & { side: 'base' | 'head' }) => {
+const CROP_PADDING = 16;
+
+export const caseShot = async (
+  request: CaseRequest & { crop?: boolean; side: 'base' | 'head' },
+) => {
   const errors: string[] = [];
-  const { page } = await capturePage(
+  const { page, snapshots } = await capturePage(
     request.browser,
     pageUrl(request.url, request.side, request.key, request.combo),
     request.condition,
@@ -110,7 +114,18 @@ export const caseShot = async (request: CaseRequest & { side: 'base' | 'head' })
       `[data-case="${`${request.key}|${request.combo}`.replaceAll('"', '\\"')}"]`,
     );
     if (!(await section.count())) throw new ApiError(404, 'CASE_NOT_RENDERED');
-    return await section.screenshot({ animations: 'disabled' });
+    const snapshot = snapshots[`${request.key}|${request.combo}`];
+    const target = request.crop && isSnapshot(snapshot) ? targetOf(snapshot).target : undefined;
+    const origin = target ? await section.boundingBox() : null;
+    if (!target || !origin || target.box[2] <= 0 || target.box[3] <= 0)
+      return await section.screenshot({ animations: 'disabled' });
+    const [x, y, width, height] = target.box;
+    const left = Math.max(0, origin.x + x - CROP_PADDING);
+    const top = Math.max(0, origin.y + y - CROP_PADDING);
+    return await page.screenshot({
+      animations: 'disabled',
+      clip: { height: height + CROP_PADDING * 2, width: width + CROP_PADDING * 2, x: left, y: top },
+    });
   } finally {
     await page.close();
   }

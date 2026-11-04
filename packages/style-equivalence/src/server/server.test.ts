@@ -173,6 +173,24 @@ describe('report server', () => {
     expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(100);
   }, 60_000);
 
+  it('crops a screenshot to the target element with padding', async () => {
+    const key = encodeURIComponent('src/A.tsx|A#1');
+    const shot = async (crop: string) =>
+      Buffer.from(
+        await (
+          await fetch(
+            `${server.url}/api/case/${key}/shot?side=head&condition=light/1280/default&combo=0${crop}`,
+          )
+        ).arrayBuffer(),
+      );
+    const width = (png: Buffer) => png.readUInt32BE(16);
+    const full = await shot('');
+    const cropped = await shot('&crop=1');
+    expect(width(full)).toBeGreaterThanOrEqual(376);
+    expect(width(cropped)).toBeLessThan(width(full));
+    expect(width(cropped)).toBeGreaterThan(32);
+  }, 60_000);
+
   it('returns the stored self-test report beside the run', async () => {
     await writeFile(
       path.join(root, 'self-test.json'),
