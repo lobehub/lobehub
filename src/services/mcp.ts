@@ -84,18 +84,19 @@ class MCPService {
     payload: ChatToolPayload,
     {
       agentId,
-      localHttpOverIpc,
+      localOverIpc,
       signal,
       topicId,
     }: {
       /** Resolve connectors the way this agent's conversation does (agent-owned first). */
       agentId?: string;
       /**
-       * On desktop, run a localhost / LAN http plugin over IPC instead of the
-       * server relay. Only an MCP App view's calls set it, as its HTML was read
+       * On desktop, run servers only this machine can reach (stdio connectors,
+       * localhost / LAN http plugins) over IPC, whether or not a device gateway
+       * is configured. Only an MCP App view's calls set it, as its HTML was read
        * the same way; conversation calls keep their existing route.
        */
-      localHttpOverIpc?: boolean;
+      localOverIpc?: boolean;
       signal?: AbortSignal;
       topicId?: string;
     },
@@ -110,7 +111,7 @@ class MCPService {
 
     // Connector-first: HTTP connectors use their server-held credentials.
     // Standalone desktop stdio connectors use local IPC; configured device
-    // gateways keep the existing server route.
+    // gateways keep the existing server route for conversation calls.
     // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
@@ -132,7 +133,8 @@ class MCPService {
         connector &&
         isDesktop &&
         connector.mcpConnectionType === 'stdio' &&
-        getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false
+        (localOverIpc ||
+          getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false)
       ) {
         // Persisted connector projections omit env secrets and may be stale.
         // This protected read retains the connector's credential ownership gate.
@@ -191,7 +193,7 @@ class MCPService {
     const isCloud = plugin?.customParams?.mcp?.type === 'cloud';
     // localhost / LAN endpoints are only reachable from this machine
     const isLocalHttp =
-      !!localHttpOverIpc &&
+      !!localOverIpc &&
       isDesktop &&
       plugin?.customParams?.mcp?.type === 'http' &&
       isLocalOrPrivateUrl(params.url);

@@ -184,7 +184,7 @@ const McpAppView = memo<McpAppViewProps>(
                 type: 'mcp',
               },
               // The view's HTML came from this machine for a local server, so its calls do too
-              { agentId: currentAgentId, localHttpOverIpc: true },
+              { agentId: currentAgentId, localOverIpc: true },
             ),
           );
         },

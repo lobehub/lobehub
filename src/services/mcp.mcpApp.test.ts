@@ -20,7 +20,7 @@ const {
   connectorEdit: vi.fn(),
   connectorRead: vi.fn(),
   connectors: new Map<string, unknown>(),
-  environment: { isDesktop: true },
+  environment: { deviceGatewayConfigured: false, isDesktop: true },
   ipcCall: vi.fn(),
   ipcRead: vi.fn(),
   plugins: new Map<string, unknown>(),
@@ -54,6 +54,12 @@ vi.mock('@/libs/trpc/client', () => ({
   toolsClient: { mcp: { callTool: { mutate: relayCall }, readUiResource: { mutate: relayRead } } },
 }));
 
+vi.mock('@/store/serverConfig/store', () => ({
+  getServerConfigStoreState: () => ({
+    serverConfig: { deviceGatewayConfigured: environment.deviceGatewayConfigured },
+  }),
+}));
+
 vi.mock('@/utils/electron/ipc', () => ({
   ensureElectronIpc: () => ({ mcp: { callTool: ipcCall, readUiResource: ipcRead } }),
 }));
@@ -85,6 +91,7 @@ vi.mock('@/store/tool/slices/connector/selectors', () => ({
 
 // Each case runs on the desktop, with the plugins loaded, unless it says otherwise
 beforeEach(() => {
+  environment.deviceGatewayConfigured = false;
   environment.isDesktop = true;
   toolState.pluginsLoaded = true;
 });
@@ -259,7 +266,7 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
   it('calls localhost / LAN http servers over IPC for a view, not the server relay', async () => {
     plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
 
-    await mcpService.invokeMcpToolCall(refresh, { localHttpOverIpc: true });
+    await mcpService.invokeMcpToolCall(refresh, { localOverIpc: true });
 
     expect(relayCall).not.toHaveBeenCalled();
     expect(deserializeMcpIpcPayload(ipcCall.mock.calls[0][0])).toEqual({
@@ -278,6 +285,76 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
     expect(ipcCall).not.toHaveBeenCalled();
     expect(relayCall).toHaveBeenCalledWith(
       expect.objectContaining({ toolName: 'refresh' }),
+      expect.anything(),
+    );
+  });
+});
+
+describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gateway', () => {
+  const stdioConnector = {
+    id: 'conn_1',
+    identifier: 'files',
+    isEnabled: true,
+    mcpConnectionType: 'stdio',
+  };
+  const detail = {
+    ...stdioConnector,
+    mcpConnectionType: 'stdio',
+    mcpStdioConfig: { args: ['mcp.js'], command: 'node', env: { TOKEN: 'fresh-secret' } },
+    tools: [{ permission: 'auto', toolName: 'list' }],
+  };
+  const list = {
+    apiName: 'list',
+    arguments: '{"dir":"/tmp"}',
+    id: 't1',
+    identifier: 'files',
+    type: 'mcp',
+  } as const;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    plugins.clear();
+    connectors.clear();
+    connectors.set('undefined:files', stdioConnector);
+    environment.deviceGatewayConfigured = true;
+    connectorEdit.mockResolvedValue(detail);
+    connectorCall.mockResolvedValue({ content: 'server', success: true });
+    ipcCall.mockResolvedValue(serializeMcpIpcPayload({ content: 'ok', success: true }));
+  });
+
+  it('runs a view call on this desktop, where its view was read', async () => {
+    await expect(mcpService.invokeMcpToolCall(list, { localOverIpc: true })).resolves.toEqual({
+      content: 'ok',
+      success: true,
+    });
+
+    expect(connectorCall).not.toHaveBeenCalled();
+    expect(deserializeMcpIpcPayload(ipcCall.mock.calls[0][0])).toEqual({
+      args: { dir: '/tmp' },
+      env: { TOKEN: 'fresh-secret' },
+      params: { args: ['mcp.js'], command: 'node', name: 'files', type: 'stdio' },
+      toolName: 'list',
+    });
+  });
+
+  it('still refuses a view call to a tool the connector disabled', async () => {
+    connectorEdit.mockResolvedValue({
+      ...detail,
+      tools: [{ permission: 'disabled', toolName: 'list' }],
+    });
+
+    await expect(mcpService.invokeMcpToolCall(list, { localOverIpc: true })).rejects.toThrow(
+      'unavailable or disabled',
+    );
+    expect(ipcCall).not.toHaveBeenCalled();
+  });
+
+  it('keeps conversation calls on the gateway route', async () => {
+    await mcpService.invokeMcpToolCall(list, {});
+
+    expect(ipcCall).not.toHaveBeenCalled();
+    expect(connectorCall).toHaveBeenCalledWith(
+      { agentId: undefined, args: '{"dir":"/tmp"}', identifier: 'files', toolName: 'list' },
       expect.anything(),
     );
   });
