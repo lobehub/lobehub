@@ -543,6 +543,8 @@ export type GoalCreateConfig = Omit<
  */
 export interface GoalItem {
   agentId: string | null;
+  /** Set when the user archives the goal; archived goals are hidden from lists by default. */
+  archivedAt?: Date | null;
   completedAt: Date | null;
   config: GoalConfig | null;
   createdAt: Date;

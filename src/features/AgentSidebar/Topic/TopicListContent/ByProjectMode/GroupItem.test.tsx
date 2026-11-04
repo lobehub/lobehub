@@ -48,11 +48,17 @@ vi.mock('@/store/global', () => ({
     }),
 }));
 
+const deviceRows = vi.hoisted(() => [
+  { deviceId: 'device-2', friendlyName: 'Studio Linux', scope: 'personal' },
+  // This desktop (`device-1`) as a workspace device: same machine, own id.
+  { deviceId: 'device-1-ws', hostname: 'mocha-laptop', scope: 'workspace' },
+  { deviceId: 'device-1', hostname: 'mocha-laptop', scope: 'personal' },
+]);
 vi.mock('@/store/device', () => ({
   deviceSelectors: { deviceList: (s: { devices: unknown[] }) => s.devices },
   useDeviceStore: (selector: (state: object) => unknown) =>
     selector({
-      devices: [{ deviceId: 'device-2', friendlyName: 'Studio Linux' }],
+      devices: deviceRows,
       useFetchDevices: () => ({}),
     }),
 }));
@@ -322,6 +328,65 @@ describe('Project topic group item', () => {
     expect(await screen.findByText('topics.subGroup.byTime')).toBeTruthy();
     expect(screen.queryByText('topics.subGroup.byDevice')).toBeNull();
     expect(document.body.textContent).not.toContain('groupTitle.byDevice.unknown');
+  });
+
+  it("sections a folder by device once it merges this machine's two device identities", () => {
+    subGroupModeMock.value = 'byDevice';
+    const folder = (id: string, boundDeviceId: string) => ({
+      id,
+      metadata: { boundDeviceId, workingDirectory: '/tmp/x' },
+      title: id,
+    });
+    render(
+      <AccordionRoot defaultValue={['project:/tmp/x']}>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              folder('Desktop topic', 'device-1'),
+              folder('Shared topic', 'device-1-ws'),
+            ] as any,
+            id: 'project:/tmp/x',
+            title: 'x',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    const text = document.body.textContent ?? '';
+    // Both sections are "mocha-laptop"; the category tells them apart.
+    expect(text.match(/mocha-laptop/g)).toHaveLength(2);
+    expect(text.indexOf('heteroAgent.executionTarget.local')).toBeLessThan(
+      text.indexOf('Desktop topic'),
+    );
+    expect(text.indexOf('Desktop topic')).toBeLessThan(
+      text.indexOf('heteroAgent.executionTarget.workspaceGroup'),
+    );
+    expect(text.indexOf('heteroAgent.executionTarget.workspaceGroup')).toBeLessThan(
+      text.indexOf('Shared topic'),
+    );
+  });
+
+  it('names the device of a folder that another machine also has', () => {
+    render(
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              { id: 't1', metadata: { boundDeviceId: 'device-2', workingDirectory: '/tmp/x' } },
+            ] as any,
+            deviceId: 'device-2',
+            id: 'project:device-2:/tmp/x',
+            title: 'x',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    expect(document.body.textContent).toContain(
+      'Studio Linux · heteroAgent.executionTarget.personalGroup',
+    );
   });
 
   it('archives only this group\'s merged-PR topics from the group "more" menu', async () => {

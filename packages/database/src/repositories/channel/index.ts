@@ -1,5 +1,5 @@
 import type { ChannelMemberConfig, ChannelMemberRole, ChannelVisibility } from '@lobechat/types';
-import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
@@ -63,6 +63,9 @@ const hasRole = (role: ChannelMemberRole | null, minRole: ChannelMemberRole) =>
  * scope (personal, or the given workspace). Every write runs inside `write`, which holds the
  * `channels` row lock so mutations of one channel serialize in a transaction.
  */
+/** Characters of the latest message a Channel list item carries as its preview. */
+const LIST_PREVIEW_LENGTH = 200;
+
 export class ChannelRepository {
   private readonly workspaceId: string | null;
 
@@ -306,15 +309,56 @@ export class ChannelRepository {
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list.
    */
-  list = async (): Promise<Array<ChannelItem & { canDelete: boolean }>> => {
+  list = async (): Promise<
+    Array<
+      ChannelItem & {
+        canDelete: boolean;
+        lastMessage: { content: string; createdAt: Date } | null;
+        unreadCount: number;
+      }
+    >
+  > => {
     const rows = await this.db
-      .select({ channel: channels, role: channelMembers.role })
+      .select({
+        channel: channels,
+        lastReadSequence: channelMembers.lastReadSequence,
+        role: channelMembers.role,
+      })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
 
-    return rows.map(({ channel, role }) => ({ ...channel, canDelete: hasRole(role, 'admin') }));
+    // The newest main-channel message of each, for a conversation-list preview.
+    const latest = rows.length
+      ? await this.db
+          .selectDistinctOn([channelMessages.channelId], {
+            channelId: channelMessages.channelId,
+            content: sql<string>`left(${channelMessages.content}, ${LIST_PREVIEW_LENGTH})`,
+            createdAt: channelMessages.createdAt,
+          })
+          .from(channelMessages)
+          .where(
+            and(
+              inArray(
+                channelMessages.channelId,
+                rows.map(({ channel }) => channel.id),
+              ),
+              isNull(channelMessages.threadId),
+            ),
+          )
+          .orderBy(channelMessages.channelId, desc(channelMessages.sequence))
+      : [];
+    const lastMessageOf = new Map(
+      latest.map(({ channelId, ...message }) => [channelId, message] as const),
+    );
+
+    return rows.map(({ channel, lastReadSequence, role }) => ({
+      ...channel,
+      canDelete: hasRole(role, 'admin'),
+      lastMessage: lastMessageOf.get(channel.id) ?? null,
+      unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+    }));
   };
 
   /** Read access. Returns undefined when the channel is missing or the caller is no member. */
@@ -328,6 +372,10 @@ export class ChannelRepository {
 
     return row;
   };
+
+  /** The caller's direct conversation with an Agent in this scope, trashed or not. */
+  findDirectAccess = (agentId: string): Promise<ChannelAccess | undefined> =>
+    this.findDirect(this.db, agentId);
 
   /**
    * Runs `fn` while holding the channel row lock, after checking that the caller is an
@@ -562,7 +610,7 @@ export class ChannelRepository {
   };
 
   private findDirect = async (
-    tx: Transaction,
+    tx: LobeChatDatabase | Transaction,
     agentId: string,
   ): Promise<ChannelAccess | undefined> => {
     const [row] = await tx

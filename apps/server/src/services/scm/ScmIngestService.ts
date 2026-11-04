@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import debug from 'debug';
 
 import { isFailingCheck, ScmChangeRequestModel, ScmInstallationModel } from '@/database/models/scm';
@@ -76,7 +77,7 @@ export class ScmIngestService {
 
     if (!existing) {
       return {
-        detail: `installation ${installation.installationId} is not bound to a LobeHub scope`,
+        detail: `installation ${installation.installationId} is not bound to a ${BRANDING_NAME} scope`,
         status: 'skipped',
       };
     }

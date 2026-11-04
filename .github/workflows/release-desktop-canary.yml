@@ -116,7 +116,7 @@ jobs:
     name: Calculate Canary Version
     needs: [check-trigger, core-ota]
     if: |
-      always() && needs.check-trigger.outputs.should_build == 'true' &&
+      !cancelled() && needs.check-trigger.outputs.should_build == 'true' &&
       (inputs.force_full || needs.core-ota.outputs.requires_full_release == 'true' || needs.core-ota.outputs.skipped == 'true')
     runs-on: ubuntu-latest
     outputs:

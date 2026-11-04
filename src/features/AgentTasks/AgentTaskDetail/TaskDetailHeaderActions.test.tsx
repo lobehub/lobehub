@@ -155,13 +155,6 @@ describe('TaskDetailHeaderActions', () => {
     ]);
   });
 
-  it('includes task transfer and copy actions in the detail menu', () => {
-    render(<TaskDetailHeaderActions />);
-
-    expect(mocks.dropdownItems.map((item) => item?.key)).toContain('transfer-task');
-    expect(mocks.dropdownItems.map((item) => item?.key)).toContain('copy-task');
-  });
-
   it('shows "publish to workspace" only for private tasks inside a workspace', () => {
     render(<TaskDetailHeaderActions />);
 

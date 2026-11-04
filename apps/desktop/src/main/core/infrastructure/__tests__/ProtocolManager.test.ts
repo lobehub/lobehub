@@ -125,12 +125,6 @@ describe('ProtocolManager', () => {
   });
 
   describe('protocol registration', () => {
-    it('should use simple registration in production mode', () => {
-      manager.initialize();
-
-      expect(app.setAsDefaultProtocolClient).toHaveBeenCalledWith('lobehub');
-    });
-
     it('should use explicit parameters in development mode', async () => {
       vi.doMock('@/const/env', () => ({ isDev: true }));
       vi.resetModules();

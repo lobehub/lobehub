@@ -32,7 +32,7 @@ describe('buildAgentProfileTabOptions', () => {
     ]);
   });
 
-  it('allows configuring channels even when the agent needs a device to execute', () => {
+  it('keeps configuration tabs when sharing is unsupported', () => {
     const options = buildAgentProfileTabOptions({
       active: 'profile',
       canConfigure: true,
@@ -63,17 +63,6 @@ describe('buildAgentProfileTabOptions', () => {
     });
 
     expect(options.map((option) => option.value)).toEqual(['channel', 'statistics']);
-  });
-
-  it('drops share when the agent cannot be shared at all', () => {
-    const options = buildAgentProfileTabOptions({
-      active: 'profile',
-      canConfigure: true,
-      labels,
-      shareSupported: false,
-    });
-
-    expect(options.map((option) => option.value)).toEqual(['profile', 'channel', 'statistics']);
   });
 
   it('keeps share when it owns the current page even though it is gated off', () => {

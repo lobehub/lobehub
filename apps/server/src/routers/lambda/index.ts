@@ -45,6 +45,7 @@ import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
 import { asrRouter } from './asr';
+import { authRouter } from './auth';
 import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
 import { canvasRouter } from './canvas';
@@ -154,6 +155,7 @@ export const lambdaRouter = router({
   aiProvider: aiProviderRouter,
   apiKey: apiKeyRouter,
   asr: asrRouter,
+  auth: authRouter,
   tts: ttsRouter,
   chunk: chunkRouter,
   comfyui: comfyuiRouter,

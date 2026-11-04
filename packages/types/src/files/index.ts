@@ -26,6 +26,12 @@ export enum FileSource {
   Canvas = 'canvas',
   ImageGeneration = 'image_generation',
   PageEditor = 'page-editor',
+  /**
+   * Image an agent's tool returned — a Claude Code `Read` on an image file —
+   * uploaded so the tool card can preview it. Owned by that message, not by
+   * the user's library.
+   */
+  ToolResult = 'tool-result',
   VideoGeneration = 'video_generation',
 }
 
@@ -45,6 +51,7 @@ export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
   FileSource.Acceptance,
   FileSource.AgentDocument,
   FileSource.Canvas,
+  FileSource.ToolResult,
 ];
 
 /** Sources a generation model wrote, as opposed to anything a human put there. */
