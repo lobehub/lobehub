@@ -5,7 +5,7 @@ import type {
   DeviceScope,
 } from '@lobechat/types';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
 import { type TopicListItem } from '@/services/topic';
 
 type DeviceClient = typeof lambdaClient.device;
@@ -20,6 +20,9 @@ export interface DeviceRunningTopic extends TopicListItem {
  * should call this instead of reaching into `lambdaClient.device.*` directly.
  */
 class DeviceService {
+  // Personal devices remain editable while the UI has an active workspace.
+  private personalClient = createWorkspaceLambdaClient(null);
+
   /** All devices the user has registered (incl. offline) + live gateway sessions. */
   listDevices() {
     return lambdaClient.device.listDevices.query();
@@ -27,7 +30,7 @@ class DeviceService {
 
   /** Update user-editable device fields (defaultCwd / friendlyName / workingDirs). */
   updateDevice(input: Parameters<DeviceClient['updateDevice']['mutate']>[0]) {
-    return lambdaClient.device.updateDevice.mutate(input);
+    return this.personalClient.device.updateDevice.mutate(input);
   }
 
   /** Update user-editable fields of a workspace-enrolled device (workspace-scoped write). */
