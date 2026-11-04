@@ -3,12 +3,20 @@ import type { ExecAgentResult } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DeviceModel } from '@/database/models/device';
 import type { ExecutionPlan } from '@/helpers/executionTarget';
 import { AgentQuotaService } from '@/server/services/agentQuota';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
+import {
+  type ManagedDeviceTarget,
+  type WaitForDeviceOnlineOptions,
+  waitForManagedDeviceOnline,
+  wakeManagedDevice,
+} from '@/server/services/deviceGateway/managedDeviceWake';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import {
   humanizeHeteroDispatchError,
@@ -25,6 +33,11 @@ import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types
 import { failHeteroDispatch } from './utils';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/** A plan `dispatchToCliDevice` can act on: a waking device is woken first. */
+type CliDispatchPlan = Exclude<ExecutionPlan, { kind: 'device-wakeable' }>;
+
+type CliDispatchParams = Parameters<typeof dispatchToCliDevice>[2];
 
 /**
  * The Claude Code account the agent's Manage-accounts choice routes this run
@@ -77,7 +90,7 @@ export const dispatchToCliDevice = async (
     agentConfig: ExecRunContext['agentConfig'];
     appContext: ExecRunContext['appContext'];
     cliDeviceWorkspaceId?: string;
-    heteroPlan: ExecutionPlan;
+    heteroPlan: CliDispatchPlan;
     heteroType: HeteroDispatchInput['heteroType'];
     heterogeneousProvider: HeteroDispatchInput['heterogeneousProvider'];
     prepared: PreparedHeteroRun;
@@ -294,5 +307,81 @@ export const dispatchToCliDevice = async (
     log('execAgent: failed to patch runningOperation with device info: %O', err);
   }
 
+  return undefined;
+};
+
+/**
+ * Wake a managed cloud device, then dispatch to it once it is online.
+ *
+ * The wake request is sent before the response; the wait (up to
+ * `MANAGED_DEVICE_WAKE_TIMEOUT_MS`, polling every
+ * `MANAGED_DEVICE_WAKE_POLL_INTERVAL_MS`) and the dispatch run after it, off
+ * the request's clock, like the timed-out dispatch confirmation. When the
+ * device does not come online in time the dispatch still runs: the gateway
+ * refuses it as offline, and the existing offline handling (the device error
+ * on the run, the goal's device wait) takes over. A run stopped during the
+ * wait is not dispatched.
+ *
+ * Returns `undefined`: the run counts as started, and any failure settles it
+ * through the same funnel an immediate dispatch failure uses.
+ */
+export const dispatchToWakingCliDevice = async (
+  deps: HeteroDispatchDeps,
+  run: HeteroRun,
+  params: Omit<CliDispatchParams, 'heteroPlan'> & {
+    device: ManagedDeviceTarget;
+    heteroPlan: Extract<ExecutionPlan, { kind: 'device-wakeable' }>;
+    wait?: Omit<WaitForDeviceOnlineOptions, 'isOnline'>;
+  },
+): Promise<ExecAgentResult | undefined> => {
+  const { device, heteroPlan, wait, ...dispatchParams } = params;
+
+  await wakeManagedDevice(deps.userId, device);
+
+  const operationModel = new AgentOperationModel(deps.db, deps.userId, deps.workspaceId);
+  const isStopped = async () =>
+    !(await operationModel.isRunningOnTopic(run.operationId, run.topicId));
+
+  const dispatchWhenOnline = async () => {
+    try {
+      const outcome = await waitForManagedDeviceOnline(deps.userId, device, {
+        ...wait,
+        shouldStop: isStopped,
+      });
+      if (await isStopped()) {
+        log(
+          'execAgent: op=%s settled while its managed device woke, not dispatching',
+          run.operationId,
+        );
+        return;
+      }
+      log(
+        'execAgent: managed device %s wake outcome=%s, dispatching op=%s',
+        heteroPlan.deviceId,
+        outcome,
+        run.operationId,
+      );
+      await dispatchToCliDevice(deps, run, {
+        ...dispatchParams,
+        heteroPlan: { deviceId: heteroPlan.deviceId, kind: 'device', target: heteroPlan.target },
+      });
+    } catch (error) {
+      // Off the request path nothing else would settle the run.
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[HeteroDispatch] Dispatch to a woken managed device failed', {
+        deviceId: heteroPlan.deviceId,
+        error: message,
+        operationId: run.operationId,
+      });
+      await failHeteroDispatch(
+        deps,
+        run,
+        { detail: message, message: 'Hetero agent device dispatch failed' },
+        { error: message, message: 'Hetero agent device dispatch failed' },
+      );
+    }
+  };
+
+  afterUnscoped(dispatchWhenOnline);
   return undefined;
 };
