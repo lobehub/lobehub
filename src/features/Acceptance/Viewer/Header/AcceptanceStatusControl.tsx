@@ -33,7 +33,10 @@ const AcceptanceStatusControl = () => {
     }
   };
 
-  const menu: DropdownItem[] = getAcceptanceStatusActions(data.acceptance.status).map((action) => {
+  const menu: DropdownItem[] = getAcceptanceStatusActions(
+    data.acceptance.status,
+    data.acceptance.subjectType,
+  ).map((action) => {
     if (action === 'accept') {
       return {
         icon: <Icon icon={CircleCheck} />,
@@ -58,7 +61,12 @@ const AcceptanceStatusControl = () => {
     };
   });
 
-  return <AcceptanceStatusPill menu={menu} status={data.acceptance.status} />;
+  return (
+    <AcceptanceStatusPill
+      menu={menu.length > 0 ? menu : undefined}
+      status={data.acceptance.status}
+    />
+  );
 };
 
 export default AcceptanceStatusControl;

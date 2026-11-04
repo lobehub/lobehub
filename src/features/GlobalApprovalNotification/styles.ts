@@ -26,6 +26,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary});
   `,
+  reviewSummary: css`
+    padding-block: 4px 8px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: ${cssVar.colorTextSecondary};
+  `,
   goalActionsSlot: css`
     flex: 1;
     min-width: 0;

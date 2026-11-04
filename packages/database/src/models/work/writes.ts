@@ -9,12 +9,14 @@ import type {
   WorkType,
   WorkVisibility,
 } from '@lobechat/types';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { documents } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 import {
   documentOwnership,
   resolveWorkAccessScope,
@@ -58,27 +60,6 @@ const versionSnapshotSelection = {
   status: workVersions.status,
   title: workVersions.title,
   url: workVersions.url,
-};
-
-const isUniqueViolation = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  const code =
-    typeof error === 'object' && error && 'code' in error
-      ? String((error as { code?: unknown }).code)
-      : '';
-  const cause = error instanceof Error ? error.cause : undefined;
-  const causeCode =
-    typeof cause === 'object' && cause && 'code' in cause
-      ? String((cause as { code?: unknown }).code)
-      : '';
-
-  return (
-    code === '23505' ||
-    causeCode === '23505' ||
-    message.includes('23505') ||
-    message.includes('duplicate') ||
-    message.includes('unique')
-  );
 };
 
 const findVersionByToolCall = async (
@@ -343,6 +324,66 @@ export const deleteTaskWork = async (
 };
 
 /**
+ * Mirror a task subtree's visibility onto its Work rows. Works keep an indexed
+ * copy of the resource visibility so gallery/list queries can filter without a
+ * join; `TaskSubtreeRepository.updateVisibility` calls this in the same
+ * transaction as the task write so lists never observe a stale public row.
+ *
+ * Scoped by user/workspace only (not visibility): a workspace owner demoting
+ * another member's public task must still reach that member's Work row.
+ */
+export const setTaskWorksVisibility = async (
+  ctx: WorkContext,
+  taskIds: string[],
+  visibility: WorkVisibility,
+): Promise<void> => {
+  if (taskIds.length === 0) return;
+
+  await ctx.db
+    .update(works)
+    .set({ visibility })
+    .where(
+      and(
+        eq(works.resourceType, 'task'),
+        inArray(works.resourceId, taskIds),
+        buildWorkspaceWhere(
+          { userId: ctx.userId, workspaceId: ctx.workspaceId },
+          { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
+        ),
+      ),
+    );
+};
+
+/**
+ * Re-home the Work rows of tasks whose creator changed (a member taking a task
+ * over), in the same transaction as the task write. A task Work's `userId` is
+ * the task owner, so a row left on the previous creator would stay theirs and
+ * drop out of the new owner's lists once the task goes private.
+ *
+ * Scoped by workspace only: the caller is authorized on the tasks, not on the
+ * previous creator's Work rows.
+ */
+export const reassignTaskWorksOwner = async (
+  ctx: WorkContext,
+  taskIds: string[],
+  fromUserId: string,
+): Promise<void> => {
+  if (taskIds.length === 0 || !ctx.workspaceId) return;
+
+  await ctx.db
+    .update(works)
+    .set({ userId: ctx.userId })
+    .where(
+      and(
+        eq(works.resourceType, 'task'),
+        inArray(works.resourceId, taskIds),
+        eq(works.userId, fromUserId),
+        eq(works.workspaceId, ctx.workspaceId),
+      ),
+    );
+};
+
+/**
  * User-initiated removal of one Work card by its own id. Meant for orphaned
  * Works (the backing task / document is gone — see `resourceDeleted`), where
  * deleting the resource itself is no longer possible, so this is the only way
@@ -356,13 +397,16 @@ export const deleteTaskWork = async (
  * eligible. Cascades `work_versions`, `project_works` and
  * `goal_node_work_versions` via FK.
  */
-export const deleteWork = async (ctx: WorkContext, params: DeleteWorkParams): Promise<void> => {
+export const deleteWork = async (
+  ctx: WorkContext,
+  params: DeleteWorkParams,
+): Promise<{ canvasManifestKeys: string[]; resourceId: string | null; resourceType: string }[]> => {
   const backingResourceGone = sql<boolean>`case ${works.resourceType}
     when 'task' then not exists (select 1 from ${tasks} where ${tasks.id} = ${works.resourceId})
     when 'document' then not exists (select 1 from ${documents} where ${documents.id} = ${works.resourceId})
     else true end`;
 
-  await ctx.db
+  return ctx.db
     .delete(works)
     .where(
       and(
@@ -371,5 +415,16 @@ export const deleteWork = async (ctx: WorkContext, params: DeleteWorkParams): Pr
         eq(works.userId, ctx.userId),
         backingResourceGone,
       ),
-    );
+    )
+    .returning({
+      // RETURNING reads the version keys before the FK cascade removes their rows.
+      canvasManifestKeys: sql<string[]>`array(
+        select distinct ${workVersions.metadata} -> 'canvas' ->> 'manifestKey'
+        from ${workVersions}
+        where ${workVersions.workId} = ${params.id}
+          and coalesce(${workVersions.metadata} -> 'canvas' ->> 'manifestKey', '') <> ''
+      )`,
+      resourceId: works.resourceId,
+      resourceType: works.resourceType,
+    });
 };

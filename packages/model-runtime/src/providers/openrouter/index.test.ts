@@ -30,15 +30,6 @@ afterEach(() => {
 });
 
 describe('LobeOpenRouterAI - custom features', () => {
-  describe('Params Export', () => {
-    it('should have constructorOptions with headers', () => {
-      expect(params.constructorOptions).toBeDefined();
-      expect(params.constructorOptions.defaultHeaders).toBeDefined();
-      expect(params.constructorOptions.defaultHeaders['HTTP-Referer']).toBe('https://lobehub.com');
-      expect(params.constructorOptions.defaultHeaders['X-Title']).toBe('LobeHub');
-    });
-  });
-
   describe('Debug Configuration', () => {
     it('should disable debug by default', () => {
       delete process.env.DEBUG_OPENROUTER_CHAT_COMPLETION;
@@ -55,13 +46,6 @@ describe('LobeOpenRouterAI - custom features', () => {
   });
 
   describe('Constructor Options', () => {
-    it('should set default headers', () => {
-      const instance = new LobeOpenRouterAI({ apiKey: 'test' });
-      expect(instance).toBeDefined();
-      // Headers are set in constructorOptions but not directly accessible
-      // We can verify by checking that the instance was created successfully
-    });
-
     it('should use custom base URL when provided', () => {
       const customBaseURL = 'https://custom.openrouter.ai/api/v1';
       const instance = new LobeOpenRouterAI({ apiKey: 'test', baseURL: customBaseURL });

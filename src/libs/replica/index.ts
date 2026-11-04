@@ -4,53 +4,53 @@ import {
   defineReplica as defineCoreReplica,
   type DefineReplicaOptions,
   isReplicaSyncKey,
-  REPLICA_INDEX_KEY,
   type ReplicaPagedData,
   type ReplicaResource,
   type ReplicaScope,
   type ReplicaStorage,
-} from '@lobechat/replica';
+} from 'local-replica';
 import {
   createReplicaSlice as createCoreReplicaSlice,
   type CreateReplicaSliceOptions,
   createSWRDriver,
-} from '@lobechat/replica/zustand';
+} from 'local-replica/zustand';
 
-import {
-  IndexedDBQueryProjectionStorage,
-  LocalStorageQueryProjectionStorage,
-} from '@/libs/queryProjectionStorage';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { getCacheScope, isScopeTrusted, useCacheScope } from '@/libs/swr/useCacheScope';
 
 import { notifyReplicaDevtools, registerReplicaDevtools } from './devtools';
+import { AppIndexedDBStorage, AppLocalStorage } from './storage';
 
 /**
- * LobeHub wiring of `@lobechat/replica`: replicas are partitioned like the SWR
+ * LobeHub wiring of `local-replica`: replicas are partitioned like the SWR
  * cache (`${userId}:${workspaceId}`), persist to IndexedDB by default and
  * fetch through the app's SWR hook (workspace-augmented keys, retry policy).
  */
 
 /**
- * Whether this runtime may hydrate replicas from their persisted projection.
+ * Where a runtime's replicas take their partition and their persistence gates.
  *
- * The Workbench runtime renders the public acceptance / verify surfaces and
- * never mounts the user store, so its cache scope stays the last-known user's
- * partition. Hydrating there would paint a previous — possibly expired or
- * server-invalidated — session's private rows before any authorization is
- * checked, so the Workbench entry turns hydration off at boot. The main SPA
- * keeps it on for the instant-from-cache first paint (it hydrates the persisted
- * partition in parallel with the session check, then resets on a scope change).
+ * The main SPA (the default) resolves the scope from the user store: it
+ * hydrates the last-known user's partition in parallel with the session check
+ * and resets on a scope change, and it persists only once identity resolves.
+ *
+ * The Workbench runtime never mounts the user store, so it installs its own
+ * source at boot (`apps/workbench/src/shell/workbenchReplicaScope.ts`): network
+ * only on its public surfaces, and the same hydrate-then-verify contract as the
+ * main SPA on the private routes that run its session check.
  */
-let replicaHydrationEnabled = true;
-
-/** Enable/disable reads from the persisted projection for this runtime. */
-export const setReplicaPersistedHydration = (enabled: boolean): void => {
-  replicaHydrationEnabled = enabled;
-};
+export interface ReplicaScopeSource {
+  /** Whether a persisted projection may be painted before the network answers. */
+  canHydrate: () => boolean;
+  /** Whether a server answer may be written to the persisted projection. */
+  canPersist: () => boolean;
+  get: () => string;
+  /** React hook form of `get`; must be stable for the runtime's lifetime. */
+  use: () => string;
+}
 
 /**
- * The scope hook, wrapped so `cacheScope` does not *read* it while this module
+ * The scope hook and getters are referenced at call time, not while this module
  * body runs. `@/libs/swr/useCacheScope` imports `@/store/user`, and a user-store
  * slice imports this module — so when `useCacheScope` is the entry of that
  * cycle this module's body executes before `useCacheScope`'s exports are
@@ -58,26 +58,68 @@ export const setReplicaPersistedHydration = (enabled: boolean): void => {
  * scope (a resource would then have no `scope.get`); resolving at call time is
  * equivalent because they are stateless delegating functions.
  */
-const useCacheScopeLazy = (): string => useCacheScope();
+const useAppCacheScope = (): string => useCacheScope();
 
-export const cacheScope: ReplicaScope = {
-  canHydrate: () => replicaHydrationEnabled,
+const appScopeSource: ReplicaScopeSource = {
+  canHydrate: () => true,
   canPersist: () => isScopeTrusted(),
   get: () => getCacheScope(),
-  use: useCacheScopeLazy,
+  use: useAppCacheScope,
+};
+
+let scopeSource: ReplicaScopeSource = appScopeSource;
+
+/** Install this runtime's scope source. Call once at boot, before any render. */
+export const setReplicaScopeSource = (source: ReplicaScopeSource): void => {
+  scopeSource = source;
+};
+
+const useSourceScope = (): string => scopeSource.use();
+
+export const cacheScope: ReplicaScope = {
+  canHydrate: () => scopeSource.canHydrate(),
+  canPersist: () => scopeSource.canPersist(),
+  get: () => scopeSource.get(),
+  use: useSourceScope,
+};
+
+/**
+ * The identity half of a cache scope (`${userId}:${workspaceId}`), with the
+ * workspace replaced by a marker no workspace id can take.
+ */
+export const identityScopeOf = (scope: string): string => {
+  const separator = scope.indexOf(':');
+  return `${separator === -1 ? scope : scope.slice(0, separator)}:*`;
+};
+
+/**
+ * A scope partitioned by identity only, for data the server owns per user and
+ * shares across workspaces (user memories, personal model preferences).
+ *
+ * Partitioning such a resource per workspace lets a switch hydrate another
+ * workspace's older persisted copy, and leaves one `clear()` unable to reach
+ * the rows written in the others. The gates still follow the live scope, so an
+ * untrusted (identity-unresolved) scope keeps refusing writes.
+ */
+export const identityOnlyScope: ReplicaScope = {
+  canHydrate: () => cacheScope.canHydrate?.() ?? true,
+  canPersist: () => cacheScope.canPersist(),
+  get: () => identityScopeOf(cacheScope.get()),
+  use: () => identityScopeOf(cacheScope.use()),
 };
 
 export type ReplicaStorageKind = 'indexedDB' | 'localStorage' | 'memory';
 
-type AppStorageOption<TData> = ReplicaStorageKind | ReplicaStorage<TData>;
+type AppStorageOption<TData> =
+  ReplicaStorageKind | ReplicaStorage<TData> | ((namespace: string) => ReplicaStorage<TData>);
 
 const resolveStorage =
   <TData>(storage: AppStorageOption<TData> = 'indexedDB') =>
   (namespace: string): ReplicaStorage<TData> | undefined => {
+    if (typeof storage === 'function') return storage(namespace);
     if (typeof storage === 'object') return storage;
-    if (storage === 'indexedDB') return new IndexedDBQueryProjectionStorage<TData>({ namespace });
-    if (storage === 'localStorage')
-      return new LocalStorageQueryProjectionStorage<TData>({ namespace });
+    if (storage === 'indexedDB') return new AppIndexedDBStorage<TData>({ namespace });
+    if (storage === 'localStorage') return new AppLocalStorage<TData>({ namespace });
     return undefined;
   };
 
@@ -131,30 +173,6 @@ export const revalidateReplica = (
     isReplicaSyncKey(queryKey, resource.name, { key, scope: resource.scope.get() }),
   );
 
-/**
- * The entry storage keys this resource has a persisted row for in the active
- * scope, oldest first.
- *
- * Storage has no key listing of its own; the engine keeps one index row per
- * scope (`REPLICA_INDEX_KEY`) as it persists and drops entries, and this reads
- * it. That is how code outside the owning store reaches rows an *earlier
- * session* wrote — bounding how many survive a reload, or invalidating a row
- * whose entry is not loaded in memory.
- *
- * The keys are storage keys (`key`, plus `?query` when the resource sets one),
- * so a caller only matches them against entry keys when the resource leaves
- * `query` unset.
- */
-export const readReplicaStoredKeys = async (
-  resource: Pick<ReplicaResource<any, any, any>, 'scope' | 'storage'>,
-): Promise<string[]> => {
-  const row = await resource.storage?.get({
-    queryKey: REPLICA_INDEX_KEY,
-    scope: resource.scope.get(),
-  });
-  return (row?.data as unknown as string[] | undefined) ?? [];
-};
-
 /** `createReplicaSlice` bound to the app's SWR driver. */
 export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
   resource: ReplicaResource<TParams, TData, TFetched>,
@@ -174,10 +192,11 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
   return slice;
 };
 
-export * from '@lobechat/replica';
+export { AppIndexedDBStorage, AppLocalStorage } from './storage';
+export * from 'local-replica';
 export {
   recordLens,
   type ReplicaLens,
   type ReplicaSyncResult,
   splitPagedLens,
-} from '@lobechat/replica/zustand';
+} from 'local-replica/zustand';

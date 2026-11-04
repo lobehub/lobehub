@@ -12,7 +12,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useDeviceStore } from '@/store/device';
-import { useElectronStore } from '@/store/electron';
+import { getElectronStoreState, useElectronStore } from '@/store/electron';
 
 export interface CommitWorkingDirectoryOptions extends CommitAgentDefaultOptions {
   /**
@@ -61,6 +61,9 @@ const normalizeWorkingDirEntry = (entry: WorkingDirEntry): WorkingDirEntry | und
 };
 
 const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
+  // Metadata only: the code environment the folder was picked with. Nothing
+  // runs it on a device yet; it travels so the association is not lost.
+  ...(entry.environmentId ? { environmentId: entry.environmentId } : {}),
   ...(entry.git ? { git: entry.git } : {}),
   path: entry.path,
   ...(entry.repoType ? { repoType: entry.repoType } : {}),
@@ -181,8 +184,14 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           // The pin is a bare path that only holds on the machine it was picked
           // for, and the server skips a topic pin whose `boundDeviceId` names a
           // different device. Re-stamp it with every write so a conversation
-          // moved to another device keeps the directory just chosen there.
-          boundDeviceId: entry ? writeDeviceId : undefined,
+          // moved to another device keeps the directory just chosen there. An
+          // unresolved target keeps the topic's own pin (or this desktop's id)
+          // rather than leaving the new path with no machine at all.
+          boundDeviceId: entry
+            ? (writeDeviceId ??
+              activeTopic?.metadata?.boundDeviceId ??
+              (await getElectronStoreState().resolveGatewayDeviceId()))
+            : undefined,
           ...(shouldUpdateHeteroSession ? { heteroSessionId: scopedHeteroSessionId } : {}),
           workingDirectory: sessionCwd,
           workingDirectoryConfig: entry ? toAgentWorkingDirConfig(entry) : undefined,

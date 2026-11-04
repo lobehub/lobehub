@@ -28,6 +28,7 @@ import {
   type AgentSkillListItem,
   agentSkillListResource,
 } from './projection';
+import { agentSkillsSelectors } from './selectors';
 
 /** The skills list has a single entry; its params carry no filter. */
 const LIST_PARAMS = {} as Record<string, never>;
@@ -57,12 +58,14 @@ export const createAgentSkillsSlice = (set: Setter, get: () => ToolStore, _api?:
 
 export class AgentSkillsActionImpl {
   readonly #detail;
+  readonly #get: () => ToolStore;
   readonly #list;
   /** One skill lives in the list row and in every loaded detail entry. */
   readonly #skill;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
+    this.#get = get;
     this.#list = createReplicaSlice(agentSkillListResource, {
       actionPrefix: 'agentSkillList',
       entity: agentSkillListEntity,
@@ -160,6 +163,19 @@ export class AgentSkillsActionImpl {
     const result = await agentSkillService.importFromZip(params);
     await this.#refreshList();
     return result;
+  };
+
+  /**
+   * Make sure the installed skills list is in the store, for callers that need
+   * it while no list view is mounted (assembling a chat request right after a
+   * page load). A list the server has confirmed is not requested again, while
+   * one hydrated from the persisted copy is: it can miss a skill installed on
+   * another device. A request in flight is joined. Rejects when the fetch fails; callers decide whether that is
+   * fatal.
+   */
+  ensureAgentSkillsLoaded = async (): Promise<void> => {
+    if (agentSkillsSelectors.isAgentSkillListSynced(this.#get())) return;
+    await this.#list.fetch(LIST_PARAMS);
   };
 
   refreshAgentSkills = async (): Promise<void> => {

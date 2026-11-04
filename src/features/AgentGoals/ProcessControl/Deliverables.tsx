@@ -51,7 +51,10 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: end;
   `,
   row: css`
-    width: 100%;
+    width: calc(100% + 16px);
+
+    /* Same column edge as the section title, like the findings and activity rows. */
+    margin-inline: -8px;
     padding-block: 8px;
     padding-inline: 8px;
     border: none;

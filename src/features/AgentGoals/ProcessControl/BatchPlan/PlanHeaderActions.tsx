@@ -27,7 +27,7 @@ const PlanHeaderActions = memo<PlanHeaderActionsProps>(({ graph, model, round })
   const { versions } = usePlanVersions(graph, model);
   if (versions.length < 2) return null;
 
-  const current = selected ?? round.revision;
+  const current = selected ?? round.planVersion;
   const latest = versions.at(-1)!.revision;
   const items: DropdownItem[] = [...versions].reverse().map((version) => ({
     extra: version.revision === current ? <Icon icon={Check} /> : undefined,

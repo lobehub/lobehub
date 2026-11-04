@@ -28,6 +28,12 @@ vi.mock('@/server/services/connector/refresh', () => ({
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: { isConfigured: false, queryDeviceList: vi.fn().mockResolvedValue([]) },
 }));
+// Pin the gatekeeper so the share assertions do not depend on the developer's
+// encryption key: without it discovery falls back to resolving undecrypted.
+const gateKeeper = vi.hoisted(() => ({ decrypt: () => {} }));
+vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
+  KeyVaultsGateKeeper: { initWithEnvKey: vi.fn().mockResolvedValue(gateKeeper) },
+}));
 
 const YINGMI = 'yingmi';
 
@@ -54,26 +60,38 @@ const connectorTools = [
 ];
 
 interface RunOptions {
+  agentId?: string;
+  installed?: boolean;
   /** The agent's own `plugins` config — i.e. what the user pinned. */
   plugins?: string[];
   /** This turn's @-mention picks. */
   selectedToolIds?: string[];
   shareGate?: unknown;
+  sourceType?: 'custom' | 'marketplace';
 }
 
+const connectorModel = {
+  resolveAll: vi.fn(),
+  resolveByIdentifiers: vi.fn(),
+};
+
 const run = (options: RunOptions = {}) => {
-  const candidates = new Set([...(options.plugins ?? []), ...(options.selectedToolIds ?? [])]);
+  const connector = {
+    ...customConnector,
+    agentId: options.agentId ?? null,
+    sourceType: options.sourceType ?? 'custom',
+    status: 'connected',
+  };
+  connectorModel.resolveAll.mockReset().mockResolvedValue([connector]);
+  connectorModel.resolveByIdentifiers
+    .mockReset()
+    .mockImplementation(async (ids: string[]) => (ids.includes(YINGMI) ? [connector] : []));
 
   return discoverTools(
     {
       agentDocumentsService: { hasDocuments: vi.fn().mockResolvedValue(false) },
       composioService: { getComposioManifests: vi.fn().mockResolvedValue([]) },
-      connectorModel: {
-        resolveAll: vi.fn().mockResolvedValue([customConnector]),
-        resolveByIdentifiers: vi.fn(async (ids: string[]) =>
-          ids.includes(YINGMI) && candidates.has(YINGMI) ? [customConnector] : [],
-        ),
-      },
+      connectorModel,
       connectorToolModel: {
         queryAllByConnectorIds: vi.fn().mockResolvedValue(connectorTools),
         queryByConnector: vi.fn().mockResolvedValue([]),
@@ -83,7 +101,9 @@ const run = (options: RunOptions = {}) => {
         getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
       }),
       messageModel: { update: vi.fn() },
-      pluginModel: { query: vi.fn().mockResolvedValue([]) },
+      pluginModel: {
+        query: vi.fn().mockResolvedValue(options.installed ? [{ identifier: YINGMI }] : []),
+      },
       userId: 'user-1',
     } as never,
     {
@@ -125,6 +145,80 @@ const offeredToolNames = (result: { tools?: { function: { name: string } }[] }) 
   (result.tools ?? []).map((tool) => tool.function.name);
 
 describe('discoverTools — unpinned custom MCP connectors', () => {
+  it.each([
+    {},
+    { plugins: [YINGMI] },
+    { selectedToolIds: [YINGMI] },
+    {
+      shareGate: {
+        agentId: 'agent-1',
+        shareConfig: { toolGrants: [{ identifier: YINGMI }] },
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+    },
+  ])(
+    'rejects a canceled marketplace install even after its OAuth callback connects: %j',
+    async (options) => {
+      const result = await run({ ...options, sourceType: 'marketplace' });
+      expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+      expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+      const restored = result.toolsEngine!.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'test-model',
+        provider: 'test-provider',
+        skipDefaultTools: true,
+        toolIds: [YINGMI],
+      });
+      expect(restored.enabledToolIds).not.toContain(YINGMI);
+    },
+  );
+
+  it.each([
+    { label: 'auto', options: {} },
+    { label: 'pinned', options: { plugins: [YINGMI] } },
+    { label: 'mentioned', options: { selectedToolIds: [YINGMI] } },
+    {
+      label: 'share granted',
+      options: {
+        shareGate: {
+          agentId: 'agent-1',
+          shareConfig: { toolGrants: [{ identifier: YINGMI }] },
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+      },
+    },
+  ])('preserves an independent agent copy after global uninstall: $label', async ({ options }) => {
+    const result = await run({
+      ...options,
+      agentId: 'agent-1',
+      sourceType: 'marketplace',
+    });
+    expect(result.toolManifestMap[YINGMI]).toBeDefined();
+    const activated = result.toolsEngine!.generateToolsDetailed({
+      context: { isExplicitActivation: true },
+      model: 'test-model',
+      provider: 'test-provider',
+      skipDefaultTools: true,
+      toolIds: [YINGMI],
+    });
+    expect(activated.enabledToolIds).toContain(YINGMI);
+  });
+
+  it('keeps a completed marketplace install discoverable and explicitly activatable', async () => {
+    const result = await run({ installed: true, sourceType: 'marketplace' });
+    expect(result.toolManifestMap[YINGMI]).toBeDefined();
+    const activated = result.toolsEngine!.generateToolsDetailed({
+      context: { isExplicitActivation: true },
+      model: 'test-model',
+      provider: 'test-provider',
+      skipDefaultTools: true,
+      toolIds: [YINGMI],
+    });
+    expect(activated.enabledToolIds).toContain(YINGMI);
+  });
+
   it('keeps an unmentioned, unpinned connector discoverable without enabling it', async () => {
     // The follow-up turn after an @-mention: no mention, nothing pinned. The
     // activator used to answer "Not found: yingmi" here.
@@ -190,16 +284,46 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     expect(connectors.map((c) => c.identifier)).toContain(YINGMI);
   });
 
-  it('does not decrypt unpinned connectors for a share visitor run', async () => {
-    const result = await run({
-      shareGate: {
-        agentId: 'agent-1',
-        shareConfig: { toolGrants: [] },
-        shareId: 'share-1',
-        visitorUserId: 'visitor-1',
-      },
+  describe('share visitor run', () => {
+    const shareGateFor = (toolGrants: { apis?: string[]; identifier: string }[]) => ({
+      agentId: 'agent-1',
+      shareConfig: { toolGrants },
+      shareId: 'share-1',
+      visitorUserId: 'visitor-1',
     });
 
-    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+    it('does not resolve or decrypt an ungranted unpinned connector', async () => {
+      vi.mocked(scheduleStaleConnectorToolsRefresh).mockClear();
+
+      const result = await run({
+        shareGate: shareGateFor([{ identifier: 'lobe-calculator' }, { identifier: 'other-mcp' }]),
+      });
+
+      expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+      expect(connectorModel.resolveAll).not.toHaveBeenCalled();
+      for (const [ids] of connectorModel.resolveByIdentifiers.mock.calls) {
+        expect(ids).not.toContain(YINGMI);
+      }
+      const [connectors] = vi.mocked(scheduleStaleConnectorToolsRefresh).mock.calls[0];
+      expect(connectors.map((c) => c.identifier)).not.toContain(YINGMI);
+    });
+
+    it('makes a granted unpinned connector activatable without enabling it', async () => {
+      const result = await run({ shareGate: shareGateFor([{ identifier: YINGMI }]) });
+
+      // Resolved by identifier only — never the creator's whole connector list.
+      expect(connectorModel.resolveAll).not.toHaveBeenCalled();
+      expect(connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(
+        [YINGMI],
+        'agent-1',
+        gateKeeper,
+      );
+      expect(result.toolManifestMap[YINGMI]).toBeDefined();
+      expect(result.toolSourceMap[YINGMI]).toBe('mcp');
+      expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+      expect(availableToolIds(result.toolManifestMap, result.toolsResult.enabledToolIds)).toContain(
+        YINGMI,
+      );
+    });
   });
 });

@@ -41,8 +41,9 @@ the ALint check run summary and the PR comment, in the form
 
 ## Two keys, never one number
 
-- **CI key** — the `DEEPSEEK_API_KEY` repository secret, spent by the `ALint & Test Desktop
-  App` job on every push. This is the recurring cost.
+- **CI key** — the `DEEPSEEK_API_KEY` repository secret, spent by the
+  `ALint & Test Desktop App` job on every push and PR, except `release/weekly-*` PRs and
+  pushes to `main`. This is the recurring cost.
 - **Local / calibration key** — whatever the operator uses for scans. A whole-repo cold
   calibration pass is a one-off cost that dwarfs a normal CI day; never fold it into the CI
   figure, and never quote a total without naming which key it came from.
@@ -64,9 +65,9 @@ alint caches by **file content**; unchanged files cost nothing on a repeat run.
 
 1. **Stay on a current `@alint-js/cli`** so per-rule cache keys apply. Cheapest, largest win.
 2. **Calibrate on samples, not whole-repo cold scans.** A full scan is the single biggest
-   one-off cost (tens of millions of tokens). Calibrate the rule's scope, sample ~20 findings.
+   one-off cost (tens of millions of tokens). Calibrate the rule's scope, sample \~20 findings.
 3. **Prefer file-before-instruction in the prompt** so DeepSeek's context cache is reused
-   across the rules that read the same file (hit tokens are ~1/10 the price). As of 0.7.3 this
+   across the rules that read the same file (hit tokens are \~1/10 the price). As of 0.7.3 this
    is upstream work, not yet in alint — verify before relying on it, and re-calibrate fixtures
    after any prompt-order change.
 4. **Narrow a rule's scope, or move it to `alint.audit.toml`**, when its cost is dominated by a

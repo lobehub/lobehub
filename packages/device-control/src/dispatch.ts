@@ -38,6 +38,7 @@ import type {
 } from '@lobechat/local-file-shell/types';
 import type { DeviceCliRestartParams } from '@lobechat/types';
 
+import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
@@ -54,6 +55,7 @@ import type {
   EnrollWorkspaceParams,
   ExternalAssetForPublishParams,
   InitWorkspaceParams,
+  ListClaudeCodeMemoryParams,
   ListHeterogeneousAgentModelsParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
@@ -85,6 +87,7 @@ export const DEVICE_RPC_METHODS = [
   'getCodexQuota',
   'getKimiCodeQuota',
   'listProjectSkills',
+  'listClaudeCodeMemory',
   'prepareSkillDirectory',
   'browseDirectory',
   'statPath',
@@ -238,6 +241,10 @@ export const executeDeviceRpc = async (
 
     case 'listProjectSkills': {
       return listProjectSkills(params as ListProjectSkillsParams, deps);
+    }
+
+    case 'listClaudeCodeMemory': {
+      return listClaudeCodeMemory(params as ListClaudeCodeMemoryParams, deps);
     }
 
     case 'prepareSkillDirectory': {

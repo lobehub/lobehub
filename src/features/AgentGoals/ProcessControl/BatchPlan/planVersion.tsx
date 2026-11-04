@@ -7,7 +7,6 @@ import { userSkillService } from '@/services/userSkill';
 
 import type { GoalGraphView } from '../goalGraphViewModel';
 import type { BatchModel, BatchRound } from '../Graph/batchModel';
-import { skillVersionContent } from './skillVersions';
 
 /**
  * The plan version a reader picked in the panel's header, shared with its body.
@@ -36,8 +35,9 @@ export interface PlanVersion {
 
 /**
  * Every version of a batch's plan, oldest first. The plan is a skill in the
- * user's library — round N is its version N; a batch from before the plan
- * became a skill falls back to its plan nodes' text.
+ * user's library, and every version it kept is listed — a plan the main Agent
+ * rewrote inside a round included. A batch from before the plan became a
+ * skill falls back to its plan nodes' text, one version per round.
  */
 export const usePlanVersions = (graph: GoalGraphView, model: BatchModel) => {
   const planSkill = model.planSkill;
@@ -46,14 +46,15 @@ export const usePlanVersions = (graph: GoalGraphView, model: BatchModel) => {
     planSkill ? ['goal-plan-skill', planSkill.id, model.rounds.length] : null,
     () => userSkillService.get(planSkill!.id),
   );
-  const versions: PlanVersion[] = model.rounds
-    .filter((item) => item.templateId)
-    .map((item: BatchRound) => ({
-      content:
-        skillVersionContent(skill?.versions, item.revision) ??
-        ((item.templateId && graph.byId[item.templateId]?.node.description) || ''),
-      revision: item.revision,
-    }));
+  const kept = [...(skill?.versions ?? [])].sort((a, b) => a.version - b.version);
+  const versions: PlanVersion[] = kept.length
+    ? kept.map((version) => ({ content: version.content, revision: version.version }))
+    : model.rounds
+        .filter((item) => item.templateId)
+        .map((item: BatchRound) => ({
+          content: (item.templateId && graph.byId[item.templateId]?.node.description) || '',
+          revision: item.planVersion,
+        }));
   // A skill's scripts are its latest set; versions keep `SKILL.md` alone.
   return { files: skill?.files ?? [], isLoading: !!planSkill && isLoading, versions };
 };

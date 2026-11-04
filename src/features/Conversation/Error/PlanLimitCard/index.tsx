@@ -4,24 +4,23 @@ import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatIntergerNumber, formatNumber } from '@/utils/format';
-
 import { ErrorActionContainer, FormAction } from '../style';
 import {
+  formatCreditAmount,
   getBudgetContextFromErrorBody,
   getNextUpgradePlan,
   isKnownPlan,
   type PlanLimitPricingBasis,
 } from './budget';
 
-/** Credits are displayed in units of 1M */
-const CREDIT_UNIT = 1_000_000;
-
 /** Plans with a `plans.plan.<id>.title` locale key */
 const PLAN_TITLE_KEYS = {
   [Plans.Free]: 'plans.plan.free.title',
   [Plans.Hobby]: 'plans.plan.hobby.title',
+  [Plans.Max]: 'plans.plan.max.title',
+  [Plans.Plus]: 'plans.plan.plus.title',
   [Plans.Premium]: 'plans.plan.premium.title',
+  [Plans.Pro]: 'plans.plan.pro.title',
   [Plans.Starter]: 'plans.plan.starter.title',
   [Plans.Ultimate]: 'plans.plan.ultimate.title',
 } as const satisfies Record<Plans, string>;
@@ -68,12 +67,6 @@ const getBudgetDescriptionKey = (pricingBasis?: PlanLimitPricingBasis) => {
       return 'limitation.insufficientBudget.desc';
     }
   }
-};
-
-const formatCreditAmount = (credits: number): string => {
-  if (credits >= CREDIT_UNIT) return `${formatNumber(credits / CREDIT_UNIT, 2)}M`;
-
-  return formatIntergerNumber(credits);
 };
 
 interface PlanLimitCardProps {

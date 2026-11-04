@@ -1,30 +1,31 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
-import useSWR from 'swr';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { sandboxStorageService } from '@/services/sandboxStorage';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { sandboxActions, sandboxSelectors, useSandboxStore } from '@/store/sandbox';
 
 import { useTopicId } from '../hooks/useTopicId';
 
 /**
  * What the composer should show where the sandbox working directory goes:
  *
- * - `hidden`  — the run does not use the cloud sandbox, or the user has not
- *   opted into the experiment. Nothing is rendered; a switch the user never
- *   flipped should not start advertising itself in their composer.
- * - `upgrade` — opted in, but this account has no persistent workspace.
- * - `ready`   — opted in and entitled.
+ * - `hidden`  — the run does not use the cloud sandbox, or the deployment has
+ *   no drive service at all (self-hosted). Nothing is rendered.
+ * - `upgrade` — this account has no persistent workspace.
+ * - `ready`   — entitled.
  */
 export type SandboxStorageAccess = 'hidden' | 'ready' | 'upgrade';
 
 export interface SandboxStorageAccessResult {
+  /**
+   * Whether this run could have a drive at all — a business deployment, an
+   * agent that runs in the cloud sandbox — known before the entitlement is.
+   */
+  eligible: boolean;
   /** Soft storage quota of the workspace, once known. */
   quotaBytes: number | null;
   status: SandboxStorageAccess;
@@ -55,31 +56,29 @@ const useRunsInSandbox = (agentId: string): boolean => {
 /**
  * The entitlement is deliberately NOT derived on the client from a plan: it is
  * resolved and signed server-side, and asking the server is the only way to see
- * the same answer the sandbox will act on. The lab flag is the cheap local half,
- * so the request is not made at all until the user has opted in.
+ * the same answer the sandbox will act on. Only a deployment with business
+ * features has a drive to ask about; anywhere else nobody is entitled, and an
+ * upgrade prompt would point at plans that do not exist.
  */
 export const useSandboxStorageAccess = (agentId: string): SandboxStorageAccessResult => {
-  const labEnabled = useUserStore(labPreferSelectors.enablePersistentSandbox);
   const runsInSandbox = useRunsInSandbox(agentId);
-  const workspaceId = useActiveWorkspaceId();
-  const shouldAsk = labEnabled && runsInSandbox;
+  const shouldAsk = ENABLE_BUSINESS_FEATURES && runsInSandbox;
 
-  // Keyed by workspace, because the server resolves the entitlement from the
-  // active one. A single global key with focus revalidation off would hand the
-  // previous workspace's answer and quota to the next one until a reload —
-  // offering persistence where there is none, or hiding one there is.
-  const { data } = useSWR(
-    shouldAsk ? ['sandbox-storage-entitlement', workspaceId ?? ''] : null,
-    () => sandboxStorageService.getEntitlement(),
-    { revalidateOnFocus: false },
-  );
+  // A replica partitioned by the cache scope (user + workspace), because the
+  // server resolves the entitlement from the active workspace: one workspace's
+  // answer and quota never reach the next. Persisted, so a reload paints the
+  // chip from the last answer while this one is confirmed; the server still
+  // checks the claim on every sandbox call.
+  sandboxActions.useFetchEntitlement(shouldAsk, { revalidateOnFocus: false });
+  const data = useSandboxStore(sandboxSelectors.entitlement);
 
-  if (!shouldAsk) return { quotaBytes: null, status: 'hidden' };
+  if (!shouldAsk) return { eligible: false, quotaBytes: null, status: 'hidden' };
   // Until the answer arrives, show nothing rather than flashing an upgrade
   // prompt at a user who turns out to be entitled.
-  if (!data) return { quotaBytes: null, status: 'hidden' };
+  if (!data) return { eligible: true, quotaBytes: null, status: 'hidden' };
 
   return {
+    eligible: true,
     quotaBytes: data.quotaBytes,
     status: data.entitled ? 'ready' : 'upgrade',
   };

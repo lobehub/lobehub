@@ -40,6 +40,17 @@ const asBrief = (node: GoalGraphNode) => ({
   title: node.title,
 });
 
+/** The gate's checks in one line, for the main Agent asked to release a wave. */
+export const describeGateChecks = (gate?: Pick<RolloutGateResult, 'checks'>): string =>
+  gate?.checks.length
+    ? gate.checks
+        .map(
+          (check) =>
+            `${check.key} ${check.passed ? 'passed' : 'failed'}${check.total === undefined ? '' : ` (${check.count ?? 0}/${check.total})`}`,
+        )
+        .join(', ')
+    : 'no checks recorded';
+
 /**
  * Whether a repeated batch has earned its next wave.
  *

@@ -43,6 +43,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     cursor: pointer;
+
+    /* The hover wash keeps its inset; the row's content lines up with the section title. */
+    margin-inline: -8px;
     padding-block: 8px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadiusSM};

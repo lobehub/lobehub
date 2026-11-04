@@ -16,18 +16,22 @@ const styles = createStaticStyles(({ css }) => ({
     inset-block-start: 20px;
 
     display: flex;
-    flex: 1 1 220px;
+    flex: none;
     flex-direction: column;
     gap: 16px;
 
-    max-width: 264px;
+    width: 296px;
 
     font-size: 13px;
+
+    @container (width < 720px) {
+      position: static;
+      width: auto;
+    }
 
     @media (width <= 767px) {
       position: static;
       order: -1;
-      max-width: none;
     }
   `,
   list: css`

@@ -6,39 +6,65 @@ interface DecryptionResult {
   wasAuthentic: boolean;
 }
 
-export class KeyVaultsGateKeeper {
-  private aesKey: CryptoKey;
+const importAesKey = async (secret: string, envName: string) => {
+  const rawKey = Buffer.from(secret, 'base64');
 
-  constructor(aesKey: CryptoKey) {
-    this.aesKey = aesKey;
+  // AES-GCM supports 128, 192, and 256 bit keys.
+  // See: https://developer.mozilla.org/en-US/docs/Web/API/AesKeyGenParams#length
+  if (![16, 24, 32].includes(rawKey.length)) {
+    throw new Error(
+      `\`${envName}\` must be 16, 24, or 32 bytes (128, 192, or 256 bits) when base64 decoded, got ${rawKey.length} bytes. ` +
+        'Please run `openssl rand -base64 32` to create a valid key.',
+    );
+  }
+
+  return crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+};
+
+export const getKeyVaultsSecrets = () => {
+  const { KEY_VAULTS_FALLBACK_SECRET, KEY_VAULTS_SECRET } = getServerDBConfig();
+  const active = KEY_VAULTS_SECRET?.trim() ? KEY_VAULTS_SECRET : undefined;
+  const fallback =
+    active && KEY_VAULTS_FALLBACK_SECRET?.trim() ? KEY_VAULTS_FALLBACK_SECRET : undefined;
+
+  return {
+    active,
+    fallback: fallback === active ? undefined : fallback,
+  };
+};
+
+export const isKeyVaultsSecretBearerToken = (authorization: string | null) => {
+  const { active, fallback } = getKeyVaultsSecrets();
+  if (!active) return false;
+
+  return [active, fallback].some(
+    (secret) => secret !== undefined && authorization === `Bearer ${secret}`,
+  );
+};
+
+export class KeyVaultsGateKeeper {
+  private activeAesKey: CryptoKey;
+  private fallbackAesKey?: CryptoKey;
+
+  constructor(activeAesKey: CryptoKey, fallbackAesKey?: CryptoKey) {
+    this.activeAesKey = activeAesKey;
+    this.fallbackAesKey = fallbackAesKey;
   }
 
   static initWithEnvKey = async () => {
-    const { KEY_VAULTS_SECRET } = getServerDBConfig();
-    if (!KEY_VAULTS_SECRET)
+    const { active, fallback } = getKeyVaultsSecrets();
+    if (!active)
       throw new Error(` \`KEY_VAULTS_SECRET\` is not set, please set it in your environment variables.
 
 If you don't have it, please run \`openssl rand -base64 32\` to create one.
 `);
 
-    const rawKey = Buffer.from(KEY_VAULTS_SECRET, 'base64');
+    const activeAesKey = await importAesKey(active, 'KEY_VAULTS_SECRET');
+    const fallbackAesKey = fallback
+      ? await importAesKey(fallback, 'KEY_VAULTS_FALLBACK_SECRET')
+      : undefined;
 
-    // Validate key length - AES-GCM supports 128, 192, and 256 bit keys (16, 24, or 32 bytes)
-    // See: https://developer.mozilla.org/en-US/docs/Web/API/AesKeyGenParams#length
-    if (![16, 24, 32].includes(rawKey.length)) {
-      throw new Error(
-        `\`KEY_VAULTS_SECRET\` must be 16, 24, or 32 bytes (128, 192, or 256 bits) when base64 decoded, got ${rawKey.length} bytes. ` +
-          'Please run `openssl rand -base64 32` to create a valid key.',
-      );
-    }
-    const aesKey = await crypto.subtle.importKey(
-      'raw',
-      rawKey,
-      { length: 256, name: 'AES-GCM' },
-      false,
-      ['encrypt', 'decrypt'],
-    );
-    return new KeyVaultsGateKeeper(aesKey);
+    return new KeyVaultsGateKeeper(activeAesKey, fallbackAesKey);
   };
 
   /**
@@ -53,7 +79,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
         iv,
         name: 'AES-GCM',
       },
-      this.aesKey,
+      this.activeAesKey,
       encodedKeyVault,
     );
 
@@ -64,8 +90,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
     return `${Buffer.from(iv).toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
   };
 
-  // Assuming key and encrypted data are obtained from external sources
-  decrypt = async (encryptedData: string): Promise<DecryptionResult> => {
+  private decryptWithKey = async (encryptedData: string, aesKey: CryptoKey) => {
     const parts = encryptedData.split(':');
     if (parts.length !== 3) {
       throw new Error('Invalid encrypted data format');
@@ -78,22 +103,43 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
     // Combine encrypted data and authentication tag
     const combined = Buffer.concat([encrypted, authTag]);
 
-    try {
-      const decryptedBuffer = await crypto.subtle.decrypt(
-        {
-          iv,
-          name: 'AES-GCM',
-        },
-        this.aesKey,
-        combined,
-      );
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      {
+        iv,
+        name: 'AES-GCM',
+      },
+      aesKey,
+      combined,
+    );
 
-      const decrypted = new TextDecoder().decode(decryptedBuffer);
+    return new TextDecoder().decode(decryptedBuffer);
+  };
+
+  // Assuming key and encrypted data are obtained from external sources
+  decrypt = async (encryptedData: string): Promise<DecryptionResult> => {
+    if (encryptedData.split(':').length !== 3) {
+      throw new Error('Invalid encrypted data format');
+    }
+
+    try {
+      const plaintext = await this.decryptWithKey(encryptedData, this.activeAesKey);
       return {
-        plaintext: decrypted,
+        plaintext,
         wasAuthentic: true,
       };
     } catch {
+      if (this.fallbackAesKey) {
+        try {
+          const plaintext = await this.decryptWithKey(encryptedData, this.fallbackAesKey);
+          return {
+            plaintext,
+            wasAuthentic: true,
+          };
+        } catch {
+          // Return the existing unauthentic result after both configured keys fail.
+        }
+      }
+
       return {
         plaintext: '',
         wasAuthentic: false,

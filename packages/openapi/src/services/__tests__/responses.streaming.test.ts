@@ -231,4 +231,61 @@ describe('ResponsesService function call outputs', () => {
       }),
     );
   });
+
+  it.each([false, true])(
+    'rejects a stale strict resume without starting a run (stream=%s)',
+    async (stream) => {
+      resumeParkedClientToolsMock.mockResolvedValue(undefined);
+      const params = { ...toolOutputRequest, strict_tool_resume: true };
+      const service = buildService();
+      let response;
+      if (stream) {
+        const events = [];
+        for await (const event of service.createStreamingResponse(params)) events.push(event);
+        expect(events.at(-1)?.type).toBe('response.failed');
+        response = events.at(-1)?.response;
+      } else {
+        response = await service.createResponse(params);
+      }
+      expect(response).toMatchObject({
+        status: 'failed',
+        error: { code: 'invalid_request_error' },
+      });
+      expect(execAgentMock).not.toHaveBeenCalled();
+      expect(executeResponseRunMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('requires both a previous response and tool outputs for strict resume', async () => {
+    for (const params of [
+      { input: 'hello', model: 'agt_1', previous_response_id: 'tpc_1' },
+      { input: toolOutputRequest.input, model: 'agt_1' },
+    ]) {
+      const response = await buildService().createResponse({ ...params, strict_tool_resume: true });
+      expect(response).toMatchObject({
+        status: 'failed',
+        error: { code: 'invalid_request_error' },
+      });
+    }
+    expect(execAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('limits hosted discovery to the explicitly declared tools in exclusive mode', async () => {
+    const response = await buildService().createResponse({
+      input: 'Read the document',
+      model: 'agt_1',
+      tools: [
+        { type: 'lobe-agent-documents' },
+        { type: 'function', name: 'read_page', parameters: { type: 'object' } },
+      ],
+      tools_mode: 'exclusive',
+    });
+    expect(response.status).toBe('completed');
+    expect(execAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exclusivePluginIds: ['lobe-agent-documents'],
+        functionTools: [{ name: 'read_page', parameters: { type: 'object' } }],
+      }),
+    );
+  });
 });

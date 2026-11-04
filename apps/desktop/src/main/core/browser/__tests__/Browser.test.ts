@@ -1142,7 +1142,7 @@ describe('Browser', () => {
     });
 
     it('should deny renderer-origin URLs instead of handing them to the OS', () => {
-      expect(windowOpenHandler({ url: 'app://renderer/verify/run-1' })).toEqual({
+      expect(windowOpenHandler({ url: 'app://renderer/acceptance/acc-1' })).toEqual({
         action: 'deny',
       });
       expect(mockShell.openExternal).not.toHaveBeenCalled();

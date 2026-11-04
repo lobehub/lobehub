@@ -7,6 +7,7 @@ export interface DeviceHoverSummary {
   /** Live connections; only meaningful while online. */
   connections: number;
   cores?: number;
+  diskTotalBytes?: number;
   /**
    * Who enrolled a workspace device. `null` names an enroller the list could
    * not resolve; `undefined` means the row has no enroller to show.
@@ -17,6 +18,8 @@ export interface DeviceHoverSummary {
   lastConnectedAt: string;
   memoryTotalBytes?: number;
   online: boolean;
+  /** A persisted row the server has not confirmed: `online` is a placeholder. */
+  onlineUnknown: boolean;
   platformLabel?: string;
   workingDir?: string;
 }
@@ -35,6 +38,7 @@ export const buildDeviceHoverSummary = (
     architecture: device.architecture || undefined,
     connections: channels.length,
     cores: series?.cpuCount || undefined,
+    diskTotalBytes: series?.diskTotalBytes || undefined,
     enrollerName:
       device.scope === 'workspace' && device.enroller
         ? device.enroller.fullName || device.enroller.username || null
@@ -43,6 +47,7 @@ export const buildDeviceHoverSummary = (
     lastConnectedAt: channels[0]?.connectedAt ?? device.lastSeen,
     memoryTotalBytes: series?.memoryTotalBytes || undefined,
     online: device.online,
+    onlineUnknown: !!device.onlineUnknown,
     platformLabel: getPlatformLabel(device.platform),
     workingDir: device.defaultCwd || undefined,
   };

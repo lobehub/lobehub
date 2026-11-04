@@ -38,7 +38,28 @@ export const usePageEditable = (): boolean => {
     isWorkspacePage && documentId ? documentId : undefined,
   );
 
+  // An agent command is writing the stored page (no collaboration room).
+  const isAgentEditing = useDocumentStore((s) =>
+    documentId ? editorSelectors.isAgentEditing(documentId)(s) : false,
+  );
+
+  const collab = usePageEditorStore((s) => s.collab);
+  if (collab) {
+    // Editable once the room synced; offline edits merge when it reconnects.
+    return (
+      hasEditPermission &&
+      canEditResource &&
+      collab.access === 'edit' &&
+      (collab.status === 'synced' || collab.status === 'offline')
+    );
+  }
+
   return (
-    hasEditPermission && canEditResource && !isLockedByOther && !pendingLock && !saveBlockedByLock
+    hasEditPermission &&
+    canEditResource &&
+    !isLockedByOther &&
+    !pendingLock &&
+    !saveBlockedByLock &&
+    !isAgentEditing
   );
 };

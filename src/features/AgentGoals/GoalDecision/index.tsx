@@ -1,6 +1,6 @@
 'use client';
 
-import { GOAL_BATCH_BREAK_OPTION } from '@lobechat/const/goal';
+import { GOAL_BATCH_BREAK_OPTION, GOAL_BATCH_RELEASE_OPTION } from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
 import {
   Avatar,
@@ -22,6 +22,8 @@ import ClarificationQuestions, {
 } from '@/features/ClarificationQuestions';
 
 import {
+  type CoordinatorGateKind,
+  coordinatorGateKind,
   coordinatorGateReason,
   gateOptionLabelKey,
   localizedCoordinatorReason,
@@ -108,10 +110,31 @@ export const GoalDecisionAsker = ({
 
 /** The coordinator's own answers, in the reader's words, and what each one does. */
 export const useGateOptionCopy = () => {
-  const { t } = useTranslation('chat');
-  return useMemo(
-    () => ({
-      describe: (option: GoalDecisionOption, category: GoalGateCategory) => {
+  const { i18n, t } = useTranslation('chat');
+  return useMemo(() => {
+    const alsoRetiresList = (option: GoalDecisionOption) =>
+      option.alsoRetires?.length
+        ? new Intl.ListFormat(i18n.language).format(
+            option.alsoRetires.map(({ title }) =>
+              t('goalProcess.decision.effect.quotedTask', { title }),
+            ),
+          )
+        : undefined;
+    return {
+      /**
+       * What an option the main Agent wrote also does to dependent tasks. Its
+       * own description is the Agent's words; the cascade is the coordinator's,
+       * so it is added here rather than trusted to the Agent to mention.
+       */
+      cascade: (option: GoalDecisionOption) => {
+        const tasks = alsoRetiresList(option);
+        return tasks ? t('goalProcess.decision.effect.alsoRetires', { tasks }) : undefined;
+      },
+      describe: (
+        option: GoalDecisionOption,
+        category: GoalGateCategory,
+        gateKind?: CoordinatorGateKind,
+      ) => {
         const terminalAcceptance = category === 'goalAcceptance';
         switch (option.id) {
           case 'retry': {
@@ -121,8 +144,11 @@ export const useGateOptionCopy = () => {
               : t('goalProcess.decision.effect.retry');
           }
           case 'retire': {
-            return terminalAcceptance
-              ? t('goalProcess.decision.effect.abandonAcceptance')
+            if (terminalAcceptance) return t('goalProcess.decision.effect.abandonAcceptance');
+            // Dependents leave with it, or they would wait forever on it.
+            const tasks = alsoRetiresList(option);
+            return tasks
+              ? t('goalProcess.decision.effect.retireWithDependents', { tasks })
               : t('goalProcess.decision.effect.retire');
           }
           case 'fail': {
@@ -132,23 +158,31 @@ export const useGateOptionCopy = () => {
           // consequences are written here, in the reader's language, rather than
           // persisted as English copy the server cannot translate.
           case GOAL_BATCH_BREAK_OPTION.revise: {
-            return t('goalProcess.decision.effect.reviseBatch');
+            return gateKind === 'batchRelease'
+              ? t('goalProcess.decision.effect.sendBackBatch')
+              : t('goalProcess.decision.effect.reviseBatch');
           }
           case GOAL_BATCH_BREAK_OPTION.newClass: {
             return t('goalProcess.decision.effect.newClassBatch');
+          }
+          case GOAL_BATCH_RELEASE_OPTION.release: {
+            return t('goalProcess.decision.effect.releaseBatch');
           }
           default: {
             return undefined;
           }
         }
       },
-      label: (option: GoalDecisionOption, category: GoalGateCategory) => {
-        const key = gateOptionLabelKey(option, category === 'machine' ? 'fixSetup' : undefined);
+      label: (
+        option: GoalDecisionOption,
+        category: GoalGateCategory,
+        gateKind?: CoordinatorGateKind,
+      ) => {
+        const key = gateOptionLabelKey(option, category === 'machine' ? 'fixSetup' : gateKind);
         return key ? t(key as any) : option.label;
       },
-    }),
-    [t],
-  );
+    };
+  }, [i18n.language, t]);
 };
 
 const contextStyles = createStaticStyles(({ css, cssVar }) => ({
@@ -311,17 +345,18 @@ const GoalDecisionCase = ({
   const questionText = localizedCoordinatorReason(rawReason, t as any);
   const basisText = basis && basis.trim() !== rawReason.trim() ? basis.trim() : undefined;
 
-  const questions = useMemo(
-    () => [
+  const questions = useMemo(() => {
+    const gateKind = coordinatorGateKind(decision);
+    return [
       toGateQuestion(decision, {
         basis: basisText,
-        describe: (option) => optionCopy.describe(option, category),
-        label: (option) => optionCopy.label(option, category),
+        cascade: optionCopy.cascade,
+        describe: (option) => optionCopy.describe(option, category, gateKind),
+        label: (option) => optionCopy.label(option, category, gateKind),
         question: questionText,
       }),
-    ],
-    [basisText, category, decision, optionCopy, questionText],
-  );
+    ];
+  }, [basisText, category, decision, optionCopy, questionText]);
 
   // A batch break revises the recipe with the correction written here; without
   // one the "revision" would re-run the plan that just failed.

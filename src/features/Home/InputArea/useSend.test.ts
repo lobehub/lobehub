@@ -216,6 +216,7 @@ describe('Home InputArea useSend', () => {
     agentState.agentMap.agt_custom = {};
     createTaskMock.mockResolvedValue({
       assigneeAgentId: 'agt_custom',
+      id: 'task_26',
       identifier: 'T-26',
     });
     const { result } = renderHook(() => useSend('task'));

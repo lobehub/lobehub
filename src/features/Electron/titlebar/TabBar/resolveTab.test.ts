@@ -47,6 +47,45 @@ describe('resolveTab', () => {
     expect(resolved.meta.icon).toBe(MessageSquare);
   });
 
+  it('carries a project avatar seed from the snapshot and the live meta', () => {
+    const cold = resolveTab(fixtureRoutes, tab('/agent/abc', { avatarSeed: 'Alpha' }), false, t);
+    expect(cold.meta.avatarSeed).toBe('Alpha');
+
+    const live = resolveTab(
+      fixtureRoutes,
+      tab('/agent/abc', { avatarSeed: 'Old name' }),
+      true,
+      t,
+      { avatarSeed: 'Alpha' },
+      '/agent/abc',
+    );
+    expect(live.meta.avatarSeed).toBe('Alpha');
+  });
+
+  it('carries the workspace avatar kind from the snapshot', () => {
+    const cold = resolveTab(
+      fixtureRoutes,
+      tab('/agent/abc', { avatarKind: 'workspace', title: 'Acme' }),
+      false,
+      t,
+    );
+    expect(cold.meta.avatarKind).toBe('workspace');
+    expect(cold.meta.avatar).toBeUndefined();
+  });
+
+  it('active tab: a live null avatar hides the cached one', () => {
+    const resolved = resolveTab(
+      fixtureRoutes,
+      tab('/agent/abc', { avatar: 'logo.png', avatarSeed: 'Alpha' }),
+      true,
+      t,
+      { avatar: null, avatarSeed: 'Alpha' },
+      '/agent/abc',
+    );
+    expect(resolved.meta.avatar).toBeUndefined();
+    expect(resolved.meta.avatarSeed).toBe('Alpha');
+  });
+
   it('active tab: live dynamic meta overlays the snapshot', () => {
     const resolved = resolveTab(
       fixtureRoutes,

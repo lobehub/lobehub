@@ -1,6 +1,6 @@
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/const/verify';
-import type { VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
+import type { VerifyAgentPlanConfig, VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -42,6 +42,20 @@ const resolveMaxRepairRounds = async (
 
   const rubric = await new VerifyRubricModel(db, userId, workspaceId).findById(rubricId);
   return rubric?.config?.maxRepairRounds ?? DEFAULT_MAX_REPAIR_ROUNDS;
+};
+
+/**
+ * How the source round settled is its own record, not policy. A repair spawned
+ * after the round was driven (the Acceptance review path) would otherwise
+ * inherit `taskDrivenAt` and never settle the Task, and inherit the rejected
+ * review as if it were its own.
+ */
+const ROUND_SETTLE_KEYS = ['autoRepair', 'goalReview', 'taskDrivenAt'] as const;
+
+export const carriedRunPolicy = (metadata: Record<string, unknown>): Record<string, unknown> => {
+  const policy = { ...metadata };
+  for (const key of ROUND_SETTLE_KEYS) delete policy[key];
+  return policy;
 };
 
 /**
@@ -125,7 +139,8 @@ export const createRepairRunner = (params: {
             // Carry the source run's policy bag (e.g. the task's maxRepairRounds
             // override) onto this round so its own auto-repair derives the same cap
             // instead of falling back to the rubric/default.
-            if (sourceRun?.metadata) await runModel.setMetadata(repairRun.id, sourceRun.metadata);
+            if (sourceRun?.metadata)
+              await runModel.setMetadata(repairRun.id, carriedRunPolicy(sourceRun.metadata));
             await runModel.confirmPlan(repairRun.id);
 
             // A repair is the next immutable round of the same business acceptance,
@@ -225,7 +240,6 @@ export const maybeAutoRepair = async (
   operationId: string,
   workspaceId?: string,
 ): Promise<{ repairOperationId: string } | null | undefined> => {
-  const operationModel = new AgentOperationModel(db, userId, workspaceId);
   const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operationId);
   const plan = (run?.plan ?? []) as VerifyCheckItem[];
   if (!run || plan.length === 0) return;
@@ -242,6 +256,19 @@ export const maybeAutoRepair = async (
     });
   if (stillPending) return;
 
+  const spawner = await buildRunRepairSpawner(db, userId, operationId, run, workspaceId);
+  return new VerifyRepairService(db, userId, workspaceId).triggerAutoRepair(operationId, spawner);
+};
+
+/** The repair runner for a run, built from its own agent / topic / model. */
+const buildRunRepairSpawner = async (
+  db: LobeChatDatabase,
+  userId: string,
+  operationId: string,
+  run: { metadata?: unknown; plan?: unknown },
+  workspaceId?: string,
+): Promise<RepairSpawner | undefined> => {
+  const operationModel = new AgentOperationModel(db, userId, workspaceId);
   const op = await operationModel.findById(operationId);
   let taskOperation = op;
   let taskDepth = 0;
@@ -249,13 +276,13 @@ export const maybeAutoRepair = async (
     taskOperation = await operationModel.findById(taskOperation.parentOperationId);
     taskDepth += 1;
   }
-  const spawner = createRepairRunner({
+  return createRepairRunner({
     agentId: op?.agentId,
     db,
     maxRepairRounds: await resolveMaxRepairRounds(
       db,
       userId,
-      plan,
+      (run.plan ?? []) as VerifyCheckItem[],
       run.metadata as VerifyRunMetadata | null,
       workspaceId,
     ),
@@ -266,7 +293,56 @@ export const maybeAutoRepair = async (
     userId,
     workspaceId,
   });
-  return new VerifyRepairService(db, userId, workspaceId).triggerAutoRepair(operationId, spawner);
+};
+
+/**
+ * Repair the checks a Goal's Acceptance review sent back, inside the round that
+ * delivered them. The verifiers had passed those checks, so the ordinary
+ * auto-repair never saw a failure: the review paused the Task and the
+ * coordinator started a whole new attempt, in a fresh topic, re-evidencing every
+ * check from nothing. Each attempt fixed the gap it was told about and dropped
+ * evidence an earlier one had (round 8 had the screenshots but no DOM snapshot,
+ * round 9 the snapshot but not the screenshots), so a Task whose work was done in
+ * its first round ran attempt after attempt on evidence alone.
+ *
+ * Returns the repair, or null when none could start (nothing auto-repairable,
+ * the repair cap reached, a superseded round) — the review's rejection then
+ * stands as before.
+ */
+export const repairRejectedReview = async (
+  db: LobeChatDatabase,
+  userId: string,
+  operationId: string,
+  rejected: ReviewRejection[],
+  workspaceId?: string,
+): Promise<{ repairOperationId: string } | null> => {
+  if (rejected.length === 0) return null;
+  const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operationId);
+  if (!run || ((run.plan ?? []) as VerifyCheckItem[]).length === 0) return null;
+
+  const spawner = await buildRunRepairSpawner(db, userId, operationId, run, workspaceId);
+  return new VerifyRepairService(db, userId, workspaceId).triggerAutoRepair(
+    operationId,
+    spawner,
+    rejected,
+  );
+};
+
+/**
+ * A passed round delivered its Acceptance unless the user rejected it or the
+ * Goal's Acceptance review sent it back. A review-rejected round still reads
+ * `passed` (its verifiers did pass), and counting it as delivered declined the
+ * auto-repair of every later round of the Task, so each gap that one small
+ * repair could close cost another full attempt instead.
+ */
+const isDeliveredRound = (round: {
+  metadata?: unknown;
+  status?: string | null;
+  userDecision?: string | null;
+}): boolean => {
+  if (round.status !== 'passed' || round.userDecision === 'reject') return false;
+  const review = (round.metadata as VerifyRunMetadata | null | undefined)?.goalReview;
+  return !review || review.status === 'passed';
 };
 
 // `errored` = the verifier couldn't run (infra), so there's no delivery fault to
@@ -276,12 +352,44 @@ const isFailed = (r: VerifyCheckResultItem | undefined): boolean =>
   r.status !== 'errored' &&
   (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain');
 
-const buildInstruction = (
-  failures: { item: VerifyCheckItem; result: VerifyCheckResultItem | undefined }[],
-): string => {
-  const lines = failures.map(({ item, result }, i) => {
-    const why = result?.suggestion || result?.toulmin?.reasoning || 'did not pass verification';
-    return `${i + 1}. ${item.title} — ${why}`;
+/** A check the Acceptance review sent back, by the reviewed round's plan item id. */
+export interface ReviewRejection {
+  checkItemId: string;
+  feedback: string;
+}
+
+interface RepairFailure {
+  item: VerifyCheckItem;
+  result: VerifyCheckResultItem | undefined;
+  /** Set when the Acceptance review, not the verifier, sent the check back. */
+  reviewFeedback?: string;
+}
+
+/**
+ * A repaired check is judged again from only what the repair submits, so its
+ * evidence must be complete, not just the piece the feedback names. A builder
+ * told "the DOM snapshot is missing" re-submitted the snapshot alone and lost
+ * the screenshots that had satisfied the rest of the check.
+ */
+const describeRequiredEvidence = (item: VerifyCheckItem): string | undefined => {
+  const specs = (item.verifierConfig as VerifyAgentPlanConfig | undefined)?.requiredEvidence ?? [];
+  if (specs.length === 0) return;
+  return specs.map((spec) => (spec.hint ? `${spec.type} (${spec.hint})` : spec.type)).join('; ');
+};
+
+const buildInstruction = (failures: RepairFailure[]): string => {
+  const lines = failures.map(({ item, result, reviewFeedback }, i) => {
+    const why = reviewFeedback
+      ? `the Acceptance review sent it back: ${reviewFeedback}`
+      : result?.suggestion || result?.toulmin?.reasoning || 'did not pass verification';
+    const evidence = describeRequiredEvidence(item);
+    return [
+      `${i + 1}. ${item.title} — ${why}`,
+      evidence &&
+        `   This check is judged again from only what you submit now. Submit all of its required evidence to item ${item.id}, not only what is missing: ${evidence}.`,
+    ]
+      .filter(Boolean)
+      .join('\n');
   });
   return [
     'The delivery checker found unresolved issues with the previous result. Fix only these, then stop:',
@@ -310,13 +418,20 @@ export class VerifyRepairService {
     this.statusService = new VerifyStatusService(db, userId, workspaceId);
   }
 
-  /** Collect the auto-repairable failures for a run. */
-  async collectRepairable(operationId: string) {
+  /**
+   * Collect the auto-repairable failures for a run: the checks its verifiers
+   * failed, plus the ones the Acceptance review sent back after they passed.
+   */
+  async collectRepairable(
+    operationId: string,
+    reviewRejections: ReviewRejection[] = [],
+  ): Promise<RepairFailure[]> {
     const run = await this.runModel.findByOperation(operationId);
     if (!run) return [];
     const plan = (run.plan ?? []) as VerifyCheckItem[];
     const results = await this.resultModel.listByRun(run.id);
     const byItem = new Map(results.map((r) => [r.checkItemId, r]));
+    const rejectedBy = new Map(reviewRejections.map((r) => [r.checkItemId, r.feedback]));
 
     // An optional check never gates delivery, so it must not spend a repair
     // round either: a passing round whose only gap was an optional video kept
@@ -324,9 +439,15 @@ export class VerifyRepairService {
     return plan
       .filter(
         (item) =>
-          item.required !== false && item.onFail === 'auto_repair' && isFailed(byItem.get(item.id)),
+          item.required !== false &&
+          item.onFail === 'auto_repair' &&
+          (isFailed(byItem.get(item.id)) || rejectedBy.has(item.id)),
       )
-      .map((item) => ({ item, result: byItem.get(item.id) }));
+      .map((item) => ({
+        item,
+        result: byItem.get(item.id),
+        ...(rejectedBy.has(item.id) && { reviewFeedback: rejectedBy.get(item.id) }),
+      }));
   }
 
   /**
@@ -344,9 +465,18 @@ export class VerifyRepairService {
     return rounds.some(
       (round) =>
         round.id !== run.id &&
-        ((round.roundIndex ?? 0) > (run.roundIndex ?? 0) ||
-          (round.status === 'passed' && round.userDecision !== 'reject')),
+        ((round.roundIndex ?? 0) > (run.roundIndex ?? 0) || isDeliveredRound(round)),
     );
+  }
+
+  /**
+   * Mark a failed round's auto-repair as declined, so readers (the persisted
+   * verify card) can treat its `failed` status as final rather than transient.
+   */
+  private async declineRepair(operationId: string): Promise<null> {
+    const run = await this.runModel.findByOperation(operationId);
+    if (run) await this.runModel.recordAutoRepair(run.id, 'declined');
+    return null;
   }
 
   /**
@@ -356,16 +486,17 @@ export class VerifyRepairService {
   async triggerAutoRepair(
     operationId: string,
     spawner?: RepairSpawner,
+    reviewRejections?: ReviewRejection[],
   ): Promise<{ repairOperationId: string } | null> {
-    const failures = await this.collectRepairable(operationId);
+    const failures = await this.collectRepairable(operationId, reviewRejections);
     if (failures.length === 0) return null;
     if (await this.isSuperseded(operationId)) {
       log('op %s round is superseded within its acceptance, not repairing', operationId);
-      return null;
+      return this.declineRepair(operationId);
     }
     if (!spawner) {
       log('auto-repair eligible for op %s but no spawner available', operationId);
-      return null;
+      return this.declineRepair(operationId);
     }
 
     const failedItemIds = failures.map((f) => f.item.id);
@@ -388,11 +519,13 @@ export class VerifyRepairService {
       operationId,
       verifyMessageId: verifyMessage?.id,
     });
-    if (!spawned) return null;
+    // Cap reached, or the spawn failed: the failure stands as this round's verdict.
+    if (!spawned) return this.declineRepair(operationId);
 
     // Link the repair operation onto each failed result and flip the rollup.
     const run = await this.runModel.findByOperation(operationId);
     if (run) {
+      await this.runModel.recordAutoRepair(run.id, 'spawned');
       for (const { item } of failures) {
         await this.resultModel.updateByCheckItem(run.id, item.id, {
           repairOperationId: spawned.repairOperationId,

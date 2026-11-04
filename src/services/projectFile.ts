@@ -18,7 +18,11 @@ import { isAbsolute, relative, resolve } from 'pathe';
 import { mutate } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
-import { type LocalFilePreview, localFileService } from '@/services/electron/localFileService';
+import {
+  type LocalFilePreview,
+  localFilePreviewResultError,
+  localFileService,
+} from '@/services/electron/localFileService';
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
 export type { LocalFilePreview } from '@/services/electron/localFileService';
@@ -159,7 +163,9 @@ class ProjectFileService {
     topicId?: string;
   }): Promise<ProjectFileIndexResult | undefined> {
     const [workspace, listing] = await Promise.all([
-      sandboxStorageService.getStorage(),
+      // Rooted on the drive the conversation's folder is on, which the
+      // topic names.
+      sandboxStorageService.getStorage({ topicId }),
       // The topic still travels: it names the warm session the read can go
       // through, and is what lets a listing be refreshed before it is served.
       // The instance is the address; the topic is the route.
@@ -264,7 +270,7 @@ class ProjectFileService {
       });
 
       if (!result.success || !result.preview) {
-        throw new Error(result.error || 'Missing local file preview');
+        throw localFilePreviewResultError(result, 'Missing local file preview');
       }
 
       if (params.accept === 'image' && result.preview.type !== 'image') {

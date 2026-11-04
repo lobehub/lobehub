@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useTaskRunTarget } from './useTaskRunTarget';
+import { getTaskDeviceLockReason, useTaskRunTarget } from './useTaskRunTarget';
 
 const DEVICE_AGENT_BOUND = 'device-agent-bound';
 const DEVICE_TASK_PIN = 'device-task-pin';
@@ -28,6 +28,9 @@ const mocks = vi.hoisted(() => ({
   activeTopicAgency: undefined as undefined | { agencyConfig: Record<string, unknown> },
   agentState: { agentMap: {} as Record<string, { workspaceId?: string }> },
   devices: [] as { deviceId: string; scope?: string; visibility?: string }[],
+  devicesConfirmed: true,
+  devicesError: undefined as unknown,
+  mutateDevices: vi.fn(),
   electron: { currentDeviceId: undefined as string | undefined, isDesktop: false },
 }));
 
@@ -50,8 +53,15 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/features/DeviceManager/useDeviceList', () => ({
-  useDeviceList: () => ({ data: mocks.devices, isLoading: false }),
+vi.mock('@/store/device/useDeviceList', () => ({
+  useDeviceList: () => ({
+    data: mocks.devices,
+    error: mocks.devicesError,
+    isConfirmed: mocks.devicesConfirmed,
+    isLoading: false,
+    isValidating: false,
+    mutate: mocks.mutateDevices,
+  }),
 }));
 
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
@@ -82,6 +92,9 @@ const deviceBoundAgent = {
 
 beforeEach(() => {
   mocks.activeTopicAgency = undefined;
+  mocks.devicesConfirmed = true;
+  mocks.devicesError = undefined;
+  mocks.mutateDevices.mockReset();
   mocks.agency.agencyConfig = {};
   mocks.agency.canSelectExecutionTarget = true;
   mocks.agency.isPreferenceLoading = false;
@@ -93,6 +106,36 @@ beforeEach(() => {
 describe('useTaskRunTarget', () => {
   // A task's runs never carry the open chat topic's binding, so the machine
   // shown for a task must not follow whatever conversation happens to be active.
+  it('keeps the target controls pending while the device list is the stored copy', () => {
+    mocks.devices = [PERSONAL_DEVICE];
+    mocks.devicesConfirmed = false;
+
+    const { result, rerender } = renderHook(() => useTaskRunTarget('agent-1'));
+
+    // A stored row may since have been deleted or unshared: no pin from it yet.
+    expect(result.current.isPending).toBe(true);
+
+    mocks.devicesConfirmed = true;
+    rerender();
+
+    expect(result.current.isPending).toBe(false);
+  });
+
+  it('unlocks with a retry, not a pin, when the unconfirmed device list fails to load', () => {
+    mocks.devices = [PERSONAL_DEVICE];
+    mocks.devicesConfirmed = false;
+    mocks.devicesError = new Error('network down');
+
+    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+
+    // Not stuck pending: the chip opens and says why, offering a retry.
+    expect(result.current.isPending).toBe(false);
+    expect(result.current.devicesFailed).toBe(true);
+
+    result.current.retryDevices();
+    expect(mocks.mutateDevices).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores the active chat topic device binding', () => {
     mocks.agency.agencyConfig = deviceBoundAgent;
     mocks.activeTopicAgency = {
@@ -249,5 +292,22 @@ describe('useTaskRunTarget', () => {
     expect(result.current.devices?.map((device) => device.deviceId)).toEqual([
       PERSONAL_DEVICE.deviceId,
     ]);
+  });
+});
+
+describe('getTaskDeviceLockReason', () => {
+  it('explains a lock caused by the unconfirmed device list as pending, not fixed', () => {
+    expect(getTaskDeviceLockReason({ canSelect: true, isPending: true })).toBe('pending');
+  });
+
+  it('keeps the fixed reason for an author-fixed policy or a disabled form', () => {
+    expect(getTaskDeviceLockReason({ canSelect: false, isPending: true })).toBe('fixed');
+    expect(getTaskDeviceLockReason({ canSelect: true, disabled: true, isPending: false })).toBe(
+      'fixed',
+    );
+  });
+
+  it('does not lock a selectable, confirmed target', () => {
+    expect(getTaskDeviceLockReason({ canSelect: true, isPending: false })).toBeUndefined();
   });
 });

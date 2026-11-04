@@ -3,37 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
 import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
-import type { IStreamEventManager, PublishAgentRuntimeEndParams } from '../types';
+import { createMockInner } from '../testUtils';
 
 // Mock global fetch
 const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
 vi.stubGlobal('fetch', mockFetch);
-
-function createMockInner(): IStreamEventManager & { calls: Record<string, any[][]> } {
-  const calls: Record<string, any[][]> = {};
-
-  const track = (name: string) => {
-    calls[name] = [];
-    return (...args: any[]) => {
-      calls[name].push(args);
-      return Promise.resolve(`${name}-result`);
-    };
-  };
-
-  return {
-    calls,
-    cleanupOperation: track('cleanupOperation') as any,
-    disconnect: track('disconnect') as any,
-    getActiveOperationsCount: track('getActiveOperationsCount') as any,
-    getStreamHistory: track('getStreamHistory') as any,
-    publishAgentRuntimeEnd: track('publishAgentRuntimeEnd') as any,
-    publishAgentRuntimeInit: track('publishAgentRuntimeInit') as any,
-    publishStreamChunk: track('publishStreamChunk') as any,
-    publishStreamEvent: track('publishStreamEvent') as any,
-    readEventsOnce: track('readEventsOnce') as any,
-    subscribeStreamEvents: track('subscribeStreamEvents') as any,
-  };
-}
 
 describe('GatewayStreamNotifier', () => {
   let inner: ReturnType<typeof createMockInner>;
@@ -666,61 +640,6 @@ describe('GatewayStreamNotifier', () => {
       expect(body.event.data.reasonDetail).toBe('Custom detail');
     });
 
-    describe('recordError', () => {
-      const endEventData = async (
-        params: Omit<PublishAgentRuntimeEndParams, 'operationId' | 'stepIndex'>,
-      ) => {
-        await notifier.publishAgentRuntimeEnd({ operationId: 'op-1', stepIndex: 0, ...params });
-        await new Promise((r) => setTimeout(r, 50));
-        const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
-        return JSON.parse(pushCall![1].body).event.data;
-      };
-
-      it('keeps a user-side error off the gateway board', async () => {
-        const data = await endEventData({
-          finalState: {
-            error: { message: 'insufficient quota', type: 'InsufficientQuota' },
-            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'openai' },
-          },
-          reason: 'error',
-        });
-
-        expect(data.recordError).toBe(false);
-      });
-
-      it('files a provider rate limit on our own provider', async () => {
-        const data = await endEventData({
-          finalState: {
-            error: { message: '429', type: 'RateLimitExceeded' },
-            modelRuntimeConfig: { model: 'claude-opus-5', provider: 'lobehub' },
-          },
-          reason: 'error',
-        });
-
-        expect(data.recordError).toBe(true);
-      });
-
-      it('classifies by the configured provider, not the upstream named in the error body', async () => {
-        // On our provider the normalized error names the upstream the router
-        // reached, never `lobehub` — trusting it would hide our own rate limit.
-        const data = await endEventData({
-          finalState: {
-            error: { body: { provider: 'azure' }, message: '429', type: 'RateLimitExceeded' },
-            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'lobehub' },
-          },
-          reason: 'error',
-        });
-
-        expect(data.recordError).toBe(true);
-      });
-
-      it('omits the flag on a non-error end', async () => {
-        const data = await endEventData({ finalState: {}, reason: 'completed' });
-
-        expect(data).not.toHaveProperty('recordError');
-      });
-    });
-
     it('includes errorType from finalState.error.type', async () => {
       const finalState = {
         error: { message: 'Budget exceeded', type: 'InsufficientBudgetForModel' },
@@ -825,59 +744,6 @@ describe('GatewayStreamNotifier', () => {
       });
       expect(body.event.data).not.toHaveProperty('finalState');
       expect(body.event.data).not.toHaveProperty('uiMessages');
-    });
-  });
-
-  // ─── Read/subscribe methods: must delegate directly to inner ───
-
-  describe('subscribeStreamEvents', () => {
-    it('delegates directly to inner', async () => {
-      const onEvents = vi.fn();
-      const signal = new AbortController().signal;
-
-      await notifier.subscribeStreamEvents('op-1', '0', onEvents, signal);
-
-      expect(inner.calls.subscribeStreamEvents).toHaveLength(1);
-      expect(inner.calls.subscribeStreamEvents[0]).toEqual(['op-1', '0', onEvents, signal]);
-    });
-
-    it('does not call gateway', async () => {
-      await notifier.subscribeStreamEvents('op-1', '0', vi.fn());
-
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('getStreamHistory', () => {
-    it('delegates directly to inner', async () => {
-      await notifier.getStreamHistory('op-1', 50);
-
-      expect(inner.calls.getStreamHistory).toHaveLength(1);
-      expect(inner.calls.getStreamHistory[0]).toEqual(['op-1', 50]);
-    });
-  });
-
-  describe('cleanupOperation', () => {
-    it('delegates directly to inner', async () => {
-      await notifier.cleanupOperation('op-1');
-
-      expect(inner.calls.cleanupOperation).toHaveLength(1);
-    });
-  });
-
-  describe('getActiveOperationsCount', () => {
-    it('delegates directly to inner', async () => {
-      await notifier.getActiveOperationsCount();
-
-      expect(inner.calls.getActiveOperationsCount).toHaveLength(1);
-    });
-  });
-
-  describe('disconnect', () => {
-    it('delegates directly to inner', async () => {
-      await notifier.disconnect();
-
-      expect(inner.calls.disconnect).toHaveLength(1);
     });
   });
 

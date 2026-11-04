@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { homedir, platform } from 'node:os';
+import { platform } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -687,6 +687,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'codex': {
     validateKeywords: ['codex'],
   },
+  'copilot': {
+    validateHelpKeywords: ['--acp'],
+    validateKeywords: ['github copilot cli', 'copilot'],
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
   'cursor': {
     validateFlag: '--help',
     validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
@@ -777,6 +782,8 @@ export interface ResolvedHeteroCommand {
    * login-shell PATH; undefined when nothing extra is needed.
    */
   pathEnv?: string;
+  /** Version the validating `--version` probe reported; undefined when not resolved. */
+  version?: string;
 }
 
 /**
@@ -806,7 +813,7 @@ export const resolveHeteroSpawnCommand = async (
   try {
     const status = await detectHeterogeneousCliCommand(agentType, defaultCommand);
     if (status.available && status.path) {
-      return { command: status.path, pathEnv: status.resolvedPathEnv };
+      return { command: status.path, pathEnv: status.resolvedPathEnv, version: status.version };
     }
   } catch {
     // best-effort: fall through to the bare command below

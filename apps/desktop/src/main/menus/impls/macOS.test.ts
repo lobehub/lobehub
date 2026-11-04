@@ -8,6 +8,9 @@ import { MacOSMenu } from './macOS';
 
 // Mock Electron modules
 vi.mock('electron', () => ({
+  BrowserWindow: {
+    getFocusedWindow: vi.fn(() => null),
+  },
   Menu: {
     buildFromTemplate: vi.fn((template) => ({ template })),
     setApplicationMenu: vi.fn(),
@@ -169,6 +172,42 @@ describe('MacOSMenu', () => {
     });
   });
 
+  describe('image context menu', () => {
+    it.each(['default', 'chat'])('copies the right-clicked image itself in the %s menu', (type) => {
+      const imageData = {
+        mediaType: 'image' as const,
+        srcURL: 'https://example.com/a.png',
+        x: 12,
+        y: 34,
+      };
+      macOSMenu.buildContextMenu(type, imageData);
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'Copy Image');
+      expect(copyImage).toBeDefined();
+
+      const copyImageAt = vi.fn();
+      const win = { isDestroyed: () => false, webContents: { copyImageAt } };
+      copyImage.click({}, win);
+
+      expect(copyImageAt).toHaveBeenCalledWith(12, 34);
+    });
+
+    it('disables Copy Image when the image has no decoded contents', () => {
+      macOSMenu.buildContextMenu('default', {
+        hasImageContents: false,
+        mediaType: 'image',
+        srcURL: 'https://example.com/broken.png',
+        x: 12,
+        y: 34,
+      });
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'Copy Image');
+      expect(copyImage.enabled).toBe(false);
+    });
+  });
+
   describe('buildTrayMenu', () => {
     it('should build tray menu', () => {
       const menu = macOSMenu.buildTrayMenu();
@@ -259,6 +298,22 @@ describe('MacOSMenu', () => {
       expect(mainWindow.broadcast).toHaveBeenCalledWith('createNewTab', { path: '/settings' });
     });
 
+    it('should place New Window after New Tab in the File menu', () => {
+      macOSMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const labels = fileMenu.submenu.map((item: any) => item.label);
+      const newWindowItem = fileMenu.submenu.find((item: any) => item.label === 'New Window');
+
+      expect(labels.indexOf('New Window')).toBe(labels.indexOf('New Tab') + 1);
+      expect(newWindowItem.accelerator).toBe('Shift+Command+N');
+
+      newWindowItem.click(undefined, null);
+      const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results.at(-1).value;
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
+    });
+
     it('should handle visit website click', async () => {
       macOSMenu.buildAndSetAppMenu();
 
@@ -280,7 +335,7 @@ describe('MacOSMenu', () => {
 
       expect(githubItem).toBeDefined();
       await githubItem.click();
-      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobe-chat');
+      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobehub');
     });
 
     it('should handle open logs directory click', () => {

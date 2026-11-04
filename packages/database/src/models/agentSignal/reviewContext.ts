@@ -12,8 +12,10 @@ import {
   userMemories,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { visibleMemoryState } from '../../utils/memoryVisibility';
 import { notShareVisitorMessage } from '../../utils/shareVisitor';
 import { notTrashed } from '../../utils/softDelete';
+import { notChannelTopicRef } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 const parseAggregateTimestamp = (value: Date | string) =>
@@ -143,7 +145,13 @@ export class AgentSignalReviewContextModel {
         updatedAt: userMemories.updatedAt,
       })
       .from(userMemories)
-      .where(and(eq(userMemories.userId, this.userId), notTrashed(userMemories.isDeleted)))
+      .where(
+        and(
+          eq(userMemories.userId, this.userId),
+          notTrashed(userMemories.isDeleted),
+          visibleMemoryState(userMemories.state),
+        ),
+      )
       .orderBy(desc(userMemories.updatedAt))
       .limit(options.limit);
   };
@@ -299,6 +307,8 @@ export class AgentSignalReviewContextModel {
           // creator's own activity — it must never feed self-learning/expertise
           // context. See `notShareVisitorMessage` for the shared predicate rule.
           notShareVisitorMessage(),
+          // Channel runs carry other members' Channel content; it stays in the Channel.
+          notChannelTopicRef(messages.topicId),
         ),
       )
       .groupBy(topics.id, topics.title, topics.historySummary, topics.description, topics.content)
@@ -363,6 +373,7 @@ export class AgentSignalReviewContextModel {
           eq(messages.topicId, options.topicId),
           // See `listTopicActivity` above / `notShareVisitorMessage` for the rule.
           notShareVisitorMessage(),
+          notChannelTopicRef(messages.topicId),
         ),
       )
       .groupBy(topics.id, topics.title, topics.historySummary, topics.description, topics.content)

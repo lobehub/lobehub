@@ -1,6 +1,5 @@
 import {
   Alert,
-  Avatar,
   Button,
   createModal,
   Flexbox,
@@ -17,11 +16,12 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
-import { useDeviceStore } from '@/store/device';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
 import { openCreateProjectModal } from '../CreateProjectModal';
+import ProjectAvatar from '../ProjectAvatar';
 import { openEnvironmentModal } from './EnvironmentModal';
 import { useBindDirectory } from './useBindDirectory';
 
@@ -45,7 +45,7 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
   const projectSync = useProjectStore((s) => s.useFetchProjectList)();
   const projects = useCurrentProjectList();
   useDeviceStore((s) => s.useFetchDevices)(true);
-  const devices = useDeviceStore((s) => s.devices);
+  const devices = useDeviceStore(deviceSelectors.deviceList);
   const device = devices.find((d) => d.deviceId === options.deviceId);
   const deviceName = device?.friendlyName ?? options.deviceId;
   const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)();
@@ -85,7 +85,7 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
               ...projects.map((project) => ({
                 label: (
                   <Flexbox horizontal align="center" gap={8}>
-                    <Avatar avatar={project.avatar || '📁'} size={20} />
+                    <ProjectAvatar avatar={project.avatar} name={project.name} />
                     {project.name}
                   </Flexbox>
                 ),

@@ -106,37 +106,27 @@ The project is divided into multiple frontend and backend layers by responsibili
 +-------------------+--------------------------------------+------------------------------------------------------+
 ```
 
-**Client Service** is frontend code that encapsulates reusable business logic, calling the backend via tRPC client. For example, `src/services/session/index.ts`:
+**Client Service** is frontend code that encapsulates reusable business logic, calling the backend via tRPC client. For agent configuration updates, see `src/services/agent.ts`:
 
 ```typescript
-export class SessionService {
-  updateSessionConfig = (id: string, config: PartialDeep<LobeAgentConfig>, signal?: AbortSignal) => {
-    return lambdaClient.session.updateSessionConfig.mutate({ id, value: config }, { signal });
+export class AgentService {
+  updateAgentConfig = async (
+    agentId: string,
+    config: PartialDeep<LobeAgentConfig>,
+    signal?: AbortSignal,
+    replaceWorkingDirDeviceIds: string[] = [],
+  ) => {
+    return lambdaClient.agent.updateAgentConfig.mutate(
+      { agentId, replaceWorkingDirDeviceIds, value: config },
+      { context: { showNotification: false }, signal },
+    );
   };
 }
 ```
 
-**tRPC Router** is the backend entry point (`apps/server/src/routers/lambda/`), validates input and calls Server Service for business logic:
+**tRPC Router** is the backend entry point. The `agent.updateAgentConfig` procedure in `apps/server/src/routers/lambda/agent/config.ts` validates the input, enforces edit permissions and workspace policies, checks collaborative edit locks, and calls `ctx.agentService.updateAgentConfig`.
 
-```typescript
-export const sessionRouter = router({
-  updateSessionConfig: sessionProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        value: z.object({}).passthrough().partial(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const session = await ctx.sessionModel.findByIdOrSlug(input.id);
-      // ...
-      const mergedValue = merge(session.agent, input.value);
-      return ctx.sessionModel.updateConfig(session.agent.id, mergedValue);
-    }),
-});
-```
-
-For this feature, `updateSessionConfig` simply merges config without field-level granularity, so none of the layers need modification.
+Configuration changes go through the agent service using an agent ID. Check the current agent service and model implementation when adding fields; do not introduce a session-based configuration update path.
 
 ## 4. Frontend Implementation
 

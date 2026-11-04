@@ -99,6 +99,13 @@ export interface AuthContext {
   apiKeyScopes?: string[] | null;
   clientIp?: string | null;
   clientMetadata?: ClientMetadata;
+  /**
+   * Set only when a `hetero-operation` token was let through to an acceptance
+   * evidence route: the operation it was minted for. Those routes must keep
+   * their writes and reads on this operation's verification round — see
+   * `authorizeHeteroOperationEvidence`.
+   */
+  heteroOperationScope?: string;
   jwtPayload?: ClientSecretPayload | null;
   /**
    * The browser tab this request came from, when it subscribed a one-shot

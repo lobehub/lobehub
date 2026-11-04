@@ -17,6 +17,7 @@ const displayMessageIds = (s: State) => s.displayMessages.map((m) => m.id);
 const dbMessages = (s: State) => s.dbMessages;
 const messagesInit = (s: State) => s.messagesInit;
 const skipFetch = (s: State) => s.skipFetch;
+const hasLaterMessages = (s: State) => s.hasLaterMessages;
 
 const getDisplayMessageById = (id: string) => (s: State) => {
   // First, try to find in top-level displayMessages
@@ -258,16 +259,6 @@ const findBlockById = (
       const block = message.children.find((child) => child.id === blockId);
       if (block) return block;
     }
-    // Post-task summary blocks live in a separate field on virtual
-    // assistantGroup messages so they render AFTER `<SignalCallbacks>`
-    // (). Same lookup contract as `children` — the renderer
-    // identifies blocks by id regardless of which slot they came from.
-    if ((message as { taskCompletions?: AssistantContentBlock[] }).taskCompletions) {
-      const block = (
-        message as { taskCompletions?: AssistantContentBlock[] }
-      ).taskCompletions!.find((child) => child.id === blockId);
-      if (block) return block;
-    }
     if (message.compressedMessages) {
       const inCompressedMessages = findBlockById(blockId, message.compressedMessages);
       if (inCompressedMessages) return inCompressedMessages;
@@ -343,6 +334,7 @@ const getVerifyOrdinal = (id: string) => (s: State) => {
 };
 
 export const dataSelectors = {
+  hasLaterMessages,
   isRefreshingAt,
   currentTopicSummary,
   dbMessages,

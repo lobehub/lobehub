@@ -1,4 +1,4 @@
-import type { WidgetManifest } from '@lobechat/types';
+import type { WidgetManifest, WidgetOutput, WidgetOutputType, WidgetView } from '@lobechat/types';
 import { validateCronPattern } from '@lobechat/utils/cronEval';
 
 import type {
@@ -43,6 +43,105 @@ export const findSucceededPreviewRun = <T extends PreviewRun & { trigger: string
           run.versionId === versionId && run.trigger === 'preview' && isUsableRunStatus(run.status),
       )
     : undefined;
+
+export interface ExpectedRun<T> {
+  run: T;
+  /** The run is of the version under review, not an earlier one shown for reference. */
+  sameVersion: boolean;
+}
+
+/**
+ * The run whose card best predicts what a version will show, from a
+ * newest-first run list: that version's latest usable run, else the widget's
+ * latest usable run of another version with the same output type — a stat
+ * run says nothing about how a table will look.
+ */
+export const findExpectedRun = <T extends Pick<PreviewRun, 'output' | 'status' | 'versionId'>>(
+  runs: T[],
+  target: Pick<DashboardWidgetVersionItem, 'id' | 'outputType'>,
+): ExpectedRun<T> | undefined => {
+  const usable = runs.filter((run) => isUsableRunStatus(run.status) && !!run.output);
+  const own = usable.find((run) => run.versionId === target.id);
+  if (own) return { run: own, sameVersion: true };
+  const earlier = usable.find((run) => run.output?.type === target.outputType);
+  return earlier ? { run: earlier, sameVersion: false } : undefined;
+};
+
+/** Words a sample card shows, in the reader's language. */
+export interface SampleLabels {
+  item: (index: number) => string;
+  name: string;
+  series: string;
+  value: string;
+}
+
+const SAMPLE_SERIES = [12, 15, 11, 18, 16, 21, 19];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Illustrative output for a version that has never produced a result, shaped
+ * like its output type (and a table's chosen columns) so the approver sees the
+ * kind of card it will make. The values are placeholders; the review labels
+ * the card as sample data.
+ */
+export const sampleOutputFor = (
+  outputType: WidgetOutputType,
+  view: WidgetView | null | undefined,
+  labels: SampleLabels,
+  now = Date.now(),
+): WidgetOutput => {
+  switch (outputType) {
+    case 'list': {
+      return {
+        items: [1, 2, 3].map((index) => ({ title: labels.item(index), value: 4 - index })),
+        type: 'list',
+      };
+    }
+    case 'series': {
+      const points = SAMPLE_SERIES.map((v, index) => ({
+        t: new Date(now - (SAMPLE_SERIES.length - 1 - index) * DAY_MS).toISOString().slice(0, 10),
+        v,
+      }));
+      return { series: [{ name: labels.series, points }], type: 'series' };
+    }
+    case 'table': {
+      const keys = view?.columns?.length ? view.columns : ['name', 'value'];
+      const last = keys.length - 1;
+      const columns = keys.map((key, index) => ({
+        key,
+        title: key === 'name' ? labels.name : key === 'value' ? labels.value : key,
+        type: index === last && keys.length > 1 ? ('number' as const) : ('string' as const),
+      }));
+      const rows = [1, 2, 3].map((row) =>
+        Object.fromEntries(
+          keys.map((key, index) => [
+            key,
+            index === last && keys.length > 1 ? (4 - row) * 10 : labels.item(row),
+          ]),
+        ),
+      );
+      return { columns, rows, type: 'table' };
+    }
+    default: {
+      return { delta: 12, trend: 'up', type: 'stat', value: 128 };
+    }
+  }
+};
+
+/**
+ * The card model for sample output: no run times, so the card shows no
+ * "updated" footer and no freshness state that the sample does not have.
+ */
+export const toSampleWidget = <T extends object>(widget: T, output: WidgetOutput) => ({
+  ...widget,
+  lastRunAt: null,
+  lastRunError: null,
+  lastRunStatus: null,
+  latestOutput: output,
+  latestOutputAt: null,
+  nextRunAt: null,
+  schedulePattern: null,
+});
 
 export type PreviewPublishState =
   /** This run's version is live. */

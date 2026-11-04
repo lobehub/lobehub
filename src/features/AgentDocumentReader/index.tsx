@@ -6,12 +6,15 @@ import { Center, Flexbox } from '@lobehub/ui/es/Flex/index';
 import Markdown from '@lobehub/ui/es/Markdown/index';
 import Text from '@lobehub/ui/es/Text/index';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import ContentLoading from '@/components/Loading/ContentLoading';
-import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
+import {
+  agentDocumentActions,
+  agentDocumentSelectors,
+  useAgentDocumentStore,
+} from '@/store/agentDocument';
 
 const styles = createStaticStyles(({ css }) => ({
   article: css`
@@ -49,11 +52,21 @@ interface AgentDocumentReaderProps {
 
 const AgentDocumentReader = memo<AgentDocumentReaderProps>(({ agentId, documentId }) => {
   const { t } = useTranslation('common');
-  const { data, error, isLoading, mutate } = useSWR(
-    agentId && documentId ? agentDocumentSWRKeys.readerDocument(agentId, documentId) : null,
-    () => agentDocumentService.getReaderDocument({ agentId, documentId }),
-    { revalidateOnFocus: false },
+  const params = useMemo(
+    () => (agentId && documentId ? { agentId, documentId } : null),
+    [agentId, documentId],
   );
+  // A reader replica: a revisit paints the last body read and the network only
+  // confirms it. Loading / error take over only while there is nothing to show.
+  const { error: syncError, revalidate } = agentDocumentActions.useFetchReaderDocument(params);
+  const entry = useAgentDocumentStore(agentDocumentSelectors.getReaderDocument(params));
+  const data = entry?.document ?? undefined;
+  const error = data
+    ? undefined
+    : entry?.document === null
+      ? new Error(entry.missingMessage)
+      : (syncError as Error | undefined);
+  const isLoading = !!params && !entry && !error;
 
   const backToAgent = () => window.location.assign(`/agent/${agentId}`);
   const title = data?.title || data?.filename || '';
@@ -77,7 +90,7 @@ const AgentDocumentReader = memo<AgentDocumentReaderProps>(({ agentId, documentI
             <Button
               icon={RefreshCw}
               onClick={() => {
-                void mutate();
+                void revalidate();
               }}
             >
               {t('retry')}

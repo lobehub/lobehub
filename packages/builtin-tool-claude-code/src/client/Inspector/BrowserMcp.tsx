@@ -8,6 +8,7 @@ import {
   Camera,
   Globe,
   Keyboard,
+  Monitor,
   MousePointerClick,
   MoveVertical,
   ScanText,
@@ -61,10 +62,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface BrowserMcpArgs {
   dx?: number;
   dy?: number;
+  height?: number;
   key?: string;
   ref?: string;
   text?: string;
   url?: string;
+  width?: number;
   x?: number;
   y?: number;
 }
@@ -77,6 +80,7 @@ const API_ICONS: Record<BrowserMcpApi, LucideIcon> = {
   readPage: ScanText,
   screenshot: Camera,
   scroll: MoveVertical,
+  setViewport: Monitor,
   snapshot: ScanText,
 };
 
@@ -114,6 +118,10 @@ const getChipValue = (api: BrowserMcpApi, args: BrowserMcpArgs): string => {
     }
     case 'scroll': {
       return formatScroll(args);
+    }
+    case 'setViewport': {
+      const { height, width } = args;
+      return typeof width === 'number' && typeof height === 'number' ? `${width}×${height}` : '';
     }
     default: {
       return '';

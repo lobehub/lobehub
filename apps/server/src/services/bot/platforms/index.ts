@@ -14,9 +14,11 @@ import { wechat } from './wechat/definition';
 export {
   allowFromField,
   BOT_REACTION_MODES,
+  BOT_REPLY_PLACEMENT_MODES,
   type BotReactionMode,
   type BotReactionPhase,
   type BotReplyLocale,
+  type BotReplyPlacementMode,
   DEFAULT_BOT_REACTION_MODE,
   displayToolCallsField,
   type DmDecision,
@@ -42,11 +44,14 @@ export {
   makeServerIdField,
   makeUserIdField,
   messageMatchesWatchKeyword,
+  NEW_BOT_REACTION_MODE,
   normalizeAllowFromEntries,
   normalizeBotReactionMode,
   normalizeBotReplyLocale,
+  normalizeBotReplyPlacementMode,
   reactionModeField,
   RECEIVED_REACTION_EMOJI,
+  replyPlacementField,
   shouldAllowSender,
   shouldApplyReaction,
   shouldHandleDm,
@@ -60,6 +65,12 @@ export {
   WORKING_REACTION_EMOJI,
 } from './const';
 export { PlatformRegistry } from './registry';
+export {
+  extractReplyEmojis,
+  type ReplyEmojiEntry,
+  replyStyleFields,
+  resolveReplyStyle,
+} from './replyStyle';
 export type {
   BotMessageAttachment,
   BotPlatformRedisClient,
@@ -73,6 +84,7 @@ export type {
   PlatformDefinition,
   PlatformDocumentation,
   PlatformMessenger,
+  ReplyTargets,
   SerializedPlatformDefinition,
   UsageStats,
   ValidationResult,

@@ -127,11 +127,17 @@ export const aiProviderRouter = router({
         return { error: errorBody, model, ok: false, status: response.status };
       } catch (error: any) {
         const errorType = error.errorType || error.type;
-        const msg =
-          errorType ||
-          (typeof error === 'string'
+        // A provider error keeps its reason under `error.message` (e.g. a device-only
+        // provider checked from the CLI with no tab to run it); the type alone does
+        // not tell the user what to do.
+        const reason = typeof error.error?.message === 'string' ? error.error.message : undefined;
+        const msg = errorType
+          ? reason
+            ? `${errorType}: ${reason}`
+            : errorType
+          : typeof error === 'string'
             ? error
-            : error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error)));
+            : error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
         return { error: msg, model, ok: false };
       }
     }),

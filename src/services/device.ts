@@ -1,4 +1,9 @@
-import type { DeviceBoundAgentItem, DeviceEnroller, DeviceRunningSummary } from '@lobechat/types';
+import type {
+  DeviceBoundAgentItem,
+  DeviceEnroller,
+  DeviceRunningSummary,
+  DeviceScope,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { type TopicListItem } from '@/services/topic';
@@ -87,6 +92,15 @@ class DeviceService {
     return lambdaClient.device.getDeviceActivity.query(input) as any;
   }
 
+  /**
+   * The device each agent runs on for the caller, resolved server-side in one
+   * read. Agents that route to no device (sandbox, none, auto, unbound) are
+   * absent from the result.
+   */
+  getAgentDeviceBindings(agentIds: string[]): Promise<Record<string, string>> {
+    return lambdaClient.device.getAgentDeviceBindings.query({ agentIds });
+  }
+
   /** Running-topic count and the members behind it, for every device in the list. */
   getRunningSummary(): Promise<DeviceRunningSummary[]> {
     return lambdaClient.device.getRunningSummary.query();
@@ -171,8 +185,8 @@ class DeviceService {
   }
 
   /** The device's recent CPU / memory / load history, bucketed for charting. */
-  getMetricSeries(deviceId: string) {
-    return lambdaClient.deviceMetric.getSeries.query({ deviceId });
+  getMetricSeries(deviceId: string, scope?: DeviceScope) {
+    return lambdaClient.deviceMetric.getSeries.query({ deviceId, scope });
   }
 
   /** Revoke a link. */

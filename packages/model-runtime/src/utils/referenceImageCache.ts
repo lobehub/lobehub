@@ -1,4 +1,4 @@
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64 } from './imageToBase64';
 import type { Buffer } from 'buffer.js';
 
 /**

@@ -1,5 +1,15 @@
-import { Block, type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, confirmModal, cssVar, Text, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  confirmModal,
+  cssVar,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { Check, ChevronDownIcon, ChevronUpIcon, MoreHorizontal, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -105,7 +115,10 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
         {showFull && (
           <>
             <BriefCardSummary summary={brief.summary} />
-            <BriefCardArtifacts artifacts={brief.artifacts} />
+            <BriefCardArtifacts
+              agentId={brief.agentId ?? brief.agent?.id}
+              artifacts={brief.artifacts}
+            />
             <BriefCardActions
               actions={brief.actions}
               agentId={brief.agentId ?? brief.agent?.id}

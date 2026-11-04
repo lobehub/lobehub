@@ -29,21 +29,30 @@ import { useParams } from 'react-router';
 import AsyncError from '@/components/AsyncError';
 import { withErrorBoundary } from '@/components/ErrorBoundary';
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
-import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
+import {
+  type AgentDocumentListMutator,
+  DocumentExplorerTree,
+} from '@/features/AgentDocumentsExplorer';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
+  filterSkillItems,
   openRenameSkillModal,
   type SkillListItem,
   type SkillRowAction,
   SkillSection,
   SkillsList,
+  SkillsSearchBar,
   useProjectSkills,
 } from '@/features/SkillsList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useClientDataSWR } from '@/libs/swr';
-import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
+import { agentDocumentService } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import {
+  agentDocumentActions,
+  agentDocumentSelectors,
+  useAgentDocumentStore,
+} from '@/store/agentDocument';
 import { useChatStore } from '@/store/chat';
 import { standardizeIdentifier } from '@/utils/identifier';
 
@@ -326,6 +335,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const [filter, setFilter] = useState<ResourceFilter>(() =>
       isDocumentMode ? 'documents' : 'skills',
     );
+    const [skillSearchQuery, setSkillSearchQuery] = useState('');
     const activeDocumentIdentifier = docId ? standardizeIdentifier(docId) : undefined;
     const filterOptions = isDocumentMode ? DOCUMENT_MODE_FILTER_OPTIONS : FILTER_OPTIONS;
     const resolvedFilter = controlledFilter ?? filter;
@@ -356,14 +366,20 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       projectItems: projectSkillItems,
     } = useProjectSkills(showProjectSkills ? workingDirectory : undefined, deviceId);
 
-    const {
-      data = EMPTY_ARRAY,
-      error,
-      isLoading,
-      mutate,
-    } = useClientDataSWR(
-      enabled && agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
-      () => agentDocumentService.listDocuments({ agentId: agentId! }),
+    // The agent's document-list replica: on a reload the persisted list paints
+    // the panel at once and the network only confirms it.
+    const { error: listError } = agentDocumentActions.useFetchDocumentList(agentId, { enabled });
+    const list = useAgentDocumentStore(agentDocumentSelectors.getDocumentList(agentId));
+    const data = list ?? EMPTY_ARRAY;
+    // Loading / error take over the panel only while there is nothing to show.
+    const isLoading = !list && !listError;
+    const error = list ? undefined : listError;
+    const mutate = useCallback<AgentDocumentListMutator>(
+      (edit, options) =>
+        agentId
+          ? agentDocumentActions.mutateDocumentList(agentId, edit, options)
+          : Promise.resolve(),
+      [agentId],
     );
 
     const webData = useMemo(
@@ -388,6 +404,11 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
           name: bundle.title || bundle.filename || '',
         })),
       [skillBundleViews],
+    );
+
+    const matchedSkillItems = useMemo(
+      () => filterSkillItems(skillItems, skillSearchQuery),
+      [skillItems, skillSearchQuery],
     );
 
     const openAgentDocument = useCallback(
@@ -560,7 +581,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const renderAgentSkillsList = () => (
       <SkillsList
         getRowActions={getAgentSkillActions}
-        items={skillItems}
+        items={matchedSkillItems}
         onOpenFile={openAgentSkillFile}
         onOpenSkill={openAgentSkill}
         onSkillDragStart={handleAgentSkillDragStart}
@@ -606,38 +627,54 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
         );
       }
 
+      // `flat` keys off the unfiltered sources so typing doesn't make headers jump.
       const flat = activeCount === 1;
+      const hasMatchedAgent = matchedSkillItems.length > 0;
+      const hasMatchedProject =
+        hasProject && filterSkillItems(projectSkillItems, skillSearchQuery).length > 0;
+      const hasMatchedDevice =
+        hasDevice && filterSkillItems(deviceSkillItems, skillSearchQuery).length > 0;
+      const hasMatchedUser = filterSkillItems(userSkillItems, skillSearchQuery).length > 0;
+      const hasMatch = hasMatchedAgent || hasMatchedProject || hasMatchedDevice || hasMatchedUser;
 
       return (
         <Flexbox gap={16} style={{ paddingBottom: 16 }}>
-          {hasAgent &&
+          <SkillsSearchBar onSearch={setSkillSearchQuery} />
+          {!hasMatch && (
+            <Center flex={1} gap={8} paddingBlock={24}>
+              <Empty description={t('workingPanel.skills.noSearchResults')} icon={SkillsIcon} />
+            </Center>
+          )}
+          {hasMatchedAgent &&
             (flat ? (
               renderAgentSkillsList()
             ) : (
               <SkillSection
                 sectionHeader={{
-                  count: skillItems.length,
+                  count: matchedSkillItems.length,
                   title: t('workingPanel.skills.section.agent'),
                 }}
               >
                 {renderAgentSkillsList()}
               </SkillSection>
             ))}
-          {hasProject && (
+          {hasMatchedProject && (
             <ProjectLevelSkills
               deviceId={deviceId}
               hideHeader={flat}
+              searchQuery={skillSearchQuery}
               workingDirectory={workingDirectory!}
             />
           )}
-          {hasDevice && (
+          {hasMatchedDevice && (
             <DeviceLevelSkills
               deviceId={deviceId}
               hideHeader={flat}
+              searchQuery={skillSearchQuery}
               workingDirectory={workingDirectory!}
             />
           )}
-          {hasUser && <UserLevelSkills hideHeader={flat} />}
+          {hasMatchedUser && <UserLevelSkills hideHeader={flat} searchQuery={skillSearchQuery} />}
         </Flexbox>
       );
     };

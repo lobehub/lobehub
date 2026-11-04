@@ -28,10 +28,12 @@ function createHarness() {
   const daemon = {
     connect: vi.fn().mockResolvedValue(connection),
     connectionOptions: {
-      endpoint: 'unix:///tmp/lobehub-auv.sock',
+      credential: 'launcher-token',
+      endpoint: '/private/auv/session.sock',
       local: true,
       transport: 'unix',
     },
+    endpoints: ['unix:///private/auv/session.sock'],
     stop: vi.fn().mockResolvedValue({ code: 0, signal: null }),
   } as unknown as AuvDaemon;
   const client = {
@@ -48,7 +50,6 @@ function createHarness() {
   const app = {
     appStoragePath: '/tmp/lobehub-storage',
   } as unknown as App;
-  const ipcCleanup = vi.fn().mockResolvedValue(undefined);
   const resolveBinaryPath = vi.fn().mockResolvedValue('/opt/lobehub/bin/auv');
   const runCli = vi.fn().mockResolvedValue({
     stderr: '',
@@ -59,17 +60,13 @@ function createHarness() {
     }),
   });
   const service = new AuvService(app, {
-    createIpcListener: vi.fn().mockResolvedValue({
-      cleanup: ipcCleanup,
-      listener: 'unix:///private/auv/session.sock',
-    }),
     hostname: () => 'Nekos-MBP.lan',
     loadSdk: vi.fn().mockResolvedValue(sdk),
     resolveBinaryPath,
     runCli,
   });
 
-  return { app, client, connection, daemon, ipcCleanup, resolveBinaryPath, runCli, sdk, service };
+  return { app, client, connection, daemon, resolveBinaryPath, runCli, sdk, service };
 }
 
 describe('AuvService', () => {
@@ -85,7 +82,6 @@ describe('AuvService', () => {
     expect(resolveBinaryPath).toHaveBeenCalledOnce();
     expect(sdk.startAuv).toHaveBeenCalledWith({
       binaryPath: '/opt/lobehub/bin/auv',
-      listeners: ['unix:///private/auv/session.sock'],
       noRegister: true,
       storeRoot: '/tmp/lobehub-storage/auv/store',
     });
@@ -109,7 +105,7 @@ describe('AuvService', () => {
   });
 
   it('rejects and stops a child that does not expose a local IPC transport', async () => {
-    const { daemon, ipcCleanup, service } = createHarness();
+    const { daemon, service } = createHarness();
     Object.assign(daemon.connectionOptions, {
       endpoint: 'http://127.0.0.1:19847',
       local: true,
@@ -120,7 +116,6 @@ describe('AuvService', () => {
 
     expect(daemon.connect).not.toHaveBeenCalled();
     expect(daemon.stop).toHaveBeenCalledOnce();
-    expect(ipcCleanup).toHaveBeenCalledOnce();
     expect(service.getSnapshot()).toEqual({
       devices: [],
       error: 'AUV refused non-private transport: http',
@@ -129,15 +124,24 @@ describe('AuvService', () => {
     });
   });
 
+  it('rejects and stops a child that did not issue a launcher token', async () => {
+    const { daemon, service } = createHarness();
+    Object.assign(daemon.connectionOptions, { credential: undefined });
+
+    await expect(service.connect()).rejects.toThrow('AUV daemon did not issue a launcher token');
+
+    expect(daemon.connect).not.toHaveBeenCalled();
+    expect(daemon.stop).toHaveBeenCalledOnce();
+  });
+
   it('closes partially-opened resources and records a failed connection', async () => {
-    const { client, connection, daemon, ipcCleanup, service } = createHarness();
+    const { client, connection, daemon, service } = createHarness();
     vi.mocked(client.health.check).mockRejectedValueOnce(new Error('daemon is unavailable'));
 
     await expect(service.connect()).rejects.toThrow('daemon is unavailable');
 
     expect(connection.close).toHaveBeenCalledOnce();
     expect(daemon.stop).toHaveBeenCalledOnce();
-    expect(ipcCleanup).toHaveBeenCalledOnce();
     expect(service.getSnapshot()).toEqual({
       devices: [],
       error: 'daemon is unavailable',
@@ -147,14 +151,13 @@ describe('AuvService', () => {
   });
 
   it('closes the SDK connection and embedded daemon on disconnect', async () => {
-    const { connection, daemon, ipcCleanup, service } = createHarness();
+    const { connection, daemon, service } = createHarness();
     await service.connect();
 
     const snapshot = await service.disconnect();
 
     expect(connection.close).toHaveBeenCalledOnce();
     expect(daemon.stop).toHaveBeenCalledOnce();
-    expect(ipcCleanup).toHaveBeenCalledOnce();
     expect(snapshot).toEqual({ devices: [], runnerClasses: [], status: 'disconnected' });
   });
 
@@ -183,6 +186,7 @@ describe('AuvService', () => {
     expect(runCli).toHaveBeenCalledWith({
       argv: ['invoke', 'display.capture', '--json'],
       binaryPath: '/opt/lobehub/bin/auv',
+      credential: 'launcher-token',
       endpoint: 'unix:///private/auv/session.sock',
       storeRoot: '/tmp/lobehub-storage/auv/runs',
     });

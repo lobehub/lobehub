@@ -12,22 +12,25 @@ import { useVerifyReportUrl } from './useReportUrl';
 
 const VerifyReportHeader = memo<{ onClose?: () => void }>(({ onClose }) => {
   const { t } = useTranslation('verify');
-  const { externalUrl } = useVerifyReportUrl();
+  const { externalUrl, standalone } = useVerifyReportUrl();
 
   return (
     <Header
       title={<Title />}
       rightExtra={
-        <ActionIcon
-          disabled={!externalUrl}
-          icon={ExternalLink}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-          title={t('report.actions.openInBrowser')}
-          onClick={() => {
-            if (!externalUrl) return;
-            openTrustedExternalUrl(externalUrl);
-          }}
-        />
+        // A run outside any acceptance has no page to open in the browser.
+        standalone ? undefined : (
+          <ActionIcon
+            disabled={!externalUrl}
+            icon={ExternalLink}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            title={t('report.actions.openInBrowser')}
+            onClick={() => {
+              if (!externalUrl) return;
+              openTrustedExternalUrl(externalUrl);
+            }}
+          />
+        )
       }
       onClose={onClose}
     />

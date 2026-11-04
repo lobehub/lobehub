@@ -23,7 +23,14 @@ import { initialKnowledgeBaseState } from './initialState';
 import { knowledgeBaseItemResource, knowledgeBaseListResource } from './projection';
 import { knowledgeBaseSelectors } from './selectors';
 
-const mocks = vi.hoisted(() => ({ activeWorkspaceId: null as string | null }));
+const mocks = vi.hoisted(() => ({
+  activeWorkspaceId: null as string | null,
+  forgetLibrary: vi.fn(),
+}));
+
+vi.mock('@/store/tree', () => ({
+  useTreeStore: { getState: () => ({ forgetLibrary: mocks.forgetLibrary }) },
+}));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => mocks.activeWorkspaceId,
@@ -236,6 +243,17 @@ describe('knowledgeBase crud replicas', () => {
       await expect(operation).rejects.toThrow('boom');
 
       expect(list('private')?.map((kb) => kb.id)).toEqual(['p1', 'p2']);
+      // A failed delete keeps the library's persisted sidebar tree.
+      expect(mocks.forgetLibrary).not.toHaveBeenCalled();
+    });
+
+    it("forgets the deleted library's persisted sidebar tree", async () => {
+      await seedList();
+      vi.mocked(knowledgeBaseService.deleteKnowledgeBase).mockResolvedValue(undefined as any);
+
+      await useKnowledgeBaseStore.getState().removeKnowledgeBase('p1');
+
+      expect(mocks.forgetLibrary).toHaveBeenCalledWith('p1');
     });
 
     it('renames across the list and the by-id copy optimistically, then reconciles', async () => {
@@ -284,6 +302,30 @@ describe('knowledgeBase crud replicas', () => {
 
       expect(list('private')?.find((kb) => kb.id === 'p1')?.name).toBe('Original');
       expect(useKnowledgeBaseStore.getState().knowledgeBaseLoadingIds).not.toContain('p1');
+    });
+
+    it('sets a cover inside settings optimistically and sends only the cover', async () => {
+      await seedList();
+      let resolve!: (value: unknown) => void;
+      vi.mocked(knowledgeBaseService.updateKnowledgeBaseList).mockImplementation(
+        () => new Promise((res) => (resolve = res)) as any,
+      );
+
+      const operation = useKnowledgeBaseStore
+        .getState()
+        .updateKnowledgeBaseCover('p1', 'preset:dusk');
+
+      expect(list('private')?.find((kb) => kb.id === 'p1')?.settings).toMatchObject({
+        cover: 'preset:dusk',
+      });
+      expect(knowledgeBaseService.updateKnowledgeBaseList).toHaveBeenCalledWith('p1', {
+        cover: 'preset:dusk',
+      });
+
+      await act(async () => {
+        resolve(undefined);
+        await operation;
+      });
     });
 
     it('creates a KB and reconciles the list from the server', async () => {

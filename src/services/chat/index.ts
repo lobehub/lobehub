@@ -36,7 +36,7 @@ import {
   userGeneralSettingsSelectors,
   userProfileSelectors,
 } from '@/store/user/selectors';
-import { type ChatStreamPayload, type OpenAIChatMessage } from '@/types/openai/chat';
+import { type ChatStreamPayload } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
 import { createTraceHeader } from '@/utils/trace';
 
@@ -88,10 +88,6 @@ export interface PreparedAssistantMessageContext {
   replayAssistantReasoning: boolean;
 }
 
-type ChatStreamInputParams = Partial<Omit<ChatStreamPayload, 'messages'>> & {
-  messages?: (UIChatMessage | OpenAIChatMessage)[];
-};
-
 interface FetchAITaskResultParams extends FetchSSEOptions {
   abortController?: AbortController;
   onError?: (e: Error, rawError?: any) => void;
@@ -101,9 +97,9 @@ interface FetchAITaskResultParams extends FetchSSEOptions {
    */
   onLoadingChange?: (loading: boolean) => void;
   /**
-   * Request object
+   * Request object. The messages are the task's complete prompt and are sent as-is.
    */
-  params: ChatStreamInputParams;
+  params: Partial<ChatStreamPayload>;
   trace?: TracePayload;
   /**
    * Request source recorded on spend / route-attempt logs. Required so every
@@ -494,25 +490,20 @@ class ChatService {
     onLoadingChange?.(true);
 
     try {
-      const llmMessages = await contextEngineering({
-        messages: params.messages as any,
-        model: params.model!,
-        provider: params.provider!,
-      });
-
-      await this.getChatCompletion(
-        { ...params, messages: llmMessages },
-        {
-          metadata: { trigger },
-          onErrorHandle: (error) => {
-            errorHandle(new Error(error.message), error);
-          },
-          onFinish,
-          onMessageHandle,
-          signal: abortController?.signal,
-          trace: this.mapTrace(trace, TraceTagMap.SystemChain),
+      // A preset task (translate, compress, rewrite, …) carries its own complete
+      // prompt. Running it through the agent context pipeline would mix in the
+      // current agent's identity, workspace and management context, which small
+      // models echo back verbatim.
+      await this.getChatCompletion(params, {
+        metadata: { trigger },
+        onErrorHandle: (error) => {
+          errorHandle(new Error(error.message), error);
         },
-      );
+        onFinish,
+        onMessageHandle,
+        signal: abortController?.signal,
+        trace: this.mapTrace(trace, TraceTagMap.SystemChain),
+      });
 
       onLoadingChange?.(false);
     } catch (e) {

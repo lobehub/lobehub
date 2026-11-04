@@ -19,7 +19,7 @@ export type ShareVisibility = 'private' | 'link';
 export type TimeGroupId =
   'today' | 'yesterday' | 'week' | 'month' | `${number}-${string}` | `${number}`;
 
-export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus' | 'byAgent';
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus' | 'byAgent' | 'byDevice';
 export type TopicSortBy = 'createdAt' | 'updatedAt';
 
 /**
@@ -50,6 +50,12 @@ export interface TopicUserMemoryExtractRunState {
 
 export interface ChatTopicBotContext {
   applicationId: string;
+  /**
+   * Whether the sender, not being the owner, is on the owner's device list
+   * (`settings.devicePolicy = 'allowlist'` + `settings.deviceAllowFrom`).
+   * Computed with `isOwner` in `buildBotContext`; absent means not trusted.
+   */
+  isDeviceTrusted?: boolean;
   /**
    * Whether the message sender is the bot owner. Computed at the bot
    * router/dispatcher entry point as
@@ -128,6 +134,14 @@ export interface ChatTopicMetadata {
   botCreator?: BotSenderMetadata | null;
   boundDeviceId?: string;
   cronJobId?: string;
+  /**
+   * The conversation's device was chosen explicitly for it (the composer's
+   * picker preset, a project directory, or `lh topic send --new --device`), not
+   * picked automatically by an `auto` agent. Later turns honour that choice
+   * instead of picking a fresh online device, because the caller was told the
+   * work stays on that machine.
+   */
+  deviceBindingPinned?: boolean;
   /**
    * Set on a topic created by editing and resending a user message of a
    * runtime whose native history cannot be rewound (Codex). The topic holds a
@@ -351,11 +365,31 @@ export interface ChatTopicMetadata {
    */
   runStartedAt?: string;
   /**
-   * Which CLOUD-SANDBOX INSTANCE this topic runs in: one instance of an
-   * environment, meaning a directory inside the persistent workspace together
-   * with the packages restored into it. Absent means the workspace root under
-   * the caller's default environment, which is what a topic that never chose
-   * gets and what a topic keeps if its instance is later deleted.
+   * Which of a workspace's drives this topic's cloud sandbox uses: `public`,
+   * the drive every member shares, or `personal`, the member's own. Absent
+   * means `public`, the only drive a workspace had before members had their
+   * own. Ignored outside a workspace, where there is one drive. The server
+   * issues the run's storage claim for this drive and nothing else, so a
+   * folder path always means a folder on the drive named here. Mirrors
+   * `SandboxDrive` in `@lobechat/builtin-tool-cloud-sandbox`, inlined to keep
+   * this package free of a dependency on the tool layer.
+   */
+  sandboxDrive?: 'personal' | 'public';
+  /**
+   * The code environment this topic's sandbox is initialized from: its
+   * repository is cloned and its setup command run once in the working
+   * directory, whichever that is. In a temporary sandbox that is once per
+   * sandbox; in a drive folder, once for the folder — a marker the script
+   * leaves behind keeps it from running again. Nothing is tracked beyond that:
+   * the folder is an ordinary folder afterwards.
+   */
+  sandboxEnvironmentId?: string;
+  /**
+   * Which CLOUD-SANDBOX INSTANCE this topic runs in — an **environment
+   * directory**: a folder on the drive together with the packages its build
+   * installed, restored into every session. Takes precedence over
+   * {@link ChatTopicMetadata.sandboxWorkingDirectory}; a picker writes one and
+   * clears the other.
    *
    * Two conversations that must not overwrite each other's files take two
    * instances of one environment rather than two directories under one, because
@@ -363,11 +397,11 @@ export interface ChatTopicMetadata {
    * alone would leave both sharing, and overwriting, the same captured state.
    *
    * A preference, not a security boundary: the directory it resolves to is
-   * composed onto the workspace the signed entitlement names and fenced there,
-   * so a value pointing outside is rejected by the execution plane rather than
-   * trusted here. Ignored entirely when the run has no persistent workspace,
-   * which is why it survives a downgrade — resubscribing puts the conversation
-   * back where it was.
+   * composed onto the drive the signed entitlement names and fenced there, so
+   * a value pointing outside is rejected by the execution plane rather than
+   * trusted here. Ignored entirely when the run has no drive, which is why it
+   * survives a downgrade — resubscribing puts the conversation back where it
+   * was.
    *
    * Fixed for the life of a session — the execution plane binds the session on
    * its first call and refuses a snapshot under a different name — so a change
@@ -379,16 +413,14 @@ export interface ChatTopicMetadata {
    */
   sandboxInstanceId?: string;
   /**
-   * Whether this topic's cloud sandbox should persist its working directory.
-   * Absent means ephemeral — persistence is an explicit choice, since not every
-   * task wants to leave files behind. Mirrors `SandboxMode` in
-   * `@lobechat/builtin-tool-cloud-sandbox`, inlined to keep this package free of
-   * a dependency on the tool layer.
-   *
-   * Only half the decision: a run is persistent when this says so AND the
-   * caller's entitlement grants a workspace.
+   * The folder on the user's drive this topic's cloud sandbox works in,
+   * relative to the drive's root; `'.'` is the root itself. Choosing a folder
+   * IS the choice to persist: with neither this nor `sandboxInstanceId` the
+   * run is a temporary sandbox. A preference like the instance — fenced by the
+   * execution plane, and a folder deleted since it was picked sends the run to
+   * a temporary sandbox (the composer says so) rather than recreating it.
    */
-  sandboxMode?: 'ephemeral' | 'persistent';
+  sandboxWorkingDirectory?: string;
   /**
    * A deferred agent run on this topic. Present iff the topic status is
    * `scheduled`. Set to `null` to clear it (same clear-convention as
@@ -637,19 +669,20 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .nullable()
     .optional(),
-  // The topic's own sandbox choices: where it works, which instance it works in,
-  // and whether anything survives. Client-writable on purpose — the execution
-  // plane fences all three against the entitlement it was issued, so they are
-  // preferences rather than boundaries (see `TopicMetadata.sandboxCwd`).
+  // The topic's own sandbox choices: which folder on the drive it works in, or
+  // which instance (environment directory). Client-writable on purpose — the
+  // execution plane fences both against the entitlement it was issued, so they
+  // are preferences rather than boundaries.
   //
   // A key absent here is not rejected, it is silently dropped: this is a plain
   // `z.object()`, and stripping unknown keys is its default. So a field that
   // lives only on `ChatTopicMetadata` writes nothing and still answers 200 —
   // the interface and this schema are two declarations the type checker never
   // compares.
-  sandboxCwd: z.string().optional(),
+  sandboxDrive: z.enum(['personal', 'public']).optional(),
+  sandboxEnvironmentId: z.string().max(255).optional(),
   sandboxInstanceId: z.string().optional(),
-  sandboxMode: z.enum(['ephemeral', 'persistent']).optional(),
+  sandboxWorkingDirectory: z.string().max(1024).optional(),
   scheduledRun: topicScheduledRunSchema.nullish(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
@@ -707,6 +740,12 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   favorite?: boolean;
   /** First user message (sliced server-side, used as preview fallback). */
   firstUserMessage?: string | null;
+  /**
+   * Whether a goal was planned in this conversation (`goals.subject_type =
+   * 'topic'`). Only the per-agent sidebar list and the project topic list
+   * select it; absent elsewhere.
+   */
+  hasGoal?: boolean;
   historySummary?: string;
   /** Total message count for the topic. */
   messageCount?: number | null;
@@ -793,6 +832,12 @@ export interface CreateTopicParams {
   /** Pinned model snapshot for the new topic (see `ChatTopic.model`). */
   model?: string;
   /**
+   * Bind the new topic to a project without a directory (conversation-only).
+   * Ignored when `projectWorkingDirectoryId` resolves — the directory carries
+   * its own project.
+   */
+  projectId?: string;
+  /**
    * Bind the new topic to a project working directory. The server resolves the
    * directory and pins its project, device and paths onto the topic — the same
    * binding `projectWorkingDirectory.startTopic` writes. Carried by the first
@@ -838,6 +883,11 @@ export interface QueryTopicParams {
    * When true, also includes legacy inbox topics (sessionId IS NULL AND groupId IS NULL AND agentId IS NULL)
    */
   isInbox?: boolean;
+  /**
+   * Only topics the caller created (`topics.userId`). Meaningful in a
+   * workspace, where the list otherwise shows every member's topics.
+   */
+  onlyMine?: boolean;
   pageSize?: number;
   /**
    * Server-side ordering. Defaults to `updatedAt`. Use `status` to back the

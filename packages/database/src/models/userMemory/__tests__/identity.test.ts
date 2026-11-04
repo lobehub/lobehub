@@ -1,10 +1,10 @@
+import type { UserMemoryIdentityInsert } from '@lobechat/types';
 // @vitest-environment node
 import { RelationshipEnum } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryIdentity } from '../../../schemas';
 import { userMemories, userMemoriesIdentities, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryIdentityModel } from '../identity';
@@ -29,7 +29,7 @@ beforeEach(async () => {
 describe('UserMemoryIdentityModel', () => {
   describe('create', () => {
     it('should create a new identity', async () => {
-      const identityData: Omit<NewUserMemoryIdentity, 'userId'> = {
+      const identityData: Omit<UserMemoryIdentityInsert, 'userId'> = {
         type: 'personal',
         description: 'Software developer',
         role: 'developer',

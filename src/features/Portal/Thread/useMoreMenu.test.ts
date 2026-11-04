@@ -72,6 +72,14 @@ describe('useThreadMoreMenu', () => {
     expect(mocks.closeThreadPortal).toHaveBeenCalledOnce();
   });
 
+  it('offers no delete for a subagent thread', () => {
+    mocks.thread = { ...mocks.thread, metadata: { sourceToolCallId: 'toolu_1' } };
+    const { result } = renderHook(() => useThreadMoreMenu());
+
+    expect(result.current!.delete).toBeUndefined();
+    expect(result.current!.rename).toBeDefined();
+  });
+
   it('renames the thread from its current title', async () => {
     const { result } = renderHook(() => useThreadMoreMenu());
     result.current!.rename!();

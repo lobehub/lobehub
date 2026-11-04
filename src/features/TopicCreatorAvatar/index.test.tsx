@@ -2,14 +2,18 @@
  * @vitest-environment happy-dom
  */
 import { render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TopicCreatorAvatar from './index';
 
 const useAuthorInfoMock = vi.hoisted(() => vi.fn());
+const hasActiveWorkspaceMock = vi.hoisted(() => ({ value: true }));
 
 vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
   useAuthorInfo: useAuthorInfoMock,
+}));
+vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
+  useHasActiveWorkspace: () => hasActiveWorkspaceMock.value,
 }));
 
 // The identity-preserving wrapper owns the initials/background fallback; this
@@ -37,6 +41,24 @@ vi.mock('@/components/Avatar', () => ({
 }));
 
 describe('TopicCreatorAvatar', () => {
+  beforeEach(() => {
+    hasActiveWorkspaceMock.value = true;
+  });
+
+  it('hides the bot conversation initiator in personal mode', () => {
+    hasActiveWorkspaceMock.value = false;
+    useAuthorInfoMock.mockReturnValue(undefined);
+    const { queryByTestId } = render(
+      <TopicCreatorAvatar
+        botCreator={{ id: '123', platform: 'wechat', avatar: 'sender.png', fullName: 'ow' }}
+        corner={<span data-testid="platform-icon" />}
+        userId="owner"
+      />,
+    );
+    expect(queryByTestId('avatar')).toBeNull();
+    expect(queryByTestId('platform-icon')).toBeNull();
+  });
+
   it('shows the bot conversation initiator instead of the workspace bot owner', () => {
     useAuthorInfoMock.mockReturnValue({ avatar: 'owner.png', fullName: 'Bot owner' });
     const { getByTestId } = render(

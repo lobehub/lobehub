@@ -5,16 +5,20 @@ import { cssVar, Tooltip } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
-import Avatar from '@/components/Avatar';
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
+import UserAvatar from '@/components/UserAvatar';
 
 /**
  * Prefer the bot-channel initiator over the account that owns the bot.
  * Ordinary topics resolve their creator from active workspace members; the
  * open-source business slot returns undefined for those member profiles.
+ * Creator identity is a workspace-only cue, so personal mode ignores the bot
+ * initiator too and the row keeps its own platform icon.
  */
 export const useTopicCreator = (userId?: string, botCreator?: BotSenderMetadata | null) => {
   const author = useAuthorInfo(userId);
-  return botCreator
+  const hasActiveWorkspace = useHasActiveWorkspace();
+  return botCreator && hasActiveWorkspace
     ? {
         avatar: botCreator.avatar,
         fullName: botCreator.fullName || botCreator.username || botCreator.id,
@@ -48,13 +52,12 @@ const TopicCreatorAvatar = memo<TopicCreatorAvatarProps>(
 
     const avatar = (
       <Tooltip title={author.fullName}>
-        <Avatar
-          avatar={author.avatar ?? undefined}
-          name={author.fullName ?? undefined}
+        <UserAvatar
+          avatar={author.avatar}
+          name={author.fullName}
           shape={'circle'}
           size={size}
           style={{ flex: 'none' }}
-          title={author.fullName ?? undefined}
         />
       </Tooltip>
     );

@@ -27,6 +27,8 @@ export interface HeterogeneousAgentBuildPlanHelpers {
 
 export interface HeterogeneousAgentBuildPlanParams {
   args: string[];
+  /** CLI version spawn preflight detected, when known. */
+  cliVersion?: string;
   helpers: HeterogeneousAgentBuildPlanHelpers;
   /**
    * Optional path to an MCP config JSON written by the controller (e.g. for
@@ -70,6 +72,8 @@ export interface ProviderBindingPlan {
   /** Best-effort synchronous release for app shutdown. */
   cleanupSync?: () => void;
   env: Record<string, string>;
+  /** Native selector ID for transports that select models after the handshake. */
+  model?: string;
   /** Environment variable that receives the per-prompt server operation token. */
   operationTokenEnvKey?: string;
   profileFiles?: ProviderBindingFilePlan[];

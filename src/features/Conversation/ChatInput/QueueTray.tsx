@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, Flexbox, Icon, Image, Tooltip } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Flexbox, Icon, Image, toast, Tooltip } from '@lobehub/ui';
 import { ArrowUp, Info, ListEnd, Pencil, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,14 +13,18 @@ import {
   type QueuedFile,
   type QueuedMessage,
   reconstructUploadFilesFromQueue,
-  SEND_NOW_CANCEL_REASON,
 } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
-import { createQueueSendNowGate } from './utils';
+import {
+  createQueueSendNowGate,
+  getQueuedHintKey,
+  putQueuedMessageInEditor,
+  sendQueuedMessageNow,
+} from './utils';
 
 const PREVIEW_SIZE = 28;
 
@@ -202,7 +206,8 @@ const QueueTray = memo(() => {
   );
 
   const queuedMessages = useChatStore((s) => operationSelectors.getQueuedMessages(context)(s));
-  const removeQueuedMessage = useChatStore((s) => s.removeQueuedMessage);
+  const waitsForRunEnd = useChatStore(operationSelectors.isQueueDrainedAtRunEnd(context));
+  const withdrawQueuedMessage = useChatStore((s) => s.withdrawQueuedMessage);
   const dispatchChatUploadFileList = useFileStore((s) => s.dispatchChatUploadFileList);
   const editor = useConversationStore((s) => s.editor);
   const sendNowGate = useSingleton(createQueueSendNowGate);
@@ -211,17 +216,32 @@ const QueueTray = memo(() => {
   // input area, so the user can tweak the message and re-send. Without the
   // file restore, images attached to a queued message would silently disappear
   // when the user clicks the pencil.
+  // A follow-up queued on the server may already be on its way into the run;
+  // then it is neither edited nor sent again.
+  const withdraw = useCallback(
+    async (msg: QueuedMessage) => {
+      const withdrawn = await withdrawQueuedMessage(contextKey, msg.id).catch((error) => {
+        console.error('[QueueTray] withdrawing a queued message failed:', error);
+        toast.error(t('inputQueue.withdrawFailed'));
+        return undefined;
+      });
+      if (withdrawn === false) toast.info(t('inputQueue.alreadyDelivered'));
+      return !!withdrawn;
+    },
+    [contextKey, t, withdrawQueuedMessage],
+  );
+
   const handleEdit = useCallback(
-    (msg: QueuedMessage) => {
-      removeQueuedMessage(contextKey, msg.id);
-      editor?.setDocument('markdown', msg.content);
+    async (msg: QueuedMessage) => {
+      if (!(await withdraw(msg))) return;
+      if (editor) putQueuedMessageInEditor(editor, msg);
       editor?.focus();
       if (msg.filesPreview?.length) {
         const restored = reconstructUploadFilesFromQueue(msg.filesPreview);
         dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
       }
     },
-    [contextKey, dispatchChatUploadFileList, editor, removeQueuedMessage],
+    [dispatchChatUploadFileList, editor, withdraw],
   );
 
   // "Send now": cancel the currently running agent run for this context, then
@@ -232,43 +252,18 @@ const QueueTray = memo(() => {
   const handleSendNow = useCallback(
     async (msg: QueuedMessage) => {
       await sendNowGate
-        .run(async () => {
-          const chat = useChatStore.getState();
-          // Cancel EVERY running blocker the item could be queued behind, not just the
-          // first: matching one op would miss an interim blocker or the second of the
-          // two concurrent `regenerate` ops a delAndRegenerate/delAndResendThread
-          // retry runs (outer wrapper + inner regenerateUserMessage). Leaving any
-          // blocker running would make the sendMessage below re-enqueue the item, so
-          // "Send now" becomes a no-op. The selector shares the queue-blocking
-          // predicate with the enqueue check.
-          const runningOpIds =
-            operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
-          const cancellationConfirmed = await Promise.all(
-            runningOpIds.map((id) => chat.cancelOperation(id, SEND_NOW_CANCEL_REASON)),
-          );
-          if (cancellationConfirmed.some((confirmed) => !confirmed)) {
-            throw new Error('Running agent cancellation was not confirmed');
-          }
-          removeQueuedMessage(contextKey, msg.id);
-
-          // Reconstruct UploadFileItem-shaped objects so the optimistic temp message
-          // can rebuild imageList/videoList from the snapshotted preview metadata.
-          const filesArray = msg.filesPreview?.length
-            ? reconstructUploadFilesFromQueue(msg.filesPreview)
-            : msg.files?.length
-              ? (msg.files.map((id) => ({ id })) as any)
-              : undefined;
-          await chat.sendMessage({
+        .run(() =>
+          sendQueuedMessageNow({
+            chat: useChatStore.getState(),
             context,
-            editorData: msg.editorData,
-            files: filesArray,
-            message: msg.content,
-            metadata: { ...msg.metadata, steer: true },
-          });
-        })
+            contextKey,
+            msg,
+            withdraw,
+          }),
+        )
         .catch((error) => console.error('[QueueTray] sendNow failed:', error));
     },
-    [context, contextKey, removeQueuedMessage, sendNowGate],
+    [context, contextKey, sendNowGate, withdraw],
   );
 
   if (queuedMessages.length === 0) return null;
@@ -278,10 +273,9 @@ const QueueTray = memo(() => {
   if (!canUseResource) return null;
 
   // The queue drains as one take-all and is merged into a single send, so a
-  // multi-item queue has to say "merges" instead of "sends".
-  const hintText = t(
-    queuedMessages.length > 1 ? 'inputQueue.queuedMergeHint' : 'inputQueue.queuedHint',
-  );
+  // multi-item queue has to say "merges" instead of "sends". A heterogeneous
+  // CLI run only drains once the whole run ends, not after the current step.
+  const hintText = t(getQueuedHintKey({ count: queuedMessages.length, waitsForRunEnd }));
 
   return (
     <Flexbox className={styles.container} gap={0}>
@@ -351,7 +345,7 @@ const QueueTray = memo(() => {
               icon={Trash2}
               size="small"
               title={t('inputQueue.delete')}
-              onClick={() => removeQueuedMessage(contextKey, msg.id)}
+              onClick={() => withdraw(msg)}
             />
           </Flexbox>
         );

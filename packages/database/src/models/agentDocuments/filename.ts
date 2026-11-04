@@ -44,6 +44,7 @@ export const extractMarkdownH1Title = (content: string): { content: string; titl
   if (!headingMatch) return { content };
 
   const title = headingMatch[1].trim();
+  /* v8 ignore next -- unreachable: the capture starts with \S, which trim() never strips, so the title is never empty */
   if (!title) return { content };
 
   let j = i + 1;

@@ -1,4 +1,4 @@
-import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
+import { getModelPropertyWithFallback } from '@lobechat/model-runtime/getModelPropertyWithFallback';
 import { merge } from '@lobechat/utils';
 import { produce } from 'immer';
 import {

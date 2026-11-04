@@ -2,7 +2,7 @@ import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { Accordion, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import dynamic from '@/libs/next/dynamic';
@@ -13,16 +13,13 @@ import { toolSelectors } from '@/store/tool/selectors';
 
 import { dataSelectors, useConversationStore } from '../../../store';
 import Actions from './Actions';
+import Detail from './Detail';
 import Inspectors from './Inspector';
 import { hasToolResultBody } from './toolResultBody';
+import { useToolExpandState } from './useToolExpandState';
 
 const Debug = dynamic(() => import('./Debug'), {
   loading: () => <Skeleton height={300} width={'100%'} />,
-  ssr: false,
-});
-
-const Detail = dynamic(() => import('./Detail'), {
-  loading: () => <Skeleton height={120} width={'100%'} />,
   ssr: false,
 });
 
@@ -53,16 +50,18 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   const renderDisplayControl = useToolStore(
     toolSelectors.getRenderDisplayControl(identifier, apiName, result?.state),
   );
-  const [showDebug, setShowDebug] = useState(false);
-  const [showToolRender, setShowToolRender] = useState(false);
-  // Controls switching between custom render and fallback ArgumentRender
-  const [showCustomToolRender, setShowCustomToolRender] = useState(true);
-
   const isPending = intervention?.status === 'pending';
   const isReject = intervention?.status === 'rejected';
   const isAbort = intervention?.status === 'aborted';
   const needExpand = renderDisplayControl !== 'collapsed' || isPending;
   const isAlwaysExpand = renderDisplayControl === 'alwaysExpand';
+
+  const { handleExpand, setShowDebug, showDebug, showToolRender } = useToolExpandState({
+    isAlwaysExpand,
+    needExpand,
+  });
+  // Controls switching between custom render and fallback ArgumentRender
+  const [showCustomToolRender, setShowCustomToolRender] = useState(true);
 
   let isArgumentsStreaming = false;
   try {
@@ -101,25 +100,6 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   const hasCustomRender = !!getBuiltinRender(identifier, apiName);
   // Only allow toggle when has custom render and not in pending/reject/abort state
   const canToggleCustomToolRender = hasCustomRender && !isPending && !isReject && !isAbort;
-
-  // Handle expand state changes
-  const handleExpand = (expand?: boolean) => {
-    // Block collapse action when alwaysExpand is set
-    if (isAlwaysExpand && expand === false) {
-      return;
-    }
-    // When collapsing, also turn off debug mode so the accordion can actually collapse
-    if (expand === false) {
-      setShowDebug(false);
-    }
-    setShowToolRender(!!expand);
-  };
-
-  useEffect(() => {
-    if (needExpand) {
-      setTimeout(() => handleExpand(true), 100);
-    }
-  }, [needExpand]);
 
   if (!tool) return null;
 

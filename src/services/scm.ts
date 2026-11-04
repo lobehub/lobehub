@@ -9,6 +9,8 @@ class ScmService {
 
   getIdentity = async (provider: 'github') => lambdaClient.scm.getIdentity.query({ provider });
 
+  hasWakeTarget = async (topicId: string) => lambdaClient.scm.hasWakeTarget.query({ topicId });
+
   listChangeRequests = async (params?: { limit?: number }) =>
     lambdaClient.scm.listChangeRequests.query(params);
 

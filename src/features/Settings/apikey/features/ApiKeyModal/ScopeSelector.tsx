@@ -59,20 +59,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   scopeRow: css`
     flex-wrap: wrap;
-
-    /* keep each label on one line; overflowing items wrap as a whole */
-    .ant-checkbox-wrapper {
-      align-items: center;
-      white-space: nowrap;
-
-      /* antd offsets the box against the first text line (top: 0.2em /
-         flex-start); with this theme's box size that sinks it below the
-         label's midline — pin it back to true center */
-      .ant-checkbox {
-        inset-block-start: 0;
-        align-self: center;
-      }
-    }
   `,
 }));
 

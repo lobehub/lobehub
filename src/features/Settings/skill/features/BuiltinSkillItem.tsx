@@ -14,16 +14,17 @@ import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NavItem from '@/features/NavPanel/components/NavItem';
 import { createBuiltinSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 
+import SkillListRow, { useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
 interface BuiltinSkillItemProps {
   avatar?: string;
+  description?: string;
   identifier: string;
   isSelected?: boolean;
   onSelect?: () => void;
@@ -31,8 +32,9 @@ interface BuiltinSkillItemProps {
 }
 
 const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
-  ({ identifier, title, avatar, isSelected, onSelect }) => {
+  ({ identifier, title, avatar, description, isSelected, onSelect }) => {
     const { t } = useTranslation(['setting', 'plugin', 'common']);
+    const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate } = usePermission('create_content');
     const { allowed: canEdit } = usePermission('edit_own_content');
 
@@ -107,11 +109,16 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
 
     if (onSelect) {
       return (
-        <NavItem
+        <SkillListRow
           active={isSelected}
-          icon={() => <Avatar avatar={avatar} size={18} />}
+          extra={isPage && !isInstalled ? renderStatus() : undefined}
+          icon={() => <Avatar avatar={avatar} size={isPage ? 20 : 18} />}
           title={title}
           titleColor={!isInstalled ? cssVar.colorTextDescription : undefined}
+          summary={t(`tools.builtins.${identifier}.description`, {
+            defaultValue: description ?? '',
+            ns: 'setting',
+          })}
           onClick={onSelect}
         />
       );

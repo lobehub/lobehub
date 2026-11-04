@@ -9,6 +9,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { matchesTaskListFilter, type TaskListFilter } from '@lobechat/types';
 import { Center, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
 import { ClipboardCheckIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -42,7 +43,7 @@ import {
 } from './kanbanBoardModel';
 import KanbanColumn, { COLUMN_I18N_KEYS, COLUMN_STATUS_ICON, COLUMN_WIDTH } from './KanbanColumn';
 import type { TaskListViewOptions } from './listViewOptions';
-import { HIDDEN_WHEN_COMPLETED_STATUSES } from './listViewOptions';
+import { getCompletedWithin, HIDDEN_WHEN_COMPLETED_STATUSES } from './listViewOptions';
 
 const styles = createStaticStyles(({ css }) => ({
   board: css`
@@ -61,6 +62,8 @@ interface KanbanBoardProps {
   agentId?: string;
   /** Overrides the generic "no tasks" copy with the collection's own line. */
   emptyDescription?: string;
+  /** The page filter: sent with the board query and re-applied to edited cards. */
+  filter?: TaskListFilter;
   /**
    * "My tasks" board: narrows the server groups to the caller's own slice of
    * the workspace, matching what that tab's list view fetches — including its
@@ -73,23 +76,40 @@ interface KanbanBoardProps {
 }
 
 const KanbanBoard = memo<KanbanBoardProps>((props) => {
-  const { agentId, emptyDescription, myTaskScope, options, projectId, routeScope } = props;
+  const { agentId, emptyDescription, filter, myTaskScope, options, projectId, routeScope } = props;
   const { t } = useTranslation('chat');
   const { allowed: canEditTask } = usePermission('create_content');
   const groupBy = normalizeKanbanGroupBy(options.groupBy);
-  const excludeStatuses = options.hideCompleted ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
+  const excludeStatuses =
+    options.completedTasks === 'none' ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
   // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
   // `queryKey` the groups are read by.
   const { error, isLoading, mutate, queryKey } = useFetchTaskGroupList({
     ...buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
+    completedWithin: getCompletedWithin(options),
+    filter,
     includeArchived: options.showArchived,
   });
   // Each board query (scope, dimension, filters) is its own store entry, so the
   // settled signal and the groups always describe the same board.
   const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit(queryKey));
-  const currentTaskGroups = useTaskStore(taskListSelectors.taskGroups(queryKey));
+  const storedTaskGroups = useTaskStore(taskListSelectors.taskGroups(queryKey));
+  // Cards edited out of the filter leave their column before the refetch lands.
+  const currentTaskGroups = useMemo(() => {
+    if (!filter) return storedTaskGroups;
+    return storedTaskGroups.map((group) => {
+      const tasks = group.tasks.filter((task) => matchesTaskListFilter(task, filter));
+      return tasks.length === group.tasks.length
+        ? group
+        : {
+            ...group,
+            tasks,
+            total: Math.max(0, group.total - (group.tasks.length - tasks.length)),
+          };
+    });
+  }, [filter, storedTaskGroups]);
   const updateTask = useTaskStore((s) => s.updateTask);
   const runTask = useTaskStore((s) => s.runTask);
   const refreshTaskList = useTaskStore((s) => s.refreshTaskList);

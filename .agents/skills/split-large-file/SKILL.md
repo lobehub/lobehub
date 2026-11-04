@@ -1,6 +1,6 @@
 ---
 name: split-large-file
-description: 'Refactor a source file over 800 lines into a directory of cohesive modules without changing behavior, test-first. Use when asked to split, decompose, or shrink a large file (拆分大文件, 拆文件, 重构大文件); with no file given, pick one.'
+description: 'Refactor a source file over 1200 lines into a directory of cohesive modules without changing behavior, test-first. Use when asked to split, decompose, or shrink a large file (拆分大文件, 拆文件, 重构大文件); with no file given, pick one.'
 ---
 
 # Split a Large File
@@ -16,7 +16,7 @@ Given a file, use it. Otherwise build a shortlist:
 ```bash
 git ls-files -z -- 'src/*.ts' 'src/*.tsx' 'apps/*.ts' 'apps/*.tsx' 'packages/*.ts' 'packages/*.tsx' \
   | rg --null-data -v '(^|/)(__tests__|__mocks__|fixtures|locales)/|\.(test|spec)\.|\.d\.ts$' \
-  | xargs -0 wc -l | awk '$1 > 800 && $NF != "total"' | sort -rn | head -30
+  | xargs -0 wc -l | awk '$1 > 1200 && $NF != "total"' | sort -rn | head -30
 ```
 
 The shortlist still contains data tables and generated code; filter it by reading. Prefer a file with:
@@ -64,7 +64,7 @@ Extract one boundary at a time and rerun the guard tests by explicit path after 
 - Child components to PascalCase siblings with named exports.
 - A constant stays in the module that uses it; one shared by several extracted modules goes to the nearest common directory's `constants.ts`.
 
-Keep the public import path and exported names unchanged so callers do not change. Every resulting file must be at most 800 lines, and the entry should read as composition, not logic.
+Keep the public import path and exported names unchanged so callers do not change. Every resulting file must be at most 1200 lines, and the entry should read as composition, not logic.
 
 ## 6. Split and trim the tests
 

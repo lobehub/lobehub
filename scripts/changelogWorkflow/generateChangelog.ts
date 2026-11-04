@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { consola } from 'consola';
 
-const REPO_URL = 'https://github.com/lobehub/lobe-chat';
+const REPO_URL = 'https://github.com/lobehub/lobehub';
 const CHANGELOG_TITLE = '<a name="readme-top"></a>\n\n# Changelog';
 const BACK_TO_TOP = `<div align="right">
 

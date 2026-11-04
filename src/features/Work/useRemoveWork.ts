@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { workService } from '@/services/work';
+import { workActions } from '@/store/work';
 
 /**
  * User-initiated removal of a Work card. Intended for orphaned Works (the
@@ -12,13 +13,7 @@ import { workService } from '@/services/work';
  * delete cascades the Work's version history and any project pins.
  */
 export interface UseRemoveWorkOptions {
-  /**
-   * Called after the Work is deleted and the global Work caches are refreshed.
-   * Lists backed by `useSWRInfinite` (e.g. the resource-page gallery) need
-   * this: SWR's filter-form `mutate` skips their `$inf$` cache keys, so the
-   * global refresh below never reaches them and the card would linger until a
-   * reload — the owner passes its bound `mutate` here instead.
-   */
+  /** Called after the Work is deleted and the Work caches are refreshed. */
   onRemoved?: () => void | Promise<void>;
 }
 
@@ -45,6 +40,9 @@ export const useRemoveWork = ({ onRemoved }: UseRemoveWorkOptions = {}) => {
         onOk: async () => {
           try {
             await workService.deleteWork(item.id);
+            // Drop the card from every Work replica (and their persisted rows)
+            // right away, so neither a list on screen nor a reload paints it.
+            workActions.removeWork(item.id);
             // The orphan may be surfaced in the gallery, the sidebar and any
             // message it was registered from, so refresh every Work view.
             await workService.refreshAllConversations();

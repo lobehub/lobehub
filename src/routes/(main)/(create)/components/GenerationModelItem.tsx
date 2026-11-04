@@ -1,7 +1,6 @@
 'use client';
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
 import { createStaticStyles, cx, Flexbox, Popover, Text } from '@lobehub/ui';
 import type { AiModelForSelect } from 'model-bank';
 import numeral from 'numeral';
@@ -22,16 +21,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   descriptionText_dark: css`
     color: ${cssVar.colorText};
-  `,
-  popover: css`
-    .ant-popover-inner {
-      background: ${cssVar.colorBgElevated};
-    }
-  `,
-  popover_dark: css`
-    .ant-popover-inner {
-      background: ${cssVar.colorBgSpotlight};
-    }
   `,
   priceText: css`
     font-weight: 500;
@@ -101,21 +90,19 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
 
       if (enableBusinessFeatures && providerId === BRANDING_PROVIDER) {
         if (typeof exactUsd === 'number') {
-          const credits = exactUsd * CREDITS_PER_DOLLAR;
           return t(
             isVideo
               ? 'GenerationModelItem.creditsPerVideoExact'
               : 'GenerationModelItem.creditsPerImageExact',
-            { amount: numeral(credits).format('0,0') },
+            { amount: numeral(exactUsd).format('0,0.00[000]') },
           );
         }
         if (typeof approxUsd === 'number') {
-          const credits = approxUsd * CREDITS_PER_DOLLAR;
           return t(
             isVideo
               ? 'GenerationModelItem.creditsPerVideoApproximate'
               : 'GenerationModelItem.creditsPerImageApproximate',
-            { amount: numeral(credits).format('0,0') },
+            { amount: numeral(approxUsd).format('0,0.00[000]') },
           );
         }
       } else {
@@ -171,11 +158,7 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
     if (!showPopover || !popoverContent) return content;
 
     return (
-      <Popover
-        classNames={{ root: cx(styles.popover, isDarkMode && styles.popover_dark) }}
-        content={popoverContent}
-        placement="rightTop"
-      >
+      <Popover content={popoverContent} placement="rightTop">
         {content}
       </Popover>
     );

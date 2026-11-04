@@ -248,6 +248,32 @@ describe('QueueService', () => {
       expect(qstashMocks.publishJSON.mock.calls[0][0]).toMatchObject({ delay: 2 });
     });
 
+    it('forwards flow control so deliveries sharing a key are serialized', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+
+      await impl.scheduleMessage({
+        delay: 20_000,
+        endpoint: 'https://example.com/api/agent/webhooks/bot-wake-flush',
+        flowControl: { key: 'agent-signal.run.scope.c1', parallelism: 1 },
+        operationId: 'op-test',
+        stepIndex: 0,
+      });
+      await impl.scheduleMessage({
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-test-2',
+        stepIndex: 0,
+      });
+
+      expect(qstashMocks.publishJSON.mock.calls[0][0]).toMatchObject({
+        delay: 20,
+        flowControl: { key: 'agent-signal.run.scope.c1', parallelism: 1 },
+      });
+      expect(qstashMocks.publishJSON.mock.calls[1][0]).not.toHaveProperty('flowControl');
+    });
+
     it('clamps an oversized body instead of letting the publish blow the QStash quota', async () => {
       qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
 

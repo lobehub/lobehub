@@ -10,6 +10,7 @@ import {
   isLocalHeterogeneousType,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
   type LocalHeterogeneousAgentType,
+  usesHeterogeneousSessionInitialModel,
 } from '@lobechat/heterogeneous-agents';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
@@ -18,7 +19,7 @@ import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolv
 import {
   createPiRpcAgentHandle,
   type PiRpcStartupControl,
-  toPiRpcPrompt,
+  preparePiRpcInput,
 } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   AgentContentBlock,
@@ -91,11 +92,8 @@ const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
 /**
- * Runtime selection registry for `lh hetero exec` — the CLI counterpart of
- * the desktop controller's `runtimeDispatchers`. Long-lived bidirectional
- * runtimes (pi RPC) register a spawn factory here; every other agent uses the
- * generic one-shot `spawnAgent`. A future agent adopting an RPC mode only
- * adds one entry — no dispatch edit.
+ * Runtime factories for `lh hetero exec`. Pi uses RPC; other agents fall
+ * through to the generic one-shot `spawnAgent`.
  */
 const spawnRuntimeRegistry: Partial<
   Record<
@@ -111,7 +109,10 @@ const spawnRuntimeRegistry: Partial<
 > = {
   pi: async (spawnOpts, lifecycle) =>
     createPiRpcAgentHandle({
-      args: spawnOpts.extraArgs ?? [],
+      ...(await preparePiRpcInput(spawnOpts.prompt, {
+        args: spawnOpts.extraArgs ?? [],
+        lobeHubContext: !!spawnOpts.env?.LOBEHUB_TOPIC_ID,
+      })),
       commandPath: spawnOpts.command!,
       cwd: spawnOpts.cwd ?? process.cwd(),
       detached: spawnOpts.detached,
@@ -119,7 +120,6 @@ const spawnRuntimeRegistry: Partial<
       operationId: spawnOpts.operationId,
       onRawStdout: lifecycle?.onRawStdout,
       onStartupControl: lifecycle?.onStartupControl,
-      prompt: await toPiRpcPrompt(spawnOpts.prompt),
       resumeSessionId: spawnOpts.resumeSessionId,
       uploadImage: spawnOpts.uploadImage,
     }),
@@ -248,14 +248,17 @@ const collectAgentArg = (value: string, previous: string[] = []): string[] => [.
 const buildExtraArgs = (
   options: Pick<ExecOptions, 'agentArg' | 'effort' | 'mode' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
+  const modelArg = options.model ? ['--model', options.model] : [];
   const selectorArgs =
     options.type === 'amp'
-      ? [...(options.mode ? ['--mode', options.mode] : [])]
+      ? options.mode
+        ? ['--mode', options.mode]
+        : []
       : options.type === 'droid' || options.type === 'trae'
         ? []
         : options.type === 'codex'
           ? [
-              ...(options.model ? ['--model', options.model] : []),
+              ...modelArg,
               ...(options.effort
                 ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
                 : []),
@@ -266,21 +269,15 @@ const buildExtraArgs = (
           : options.type === 'claude-code' ||
               options.type === 'codebuddy' ||
               options.type === 'grok-build'
-            ? [
-                ...(options.model ? ['--model', options.model] : []),
-                ...(options.effort ? ['--effort', options.effort] : []),
-              ]
+            ? [...modelArg, ...(options.effort ? ['--effort', options.effort] : [])]
             : options.type === 'cursor' ||
                 options.type === 'devin' ||
                 options.type === 'kimi-code' ||
                 options.type === 'opencode' ||
                 options.type === 'pi'
-              ? [...(options.model ? ['--model', options.model] : [])]
-              : options.type === 'qoder'
-                ? [
-                    ...(options.model ? ['--model', options.model] : []),
-                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
-                  ]
+              ? modelArg
+              : options.type === 'copilot' || options.type === 'qoder'
+                ? [...modelArg, ...(options.effort ? ['--reasoning-effort', options.effort] : [])]
                 : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
@@ -763,21 +760,22 @@ const exec = async (options: ExecOptions): Promise<void> => {
   if (
     serverIngest &&
     (agentType === 'claude-code' ||
+      agentType === 'copilot' ||
       agentType === 'cursor' ||
       agentType === 'droid' ||
       agentType === 'devin' ||
       agentType === 'qoder') &&
     serverIngester
   ) {
-    if (agentType === 'cursor' || agentType === 'droid') {
+    if (
+      agentType === 'copilot' ||
+      agentType === 'cursor' ||
+      agentType === 'devin' ||
+      agentType === 'droid'
+    ) {
       askBridge = new AskUserBridge(operationId, {
         identifier: agentType === 'cursor' ? 'claude-code' : agentType,
         provider: agentType,
-      });
-    } else if (agentType === 'devin') {
-      askBridge = new AskUserBridge(operationId, {
-        identifier: 'devin',
-        provider: 'devin',
       });
     } else {
       askServer = new LobeBuiltinMcpServer();
@@ -1257,30 +1255,30 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // response must not overwrite the model selected by `initialModel`.
   const permissionMode = options.type === 'devin' ? 'bypass' : undefined;
 
+  const spawnOptions = {
+    agentType: options.type,
+    askUserBridge: askBridge,
+    command: resolvedCommand.command,
+    commandVersion: resolvedCommand.version,
+    cwd: options.cwd || process.cwd(),
+    detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
+    env: commandEnv,
+    extraArgs,
+    // Device and sandbox executions are observed through the same gateway stream as native
+    // server agents. Ask Claude Code for content-block deltas so the current conversation
+    // receives text while the process is running, not only the terminal assistant snapshot.
+    includePartialMessages: options.type === 'claude-code',
+    initialModel: usesHeterogeneousSessionInitialModel(options.type) ? options.model : undefined,
+    // Keep Claude Code's stdin open while it can still use input: closing it
+    // early makes print mode kill background tasks after 10 minutes.
+    liveInput: options.type === 'claude-code',
+    operationId,
+    permissionMode,
+    uploadImage,
+  };
+
   const first = await runOneAgent(
-    {
-      agentType: options.type,
-      askUserBridge: askBridge,
-      command: resolvedCommand.command,
-      cwd: options.cwd || process.cwd(),
-      detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
-      env: commandEnv,
-      extraArgs,
-      permissionMode,
-      // Device and sandbox executions are observed through the same gateway
-      // stream as native server agents. Ask Claude Code for content-block
-      // deltas so the current conversation receives text while the process is
-      // running instead of seeing only the terminal assistant snapshot.
-      includePartialMessages: options.type === 'claude-code',
-      initialModel:
-        options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
-          ? options.model
-          : undefined,
-      operationId,
-      prompt: resolved.prompt,
-      resumeSessionId: options.resume,
-      uploadImage,
-    },
+    { ...spawnOptions, prompt: resolved.prompt, resumeSessionId: options.resume },
     interceptResume,
     'attempt-1',
   );
@@ -1302,25 +1300,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
   if (!first.cancelled && !first.ingestError && first.resumeNotFound) {
     log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
-      {
-        agentType: options.type,
-        askUserBridge: askBridge,
-        command: resolvedCommand.command,
-        cwd: options.cwd || process.cwd(),
-        detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
-        env: commandEnv,
-        extraArgs,
-        includePartialMessages: options.type === 'claude-code',
-        initialModel:
-          options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
-            ? options.model
-            : undefined,
-        operationId,
-        permissionMode,
-        prompt: resolved.resumeFallbackPrompt ?? resolved.prompt,
-        uploadImage,
-        // No resumeSessionId — start fresh
-      },
+      // No resumeSessionId — start fresh
+      { ...spawnOptions, prompt: resolved.resumeFallbackPrompt ?? resolved.prompt },
       false, // no need to intercept resume errors on a fresh run
       'attempt-2-noresume',
     );

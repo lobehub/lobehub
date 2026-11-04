@@ -1,16 +1,16 @@
 'use client';
 
-import type {
-  FileTreeDirectoryHandle,
-  FileTreeItemHandle,
-  FileTreeOptions,
-  FileTreeRowDecoration,
-} from '@pierre/trees';
-import { FileTree as PierreFileTree, useFileTree, useFileTreeSelection } from '@pierre/trees/react';
-import debug from 'debug';
-import type { DragEvent, ForwardedRef, KeyboardEvent, MouseEvent } from 'react';
 import {
-  forwardRef,
+  FileTree as FileTreeModel,
+  type FileTreeDirectoryHandle,
+  type FileTreeItemHandle,
+  type FileTreeOptions,
+  type FileTreeRowDecoration,
+} from '@pierre/trees';
+import { FileTree as PierreFileTree, useFileTreeSelection } from '@pierre/trees/react';
+import debug from 'debug';
+import type { DragEvent, KeyboardEvent, MouseEvent } from 'react';
+import {
   useCallback,
   useImperativeHandle,
   useLayoutEffect,
@@ -42,8 +42,6 @@ const asDirectory = (
   handle: FileTreeItemHandle | null | undefined,
 ): FileTreeDirectoryHandle | null =>
   handle && handle.isDirectory() ? (handle as FileTreeDirectoryHandle) : null;
-
-type FileTreeModel = ReturnType<typeof useFileTree>['model'];
 
 // @pierre/trees walks a lookup path segment by segment and asks for each
 // intermediate node's directory child index *before* checking that the node is
@@ -101,14 +99,11 @@ interface ExplorerTreeInnerProps<TData> extends ExplorerTreeProps<TData> {
   requestTreeRebuild: () => void;
 }
 
-function ExplorerTreeInner<TData>(
-  props: ExplorerTreeInnerProps<TData>,
-  ref: ForwardedRef<ExplorerTreeHandle>,
-) {
+function ExplorerTreeInner<TData>(props: ExplorerTreeInnerProps<TData>) {
   const propsRef = useRef(props);
   propsRef.current = props;
 
-  const { requestTreeRebuild } = props;
+  const { ref, requestTreeRebuild } = props;
 
   const adapterRef = useSingleton(() => ({
     current: normalizeTree(props.nodes),
@@ -293,7 +288,12 @@ function ExplorerTreeInner<TData>(
   }, []);
 
   const renamingNodeRef = useRef<ExplorerTreeNode<TData> | null>(null);
-  const { model } = useFileTree(initialOptions);
+  // Not `useFileTree`: it destroys the model in an effect cleanup, which also
+  // runs when an <Activity> ancestor hides the tree (the working sidebar). On
+  // reveal the tree kept using the destroyed model and fell back to the paths it
+  // was created with. The model holds no global listeners, so garbage collection
+  // releases it after a real unmount, and <PierreFileTree> detaches its DOM.
+  const model = useSingleton(() => new FileTreeModel(initialOptions));
 
   // Drops whatever the tree applied optimistically (rename, drop, new row) by
   // re-applying the current nodes, keeping expansion, selection and focus.
@@ -740,24 +740,17 @@ function ExplorerTreeInner<TData>(
   );
 }
 
-const ExplorerTreeInnerWithRef = forwardRef(ExplorerTreeInner) as <TData>(
-  props: ExplorerTreeInnerProps<TData> & { ref?: ForwardedRef<ExplorerTreeHandle> },
-) => ReturnType<typeof ExplorerTreeInner>;
-
 // Owns the escape hatch for an unusable tree model: bumping the generation
 // remounts the inner component, which builds a fresh model from the current
 // paths. Kept in a parent so the inner component can ask for its own remount.
-function ExplorerTree<TData>({
-  ref,
-  ...props
-}: ExplorerTreeProps<TData> & { ref?: ForwardedRef<ExplorerTreeHandle> }) {
+function ExplorerTree<TData>({ ref, ...props }: ExplorerTreeProps<TData>) {
   const [generation, setGeneration] = useState(0);
   const requestTreeRebuild = useCallback(() => setGeneration((value) => value + 1), []);
 
   return (
-    <ExplorerTreeInnerWithRef
-      {...props}
+    <ExplorerTreeInner
       key={generation}
+      {...props}
       ref={ref}
       requestTreeRebuild={requestTreeRebuild}
     />

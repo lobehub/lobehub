@@ -1,5 +1,5 @@
 import { type FlexboxProps, type IconProps } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, Suspense, useState } from 'react';
@@ -17,6 +17,11 @@ interface GroupBlockProps extends Omit<FlexboxProps, 'title'> {
   collapsed?: boolean;
   count?: number;
   icon?: IconProps['icon'];
+  /**
+   * The rows on screen are the local copy and a refresh is in flight: a small
+   * spinner beside the count, so the user knows newer data may still arrive.
+   */
+  loading?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   title?: ReactNode;
 }
@@ -49,6 +54,7 @@ const GroupBlock = memo<GroupBlockProps>(
     collapsed = false,
     count,
     icon,
+    loading,
     onCollapsedChange,
     ...rest
   }) => {
@@ -80,6 +86,7 @@ const GroupBlock = memo<GroupBlockProps>(
               {title}
             </Text>
             {count !== undefined && <CountBadge count={count} />}
+            {loading && <Spin size="small" variant="network" />}
             {onCollapsedChange && (
               <Icon
                 color={cssVar.colorTextQuaternary}

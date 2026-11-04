@@ -24,20 +24,33 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metrics: css`
     display: grid;
-    grid-template-columns: minmax(178px, 1fr) 72px 48px 64px;
+    grid-template-columns: minmax(0, 1fr) 48px 64px;
     column-gap: 12px;
     align-items: center;
 
     width: min(100%, 390px);
     min-width: 390px;
+
+    /* On a phone the fixed width would crush the goal title beside it. The
+       metrics take what is left on the row's second line (beside the agent
+       and the menu), and the duration / cost cells shrink to their content. */
+    @media (width <= 767px) {
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      flex: 1 1 0;
+      column-gap: 8px;
+
+      width: auto;
+      min-width: 0;
+    }
   `,
   needsYou: css`
-    justify-self: end;
+    flex: none;
     color: ${cssVar.colorWarning};
     white-space: nowrap;
   `,
   progress: css`
     overflow: hidden;
+    flex: none;
 
     width: 64px;
     height: 4px;
@@ -54,7 +67,6 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface GoalProgressProps {
-  findingCount: number;
   pendingDecisions: number;
   taskDone: number;
   taskTotal: number;
@@ -63,45 +75,47 @@ export interface GoalProgressProps {
 }
 
 /**
- * The list row's roll-up: how far the graph got, what it produced, what it
- * cost — and, taking priority over the findings count, whether anything is
- * blocked on the user right now.
+ * The list row's roll-up: how far the graph got, whether anything is blocked
+ * on the user right now, and how long it ran and what it cost.
  */
 export const GoalProgress = memo<GoalProgressProps>(
-  ({ findingCount, pendingDecisions, totalRunCost, totalRunDuration, taskDone, taskTotal }) => {
+  ({ pendingDecisions, totalRunCost, totalRunDuration, taskDone, taskTotal }) => {
     const { t } = useTranslation('chat');
     const progress = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0;
 
     return (
       <div className={styles.metrics}>
-        {taskTotal > 0 ? (
-          <Flexbox horizontal align={'center'} className={styles.acceptance} gap={6}>
-            <div aria-hidden className={styles.progress}>
-              <div className={styles.progressValue} style={{ width: `${progress}%` }} />
-            </div>
+        {/* Progress and anything blocked on the user read as one cell, so
+          duration and cost sit in fixed columns at the row's end and line up
+          whether or not a goal needs you. */}
+        <Flexbox horizontal align={'center'} className={styles.acceptance} gap={8}>
+          {taskTotal > 0 ? (
+            <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+              <div aria-hidden className={styles.progress}>
+                <div className={styles.progressValue} style={{ width: `${progress}%` }} />
+              </div>
+              <Text ellipsis color={cssVar.colorTextTertiary} fontSize={12}>
+                {t('goalList.taskProgress', { done: taskDone, total: taskTotal })}
+              </Text>
+            </Flexbox>
+          ) : (
             <Text ellipsis color={cssVar.colorTextTertiary} fontSize={12}>
-              {t('goalList.taskProgress', { done: taskDone, total: taskTotal })}
+              {t('goalList.noTasks')}
             </Text>
-          </Flexbox>
-        ) : (
-          <Text ellipsis color={cssVar.colorTextTertiary} fontSize={12}>
-            {t('goalList.noTasks')}
-          </Text>
-        )}
-        {pendingDecisions > 0 ? (
-          <Text className={styles.needsYou} fontSize={12}>
-            {t('goalList.needsYou', { count: pendingDecisions })}
-          </Text>
-        ) : (
-          <Text className={styles.metric} color={cssVar.colorTextTertiary} fontSize={12}>
-            {t('goalList.findings', { count: findingCount })}
-          </Text>
-        )}
+          )}
+          {pendingDecisions > 0 && (
+            <Text className={styles.needsYou} fontSize={12}>
+              {t('goalList.needsYou', { count: pendingDecisions })}
+            </Text>
+          )}
+        </Flexbox>
+        {/* A goal that has not run yet leaves these cells empty: a column of
+          lone dashes reads as stray marks rather than as "nothing yet". */}
         <Text className={styles.metric} color={cssVar.colorTextTertiary} fontSize={12}>
-          {formatGoalDuration(totalRunDuration)}
+          {totalRunDuration > 0 ? formatGoalDuration(totalRunDuration) : null}
         </Text>
         <Text className={styles.metric} color={cssVar.colorTextTertiary} fontSize={12}>
-          {formatGoalCost(totalRunCost)}
+          {totalRunCost > 0 ? formatGoalCost(totalRunCost) : null}
         </Text>
       </div>
     );

@@ -1,7 +1,10 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 
 import { useUserStore } from '@/store/user';
@@ -9,47 +12,36 @@ import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import SkeletonBar from '../Bar';
 
-const styles = createStaticStyles(({ css, responsive }) => ({
-  action: css`
-    flex-shrink: 0;
-    margin-inline-start: auto;
-  `,
-  body: css`
-    display: flex;
-    flex: 1;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    min-width: 0;
-  `,
-  divider: css`
-    width: 100%;
-    height: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  label: css`
-    flex: 0 0 160px;
-
-    ${responsive.md} {
-      flex: 0 0 auto;
-    }
-  `,
-  row: css`
-    display: flex;
-    gap: 24px;
-    align-items: center;
-
-    min-height: 48px;
-    padding-block: 16px;
-
-    ${responsive.md} {
-      flex-direction: column;
-      gap: 12px;
-      align-items: stretch;
-    }
-  `,
-}));
+const styles = stylex.create({
+  action: { flexShrink: 0, marginInlineStart: 'auto' },
+  body: {
+    display: 'flex',
+    flex: '1',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: '0',
+  },
+  divider: {
+    width: '100%',
+    height: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  label: {
+    flexGrow: { default: 0, [media.md]: 0 },
+    flexShrink: { default: 0, [media.md]: 0 },
+    flexBasis: { default: '160px', [media.md]: 'auto' },
+  },
+  row: {
+    display: 'flex',
+    gap: { default: '24px', [media.md]: '12px' },
+    alignItems: { default: 'center', [media.md]: 'stretch' },
+    minHeight: '48px',
+    paddingBlock: '16px',
+    flexDirection: { default: null, [media.md]: 'column' },
+  },
+});
 
 interface SettingsProfileRowSkeletonProps {
   action?: boolean;
@@ -68,14 +60,19 @@ export const SettingsProfileRowSkeleton = ({
   height,
   labelWidth = 80,
 }: SettingsProfileRowSkeletonProps) => (
-  <div className={styles.row} style={height ? { minHeight: height } : undefined}>
-    <div className={styles.label}>
+  <div
+    className={stylex.props(styles.row).className}
+    style={height ? { minHeight: height } : undefined}
+  >
+    <div {...stylex.props(styles.label)}>
       <SkeletonBar height={22} width={labelWidth} />
     </div>
-    <div className={styles.body}>
+    <div {...stylex.props(styles.body)}>
       {body === undefined ? <SkeletonBar height={22} width={bodyWidth} /> : body}
       {action && (
-        <div className={styles.action}>{actionNode ?? <SkeletonBar height={22} width={80} />}</div>
+        <div {...stylex.props(styles.action)}>
+          {actionNode ?? <SkeletonBar height={22} width={80} />}
+        </div>
       )}
     </div>
   </div>
@@ -111,11 +108,11 @@ const SettingsProfileSkeleton = () => {
           body={null}
           height={78}
         />
-        <div className={styles.divider} />
+        <div {...stylex.props(styles.divider)} />
         <SettingsProfileRowSkeleton action={false} bodyWidth={194} height={68} labelWidth={72} />
-        <div className={styles.divider} />
+        <div {...stylex.props(styles.divider)} />
         <SettingsProfileRowSkeleton action={false} bodyWidth={194} height={68} labelWidth={88} />
-        <div className={styles.divider} />
+        <div {...stylex.props(styles.divider)} />
         <SettingsProfileRowSkeleton
           action={false}
           body={<InterestsSkeleton />}
@@ -124,7 +121,7 @@ const SettingsProfileSkeleton = () => {
         />
         {isLogin && email && (
           <>
-            <div className={styles.divider} />
+            <div {...stylex.props(styles.divider)} />
             <SettingsProfileRowSkeleton bodyWidth={184} height={54} labelWidth={96} />
           </>
         )}

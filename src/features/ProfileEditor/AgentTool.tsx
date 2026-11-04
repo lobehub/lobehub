@@ -7,7 +7,7 @@ import { Avatar, Button, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon } from 'lucide-react';
-import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
@@ -36,13 +36,14 @@ import {
   composioStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { agentSkillListResource } from '@/store/tool/slices/agentSkills/projection';
 import type { LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
 import PluginTag from './PluginTag';
 import PopoverContent from './PopoverContent';
 import { getVisibleProfileToolIds } from './profileToolVisibility';
-import { resolveStalePluginCleanup, selectProfileToolCatalogsSynced } from './staleProfilePlugins';
+import { selectProfileToolCatalogsSynced, useStalePluginAutoResolve } from './staleProfilePlugins';
 
 export interface AgentToolProps {
   /**
@@ -785,50 +786,28 @@ const AgentTool = memo<AgentToolProps>(
       customConnectors,
     ]);
 
-    // Track whether initial cleanup has been performed
-    const cleanupDoneRef = useRef(false);
-
-    // Auto-remove stale plugin IDs from the agent config. The catalog gates
-    // decide when the data is complete; the debounce only coalesces the burst
-    // of catalog updates that arrive together.
-    useEffect(() => {
-      if (cleanupDoneRef.current) return;
-
-      const timer = setTimeout(() => {
-        const cleanedPlugins = resolveStalePluginCleanup({
-          canEditContent: canEdit,
-          canEditResource,
-          isAccessResolved,
-          isConnectorsInit,
-          isToolCatalogSynced,
-          plugins: config?.plugins,
-          validIdentifiers,
-        });
-
-        if (cleanedPlugins && effectiveAgentId) {
-          // Best-effort self-healing the user never asked for, so a rejection
-          // (edit lock held by another member, resource access revoked between
-          // render and write) must not claim "your change was not applied" —
-          // there was no change to apply. It retries on the next open.
-          updateAgentConfigById(
-            effectiveAgentId,
-            { plugins: cleanedPlugins },
-            { showErrorMessage: false },
-          );
-          cleanupDoneRef.current = true;
-        }
-      }, 500);
-
-      return () => clearTimeout(timer);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [
-      validIdentifiers,
-      canEdit,
+    // Self-heal unresolved plugin entries once the catalogs are complete. They
+    // may be Market skills that are not installed yet, so the server is asked
+    // first and only entries it says are not skills are removed.
+    useStalePluginAutoResolve({
+      agentId: effectiveAgentId,
+      canEditContent: canEdit,
       canEditResource,
+      getScope: () => agentSkillListResource.scope.get(),
+      getCurrentPlugins: () =>
+        agentSelectors.getAgentConfigById(effectiveAgentId)(useAgentStore.getState())?.plugins,
       isAccessResolved,
       isConnectorsInit,
       isToolCatalogSynced,
-    ]);
+      plugins: config?.plugins,
+      scope: agentSkillListResource.scope.use(),
+      // Best-effort: the user never asked for this, so a rejection (edit lock
+      // held by another member, access revoked between render and write) must
+      // not claim "your change was not applied". It retries on the next open.
+      updatePlugins: (id, nextPlugins) =>
+        updateAgentConfigById(id, { plugins: nextPlugins }, { showErrorMessage: false }),
+      validIdentifiers,
+    });
 
     // Only display tools that this profile surface actually manages. Runtime-
     // managed entries remain untouched in config for compatibility with other

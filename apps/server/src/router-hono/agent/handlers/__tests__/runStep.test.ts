@@ -505,6 +505,7 @@ describe('runStep handler', () => {
         pendingHumanSelect: undefined,
         pendingToolsCalling: ['t1'],
         status: 'waiting_for_human',
+        llmCalls: 5,
         stepCount: 5,
       },
       success: true,

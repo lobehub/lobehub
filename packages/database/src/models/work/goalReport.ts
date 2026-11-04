@@ -11,6 +11,8 @@ export interface RegisterGoalReportWorkParams extends Omit<WorkVersionEventParam
   content: string;
   goalId: string;
   metadata: GoalReportMetadata;
+  /** The `custom/html` document holding this version as an HTML page. */
+  pageDocumentId?: string;
   title: string;
 }
 
@@ -23,7 +25,7 @@ export const registerGoalReportWork = (
   ctx: WorkContext,
   params: RegisterGoalReportWorkParams,
 ): Promise<WorkItem> => {
-  const { content, goalId, metadata, title, ...event } = params;
+  const { content, goalId, metadata, pageDocumentId, title, ...event } = params;
   return registerWorkVersion(
     ctx,
     {
@@ -45,7 +47,10 @@ export const registerGoalReportWork = (
         title,
         url: null,
       },
-      metadata: { goalReport: metadata },
+      metadata: {
+        goalReport: metadata,
+        ...(pageDocumentId && { goalReportPageId: pageDocumentId }),
+      },
     }),
   );
 };

@@ -7,6 +7,7 @@ import {
   type DeviceUnavailableErrorData,
 } from './deviceTransportError';
 import type {
+  AgentRunRequestMessage,
   DeviceSystemInfo,
   GatewayDevice,
   GatewayMcpParams,
@@ -317,6 +318,7 @@ export class GatewayHttpClient {
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
+    claudeAccountRouting?: AgentRunRequestMessage['claudeAccountRouting'];
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
     cwd?: string;

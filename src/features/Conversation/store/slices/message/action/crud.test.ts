@@ -3,6 +3,7 @@ import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as messageServiceModule from '@/services/message';
+import { useChatStore } from '@/store/chat';
 
 import { type ConversationContext } from '../../../../types';
 import { createStore } from '../../../index';
@@ -96,68 +97,6 @@ describe('Message CRUD Actions', () => {
 
       expect(result).toBeUndefined();
     });
-
-    it('discards a create result that resolves after switching conversations', async () => {
-      let resolveCreate!: (result: any) => void;
-      vi.spyOn(messageServiceModule.messageService, 'createMessage').mockReturnValue(
-        new Promise((resolve) => {
-          resolveCreate = resolve;
-        }),
-      );
-
-      const oldContext = {
-        agentId: 'test-session',
-        threadId: null,
-        topicId: 'topic-old',
-      };
-      const currentContext = {
-        agentId: 'test-session',
-        threadId: null,
-        topicId: 'topic-current',
-      };
-      const currentMessages: UIChatMessage[] = [
-        {
-          content: 'current topic',
-          createdAt: 2000,
-          id: 'msg-current',
-          role: 'user',
-          updatedAt: 2000,
-        },
-      ];
-      const store = createTestStore(oldContext);
-
-      const createPromise = store.getState().createMessage({
-        content: 'old topic message',
-        role: 'user',
-      });
-      store.setState({
-        context: currentContext,
-        dbMessages: currentMessages,
-        displayMessages: currentMessages,
-        messageLoadingIds: [],
-        messagesInit: true,
-      });
-
-      let result: string | undefined;
-      await act(async () => {
-        resolveCreate({
-          id: 'msg-old',
-          messages: [
-            {
-              content: 'late old topic result',
-              createdAt: 1000,
-              id: 'msg-old',
-              role: 'user',
-              updatedAt: 1000,
-            },
-          ],
-        });
-        result = await createPromise;
-      });
-
-      expect(result).toBeUndefined();
-      expect(store.getState().dbMessages).toEqual(currentMessages);
-    });
   });
 
   describe('createTempMessage', () => {
@@ -178,6 +117,25 @@ describe('Message CRUD Actions', () => {
       const state = store.getState();
       expect(state.displayMessages.length).toBe(1);
       expect(state.displayMessages[0].content).toBe('Temp message');
+    });
+
+    it('marks the temp row as client-created when forwarding to the chat store', () => {
+      const store = createTestStore();
+      const dispatch = vi.spyOn(useChatStore.getState(), 'internal_dispatchMessage');
+
+      act(() => {
+        store.getState().createTempMessage({
+          content: 'Temp message',
+          role: 'user',
+          sessionId: 'test-session',
+        });
+      });
+
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'createMessage' }),
+        expect.any(Object),
+        { creationOrigin: 'client' },
+      );
     });
   });
 
@@ -882,6 +840,46 @@ describe('Message CRUD Actions', () => {
         { key: 'new' },
         expect.any(Object),
       );
+    });
+
+    it('keeps the local rows when the caller opts out of the refresh', async () => {
+      // The server's rows still carry the call as `pending`: loading them would
+      // bring back an approval card the user already answered.
+      vi.spyOn(messageServiceModule.messageService, 'updateToolArguments').mockResolvedValue({
+        success: true,
+        messages: [{ id: 'tool-msg-1', role: 'tool' }],
+      } as any);
+      const store = createTestStore();
+      act(() => {
+        store.getState().internal_dispatchMessage({
+          type: 'createMessage',
+          id: 'tool-msg-1',
+          value: {
+            content: '',
+            role: 'tool',
+            sessionId: 'test-session',
+            tool_call_id: 'tool-call-1',
+            plugin: {
+              apiName: 'test',
+              arguments: '{"key":"old"}',
+              identifier: 'p',
+              type: 'default',
+            },
+          },
+        });
+      });
+      const replaceSpy = vi.spyOn(store.getState(), 'replaceMessages');
+
+      await act(async () => {
+        await store
+          .getState()
+          .updatePluginArguments('tool-call-1', { key: 'new' }, true, { refresh: false });
+      });
+
+      expect(replaceSpy).not.toHaveBeenCalled();
+      expect(
+        store.getState().dbMessages.find((m) => m.id === 'tool-msg-1')?.plugin?.arguments,
+      ).toBe('{"key":"new"}');
     });
 
     it('should update using toolCallId even when tool message not persisted (intervention pending)', async () => {

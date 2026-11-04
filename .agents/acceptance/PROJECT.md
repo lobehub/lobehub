@@ -53,6 +53,10 @@ stale standalone install: a recently added workspace package fails to resolve �
   - With repo-root `.env` present: use the existing local config — `bun run dev`
     (full-stack, needed for Web smoke) or `AGENT_RUNTIME_MODE=queue pnpm run dev:next`
     (backend only). Do NOT call any `init-dev-env.sh` subcommand when `.env` exists.
+    If that `.env` config does not boot (expired credentials, schema behind
+    the checkout, `setup-auth.sh` refusing to seed), do not repair it in place —
+    open a clean `git worktree` with no root `.env` and use the bootstrap below
+    ([dev-server.md](./references/dev-server.md#root-env-exists-but-does-not-boot)).
   - Without `.env`: use the skill-owned bootstrap `.agents/acceptance/scripts/init-dev-env.sh`
     (Postgres, Redis, migrations, auth/key-vault/S3 test env, seed user, then the
     repo's own dev server — not `e2e/scripts/setup.ts`). It hard-blocks when
@@ -218,13 +222,15 @@ stale standalone install: a recently added workspace package fails to resolve �
   edited-file cards, works, topic content), drive the run with
 
   ```bash
-  lh agent run -a local --sse --json -p '<prompt>' [-t < agentId > --device < topicId > ]
+  lh agent run -a <agentId> --json -p '<prompt>' [-t <topicId>] [--device local]
   ```
 
-  and use the browser only to capture the rendered evidence afterwards. `--sse`
-  is REQUIRED against a local dev server — without it the run dies with
-  `Gateway auth failed: signature verification failed` (local agent-gateway
-  JWKS mismatch; see `references/probe-field-notes.md` E43). `--json` gives assertable
+  and use the browser only to capture the rendered evidence afterwards. CLI
+  streaming uses the agent gateway WebSocket only. For local runs, configure
+  both the backend and CLI to use the same local `AGENT_GATEWAY_URL`, with
+  matching service-token and local JWT verification configuration (see
+  `references/agent-gateway.md`). The production gateway cannot verify local
+  JWT signatures; there is no SSE fallback. `--json` gives assertable
   output; reuse `-t` to chain multi-step cases in one topic. This is faster and
   far more deterministic than typing prompts through agent-browser, and the
   server-side state it produces is identical.
@@ -368,7 +374,7 @@ bash "$GUARD" stop                      # teardown, always
 | `ACCEPTANCE_GUARD_RED`    | `swap=80,free=8`                              | Linux host stop thresholds                                 |
 
 Thresholds are host-level on purpose. The groups (`Google Chrome for Testing`,
-`next-server|vite`, `tsgo`) also match other worktrees' servers and other runs'
+`next-server|vite`, `tsrs`) also match other worktrees' servers and other runs'
 browsers — five such processes held \~20 GB here — so a group or total RSS cap turns a
 merely busy machine red and stops a healthy run. The groups select what
 `stop-owned` may stop; they do not determine this adapter's tier.

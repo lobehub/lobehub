@@ -1,9 +1,10 @@
 import path from 'node:path';
 
+import { buildCodexAppServerThreadParams } from '@lobechat/heterogeneous-agents/spawn';
 import { describe, expect, it } from 'vitest';
 
 import type { PrepareProviderBindingContext } from '../types';
-import { codexDriver, sanitizeCodexProviderBindingArgs } from './codex';
+import { codexDriver, sanitizeCodexProviderBindingArgs, withCodexContextArgs } from './codex';
 
 const bindingContext = (): PrepareProviderBindingContext => ({
   args: ['--model', 'stale-model', '-c', 'model_provider="other"', '--json'],
@@ -231,5 +232,59 @@ describe('codexDriver provider binding', () => {
         'sandbox_workspace_write.network_access=true',
       ]),
     ).toEqual(['-c', 'sandbox_workspace_write.network_access=true']);
+  });
+});
+
+describe('withCodexContextArgs', () => {
+  const env = {
+    LOBEHUB_AGENT_ID: 'agt_1',
+    LOBEHUB_OPERATION_ID: 'op "1"',
+    LOBEHUB_TOPIC_ID: 'tpc_1',
+    LOBEHUB_WORKSPACE_ID: 'ws_1',
+  };
+  const cliPath = path.join(
+    '/mock/userData',
+    'bin',
+    process.platform === 'win32' ? 'lh.cmd' : 'lh',
+  );
+
+  it('prefixes Codex args with shell_environment_policy.set overrides for the run ids', () => {
+    expect(withCodexContextArgs('codex', env, ['--model', 'gpt-test'])).toEqual([
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_AGENT_ID="agt_1"',
+      '-c',
+      `shell_environment_policy.set.LOBEHUB_CLI=${JSON.stringify(cliPath)}`,
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_OPERATION_ID="op \\"1\\""',
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_TOPIC_ID="tpc_1"',
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_WORKSPACE_ID="ws_1"',
+      '--model',
+      'gpt-test',
+    ]);
+  });
+
+  it('reaches the app-server thread config as plain strings', () => {
+    const params = buildCodexAppServerThreadParams(withCodexContextArgs('codex', env), '/work');
+    expect(params.config).toEqual({
+      'shell_environment_policy.set.LOBEHUB_AGENT_ID': 'agt_1',
+      'shell_environment_policy.set.LOBEHUB_CLI': cliPath,
+      'shell_environment_policy.set.LOBEHUB_OPERATION_ID': 'op "1"',
+      'shell_environment_policy.set.LOBEHUB_TOPIC_ID': 'tpc_1',
+      'shell_environment_policy.set.LOBEHUB_WORKSPACE_ID': 'ws_1',
+    });
+  });
+
+  it('lets the session env name its own CLI', () => {
+    expect(withCodexContextArgs('codex', { LOBEHUB_CLI: '/custom/lh' })).toEqual([
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_CLI="/custom/lh"',
+    ]);
+  });
+
+  it('leaves other agents and env-less sessions unchanged', () => {
+    expect(withCodexContextArgs('claude-code', env, ['-p'])).toEqual(['-p']);
+    expect(withCodexContextArgs('codex', undefined, ['--json'])).toEqual(['--json']);
   });
 });

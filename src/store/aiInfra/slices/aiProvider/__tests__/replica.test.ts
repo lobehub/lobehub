@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { IndexedDBQueryProjectionStorage } from '@/libs/queryProjectionStorage';
+import { AppIndexedDBStorage } from '@/libs/replica';
 import { aiProviderSelectors, useAiInfraStore as useStore } from '@/store/aiInfra';
 import { initialAIModelState } from '@/store/aiInfra/slices/aiModel/initialState';
 import type {
@@ -17,6 +17,7 @@ import {
   aiProviderListResource,
   aiProviderRuntimeStateQueryKey,
   aiProviderRuntimeStateResource,
+  type AiProviderRuntimeStateView,
 } from '../projection';
 
 vi.mock('@/services/aiProvider', () => ({
@@ -80,7 +81,7 @@ const RUNTIME_STATE_ROW = {
   queryKey: aiProviderRuntimeStateResource.storageKey({ isLogin: true }),
   scope: SCOPE,
 };
-const rawRuntimeStateStorage = new IndexedDBQueryProjectionStorage<any>({
+const rawRuntimeStateStorage = new AppIndexedDBStorage<any>({
   namespace: 'replica:aiProviderRuntimeState:v2',
 });
 
@@ -255,6 +256,38 @@ describe('AiProviderSlice (replica)', () => {
       expect(
         state.aiProviderRuntimeStateMap[aiProviderRuntimeStateQueryKey({ isLogin: true })],
       ).toEqual(value);
+    });
+
+    it('seeds the saved reasoning configs through the aiModel replica', async () => {
+      const value: AiProviderRuntimeStateView = {
+        ...runtimeState(),
+        modelReasoningConfigs: { 'openai/gpt-4o': { reasoningEffort: 'low' } },
+      };
+
+      renderHook(() => useStore.getState().useFetchAiProviderRuntimeState(true));
+      const [call] = await syncCalls('aiProviderRuntimeState');
+      act(() => call.config.onSuccess!(value));
+
+      const state = useStore.getState();
+      expect(state.modelReasoningConfigMap['openai/gpt-4o']).toEqual({ reasoningEffort: 'low' });
+      // Seeded as a *confirmed* replica entry, not a bare map write: only then
+      // does a storage hydration that resolves later leave it alone instead of
+      // repainting an older persisted row over the server's value.
+      expect(state.modelReasoningConfigReplica.entries['openai/gpt-4o']).toBeDefined();
+    });
+
+    it('does not seed reasoning configs from a display snapshot', async () => {
+      const value: AiProviderRuntimeStateView = {
+        ...runtimeState(),
+        isDisplaySnapshot: true,
+        modelReasoningConfigs: { 'openai/gpt-4o': { reasoningEffort: 'low' } },
+      };
+
+      renderHook(() => useStore.getState().useFetchAiProviderRuntimeState(true));
+      const [call] = await syncCalls('aiProviderRuntimeState');
+      act(() => call.config.onSuccess!(value));
+
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-4o']).toBeUndefined();
     });
 
     it('persists only the secret-free display fields of a confirmed value', async () => {

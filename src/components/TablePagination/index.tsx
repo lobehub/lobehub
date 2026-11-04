@@ -1,10 +1,13 @@
 'use client';
 
-import { Button, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
 import { formatIntergerNumber } from '@/utils/format';
 
 import PageSizeSelect from './PageSizeSelect';
@@ -13,23 +16,25 @@ const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 /** Pages either side of the current one that stay visible before an ellipsis. */
 const SIBLINGS = 1;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  ellipsis: css`
-    min-width: 24px;
-    color: ${cssVar.colorTextQuaternary};
-    text-align: center;
-  `,
-  root: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  total: css`
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  ellipsis: {
+    minWidth: '24px',
+    color: cssVar.colorTextQuaternary,
+    textAlign: 'center',
+  },
+  root: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  total: {
+    fontSize: '13px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 type PageItem = number | 'ellipsis-end' | 'ellipsis-start';
 
@@ -94,11 +99,11 @@ const TablePagination = memo<TablePaginationProps>(
       <Flexbox
         horizontal
         align={'center'}
-        className={cx(styles.root, className)}
         gap={12}
         justify={'space-between'}
+        {...sx([styles.root], className)}
       >
-        <span className={styles.total}>
+        <span {...stylex.props(styles.total)}>
           {t('table.pagination.range', {
             from: formatIntergerNumber(from),
             to: formatIntergerNumber(to),
@@ -138,7 +143,7 @@ const TablePagination = memo<TablePaginationProps>(
                 {item}
               </Button>
             ) : (
-              <span className={styles.ellipsis} key={item}>
+              <span {...stylex.props(styles.ellipsis)} key={item}>
                 …
               </span>
             ),

@@ -67,7 +67,7 @@ const lobeDoc = (id: string, overrides: Partial<LobeDocument> = {}): LobeDocumen
 });
 
 /** The replica sync queries the slice registered with the SWR driver. */
-const syncCalls = async (name: 'pageDetail' | 'pageList') => {
+const syncCalls = async (name: 'pageDetail' | 'pageList' | 'pageSection' | 'pageSectionList') => {
   const { useClientDataSWR } = await import('@/libs/swr');
   return vi
     .mocked(useClientDataSWR)
@@ -125,13 +125,104 @@ describe('pageActions — useFetchDocuments', () => {
     const [call] = await syncCalls('pageList');
 
     vi.mocked(documentService.queryDocuments).mockResolvedValue({
-      items: [row('docs_page'), row('upload_1', { fileType: 'text/plain' })],
-      total: 2,
+      items: [
+        row('docs_page'),
+        row('docs_html', { fileType: 'custom/html' }),
+        row('upload_1', { fileType: 'text/plain' }),
+      ],
+      total: 3,
     });
 
     const page = (await call.fetcher()) as { items: LobeDocument[] };
 
-    expect(page.items.map((item) => item.id)).toEqual(['docs_page']);
+    // An HTML page is a page too; an arbitrary upload is not.
+    expect(page.items.map((item) => item.id)).toEqual(['docs_page', 'docs_html']);
+  });
+});
+
+describe('pageActions — useFetchPageSection', () => {
+  it('lists authored pages only, never parsed uploads', async () => {
+    renderHook(() =>
+      pageActions.useFetchPageSection({
+        limit: 20,
+        scope: 'mine',
+        sortBy: 'updatedAt',
+        type: 'all',
+      }),
+    );
+    const [call] = await syncCalls('pageSection');
+
+    vi.mocked(documentService.queryDocuments).mockResolvedValue({
+      items: [
+        row('docs_page'),
+        // A page written into a library keeps a mirror file id; still a page.
+        row('docs_library_page', { fileId: 'file_mirror' }),
+        // An uploaded .txt parsed into a document is a Drive file, not a page.
+        row('docs_parsed_upload', {
+          fileId: 'file_upload',
+          filename: 'run-transcript.txt',
+          source: 'files/2026-10-23/a.txt',
+          sourceType: 'file',
+        }),
+      ],
+      total: 3,
+    });
+
+    const docs = (await call.fetcher()) as LobeDocument[];
+
+    expect(documentService.queryDocuments).toHaveBeenCalledWith(
+      expect.objectContaining({
+        creator: 'self',
+        sortBy: 'updatedAt',
+        sourceTypes: [DocumentSourceType.API],
+      }),
+    );
+    expect(docs.map((doc) => doc.id)).toEqual(['docs_page', 'docs_library_page']);
+  });
+});
+
+describe('pageActions — section view options', () => {
+  it('asks the server for artifacts only, in the section sort', async () => {
+    renderHook(() =>
+      pageActions.useFetchPageSection({
+        limit: 10,
+        scope: 'mine',
+        sortBy: 'title',
+        type: 'artifact',
+      }),
+    );
+    const [call] = await syncCalls('pageSection');
+    vi.mocked(documentService.queryDocuments).mockResolvedValue({ items: [], total: 0 });
+
+    await call.fetcher();
+
+    expect(documentService.queryDocuments).toHaveBeenCalledWith(
+      expect.objectContaining({ fileTypes: ['custom/html'], pageSize: 11, sortBy: 'title' }),
+    );
+  });
+
+  it('pages the full list of a section with the same filters', async () => {
+    renderHook(() =>
+      pageActions.useFetchPageSectionList({ scope: 'shared', sortBy: 'createdAt', type: 'page' }),
+    );
+    const [call] = await syncCalls('pageSectionList');
+    vi.mocked(documentService.queryDocuments).mockResolvedValue({
+      items: [row('docs_a')],
+      total: 1,
+    });
+
+    const page = (await call.fetcher()) as { items: LobeDocument[] };
+
+    expect(documentService.queryDocuments).toHaveBeenCalledWith(
+      expect.objectContaining({
+        creator: 'others',
+        current: 0,
+        fileTypes: ['custom/document'],
+        sortBy: 'createdAt',
+        standaloneOnly: true,
+      }),
+    );
+    expect(page.items.map((item) => item.id)).toEqual(['docs_a']);
   });
 });
 

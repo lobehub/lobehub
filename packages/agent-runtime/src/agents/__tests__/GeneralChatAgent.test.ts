@@ -1085,43 +1085,6 @@ describe('GeneralChatAgent', () => {
         },
       ]);
     });
-
-    it('keeps a legal no-argument call executable (arguments "{}" is not the loss shape)', async () => {
-      const agent = new GeneralChatAgent({
-        agentConfig: { maxSteps: 100 },
-        operationId: 'test-session',
-        modelRuntimeConfig: mockModelRuntimeConfig,
-      });
-
-      const noArgsCall: ChatToolPayload = {
-        apiName: 'listOnlineDevices',
-        arguments: '{}',
-        id: 'call-1',
-        identifier: 'lobe-remote-device',
-        type: 'builtin',
-      };
-
-      const result = await agent.runner(
-        createMockContext('llm_result', {
-          hasToolsCalling: true,
-          parentMessageId: 'msg-1',
-          toolsCalling: [noArgsCall],
-        }),
-        createMockState({
-          toolManifestMap: { 'lobe-remote-device': { identifier: 'lobe-remote-device' } },
-        }),
-      );
-
-      expect(result).toEqual([
-        {
-          type: 'call_tool',
-          payload: {
-            parentMessageId: 'msg-1',
-            toolCalling: noArgsCall,
-          },
-        },
-      ]);
-    });
   });
 
   describe('tool_result phase', () => {

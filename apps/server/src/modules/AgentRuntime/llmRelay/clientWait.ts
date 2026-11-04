@@ -14,11 +14,13 @@ import type { ClientLlmUnavailableReason } from './errors';
  */
 
 /**
- * How long a parked run waits for a client. Well inside the gateway's 30 min
- * inactivity watchdog, so the parked stream is never reaped as dead first.
- * `AGENT_LLM_RELAY_CLIENT_WAIT_MS` overrides it (self-hosting, tests).
+ * How long a parked run waits for a client. Long enough to reload or reopen a
+ * tab, short enough that a run with no client (schedule, bot, CLI) fails soon.
+ * Well inside the gateway's 30 min inactivity watchdog, so the parked stream is
+ * never reaped as dead first. `AGENT_LLM_RELAY_CLIENT_WAIT_MS` overrides it
+ * (self-hosting, tests).
  */
-export const DEFAULT_LLM_RELAY_CLIENT_WAIT_MS = 10 * 60_000;
+export const DEFAULT_LLM_RELAY_CLIENT_WAIT_MS = 60_000;
 
 const MAX_LLM_RELAY_CLIENT_WAIT_MS = 25 * 60_000;
 

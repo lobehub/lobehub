@@ -1,3 +1,4 @@
+import { GOAL_BATCH_RELEASE_OPTION } from '@lobechat/const/goal';
 import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CircleCheck, CircleDashed, CircleX, GraduationCap } from 'lucide-react';
@@ -14,6 +15,7 @@ import {
   type BatchRound,
   verdictChecks,
 } from '../Graph/batchModel';
+import ReleaseGateEntry from '../ReleaseGateEntry';
 import { KIND_COLOR, KIND_ICON } from '../shared';
 import { activateProps } from './activateProps';
 import { type GateCheckLike, useGateCheckCopy } from './useGateCheckCopy';
@@ -124,14 +126,20 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
 
   const next = (() => {
     switch (round.gate) {
+      case 'checking': {
+        if (isCurrent && model.phase === 'plan_revision')
+          return t('goalBatch.gatePanel.next.revising');
+        if (isCurrent && model.phase === 'plan_distill')
+          return t('goalBatch.gatePanel.next.distilling');
+        return t('goalBatch.gatePanel.next.checking');
+      }
       case 'locked': {
         return t('goalBatch.gatePanel.next.locked', { count: round.probes.length });
       }
-      case 'checking': {
-        return t('goalBatch.gatePanel.next.checking');
-      }
       case 'human': {
-        return t('goalBatch.gatePanel.next.human');
+        return isCurrent && model.phase === 'release_review'
+          ? t('goalBatch.gatePanel.next.release')
+          : t('goalBatch.gatePanel.next.human');
       }
       case 'rejected': {
         return t('goalBatch.gatePanel.next.rejected', { revision: round.revision + 1 });
@@ -203,17 +211,40 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
   const learned = model.learnings.filter((learning) => learning.revision === round.revision);
 
   // The gate is waiting on a person: answer it here, beside what it found.
-  const pending = round.assayId ? graph.byId[round.assayId]?.decision : undefined;
+  const pending =
+    (round.releaseId ? graph.byId[round.releaseId]?.decision : undefined) ??
+    (round.assayId ? graph.byId[round.assayId]?.decision : undefined);
+  // A held release with a review page is decided there, not here.
+  const heldRelease = graph.goal.config?.rolloutState;
+  const releaseGateAcceptanceId =
+    round.releaseId && heldRelease?.releaseReviewNodeId === round.releaseId
+      ? heldRelease.releaseGateAcceptanceId
+      : undefined;
+  // A passed gate held for approval asks something else than a break does.
+  const releaseReview = !!pending?.options?.some(
+    (option) => option.id === GOAL_BATCH_RELEASE_OPTION.release,
+  );
 
   return (
     <Flexbox data-gate-detail gap={16}>
       {/* Waiting on a person, the question itself leads: no verdict line and no
           section label repeating "needs your decision" above it. */}
-      {pending && decide ? (
+      {pending && releaseGateAcceptanceId ? (
+        <ReleaseGateEntry
+          acceptanceId={releaseGateAcceptanceId}
+          decision={pending}
+          goalId={graph.goal.id}
+        />
+      ) : pending && decide ? (
         <GoalDecisionCase
           hideAsker
           category={'judgment'}
-          decision={{ ...pending, question: t('goalBatch.gatePanel.question') }}
+          decision={{
+            ...pending,
+            question: releaseReview
+              ? t('goalBatch.gatePanel.releaseQuestion')
+              : t('goalBatch.gatePanel.question'),
+          }}
           onDecide={(optionId, resolution) => decide(pending.id, optionId, resolution)}
         />
       ) : (

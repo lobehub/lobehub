@@ -10,7 +10,6 @@ import { setScopedMutate } from '@/libs/swr';
 import * as cacheScopeModule from '@/libs/swr/useCacheScope';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { agentService } from '@/services/agent';
-import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 import { type LobeAgentConfig } from '@/types/agent';
@@ -34,28 +33,12 @@ vi.mock('@/services/agent', () => ({
 }));
 
 vi.mock('@/services/agentDocument', () => ({
-  agentDocumentService: {
-    listDocuments: vi.fn(),
-  },
-  agentDocumentSWRKeys: {
-    documents: (agentId: string) => ['agent:documents', agentId] as const,
-    documentsList: (agentId: string) => ['agent:documentsList', agentId] as const,
-  },
   resolveAgentDocumentsContext: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
-}));
-
-// Mock sessionStore
-vi.mock('@/store/session', () => ({
-  useSessionStore: {
-    getState: vi.fn(() => ({
-      refreshSessions: vi.fn(),
-    })),
-  },
 }));
 
 // Mock SWR mutate
@@ -201,7 +184,7 @@ describe('AgentSlice Actions', () => {
         await result.current.createAgent({ config: { title: 'New Agent' } });
       });
 
-      expect(result.current.availableAgents).toBeUndefined();
+      expect(result.current.availableAgentsStale).toBe(true);
     });
 
     it('should seed a personal name matching the user language', async () => {
@@ -335,31 +318,6 @@ describe('AgentSlice Actions', () => {
     });
   });
 
-  describe('useFetchAgentDocuments', () => {
-    it('should fetch agent documents via listDocuments', async () => {
-      const docs = [
-        {
-          documentId: 'doc-1',
-          filename: 'setup.md',
-          id: 'doc-1',
-          title: 'Setup',
-        },
-      ];
-      vi.mocked(agentDocumentService.listDocuments).mockResolvedValue(docs as any);
-
-      const store = renderHook(() => useAgentStore(), { wrapper: withSWR });
-
-      const { result } = renderHook(() => store.result.current.useFetchAgentDocuments('agent-1'), {
-        wrapper: withSWR,
-      });
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(docs);
-      });
-      expect(agentDocumentService.listDocuments).toHaveBeenCalledWith({ agentId: 'agent-1' });
-    });
-  });
-
   describe('useFetchAvailableAgents', () => {
     it('should sync fetched available agents into store cache', async () => {
       vi.mocked(agentService.queryAgents).mockResolvedValue([
@@ -465,7 +423,7 @@ describe('AgentSlice Actions', () => {
   });
 
   describe('invalidateAvailableAgents', () => {
-    it('should clear cached available agents', () => {
+    it('should stop trusting cached available agents', () => {
       const { result } = renderHook(() => useAgentStore());
 
       act(() => {
@@ -487,7 +445,7 @@ describe('AgentSlice Actions', () => {
         result.current.invalidateAvailableAgents();
       });
 
-      expect(result.current.availableAgents).toBeUndefined();
+      expect(result.current.availableAgentsStale).toBe(true);
     });
   });
 
@@ -1161,9 +1119,6 @@ describe('AgentSlice Actions', () => {
       );
     });
 
-    // Note: refreshSessions is no longer called after optimistic update
-    // as the implementation now uses API returned data directly
-
     it('confirms the saved response in the replica without another request', async () => {
       const { result } = renderHook(() => useAgentStore());
       const scopedMutate = vi.fn().mockResolvedValue(undefined);
@@ -1308,7 +1263,7 @@ describe('AgentSlice Actions', () => {
         description: 'New Desc',
         title: 'New Title',
       });
-      expect(result.current.availableAgents).toBeUndefined();
+      expect(result.current.availableAgentsStale).toBe(true);
     });
 
     it('rolls back and rethrows when an optimistic projection owns the failure UI', async () => {
@@ -1326,9 +1281,6 @@ describe('AgentSlice Actions', () => {
 
       expect(result.current.agentMap['agent-1']?.title).toBe('Original');
     });
-
-    // Note: refreshSessions is no longer called after optimistic update
-    // as the implementation now uses API returned data directly
   });
 
   describe('useFetchAgentConfig', () => {

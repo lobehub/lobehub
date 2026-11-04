@@ -16,6 +16,9 @@ const resourcePermissionMock = vi.hoisted(() => ({
   workspaceId: undefined as string | undefined,
 }));
 const wsNavigateMock = vi.hoisted(() => vi.fn());
+const favoriteMenuItemMock = vi.hoisted(() => vi.fn(() => null));
+const pageEditorState = vi.hoisted(() => ({ title: undefined as string | undefined }));
+const documentStoreMock = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 const menuActionMocks = vi.hoisted(() => ({
   handleCopyLink: vi.fn(),
   handleDelete: vi.fn(),
@@ -35,6 +38,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@lobechat/const', () => ({
   CUSTOM_DOCUMENT_FILE_TYPE: 'custom/document',
+  HTML_DOCUMENT_FILE_TYPE: 'custom/html',
   isDesktop: false,
 }));
 
@@ -70,6 +74,11 @@ vi.mock('@/business/client/hooks/useDocumentTransferMenuItem', () => ({
   useDocumentTransferMenuItem: () => null,
 }));
 
+vi.mock('@/features/Favorites', () => ({
+  FavoriteButton: () => null,
+  useCurrentFavoritePath: () => '/favorite-path',
+  useFavoriteMenuItem: favoriteMenuItemMock,
+}));
 vi.mock('@/features/VisibilityConfirmContent', () => ({
   default: () => null,
 }));
@@ -97,7 +106,8 @@ vi.mock('@/hooks/usePermission', () => ({
 }));
 
 vi.mock('@/store/document', () => ({
-  useDocumentStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
+  useDocumentStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector(documentStoreMock.state),
 }));
 
 vi.mock('@/store/page', () => ({
@@ -152,6 +162,7 @@ vi.mock('../store', () => ({
     selector({
       documentId: 'doc-1',
       setRightPanelMode: menuActionMocks.setRightPanelMode,
+      title: pageEditorState.title,
     }),
   useStoreApi: () => ({
     getState: () => ({
@@ -174,7 +185,50 @@ describe('PageEditor header menu', () => {
     permissionMock.edit_own_content = true;
     resourcePermissionMock.canManage = false;
     resourcePermissionMock.workspaceId = undefined;
+    documentStoreMock.state = { documentDetailMap: {} };
+    pageEditorState.title = undefined;
     vi.clearAllMocks();
+  });
+
+  it('lets a loaded untitled page be favorited, but waits while the title is loading', () => {
+    renderHook(() => useMenu());
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotReady: false }),
+    );
+
+    pageEditorState.title = '';
+    renderHook(() => useMenu());
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotReady: true, title: 'pageEditor.titlePlaceholder' }),
+    );
+  });
+
+  it('favorites the page under its canonical link, not the location underneath a modal', () => {
+    renderHook(() => useMenu());
+
+    expect(favoriteMenuItemMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/page/doc-1', targetId: 'doc-1', type: 'page' }),
+    );
+  });
+
+  it('exports an HTML page as HTML and offers no editor history', () => {
+    const exportChildren = (items: ReturnType<typeof useMenu>['menuItems']) =>
+      (getMenuItem(items, 'export') as { children: { key: string }[] }).children.map(
+        (child) => child.key,
+      );
+
+    const { result: page } = renderHook(() => useMenu());
+    expect(exportChildren(page.current.menuItems)).toEqual(['export-markdown']);
+    expect(getMenuItem(page.current.menuItems, 'version-history')).toBeDefined();
+
+    documentStoreMock.state = {
+      documentDetailMap: { 'doc-1': { document: { fileType: 'custom/html', id: 'doc-1' } } },
+    };
+    const { result: htmlPage } = renderHook(() => useMenu());
+
+    expect(exportChildren(htmlPage.current.menuItems)).toEqual(['export-html']);
+    expect(getMenuItem(htmlPage.current.menuItems, 'version-history')).toBeUndefined();
+    expect(getMenuItem(htmlPage.current.menuItems, 'duplicate')).toBeDefined();
   });
 
   it('places the member-permission page entry in the overflow menu for managers', () => {

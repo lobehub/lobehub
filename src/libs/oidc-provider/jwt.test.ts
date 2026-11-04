@@ -19,9 +19,13 @@ vi.mock('@/envs/auth', () => ({
 }));
 
 const importJWKMock = vi.fn();
+const createLocalJWKSetMock = vi.fn();
+const decodeProtectedHeaderMock = vi.fn();
 const jwtVerifyMock = vi.fn();
 
 vi.mock('jose', () => ({
+  createLocalJWKSet: (...args: unknown[]) => createLocalJWKSetMock(...args),
+  decodeProtectedHeader: (...args: unknown[]) => decodeProtectedHeaderMock(...args),
   importJWK: (...args: unknown[]) => importJWKMock(...args),
   jwtVerify: (...args: unknown[]) => jwtVerifyMock(...args),
 }));
@@ -29,6 +33,8 @@ vi.mock('jose', () => ({
 describe('validateOIDCJWT', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    createLocalJWKSetMock.mockReturnValue('public-key-set');
+    decodeProtectedHeaderMock.mockReturnValue({ kid: 'test-key' });
     importJWKMock.mockResolvedValue('public-key');
   });
 
@@ -64,12 +70,14 @@ describe('acceptance review tokens', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    createLocalJWKSetMock.mockReturnValue('public-key-set');
+    decodeProtectedHeaderMock.mockReturnValue({ kid: 'test-key' });
     importJWKMock.mockResolvedValue('public-key');
   });
 
   it('are refused as an app session', async () => {
     jwtVerifyMock.mockResolvedValueOnce({
-      payload: { aud: REVIEW_AUD, client_id: 'lobehub-review', sub: 'user-1' },
+      payload: { aud: REVIEW_AUD, client_id: 'lobehub-acceptance', sub: 'user-1' },
     });
     const { validateOIDCJWT } = await import('./jwt');
     await expect(validateOIDCJWT('t')).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
@@ -77,10 +85,10 @@ describe('acceptance review tokens', () => {
 
   it('refuse anything else the review client was issued, such as its ID token', async () => {
     const { validateOIDCJWT } = await import('./jwt');
-    jwtVerifyMock.mockResolvedValueOnce({ payload: { aud: 'lobehub-review', sub: 'user-1' } });
+    jwtVerifyMock.mockResolvedValueOnce({ payload: { aud: 'lobehub-acceptance', sub: 'user-1' } });
     await expect(validateOIDCJWT('t')).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     jwtVerifyMock.mockResolvedValueOnce({
-      payload: { aud: ['urn:lobehub:chat'], client_id: 'lobehub-review', sub: 'user-1' },
+      payload: { aud: ['urn:lobehub:chat'], client_id: 'lobehub-acceptance', sub: 'user-1' },
     });
     await expect(validateOIDCJWT('t')).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
@@ -95,7 +103,12 @@ describe('acceptance review tokens', () => {
 
   it('are read back as the acceptance and user they were issued for', async () => {
     jwtVerifyMock.mockResolvedValueOnce({
-      payload: { aud: REVIEW_AUD, client_id: 'lobehub-review', exp: 1_800_000_000, sub: 'user-1' },
+      payload: {
+        aud: REVIEW_AUD,
+        client_id: 'lobehub-acceptance',
+        exp: 1_800_000_000,
+        sub: 'user-1',
+      },
     });
     const { verifyAcceptanceReviewJWT } = await import('./jwt');
     await expect(verifyAcceptanceReviewJWT('t')).resolves.toEqual({

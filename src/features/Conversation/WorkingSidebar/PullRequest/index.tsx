@@ -14,6 +14,7 @@ import {
 
 import { OverviewRow } from '../Overview/OverviewRow';
 import { sectionStyles } from '../Overview/sectionStyles';
+import { resolvePullRequestActionLock } from './actionLock';
 import Header from './Header';
 import MergeDock from './MergeDock';
 import Sections from './Sections';
@@ -40,21 +41,42 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface PullRequestProps {
   active: boolean;
+  /**
+   * This session's branch and linked-PR reads confirmed `number`. Until then
+   * the pane may paint persisted rows, but must not mutate the PR.
+   */
+  confirmed: boolean;
+  /** The failed branch / linked-PR read keeping `confirmed` false. */
+  confirmError?: unknown;
   deviceId?: string;
   number: number;
   onOpenTab: (tab: string) => void;
+  /** Re-run the branch / linked-PR reads that confirm `number`. */
+  onRetryConfirm?: () => void;
   summary?: DeviceGitLinkedPullRequest;
   url?: string;
   workingDirectory: string;
 }
 
 const PullRequest = memo<PullRequestProps>(
-  ({ active, deviceId, number, onOpenTab, summary, url, workingDirectory }) => {
+  ({
+    active,
+    confirmError,
+    confirmed,
+    deviceId,
+    number,
+    onOpenTab,
+    onRetryConfirm,
+    summary,
+    url,
+    workingDirectory,
+  }) => {
     const { t } = useTranslation('chat');
     const { t: tCommon } = useTranslation('common');
     const {
       data,
       error: fetchError,
+      isConfirmed: detailConfirmed,
       isLoading,
       mutate,
     } = useFetchGitPullRequestDetail(deviceId, workingDirectory, number, { active });
@@ -64,14 +86,33 @@ const PullRequest = memo<PullRequestProps>(
       data?.detail?.number,
       active && data?.detail?.state === 'open',
     );
-    const { data: context } = useFetchGitPullRequestMergeContext(
-      deviceId,
-      workingDirectory,
-      data?.detail ?? undefined,
-    );
+    const {
+      data: cachedContext,
+      error: contextError,
+      isConfirmed: contextConfirmed,
+      mutate: mutateContext,
+    } = useFetchGitPullRequestMergeContext(deviceId, workingDirectory, data?.detail ?? undefined);
     const { data: aheadBehind } = useFetchGitAheadBehind(deviceId, workingDirectory);
+    // Stale content stays paintable; actions wait for the live reads.
+    const {
+      context,
+      contextLoading,
+      locked: actionsLocked,
+      policyLocked,
+      refreshFailed,
+    } = resolvePullRequestActionLock({
+      confirmError,
+      confirmed,
+      context: cachedContext,
+      contextConfirmed,
+      contextError,
+      detailConfirmed,
+      detailError: fetchError,
+    });
     const actions = usePullRequestActions({
       deviceId,
+      locked: actionsLocked,
+      policyLocked,
       mutateDetail: mutate,
       number,
       workingDirectory,
@@ -90,6 +131,22 @@ const PullRequest = memo<PullRequestProps>(
       };
     }, [data?.detail, context, activity.data]);
     const externalUrl = detail?.url ?? url;
+    const loadError = (error: unknown, onRetry: () => void) => (
+      <Flexbox className={sectionStyles.section}>
+        <OverviewRow
+          danger
+          icon={TriangleAlertIcon}
+          iconColor={cssVar.colorError}
+          title={error instanceof Error ? error.message : undefined}
+          value={t('workingPanel.pr.error.load')}
+          trailing={
+            <Button icon={<Icon icon={RefreshCwIcon} size={12} />} size={'small'} onClick={onRetry}>
+              {tCommon('retry')}
+            </Button>
+          }
+        />
+      </Flexbox>
+    );
 
     if (isLoading && !data) return <PullRequestSkeleton summary={summary} />;
 
@@ -119,27 +176,7 @@ const PullRequest = memo<PullRequestProps>(
         />
       );
 
-    if (!detail)
-      return (
-        <Flexbox className={sectionStyles.section}>
-          <OverviewRow
-            danger
-            icon={TriangleAlertIcon}
-            iconColor={cssVar.colorError}
-            title={fetchError instanceof Error ? fetchError.message : undefined}
-            value={t('workingPanel.pr.error.load')}
-            trailing={
-              <Button
-                icon={<Icon icon={RefreshCwIcon} size={12} />}
-                size={'small'}
-                onClick={() => void mutate()}
-              >
-                {tCommon('retry')}
-              </Button>
-            }
-          />
-        </Flexbox>
-      );
+    if (!detail) return loadError(fetchError, () => void mutate());
 
     const local = aheadBehind?.hasUpstream ? { ahead: aheadBehind.ahead } : undefined;
 
@@ -152,7 +189,15 @@ const PullRequest = memo<PullRequestProps>(
           contentProps={{ className: styles.scrollContent }}
           viewportProps={{ className: styles.viewport, style: { overflowX: 'hidden' } }}
         >
+          {/* The persisted PR still paints, but stays locked until a live read lands. */}
+          {refreshFailed &&
+            loadError(confirmError ?? fetchError ?? contextError, () => {
+              onRetryConfirm?.();
+              void mutate();
+              void mutateContext();
+            })}
           <Header
+            actionsDisabled={actionsLocked || policyLocked}
             activityLoaded={!!activity.data}
             detail={detail}
             deviceId={deviceId}
@@ -160,6 +205,7 @@ const PullRequest = memo<PullRequestProps>(
             onAction={actions.run}
           />
           <Sections
+            actionsDisabled={actionsLocked}
             activity={activity}
             busy={actions.busy}
             detail={detail}
@@ -169,7 +215,7 @@ const PullRequest = memo<PullRequestProps>(
         </ScrollArea>
         <MergeDock
           busy={actions.busy}
-          contextLoading={context === undefined}
+          contextLoading={contextLoading}
           detail={detail}
           error={actions.error}
           local={local}

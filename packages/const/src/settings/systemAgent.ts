@@ -4,11 +4,16 @@ import {
   DEFAULT_EMBEDDING_PROVIDER,
   DEFAULT_MINI_PROVIDER,
   DEFAULT_PROVIDER,
+  DEFAULT_VERIFY_MODEL,
+  DEFAULT_VERIFY_PROVIDER,
 } from '@lobechat/business-const';
+import * as businessDefaults from '@lobechat/business-const';
 import type {
   PromptRewriteSystemAgent,
+  ServiceModelTier,
   SystemAgentItem,
   UserServiceModelConfig,
+  UserServiceModelConfigKey,
 } from '@lobechat/types';
 
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_MINI_MODEL, DEFAULT_MODEL } from './llm';
@@ -63,14 +68,35 @@ export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = 
   provider: DEFAULT_EMBEDDING_PROVIDER,
 };
 
+// Verification is the quality gate and reads screenshot evidence, so it has its
+// own vision-capable tier instead of following 主模型 / Flash. Deployments can
+// repoint it with `SYSTEM_AGENT=verify=<provider>/<model>`.
+export const DEFAULT_VERIFY_SYSTEM_AGENT_ITEM: SystemAgentItem = {
+  model: DEFAULT_VERIFY_MODEL,
+  provider: DEFAULT_VERIFY_PROVIDER,
+};
+
+// Distribution overlays can deploy separately from the core. Read the new defaults
+// optionally so an older overlay can still build with the self-hosted fallback.
+const channelRoutingModel: unknown = Reflect.get(businessDefaults, 'DEFAULT_CHANNEL_ROUTING_MODEL');
+const channelRoutingProvider: unknown = Reflect.get(
+  businessDefaults,
+  'DEFAULT_CHANNEL_ROUTING_PROVIDER',
+);
+
 export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
   asr: DEFAULT_ASR_SYSTEM_AGENT_ITEM,
-  expertise: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  channelRouting: {
+    enabled: true,
+    model: typeof channelRoutingModel === 'string' ? channelRoutingModel : 'jev-1.14.0',
+    provider: typeof channelRoutingProvider === 'string' ? channelRoutingProvider : 'typesafe',
+  },
+  expertise: DEFAULT_SYSTEM_AGENT_ITEM,
   followUpAction: DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
-  goal: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
-  historyCompress: DEFAULT_SYSTEM_AGENT_ITEM,
+  goal: DEFAULT_SYSTEM_AGENT_ITEM,
+  historyCompress: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,
   memoryAnalysisAgentConfig: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   onboardingTaskRecommender: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
@@ -78,8 +104,35 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   userMemoryEmbedding: DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM,
   userMemoryPersonaWriter: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   promptRewrite: DEFAULT_PROMPT_REWRITE_SYSTEM_AGENT_ITEM,
-  thread: DEFAULT_SYSTEM_AGENT_ITEM,
+  thread: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   topic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   topicAutoSummary: DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM,
   translation: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  verify: DEFAULT_VERIFY_SYSTEM_AGENT_ITEM,
+};
+
+/**
+ * Which top-level Service Model tier each task slot follows. A slot's default
+ * above is its tier's default, so a slot that follows an unset tier runs the
+ * same system-recommended model the tier shows. The first slot of a tier
+ * stands for the tier's own recommendation. Slots left out (`asr`,
+ * `channelRouting`, onboarding) keep their own system default and ignore tier changes.
+ */
+export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModelConfigKey[]> = {
+  embedding: ['userMemoryEmbedding'],
+  flash: [
+    'topic',
+    'thread',
+    'generationTopic',
+    'translation',
+    'historyCompress',
+    'promptRewrite',
+    'memoryAnalysisAgentConfig',
+    'userMemoryPersonaWriter',
+    'inputCompletion',
+    'followUpAction',
+  ],
+  main: ['agentMeta', 'expertise', 'goal', 'topicAutoSummary'],
+  // Must stay vision-capable: the picker for this tier lists only vision models.
+  verify: ['verify'],
 };

@@ -36,7 +36,7 @@ const credentialSource: DoctorCheck = {
       return {
         detail: `Authenticating with the LOBEHUB_JWT in this environment (${maskSecret(source.token)}), not with the stored login.`,
         evidence,
-        fix: 'Expected? This is how server-dispatched runs authenticate. If not, unset LOBEHUB_JWT.',
+        fix: 'Expected? This is how server-dispatched runs authenticate. If not, unset LOBEHUB_JWT and LOBEHUB_JWT_FILE.',
         status: 'warn',
       };
 

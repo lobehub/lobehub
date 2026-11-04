@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Button, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui';
+import { Button, type DropdownItem, DropdownMenu, Icon, toast } from '@lobehub/ui';
 import { CheckIcon, LayoutDashboardIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

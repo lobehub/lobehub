@@ -9,10 +9,13 @@ import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type {
   AddWidgetToDashboardState,
+  CreateDashboardState,
   DashboardApiNameType,
   DryRunWidgetState,
   GetWidgetRunsState,
+  ListWidgetPresetsState,
   RequestPublishState,
+  UpdateDashboardState,
   WidgetDraftState,
 } from '../../types';
 import { DashboardApiName, DashboardIdentifier } from '../../types';
@@ -56,10 +59,21 @@ const useChip = (apiName: DashboardApiNameType, props: Props): ReactNode => {
     case DashboardApiName.listDashboards: {
       return undefined;
     }
+    case DashboardApiName.createDashboard: {
+      const state = props.pluginState as CreateDashboardState | undefined;
+      return state?.title ?? args.title;
+    }
+    case DashboardApiName.listWidgetPresets: {
+      const state = props.pluginState as ListWidgetPresetsState | undefined;
+      return state ? String(state.presets.length) : undefined;
+    }
     case DashboardApiName.createWidgetDraft:
     case DashboardApiName.updateWidgetDraft: {
       const state = props.pluginState as WidgetDraftState | undefined;
-      return [args.title, state && `v${state.version}`].filter(Boolean).join(' · ') || undefined;
+      return (
+        [args.title ?? args.presetId, state && `v${state.version}`].filter(Boolean).join(' · ') ||
+        undefined
+      );
     }
     case DashboardApiName.dryRunWidget: {
       const state = props.pluginState as DryRunWidgetState | undefined;
@@ -86,6 +100,10 @@ const useChip = (apiName: DashboardApiNameType, props: Props): ReactNode => {
     case DashboardApiName.addWidgetToDashboard: {
       const state = props.pluginState as AddWidgetToDashboardState | undefined;
       return state?.dashboardTitle ?? args.newDashboardTitle;
+    }
+    case DashboardApiName.updateDashboard: {
+      const state = props.pluginState as UpdateDashboardState | undefined;
+      return state?.title ?? args.title;
     }
     case DashboardApiName.getWidgetRuns: {
       const state = props.pluginState as GetWidgetRunsState | undefined;

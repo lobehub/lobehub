@@ -139,7 +139,6 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       hasCachedInputPricing,
       hasPricing,
       isAbilitiesExpanded,
-      isCreditPricing,
       isPricingExpanded,
       model,
       pricingGroups,
@@ -440,7 +439,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                               </span>
                             </Flexbox>
                             <PriceValue
-                              prefix={isCreditPricing ? '' : '$'}
+                              prefix="$"
                               price={formatUnitPrice(unit)}
                               suffix={getUnitPriceSuffix(unit.unit)}
                             />

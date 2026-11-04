@@ -76,6 +76,19 @@ export const getWellKnownCommandPaths = (agentType: LocalHeterogeneousAgentType)
         path.join(homedir(), 'Applications', bundledCli),
       ]);
     }
+    case 'copilot': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), 'AppData', 'Roaming', 'npm', 'copilot.cmd')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'copilot'),
+        path.join(homedir(), '.bun', 'bin', 'copilot'),
+        path.join(homedir(), '.npm-global', 'bin', 'copilot'),
+        path.join(homedir(), 'Library', 'pnpm', 'copilot'),
+      ];
+    }
     case 'cursor': {
       if (platform() === 'win32') {
         const localAppData = process.env.LOCALAPPDATA;

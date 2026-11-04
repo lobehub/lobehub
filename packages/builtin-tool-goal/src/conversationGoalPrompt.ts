@@ -22,7 +22,7 @@ export const conversationGoalPrompt = `The user sent this request with LobeHub's
    lh goal start <goalId> --json
    If the tasks apply one recipe to many units (migrate N stores to one mechanism, give N resources the same caching, update N callers), start them as a batch instead:
    lh goal start <goalId> --rollout canary --recipe-file <recipe.md> --probes <2-5 task node ids> --json
-   The recipe is the procedure every unit follows; the probes are the most representative units, covering every way the units differ. The probes run first, and the other tasks are released wave by wave only after the probes ran through without a person; a rejection revises the recipe and re-probes. Tasks that differ only in names, files or details are one recipe; tasks whose steps differ are not, so start those without --rollout.
+   The recipe is the procedure every unit follows; the probes are the most representative units, covering every way the units differ. The probes run first, and the other tasks are released wave by wave only after the probes ran through without a person; a rejected release comes back to the main Agent to rewrite the plan for review. Tasks that differ only in names, files or details are one recipe; tasks whose steps differ are not, so start those without --rollout.
    If lh has no goal start command, the goal already runs: skip this step.
 4. Then end the run with one or two sentences in the user's language: the goal is running, and what runs first.
 

@@ -23,11 +23,11 @@ import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useDeviceStore } from '@/store/device';
+import { useDocumentStore } from '@/store/document';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { type ProjectDirectory, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 import { getSessionStoreState } from '@/store/session';
 import * as toolStoreModule from '@/store/tool';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { useUserStore } from '@/store/user';
 
 import { useChatStore } from '../../../../store';
@@ -110,7 +110,7 @@ afterEach(() => {
   // Zustand state and the window-backed agent context survive `restoreAllMocks`,
   // so a cwd test that seeds a device (or a desktop path) would otherwise leak
   // a working directory into every later send in this file.
-  useDeviceStore.setState({ devices: [] });
+  useDeviceStore.setState({ deviceListMap: {} });
   delete window.__LOBE_GLOBAL_AGENT_CONTEXT__;
   vi.restoreAllMocks();
 });
@@ -318,6 +318,7 @@ describe('ConversationLifecycle actions', () => {
             }),
           }),
           expect.any(Object),
+          { creationOrigin: 'client' },
         );
         expect(createCompressionGroupSpy).toHaveBeenCalledWith({
           agentId,
@@ -2527,7 +2528,7 @@ describe('ConversationLifecycle actions', () => {
         });
         act(() => {
           useDeviceStore.setState({
-            devices: [{ defaultCwd: '/repo/default', deviceId, name: 'Mac' }] as any,
+            deviceListMap: { all: [{ defaultCwd: '/repo/default', deviceId, name: 'Mac' }] as any },
           });
         });
 
@@ -2791,9 +2792,11 @@ describe('ConversationLifecycle actions', () => {
           const sendMessageInServerSpy = setupHeteroRun();
           act(() => {
             useDeviceStore.setState({
-              devices: [
-                { defaultCwd: '/repo/device-default', deviceId: HETERO_DEVICE_ID, name: 'Mac' },
-              ] as any,
+              deviceListMap: {
+                all: [
+                  { defaultCwd: '/repo/device-default', deviceId: HETERO_DEVICE_ID, name: 'Mac' },
+                ] as any,
+              },
             });
           });
 
@@ -2883,9 +2886,11 @@ describe('ConversationLifecycle actions', () => {
           });
           act(() => {
             useDeviceStore.setState({
-              devices: [
-                { defaultCwd: '/repo/device-default', deviceId: HETERO_DEVICE_ID, name: 'Mac' },
-              ] as any,
+              deviceListMap: {
+                all: [
+                  { defaultCwd: '/repo/device-default', deviceId: HETERO_DEVICE_ID, name: 'Mac' },
+                ] as any,
+              },
             });
           });
 
@@ -3907,16 +3912,14 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ selectedToolIds: ['lobe-goal'] }),
+          expect.objectContaining({ selectedToolIds: ['builtin-goal'] }),
         );
       });
 
       it('injects the active page documentId into the gateway context when scope is page', async () => {
         const { result } = renderHook(() => useChatStore());
 
-        const getCurrentDocIdSpy = vi
-          .spyOn(pageAgentRuntime, 'getCurrentDocId')
-          .mockReturnValue('doc-page-1');
+        useDocumentStore.setState({ activeDocumentId: 'doc-page-1' });
 
         const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
@@ -3943,7 +3946,6 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(getCurrentDocIdSpy).toHaveBeenCalled();
         expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             context: expect.objectContaining({ documentId: 'doc-page-1', scope: 'page' }),
@@ -3954,7 +3956,7 @@ describe('ConversationLifecycle actions', () => {
       it('does not inject documentId for non-page scope conversations', async () => {
         const { result } = renderHook(() => useChatStore());
 
-        vi.spyOn(pageAgentRuntime, 'getCurrentDocId').mockReturnValue('doc-page-1');
+        useDocumentStore.setState({ activeDocumentId: 'doc-page-1' });
 
         const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,

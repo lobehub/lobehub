@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
+/**
+ * @vitest-environment happy-dom
+ */
+import type { AgentPluginEntry } from '@lobechat/types';
+import { renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { EnsureMarketSkillResult } from '@/services/skill';
 import { initialState, type ToolStoreState } from '@/store/tool/initialState';
 import { AGENT_SKILL_LIST_KEY } from '@/store/tool/slices/agentSkills/projection';
 import { UNINSTALLED_BUILTIN_TOOLS_KEY } from '@/store/tool/slices/builtin/projection';
@@ -8,9 +14,18 @@ import { INSTALLED_PLUGINS_KEY } from '@/store/tool/slices/plugin/projection';
 
 import {
   resolveStalePluginCleanup,
+  resolveUnresolvedPluginIds,
   selectProfileToolCatalogsSynced,
+  type StalePluginAutoResolveInput,
   type StalePluginCleanupInput,
+  useStalePluginAutoResolve,
 } from './staleProfilePlugins';
+
+const ensureMock = vi.hoisted(() => vi.fn());
+vi.mock('@/services/ensureAgentMarketSkills', () => ({ ensureAgentMarketSkills: ensureMock }));
+
+const notSkill = (...ids: string[]): EnsureMarketSkillResult[] =>
+  ids.map((identifier) => ({ identifier, status: 'notSkill' }));
 
 const baseInput = (overrides: Partial<StalePluginCleanupInput> = {}): StalePluginCleanupInput => ({
   canEditContent: true,
@@ -25,7 +40,7 @@ const baseInput = (overrides: Partial<StalePluginCleanupInput> = {}): StalePlugi
 
 describe('resolveStalePluginCleanup', () => {
   it('drops entries whose identifier no longer resolves', () => {
-    expect(resolveStalePluginCleanup(baseInput())).toEqual(['web-search']);
+    expect(resolveStalePluginCleanup(baseInput(), notSkill('ghost-tool'))).toEqual(['web-search']);
   });
 
   it('keeps the original entry shape for surviving entries', () => {
@@ -33,6 +48,7 @@ describe('resolveStalePluginCleanup', () => {
       baseInput({
         plugins: [{ identifier: 'web-search', mode: 'disabled' }, 'ghost-tool'],
       }),
+      notSkill('ghost-tool'),
     );
 
     expect(result).toEqual([{ identifier: 'web-search', mode: 'disabled' }]);
@@ -42,12 +58,64 @@ describe('resolveStalePluginCleanup', () => {
     expect(
       resolveStalePluginCleanup(
         baseInput({ plugins: ['web-search'], validIdentifiers: new Set(['web-search']) }),
+        notSkill('web-search'),
+      ),
+    ).toBeNull();
+  });
+
+  // The server could not say the entry is not a skill, so it may still be a
+  // valid Market skill that failed to download: keep it for the next open.
+  it.each<[string, EnsureMarketSkillResult[]]>([
+    ['installed', [{ identifier: 'ghost-tool', status: 'installed' }]],
+    ['skipped', [{ identifier: 'ghost-tool', status: 'skipped' }]],
+    ['failed', [{ identifier: 'ghost-tool', reason: 'download', status: 'failed' }]],
+    ['unavailable', [{ identifier: 'ghost-tool', reason: 'unavailable', status: 'failed' }]],
+    ['not reported', []],
+  ])('keeps an unresolved entry whose ensure result is %s', (_, results) => {
+    expect(resolveStalePluginCleanup(baseInput(), results)).toBeNull();
+  });
+
+  it('removes nothing without ensure results', () => {
+    expect(resolveStalePluginCleanup(baseInput())).toBeNull();
+  });
+
+  it('only removes not-a-skill entries and leaves the rest untouched in place', () => {
+    const plugins = [
+      'web-search',
+      { identifier: 'ghost-a', mode: 'disabled' as const },
+      'market-skill',
+      { identifier: 'ghost-b' },
+      { identifier: 'kept-disabled', mode: 'disabled' as const },
+    ];
+
+    expect(
+      resolveStalePluginCleanup(
+        baseInput({
+          plugins,
+          validIdentifiers: new Set(['web-search', 'kept-disabled']),
+        }),
+        [
+          { identifier: 'ghost-a', status: 'notSkill' },
+          { identifier: 'market-skill', status: 'installed' },
+          { identifier: 'ghost-b', status: 'notSkill' },
+        ],
+      ),
+    ).toEqual(['web-search', 'market-skill', { identifier: 'kept-disabled', mode: 'disabled' }]);
+  });
+
+  it('does not remove a now-resolved entry even if the server called it not-a-skill', () => {
+    expect(
+      resolveStalePluginCleanup(
+        baseInput({ plugins: ['web-search'], validIdentifiers: new Set(['web-search']) }),
+        notSkill('web-search'),
       ),
     ).toBeNull();
   });
 
   it('returns null before the connector store has loaded', () => {
-    expect(resolveStalePluginCleanup(baseInput({ isConnectorsInit: false }))).toBeNull();
+    expect(
+      resolveStalePluginCleanup(baseInput({ isConnectorsInit: false }), notSkill('ghost-tool')),
+    ).toBeNull();
   });
 
   // https://github.com/lobehub/lobehub/issues/18856 — on a cold start the
@@ -61,17 +129,20 @@ describe('resolveStalePluginCleanup', () => {
           plugins: ['web-search', 'my-custom-tool'],
           validIdentifiers: new Set(['web-search']),
         }),
+        notSkill('my-custom-tool'),
       ),
     ).toBeNull();
   });
 
   it('returns null when no identifiers are known yet', () => {
-    expect(resolveStalePluginCleanup(baseInput({ validIdentifiers: new Set() }))).toBeNull();
+    expect(
+      resolveStalePluginCleanup(baseInput({ validIdentifiers: new Set() }), notSkill('ghost-tool')),
+    ).toBeNull();
   });
 
   it('returns null for an agent with no plugins', () => {
-    expect(resolveStalePluginCleanup(baseInput({ plugins: undefined }))).toBeNull();
-    expect(resolveStalePluginCleanup(baseInput({ plugins: [] }))).toBeNull();
+    expect(resolveStalePluginCleanup(baseInput({ plugins: undefined }), [])).toBeNull();
+    expect(resolveStalePluginCleanup(baseInput({ plugins: [] }), [])).toBeNull();
   });
 
   // automatic corrections must not trigger phantom save-error toasts: the cleanup is automatic, so firing it without edit access made
@@ -80,11 +151,15 @@ describe('resolveStalePluginCleanup', () => {
   // agent settings" on an agent the member had only opened.
   describe('permission gate (automatic corrections must not trigger phantom save-error toasts)', () => {
     it('does not clean up when the workspace role cannot edit content', () => {
-      expect(resolveStalePluginCleanup(baseInput({ canEditContent: false }))).toBeNull();
+      expect(
+        resolveStalePluginCleanup(baseInput({ canEditContent: false }), notSkill('ghost-tool')),
+      ).toBeNull();
     });
 
     it('does not clean up when General access on this agent is below edit', () => {
-      expect(resolveStalePluginCleanup(baseInput({ canEditResource: false }))).toBeNull();
+      expect(
+        resolveStalePluginCleanup(baseInput({ canEditResource: false }), notSkill('ghost-tool')),
+      ).toBeNull();
     });
 
     it('fails closed while workspace access is still resolving', () => {
@@ -93,9 +168,260 @@ describe('resolveStalePluginCleanup', () => {
           // `canEditResource` defaults permissive during loading, so the
           // resolved flag is what keeps the doomed write from being fired.
           baseInput({ canEditResource: true, isAccessResolved: false }),
+          notSkill('ghost-tool'),
         ),
       ).toBeNull();
     });
+  });
+});
+
+describe('resolveUnresolvedPluginIds', () => {
+  it('lists each unresolved identifier once, whatever the entry shape or mode', () => {
+    expect(
+      resolveUnresolvedPluginIds(
+        baseInput({
+          plugins: [
+            'web-search',
+            'ghost-a',
+            { identifier: 'ghost-a', mode: 'disabled' },
+            { identifier: 'ghost-b' },
+          ],
+        }),
+      ),
+    ).toEqual(['ghost-a', 'ghost-b']);
+  });
+
+  it.each([
+    ['canEditContent', { canEditContent: false }],
+    ['canEditResource', { canEditResource: false }],
+    ['isAccessResolved', { isAccessResolved: false }],
+    ['isConnectorsInit', { isConnectorsInit: false }],
+    ['isToolCatalogSynced', { isToolCatalogSynced: false }],
+    ['validIdentifiers', { validIdentifiers: new Set<string>() }],
+  ])('lists nothing while the %s gate is not satisfied', (_, overrides) => {
+    expect(resolveUnresolvedPluginIds(baseInput(overrides))).toEqual([]);
+  });
+
+  it('lists nothing when every entry resolves', () => {
+    expect(resolveUnresolvedPluginIds(baseInput({ plugins: ['web-search'] }))).toEqual([]);
+  });
+});
+
+describe('useStalePluginAutoResolve', () => {
+  const update = vi.fn();
+  let live: AgentPluginEntry[] | undefined;
+  let liveScope = 'user-1:personal';
+
+  const deferred = () => {
+    let resolve!: (value: EnsureMarketSkillResult[]) => void;
+    const promise = new Promise<EnsureMarketSkillResult[]>((r) => (resolve = r));
+    return { promise, resolve };
+  };
+
+  const hookInput = (
+    overrides: Partial<StalePluginAutoResolveInput> = {},
+  ): StalePluginAutoResolveInput => {
+    const base = baseInput(overrides);
+    live = base.plugins;
+    liveScope = overrides.scope ?? 'user-1:personal';
+    return {
+      ...base,
+      agentId: 'agent-1',
+      getCurrentPlugins: () => live,
+      getScope: () => liveScope,
+      scope: 'user-1:personal',
+      updatePlugins: update,
+      ...overrides,
+    };
+  };
+
+  const settle = (ms = 500) => vi.advanceTimersByTimeAsync(ms);
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    update.mockReset();
+    ensureMock.mockReset();
+    ensureMock.mockImplementation(async () => notSkill('ghost-tool'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    ['canEditContent', { canEditContent: false }],
+    ['canEditResource', { canEditResource: false }],
+    ['isAccessResolved', { isAccessResolved: false }],
+    ['isConnectorsInit', { isConnectorsInit: false }],
+    ['isToolCatalogSynced', { isToolCatalogSynced: false }],
+  ])('sends no write request while the %s gate is not satisfied', async (_, overrides) => {
+    renderHook(() => useStalePluginAutoResolve(hookInput(overrides)));
+    await settle();
+
+    expect(ensureMock).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('asks about the unresolved identifiers only, then drops the not-a-skill ones', async () => {
+    renderHook(() => useStalePluginAutoResolve(hookInput()));
+    await settle();
+
+    expect(ensureMock).toHaveBeenCalledTimes(1);
+    expect(ensureMock).toHaveBeenCalledWith(['ghost-tool']);
+    expect(update).toHaveBeenCalledWith('agent-1', ['web-search']);
+  });
+
+  it.each<[string, () => Promise<EnsureMarketSkillResult[]>]>([
+    ['installed', async () => [{ identifier: 'ghost-tool', status: 'installed' }]],
+    ['failed', async () => [{ identifier: 'ghost-tool', reason: 'download', status: 'failed' }]],
+    [
+      'rejected',
+      async () => {
+        throw new Error('network down');
+      },
+    ],
+  ])('keeps every entry when ensure is %s', async (_, outcome) => {
+    ensureMock.mockImplementation(outcome);
+    renderHook(() => useStalePluginAutoResolve(hookInput()));
+    await settle();
+
+    expect(ensureMock).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('does not repeat the request while one is in flight or after it settled', async () => {
+    const pending = deferred();
+    ensureMock.mockImplementation(() => pending.promise);
+    const { rerender } = renderHook((input) => useStalePluginAutoResolve(input), {
+      initialProps: hookInput(),
+    });
+    await settle();
+
+    rerender(hookInput({ validIdentifiers: new Set(['web-search']) }));
+    await settle();
+    expect(ensureMock).toHaveBeenCalledTimes(1);
+
+    pending.resolve(notSkill('ghost-tool'));
+    await settle();
+    rerender(hookInput({ validIdentifiers: new Set(['web-search']) }));
+    await settle();
+
+    expect(ensureMock).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('tracks attempts per scope and agent', async () => {
+    const { rerender } = renderHook((input) => useStalePluginAutoResolve(input), {
+      initialProps: hookInput(),
+    });
+    await settle();
+    rerender(hookInput({ agentId: 'agent-2' }));
+    await settle();
+    rerender(hookInput({ agentId: 'agent-2', scope: 'user-1:workspace-1' }));
+    await settle();
+
+    expect(ensureMock).toHaveBeenCalledTimes(3);
+    expect(update.mock.calls.map(([agentId]) => agentId)).toEqual([
+      'agent-1',
+      'agent-2',
+      'agent-2',
+    ]);
+  });
+
+  it('abandons the write when the plugins changed meanwhile, then retries on the new snapshot', async () => {
+    const pending = deferred();
+    ensureMock.mockImplementationOnce(() => pending.promise);
+    const { rerender } = renderHook((input) => useStalePluginAutoResolve(input), {
+      initialProps: hookInput(),
+    });
+    await settle();
+
+    // the user edits the tool list while the request is in flight
+    const edited = ['web-search', 'ghost-tool', 'added-by-user'];
+    live = edited;
+    rerender(
+      hookInput({ plugins: edited, validIdentifiers: new Set(['web-search', 'added-by-user']) }),
+    );
+    live = edited;
+    pending.resolve(notSkill('ghost-tool'));
+    await settle();
+
+    // nothing is written from the old snapshot; the new one is resolved on its own
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith('agent-1', ['web-search', 'added-by-user']);
+    expect(ensureMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('abandons the write when the scope switched meanwhile', async () => {
+    const pending = deferred();
+    ensureMock.mockImplementationOnce(() => pending.promise);
+    // the new scope gets its own attempt, which has nothing to remove
+    ensureMock.mockImplementation(async () => []);
+    const { rerender } = renderHook((input) => useStalePluginAutoResolve(input), {
+      initialProps: hookInput(),
+    });
+    await settle();
+
+    rerender(hookInput({ plugins: live, scope: 'user-1:workspace-1' }));
+    pending.resolve(notSkill('ghost-tool'));
+    await settle();
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // Same workspace (here: personal mode), another signed-in user: the cache
+  // scope carries the user id, so the old response must not land.
+  it.each([
+    ['rendered', true],
+    ['not rendered yet', false],
+  ])(
+    'abandons the write when another user signed in on the same workspace (%s)',
+    async (_, rendered) => {
+      const pending = deferred();
+      ensureMock.mockImplementationOnce(() => pending.promise);
+      // the new scope gets its own attempt, which has nothing to remove
+      ensureMock.mockImplementation(async () => []);
+      const { rerender } = renderHook((input) => useStalePluginAutoResolve(input), {
+        initialProps: hookInput(),
+      });
+      await settle();
+
+      const plugins = live;
+      if (rendered) rerender(hookInput({ plugins, scope: 'user-2:personal' }));
+      else liveScope = 'user-2:personal';
+      pending.resolve(notSkill('ghost-tool'));
+      await settle();
+
+      expect(update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('abandons the write when edit permission is lost meanwhile', async () => {
+    const pending = deferred();
+    ensureMock.mockImplementationOnce(() => pending.promise);
+    const { rerender } = renderHook((input) => useStalePluginAutoResolve(input), {
+      initialProps: hookInput(),
+    });
+    await settle();
+
+    rerender(hookInput({ canEditResource: false, plugins: live }));
+    pending.resolve(notSkill('ghost-tool'));
+    await settle();
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('abandons the write when the profile is closed meanwhile', async () => {
+    const pending = deferred();
+    ensureMock.mockImplementationOnce(() => pending.promise);
+    const { unmount } = renderHook(() => useStalePluginAutoResolve(hookInput()));
+    await settle();
+
+    unmount();
+    pending.resolve(notSkill('ghost-tool'));
+    await settle();
+
+    expect(update).not.toHaveBeenCalled();
   });
 });
 

@@ -25,23 +25,33 @@ export type IFeatureFlagsState = {
    */
   enableAgentShare: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
+  /**
+   * Multi-agent Channels (`channel`). Off by default: the sidebar section and Channel pages are
+   * hidden and the Channel APIs answer FORBIDDEN.
+   */
+  enableChannels: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   /**
-   * Dashboards and the `lobe-dashboard` agent tool (`dashboard`). Off by
+   * Dashboards and the `builtin-dashboard` agent tool (`dashboard`). Off by
    * default: the pages, Portal view, in-chat previews and the tool are hidden
    * and the widget / dashboard APIs answer FORBIDDEN.
    */
   enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
-   * Rollout gate for the multiplexed gateway socket. Necessary but not
-   * sufficient: the transport also requires
-   * `GlobalServerConfig.agentGatewayProtocol === 2`.
+   * Rail layout trial (`im_layout`): icon rail, IM-style Messages list,
+   * Contacts, Tasks scope list and the agent profile side panel. Off keeps the
+   * current sidebar layout.
    */
-  enableGatewayMux: boolean | undefined;
+  enableImLayout: boolean | undefined;
+  /**
+   * New subscription tiers (`new_tier_plans`). Off by default: the plans page keeps
+   * selling the current tiers; listed users see and can buy the new tiers instead.
+   */
+  enableNewTierPlans: boolean | undefined;
   /**
    * LobeHub Mobile rollout gate for the multiplexed gateway socket and
-   * protocol-v2 payloads; independent from `enableGatewayMux`.
+   * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
    */
   enableGatewayMuxMobile: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
@@ -55,6 +65,8 @@ export type IFeatureFlagsState = {
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  /** Hover previews of a topic's final answer (`topic_preview`). */
+  enableTopicPreview: boolean | undefined;
   enableVoiceDictation: boolean | undefined;
   enableWorkspace: boolean | undefined;
   hideDocs: boolean | undefined;
@@ -132,6 +144,8 @@ export interface GlobalServerConfig {
   agentGatewayUrl?: string;
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
+  /** Whether the server has DEVICE_GATEWAY_URL configured, independent of its public URL. */
+  deviceGatewayConfigured?: boolean;
   /**
    * Public Device Gateway base URL (`DEVICE_GATEWAY_PUBLIC_URL`). Absent when not
    * configured; clients then keep the address they manage themselves.
@@ -153,6 +167,8 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableMultimodalUnderstanding?: boolean;
+  /** Pages collaborate live through the gateway's document rooms (LobeHub Cloud). */
+  enablePageCollab?: boolean;
   enableUploadFileToServer?: boolean;
   image?: PartialDeep<UserImageConfig>;
   /**
@@ -170,6 +186,11 @@ export interface GlobalServerConfig {
    * reverse proxy or on desktop.
    */
   oidcIssuer?: string;
+  /**
+   * The sandbox the page agent edits pages in: Market (needs the user's Market
+   * authorization unless the trusted client is configured), Onlyboxes, or none.
+   */
+  sandbox?: 'market' | 'onlyboxes' | 'unconfigured';
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;
@@ -183,15 +204,6 @@ export interface GlobalServerConfig {
    * Undefined means "not configured": the default (64) applies.
    */
   toolNameMaxLength?: number;
-  /**
-   * How the widget sandbox encodes the manifest's network allowlist
-   * (`WIDGET_SANDBOX_NETWORK_FORMAT`): `allowlist` when the Worker restricts
-   * egress to the declared hosts, `boolean` — or absent, the deployed
-   * Worker's only format — when the sandbox only gets an on/off switch and
-   * cannot enforce hosts. The publish review reads this to disclose
-   * unrestricted egress instead of presenting the allowlist as enforced.
-   */
-  widgetSandboxNetworkFormat?: 'allowlist' | 'boolean';
 }
 
 export interface GlobalBillboardItemLocaleFields {

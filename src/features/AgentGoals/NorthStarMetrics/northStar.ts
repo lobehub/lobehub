@@ -1,10 +1,12 @@
 import {
   type GoalMetricComparison,
   type GoalMetricCriterion,
+  type MetricActorType,
+  type MetricPointSourceType,
   toMetricScale,
 } from '@lobechat/types';
 
-import type { MetricSeriesWithPoints } from '@/services/metric';
+import type { MetricSeriesPoint, MetricSeriesWithPoints } from '@/services/metric';
 
 /**
  * View model of one north-star card: a declared acceptance clause joined with
@@ -140,4 +142,84 @@ export const formatMetricValue = (value: number | null): string => {
   if (value == null) return '—';
   if (Number.isInteger(value)) return value.toLocaleString('en-US');
   return String(value);
+};
+
+/** A goal task, as the observation history needs it. */
+export interface NorthStarTaskRef {
+  id: string;
+  resolvedAt: Date;
+  title: string;
+}
+
+/** One observation in the detail panel's history, newest first. */
+export interface NorthStarObservationRow {
+  actorType?: MetricActorType;
+  /** Change from the observation before it; null for the first one in the window. */
+  delta: number | null;
+  observedAt: Date;
+  sourceType?: MetricPointSourceType;
+  /**
+   * Tasks that finished since the observation before this one — the work this
+   * number is the first measurement after.
+   */
+  tasks: NorthStarTaskRef[];
+  value: number;
+}
+
+export const buildObservationRows = (
+  points: MetricSeriesPoint[],
+  tasks: NorthStarTaskRef[] = [],
+): NorthStarObservationRow[] =>
+  points
+    .map((point, index) => {
+      const previous = points[index - 1]?.observedAt.getTime() ?? -Infinity;
+      const at = point.observedAt.getTime();
+      return {
+        actorType: point.actorType,
+        delta: index === 0 ? null : point.value - points[index - 1].value,
+        observedAt: point.observedAt,
+        sourceType: point.sourceType,
+        tasks: tasks
+          .filter((task) => {
+            const resolved = task.resolvedAt.getTime();
+            return resolved > previous && resolved <= at;
+          })
+          .sort((a, b) => b.resolvedAt.getTime() - a.resolvedAt.getTime()),
+        value: point.value,
+      };
+    })
+    .reverse();
+
+/**
+ * Rows for the detail chart: the observed series plus the target as a flat
+ * reference line, so the gap reads off the chart instead of the legend.
+ */
+export const buildNorthStarChartRows = (
+  points: { observedAt: Date; value: number }[],
+  target: number,
+  formatTime: (date: Date) => string,
+): { target: number; time: string; value: number }[] =>
+  points.map((point) => ({ target, time: formatTime(point.observedAt), value: point.value }));
+
+export type DeltaTone = 'bad' | 'good' | 'neutral';
+
+/**
+ * Whether one observation's change is progress, read by the clause's own
+ * direction: on a lower-is-better clause (`lte` / `lt`) a drop is progress, and
+ * on `eq` progress is closing the distance to the target from the value before.
+ */
+export const deltaTone = (
+  op: GoalMetricComparison,
+  value: number,
+  delta: number,
+  target: number,
+): DeltaTone => {
+  if (delta === 0) return 'neutral';
+  if (op === 'eq') {
+    const before = Math.abs(value - delta - target);
+    const after = Math.abs(value - target);
+    return after === before ? 'neutral' : after < before ? 'good' : 'bad';
+  }
+  const lowerIsBetter = op === 'lte' || op === 'lt';
+  return delta < 0 === lowerIsBetter ? 'good' : 'bad';
 };

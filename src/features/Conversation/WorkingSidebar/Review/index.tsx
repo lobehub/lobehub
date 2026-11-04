@@ -1,8 +1,16 @@
 'use client';
 
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
-import { Center, type DropdownItem, DropdownMenu, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, createStaticStyles, Spin } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Center,
+  createStaticStyles,
+  type DropdownItem,
+  DropdownMenu,
+  Empty,
+  Flexbox,
+  Spin,
+} from '@lobehub/ui';
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -32,6 +40,7 @@ import FileTreeNav from './FileTreeNav';
 import GroupHeader from './GroupHeader';
 import { getDefaultExpandedKeys, itemKey } from './reviewTreeNodes';
 import {
+  getReviewSummaryState,
   invalidateGitReviewCaches,
   type ReviewMode,
   useGitRemoteBranches,
@@ -241,13 +250,16 @@ const Review = memo<ReviewProps>(
       });
     };
 
-    const { data, isLoading, isValidating } = useReviewPatches(
+    // Stale-first: after a reload the replica paints the last persisted summary
+    // (paths + counts, no diff text); expanded rows wait for the live diff.
+    const { data, error, isLoading, isValidating } = useReviewPatches(
       workingDirectory,
       mode,
       baseOverride,
       deviceId,
       active,
     );
+    const { diffPending, isSummary } = getReviewSummaryState(data, error);
     const invalidateReviewData = useCallback(
       async () =>
         invalidateGitReviewCaches({
@@ -658,7 +670,9 @@ const Review = memo<ReviewProps>(
                             expanded={expanded}
                             key={key}
                             mode={mode}
+                            pending={diffPending}
                             repoAbsolutePath={group.absolutePath}
+                            stale={isSummary}
                             textDiff={textDiff}
                             viewMode={viewMode}
                             wordWrap={wordWrap}

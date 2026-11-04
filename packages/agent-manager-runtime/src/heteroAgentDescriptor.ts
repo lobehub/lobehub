@@ -69,6 +69,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Codex',
     kind: 'cli',
   },
+  'copilot': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "GitHub Copilot — GitHub's autonomous CLI coding agent. It can inspect and edit a working directory, run shell commands and tests, search code, and complete multi-step software-engineering tasks through its built-in tools.",
+    displayName: 'GitHub Copilot',
+    kind: 'cli',
+  },
   'cursor': {
     capabilities: CODING_CAPABILITIES,
     description:

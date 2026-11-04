@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 
@@ -52,59 +52,20 @@ const createState = (documents: LobeDocument[], overrides: Partial<PageState> = 
   ...overrides,
 });
 
-describe('listSelectors — private/workspace buckets', () => {
-  let state: PageState;
-
-  beforeEach(() => {
-    state = createState([
-      doc('priv-a', 'private'),
-      doc('priv-b', 'private'),
-      doc('pub-a', 'public'),
-      doc('pub-b', null),
-      doc('pub-c', undefined),
-    ]);
-  });
-
-  it('routes private-visibility docs into the private bucket', () => {
-    const ids = listSelectors.getPrivateFilteredDocuments(state).map((d) => d.id);
-    expect(ids.sort()).toEqual(['priv-a', 'priv-b']);
-  });
-
-  it('routes non-private docs (public/null/undefined) into the workspace bucket', () => {
-    // null and undefined visibility fall back to workspace-shared so historical
-    // docs pre-dating the column stay visible to every member.
-    const ids = listSelectors.getWorkspaceFilteredDocuments(state).map((d) => d.id);
-    expect(ids.sort()).toEqual(['pub-a', 'pub-b', 'pub-c']);
-  });
-
-  it('exposes bucket counts', () => {
-    expect(listSelectors.privateFilteredDocumentsCount(state)).toBe(2);
-    expect(listSelectors.workspaceFilteredDocumentsCount(state)).toBe(3);
-  });
-
-  it('honors the existing sourceType filter (drops file-uploaded docs from both buckets)', () => {
-    const stateWithFile = createState([
-      doc('priv-page', 'private'),
-      doc('priv-file', 'private', { sourceType: 'file' as DocumentSourceType }),
-      doc('pub-page', 'public'),
-      doc('pub-file', 'public', { sourceType: 'file' as DocumentSourceType }),
+describe('listSelectors — workspace visibility', () => {
+  it('keeps private and shared pages in one list', () => {
+    const state = createState([
+      doc('priv-a', 'private', { createdAt: new Date('2026-01-03') }),
+      doc('pub-a', 'public', { createdAt: new Date('2026-01-02') }),
+      doc('legacy', null, { createdAt: new Date('2026-01-01') }),
     ]);
 
-    expect(listSelectors.getPrivateFilteredDocuments(stateWithFile).map((d) => d.id)).toEqual([
-      'priv-page',
+    expect(listSelectors.getFilteredDocuments(state).map((d) => d.id)).toEqual([
+      'priv-a',
+      'pub-a',
+      'legacy',
     ]);
-    expect(listSelectors.getWorkspaceFilteredDocuments(stateWithFile).map((d) => d.id)).toEqual([
-      'pub-page',
-    ]);
-  });
-
-  it('respects the sidebar page size cap for each bucket independently', () => {
-    const many = Array.from({ length: 25 }).map((_, i) =>
-      doc(`priv-${i}`, 'private', { createdAt: new Date(`2026-01-${(i % 28) + 1}`) }),
-    );
-    const state = createState(many);
-    expect(listSelectors.getPrivateFilteredDocumentsLimited(state)).toHaveLength(20);
-    expect(listSelectors.hasMorePrivateFilteredDocuments(state)).toBe(true);
+    expect(listSelectors.filteredDocumentsCount(state)).toBe(3);
   });
 });
 
@@ -161,5 +122,31 @@ describe('listSelectors — replica-backed reads', () => {
     });
 
     expect(listSelectors.getDocumentById('same-page')(state)?.title).toBe('From list');
+  });
+
+  it('resolves a page that only a Docs sidebar section has loaded', () => {
+    // Fresh Docs load: the section rendered the row, the flat list has not.
+    const state = createState([], {
+      pageSectionMap: {
+        mine: [doc('section-only', 'private', { title: 'Section only' })],
+      },
+    });
+
+    expect(listSelectors.getDocumentById('section-only')(state)?.title).toBe('Section only');
+  });
+
+  it('prefers the list and by-id copies over a section row', () => {
+    const state = createState([doc('everywhere', 'private', { title: 'From list' })], {
+      pageDetailMap: { 'deep-link': doc('deep-link', 'private', { title: 'From detail' }) },
+      pageSectionMap: {
+        mine: [
+          doc('everywhere', 'private', { title: 'From section' }),
+          doc('deep-link', 'private', { title: 'From section' }),
+        ],
+      },
+    });
+
+    expect(listSelectors.getDocumentById('everywhere')(state)?.title).toBe('From list');
+    expect(listSelectors.getDocumentById('deep-link')(state)?.title).toBe('From detail');
   });
 });

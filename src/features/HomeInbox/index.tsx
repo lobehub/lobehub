@@ -1,7 +1,7 @@
 import { ActionIcon, createStaticStyles, cx, Flexbox, Segmented } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
+import { Fragment, memo, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -55,6 +55,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+/**
+ * Mounted only while the rail has settled with nothing to show, so the page
+ * hears "empty" once the feeds have answered and "not empty" as soon as any
+ * card returns — including when the rail unmounts.
+ */
+const RailEmptyReporter = ({ onChange }: { onChange: (empty: boolean) => void }) => {
+  useEffect(() => {
+    onChange(true);
+    return () => onChange(false);
+  }, [onChange]);
+
+  return null;
+};
+
 interface InboxSection {
   /** Header action revealed on hover (GroupBlock's action slot). */
   action?: ReactNode;
@@ -68,6 +82,8 @@ interface InboxSection {
   key: string;
   /** Omitted when the section labels itself (the running card names its own count). */
   label?: string;
+  /** A refresh is in flight over rows already on screen (see GroupBlock `loading`). */
+  loading?: boolean;
   node: ReactNode;
   onCollapsedChange?: (collapsed: boolean) => void;
   /** Section carries its own card shell — the rail renders it verbatim. */
@@ -111,6 +127,12 @@ interface HomeInboxProps {
    * news) fold into this column instead of disappearing with it.
    */
   inlineRail?: boolean;
+  /**
+   * Rail only: told `true` once the rail's feeds have loaded and it has no card
+   * to show, and `false` when a card appears, so the page can hand its space to
+   * the main column without guessing from a loading rail.
+   */
+  onRailEmptyChange?: (empty: boolean) => void;
   /** Controlled mine/team scope — lets the page share one scope across sibling sections. */
   onScopeChange?: (scope: 'mine' | 'team') => void;
   scope?: 'mine' | 'team';
@@ -123,6 +145,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     hideRunning,
     hideUnread,
     inlineRail,
+    onRailEmptyChange,
     onScopeChange,
     scope: controlledScope,
     variant = 'default',
@@ -228,6 +251,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   );
 
   if (!isLogin) return null;
+
+  // The cached feed is on screen while the server confirms it: say so on the
+  // section heading instead of hiding the rows behind a skeleton.
+  const briefsRefreshing = isBriefsInit && briefsSWR.isValidating;
 
   const blockState = resolveInboxBlockState({
     hasError: Boolean(briefsSWR.error),
@@ -337,6 +364,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             count: needsYou.length,
             key: 'needsYou',
             label: t('inbox.needsYou.title'),
+            loading: briefsRefreshing,
             node: (
               <Flexbox gap={12}>
                 {needsYou.map((brief) => (
@@ -362,6 +390,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       count: unreadTopics.length,
       key: 'unread',
       label: t('inbox.unread.title'),
+      loading: topics.isRefreshing,
       node: (
         <UnreadTopicList
           bare={isRail}
@@ -393,6 +422,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         count: needsYou.length,
         key: 'needsYou',
         label: t('inbox.needsYou.title'),
+        loading: briefsRefreshing,
         node: (
           <Flexbox gap={12}>
             {needsYou.map((brief) => (
@@ -514,13 +544,32 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   if (visibleSections.length === 0) {
     if (isMain) return null;
 
-    if (isRail)
-      return recommendationsVisible || usageCard ? (
-        <Flexbox gap={12}>
-          {recommendationsVisible && <Recommendations variant={'rail'} />}
-          {usageCard}
-        </Flexbox>
-      ) : null;
+    if (isRail) {
+      if (recommendationsVisible || usageCard)
+        return (
+          <Flexbox gap={12}>
+            {recommendationsVisible && <Recommendations variant={'rail'} />}
+            {usageCard}
+          </Flexbox>
+        );
+
+      // Still waiting on a feed that may yet fill the rail: keep its place
+      // with the loading skeleton rather than collapse it and slide the page
+      // back when the cards land.
+      const railFeedsSettled =
+        (!showGoals || goals !== undefined || Boolean(goalsSWR.error)) &&
+        (!showRailSections || Boolean(newsSWR.data) || Boolean(newsSWR.error));
+
+      if (!railFeedsSettled)
+        return (
+          <Flexbox gap={12}>
+            <BriefCardSkeleton />
+            <BriefCardSkeleton />
+          </Flexbox>
+        );
+
+      return onRailEmptyChange ? <RailEmptyReporter onChange={onRailEmptyChange} /> : null;
+    }
 
     // With no titled block above it, the bare recommendations list doesn't need
     // the full section gap below the input area — offset the parent's gap so it
@@ -548,6 +597,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
           count,
           key,
           label,
+          loading,
           node,
           onCollapsedChange,
           selfShelled,
@@ -562,6 +612,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
                 collapsed={collapsed}
                 count={count}
                 key={key}
+                loading={loading}
                 title={
                   label && (
                     <>
@@ -585,6 +636,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
               collapsed={collapsed}
               count={count}
               key={key}
+              loading={loading}
               title={
                 <>
                   {label}

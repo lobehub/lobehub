@@ -9,33 +9,55 @@ import { WorkspaceSidePanelProvider } from '@/features/RightPanel/WorkspaceSideP
 
 import GoalDetailPage from './GoalDetailPage';
 
-const mocks = vi.hoisted(() => ({ canEdit: true, hasSupervision: true, showPortal: false }));
+const mocks = vi.hoisted(() => ({
+  canEdit: true,
+  graphError: undefined as unknown,
+  hasSnapshot: true,
+  hasSupervision: true,
+  recovery: { pending: false } as { pending: boolean },
+  showPortal: false,
+}));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
 vi.mock('@/store/goal', () => ({
   goalSelectors: {
-    goalGraph: () => () => ({
-      goal: {
-        agentId: 'agt_manager',
-        config: mocks.hasSupervision
-          ? { manager: true, managerState: { topicId: 'tpc_manager' } }
-          : {},
-        id: 'goal_1',
-        projectId: null,
-        requirement: null,
-        status: 'review',
-        title: 'Ship it',
-      },
-      nodes: [],
-    }),
+    goalGraph: () => () =>
+      mocks.hasSnapshot
+        ? {
+            goal: {
+              agentId: 'agt_manager',
+              config: mocks.hasSupervision
+                ? { manager: true, managerState: { topicId: 'tpc_manager' } }
+                : {},
+              id: 'goal_1',
+              projectId: null,
+              requirement: 'Reach 1,100 followers',
+              status: 'review',
+              title: 'Ship it',
+            },
+            nodes: [],
+          }
+        : undefined,
   },
   useGoalStore: (selector: (s: any) => unknown) =>
     selector({
       pauseGoal: vi.fn(),
       resumeGoal: vi.fn(),
-      useFetchGoalGraph: () => ({ error: undefined, isLoading: false, mutate: vi.fn() }),
+      useFetchGoalGraph: () => ({ error: mocks.graphError, isLoading: false, mutate: vi.fn() }),
     }),
+}));
+
+vi.mock('@/features/Workspace/useLocateInOtherScope', () => ({
+  useOtherScopeRecovery: () => mocks.recovery,
+}));
+
+vi.mock('@/components/Skeleton/GoalDetail', () => ({
+  default: () => <div data-testid="goal-detail-skeleton" />,
+}));
+
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (s: any) => unknown) => selector({ featureFlags: {} }),
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -46,15 +68,23 @@ vi.mock('@/store/chat/selectors', () => ({
   chatPortalSelectors: { currentViewType: () => undefined, showPortal: () => mocks.showPortal },
 }));
 
-vi.mock('@/store/global', () => ({
-  useGlobalStore: Object.assign(
-    (selector: (s: any) => unknown) => selector({ toggleLeftPanel: vi.fn() }),
-    { getState: () => ({ toggleLeftPanel: vi.fn() }) },
-  ),
-}));
+vi.mock('@/store/global', () => {
+  // The assignee picker reads persisted UI status (folded groups, recents).
+  const state = { status: {}, toggleLeftPanel: vi.fn(), updateSystemStatus: vi.fn() };
+  return {
+    useGlobalStore: Object.assign((selector: (s: any) => unknown) => selector(state), {
+      getState: () => state,
+    }),
+  };
+});
 
 vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: { showLeftPanel: () => false },
+}));
+
+// The main-agent picker follows a handover to the new agent's route.
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => vi.fn(),
 }));
 
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: mocks.canEdit }) }));
@@ -84,6 +114,11 @@ vi.mock('./GoalSupervisorToggle', () => ({
 vi.mock('@/features/Portal/router', () => ({
   PortalContent: () => <div data-testid="goal-portal-content" />,
 }));
+vi.mock('@/features/Favorites', () => ({
+  FavoriteButton: () => null,
+  useCurrentFavoritePath: () => '/favorite-path',
+  useFavoriteMenuItem: () => null,
+}));
 vi.mock('@/features/NavHeader', () => ({
   default: ({ left, right }: { left: ReactNode; right: ReactNode }) => (
     <div>
@@ -100,14 +135,28 @@ vi.mock('@/features/WideScreenContainer', () => ({
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('./GoalChat', () => ({
-  default: ({ agentId, initialMessage }: { agentId: string; initialMessage?: string }) => (
-    <div data-agent-id={agentId} data-initial-message={initialMessage} data-testid="goal-chat" />
+  default: ({
+    agentId,
+    initialMessage,
+    initialTopicId,
+  }: {
+    agentId: string;
+    initialMessage?: string;
+    initialTopicId?: string;
+  }) => (
+    <div
+      data-agent-id={agentId}
+      data-initial-message={initialMessage}
+      data-initial-topic-id={initialTopicId}
+      data-testid="goal-chat"
+    />
   ),
 }));
 vi.mock('./GoalDetailActions', () => ({ default: () => null }));
+vi.mock('./GoalDetailTitle', () => ({ default: () => null }));
 vi.mock('./GoalHeaderMetrics', () => ({ default: () => null }));
-vi.mock('./GoalRequirement', () => ({ default: () => null }));
-vi.mock('./NorthStarMetrics', () => ({ default: () => null }));
+vi.mock('./GoalRequirement', () => ({ default: () => <div data-testid="goal-requirement" /> }));
+vi.mock('./NorthStarMetrics', () => ({ default: () => <div data-testid="goal-north-star" /> }));
 // The result page's composer lives inside ProcessControl; the page owns where
 // its message goes, so the stub only exposes the hand-off.
 vi.mock('./ProcessControl', () => ({
@@ -122,10 +171,12 @@ vi.mock('./GoalSupervision', () => ({
   GoalSupervision: ({
     initialMessage,
     onOpenChat,
+    onSelectTopic,
     topicId,
   }: {
     initialMessage?: string;
     onOpenChat?: () => void;
+    onSelectTopic?: (topicId: string) => void;
     topicId: string;
   }) => (
     <div data-initial-message={initialMessage} data-testid="goal-supervision">
@@ -135,6 +186,14 @@ vi.mock('./GoalSupervision', () => ({
           open chat
         </button>
       )}
+      {onSelectTopic && (
+        <button
+          data-testid="goal-supervision-pick-topic"
+          onClick={() => onSelectTopic('tpc_other')}
+        >
+          pick topic
+        </button>
+      )}
     </div>
   ),
 }));
@@ -142,8 +201,24 @@ vi.mock('./GoalSupervision', () => ({
 describe('GoalDetailPage', () => {
   beforeEach(() => {
     mocks.canEdit = true;
+    mocks.graphError = undefined;
+    mocks.hasSnapshot = true;
     mocks.hasSupervision = true;
+    mocks.recovery = { pending: false };
     mocks.showPortal = false;
+  });
+
+  // The measured numbers are what executing the requirement has observed, so
+  // they read below it as its outcome.
+  it('renders the north-star metrics below the requirement', () => {
+    render(<GoalDetailPage goalId={'goal_1'} />);
+
+    expect(
+      screen
+        .getByTestId('goal-requirement')
+        .compareDocumentPosition(screen.getByTestId('goal-north-star')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   // On the agent-less route the task workspace owns the portal host, but the
@@ -211,19 +286,17 @@ describe('GoalDetailPage', () => {
     expect(screen.queryByTestId('goal-follow-up')).not.toBeInTheDocument();
   });
 
-  // The side chat stays one menu item away, for a question that should not land
-  // in the manager's own record.
-  it('hands a managed goal back to its editable conversation from the record', () => {
+  // A goal bound to its supervision record keeps the panel on that topic: the
+  // record offers no way out to a new or another conversation.
+  it('keeps a bound goal’s panel on its supervision record', () => {
     render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
 
     fireEvent.click(screen.getByTestId('goal-supervisor-toggle'));
-    expect(screen.getByTestId('goal-supervision')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('goal-supervision-open-chat'));
-
-    expect(screen.queryByTestId('goal-supervision')).not.toBeInTheDocument();
-    expect(screen.getByTestId('goal-chat')).toHaveAttribute('data-agent-id', 'agt_manager');
-    expect(screen.getByTestId('goal-right-panel')).toHaveAttribute('data-expand', 'true');
+    expect(screen.getByTestId('goal-supervision')).toHaveTextContent('tpc_manager');
+    expect(screen.queryByTestId('goal-supervision-open-chat')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('goal-supervision-pick-topic')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('goal-chat')).not.toBeInTheDocument();
   });
 
   it('leaves drill-downs to the workspace portal host on the agent-less route', () => {
@@ -243,5 +316,17 @@ describe('GoalDetailPage', () => {
     render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
 
     expect(screen.getByTestId('goal-portal-content')).toBeInTheDocument();
+  });
+
+  // A 404 may only mean the goal lives in another of the user's spaces; while
+  // those are probed the page keeps its loading frame instead of going blank.
+  it('keeps the page skeleton while another space is being probed', () => {
+    mocks.hasSnapshot = false;
+    mocks.graphError = { data: { code: 'NOT_FOUND', httpStatus: 404 } };
+    mocks.recovery = { pending: true };
+
+    render(<GoalDetailPage goalId={'goal_1'} />);
+
+    expect(screen.getByTestId('goal-detail-skeleton')).toBeTruthy();
   });
 });

@@ -43,6 +43,7 @@ const setToolState = (state: any) => {
     ),
     agentSkillListMap: { all: agentSkills },
     builtinSkills: [],
+    ensureAgentSkillsLoaded: vi.fn(),
     ...rest,
   } as any);
 };
@@ -213,6 +214,36 @@ describe('resolveClientSkills', () => {
 
     expect(result.enabledPluginIds).toEqual([]);
     expect(findSkill(result.skills, 'lobehub')).toMatchObject({ activated: false });
+  });
+
+  describe('agent skill list loading', () => {
+    const dbSkill = { description: 'Bound', id: 'db-1', identifier: 'bound-skill', name: 'Bound' };
+
+    it('loads the skill list before assembling the pool, so a send right after a page load sees DB skills', async () => {
+      const state: any = { agentSkillListMap: {}, agentSkillDetailMap: {}, builtinSkills: [] };
+      state.ensureAgentSkillsLoaded = vi.fn(async () => {
+        state.agentSkillListMap = { all: [dbSkill] };
+      });
+      mockedGetToolStoreState.mockReturnValue(state);
+
+      const result = await resolveClientSkills();
+
+      expect(state.ensureAgentSkillsLoaded).toHaveBeenCalledTimes(1);
+      expect(findSkill(result.skills, 'bound-skill')).toMatchObject({ name: 'Bound' });
+    });
+
+    it('still assembles the pool when the skill list fails to load', async () => {
+      setToolState({
+        builtinSkills: [
+          { content: 'guide', description: 'd', identifier: 'artifacts', name: 'Artifacts' },
+        ],
+        ensureAgentSkillsLoaded: vi.fn().mockRejectedValue(new Error('network down')),
+      });
+
+      const result = await resolveClientSkills();
+
+      expect(findSkill(result.skills, 'artifacts')).toBeDefined();
+    });
   });
 
   describe('disabled skills', () => {

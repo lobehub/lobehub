@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { mutate } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
+import { useGitStatusStore } from '@/store/device/gitStatus/store';
 
 export type PullRequestBusy = DeviceGitPullRequestAction['type'] | 'push';
 
@@ -18,14 +19,26 @@ const DOCK_KINDS = new Set<PullRequestBusy>([
 
 interface UsePullRequestActionsParams {
   deviceId?: string;
+  /**
+   * The PR is only known from persisted rows so far: refuse every mutation so
+   * a click on stale content cannot act on a PR the branch has moved off.
+   */
+  locked?: boolean;
   mutateDetail: () => Promise<unknown>;
   number: number;
+  /**
+   * The merge context (permissions, required checks) is still last session's:
+   * refuse policy-driven mutations, but let comments through.
+   */
+  policyLocked?: boolean;
   workingDirectory: string;
 }
 
 export const usePullRequestActions = ({
   deviceId,
+  locked = false,
   mutateDetail,
+  policyLocked = false,
   number,
   workingDirectory,
 }: UsePullRequestActionsParams) => {
@@ -33,10 +46,15 @@ export const usePullRequestActions = ({
   const [error, setError] = useState<string>();
   const busyRef = useRef(false);
   const retryRef = useRef<() => Promise<boolean>>(undefined);
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+  const policyLockedRef = useRef(policyLocked);
+  policyLockedRef.current = policyLocked;
 
   const perform = useCallback(
     async (kind: PullRequestBusy, request: () => Promise<DeviceGitPullRequestActionResult>) => {
-      if (busyRef.current) return false;
+      if (busyRef.current || lockedRef.current) return false;
+      if (policyLockedRef.current && kind !== 'comment') return false;
       busyRef.current = true;
       setBusy(kind);
       const isDockAction = DOCK_KINDS.has(kind);
@@ -72,8 +90,9 @@ export const usePullRequestActions = ({
               key[2] === workingDirectory &&
               key[3] === number,
           ),
-          mutate(deviceKeys.gitAheadBehind(cacheDeviceId, workingDirectory)),
-          mutate(deviceKeys.gitWorkingTreeStatus(cacheDeviceId, workingDirectory)),
+          useGitStatusStore
+            .getState()
+            .revalidateGitStatus(deviceId, workingDirectory, ['aheadBehind', 'workingTreeStatus']),
         ]);
         return true;
       } catch (err) {

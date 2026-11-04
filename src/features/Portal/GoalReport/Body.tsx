@@ -132,6 +132,7 @@ export const ChapterBody = memo(() => {
       </Text>
       {map.graph.nodes.length > 0 && (
         <Graph
+          initialShowMainline
           bridges={map.bridges}
           graph={map.graph}
           highlightedIds={highlightedIds}

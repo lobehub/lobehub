@@ -1,82 +1,52 @@
 'use client';
 
 import { AgentIcon } from '@lobehub/icons';
-import { Avatar, createStaticStyles, Flexbox, Markdown, responsive, Text } from '@lobehub/ui';
+import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Rate from '@/components/RatingOverview/Rate';
 import { type SkillCommentItem } from '@/types/discover';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  author: css`
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 1.2;
-    color: ${cssVar.colorText};
-    word-break: break-word;
+import moduleStyles from './CommentItem.module.css';
 
-    ${responsive.sm} {
-      font-size: 15px;
-    }
-  `,
-  avatar: css`
-    flex: none;
-    line-height: 0;
-  `,
-  card: css`
-    padding-block: 22px;
-    padding-inline: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 22px;
-
-    background: ${cssVar.colorBgContainer};
-
-    ${responsive.sm} {
-      padding-block: 18px;
-      padding-inline: 16px;
-      border-radius: 18px;
-    }
-  `,
-  content: css`
-    font-size: 16px;
-    line-height: 1.56;
-    color: ${cssVar.colorTextSecondary};
-
-    p {
-      margin-block: 0;
-    }
-
-    p + p {
-      margin-block-start: 0.72em;
-    }
-
-    a {
-      color: ${cssVar.colorLink};
-    }
-
-    strong {
-      font-weight: 600;
-      color: ${cssVar.colorText};
-    }
-
-    ${responsive.sm} {
-      font-size: 15px;
-    }
-  `,
-  date: css`
-    flex: none;
-
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.3;
-    color: ${cssVar.colorTextDescription};
-    white-space: nowrap;
-  `,
-  rate: css`
-    line-height: 1;
-  `,
-}));
+const styles = stylex.create({
+  author: {
+    fontSize: { default: '16px', [media.sm]: '15px' },
+    fontWeight: 700,
+    lineHeight: 1.2,
+    color: cssVar.colorText,
+    wordBreak: 'break-word',
+  },
+  avatar: {
+    flex: 'none',
+    lineHeight: 0,
+  },
+  card: {
+    paddingBlock: { default: '22px', [media.sm]: '18px' },
+    paddingInline: { default: '24px', [media.sm]: '16px' },
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: { default: '22px', [media.sm]: '18px' },
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  date: {
+    flex: 'none',
+    fontSize: '13px',
+    fontWeight: 500,
+    lineHeight: 1.3,
+    color: cssVar.colorTextDescription,
+    whiteSpace: 'nowrap',
+  },
+  rate: {
+    lineHeight: 1,
+  },
+});
 
 const CommentItem = memo<{ item: SkillCommentItem }>(({ item }) => {
   const { i18n, t } = useTranslation('discover');
@@ -117,20 +87,25 @@ const CommentItem = memo<{ item: SkillCommentItem }>(({ item }) => {
   }, [author?.avatar, author?.sourceType, author?.type, authorName]);
 
   return (
-    <Flexbox className={styles.card} gap={14}>
+    <Flexbox className={stylex.props(styles.card).className} gap={14}>
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'} wrap={'wrap'}>
         <Flexbox horizontal align={'center'} gap={12}>
-          <div className={styles.avatar}>{avatar}</div>
+          <div {...stylex.props(styles.avatar)}>{avatar}</div>
           <Flexbox gap={6}>
-            <Text className={styles.author}>{authorName}</Text>
+            <Text className={stylex.props(styles.author).className}>{authorName}</Text>
             {typeof item.rating === 'number' && (
-              <Rate className={styles.rate} gap={3} size={16} value={item.rating} />
+              <Rate
+                className={stylex.props(styles.rate).className}
+                gap={3}
+                size={16}
+                value={item.rating}
+              />
             )}
           </Flexbox>
         </Flexbox>
-        <Text className={styles.date}>{createdAt}</Text>
+        <Text className={stylex.props(styles.date).className}>{createdAt}</Text>
       </Flexbox>
-      <Markdown className={styles.content} variant={'chat'}>
+      <Markdown className={moduleStyles.content} variant={'chat'}>
         {item.content}
       </Markdown>
     </Flexbox>

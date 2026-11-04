@@ -1,4 +1,6 @@
-import { createStaticStyles, cx, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { cx, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BoltIcon, RotateCwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,17 +8,16 @@ import { useTranslation } from 'react-i18next';
 import { type FileParsingTask } from '@/types/asyncTask';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  errorReason: css`
-    padding: 4px;
-    border-radius: 4px;
-
-    font-family: monospace;
-    font-size: 12px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  errorReason: {
+    padding: '4px',
+    borderRadius: '4px',
+    fontFamily: 'monospace',
+    fontSize: '12px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface EmbeddingStatusProps extends FileParsingTask {
   className?: string;
@@ -62,7 +63,7 @@ const EmbeddingStatus = memo<EmbeddingStatusProps>(
               <Flexbox gap={4}>
                 {t('FileParsingStatus.chunks.embeddingStatus.errorResult')}
                 {embeddingError && (
-                  <Flexbox className={styles.errorReason}>
+                  <Flexbox className={stylex.props(styles.errorReason).className}>
                     [{embeddingError.name}]:{' '}
                     {embeddingError.body && typeof embeddingError.body !== 'string'
                       ? embeddingError.body.detail

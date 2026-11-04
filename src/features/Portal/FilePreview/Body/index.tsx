@@ -44,11 +44,7 @@ const FilePreview = () => {
   // resolved-nothing on some list paths) — both are terminal, not retryable.
   // Other failures offer Reload.
   if (error && normalizeAsyncError(error).status !== 404) {
-    return (
-      <Flexbox flex={1} padding={16}>
-        <AsyncError error={error} variant={'block'} onRetry={() => void mutate?.()} />
-      </Flexbox>
-    );
+    return <AsyncError error={error} variant={'page'} onRetry={() => void mutate?.()} />;
   }
   if (error || !data) return <FileNotFound />;
 

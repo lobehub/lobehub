@@ -47,7 +47,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const getLanguage = (fileName: string): string => {
+export const getLanguage = (fileName: string): string => {
   const ext = fileName.toLowerCase().split('.').pop();
   switch (ext) {
     case 'js':

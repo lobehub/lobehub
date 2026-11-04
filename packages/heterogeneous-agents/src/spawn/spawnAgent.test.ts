@@ -346,15 +346,15 @@ describe('spawnAgent', () => {
     nextFakeProc = null;
     platformMock.mockReturnValue('linux');
     execFileMock.mockReset();
-    // ACP/stdio sessions read `process.platform` directly (unlike the CLI
-    // spawn plan which uses `os.platform()`), so pin it too — otherwise the
-    // signal-path tests exercise the win32 taskkill branch on Windows hosts.
+    // ACP sessions read `process.platform` directly; pin it so signal tests skip win32 taskkill.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' });
+    vi.stubEnv('LOBEHUB_JWT', ''); // a host token would land in a never-cleaned Codex JWT file
     detectHeterogeneousCliCommandMock.mockResolvedValue({ available: true, path: 'traecli' });
   });
 
   afterEach(async () => {
     nextFakeProc = null;
+    vi.unstubAllEnvs();
     Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   });

@@ -306,6 +306,7 @@ export const createServerContextFactProviders = ({
       (await new AgentModel(db, userId, ctx.workspaceId).queryAgents({ limit })).map((a) => ({
         description: a.description,
         id: a.id,
+        name: a.name,
         title: a.title,
       })),
 

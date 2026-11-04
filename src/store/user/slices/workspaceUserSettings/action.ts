@@ -1,7 +1,7 @@
-import type { ReplicaSlice } from '@lobechat/replica/zustand';
 import type { WorkspaceUserPreference } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import isEqual from 'fast-deep-equal';
+import type { ReplicaSlice } from 'local-replica/zustand';
 import { useSyncExternalStore } from 'react';
 
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/business/client/hooks/useActiveWorkspaceId';
 import { createReplicaSlice, type ReplicaLens } from '@/libs/replica';
 import { workspaceUserSettingsService } from '@/services/workspaceUserSettings';
+import { refreshAgentDeviceBindings } from '@/store/device/agentDeviceBinding';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -242,6 +243,10 @@ export class WorkspaceUserSettingsActionImpl {
       () => workspaceUserSettingsService.updatePreference(patch),
       { revalidate: true },
     );
+    // The caller's per-agent device override changes where an agent routes for
+    // them, which the sidebar presence dots cache per agent. (Personal mode
+    // has no overrides, so the early return above needs no refresh.)
+    if (patch.agentDeviceOverrides) void refreshAgentDeviceBindings();
   };
 }
 

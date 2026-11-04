@@ -32,6 +32,8 @@ export type UploadHeterogeneousImage = (image: {
 }) => Promise<{ fileId: string; url: string } | undefined>;
 
 export interface AgentStreamPipelineOptions {
+  /** Adapter to use instead of the registered one for `agentType`. */
+  adapter?: AgentEventAdapter;
   /** Agent type key (e.g. `claude-code`, `codex`). */
   agentType: string;
   /** Working directory used to resolve relative file paths emitted by CLI tools. */
@@ -80,7 +82,7 @@ export class AgentStreamPipeline {
   private queuedEvents: AgentStreamEvent[] = [];
 
   constructor(options: AgentStreamPipelineOptions) {
-    this.adapter = createAdapter(options.agentType);
+    this.adapter = options.adapter ?? createAdapter(options.agentType);
     this.agentType = options.agentType;
     this.readCodexImages = createCodexImageOutputReader({
       env: options.env ?? process.env,

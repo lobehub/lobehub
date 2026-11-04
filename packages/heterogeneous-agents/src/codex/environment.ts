@@ -2,11 +2,15 @@ import { isRecord } from '@lobechat/utils/object';
 
 import type { ThreadStartParams } from './protocol';
 
-/** These values identify one run; credentials and every other setting stay process-scoped. */
+/**
+ * These values identify one run; credentials and every other setting stay process-scoped.
+ * The workspace is run-scoped too: runs from different workspaces share one app-server.
+ */
 const CODEX_PROVENANCE_KEYS = [
   'LOBEHUB_AGENT_ID',
   'LOBEHUB_OPERATION_ID',
   'LOBEHUB_TOPIC_ID',
+  'LOBEHUB_WORKSPACE_ID',
 ] as const;
 
 const isProvenanceKey = (key: string) => (CODEX_PROVENANCE_KEYS as readonly string[]).includes(key);

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import IntegrationCard from './IntegrationCard';
 import { type IntegrationId, INTEGRATIONS, UPCOMING_INTEGRATIONS } from './registry';
 import { useGithubIntegration } from './useGithubIntegration';
+import { useLinearIntegration } from './useLinearIntegration';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   list: css`
@@ -52,8 +53,12 @@ interface OverviewProps {
 const Overview = memo<OverviewProps>(({ onOpen }) => {
   const { t } = useTranslation('integration');
   const github = useGithubIntegration();
+  const linear = useLinearIntegration();
 
-  const enabledById: Record<IntegrationId, boolean> = { github: github.enabled };
+  const enabledById: Record<IntegrationId, boolean> = {
+    github: github.enabled,
+    linear: linear.enabled,
+  };
   const enabled = INTEGRATIONS.filter((item) => enabledById[item.id]);
 
   return (

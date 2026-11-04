@@ -22,11 +22,8 @@ const mockTopicUpdate = vi.fn();
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(function () {
     return {
-      batchCreate: mockTopicBatchCreate,
-      batchMoveToAgent: mockTopicBatchMoveToAgent,
       create: mockTopicCreate,
       delete: mockTopicDelete,
-      duplicate: mockTopicDuplicate,
       findOwnersByIds: mockTopicFindOwnersByIds,
       findOwnTopicById: mockTopicFindOwnTopicById,
       findShareVisitorTopicIds: mockTopicFindShareVisitorTopicIds,
@@ -36,11 +33,26 @@ vi.mock('@/database/models/topic', () => ({
   }),
 }));
 
+// Cross-aggregate topic writes (create with messages, batch create, clone/fork,
+// move) go through TopicRepository; share the spies so guard tests still prove
+// the write never ran.
+vi.mock('@/database/repositories/topic', () => ({
+  TopicRepository: vi.fn(function () {
+    return {
+      batchCreate: mockTopicBatchCreate,
+      batchMoveToAgent: mockTopicBatchMoveToAgent,
+      create: mockTopicCreate,
+      duplicate: mockTopicDuplicate,
+    };
+  }),
+}));
+
 const mockMessageFindShareVisitorMessageIds = vi.fn();
 const mockMessageDeleteMessagesBySession = vi.fn();
 const mockMessageUpdateTTS = vi.fn();
 const mockMessageUpdateTranslate = vi.fn();
 vi.mock('@/database/models/message', () => ({
+  MESSAGE_KEYWORD_SEARCH_MAX_LIMIT: 100,
   MessageModel: vi.fn(function () {
     return {
       deleteMessagesBySession: mockMessageDeleteMessagesBySession,
@@ -105,10 +117,14 @@ vi.mock('@/server/services/file', () => ({
   }),
 }));
 
-// Topic creation canonicalizes agent/session through the DB; the guard under
+// Creation canonicalizes agent/session through the DB; the guard under
 // test runs after that step, so short-circuit it.
 vi.mock('../_helpers/resolveContext', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  resolveContext: vi.fn(async (input: { agentId?: string; topicId?: string }) => ({
+    ...input,
+    sessionId: 'session-1',
+  })),
   resolveContextWithAgentId: vi.fn(async (input: { agentId?: string }) => ({
     agentId: input.agentId,
     sessionId: 'session-1',

@@ -10,8 +10,8 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import { TaskContent } from '../../Tasks/shared';
-import { type TaskMetrics } from './TaskTitle';
 import TaskTitle from './TaskTitle';
+import { type TaskMetrics } from './TaskTitle';
 
 interface ServerTaskItemProps {
   item: UIChatMessage;
@@ -41,7 +41,8 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
     if (isCompleted || isError) {
       return {
         duration: taskDetail?.duration,
-        steps: taskDetail?.totalSteps,
+        // `totalSteps` is the server's user-facing step metric: actual LLM calls.
+        llmCalls: taskDetail?.totalSteps,
         toolCalls: taskDetail?.totalToolCalls,
       };
     }
@@ -84,7 +85,11 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
               title={title}
               agent={
                 agent
-                  ? { avatar: agent.avatar || undefined, backgroundColor: agent.backgroundColor }
+                  ? {
+                      avatar: agent.avatar || undefined,
+                      backgroundColor: agent.backgroundColor,
+                      id: agentId,
+                    }
                   : undefined
               }
             />

@@ -4,47 +4,41 @@ import {
   type MenuInfo,
   type MenuItemType,
 } from '@lobehub/ui';
-import {
-  ActionIcon,
-  confirmModal,
-  createStaticStyles,
-  DropdownMenu,
-  Icon,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, confirmModal, DropdownMenu, Icon, toast } from '@lobehub/ui';
 import { MoreVertical, PencilLine, Plus, Settings2, Trash, UsersRound } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MemberSelectionModal } from '@/components/MemberSelectionModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { useSessionStore } from '@/store/session';
+import { useHomeStore } from '@/store/home';
 
-const styles = createStaticStyles(({ css }) => ({
-  modalRoot: css`
-    z-index: 2000;
-  `,
-}));
+import { useCreateAgent } from '../../useCreateAgent';
+
 interface ActionsProps extends Pick<DropdownMenuProps, 'onOpenChange'> {
   id?: string;
   isCustomGroup?: boolean;
   isPinned?: boolean;
   openConfigModal: () => void;
   openRenameModal?: () => void;
+  visibility?: 'private' | 'public';
 }
 
 const Actions = memo<ActionsProps>(
-  ({ id, openRenameModal, openConfigModal, onOpenChange, isCustomGroup, isPinned }) => {
+  ({ id, visibility, openRenameModal, openConfigModal, onOpenChange, isCustomGroup, isPinned }) => {
     const { t } = useTranslation(['chat', 'common']);
 
     const isMobile = useIsMobile();
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
-    const [createSession, removeSessionGroup] = useSessionStore((s) => [
-      s.createSession,
-      s.removeSessionGroup,
+    const { create, loading, allowed: canCreate, reason: createReason } = useCreateAgent();
+    const { allowed: canEdit } = usePermission('edit_own_content');
+    const [removeSessionGroup, refreshAgentList] = useHomeStore((s) => [
+      s.removeGroup,
+      s.refreshAgentList,
     ]);
 
     const [createGroup] = useAgentGroupStore((s) => [s.createGroup]);
@@ -61,26 +55,30 @@ const Actions = memo<ActionsProps>(
 
     const newAgentPublicItem: MenuItemType = {
       icon: <Icon icon={Plus} />,
+      disabled: !canCreate || loading,
       key: 'newAgent',
       label: t('newAgent'),
+      title: createReason,
       onClick: async ({ domEvent }: MenuInfo) => {
         domEvent.stopPropagation();
         const creatingToast = toast.loading(t('sessionGroup.creatingAgent'));
-
-        await createSession({ group: id, pinned: isPinned });
-
-        creatingToast.close();
-        toast.success(t('sessionGroup.createAgentSuccess'));
+        try {
+          const result = await create({ groupId: id, pinned: isPinned, visibility });
+          if (result && !result.hasWarnings) toast.success(t('sessionGroup.createAgentSuccess'));
+        } finally {
+          creatingToast.close();
+        }
       },
     };
 
     const newGroupChatItem: MenuItemType = {
       icon: <Icon icon={UsersRound} />,
+      disabled: !canCreate,
       key: 'newGroupChat',
       label: t('newGroupChat'),
       onClick: ({ domEvent }: MenuInfo) => {
         domEvent.stopPropagation();
-        setIsGroupModalOpen(true);
+        if (canCreate) setIsGroupModalOpen(true);
       },
     };
 
@@ -90,6 +88,7 @@ const Actions = memo<ActionsProps>(
       enableSupervisor?: boolean,
     ) => {
       try {
+        if (!canCreate || isCreatingGroup) return;
         setIsCreatingGroup(true);
 
         const config: any = {};
@@ -107,9 +106,13 @@ const Actions = memo<ActionsProps>(
           {
             config: Object.keys(config).length > 0 ? config : undefined,
             title: 'New Group Chat',
+            groupId: id,
+            pinned: isPinned,
+            visibility,
           },
           selectedAgents,
         );
+        await refreshAgentList();
         setIsGroupModalOpen(false);
       } catch (error) {
         console.error('Failed to create group:', error);
@@ -123,65 +126,61 @@ const Actions = memo<ActionsProps>(
       setIsGroupModalOpen(false);
     };
 
-    const customGroupItems: DropdownItem[] = useMemo(
-      () => [
-        {
-          icon: <Icon icon={PencilLine} />,
-          key: 'rename',
-          label: t('sessionGroup.rename'),
-          onClick: ({ domEvent }: MenuInfo) => {
-            domEvent.stopPropagation();
-            openRenameModal?.();
-          },
+    const customGroupItems: DropdownItem[] = [
+      {
+        icon: <Icon icon={PencilLine} />,
+        disabled: !canEdit,
+        key: 'rename',
+        label: t('sessionGroup.rename'),
+        onClick: ({ domEvent }: MenuInfo) => {
+          domEvent.stopPropagation();
+          openRenameModal?.();
         },
-        sessionGroupConfigPublicItem,
-        {
-          type: 'divider',
+      },
+      sessionGroupConfigPublicItem,
+      {
+        type: 'divider',
+      },
+      {
+        danger: true,
+        icon: <Icon icon={Trash} />,
+        disabled: !canEdit,
+        key: 'delete',
+        label: t('delete', { ns: 'common' }),
+        onClick: ({ domEvent }: MenuInfo) => {
+          domEvent.stopPropagation();
+          confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('sessionGroup.confirmRemoveGroupAlert'),
+            okButtonProps: { danger: true },
+            okText: t('delete', { ns: 'common' }),
+            onOk: async () => {
+              if (!id) return;
+              await removeSessionGroup(id);
+            },
+            title: t('delete', { ns: 'common' }),
+          });
         },
-        {
-          danger: true,
-          icon: <Icon icon={Trash} />,
-          key: 'delete',
-          label: t('delete', { ns: 'common' }),
-          onClick: ({ domEvent }: MenuInfo) => {
-            domEvent.stopPropagation();
-            confirmModal({
-              cancelText: t('cancel', { ns: 'common' }),
-              content: t('sessionGroup.confirmRemoveGroupAlert'),
-              okButtonProps: { danger: true },
-              okText: t('delete', { ns: 'common' }),
-              onOk: async () => {
-                if (!id) return;
-                await removeSessionGroup(id);
-              },
-              title: t('delete', { ns: 'common' }),
-            });
-          },
-        },
-      ],
-      [],
-    );
-
-    const defaultItems: DropdownItem[] = useMemo(() => [sessionGroupConfigPublicItem], []);
-
-    const tailItems = useMemo(
-      () => (isCustomGroup ? customGroupItems : defaultItems),
-      [isCustomGroup, customGroupItems, defaultItems],
-    );
-
-    const menuItems = useMemo(() => {
-      return [newAgentPublicItem, newGroupChatItem, { type: 'divider' as const }, ...tailItems];
-    }, [newAgentPublicItem, newGroupChatItem, tailItems]);
+      },
+    ];
+    const tailItems = isCustomGroup ? customGroupItems : [sessionGroupConfigPublicItem];
+    const menuItems: DropdownItem[] = [
+      newAgentPublicItem,
+      newGroupChatItem,
+      { type: 'divider' },
+      ...tailItems,
+    ];
 
     return (
       <>
         <DropdownMenu items={menuItems} onOpenChange={onOpenChange}>
           <ActionIcon
-            active={isMobile ? true : false}
+            aria-label={t('more', { ns: 'common' })}
             icon={MoreVertical}
             loading={isCreatingGroup}
-            size={{ blockSize: 22, size: 16 }}
-            style={{ background: isMobile ? 'transparent' : '', marginRight: -8 }}
+            size={{ blockSize: isMobile ? 44 : 22, size: 16 }}
+            style={isMobile ? undefined : { marginRight: -8 }}
+            title={t('more', { ns: 'common' })}
             onClick={(e) => {
               e.stopPropagation();
             }}

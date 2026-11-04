@@ -11,7 +11,7 @@ import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
+import { settingsSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import ChatTransitionPreview from './ChatTransitionPreview';
 import HighlighterPreview from './HighlighterPreview';
@@ -21,6 +21,7 @@ import MermaidPreview from './MermaidPreview';
 const ChatAppearance = memo(() => {
   const { t } = useTranslation('setting');
   const { general } = useUserStore(settingsSelectors.currentSettings, isEqual);
+  const enablePasteAutoConvert = useUserStore(userGeneralSettingsSelectors.enablePasteAutoConvert);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const [savingKey, setSavingKey] = useState<string>();
@@ -118,6 +119,20 @@ const ChatAppearance = memo(() => {
                 ),
                 desc: <LinkIconPreview />,
                 label: t('settingChatAppearance.linkIcon.title'),
+                minWidth: undefined,
+              },
+              {
+                children: (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    {renderSaveHint('enablePasteAutoConvert')}
+                    <Switch
+                      checked={enablePasteAutoConvert}
+                      onChange={(checked) => handleChange('enablePasteAutoConvert', checked)}
+                    />
+                  </Flexbox>
+                ),
+                desc: t('settingChatAppearance.pasteAutoConvert.desc'),
+                label: t('settingChatAppearance.pasteAutoConvert.title'),
                 minWidth: undefined,
               },
             ],

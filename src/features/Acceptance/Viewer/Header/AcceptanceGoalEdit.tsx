@@ -23,6 +23,8 @@ const AcceptanceGoalEdit = () => {
    * never offers an action that is guaranteed to answer `NOT_FOUND`.
    */
   if (!data?.isOwner) return null;
+  const subjectType = data.subject.type;
+  if (subjectType === 'site') return null;
 
   const handleEdit = async () => {
     const { openGoalModal } =
@@ -31,7 +33,7 @@ const AcceptanceGoalEdit = () => {
       initialGoal: data.acceptance.requirement ?? undefined,
       onSubmit: async (goal) => {
         try {
-          await verifyService.saveAcceptanceGoal(data.subject.type, data.subject.id, goal);
+          await verifyService.saveAcceptanceGoal(subjectType, data.subject.id, goal);
         } catch (cause) {
           toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
           throw cause;
