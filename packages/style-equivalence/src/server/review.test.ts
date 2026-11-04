@@ -104,7 +104,32 @@ beforeAll(async () => {
   });
   await write('mutation.json', { passed: true });
   await write('calibration.json', []);
-  await write('evidence.json', {});
+  await write('evidence.json', {
+    'src/A.tsx|A#0': {
+      declarations: {
+        base: { 'styles.a': 'a: css`\n    color: black;\n    padding: 4px;\n  `' },
+        head: { 'styles.a': "a: {\n    color: 'red',\n    padding: '4px',\n  }" },
+      },
+      elements: {
+        base: [
+          {
+            bindings: [{ expr: 'styles.a', prop: 'className', spread: false }],
+            literalProps: {},
+            slots: ['styles.a'],
+            tag: 'span',
+          },
+        ],
+        head: [
+          {
+            bindings: [{ expr: 'stylex.props(styles.a)', prop: '...', spread: true }],
+            literalProps: {},
+            slots: ['styles.a'],
+            tag: 'span',
+          },
+        ],
+      },
+    },
+  });
   server = await startServer({ runDir });
 });
 
@@ -137,6 +162,21 @@ describe('review API', () => {
     const difference = payload.items.find((entry: any) => entry.key === 'src/A.tsx|A#0');
     expect(difference.summary).toEqual(['文字颜色 black → red']);
     expect(difference.canPass).toBe(false);
+    expect(difference.styles.blocks).toEqual([
+      {
+        rows: [
+          { after: ['color: red'], before: ['color: black'], differs: true, label: 'color' },
+          { after: ['padding: 4px'], before: ['padding: 4px'], differs: false, label: 'padding' },
+        ],
+        slot: 'a',
+      },
+    ]);
+    expect(difference.styles.source.head['styles.a']).toContain("color: 'red'");
+    expect(difference.styles.usage).toEqual({
+      base: ['<span className={styles.a}>'],
+      head: ['<span {...stylex.props(styles.a)}>'],
+    });
+    expect(variable.styles).toEqual({ blocks: [], source: {}, usage: {} });
     expect(payload.items.find((entry: any) => entry.key === 'src/A.tsx|A#2').state).toBe(
       'waiting-agent',
     );

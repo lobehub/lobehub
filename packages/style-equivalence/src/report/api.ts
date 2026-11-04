@@ -163,6 +163,14 @@ export interface ReviewView {
   note?: { finding: string; suggestion: 'pass' | 'rework' };
   rework?: { at: string; note: string; reviewer: string };
   state: ReviewState;
+  styles: {
+    blocks: Array<{
+      rows: Array<{ after: string[]; before: string[]; differs: boolean; label: string }>;
+      slot: string;
+    }>;
+    source: Partial<Record<'base' | 'head', Record<string, string>>>;
+    usage: Partial<Record<'base' | 'head', string[]>>;
+  };
   summary: string[];
   title: string;
 }

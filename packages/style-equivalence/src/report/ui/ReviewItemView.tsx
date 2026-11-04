@@ -1,10 +1,9 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { useEffect, useState } from 'react';
 
-import { cropShotUrl, fetchRun, type ReviewView, type RunPayload } from '../api';
+import { cropShotUrl, type ReviewView } from '../api';
 import { reviewGrid } from '../review';
-import { CaseView } from './CaseView';
+import { StyleDetails } from './StyleDetails';
 
 const styles = stylex.create({
   agent: {
@@ -36,7 +35,6 @@ const styles = stylex.create({
     padding: 12,
   },
   colHead: { color: cssVar.colorTextTertiary, fontSize: 12, paddingInlineStart: 4 },
-  details: { color: cssVar.colorTextSecondary, fontSize: 13, marginBlockStart: 20 },
   diff: { borderColor: cssVar.colorError, boxShadow: `0 0 0 3px ${cssVar.colorErrorBg}` },
   error: { color: cssVar.colorError },
   grid: { alignItems: 'stretch', columnGap: 16, display: 'grid', rowGap: 12 },
@@ -94,18 +92,6 @@ const Pair = ({
     ))}
   </div>
 );
-
-const Details = ({ caseKey }: { caseKey: string }) => {
-  const [run, setRun] = useState<RunPayload>();
-  useEffect(() => {
-    fetchRun().then(setRun);
-  }, []);
-  return (
-    <section {...stylex.props(styles.details)}>
-      {run ? <CaseView caseKey={caseKey} payload={run} /> : null}
-    </section>
-  );
-};
 
 const AgentNote = ({ item }: { item: ReviewView }) =>
   item.note ? (
@@ -187,7 +173,7 @@ export const ReviewItemView = ({
           ))}
         </div>
       )}
-      {item.category !== 'unpaired' && <Details caseKey={item.key} />}
+      <StyleDetails item={item} />
     </section>
   );
 };

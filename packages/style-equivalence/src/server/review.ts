@@ -2,6 +2,7 @@ import type { StyleElement } from '../extract';
 import type { Combo } from '../plan/combos';
 import { isIntrinsicTag, PASS_THROUGH_VARIABLES } from '../plan/planFile';
 import { askSentence, comboLabel, differenceSummary } from '../report/plain';
+import { declarationBlocks } from '../review/declarations';
 import {
   elementSignature,
   passRecord,
@@ -36,6 +37,49 @@ interface CaseEntry {
   };
 }
 
+interface CaseEvidence {
+  declarations?: Partial<Record<'base' | 'head', Record<string, string>>>;
+  elements?: Partial<
+    Record<'base' | 'head', Array<{ bindings: StyleElement['bindings']; tag: string }>>
+  >;
+}
+
+const usageOf = (element: { bindings: StyleElement['bindings']; tag: string }) => {
+  const props = element.bindings.map((binding) =>
+    binding.spread ? `{...${binding.expr}}` : `${binding.prop}={${binding.expr}}`,
+  );
+  return `<${[element.tag, ...props].join(' ')}>`;
+};
+
+const stylesOf = (entry: CaseEntry | undefined, evidence: CaseEvidence | undefined) => {
+  const causes = [
+    ...(entry?.result?.rootCauses ?? []),
+    ...(entry?.result?.comboDifferences ?? []).flatMap((difference) => difference.rootCauses),
+  ];
+  const source = Object.fromEntries(
+    (['base', 'head'] as const).flatMap((side) => {
+      const declarations = evidence?.declarations?.[side];
+      return declarations && Object.keys(declarations).length ? [[side, declarations]] : [];
+    }),
+  );
+  return {
+    blocks: evidence?.declarations
+      ? declarationBlocks(
+          evidence.declarations.base,
+          evidence.declarations.head,
+          causes.map((cause) => cause.property),
+        )
+      : [],
+    source,
+    usage: Object.fromEntries(
+      (['base', 'head'] as const).flatMap((side) => {
+        const chain = evidence?.elements?.[side];
+        return chain?.length ? [[side, chain.map(usageOf)]] : [];
+      }),
+    ),
+  };
+};
+
 type Extractions = Record<string, Partial<Record<'base' | 'head', { elements: StyleElement[] }>>>;
 
 const elementFor = (stored: StoredRun, key: string, entry: CaseEntry | undefined) => {
@@ -67,7 +111,12 @@ const contextOf = (stored: StoredRun) => {
   return { cases, combos, elements, signatures };
 };
 
-const describe = (item: ReviewItem, entry: CaseEntry | undefined, element?: StyleElement) => {
+const describe = (
+  item: ReviewItem,
+  entry: CaseEntry | undefined,
+  element?: StyleElement,
+  evidence?: CaseEvidence,
+) => {
   const component = element && !isIntrinsicTag(element.tag) ? element.tag : undefined;
   const binding = element?.bindings[0];
   const variables = [
@@ -96,6 +145,7 @@ const describe = (item: ReviewItem, entry: CaseEntry | undefined, element?: Styl
     component,
     differingConditions: entry?.result?.differingConditions ?? [],
     errors: entry?.result?.errors ?? [],
+    styles: stylesOf(entry, evidence),
     summary: differenceSummary(entry?.result?.rootCauses ?? []),
     title: titleOf(item.key, element),
   };
@@ -124,7 +174,12 @@ export const reviewState = async (stored: StoredRun) => {
 export const reviewPayload = async (stored: StoredRun) => {
   const { context, items, reviews, verdict } = await reviewState(stored);
   const views = items.map((item) =>
-    describe(item, context.cases.get(item.key), context.elements.get(item.key)),
+    describe(
+      item,
+      context.cases.get(item.key),
+      context.elements.get(item.key),
+      stored.evidence[item.key] as CaseEvidence | undefined,
+    ),
   );
   const resolved = [...reviews.reworks.values()].filter((rework) => rework.resolvedAt);
   return {
