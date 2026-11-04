@@ -1798,7 +1798,7 @@ When I am ___, I need ___
   'storageOverage.consent.onlyOverage': 'Only overage is charged',
   'storageOverage.consent.rate':
     'About {{limitedMonthlyRate}}/GB/month for a limited time (regular {{regularMonthlyRate}}).',
-  'storageOverage.consent.title': 'Enable Storage Pay-as-you-go',
+  'storageOverage.consent.title': 'Enable storage pay-as-you-go',
   'storageOverage.mobileManaged.desc':
     'Your plan was purchased in an app store, so storage pay-as-you-go cannot be enabled here. Manage this subscription where you bought it.',
   'storageOverage.currentPlanLocked.desc':
@@ -1819,7 +1819,7 @@ When I am ___, I need ___
   'storageOverage.disabled': 'Storage pay-as-you-go disabled.',
   'storageOverage.enableFailed': 'Failed to enable storage pay-as-you-go.',
   'storageOverage.enabled': 'Storage pay-as-you-go enabled.',
-  'storageOverage.monthlyCap': 'Monthly Spending Cap',
+  'storageOverage.monthlyCap': 'Monthly spending cap',
   'storageOverage.monthlyCapDesc':
     'Leave empty for unlimited. Uploads will be blocked when the cap is reached.',
   'storageOverage.noPaymentMethod': 'Please add a payment method to enable storage pay-as-you-go.',
@@ -1829,7 +1829,7 @@ When I am ___, I need ___
   // what actually differs is restated: what it is, what it costs, and what
   // stops when it is turned off. Everything else — consent terms, cap,
   // payment-method prompt — is shared word for word.
-  'storageOverage.sandbox.title': 'Sandbox Storage Pay-as-you-go',
+  'storageOverage.sandbox.title': 'Sandbox storage pay-as-you-go',
   'storageOverage.sandbox.desc':
     "Bill for sandbox workspace storage beyond your plan's included size, instead of stopping at it.",
   'storageOverage.sandbox.rate': 'About {{regularMonthlyRate}}/GB/month.',
@@ -1839,12 +1839,12 @@ When I am ___, I need ___
   'storageOverage.subscriptionRequired.action': 'View plans',
   'storageOverage.subscriptionRequired.desc':
     'Subscribe to a plan to enable storage pay-as-you-go for overage usage.',
-  'storageOverage.title': 'File Storage Pay-as-you-go',
+  'storageOverage.title': 'File storage pay-as-you-go',
   'storageOverage.toggle': 'Enable overage billing',
   'storageOverage.unlimited': 'Unlimited',
   'storageOverage.usage.current': 'Usage',
   'storageOverage.usage.estimatedCharge': 'Est. Cycle Charge',
-  'storageOverage.usage.incurredCharge': 'Incurred This Cycle',
+  'storageOverage.usage.incurredCharge': 'Incurred this cycle',
   'storageOverage.usage.overage': 'Overage',
   'sync.device.deviceName.hint': 'Add a name for easy identification',
   'sync.device.deviceName.placeholder': 'Enter device name',
@@ -2154,9 +2154,9 @@ When I am ___, I need ___
   'workspace.billingPage.billing.breakdown.platform': 'Platform fee',
   'workspace.billingPage.billing.breakdown.product': 'Product',
   'workspace.billingPage.billing.breakdown.quantity': 'Quantity',
-  'workspace.billingPage.billing.breakdown.seatCount_one': '{{count}} Seat',
-  'workspace.billingPage.billing.breakdown.seatCount_other': '{{count}} Seats',
-  'workspace.billingPage.billing.breakdown.totalCost': 'Total Cost',
+  'workspace.billingPage.billing.breakdown.seatCount_one': '{{count}} seat',
+  'workspace.billingPage.billing.breakdown.seatCount_other': '{{count}} seats',
+  'workspace.billingPage.billing.breakdown.totalCost': 'Total cost',
   'workspace.billingPage.billing.breakdown.unitPrice': 'Price',
   'workspace.billingPage.billing.cancelConfirm':
     'Subscription will keep running until the end of the current billing cycle, then stop renewing. You can resume at any time before the cycle ends.',
@@ -2341,7 +2341,7 @@ When I am ___, I need ___
   'workspace.billingPage.billing.invoice.tab.open': 'Unpaid',
   'workspace.billingPage.billing.invoice.tab.paid': 'Paid',
   'workspace.billingPage.billing.invoice.title': 'Billing history',
-  'workspace.billingPage.billing.manage.cancelItem': 'Cancel Subscription',
+  'workspace.billingPage.billing.manage.cancelItem': 'Cancel subscription',
   'workspace.billingPage.billing.manage.cta': 'Manage',
   'workspace.billingPage.billing.manage.downgradeItem': 'Downgrade',
   'workspace.billingPage.billing.manage.payOnceUpgradeItem': 'Upgrade plan',
@@ -2416,7 +2416,7 @@ When I am ___, I need ___
   'workspace.billingPage.credits.hero.resetsIn_one': 'Resets in {{count}} day',
   'workspace.billingPage.credits.hero.resetsIn_other': 'Resets in {{count}} days',
   'workspace.billingPage.credits.hero.resetsToday': 'Resets today',
-  'workspace.billingPage.credits.hero.seePlans': 'See Plans',
+  'workspace.billingPage.credits.hero.seePlans': 'See plans',
   'workspace.billingPage.credits.hero.title': 'Usage pool',
   'workspace.billingPage.credits.hero.usedLabel': 'Used',
   'workspace.billingPage.credits.hero.viewUsage': 'View detailed usage',
@@ -2425,7 +2425,7 @@ When I am ___, I need ___
   'workspace.billingPage.credits.packageId': 'Package',
   'workspace.billingPage.credits.packageLimit': 'Allowance',
   'workspace.billingPage.credits.packageSpend': 'Used',
-  'workspace.billingPage.credits.packages.empty.cta': 'See Plans',
+  'workspace.billingPage.credits.packages.empty.cta': 'See plans',
   'workspace.billingPage.credits.packages.empty.title':
     'No add-on packages yet. Upgrade via Plans or contact sales for extra capacity.',
   'workspace.billingPage.credits.packages.cost': 'Cost',
@@ -2472,7 +2472,7 @@ When I am ___, I need ___
   'workspace.billingPage.credits.topUp.selectPackage': 'Select a top-up pack',
   'workspace.billingPage.credits.topUp.subtitle':
     'Add balance to this workspace with a one-time purchase',
-  'workspace.billingPage.credits.topUp.title': 'Top Up',
+  'workspace.billingPage.credits.topUp.title': 'Top up',
   'workspace.billingPage.credits.topUp.total': 'Total',
   'workspace.billingPage.credits.topUp.unitPriceFormat': '${{price}} per $1 of balance',
   'workspace.billingPage.credits.topUp.upgradePlanName': 'Pro',
@@ -2485,7 +2485,7 @@ When I am ___, I need ___
     'Top up once and save a payment method to enable auto top-up.',
   'workspace.billingPage.credits.autoTopUp.noPaymentMethodHint':
     'No saved payment method. Set one up to enable auto top-up.',
-  'workspace.billingPage.credits.autoTopUp.purchaseCredits': 'Top Up',
+  'workspace.billingPage.credits.autoTopUp.purchaseCredits': 'Top up',
   'workspace.billingPage.credits.autoTopUp.setupPaymentMethod': 'Set up payment method',
   'workspace.billingPage.credits.autoTopUp.monthlyLimitReached':
     "This month's auto top-up has reached the cap; will resume next month.",
@@ -2504,6 +2504,7 @@ When I am ___, I need ___
   'workspace.billingPage.credits.autoTopUp.title': 'Auto top-up',
   'workspace.billingPage.credits.autoTopUp.validation.targetMustExceedThreshold':
     'Target balance must be greater than the trigger threshold.',
+  'workspace.billingPage.credits.autoTopUp.emptyTitle': 'Auto top-up is off',
   'workspace.billingPage.plans.cancelled': 'Pending cancellation',
   'workspace.billingPage.plans.billedYearly': '${{price}} billed yearly',
   'workspace.billingPage.plans.currentTag': 'Current plan',
@@ -2520,25 +2521,25 @@ When I am ___, I need ___
   'workspace.billingPage.plans.enterprise.features.customIntegration':
     'Custom integration & support',
   'workspace.billingPage.plans.enterprise.features.privateModels': 'Private models',
-  'workspace.billingPage.plans.enterprise.features.selfHostedProvider': 'Self-hosted Provider',
+  'workspace.billingPage.plans.enterprise.features.selfHostedProvider': 'Self-hosted provider',
   'workspace.billingPage.plans.enterprise.features.userManagement': 'User management',
   'workspace.billingPage.plans.enterprise.priceCaption': 'Tailored to your needs',
   'workspace.billingPage.plans.enterprise.priceText': 'Custom',
   'workspace.billingPage.plans.enterprise.tagline':
     'For teams that need private deployment or custom solutions',
-  'workspace.billingPage.plans.enterprise.title': 'Enterprise Edition',
+  'workspace.billingPage.plans.enterprise.title': 'Enterprise edition',
   'workspace.billingPage.plans.creditsHint':
     'Shared monthly pool · every seat draws from the same balance',
   'workspace.billingPage.plans.creditsTitle': 'Workspace usage',
   'workspace.billingPage.plans.creditsTooltip':
     'Workspace-wide monthly usage. Adding seats does NOT grow the pool — overage flows through AutoTopUp.',
   'workspace.billingPage.plans.capacityOnly': 'Up to {{max}} seats',
-  'workspace.billingPage.plans.compare.collaborationTitle': 'Collaboration & Management',
+  'workspace.billingPage.plans.compare.collaborationTitle': 'Collaboration & management',
   'workspace.billingPage.plans.compare.extraSeats': 'Additional seats',
   'workspace.billingPage.plans.compare.extraSeatsValue': '${{fee}} / seat / month',
   'workspace.billingPage.plans.compare.includedSeats': 'Included seats',
   'workspace.billingPage.plans.compare.maxSeats': 'Member capacity',
-  'workspace.billingPage.plans.compare.seatsTitle': 'Seats & Members',
+  'workspace.billingPage.plans.compare.seatsTitle': 'Seats & members',
   'workspace.billingPage.plans.compare.topUpPrice': 'On-demand top-up',
   'workspace.billingPage.plans.compare.topUpPriceValue': '${{price}} per $1 of balance',
   'workspace.billingPage.plans.downgradeToBasicCta': 'Downgrade',
@@ -2598,7 +2599,7 @@ When I am ___, I need ___
   'workspace.billingPage.usage.activity.viewAll': 'View all',
   'workspace.billingPage.usage.activity.viewAllTitle': 'All recent activity',
   'workspace.billingPage.usage.at': 'When',
-  'workspace.billingPage.usage.breakdownTitle': 'Usage Breakdown',
+  'workspace.billingPage.usage.breakdownTitle': 'Usage breakdown',
   'workspace.billingPage.usage.byMemberTitle': 'Spend by member',
   'workspace.billingPage.usage.byTypeTitle': 'Spend by category',
   'workspace.billingPage.usage.categories.chat': 'Chat',
@@ -2606,7 +2607,8 @@ When I am ___, I need ___
   'workspace.billingPage.usage.categories.imageGeneration': 'Image generation',
   'workspace.billingPage.usage.categories.tts': 'Text to speech',
   'workspace.billingPage.usage.categories.videoGeneration': 'Video generation',
-  'workspace.billingPage.usage.empty': 'No spend yet',
+  'workspace.billingPage.usage.empty':
+    'No spend yet. Spend appears here once members start using models.',
   'workspace.billingPage.usage.logsTitle': 'Recent activity',
   'workspace.billingPage.usage.member': 'Member',
   'workspace.billingPage.usage.member.moreMembers_one': '{{count}} more member',
@@ -3254,7 +3256,7 @@ When I am ___, I need ___
   'workspace.invitePage.invitedTo': '{{inviter}} invited you to join the workspace',
   'workspace.invitePage.memberLimitSubtitle':
     'This workspace is full. Ask an owner to adjust seats in Billing or remove a member before joining.',
-  'workspace.invitePage.memberLimitTitle': 'Workspace Is Full',
+  'workspace.invitePage.memberLimitTitle': 'Workspace is full',
   'workspace.invitePage.notFoundSubtitle':
     'This invitation link is invalid. Double-check the URL or ask the team owner to send a new one.',
   'workspace.invitePage.notFoundTitle': 'Invitation Not Found',
@@ -3267,10 +3269,10 @@ When I am ___, I need ___
   'workspace.invitePage.title': 'Workspace Invitation',
   'workspace.invitePage.viewerLimitSubtitle':
     'This workspace has reached its viewer limit. Ask an owner to free a viewer seat or upgrade the plan before joining.',
-  'workspace.invitePage.viewerLimitTitle': 'Viewer Limit Reached',
+  'workspace.invitePage.viewerLimitTitle': 'Viewer limit reached',
   'workspace.invitePage.workspaceLimitSubtitle':
     "You've reached the maximum of {{limit}} workspaces. Leave one before joining another.",
-  'workspace.invitePage.workspaceLimitTitle': 'Workspace Limit Reached',
+  'workspace.invitePage.workspaceLimitTitle': 'Workspace limit reached',
   'workspace.waitlistPage.badge': 'Workspace · Private Beta',
   'workspace.waitlistPage.createWorkspaceCta': 'Create workspace',
   'workspace.waitlistPage.enabledSubtitle': 'Workspace is already enabled for your account.',
@@ -3496,7 +3498,7 @@ When I am ___, I need ___
   'workspace.wizard.step2.confirmPurchase': 'Confirm purchase',
   'workspace.wizard.step2.createFailed': 'Failed to create workspace',
   'workspace.wizard.step2.details.description': "See what's included in your selected plan.",
-  'workspace.wizard.step2.details.title': 'Plan Details',
+  'workspace.wizard.step2.details.title': 'Plan details',
   'workspace.wizard.step2.createBasic': 'Create workspace',
   'workspace.wizard.step2.createFree': 'Create workspace',
   'workspace.wizard.step2.createdToast': 'Workspace {{name}} created.',
@@ -3505,7 +3507,7 @@ When I am ___, I need ___
   'workspace.wizard.step2.freeAgreement':
     'The Free plan has no monthly usage. Top-ups or AutoTopUp are billed only after you confirm them.',
   'workspace.wizard.step2.header.description': 'Each workspace is billed separately.',
-  'workspace.wizard.step2.header.title': 'Select Your Plan',
+  'workspace.wizard.step2.header.title': 'Select your plan',
   'workspace.wizard.step2.basicLimitReached':
     "You've reached the basic workspace limit ({{limit}}). Upgrade to Pro to create more.",
   'workspace.wizard.step2.freeLimitReached':

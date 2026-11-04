@@ -19,7 +19,6 @@
   "artifacts.deploy.outdated": "الإصدار الأقدم نشط",
   "artifacts.deploy.publish": "نشر",
   "artifacts.deploy.publishNewVersion": "نشر هذا الإصدار",
-  "artifacts.deploy.quotaUnavailable": "التحقق من حصة النشر غير متاح مؤقتًا. حاول مرة أخرى لاحقًا.",
   "artifacts.deploy.serviceOverloaded": "استضافة العناصر مؤقتًا محملة بشكل زائد. حاول النشر مرة أخرى قريبًا.",
   "artifacts.deploy.success": "تم النشر",
   "artifacts.deploy.writeInProgress": "هناك تغيير آخر في النشر قيد التنفيذ. حاول مرة أخرى قريبًا.",

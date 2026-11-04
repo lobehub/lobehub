@@ -259,6 +259,26 @@ describe('ModelDetailPanel pricing', () => {
     expect(container).not.toHaveTextContent('credits');
   });
 
+  it('writes the dollar sign on the prices shown while the section is collapsed', () => {
+    globalState.status.modelDetailPanelExpandedKeys = ['rating'];
+
+    try {
+      const { container } = render(
+        <ModelDetailPanel
+          enabledList={createEnabledList('lobehub', discountedTextPricing)}
+          model="test-model"
+          provider="lobehub"
+        />,
+      );
+
+      // Collapsed header: both the struck-through price and the current one carry the `$`
+      expect(container.querySelector('.originalPriceText')).toHaveTextContent('$5.00');
+      expect(container).toHaveTextContent('$2.50');
+    } finally {
+      globalState.status.modelDetailPanelExpandedKeys = ['pricing', 'rating'];
+    }
+  });
+
   it('renders the original branding price without repeating the unit suffix', () => {
     const { container } = render(
       <ModelDetailPanel

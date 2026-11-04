@@ -66,6 +66,13 @@ export default {
   'table.agentShareDesc':
     'Every model call a visitor of this share triggered, billed to your account.',
   'table.desc': 'Details of spend for text generation, embedding, image generation, etc.',
+  'table.empty.clearFilters': 'Clear filters',
+  'table.empty.description': 'Every request you run is listed here with its cost.',
+  'table.empty.filteredDescription': 'Try a different model, type, or date range.',
+  'table.empty.filteredTitle': 'No matching records',
+  'table.empty.title': 'No spend yet',
+  'table.error.description': 'Check your connection and try again.',
+  'table.error.title': "Couldn't load the breakdown",
   'table.filters.allTypes': 'All types',
   'table.filters.endDate': 'End date',
   'table.filters.reset': 'Reset',
