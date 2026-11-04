@@ -17,6 +17,17 @@ const [, uiRestrictedImportOptions] = restrictedImports.rules['no-restricted-imp
 
 const baseRestrictedImportOptions = {
   ...uiRestrictedImportOptions,
+  paths: [
+    ...uiRestrictedImportOptions.paths,
+    // Applies to tests and packages too: Vitest does not bundle, so a root import
+    // evaluates the whole re-export list in every test file that reaches it.
+    {
+      allowTypeImports: true,
+      message:
+        'The root entry re-exports every icon (~3,450 modules), which Vitest and the Vite dev server load one by one. Import each icon from "@icons-pack/react-simple-icons/icons/<Name>".',
+      name: '@icons-pack/react-simple-icons',
+    },
+  ],
   patterns: [
     ...(uiRestrictedImportOptions.patterns ?? []),
     {

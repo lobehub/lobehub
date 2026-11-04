@@ -13,7 +13,6 @@ import { createStore, Provider } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { cacheScope } from '@/libs/replica';
-import { channelService } from '@/services/channel';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 
 import { ArchivedNotice } from './ArchivedNotice';
@@ -99,7 +98,7 @@ const Timeline = ({
 
   useEffect(() => {
     if (threadId || sequence === undefined || before !== undefined) return;
-    void channelService
+    void channelActions
       .markRead(channelId, sequence)
       .catch((error: unknown) => console.error('Failed to mark Channel read', error));
   }, [channelId, threadId, sequence, before]);

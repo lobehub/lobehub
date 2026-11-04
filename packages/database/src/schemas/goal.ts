@@ -60,6 +60,10 @@ export const goals = pgTable(
 
     startedAt: timestamptz('started_at'),
     completedAt: timestamptz('completed_at'),
+    // Set when the user archives the goal (put away once it is done with:
+    // signed off or canceled); orthogonal to `status`, null = not archived.
+    // Archived goals drop out of every list unless one asks for them.
+    archivedAt: timestamptz('archived_at'),
 
     // Visibility (mirrors agent / task visibility). Workspace goals are
     // 'public' (every member sees them) or 'private' (only the creator does);

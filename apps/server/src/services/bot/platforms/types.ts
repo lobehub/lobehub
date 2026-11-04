@@ -569,8 +569,11 @@ export interface BotPlatformRuntimeContext {
  * `agent` locale namespace, shared with the runtime-status error codes.
  */
 export type BotCredentialErrorCode =
+  | 'application_mismatch'
   | 'application_not_found'
+  | 'bot_not_installed'
   | 'invalid_credentials'
+  | 'message_content_intent_disabled'
   | 'missing_credentials'
   | 'permission_denied'
   | 'rate_limited'

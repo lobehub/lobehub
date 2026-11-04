@@ -183,6 +183,7 @@ export type ChannelJobStatus = 'cancelled' | 'completed' | 'failed' | 'queued' |
 export type ChannelJobBlockCode =
   | 'device_approval_pending'
   | 'device_offline'
+  | 'device_required'
   | 'directory_locked'
   | 'member_busy'
   | 'unavailable'
@@ -264,11 +265,17 @@ export interface ChannelListItem {
   canDelete: boolean;
   createdAt: Date;
   id: string;
+  /** The newest main-channel message, cut for a preview; set by the Channel list. */
+  lastMessage?: { content: string; createdAt: Date } | null;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
   sequence: number;
   status: ChannelStatus;
   title: string;
+  /** Main-channel messages the caller has not read; set by the Channel list. */
+  unreadCount?: number;
+  /** Bumped by every new message, so it orders conversations by latest activity. */
+  updatedAt?: Date;
   workspaceId: string | null;
 }
 
