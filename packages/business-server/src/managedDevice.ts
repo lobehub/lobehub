@@ -2,7 +2,7 @@ import type { ManagedDevicePhase } from '@lobechat/types';
 
 /**
  * Managed cloud devices are devices the platform creates and runs in the
- * cloud. The open-source build has none: every default below answers as if
+ * cloud. The open-source build has none, so every default below answers as if
  * the capability does not exist. A deployment that offers managed devices
  * overrides this module through its own `@/business/server/...` mapping.
  */
@@ -10,7 +10,7 @@ import type { ManagedDevicePhase } from '@lobechat/types';
 /** Whose managed devices a call is about: a person, or a workspace they act in. */
 export interface ManagedDeviceScope {
   userId: string;
-  /** Set for a workspace device; omitted for a personal device. */
+  /** Set for a workspace device. Not set for a personal device. */
   workspaceId?: string;
 }
 
@@ -21,7 +21,7 @@ export interface ManagedDeviceProvider {
   listStates: (scope: ManagedDeviceScope) => Promise<Record<string, ManagedDevicePhase>>;
   /**
    * Ask a managed device to run. Resolves when the request is accepted, not
-   * when the device is online; callers watch device presence for that.
+   * when the device is online. Callers watch device presence for that.
    */
   wake: (scope: ManagedDeviceScope, deviceId: string) => Promise<void>;
 }
@@ -48,9 +48,9 @@ export type ManagedDeviceTokenResult =
 
 /**
  * Exchange a managed device's credentials for a short-lived connect token.
- * Sign it with `signManagedDeviceToken` (`@/libs/trpc/utils/internalJwt`): its
- * `purpose: MANAGED_DEVICE_JWT_PURPOSE` is what server login verifiers reject,
- * so a token signed any other way could pass as a user login.
+ * Sign the token with `signManagedDeviceToken` (`@/libs/trpc/utils/internalJwt`).
+ * Server login verifiers reject its `purpose`. A token signed in a different
+ * way can pass as a user login.
  */
 export const exchangeManagedDeviceToken = async (
   _request: ManagedDeviceTokenRequest,
@@ -68,11 +68,11 @@ export interface ManagedDeviceRemoval extends ManagedDeviceScope {
 /**
  * Called after a user removes a managed cloud device (`removeDevice`,
  * `removeWorkspaceDevice`), so the deployment can release whatever backs the
- * device. The row is already gone when this runs; a rejection is logged and
- * does not fail the removal. It runs inside the request, so return once the
- * release is recorded rather than when it completes.
+ * device. The row is already gone when this runs. A rejection is logged and
+ * does not fail the removal. It runs inside the request, so return when the
+ * release is recorded, not when it completes.
  *
- * Rows deleted any other way (a member leaving a workspace, a cascade from a
- * deleted user or workspace) do not call it; the deployment reconciles those.
+ * Rows deleted in other ways (a member leaves a workspace, a user or
+ * workspace is deleted) do not call it. The deployment reconciles those.
  */
 export const onManagedDeviceRemoved = async (_removal: ManagedDeviceRemoval): Promise<void> => {};

@@ -6,8 +6,8 @@ import type { DeviceItem } from '@/database/schemas';
 type RemovedDevice = Pick<DeviceItem, 'deviceId' | 'identitySource' | 'userId' | 'workspaceId'>;
 
 /**
- * Report each removed managed cloud device to the deployment. Runs after the
- * rows are deleted; a hook failure is logged and never fails the removal.
+ * Report each removed managed cloud device to the deployment. Call it after
+ * the rows are deleted. A hook failure is logged and never fails the removal.
  */
 export const reportManagedDevicesRemoved = async (
   removed: RemovedDevice[] | undefined,
