@@ -157,6 +157,21 @@ describe('connector slice replica', () => {
     expect(useToolStore.getState().agentConnectors.a1).toHaveLength(1);
   });
 
+  it('loads confirmed lists again for a caller that revalidates', async () => {
+    listQuery.mockResolvedValue([connector('c1')]);
+    listByAgentQuery.mockResolvedValue([connector('c1')]);
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+
+    listByAgentQuery.mockResolvedValue([connector('c1', 'needs_approval')]);
+    await useToolStore.getState().ensureConfirmedConnectors('a1', { revalidate: true });
+
+    expect(listQuery).toHaveBeenCalledTimes(2);
+    expect(listByAgentQuery).toHaveBeenCalledTimes(2);
+    expect(useToolStore.getState().agentConnectors.a1[0].tools[0].permission).toBe(
+      'needs_approval',
+    );
+  });
+
   it('does not count a list painted from storage as confirmed until the server answers', async () => {
     // A stored copy may hold permissions the server has since tightened
     await agentConnectorsResource.storage!.set(

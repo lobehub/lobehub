@@ -301,11 +301,18 @@ export class ConnectorActionImpl {
    * has, for callers that resolve an identifier the way an agent's runs do and
    * act on what they find (a view's tool-call policy, its resource read): the
    * base list, and `agentId`'s own tools if given. Joins a load in flight.
+   *
+   * `revalidate` loads them even when confirmed, for a caller that authorizes
+   * by them: a permission may have changed since, in another tab or by another
+   * workspace member.
    */
-  ensureConfirmedConnectors = async (agentId?: string): Promise<void> => {
+  ensureConfirmedConnectors = async (
+    agentId?: string,
+    { revalidate = false }: { revalidate?: boolean } = {},
+  ): Promise<void> => {
     const confirm = (key: string, load: () => Promise<void>) => {
       const id = `${cacheScope.get()}|${key}`;
-      if (this.#confirmed.has(id)) return;
+      if (!revalidate && this.#confirmed.has(id)) return;
       let loading = this.#confirming.get(id);
       if (!loading) {
         loading = load().finally(() => this.#confirming.delete(id));

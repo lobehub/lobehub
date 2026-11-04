@@ -198,7 +198,9 @@ describe('getAppToolCallPolicy', () => {
       agentTools.set('agt_1', new Map([['mail', connector('needs_approval')]]));
 
       expect(await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_1' })).toBe('confirm');
-      expect(toolStore.ensureConfirmedConnectors).toHaveBeenCalledWith('agt_1');
+      expect(toolStore.ensureConfirmedConnectors).toHaveBeenCalledWith('agt_1', {
+        revalidate: true,
+      });
     });
 
     it('uses the base connector once the agent turns out to have no copy of it', async () => {
@@ -213,6 +215,24 @@ describe('getAppToolCallPolicy', () => {
       toolStore.ensureConfirmedConnectors.mockRejectedValueOnce(new Error('offline'));
 
       expect(await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_1' })).toBe('confirm');
+    });
+
+    it('reloads the permissions for every call, asking when they changed since the view opened', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      connectors.set('mail', connector('auto'));
+      expect(await getAppToolCallPolicy('mail', 'send')).toBe('allow');
+
+      // Tightened elsewhere (another tab, another workspace member)
+      toolStore.ensureConfirmedConnectors.mockImplementationOnce(async () => {
+        connectors.set('mail', connector('needs_approval'));
+      });
+      expect(await getAppToolCallPolicy('mail', 'send')).toBe('confirm');
+
+      // Confirmed earlier, but unreachable now: the earlier answer can't waive approval
+      connectors.set('mail', connector('auto'));
+      toolStore.ensureConfirmedConnectors.mockRejectedValueOnce(new Error('offline'));
+      expect(await getAppToolCallPolicy('mail', 'send')).toBe('confirm');
+      expect(toolStore.ensureConfirmedConnectors).toHaveBeenCalledTimes(3);
     });
 
     it('asks while the only permissions it has were painted from storage', async () => {

@@ -79,9 +79,12 @@ export const resolveAppToolCallPolicy = ({
 const findToolIntervention = (
   identifier: string,
   toolName: string,
-  agentId?: string,
+  agentId: string | undefined,
+  /** The lists were just loaded from the server; if not, nothing here can waive approval. */
+  revalidated: boolean,
 ): { intervention?: unknown } | null => {
   const s = getToolStoreState();
+  const confirmed = revalidated && s.isConnectorListConfirmed(agentId);
 
   const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
   // Same routing as `mcpService.invokeMcpToolCall`
@@ -92,7 +95,7 @@ const findToolIntervention = (
     // Until the server confirms the lists, this row may be the base connector
     // standing in for the agent's stricter copy, or a stale copy painted from
     // storage: neither can waive approval, so ask.
-    if (!s.isConnectorListConfirmed(agentId)) return { intervention: 'required' };
+    if (!confirmed) return { intervention: 'required' };
     const tool = connector.tools.find((t) => t.toolName === toolName);
     // A tool only the model may call is refused before anyone is asked about it
     if (!tool || tool.permission === 'disabled' || !isSyncedMcpToolVisibleTo(tool, 'app')) {
@@ -126,7 +129,7 @@ const findToolIntervention = (
   // (syncPluginTools), applied as the conversation applies them
   // (patchManifestWithPermissions). Until the server confirms the lists they
   // may be stale or missing, so ask.
-  if (!s.isConnectorListConfirmed(agentId)) return { intervention: 'required' };
+  if (!confirmed) return { intervention: 'required' };
   const permission = connector?.tools.find((t) => t.toolName === toolName)?.permission;
   if (permission === 'disabled') return null;
   if (permission === 'needs_approval') return { intervention: 'required' };
@@ -140,16 +143,18 @@ const findToolIntervention = (
 };
 
 /**
- * Load the connector lists from the server first (the agent's own tools too),
- * so the policy and the call that follows resolve the connector the server
- * will run, under its current permissions. If they can't be loaded, the
- * policy asks.
+ * Load the connector lists from the server before every call (the agent's own
+ * tools too), so the policy and the call that follows resolve the connector
+ * the server will run, under its current permissions: one may have changed
+ * since the view opened. If they can't be loaded, the policy asks.
  */
-const ensureConfirmedConnectors = async (agentId: string | undefined) => {
+const revalidateConnectors = async (agentId: string | undefined): Promise<boolean> => {
   try {
-    await getToolStoreState().ensureConfirmedConnectors(agentId);
+    await getToolStoreState().ensureConfirmedConnectors(agentId, { revalidate: true });
+    return true;
   } catch (error) {
     console.warn('[MCPApp] failed to load the connectors for a view tool call:', error);
+    return false;
   }
 };
 
@@ -158,8 +163,8 @@ export const getAppToolCallPolicy = async (
   toolName: string,
   { agentId, toolArgs = {} }: { agentId?: string; toolArgs?: Record<string, unknown> } = {},
 ): Promise<AppToolCallPolicy> => {
-  await ensureConfirmedConnectors(agentId);
-  const tool = findToolIntervention(identifier, toolName, agentId);
+  const revalidated = await revalidateConnectors(agentId);
+  const tool = findToolIntervention(identifier, toolName, agentId, revalidated);
   if (!tool) return 'deny';
 
   const userState = getUserStoreState();
