@@ -4,6 +4,9 @@
  * verifier must reject them.
  */
 
+/** A managed cloud device's connect token. */
+export const MANAGED_DEVICE_JWT_PURPOSE = 'managed-device';
+
 /** A workspace device's connect token. */
 export const WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE = 'workspace-device-connect';
 

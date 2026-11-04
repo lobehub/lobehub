@@ -15,11 +15,7 @@ import { isAcceptanceReviewClient, isAcceptanceReviewIssued } from './acceptance
 
 const log = debug('oidc-jwt');
 
-/**
- * Purposes of tokens that only the device gateway accepts: a device's connect
- * token and the one-shot tunnel entry ticket. They are signed with the same
- * key as access tokens, so without this check each would pass as a login.
- */
+/** See `@lobechat/types` `deviceGatewayToken`: these tokens are not logins. */
 const DEVICE_GATEWAY_ONLY_PURPOSES = new Set<unknown>([
   MANAGED_DEVICE_JWT_PURPOSE,
   TUNNEL_ACCESS_JWT_PURPOSE,
