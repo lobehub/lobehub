@@ -28,13 +28,17 @@ import {
 import { executeDeviceOperation } from '@lobechat/local-file-shell/shell';
 import type { Command } from 'commander';
 
-import { createLambdaClient } from '../api/client';
-import { scheduleProactiveRefresh } from '../auth/proactiveRefresh';
-import { resolveToken } from '../auth/resolveToken';
-import { CLI_API_KEY_ENV } from '../constants/auth';
-import { CLI_CONNECT_SERVICE_NAME, CLI_DISPLAY_NAME, CLI_PRIMARY_BIN } from '../constants/identity';
-import { getCliInstallationPath } from '../daemon/installation';
-import { CliMaintenance } from '../daemon/maintenance';
+import { createLambdaClient } from '../../api/client';
+import { scheduleProactiveRefresh } from '../../auth/proactiveRefresh';
+import { resolveToken } from '../../auth/resolveToken';
+import { CLI_API_KEY_ENV } from '../../constants/auth';
+import {
+  CLI_CONNECT_SERVICE_NAME,
+  CLI_DISPLAY_NAME,
+  CLI_PRIMARY_BIN,
+} from '../../constants/identity';
+import { getCliInstallationPath } from '../../daemon/installation';
+import { CliMaintenance } from '../../daemon/maintenance';
 import {
   appendLog,
   getLogPath,
@@ -47,25 +51,25 @@ import {
   stopDaemon,
   stopDaemonAndWait,
   writeStatus,
-} from '../daemon/manager';
-import { listTasks } from '../daemon/taskRegistry';
-import { spawnHeteroAgentRun } from '../device/agentRun';
+} from '../../daemon/manager';
+import { listTasks } from '../../daemon/taskRegistry';
+import { spawnHeteroAgentRun } from '../../device/agentRun';
 import {
   describeDeviceGateway,
   describeDeviceGatewayFailure,
   rememberGatewayOverride,
   resolveCliDeviceGateway,
-} from '../device/gatewayEndpoint';
+} from '../../device/gatewayEndpoint';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
   registerWorkspaceDevice,
   resolveDeviceIdentity,
   resolveWorkspaceDeviceIdentity,
-} from '../device/register';
-import { collectSystemInfo, probeNativeRuntimes } from '../device/systemInfo';
-import { TerminalSessionManager } from '../device/terminal';
-import { cliVersion } from '../pkg';
+} from '../../device/register';
+import { collectSystemInfo, probeNativeRuntimes } from '../../device/systemInfo';
+import { TerminalSessionManager } from '../../device/terminal';
+import { cliVersion } from '../../pkg';
 import {
   CONNECT_RETRYABLE_EXIT_CODE,
   getWorkspaceFailureExitCode,
@@ -73,23 +77,27 @@ import {
   startConnectService,
   stopConnectService,
   uninstallConnectService,
-} from '../service/connect';
-import { getServiceRestartCommand, readConnectServices } from '../service/status';
+} from '../../service/connect';
+import { getServiceRestartCommand, readConnectServices } from '../../service/status';
 import {
   addWorkspaceEnrollment,
   loadOrCreateConnectionId,
   loadWorkspaceEnrollments,
   removeWorkspaceEnrollment,
   resolveDeviceMetricsBacklogPath,
-} from '../settings';
-import { executeToolCall } from '../tools';
-import { closeBrowserSessions, executeBrowserCall, resolveBrowserDevice } from '../tools/browser';
-import { executeComputerUseCall, resolveComputerUseDevice } from '../tools/computerUse';
-import { cleanupAllProcesses, getActiveShellCount } from '../tools/shell';
-import { log, setVerbose } from '../utils/logger';
-import { sweepLocalTraces } from '../utils/traceMaintenance';
-import { restartConnector } from './connectRestart';
-import { printConnectStatus } from './connectStatus';
+} from '../../settings';
+import { executeToolCall } from '../../tools';
+import {
+  closeBrowserSessions,
+  executeBrowserCall,
+  resolveBrowserDevice,
+} from '../../tools/browser';
+import { executeComputerUseCall, resolveComputerUseDevice } from '../../tools/computerUse';
+import { cleanupAllProcesses, getActiveShellCount } from '../../tools/shell';
+import { log, setVerbose } from '../../utils/logger';
+import { sweepLocalTraces } from '../../utils/traceMaintenance';
+import { restartConnector } from '../connectRestart';
+import { printConnectStatus } from '../connectStatus';
 
 /** Longest a clean stop waits to push pending device health samples. */
 const SHUTDOWN_METRICS_FLUSH_MS = 3000;
