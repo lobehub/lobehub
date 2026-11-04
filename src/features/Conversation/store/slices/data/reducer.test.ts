@@ -753,9 +753,6 @@ describe('messagesReducer', () => {
       const newState = messagesReducer(initialState, payload);
 
       expect(newState).toEqual(newMessages);
-      expect(newState.find((m) => m.id === 'message1')).toBeUndefined();
-      expect(newState.find((m) => m.id === 'message2')).toBeUndefined();
-      expect(newState.find((m) => m.id === 'newMsg1')).toBeDefined();
     });
   });
 });

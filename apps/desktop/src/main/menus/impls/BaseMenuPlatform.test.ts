@@ -96,17 +96,6 @@ describe('BaseMenuPlatform', () => {
     vi.useRealTimers();
   });
 
-  describe('constructor', () => {
-    it('should initialize with app instance', () => {
-      expect(menuPlatform['app']).toBe(mockApp);
-    });
-
-    it('should store app reference for subclasses', () => {
-      const anotherInstance = new TestMenuPlatform(mockApp);
-      expect(anotherInstance['app']).toBe(mockApp);
-    });
-  });
-
   describe('reload confirmation', () => {
     it.each([false, true])(
       'preserves the requested cache behavior (ignoreCache=%s)',

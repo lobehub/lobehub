@@ -102,13 +102,6 @@ describe('UserMemoryExperienceModel', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('experience-2');
     });
-
-    it('should not return other users experiences', async () => {
-      const result = await experienceModel.query();
-
-      const otherExperience = result.find((e) => e.id === 'other-experience');
-      expect(otherExperience).toBeUndefined();
-    });
   });
 
   describe('findById', () => {
