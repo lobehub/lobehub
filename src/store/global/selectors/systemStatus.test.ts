@@ -276,15 +276,15 @@ describe('systemStatusSelectors', () => {
         status: { sidebarItems: stored },
       });
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
-        // Defaults missing from a saved layout (here the newer `goals`,
-        // `dashboard` and `favorites`) are backfilled.
+        // Defaults missing from a saved layout (here the newer `project`,
+        // `goals`, `dashboard` and `favorites`) are backfilled.
+        'project',
         'goals',
         'dashboard',
         'favorites',
         'private',
         'agent',
         'recents',
-        'project',
         SIDEBAR_SPACER_ID,
         'pages',
         'tasks',
@@ -298,10 +298,10 @@ describe('systemStatusSelectors', () => {
     it('should preserve a canonically-positioned spacer', () => {
       const stored = [
         'pages',
+        'project',
         'goals',
         'dashboard',
         'favorites',
-        'project',
         'recents',
         'private',
         'agent',
@@ -339,11 +339,11 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         'tasks',
         'pages',
+        'project',
         'goals',
         'dashboard',
         'favorites',
         'recents',
-        'project',
         'private',
         'agent',
         SIDEBAR_SPACER_ID,
@@ -374,12 +374,13 @@ describe('systemStatusSelectors', () => {
       });
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         'tasks',
+        // Projects left the accordion for a link, so a saved layout lifts it next to Tasks.
+        'project',
         'goals',
         'dashboard',
         'resource',
         'favorites',
         'recents',
-        'project',
         'private',
         'agent',
         SIDEBAR_SPACER_ID,
@@ -387,6 +388,47 @@ describe('systemStatusSelectors', () => {
         'community',
         'memory',
       ]);
+    });
+
+    it('should lift projects above the accordion when tasks sit below the spacer', () => {
+      const stored = [
+        'goals',
+        'favorites',
+        'project',
+        'recents',
+        'agent',
+        SIDEBAR_SPACER_ID,
+        'tasks',
+        'image',
+      ];
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarItems: stored },
+      });
+      const items = systemStatusSelectors.sidebarItems(null)(s);
+      expect(items.slice(0, 3)).toEqual(['goals', 'project', 'dashboard']);
+      expect(items.indexOf('project')).toBeLessThan(items.indexOf('favorites'));
+    });
+
+    it('should keep projects where the user moved them outside the accordion', () => {
+      const stored = [
+        'tasks',
+        'goals',
+        'dashboard',
+        'resource',
+        'favorites',
+        'recents',
+        'private',
+        'agent',
+        SIDEBAR_SPACER_ID,
+        'image',
+        'project',
+        'community',
+        'memory',
+      ];
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarItems: stored },
+      });
+      expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual(stored);
     });
 
     it('should slot missing top-group defaults before the accordion block', () => {
@@ -401,12 +443,12 @@ describe('systemStatusSelectors', () => {
       expect(items).toContain('resource');
       expect(items).toContain('memory');
       // accordion block is flush against the spacer, in stored order
-      expect(items[spacerIdx - 3]).toBe('agent');
-      expect(items[spacerIdx - 2]).toBe('recents');
-      expect(items[spacerIdx - 1]).toBe('project');
+      expect(items[spacerIdx - 2]).toBe('agent');
+      expect(items[spacerIdx - 1]).toBe('recents');
       // missing top-group defaults slot in just before the accordion
-      expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 3);
-      expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 3);
+      expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 2);
+      expect(items.indexOf('project')).toBe(items.indexOf('tasks') + 1);
+      expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 2);
       // missing bottom-group defaults sit after the spacer
       expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
       // Pages live in Docs now; the retired entry is not backfilled
@@ -422,6 +464,7 @@ describe('systemStatusSelectors', () => {
       // the legacy state was saved) is backfilled at the head of the block.
       expect(items).toEqual([
         'tasks',
+        'project',
         'goals',
         'dashboard',
         'resource',
@@ -429,7 +472,6 @@ describe('systemStatusSelectors', () => {
         'private',
         'agent',
         'recents',
-        'project',
         SIDEBAR_SPACER_ID,
         'image',
         'community',
@@ -446,13 +488,13 @@ describe('systemStatusSelectors', () => {
       // backfilled at the head of the block; recents/agent keep legacy order.
       expect(items).toEqual([
         'tasks',
+        'project',
         'goals',
         'dashboard',
         'resource',
         'favorites',
         'private',
         'recents',
-        'project',
         'agent',
         SIDEBAR_SPACER_ID,
         'image',

@@ -8,6 +8,7 @@ import {
   ContextMenuTrigger,
   createStaticStyles,
   cssVar,
+  cx,
   type DropdownItem,
   DropdownMenu,
   Empty,
@@ -22,8 +23,10 @@ import dayjs from 'dayjs';
 import {
   FolderClosedIcon,
   MoreHorizontalIcon,
+  PencilIcon,
   PlusIcon,
   SearchXIcon,
+  StarIcon,
   TrashIcon,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -34,11 +37,13 @@ import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import { PROJECT_STATUS_VISUALS, resolveProjectStatus } from '@/components/ExecutionStatus';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
+import { useFavoriteMenuItem, useFavoriteToggle } from '@/features/Favorites';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
 import { createDeleteProjectModal } from '@/features/Projects/DeleteProjectModal';
 import ProjectDisabled from '@/features/Projects/ProjectDisabled';
+import { openRenameProjectModal } from '@/features/Projects/RenameProjectModal';
 import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
@@ -49,6 +54,7 @@ import type { ProjectListItem } from '@/store/project/store';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import { projectFavoriteTarget } from '../projectFavorite';
 import { resolveProjectListState } from '../projectListState';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -74,6 +80,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 0;
 
     color: inherit;
+  `,
+  favorited: css`
+    opacity: 1;
   `,
   owner: css`
     display: flex;
@@ -153,11 +162,43 @@ const ProjectCoordinatorAvatar = memo<{ project: ProjectListItem }>(({ project }
 
 ProjectCoordinatorAvatar.displayName = 'ProjectCoordinatorAvatar';
 
+/**
+ * Row star. Unlike `FavoriteButton` it does not take the favorite hotkey: the
+ * hotkey toggles the open page, not one row in a list.
+ */
+const ProjectFavoriteStar = memo<{ project: ProjectListItem }>(({ project }) => {
+  const { t } = useTranslation('common');
+  const { isFavorite, isReady, toggle } = useFavoriteToggle(projectFavoriteTarget(project));
+  const label = t(isFavorite ? 'favorite.remove' : 'favorite.add');
+
+  return (
+    // A favorited star stays visible so the row shows it is pinned.
+    <span className={cx(styles.actions, 'project-row-actions', isFavorite && styles.favorited)}>
+      <ActionIcon
+        aria-label={label}
+        aria-pressed={isFavorite}
+        color={isFavorite ? cssVar.colorWarning : undefined}
+        disabled={!isReady}
+        fill={isFavorite ? cssVar.colorWarning : 'none'}
+        icon={StarIcon}
+        size={'small'}
+        title={label}
+        onClick={() => void toggle()}
+      />
+    </span>
+  );
+});
+
+ProjectFavoriteStar.displayName = 'ProjectFavoriteStar';
+
 const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
   const { t } = useTranslation(['project', 'common']);
   const [deleting, setDeleting] = useState(false);
   const deleteProject = useProjectStore((s) => s.deleteProject);
-  const canDelete = useCanManageProject();
+  const canManage = useCanManageProject();
+  const favoriteMenuItem = useFavoriteMenuItem(projectFavoriteTarget(project), {
+    showHotkey: false,
+  });
   const status = resolveProjectStatus(project.status);
   const statusVisual = PROJECT_STATUS_VISUALS[status];
 
@@ -174,18 +215,30 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
   };
 
   const menuItems: DropdownItem[] = [
-    {
-      danger: true,
-      icon: <Icon icon={TrashIcon} />,
-      key: 'delete',
-      label: t('list.deleteAction'),
-      onClick: () => {
-        createDeleteProjectModal({
-          onConfirm: handleDelete,
-          project: { id: project.id, name: project.name },
-        });
-      },
-    },
+    ...(favoriteMenuItem ? [favoriteMenuItem] : []),
+    ...(canManage
+      ? ([
+          { type: 'divider' },
+          {
+            icon: <Icon icon={PencilIcon} />,
+            key: 'rename',
+            label: t('rename.action'),
+            onClick: () => openRenameProjectModal(project),
+          },
+          {
+            danger: true,
+            icon: <Icon icon={TrashIcon} />,
+            key: 'delete',
+            label: t('list.deleteAction'),
+            onClick: () => {
+              createDeleteProjectModal({
+                onConfirm: handleDelete,
+                project: { id: project.id, name: project.name },
+              });
+            },
+          },
+        ] satisfies DropdownItem[])
+      : []),
   ];
 
   const row = (
@@ -214,22 +267,21 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
           {dayjs(project.updatedAt).fromNow()}
         </Text>
       </WorkspaceLink>
-      {canDelete && (
-        <span className={`${styles.actions} project-row-actions`}>
-          <DropdownMenu items={menuItems} placement={'bottomRight'}>
-            <ActionIcon
-              icon={MoreHorizontalIcon}
-              loading={deleting}
-              size={'small'}
-              title={t('list.moreActions')}
-            />
-          </DropdownMenu>
-        </span>
-      )}
+      <ProjectFavoriteStar project={project} />
+      <span className={cx(styles.actions, 'project-row-actions')}>
+        <DropdownMenu items={menuItems} placement={'bottomRight'}>
+          <ActionIcon
+            icon={MoreHorizontalIcon}
+            loading={deleting}
+            size={'small'}
+            title={t('list.moreActions')}
+          />
+        </DropdownMenu>
+      </span>
     </Flexbox>
   );
 
-  return canDelete ? <ContextMenuTrigger items={menuItems}>{row}</ContextMenuTrigger> : row;
+  return <ContextMenuTrigger items={menuItems}>{row}</ContextMenuTrigger>;
 });
 
 ProjectRow.displayName = 'ProjectRow';
