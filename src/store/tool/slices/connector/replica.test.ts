@@ -144,15 +144,51 @@ describe('connector slice replica', () => {
     expect(useToolStore.getState().isConnectorsInit).toBe(false);
   });
 
-  it("loads an agent's own tools once, for callers that need them before acting", async () => {
+  it('loads the base and an agent list from the server once, for callers acting on them', async () => {
+    listQuery.mockResolvedValue([connector('c1')]);
     listByAgentQuery.mockResolvedValue([connector('c1', 'needs_approval')]);
 
-    await useToolStore.getState().ensureAgentConnectors('a1');
-    await useToolStore.getState().ensureAgentConnectors('a1');
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
 
+    expect(listQuery).toHaveBeenCalledTimes(1);
     expect(listByAgentQuery).toHaveBeenCalledTimes(1);
-    expect(useToolStore.getState().agentConnectorsInit.a1).toBe(true);
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(true);
     expect(useToolStore.getState().agentConnectors.a1).toHaveLength(1);
+  });
+
+  it('does not count a list painted from storage as confirmed until the server answers', async () => {
+    // A stored copy may hold permissions the server has since tightened
+    await agentConnectorsResource.storage!.set(
+      { queryKey: AGENT_STORAGE_KEY, scope },
+      { data: [connector('c1', 'auto')], updatedAt: 1 },
+    );
+    listQuery.mockResolvedValue([]);
+    let answer!: (rows: unknown[]) => void;
+    listByAgentQuery.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+
+    const ensured = useToolStore.getState().ensureConfirmedConnectors('a1');
+    await vi.waitFor(() => expect(useToolStore.getState().agentConnectorsInit.a1).toBe(true));
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(false);
+
+    answer([connector('c1', 'needs_approval')]);
+    await ensured;
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(true);
+    expect(useToolStore.getState().agentConnectors.a1[0].tools[0].permission).toBe(
+      'needs_approval',
+    );
+  });
+
+  it('leaves a list unconfirmed when the server fails, and tries again next time', async () => {
+    listQuery.mockResolvedValue([]);
+    listByAgentQuery.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(useToolStore.getState().ensureConfirmedConnectors('a1')).rejects.toThrow();
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(false);
+
+    listByAgentQuery.mockResolvedValueOnce([]);
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(true);
   });
 
   // These resources have no `useSync` mount: nothing re-renders them on a scope

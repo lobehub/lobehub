@@ -402,7 +402,7 @@ class MCPService {
     // base resolution below, as before.
     if (agentId) {
       try {
-        await s.ensureAgentConnectors(agentId);
+        await s.ensureConfirmedConnectors(agentId);
         s = getToolStoreState();
       } catch (error) {
         console.warn(`[MCPApp] failed to load the tools of agent ${agentId}:`, error);

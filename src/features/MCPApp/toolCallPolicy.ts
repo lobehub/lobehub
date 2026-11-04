@@ -89,11 +89,10 @@ const findToolIntervention = (
     connector?.isEnabled &&
     (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
   ) {
-    // Until the agent's own tools are known this is the base connector, while
-    // the server may run the agent's copy under stricter permissions: ask.
-    if (agentId && !connectorSelectors.isAgentConnectorsInit(agentId)(s)) {
-      return { intervention: 'required' };
-    }
+    // Until the server confirms the lists, this row may be the base connector
+    // standing in for the agent's stricter copy, or a stale copy painted from
+    // storage: neither can waive approval, so ask.
+    if (!s.isConnectorListConfirmed(agentId)) return { intervention: 'required' };
     const tool = connector.tools.find((t) => t.toolName === toolName);
     // A tool only the model may call is refused before anyone is asked about it
     if (!tool || tool.permission === 'disabled' || !isSyncedMcpToolVisibleTo(tool, 'app')) {
@@ -128,17 +127,16 @@ const findToolIntervention = (
 };
 
 /**
- * Load the agent's own tools first, so the policy and the call that follows
- * resolve the same connector the server will run. If they can't be loaded, the
+ * Load the connector lists from the server first (the agent's own tools too),
+ * so the policy and the call that follows resolve the connector the server
+ * will run, under its current permissions. If they can't be loaded, the
  * policy asks.
  */
-const ensureAgentConnectors = async (agentId: string | undefined) => {
-  if (!agentId) return;
-
+const ensureConfirmedConnectors = async (agentId: string | undefined) => {
   try {
-    await getToolStoreState().ensureAgentConnectors(agentId);
+    await getToolStoreState().ensureConfirmedConnectors(agentId);
   } catch (error) {
-    console.warn(`[MCPApp] failed to load the tools of agent ${agentId}:`, error);
+    console.warn('[MCPApp] failed to load the connectors for a view tool call:', error);
   }
 };
 
@@ -147,7 +145,7 @@ export const getAppToolCallPolicy = async (
   toolName: string,
   { agentId, toolArgs = {} }: { agentId?: string; toolArgs?: Record<string, unknown> } = {},
 ): Promise<AppToolCallPolicy> => {
-  await ensureAgentConnectors(agentId);
+  await ensureConfirmedConnectors(agentId);
   const tool = findToolIntervention(identifier, toolName, agentId);
   if (!tool) return 'deny';
 

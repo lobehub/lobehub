@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAppToolCallPolicy } from './toolCallPolicy';
 
 const { agentTools, connectors, plugins, toolStore, userIntervention } = vi.hoisted(() => {
-  // The agent's own connectors on the server, and which agents the client has loaded
+  // The agent's own connectors on the server, and which lists the server confirmed
   const agentTools = new Map<string, Map<string, unknown>>();
   const loaded = new Set<string>();
 
@@ -12,9 +12,12 @@ const { agentTools, connectors, plugins, toolStore, userIntervention } = vi.hois
     connectors: new Map<string, unknown>(),
     plugins: new Map<string, unknown>(),
     toolStore: {
-      ensureAgentConnectors: vi.fn(async (agentId: string) => {
-        loaded.add(agentId);
+      ensureConfirmedConnectors: vi.fn(async (agentId?: string) => {
+        loaded.add('#base');
+        if (agentId) loaded.add(agentId);
       }),
+      isConnectorListConfirmed: (agentId?: string) =>
+        loaded.has('#base') && (!agentId || loaded.has(agentId)),
       loaded,
     },
     userIntervention: { allowList: [] as string[], approvalMode: 'manual' },
@@ -35,7 +38,6 @@ vi.mock('@/store/tool/slices/connector', () => ({
     connectorByIdentifierForAgent: (id: string, agentId?: string) => () =>
       (agentId && toolStore.loaded.has(agentId) ? agentTools.get(agentId)?.get(id) : undefined) ??
       connectors.get(id),
-    isAgentConnectorsInit: (agentId: string) => () => toolStore.loaded.has(agentId),
   },
 }));
 
@@ -64,7 +66,7 @@ describe('getAppToolCallPolicy', () => {
     connectors.clear();
     plugins.clear();
     toolStore.loaded.clear();
-    toolStore.ensureAgentConnectors.mockClear();
+    toolStore.ensureConfirmedConnectors.mockClear();
     userIntervention.allowList = [];
     userIntervention.approvalMode = 'manual';
   });
@@ -158,7 +160,7 @@ describe('getAppToolCallPolicy', () => {
       agentTools.set('agt_1', new Map([['mail', connector('needs_approval')]]));
 
       expect(await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_1' })).toBe('confirm');
-      expect(toolStore.ensureAgentConnectors).toHaveBeenCalledWith('agt_1');
+      expect(toolStore.ensureConfirmedConnectors).toHaveBeenCalledWith('agt_1');
     });
 
     it('uses the base connector once the agent turns out to have no copy of it', async () => {
@@ -170,9 +172,18 @@ describe('getAppToolCallPolicy', () => {
     it("asks when the agent's tools can't be loaded rather than trust the base connector", async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {});
       connectors.set('mail', connector('auto'));
-      toolStore.ensureAgentConnectors.mockRejectedValueOnce(new Error('offline'));
+      toolStore.ensureConfirmedConnectors.mockRejectedValueOnce(new Error('offline'));
 
       expect(await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_1' })).toBe('confirm');
+    });
+
+    it('asks while the only permissions it has were painted from storage', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      // The stored list says auto; the server, which can't be reached, may say otherwise
+      connectors.set('mail', connector('auto'));
+      toolStore.ensureConfirmedConnectors.mockRejectedValueOnce(new Error('offline'));
+
+      expect(await getAppToolCallPolicy('mail', 'send')).toBe('confirm');
     });
   });
 

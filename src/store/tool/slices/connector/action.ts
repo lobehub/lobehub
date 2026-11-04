@@ -89,6 +89,9 @@ const fetchAgentBoundConnectorList = (): Promise<AgentBoundConnector[]> =>
 const fetchAgentConnectorList = ({ agentId }: { agentId: string }): Promise<ConnectorWithTools[]> =>
   lambdaClient.connector.listByAgent.query({ agentId }) as unknown as Promise<ConnectorWithTools[]>;
 
+/** The base connector list's entry among the server-confirmed lists */
+const BASE_LIST_KEY = '#base';
+
 export const createConnectorSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
   new ConnectorActionImpl(set, get, _api);
 
@@ -105,6 +108,9 @@ export class ConnectorActionImpl {
   /** One connector lives in the base list, the aggregate and per-agent buckets. */
   readonly #connectorRows;
   readonly #connectors;
+  /** `${scope}|${list}` entries the server answered in this session (not painted from storage) */
+  readonly #confirmed = new Set<string>();
+  readonly #confirming = new Map<string, Promise<void>>();
   readonly #get: () => ToolStore;
   readonly #set: Setter;
 
@@ -209,8 +215,12 @@ export class ConnectorActionImpl {
   fetchConnectors = async (): Promise<void> => {
     const scope = cacheScope.get();
     const pending = this.#connectors.fetch(LIST_PARAMS, { fresh: true });
-    if (!this.#get().isConnectorsInit) await this.#connectors.hydrate(LIST_PARAMS, scope);
-    await pending;
+    // Awaited together, so a request that fails while storage paints is still handled
+    const [, result] = await Promise.all([
+      this.#get().isConnectorsInit ? undefined : this.#connectors.hydrate(LIST_PARAMS, scope),
+      pending,
+    ]);
+    if (result.applied) this.#confirmed.add(`${scope}|${BASE_LIST_KEY}`);
   };
 
   /**
@@ -258,18 +268,51 @@ export class ConnectorActionImpl {
     const scope = cacheScope.get();
     const params = { agentId };
     const pending = this.#agentConnectors.fetch(params, { fresh: true });
-    if (!this.#get().agentConnectorsInit[agentId])
-      await this.#agentConnectors.hydrate(params, scope);
-    await pending;
+    // Awaited together, so a request that fails while storage paints is still handled
+    const [, result] = await Promise.all([
+      this.#get().agentConnectorsInit[agentId]
+        ? undefined
+        : this.#agentConnectors.hydrate(params, scope),
+      pending,
+    ]);
+    if (result.applied) this.#confirmed.add(`${scope}|${agentId}`);
   };
 
   /**
-   * Load an agent's own tools unless they are loaded already, for callers that
-   * must resolve an identifier the way that agent's runs do before acting on it.
+   * Whether the base connector list (and `agentId`'s own, if given) came from
+   * the server in this cache scope. A list painted from storage is not: its
+   * permissions may be stale, so nothing that authorizes a call may trust it.
    */
-  ensureAgentConnectors = async (agentId: string): Promise<void> => {
-    if (this.#get().agentConnectorsInit[agentId]) return;
-    await this.fetchAgentConnectors(agentId);
+  isConnectorListConfirmed = (agentId?: string): boolean => {
+    const scope = cacheScope.get();
+    return (
+      this.#confirmed.has(`${scope}|${BASE_LIST_KEY}`) &&
+      (!agentId || this.#confirmed.has(`${scope}|${agentId}`))
+    );
+  };
+
+  /**
+   * Load the connector lists from the server unless this cache scope already
+   * has, for callers that resolve an identifier the way an agent's runs do and
+   * act on what they find (a view's tool-call policy, its resource read): the
+   * base list, and `agentId`'s own tools if given. Joins a load in flight.
+   */
+  ensureConfirmedConnectors = async (agentId?: string): Promise<void> => {
+    const confirm = (key: string, load: () => Promise<void>) => {
+      const id = `${cacheScope.get()}|${key}`;
+      if (this.#confirmed.has(id)) return;
+      let loading = this.#confirming.get(id);
+      if (!loading) {
+        loading = load().finally(() => this.#confirming.delete(id));
+        this.#confirming.set(id, loading);
+      }
+      return loading;
+    };
+
+    await Promise.all([
+      confirm(BASE_LIST_KEY, this.fetchConnectors),
+      agentId ? confirm(agentId, () => this.fetchAgentConnectors(agentId)) : undefined,
+    ]);
   };
 
   /** Copy a user connector into an agent-owned, independently editable row. */
