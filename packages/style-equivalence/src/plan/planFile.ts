@@ -1,8 +1,14 @@
 import type { FileExtraction, StyleElement, VariableKind } from '../extract';
-import { mergeKinds } from '../extract/identifiers';
+import { mergeKinds, valueIdentifiers } from '../extract/identifiers';
 import { type Combo, combosFor } from './combos';
+import { bindKnobs, parseExpression } from './knobs';
 import { alignElements } from './pair';
-import { isIntrinsicTag, placementPreserved } from './placement';
+import {
+  isIntrinsicTag,
+  placementPreserved,
+  sharedConditions,
+  type SideProperties,
+} from './placement';
 
 export { isIntrinsicTag } from './placement';
 
@@ -29,6 +35,7 @@ export interface PlanCase {
   file: string;
   flags: string[];
   key: string;
+  knobs?: string[];
   variables: PlanVariable[];
 }
 
@@ -51,6 +58,34 @@ export const chainOf = (element: StyleElement, byId: Map<string, StyleElement>) 
     current = current.parent ? byId.get(current.parent) : undefined;
   }
   return chain;
+};
+
+const boundWithoutVariables = (chain: StyleElement[], knobs: string[]) =>
+  chain.every((element) => {
+    const names = new Set(
+      element.variables
+        .map((variable) => variable.name)
+        .filter((name) => !PASS_THROUGH_VARIABLES.has(name)),
+    );
+    const before = new Set<string>();
+    const unbound = element.bindings.every((binding) => {
+      const original = parseExpression(binding.expr);
+      const bound = bindKnobs(binding.expr, knobs);
+      const parsed = bound === undefined ? undefined : parseExpression(bound);
+      if (!original || !parsed) return false;
+      valueIdentifiers(original.expression).forEach((name) => before.add(name));
+      return [...valueIdentifiers(parsed.expression)].every((name) => !names.has(name));
+    });
+    return unbound && [...names].every((name) => before.has(name));
+  });
+
+const conditionKnobs = (chains: Record<Side, StyleElement[]>, properties: SideProperties) => {
+  const knobs = sharedConditions(chains.base, chains.head, properties);
+  return knobs &&
+    boundWithoutVariables(chains.base, knobs) &&
+    boundWithoutVariables(chains.head, knobs)
+    ? knobs
+    : undefined;
 };
 
 const groupByOwner = (elements: StyleElement[]) => {
@@ -100,12 +135,14 @@ export const planFile = (
         flags.add('PLACEMENT_NEUTRAL_PROP');
       item.flags.forEach((flag) => flags.add(flag));
     }
+    const structural = flags.size > 0;
+    const properties = { base: base.slotProperties, head: head.slotProperties };
     const evidence: string[] = [];
     if (
       (flags.has('PLACEMENT_SUBSTITUTED') || flags.has('PLACEMENT_NEUTRAL_PROP')) &&
       placementPreserved(chains.base, chains.head, {
         layoutComponents: config.layoutComponents,
-        properties: { base: base.slotProperties, head: head.slotProperties },
+        properties,
       })
     ) {
       flags.delete('PLACEMENT_SUBSTITUTED');
@@ -121,16 +158,21 @@ export const planFile = (
           entry.kinds[side] = mergeKinds([entry.kinds[side] ?? variable.kind, variable.kind]);
           variables.set(variable.name, entry);
         }
+    const sorted = [...variables.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const unmodeled = sorted.some((variable) => Object.values(variable.kinds).includes('unknown'));
+    const knobs = unmodeled && !structural ? conditionKnobs(chains, properties) : undefined;
     const modeled: PlanVariable[] = [];
-    for (const variable of [...variables.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-      if (Object.values(variable.kinds).includes('unknown')) {
-        flags.add('VARIABLE_UNMODELED');
-        continue;
+    if (knobs) evidence.push('CONDITION_KNOBS');
+    else
+      for (const variable of sorted) {
+        if (Object.values(variable.kinds).includes('unknown')) {
+          flags.add('VARIABLE_UNMODELED');
+          continue;
+        }
+        if (!variable.kinds.base || !variable.kinds.head) flags.add('ASYMMETRIC_CONDITION');
+        modeled.push(variable);
       }
-      if (!variable.kinds.base || !variable.kinds.head) flags.add('ASYMMETRIC_CONDITION');
-      modeled.push(variable);
-    }
-    const { combos, pairwise } = combosFor(modeled.map((variable) => variable.name));
+    const { combos, pairwise } = combosFor(knobs ?? modeled.map((variable) => variable.name));
     if (pairwise) flags.add('COMBINATIONS_PAIRWISE');
     return {
       combos,
@@ -139,6 +181,7 @@ export const planFile = (
       file,
       flags: [...flags].sort(),
       key: `${file}|${left.id}`,
+      ...(knobs ? { knobs } : {}),
       variables: modeled,
     };
   });

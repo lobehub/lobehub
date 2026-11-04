@@ -57,6 +57,17 @@ const extraction: FileExtraction = {
     element('C#0', 'span', 'cx(PILL[attrs.kind] ?? styles.b, attrs.meta.color && styles.c)', {
       variables: [{ kind: 'unknown', name: 'attrs' }],
     }),
+    element(
+      'K#0',
+      'span',
+      "cx(styles.a, state.kind === 'x' ? styles.b : state.kind !== 'y' && styles.c)",
+      {
+        variables: [{ kind: 'unknown', name: 'state' }],
+      },
+    ),
+    element('K#1', 'span', 'cx(styles.a,', {
+      variables: [{ kind: 'unknown', name: 'state' }],
+    }),
     element('B#0', 'SortableList.Item', 'styles.a', {
       bindings: [
         { expr: 'styles.a', prop: 'className', spread: false },
@@ -101,6 +112,24 @@ const plan: FilePlan = {
       file: 'a.tsx',
       flags: ['VARIABLE_UNMODELED'],
       key: 'a.tsx|C#0',
+      variables: [],
+    },
+    {
+      combos: [],
+      elementIds: { base: 'K#0', head: 'K#0' },
+      file: 'a.tsx',
+      flags: [],
+      key: 'a.tsx|K#0',
+      knobs: ["state.kind === 'x'", "state.kind !== 'y'"],
+      variables: [],
+    },
+    {
+      combos: [],
+      elementIds: { base: 'K#1', head: 'K#1' },
+      file: 'a.tsx',
+      flags: [],
+      key: 'a.tsx|K#1',
+      knobs: ["state.kind === 'x'"],
       variables: [],
     },
     {
@@ -157,6 +186,20 @@ describe('generateModule', () => {
     expect(render(cases['a.tsx|C#0']({}))).toContain('class="b c"');
   });
 
+  it('binds each condition knob so every branch renders', async () => {
+    const { cases } = await load();
+    const knob = (x: boolean, y: boolean) =>
+      render(cases['a.tsx|K#0']({ "state.kind !== 'y'": y, "state.kind === 'x'": x }));
+    expect(knob(true, false)).toContain('class="a b"');
+    expect(knob(false, true)).toContain('class="a c"');
+    expect(knob(false, false)).toContain('class="a"');
+  });
+
+  it('fails a knob case it cannot bind instead of rendering it unbound', async () => {
+    const { cases } = await load();
+    expect(() => cases['a.tsx|K#1']({})).toThrow('KNOB_UNBOUND');
+  });
+
   it('substitutes non-layout components with a div and renders neutral props as children', async () => {
     const { cases } = await load();
     expect(render(cases['a.tsx|B#0']({}))).toBe(
@@ -171,14 +214,17 @@ describe('CaseList', () => {
     const fullPlan = [
       {
         ...plan,
-        cases: plan.cases.map((entry) => ({
-          ...entry,
-          combos: entry.key === 'a.tsx|A#0' ? [{ isDragging: false }, { isDragging: true }] : [{}],
-        })),
+        cases: plan.cases
+          .filter((entry) => entry.key !== 'a.tsx|K#1')
+          .map((entry) => ({
+            ...entry,
+            combos:
+              entry.key === 'a.tsx|A#0' ? [{ isDragging: false }, { isDragging: true }] : [{}],
+          })),
       },
     ];
     const all = render(createElement(CaseList, { modules: { 'a.tsx': mod }, plan: fullPlan }));
-    expect(all.match(/data-case=/g)).toHaveLength(5);
+    expect(all.match(/data-case=/g)).toHaveLength(6);
     expect(all).toContain('data-case="a.tsx|A#0|1"');
     const one = render(
       createElement(CaseList, {
@@ -196,10 +242,13 @@ describe('CaseList', () => {
     const fullPlan = [
       {
         ...plan,
-        cases: plan.cases.map((entry) => ({
-          ...entry,
-          combos: entry.key === 'a.tsx|A#0' ? [{ isDragging: false }, { isDragging: true }] : [{}],
-        })),
+        cases: plan.cases
+          .filter((entry) => entry.key !== 'a.tsx|K#1')
+          .map((entry) => ({
+            ...entry,
+            combos:
+              entry.key === 'a.tsx|A#0' ? [{ isDragging: false }, { isDragging: true }] : [{}],
+          })),
       },
     ];
     const selection = readSelection(`?cases=${encodeURIComponent(JSON.stringify(['a.tsx|A#0']))}`);

@@ -1,4 +1,5 @@
-import type { FileExtraction, LiteralValue, StyleElement } from '../extract';
+import type { FileExtraction, LiteralValue, StyleBinding, StyleElement } from '../extract';
+import { bindKnobs } from '../plan/knobs';
 import { chainOf, type FilePlan, isIntrinsicTag, type Side } from '../plan/planFile';
 
 export const SAMPLE_TEXT = 'Ag 文本 Text';
@@ -23,7 +24,11 @@ const renderLiteral = (name: string, value: LiteralValue) =>
     ? `${name}=${JSON.stringify(value)}`
     : `${name}={${JSON.stringify(value)}}`;
 
-const renderChain = (chain: StyleElement[], layout: Set<string>): string => {
+const renderChain = (
+  chain: StyleElement[],
+  layout: Set<string>,
+  exprOf: (binding: StyleBinding) => string,
+): string => {
   const [element, ...rest] = chain;
   const tag = placementTag(element, layout);
   const substituted = tag !== element.tag;
@@ -32,13 +37,16 @@ const renderChain = (chain: StyleElement[], layout: Set<string>): string => {
     if (keepLiteral(name, substituted)) attributes.push(renderLiteral(name, value));
   const neutral: string[] = [];
   for (const binding of element.bindings) {
-    if (binding.spread) attributes.push(`{...(${binding.expr})}`);
-    else if (binding.prop === 'className') attributes.push(`className={${binding.expr}}`);
-    else neutral.push(`{__neutral(${JSON.stringify(binding.prop)}, ${binding.expr})}`);
+    const expr = exprOf(binding);
+    if (binding.spread) attributes.push(`{...(${expr})}`);
+    else if (binding.prop === 'className') attributes.push(`className={${expr}}`);
+    else neutral.push(`{__neutral(${JSON.stringify(binding.prop)}, ${expr})}`);
   }
   const open = `<${tag} ${attributes.join(' ')}`;
   if (VOID_TAGS.has(tag)) return `<>${open} />${neutral.join('')}</>`;
-  const inner = rest.length ? renderChain(rest, layout) : `{${JSON.stringify(SAMPLE_TEXT)}}`;
+  const inner = rest.length
+    ? renderChain(rest, layout, exprOf)
+    : `{${JSON.stringify(SAMPLE_TEXT)}}`;
   return `${open}>${inner}${neutral.join('')}</${tag}>`;
 };
 
@@ -69,6 +77,17 @@ export const generateModule = (
     if (!element)
       return `${JSON.stringify(entry.key)}: () => { throw new Error('CASE_ELEMENT_MISSING'); }`;
     const chain = chainOf(element, byId);
+    const { knobs } = entry;
+    const bound = new Map<StyleBinding, string | undefined>(
+      chain.flatMap((item) =>
+        item.bindings.map((binding) => [
+          binding,
+          knobs ? bindKnobs(binding.expr, knobs) : binding.expr,
+        ]),
+      ),
+    );
+    if ([...bound.values()].includes(undefined))
+      return `${JSON.stringify(entry.key)}: () => { throw new Error('KNOB_UNBOUND'); }`;
     const declared = new Set<string>();
     const lines: string[] = [];
     for (const variable of entry.variables) {
@@ -97,7 +116,7 @@ export const generateModule = (
             : `const ${variable.name} = ${readThrough(variable.name) ? '__opaque' : 'undefined'};`,
         );
       }
-    return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean>) => { ${lines.join(' ')} return (${renderChain(chain, layout)}); }`;
+    return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean>) => { ${lines.join(' ')} return (${renderChain(chain, layout, (binding) => bound.get(binding)!)}); }`;
   });
   return [
     extraction.prelude,

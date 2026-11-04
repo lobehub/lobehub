@@ -1,6 +1,7 @@
 import ts from 'typescript';
 
 import type { StyleBinding, StyleElement } from '../extract';
+import { knobText } from './knobs';
 import { propertiesOverlap } from './properties';
 
 type Canonical = { entries: Record<string, Canonical> } | { terms: string[] };
@@ -14,6 +15,7 @@ interface Unit {
 }
 
 interface Context {
+  atoms: string[];
   depth: number;
   joins: Array<Array<Set<string>>>;
   unit: Unit;
@@ -140,9 +142,12 @@ function termsOf(raw: ts.Expression, ctx: Context): string[] | undefined {
   if (
     ts.isBinaryExpression(node) &&
     node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
-  )
+  ) {
+    ctx.atoms.push(knobText(unwrap(node.left)));
     return prefixed(node.right, `${compact(node.left)}&&`, ctx);
+  }
   if (ts.isConditionalExpression(node)) {
+    ctx.atoms.push(knobText(unwrap(node.condition)));
     const condition = compact(node.condition);
     const whenTrue = prefixed(node.whenTrue, `${condition}?`, ctx);
     const whenFalse = prefixed(node.whenFalse, `${condition}:`, ctx);
@@ -164,6 +169,7 @@ const joinsDisjoint = (joins: Context['joins'], properties: SlotProperties | und
 const canonicalOf = (
   raw: ts.Expression,
   properties: SlotProperties | undefined,
+  atoms: string[],
   spread = false,
 ): Canonical | undefined => {
   const node = unwrap(raw);
@@ -177,14 +183,14 @@ const canonicalOf = (
       if (!ts.isPropertyAssignment(property)) return undefined;
       const { name } = property;
       if (!ts.isIdentifier(name) && !ts.isStringLiteral(name)) return undefined;
-      const value = canonicalOf(property.initializer, properties);
+      const value = canonicalOf(property.initializer, properties, atoms);
       if (!value) return undefined;
       entries[name.text] = value;
     }
     return { entries };
   }
   const unit = newUnit();
-  const ctx: Context = { depth: 0, joins: [], unit, units: [unit] };
+  const ctx: Context = { atoms, depth: 0, joins: [], unit, units: [unit] };
   const terms =
     spread && ts.isCallExpression(node) && isStylexProps(node)
       ? propsTerms(node, ctx)
@@ -196,15 +202,15 @@ const canonicalOf = (
   return merged && joinsDisjoint(ctx.joins, properties) ? { terms } : undefined;
 };
 
-const normalize = (binding: StyleBinding, properties?: SlotProperties) => {
+const normalize = (binding: StyleBinding, properties?: SlotProperties, atoms: string[] = []) => {
   const expression = parse(binding.expr);
   if (!expression) return undefined;
   if (binding.spread) {
     if (!isStylexProps(expression)) return undefined;
-    const value = canonicalOf(expression, properties, true);
+    const value = canonicalOf(expression, properties, atoms, true);
     return value && { prop: 'className', value };
   }
-  const value = canonicalOf(expression, properties);
+  const value = canonicalOf(expression, properties, atoms);
   return value && { prop: binding.prop, value };
 };
 
@@ -226,7 +232,7 @@ const sameElement = (base: StyleElement, head: StyleElement, properties: SidePro
   });
 };
 
-type SideProperties = Partial<Record<'base' | 'head', SlotProperties>>;
+export type SideProperties = Partial<Record<'base' | 'head', SlotProperties>>;
 
 export interface PlacementOptions {
   layoutComponents?: string[];
@@ -255,4 +261,30 @@ export const placementPreserved = (
         : true;
     })
   );
+};
+
+const canonicalChain = (chain: StyleElement[], properties: SlotProperties | undefined) => {
+  const atoms: string[] = [];
+  const elements = [];
+  for (const element of chain) {
+    const bindings = [];
+    for (const binding of element.bindings) {
+      const value = normalize(binding, properties, atoms);
+      if (!value) return undefined;
+      bindings.push(value);
+    }
+    elements.push({ bindings, tag: element.tag });
+  }
+  return { atoms: [...new Set(atoms)], shape: sortedJson(elements) };
+};
+
+export const sharedConditions = (
+  base: StyleElement[],
+  head: StyleElement[],
+  properties: SideProperties = {},
+) => {
+  const left = canonicalChain(base, properties.base);
+  const right = canonicalChain(head, properties.head);
+  if (!left || !right || left.shape !== right.shape) return undefined;
+  return sortedJson(left.atoms) === sortedJson(right.atoms) ? left.atoms : undefined;
 };
