@@ -28,6 +28,7 @@ import {
 import { sendAppMessage } from './sendAppMessage';
 import { getAppToolCallPolicy } from './toolCallPolicy';
 import { APP_IFRAME_ALLOW, buildAppCsp, pickAppResource, toCallToolResult } from './utils';
+import { restoreMediaForView } from './viewToolResult';
 
 const DEFAULT_HEIGHT = 320;
 const MAX_HEIGHT = 2000;
@@ -270,9 +271,12 @@ const McpAppView = memo<McpAppViewProps>(
           }
         },
         toolInput: () => safeParseJSON(latest.current.args || '{}') ?? {},
+        // The chat stored this result's media as uploads; the view reads base64
         toolResult: () => {
           const { result: toolResult } = latest.current;
-          return toCallToolResult({ ...toolResult, success: !toolResult.state?.isError });
+          return restoreMediaForView(
+            toCallToolResult({ ...toolResult, success: !toolResult.state?.isError }),
+          );
         },
       });
       bridgeRef.current = bridge;

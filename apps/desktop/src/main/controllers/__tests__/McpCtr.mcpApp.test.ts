@@ -211,6 +211,18 @@ describe('McpCtr MCP Apps', () => {
     expect(client.isToolCallableByApp).not.toHaveBeenCalled();
   });
 
+  it('reads stored MCP media back as base64, and nothing outside its folder', async () => {
+    const getFile = vi.fn().mockResolvedValue({ content: new Uint8Array([104, 105]).buffer });
+    Object.defineProperty(ctr, 'fileService', { get: () => ({ getFile }) });
+
+    await expect(ctr.readStoredMcpMedia('desktop://mcp/image/2026/a.png')).resolves.toBe('aGk=');
+    expect(getFile).toHaveBeenCalledWith('desktop://mcp/image/2026/a.png');
+
+    await expect(ctr.readStoredMcpMedia('desktop://files/secret.txt')).rejects.toThrow();
+    await expect(ctr.readStoredMcpMedia('desktop://mcp/../files/secret.txt')).rejects.toThrow();
+    expect(getFile).toHaveBeenCalledTimes(1);
+  });
+
   it('reads ui:// resources over IPC and refuses other URIs', async () => {
     const client = makeClient();
     mcpClientMocks.mockReturnValue(client);

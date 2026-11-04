@@ -523,6 +523,22 @@ export default class McpCtr extends ControllerModule {
     return client;
   }
 
+  /**
+   * Media an MCP tool returned, as this desktop stored it for the chat, back
+   * as base64 for the result's MCP App view, which reads `data` as base64.
+   * Only files under the MCP media folder can be read.
+   */
+  @IpcMethod()
+  async readStoredMcpMedia(storedPath: string): Promise<string> {
+    const normalized = storedPath.replace(/^desktop:\/+/, 'desktop://');
+    if (!normalized.startsWith('desktop://mcp/') || normalized.split('/').includes('..')) {
+      throw new Error('Only stored MCP media can be read');
+    }
+
+    const { content } = await this.fileService.getFile(normalized);
+    return Buffer.from(content).toString('base64');
+  }
+
   private async uploadMcpMediaBlock(base64: string, mediaType: MediaContentType, mimeType: string) {
     const config = MEDIA_UPLOAD_CONFIG[mediaType];
     const ext = getFileExtensionFromMimeType(mimeType, mediaType);

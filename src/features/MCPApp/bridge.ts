@@ -39,7 +39,8 @@ export interface McpAppBridgeHost {
    */
   sendMessage: (text: string, signal: AbortSignal) => Promise<boolean | void> | boolean | void;
   toolInput: () => Record<string, unknown>;
-  toolResult: () => CallToolResult;
+  /** The result the view renders; may resolve later (stored media is read back first). */
+  toolResult: () => CallToolResult | Promise<CallToolResult>;
 }
 
 /**
@@ -80,7 +81,7 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
 
   const handleInitialized = () => {
     void bridge.sendToolInput({ arguments: host.toolInput() });
-    void bridge.sendToolResult(host.toolResult());
+    void Promise.resolve(host.toolResult()).then((result) => bridge.sendToolResult(result));
   };
 
   bridge.addEventListener('sizechange', handleSizeChange);
