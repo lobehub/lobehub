@@ -48,9 +48,9 @@ export type ManagedDeviceTokenResult =
 
 /**
  * Exchange a managed device's credentials for a short-lived connect token.
- * The issued token must carry `purpose: MANAGED_DEVICE_JWT_PURPOSE` (from
- * `@lobechat/types`): server login verifiers reject exactly that purpose, so a
- * token without it would pass as a user login.
+ * Sign it with `signManagedDeviceToken` (`@/libs/trpc/utils/internalJwt`): its
+ * `purpose: MANAGED_DEVICE_JWT_PURPOSE` is what server login verifiers reject,
+ * so a token signed any other way could pass as a user login.
  */
 export const exchangeManagedDeviceToken = async (
   _request: ManagedDeviceTokenRequest,

@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 
 import { MANAGED_DEVICE_JWT_PURPOSE } from '@lobechat/types';
-import { SignJWT } from 'jose';
+import { decodeJwt, decodeProtectedHeader, SignJWT } from 'jose';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 const { authEnvMock } = vi.hoisted(() => ({
@@ -28,27 +28,44 @@ describe('validateOIDCJWT token purposes', () => {
     });
   });
 
-  it('rejects a personal managed device token as a login', async () => {
+  it('signs a personal managed device token and rejects it as a login', async () => {
     const { validateOIDCJWT } = await import('./jwt');
-    const token = await sign(
-      { device_id: 'managed-device-1', purpose: MANAGED_DEVICE_JWT_PURPOSE },
-      'user-1',
-    );
+    const { signManagedDeviceToken } = await import('@/libs/trpc/utils/internalJwt');
+    const { expiresAt, token } = await signManagedDeviceToken({
+      deviceId: 'managed-device-1',
+      expiresIn: 3600,
+      sub: 'user-1',
+    });
+    const claims = decodeJwt(token);
 
+    expect(decodeProtectedHeader(token)).toEqual({ alg: 'RS256', kid });
+    expect(claims).toMatchObject({
+      device_id: 'managed-device-1',
+      purpose: MANAGED_DEVICE_JWT_PURPOSE,
+      sub: 'user-1',
+    });
+    expect(claims).not.toHaveProperty('workspace_id');
+    expect(claims.exp! - claims.iat!).toBe(3600);
+    expect(expiresAt).toBe(new Date(claims.exp! * 1000).toISOString());
     await expect(validateOIDCJWT(token)).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 
-  it('rejects a workspace managed device token as a login', async () => {
+  it('signs a workspace managed device token and rejects it as a login', async () => {
     const { validateOIDCJWT } = await import('./jwt');
-    const token = await sign(
-      {
-        device_id: 'managed-device-1',
-        purpose: MANAGED_DEVICE_JWT_PURPOSE,
-        workspace_id: 'workspace-1',
-      },
-      'workspace-1',
-    );
+    const { signManagedDeviceToken } = await import('@/libs/trpc/utils/internalJwt');
+    const { token } = await signManagedDeviceToken({
+      deviceId: 'managed-device-1',
+      expiresIn: 3600,
+      sub: 'workspace-1',
+      workspaceId: 'workspace-1',
+    });
 
+    expect(decodeJwt(token)).toMatchObject({
+      device_id: 'managed-device-1',
+      purpose: MANAGED_DEVICE_JWT_PURPOSE,
+      sub: 'workspace-1',
+      workspace_id: 'workspace-1',
+    });
     await expect(validateOIDCJWT(token)).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 
