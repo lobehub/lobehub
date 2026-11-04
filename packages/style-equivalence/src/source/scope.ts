@@ -74,6 +74,7 @@ const resolveSpecifier = (from: string, specifier: string, aliases: Record<strin
     if (specifier.startsWith(prefix))
       target = path.posix.join(directory, specifier.slice(prefix.length));
   if (!target) return [];
+  target = target.replace(/\/+$/, '');
   return [target, `${target}.ts`, `${target}.tsx`, `${target}/index.ts`, `${target}/index.tsx`];
 };
 
@@ -110,12 +111,17 @@ export const resolveScope = async ({
     }
   }
 
-  const stems = [
-    ...new Set([...styleModules].map((file) => path.posix.basename(file).replace(/\.[^.]+$/, ''))),
-  ];
+  const stems = new Set<string>();
+  for (const file of styleModules) {
+    const stem = path.posix.basename(file).replace(/\.[^.]+$/, '');
+    stems.add(stem);
+    if (stem === 'index') stems.add(path.posix.basename(path.posix.dirname(file)));
+  }
   const candidates = new Set<string>();
-  if (stems.length) {
-    const pattern = `['"/](${stems.map(escapeRegex).join('|')})(\\.[a-z]+)?['"]`;
+  if (stems.size) {
+    const forms = [`['"/](${[...stems].map(escapeRegex).join('|')})(\\.[a-z]+|/)?['"]`];
+    if (stems.has('index')) forms.push(`['"]\\.\\.?/?['"]`);
+    const pattern = forms.join('|');
     let output = '';
     try {
       output = await git(repo, ['grep', '-l', '-E', pattern, head, '--', '*.tsx']);
