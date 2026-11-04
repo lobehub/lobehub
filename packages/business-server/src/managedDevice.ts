@@ -1,0 +1,52 @@
+import type { ManagedDevicePhase } from '@lobechat/types';
+
+/**
+ * Managed cloud devices are devices the platform creates and runs in the
+ * cloud. The open-source build has none: every default below answers as if
+ * the capability does not exist. A deployment that offers managed devices
+ * overrides this module through its own `@/business/server/...` mapping.
+ */
+
+/** Whose managed devices a call is about: a person, or a workspace they act in. */
+export interface ManagedDeviceScope {
+  userId: string;
+  /** Set for a workspace device; omitted for a personal device. */
+  workspaceId?: string;
+}
+
+export interface ManagedDeviceProvider {
+  /** Whether this deployment offers managed cloud devices at all. */
+  isAvailable: () => boolean;
+  /** Phases of the caller's managed devices, keyed by `devices.deviceId`. */
+  listStates: (scope: ManagedDeviceScope) => Promise<Record<string, ManagedDevicePhase>>;
+  /**
+   * Ask a managed device to run. Resolves when the request is accepted, not
+   * when the device is online; callers watch device presence for that.
+   */
+  wake: (scope: ManagedDeviceScope, deviceId: string) => Promise<void>;
+}
+
+export const managedDeviceProvider: ManagedDeviceProvider = {
+  isAvailable: () => false,
+  listStates: async () => ({}),
+  wake: async () => {},
+};
+
+/** Credentials a managed device presents to get its device-gateway token. */
+export interface ManagedDeviceTokenRequest {
+  deviceId: string;
+  secret: string;
+}
+
+export type ManagedDeviceTokenResult =
+  /** `expiresAt` is an RFC 3339 timestamp. */
+  | { expiresAt: string; status: 'issued'; token: string }
+  /** The device does not exist or the secret does not match. */
+  | { status: 'invalid-credentials' }
+  /** This deployment does not offer managed devices. */
+  | { status: 'unavailable' };
+
+/** Exchange a managed device's credentials for a short-lived connect token. */
+export const exchangeManagedDeviceToken = async (
+  _request: ManagedDeviceTokenRequest,
+): Promise<ManagedDeviceTokenResult> => ({ status: 'unavailable' });

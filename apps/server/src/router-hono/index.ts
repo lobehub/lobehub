@@ -22,6 +22,7 @@ app.get('/health', (c) =>
 app.all('/api/agent', (c) => fetchWith(c, () => import('./agent')));
 app.all('/api/agent/*', (c) => fetchWith(c, () => import('./agent')));
 app.all('/api/acceptance-review/*', (c) => acceptanceReview.fetch(c.req.raw));
+app.all('/api/device/managed/*', (c) => fetchWith(c, () => import('./device')));
 app.all('/api/workflows', (c) => fetchWith(c, () => import('./workflows')));
 app.all('/api/workflows/*', (c) => fetchWith(c, () => import('./workflows')));
 

@@ -17,6 +17,7 @@ import {
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ManagedDeviceCreateEntry from '@/business/client/features/ManagedDeviceCreateEntry';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
@@ -297,6 +298,7 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
               {t('devices.empty.methodCli.title')}
             </Button>
           )}
+          <ManagedDeviceCreateEntry placement={'empty'} scope={scope} visibility={visibility} />
         </Flexbox>
 
         {!isWorkspace && (
@@ -336,6 +338,7 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
           title={t('devices.actions.refresh')}
           onClick={() => mutate()}
         />
+        <ManagedDeviceCreateEntry placement={'toolbar'} scope={scope} visibility={visibility} />
         {isWorkspace ? (
           <Button
             icon={<Icon icon={TerminalIcon} />}
