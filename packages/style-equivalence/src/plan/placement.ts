@@ -139,5 +139,30 @@ const sameElement = (base: StyleElement, head: StyleElement) => {
   });
 };
 
-export const placementPreserved = (base: StyleElement[], head: StyleElement[]) =>
-  base.length === head.length && base.every((element, index) => sameElement(element, head[index]));
+export interface PlacementOptions {
+  layoutComponents?: string[];
+}
+
+export const isIntrinsicTag = (tag: string) => /^[a-z][\w-]*$/.test(tag);
+
+const placementSensitive = (element: StyleElement, layout: Set<string>) =>
+  (!isIntrinsicTag(element.tag) && !layout.has(element.tag)) ||
+  element.bindings.some((binding) => !binding.spread && binding.prop !== 'className');
+
+export const placementPreserved = (
+  base: StyleElement[],
+  head: StyleElement[],
+  options: PlacementOptions = {},
+) => {
+  const layout = new Set(options.layoutComponents);
+  return (
+    base.length === head.length &&
+    base.every((element, index) => {
+      const other = head[index];
+      if (element.tag !== other.tag) return false;
+      return placementSensitive(element, layout) || placementSensitive(other, layout)
+        ? sameElement(element, other)
+        : true;
+    })
+  );
+};

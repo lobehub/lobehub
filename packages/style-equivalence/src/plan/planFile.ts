@@ -2,7 +2,9 @@ import type { FileExtraction, StyleElement, VariableKind } from '../extract';
 import { mergeKinds } from '../extract/identifiers';
 import { type Combo, combosFor } from './combos';
 import { alignElements } from './pair';
-import { placementPreserved } from './placement';
+import { isIntrinsicTag, placementPreserved } from './placement';
+
+export { isIntrinsicTag } from './placement';
 
 export type Side = 'base' | 'head';
 
@@ -40,8 +42,6 @@ export interface FilePlan {
 export interface PlanConfig {
   layoutComponents: string[];
 }
-
-export const isIntrinsicTag = (tag: string) => /^[a-z][\w-]*$/.test(tag);
 
 export const chainOf = (element: StyleElement, byId: Map<string, StyleElement>) => {
   const chain: StyleElement[] = [];
@@ -103,7 +103,7 @@ export const planFile = (
     const evidence: string[] = [];
     if (
       (flags.has('PLACEMENT_SUBSTITUTED') || flags.has('PLACEMENT_NEUTRAL_PROP')) &&
-      placementPreserved(chains.base, chains.head)
+      placementPreserved(chains.base, chains.head, config)
     ) {
       flags.delete('PLACEMENT_SUBSTITUTED');
       flags.delete('PLACEMENT_NEUTRAL_PROP');

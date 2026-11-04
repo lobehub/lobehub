@@ -201,6 +201,79 @@ describe('placementPreserved', () => {
   });
 });
 
+describe('placementPreserved on replaced elements only', () => {
+  const ancestor = (expr: string, tag = 'div') => el(tag, [cls(expr)], { id: 'Row#0' });
+  const icon = (expr: string) =>
+    el('Icon', [cls(expr)], { id: 'Row#1', literalProps: { size: 14 }, parent: 'Row#0' });
+
+  it('ignores a reordered merge on an intrinsic ancestor', () => {
+    expect(
+      placementPreserved(
+        [ancestor('cx(inspectorTextStyles.root, styles.root)'), icon('styles.icon')],
+        [
+          ancestor('cx(stylex.props(styles.root).className, inspectorTextStyles.root)'),
+          icon('stylex.props(styles.icon).className'),
+        ],
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores a changed binding on a layout ancestor', () => {
+    expect(
+      placementPreserved(
+        [ancestor('cx(styles.a, styles.b)', 'Flexbox'), icon('styles.icon')],
+        [
+          ancestor('stylex.props(styles.b, styles.a).className', 'Flexbox'),
+          icon('stylex.props(styles.icon).className'),
+        ],
+        { layoutComponents: ['Flexbox'] },
+      ),
+    ).toBe(true);
+  });
+
+  it('still compares a component ancestor that is not a layout component', () => {
+    expect(
+      placementPreserved(
+        [ancestor('cx(styles.a, styles.b)', 'Flexbox'), icon('styles.icon')],
+        [
+          ancestor('stylex.props(styles.b, styles.a).className', 'Flexbox'),
+          icon('stylex.props(styles.icon).className'),
+        ],
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a changed intrinsic ancestor tag', () => {
+    expect(
+      placementPreserved(
+        [ancestor('styles.root'), icon('styles.icon')],
+        [
+          ancestor('stylex.props(styles.root).className', 'span'),
+          icon('stylex.props(styles.icon).className'),
+        ],
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects chains of different length', () => {
+    expect(
+      placementPreserved(
+        [ancestor('styles.root'), icon('styles.icon')],
+        [icon('stylex.props(styles.icon).className')],
+      ),
+    ).toBe(false);
+  });
+
+  it('still compares an intrinsic element that passes a style through a neutral prop', () => {
+    expect(
+      placementPreserved(
+        [el('div', [prop('style', 'styles.a')])],
+        [el('div', [prop('style', 'stylex.props(styles.b).style')])],
+      ),
+    ).toBe(false);
+  });
+});
+
 describe('planFile placement evidence', () => {
   it('drops placement flags and records evidence for an identical chain', () => {
     const base = el('SkillsIcon', [cls('styles.skillIcon')], { slots: ['styles.skillIcon'] });
@@ -219,6 +292,39 @@ describe('planFile placement evidence', () => {
     const [plan] = planFile('a.tsx', extraction(base), extraction(head), {
       layoutComponents: [],
     }).cases;
+    expect(plan.flags).toEqual([]);
+    expect(plan.evidence).toEqual(['PLACEMENT_PRESERVED']);
+  });
+
+  it('drops the placement flag when only an intrinsic ancestor of the replaced icon changed', () => {
+    const root = (expr: string) =>
+      el('div', [cls(expr)], { id: 'List#0', owner: 'List', slots: ['styles.root'] });
+    const icon = (expr: string) =>
+      el('Icon', [cls(expr)], {
+        id: 'List#1',
+        literalProps: { size: 14 },
+        owner: 'List',
+        parent: 'List#0',
+        slots: ['styles.icon'],
+      });
+    const extraction = (elements: StyleElement[]) => ({
+      elements,
+      file: 'a.tsx',
+      gaps: [],
+      outsideReferences: [],
+      prelude: '',
+      rules: [],
+      styleSymbols: ['styles'],
+    });
+    const [, plan] = planFile(
+      'a.tsx',
+      extraction([root('cx(inspectorTextStyles.root, styles.root)'), icon('styles.icon')]),
+      extraction([
+        root('cx(stylex.props(styles.root).className, inspectorTextStyles.root)'),
+        icon('stylex.props(styles.icon).className'),
+      ]),
+      { layoutComponents: [] },
+    ).cases;
     expect(plan.flags).toEqual([]);
     expect(plan.evidence).toEqual(['PLACEMENT_PRESERVED']);
   });
