@@ -365,6 +365,42 @@ describe('file document replica', () => {
       });
     });
 
+    it('creates a duplicate inside the source library and folder and lists it there', async () => {
+      vi.mocked(documentService.getDocumentById).mockResolvedValue(
+        serverRow({
+          content: 'Hello',
+          id: 'doc-1',
+          knowledgeBaseId: 'kb-1',
+          parentId: 'folder-9',
+          title: 'Original',
+        }) as any,
+      );
+      vi.mocked(documentService.createDocument).mockResolvedValue(
+        serverRow({
+          content: 'Hello',
+          id: 'doc-2',
+          knowledgeBaseId: 'kb-1',
+          parentId: 'folder-9',
+          title: 'Original (Copy)',
+        }) as any,
+      );
+
+      const { result } = renderHook(() => useFileStore(), { wrapper });
+
+      act(() => {
+        useFileStore.setState({ queryParams: { libraryId: 'kb-1', parentId: 'folder-9' } }, false);
+      });
+
+      await act(async () => {
+        await result.current.duplicateDocument('doc-1');
+      });
+
+      expect(documentService.createDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ knowledgeBaseId: 'kb-1', parentId: 'folder-9' }),
+      );
+      expect(useFileStore.getState().resourceList.map((item) => item.id)).toEqual(['doc-2']);
+    });
+
     it('puts a created page into the replica so it resolves by id immediately', async () => {
       vi.mocked(documentService.createDocument).mockResolvedValue(
         serverRow({ content: 'Hello', id: 'doc-2', title: 'Fresh page' }) as any,
