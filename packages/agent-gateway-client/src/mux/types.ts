@@ -75,7 +75,20 @@ export type MuxDocServerMessage =
   | { documentId: string; type: 'doc_update'; update: string }
   | { documentId: string; seq: number; type: 'doc_ack' }
   | ({ documentId: string; type: 'doc_awareness' } & MuxDocAwarenessEntry)
-  | { code: string; documentId: string; message: string; type: 'doc_error' };
+  | {
+      /**
+       * Length the room's page would have, with `code: 'char_limit_exceeded'`:
+       * the server refused to store it for the plan's per-page limit.
+       */
+      actual?: number;
+      code: string;
+      documentId: string;
+      /** Per-page character limit, with `code: 'char_limit_exceeded'`. */
+      limit?: number;
+      message: string;
+      plan?: string;
+      type: 'doc_error';
+    };
 
 export interface DocumentChannelHandler {
   onMessage: (message: MuxDocServerMessage) => void;

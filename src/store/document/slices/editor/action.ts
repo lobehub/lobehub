@@ -16,7 +16,11 @@ import { setNamespace } from '@/utils/storeDebug';
 import { PAGE_SYNC_WAIT_MS, waitForPageSynced } from '../../collabRegistry';
 import type { DocumentStore } from '../../store';
 import { documentDetailResource } from '../document/projection';
-import { getCharLimitRefusal, notifyCharLimitRefused } from './charLimit';
+import {
+  type DocumentCharLimitRefusal,
+  getCharLimitRefusal,
+  notifyCharLimitRefused,
+} from './charLimit';
 import type { DocumentFormatFields } from './contentFormat';
 import { hasDocumentFormatFields, resolveDocumentContentFormat } from './contentFormat';
 import type { EditorContentState } from './initialState';
@@ -112,6 +116,9 @@ export class EditorActionImpl {
       const editorData = editor.getDocument('json');
 
       if (doc.collab) {
+        // The room persists the body on its own and reports only refusals, so
+        // a page shortened back within the refused limit is saved again.
+        const backWithinLimit = !!doc.charLimitError && markdown.length <= doc.charLimitError.limit;
         internal_dispatchDocument(
           {
             id,
@@ -122,6 +129,9 @@ export class EditorActionImpl {
               isDirty: false,
               lastSavedContent: markdown,
               lastSavedEditorData: editorData,
+              ...(backWithinLimit
+                ? { charLimitError: undefined, saveStatus: 'idle' as const }
+                : {}),
             },
           },
           'handleContentChange/collab',
@@ -281,7 +291,34 @@ export class EditorActionImpl {
     }
 
     await waitForPageSynced(documentId, PAGE_SYNC_WAIT_MS);
-    await documentService.snapshotPageVersion(documentId, 'manual');
+    try {
+      await documentService.snapshotPageVersion(documentId, 'manual');
+    } catch (error) {
+      const refusal = getCharLimitRefusal(
+        error,
+        (this.#get().documents[documentId]?.content ?? '').length,
+      );
+      if (!refusal) throw error;
+      this.#get().setCharLimitRefusal(documentId, refusal);
+      notifyCharLimitRefused(refusal);
+    }
+  };
+
+  /**
+   * Marks a room page as refused for the plan's per-page character limit: its
+   * room keeps the edits, but the stored page stays at its last accepted
+   * version until the page is shortened.
+   */
+  setCharLimitRefusal = (documentId: string, refusal: DocumentCharLimitRefusal): void => {
+    if (!this.#get().documents[documentId]) return;
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { charLimitError: refusal, saveStatus: 'failed' },
+      },
+      n('setCharLimitRefusal'),
+    );
   };
 
   /**

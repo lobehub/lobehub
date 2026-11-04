@@ -1,6 +1,8 @@
 // @vitest-environment node
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { persistPageState } from '../persist';
 import { RoomPageSessions } from '../roomSession';
 import type { PageWriter } from '../session';
 
@@ -66,6 +68,7 @@ describe('RoomPageSessions character limit', () => {
   beforeEach(() => {
     pushUpdate.mockReset();
     fork.editor.export.mockReset();
+    vi.mocked(persistPageState).mockReset();
   });
 
   it('refuses a commit that grows the page over the limit and pushes nothing', async () => {
@@ -86,5 +89,34 @@ describe('RoomPageSessions character limit', () => {
   it('exempts a system writer', async () => {
     await expect(commitWith('system', 5, 500)).resolves.toBe(true);
     expect(pushUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists under the writer source, so a system write is not refused by the projection', async () => {
+    await commitWith('system', 5, 500);
+
+    expect(vi.mocked(persistPageState).mock.calls[0][3]).toMatchObject({ writeSource: 'system' });
+  });
+});
+
+describe('RoomPageSessions.persistAs character limit', () => {
+  const openSession = async () => {
+    fork.editor.export.mockReturnValue({ markdown: 'x' });
+    return (await new RoomPageSessions({} as any, writerOf('user')).openLiveSession('doc_1'))!;
+  };
+
+  it('reports a version refused for its length instead of a saved one', async () => {
+    const refusal = new TRPCError({
+      cause: { data: { actual: 20, code: 'DocumentCharLimitExceeded', limit: 10 } },
+      code: 'BAD_REQUEST',
+    });
+    vi.mocked(persistPageState).mockRejectedValue(refusal);
+
+    await expect((await openSession()).persistAs('manual')).rejects.toBe(refusal);
+  });
+
+  it('keeps other persist failures quiet: the room still holds the edit', async () => {
+    vi.mocked(persistPageState).mockRejectedValue(new Error('db down'));
+
+    await expect((await openSession()).persistAs('manual')).resolves.toBeUndefined();
   });
 });

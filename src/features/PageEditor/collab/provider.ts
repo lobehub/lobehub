@@ -31,9 +31,24 @@ export const PAGE_ROOM_SYNC_TIMEOUT_MS = 10_000;
 export const AWARENESS_RENEW_INTERVAL_MS = 15_000;
 export const AWARENESS_TIMEOUT_MS = 30_000;
 
+/** The server refused to store the room's page for the plan's per-page character limit. */
+export interface PageCollabCharLimitRefusal {
+  actual: number;
+  limit: number;
+  plan?: string;
+}
+
+/** `doc_error` code the room sends when the server refuses its page for its length. */
+export const PAGE_ROOM_CHAR_LIMIT_CODE = 'char_limit_exceeded';
+
 export interface PageCollabProviderEvents {
   onAccess?: (access: PageCollabAccess) => void;
   onBootstrap?: () => void;
+  /**
+   * The page grew past the plan's per-page limit: the room keeps the edits, but
+   * the stored page stays at its last accepted version until it is shortened.
+   */
+  onCharLimitExceeded?: (refusal: PageCollabCharLimitRefusal) => void;
   onFailure?: (failure: PageCollabFailure) => void;
   onPendingChange?: (pending: number) => void;
   onReset?: (reason: PageCollabResetReason) => void;
@@ -350,6 +365,19 @@ export class PageCollabProvider extends Emitter {
           if (!this.conflicted) {
             this.conflicted = true;
             this.events.onReset?.('bootstrap_conflict');
+          }
+          return;
+        }
+        // Not a join failure: the room still syncs, only storing the page is refused.
+        if (message.code === PAGE_ROOM_CHAR_LIMIT_CODE) {
+          if (typeof message.limit === 'number') {
+            this.events.onCharLimitExceeded?.({
+              actual: message.actual ?? 0,
+              limit: message.limit,
+              plan: message.plan,
+            });
+          } else {
+            console.warn('[PageCollabProvider] char limit refusal without a limit', message);
           }
           return;
         }

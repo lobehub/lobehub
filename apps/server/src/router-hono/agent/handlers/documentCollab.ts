@@ -2,6 +2,7 @@ import debug from 'debug';
 import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import { getDocumentCharLimitErrorData } from '@/server/services/document/writeLimit';
 import { persistPageState, resolvePageAccess } from '@/server/services/pageCollab';
 import { PageProjectionRejectedError } from '@/server/services/pageCollab/persist';
 import { fromBase64 } from '@/server/services/pageCollab/roomClient';
@@ -42,6 +43,12 @@ export async function documentProjection(c: Context): Promise<Response> {
     log('projection failed for %s (epoch %s): %O', body.documentId, body.epoch, error);
     if (error instanceof PageProjectionRejectedError) {
       return c.json({ error: error.message }, 409);
+    }
+    // The room grew the page past its plan's limit. The stored page keeps its
+    // last accepted version; the room relays the refusal to the people editing.
+    const charLimit = getDocumentCharLimitErrorData(error);
+    if (charLimit) {
+      return c.json({ ...charLimit, error: (error as Error).message }, 422);
     }
     console.error('[document-projection] failed for %s:', body.documentId, error);
     return c.json({ error: (error as Error).message }, 500);
