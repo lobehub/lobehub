@@ -15,6 +15,26 @@ describe('mcpAppAgentIdSelector', () => {
     expect(mcpAppAgentIdSelector('tool-msg')(s)).toBe('member');
   });
 
+  it('finds the member whose turn holds the result inside compressed history', () => {
+    const s = groupState([
+      {
+        compressedMessages: [
+          { id: 'state-row', role: 'tool' },
+          {
+            agentId: 'member',
+            children: [{ id: 'block', tools: [{ id: 'call', result_msg_id: 'tool-msg' }] }],
+            id: 'assistant',
+            role: 'assistantGroup',
+          },
+        ],
+        id: 'compressed',
+        role: 'compressedGroup',
+      },
+    ]);
+
+    expect(mcpAppAgentIdSelector('tool-msg')(s)).toBe('member');
+  });
+
   it("falls back to the conversation's agent when the message names none", () => {
     expect(mcpAppAgentIdSelector('tool-msg')(groupState([{ id: 'tool-msg', role: 'tool' }]))).toBe(
       'supervisor',
