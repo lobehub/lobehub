@@ -17,12 +17,17 @@ const SEQ_PATTERN = /^#?(\d{1,9})$/;
 /** Characters of context kept on each side of a content match in the snippet. */
 const SNIPPET_CONTEXT = 40;
 
-/** Markdown noise that would crowd a one-line snippet: images, links, emphasis. */
+/**
+ * Markdown syntax that would crowd a one-line snippet: images, link targets,
+ * line-leading heading/quote markers, bold markers and backticks. Literal
+ * characters a query may contain (`retry_count`, `C#`) are kept.
+ */
 const toPlainText = (markdown: string) =>
   markdown
     .replaceAll(/!\[[^\]]*]\([^)]*\)/g, ' ')
     .replaceAll(/\[([^\]]*)]\([^)]*\)/g, '$1')
-    .replaceAll(/[#*_`>]+/g, ' ')
+    .replaceAll(/^\s*(?:#{1,6}|>+)\s+/gm, '')
+    .replaceAll(/\*\*|`+/g, '')
     .replaceAll(/\s+/g, ' ')
     .trim();
 
@@ -35,12 +40,16 @@ const buildSnippet = (instruction: string, needle: string): string | null => {
   const text = toPlainText(instruction);
   if (!text) return null;
 
-  const index = text.toLowerCase().indexOf(needle.toLowerCase());
+  const haystack = text.toLowerCase();
+  // A query that spans stripped syntax (`**bold** text`) is found once it is
+  // normalized the same way as the body.
+  const term = [needle, toPlainText(needle)]
+    .map((candidate) => candidate.toLowerCase())
+    .find((candidate) => candidate && haystack.includes(candidate));
+  const index = term ? haystack.indexOf(term) : -1;
   const start = index < 0 ? 0 : Math.max(0, index - SNIPPET_CONTEXT);
   const end =
-    index < 0
-      ? SNIPPET_CONTEXT * 2
-      : Math.min(text.length, index + needle.length + SNIPPET_CONTEXT);
+    index < 0 ? SNIPPET_CONTEXT * 2 : Math.min(text.length, index + term!.length + SNIPPET_CONTEXT);
 
   return `${start > 0 ? '…' : ''}${text.slice(start, end).trim()}${end < text.length ? '…' : ''}`;
 };

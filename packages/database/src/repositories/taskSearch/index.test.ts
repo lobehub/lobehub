@@ -156,6 +156,37 @@ describe('TaskSearchRepo', () => {
     expect(result.description).toBe('See the screenshot');
   });
 
+  it.each(['retry_count', 'C#'])(
+    'keeps literal punctuation such as %s in the matched passage',
+    async (query) => {
+      const model = new TaskModel(serverDB, userId);
+      await model.create({
+        instruction: `${'Background context that pushes the match past the opening. '.repeat(3)}Then rename ${query} in the worker.`,
+        name: 'Punctuation',
+      });
+
+      const [result] = await new TaskSearchRepo(serverDB, userId).search({ query });
+
+      expect(result.description).toContain(`rename ${query} in the worker.`);
+      expect(result.description?.startsWith('…')).toBe(true);
+    },
+  );
+
+  it('finds a passage across stripped markdown and drops heading markers', async () => {
+    const model = new TaskModel(serverDB, userId);
+    await model.create({
+      instruction: '## Steps\n\nClick the **batch** button',
+      name: 'Markdown',
+    });
+
+    const repo = new TaskSearchRepo(serverDB, userId);
+    const [byHeading] = await repo.search({ query: 'Steps' });
+    expect(byHeading.description).toBe('Steps Click the batch button');
+
+    const [byRawMarkdown] = await repo.search({ query: '**batch** button' });
+    expect(byRawMarkdown.description).toBe('Steps Click the batch button');
+  });
+
   it('treats LIKE wildcards in the content literally', async () => {
     const model = new TaskModel(serverDB, userId);
     await model.create({ instruction: 'Coverage must reach 100%', name: 'A' });
