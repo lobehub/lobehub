@@ -4,13 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
-import McpCtr from '../McpCtr';
+import McpCtr from './McpCtr';
 
 const { mcpClientMocks } = vi.hoisted(() => ({
   mcpClientMocks: vi.fn(),
 }));
 
-vi.mock('../../libs/mcp/client', () => ({
+vi.mock('../libs/mcp/client', () => ({
   MCPClient: class {
     constructor(
       public params: unknown,

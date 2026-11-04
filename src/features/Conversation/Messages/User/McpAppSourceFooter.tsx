@@ -13,7 +13,7 @@ import { useToolStore } from '@/store/tool';
  * as a follow-up sent from that view inside this conversation, not a fresh
  * question the user typed.
  */
-const McpAppSourceFooter = ({ source }: { source: MessageMcpAppSource }) => {
+export const McpAppSourceFooter = ({ source }: { source: MessageMcpAppSource }) => {
   const { t } = useTranslation('plugin');
   const appName = useToolStore(mcpAppNameSelector(source.identifier));
 
@@ -26,5 +26,3 @@ const McpAppSourceFooter = ({ source }: { source: MessageMcpAppSource }) => {
     </Flexbox>
   );
 };
-
-export default McpAppSourceFooter;

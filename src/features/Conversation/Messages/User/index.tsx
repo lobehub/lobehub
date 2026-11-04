@@ -27,7 +27,7 @@ import AgentSenderSourceLink from './components/AgentSenderSourceLink';
 import UserMessageContent from './components/MessageContent';
 import { ScmEventAvatar, ScmEventSenderTitle } from './components/ScmEventSender';
 import { UserMessageExtra } from './Extra';
-import McpAppSourceFooter from './McpAppSourceFooter';
+import { McpAppSourceFooter } from './McpAppSourceFooter';
 import { getAgentSender, getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
 import {
