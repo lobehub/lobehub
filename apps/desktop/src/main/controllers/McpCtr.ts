@@ -106,10 +106,18 @@ interface GetStreamableMcpServerManifestInput {
   url: string;
 }
 
+interface HttpMcpCallInput {
+  auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+  headers?: Record<string, string>;
+  name: string;
+  type: 'http';
+  url: string;
+}
+
 export interface CallToolInput {
   args: any;
   env: any;
-  params: GetStdioMcpServerManifestInput;
+  params: (GetStdioMcpServerManifestInput & { type: 'stdio' }) | HttpMcpCallInput;
   toolName: string;
 }
 
@@ -587,6 +595,9 @@ export default class McpCtr extends ControllerModule {
   @IpcMethod()
   async callTool(payload: SuperJSONSerialized<CallToolInput>) {
     const input = deserializePayload<CallToolInput>(payload);
+    if (input.params.type === 'http') {
+      return serializePayload(await this.runHttpMcpTool(input.params, input.toolName, input.args));
+    }
     return serializePayload(await this.runStdioMcpTool(input));
   }
 
