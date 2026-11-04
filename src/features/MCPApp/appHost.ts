@@ -14,7 +14,7 @@ import { isAppFrameNavigatedNotice } from './frameDocument';
 import { sendAppMessage } from './sendAppMessage';
 import { getAppToolCallPolicy } from './toolCallPolicy';
 import { toCallToolResult } from './utils';
-import { restoreMediaForView } from './viewToolResult';
+import { withoutStoredMedia } from './viewToolResult';
 
 export const MAX_APP_VIEW_HEIGHT = 2000;
 // Tool calls from one view that may wait for approval at once; more are refused as busy
@@ -210,7 +210,7 @@ export const connectAppView = ({
     // The chat stored this result's media as uploads; the view reads base64
     toolResult: () => {
       const { result } = getContext();
-      return restoreMediaForView(toCallToolResult({ ...result, success: !result.state?.isError }));
+      return withoutStoredMedia(toCallToolResult({ ...result, success: !result.state?.isError }));
     },
   });
 
