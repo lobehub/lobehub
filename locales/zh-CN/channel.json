@@ -21,6 +21,7 @@
   "autoTitle.separator": "、",
   "blocked.device_approval_pending": "等待设备授权",
   "blocked.device_offline": "等待设备上线",
+  "blocked.device_required": "请为这个 Agent 选择运行设备",
   "blocked.directory_locked": "等待工作目录释放",
   "blocked.member_busy": "等待上一条回复完成",
   "blocked.unavailable": "Agent 暂不可用",
