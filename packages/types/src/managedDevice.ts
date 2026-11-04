@@ -22,6 +22,13 @@
 /** `devices.identitySource` of a managed cloud device. */
 export const MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE = 'managed-cloud-device';
 
+/**
+ * `purpose` claim of the token a managed cloud device connects with. Such a
+ * token is only for the device gateway; every LobeHub server verifier must
+ * reject it.
+ */
+export const MANAGED_DEVICE_JWT_PURPOSE = 'managed-device';
+
 /** `environment_instances.provider` of a managed cloud device's cluster instance. */
 export const MANAGED_CLOUD_CLUSTER_PROVIDER_V1 = 'managed-cloud-cluster-v1';
 

@@ -1,14 +1,30 @@
 import { acceptanceIdFromReviewResource, siteReviewFromResource } from '@lobechat/const';
+import { MANAGED_DEVICE_JWT_PURPOSE } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { JSONWebKeySet, JWK, JWK_RSA_Public } from 'jose';
 import { calculateJwkThumbprint } from 'jose';
 
 import { authEnv } from '@/envs/auth';
+import {
+  TUNNEL_ACCESS_JWT_PURPOSE,
+  WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE,
+} from '@/libs/trpc/utils/internalJwt';
 
 import { isAcceptanceReviewClient, isAcceptanceReviewIssued } from './acceptanceReview';
 
 const log = debug('oidc-jwt');
+
+/**
+ * Purposes of tokens that only the device gateway accepts: a device's connect
+ * token and the one-shot tunnel entry ticket. They are signed with the same
+ * key as access tokens, so without this check each would pass as a login.
+ */
+const DEVICE_GATEWAY_ONLY_PURPOSES = new Set<unknown>([
+  MANAGED_DEVICE_JWT_PURPOSE,
+  TUNNEL_ACCESS_JWT_PURPOSE,
+  WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE,
+]);
 
 /**
  * Get JWKS key string from environment
@@ -168,6 +184,13 @@ export const validateOIDCJWT = async (token: string) => {
       throw new TRPCError({
         code: 'UNAUTHORIZED',
         message: 'Acceptance review tokens are not accepted here',
+      });
+    }
+
+    if (DEVICE_GATEWAY_ONLY_PURPOSES.has(payload.purpose)) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'Device gateway tokens are not accepted here',
       });
     }
 
