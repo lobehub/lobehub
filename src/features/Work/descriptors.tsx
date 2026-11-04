@@ -36,7 +36,7 @@ import {
 
 import LinearIcon from './icons/LinearIcon';
 
-type WorkIcon = ComponentType<{ className?: string; size?: number }>;
+export type WorkIcon = ComponentType<{ className?: string; size?: number }>;
 
 /**
  * Brand icon per skill provider for the unified `external` Work type. An
@@ -181,6 +181,12 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
    * further to `resourceId` when this is also null.
    */
   getIdentifier: (item: Item) => string | null;
+  /**
+   * Brand mark drawn before the identifier on the card's second line. GitHub
+   * cards spend their main icon on the issue/PR state, so the mark keeps
+   * `owner/repo#n` recognizable as a GitHub repository.
+   */
+  getIdentifierIcon?: (item: Item) => WorkIcon | null;
   /** Where a click should lead, or `null` when the Work is not clickable. */
   getOpenTarget: (item: Item) => WorkOpenTarget | null;
   /** Label of the state `getIcon` draws, for its tooltip; `null` when the icon carries no state. */
@@ -345,6 +351,10 @@ export const WORK_TYPE_DESCRIPTORS: {
       return getGithubState(item)?.icon ?? PROVIDER_ICONS[provider];
     },
     getIdentifier: (item) => item.identifier,
+    // Every GitHub card carries the mark, including a brand-icon card with an
+    // unknown state, so the identifiers line up in a list.
+    getIdentifierIcon: (item) =>
+      workProviderOfResourceType(item.resourceType) === 'github' ? Github : null,
     // External works registered from CLI/tool results may carry no URL (or a
     // member-planted non-http(s) scheme) — those cards have nothing safe to
     // open, so drop the click affordance entirely.

@@ -12,7 +12,12 @@ import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import CanvasWorkCard from './CanvasWorkCard';
-import { getWorkTypeDescriptor, isSafeExternalUrl, type WorkBranch } from './descriptors';
+import {
+  getWorkTypeDescriptor,
+  isSafeExternalUrl,
+  type WorkBranch,
+  type WorkIcon,
+} from './descriptors';
 import { useResourceDeletedPrompt } from './useResourceDeletedPrompt';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -38,12 +43,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1 1 0;
     min-width: 0;
     color: ${cssVar.colorTextTertiary};
-  `,
-  branchName: css`
-    min-width: 0;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: inherit;
-    color: inherit;
   `,
   cost: css`
     flex-shrink: 0;
@@ -71,6 +70,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  identifierIcon: css`
+    flex-shrink: 0;
   `,
   icon: css`
     flex-shrink: 0;
@@ -136,6 +138,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   meta: css`
     min-width: 0;
   `,
+  /** Monospace text inside an identifier / branch group, truncating within it. */
+  metaText: css`
+    min-width: 0;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: inherit;
+    color: inherit;
+  `,
   inlineIcon: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextSecondary};
@@ -157,6 +166,8 @@ interface WorkMetaLineProps {
   description: string | null;
   /** `null` when the title already fell back to it. */
   identifier: string | null;
+  /** Brand mark before the identifier (GitHub), see `getIdentifierIcon`. */
+  identifierIcon: WorkIcon | null;
   variant: 'card' | 'inline';
 }
 
@@ -165,7 +176,13 @@ interface WorkMetaLineProps {
  * branch, or the description when no branch is known. Keeping the key here
  * leaves the first line to the title, so a long `owner/repo#n` can't squeeze it.
  */
-const WorkMetaLine = ({ branch, description, identifier, variant }: WorkMetaLineProps) => {
+const WorkMetaLine = ({
+  branch,
+  description,
+  identifier,
+  identifierIcon: IdentifierIcon,
+  variant,
+}: WorkMetaLineProps) => {
   const inline = variant === 'inline';
   const detail = branch ? branch.head : description;
   if (!identifier && !detail) return null;
@@ -173,13 +190,20 @@ const WorkMetaLine = ({ branch, description, identifier, variant }: WorkMetaLine
   return (
     <Flexbox horizontal align={'center'} className={styles.meta} gap={4}>
       {identifier && (
-        <Text
-          ellipsis
+        <Flexbox
+          horizontal
+          align={'center'}
           className={inline ? styles.inlineIdentifier : styles.identifier}
+          gap={3}
           title={identifier}
         >
-          {identifier}
-        </Text>
+          {IdentifierIcon && (
+            <IdentifierIcon className={styles.identifierIcon} size={inline ? 11 : 12} />
+          )}
+          <Text ellipsis className={styles.metaText}>
+            {identifier}
+          </Text>
+        </Flexbox>
       )}
       {identifier && detail && <span className={inline ? styles.inlineDot : styles.dot}>·</span>}
       {branch ? (
@@ -191,7 +215,7 @@ const WorkMetaLine = ({ branch, description, identifier, variant }: WorkMetaLine
           title={branch.base ? `${branch.head} → ${branch.base}` : branch.head}
         >
           <LobeIcon icon={GitBranchIcon} size={inline ? 11 : 12} />
-          <Text ellipsis className={styles.branchName}>
+          <Text ellipsis className={styles.metaText}>
             {branch.head}
           </Text>
         </Flexbox>
@@ -267,6 +291,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
     // already fell back to it.
     const identifier = descriptor.getIdentifier(item);
     const metaIdentifier = identifier && identifier !== title ? identifier : null;
+    const identifierIcon = descriptor.getIdentifierIcon?.(item) ?? null;
     const branch = descriptor.getBranch?.(item) ?? null;
     const description = descriptor.getDescription(item);
     const openTarget = descriptor.getOpenTarget(item);
@@ -351,6 +376,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
               branch={branch}
               description={description}
               identifier={metaIdentifier}
+              identifierIcon={identifierIcon}
               variant={'inline'}
             />
           </Flexbox>
@@ -385,6 +411,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
             branch={branch}
             description={description}
             identifier={metaIdentifier}
+            identifierIcon={identifierIcon}
             variant={'card'}
           />
         </Flexbox>

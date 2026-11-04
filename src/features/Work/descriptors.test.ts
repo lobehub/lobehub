@@ -177,6 +177,20 @@ describe('getWorkTypeDescriptor', () => {
       expect(labelOf({ status: null })).toBeNull();
     });
 
+    it('marks every GitHub identifier with the GitHub logo, and no other provider', () => {
+      const markOf = (overrides: Record<string, unknown>) => {
+        const item = githubItem(overrides);
+        return getWorkTypeDescriptor(item).getIdentifierIcon?.(item);
+      };
+
+      const prMark = markOf({ status: 'open' });
+      expect(prMark).toBeTruthy();
+      // Same mark whether the main icon is a state glyph or already the brand logo.
+      expect(markOf({ status: null })).toBe(prMark);
+      expect(markOf({ resourceType: 'github_issue', status: 'closed' })).toBe(prMark);
+      expect(markOf({ resourceType: 'linear_issue', status: 'In Progress' })).toBeNull();
+    });
+
     it('reads the head/base branch from the summary metadata only for pull requests', () => {
       const withBranch = githubItem({
         event: { metadata: { baseBranch: 'canary', headBranch: 'feat/x' } },
