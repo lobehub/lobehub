@@ -17,13 +17,13 @@ class ImportService {
   importData = async (data: ImporterEntryData, callbacks?: OnImportCallbacks): Promise<void> => {
     const handleError = (e: unknown) => {
       callbacks?.onStageChange?.(ImportStage.Error);
-      const error = e as DefaultErrorShape;
+      const error = e as Partial<DefaultErrorShape> | null | undefined;
 
       callbacks?.onError?.({
-        code: error.data.code,
-        httpStatus: error.data.httpStatus,
-        message: error.message,
-        path: error.data.path,
+        code: error?.data?.code ?? 'INTERNAL_SERVER_ERROR',
+        httpStatus: error?.data?.httpStatus ?? 500,
+        message: error?.message ?? String(e),
+        path: error?.data?.path,
       });
     };
 
@@ -38,6 +38,10 @@ class ImportService {
       const time = Date.now();
       try {
         const result = await lambdaClient.importer.importByPost.mutate({ data });
+        if (!result.success) {
+          handleError(result.error);
+          return;
+        }
         const duration = Date.now() - time;
 
         callbacks?.onStageChange?.(ImportStage.Success);
@@ -63,13 +67,13 @@ class ImportService {
 
     const handleError = (e: unknown) => {
       callbacks?.onStageChange?.(ImportStage.Error);
-      const error = e as DefaultErrorShape;
+      const error = e as Partial<DefaultErrorShape> | null | undefined;
 
       callbacks?.onError?.({
-        code: error.data.code,
-        httpStatus: error.data.httpStatus,
-        message: error.message,
-        path: error.data.path,
+        code: error?.data?.code ?? 'INTERNAL_SERVER_ERROR',
+        httpStatus: error?.data?.httpStatus ?? 500,
+        message: error?.message ?? String(e),
+        path: error?.data?.path,
       });
     };
 
@@ -82,6 +86,10 @@ class ImportService {
       const time = Date.now();
       try {
         const result = await lambdaClient.importer.importPgByPost.mutate(data);
+        if (!result.success) {
+          handleError(result.error);
+          return;
+        }
         const duration = Date.now() - time;
 
         callbacks?.onStageChange?.(ImportStage.Success);
@@ -122,6 +130,10 @@ class ImportService {
     const time = Date.now();
     try {
       const result = await lambdaClient.importer.importByFile.mutate({ pathname });
+      if (!result.success) {
+        handleError(result.error);
+        return;
+      }
       const duration = Date.now() - time;
       callbacks?.onStageChange?.(ImportStage.Success);
       callbacks?.onSuccess?.(result.results, duration);
