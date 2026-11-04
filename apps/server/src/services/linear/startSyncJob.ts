@@ -136,11 +136,15 @@ const dispatchJob = async (
         await asyncCaller.linear.runSync({ taskId, workspaceId });
         return;
       } catch (error) {
-        // Any other failure reached the async router, which owns the job from
-        // there; a dropped response (a proxy timing out a long run) is not a
-        // failed sync, so only log it.
+        // A dropped response (a proxy timing out a long run) is not a failed
+        // sync: the async router claimed the job and owns it from there. A
+        // request the host turned away before it reached the router (e.g.
+        // Vercel's 508 on a deep chain of requests) left the job unclaimed;
+        // `fail` only applies to that one, so it is shown as failed now
+        // instead of sitting queued until it times out.
         if (!isRejectedHandOff(error)) {
           log('async sync %s request failed: %O', taskId, error);
+          await fail();
           return;
         }
         log('async sync %s hand-off rejected (attempt %d): %O', taskId, attempt, error);

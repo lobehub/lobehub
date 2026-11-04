@@ -37,6 +37,12 @@ export const LINEAR_SYNC_UNCLAIMED_MS = 2 * 60 * 1000;
  * run at about 5,000 new tasks.
  */
 export const LINEAR_SYNC_MAX_ROUNDS = 50;
+/**
+ * How long one request keeps starting new rounds before it hands the run to
+ * a new request. Well inside the async route's time limit (800s on Vercel),
+ * leaving room for the round still running when the budget runs out.
+ */
+export const LINEAR_SYNC_RUN_BUDGET_MS = 10 * 60 * 1000;
 
 /**
  * The outcome of a run that took several rounds. What a round wrote happens
@@ -150,6 +156,8 @@ export class LinearSyncJobService {
     private readonly userId: string,
     private readonly workspaceId?: string,
     private readonly continueJob?: ContinueLinearSyncJob,
+    /** How long this request keeps starting rounds before handing the run on. */
+    private readonly runBudgetMs: number = LINEAR_SYNC_RUN_BUDGET_MS,
   ) {}
 
   /** Run a recorded job to completion (async router side). */
@@ -182,61 +190,95 @@ export class LinearSyncJobService {
       if (!failed)
         await LinearSyncJobModel.settleStopped(this.db, this.scope, taskId, { duration });
     };
+    // Rounds run here, one after another, while the run is within its time
+    // budget. Handing every round to a new async request instead nests each
+    // request inside the previous one (it waits for the next), and the host
+    // refuses a chain a few requests deep (Vercel: 508 INFINITE_LOOP_DETECTED),
+    // which left the run queued until it showed as cut off.
+    let current = metadata;
     try {
-      const round = await this.execute(metadata);
-      const roundResult = withoutResumePoint(round);
-      const rounds = (metadata.rounds ?? 0) + 1;
-      const result = mergeLinearSyncResults(metadata.result, roundResult, {
-        resumed: metadata.cursor !== undefined,
-      });
-      // A rule run that hit its per-round cap goes on by itself, so the user
-      // does not have to press Sync once per hundred issues.
-      const proposed =
-        this.continueJob && metadata.kind === 'rule'
-          ? nextLinearSyncRound(metadata.cursor, round)
-          : undefined;
-      const next = withinRoundCap(proposed, rounds, metadata.cursor !== undefined);
-      const outcome = {
-        ...metadata,
-        cursor: undefined,
-        reconcileOnly: undefined,
-        result,
-        rounds,
-      };
-      if (next) {
-        log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
-        const queued = await this.continueJob!(taskId, {
-          ...metadata,
-          cursor: next.cursor,
-          // Past the cap, the closing pass creates nothing, so the cap holds.
-          reconcileOnly: rounds >= LINEAR_SYNC_MAX_ROUNDS || undefined,
+      for (;;) {
+        const round = await this.execute(current);
+        const roundResult = withoutResumePoint(round);
+        const rounds = (current.rounds ?? 0) + 1;
+        const result = mergeLinearSyncResults(current.result, roundResult, {
+          resumed: current.cursor !== undefined,
+        });
+        // A rule run that hit its per-round cap goes on by itself, so the user
+        // does not have to press Sync once per hundred issues.
+        const proposed =
+          this.continueJob && current.kind === 'rule'
+            ? nextLinearSyncRound(current.cursor, round)
+            : undefined;
+        const next = withinRoundCap(proposed, rounds, current.cursor !== undefined);
+        const outcome = {
+          ...current,
+          cursor: undefined,
+          reconcileOnly: undefined,
           result,
           rounds,
-        });
-        if (queued) return;
-      }
-      // The rule shows its last finished run; a round in between, or a run
-      // stopped part-way, leaves the previous one in place. The job turns
-      // successful together with that record, or neither changes and the
-      // failure below marks the job failed.
-      const succeeded = await this.db.transaction(async (tx) => {
-        const done = await LinearSyncJobModel.transition(
-          tx,
-          this.scope,
-          taskId,
-          [AsyncTaskStatus.Processing],
-          { duration: Date.now() - startedAt, metadata: outcome, status: AsyncTaskStatus.Success },
-        );
-        if (done && metadata.kind === 'rule' && metadata.ruleId) {
-          await LinearSyncRuleModel.recordRun(tx, metadata.ruleId, this.scope, result);
+        };
+        if (next) {
+          const following: LinearSyncJobMetadata = {
+            ...current,
+            cursor: next.cursor,
+            // Past the cap, the closing pass creates nothing, so the cap holds.
+            reconcileOnly: rounds >= LINEAR_SYNC_MAX_ROUNDS || undefined,
+            result,
+            rounds,
+          };
+          log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
+          if (Date.now() - startedAt < this.runBudgetMs) {
+            // Record the total so far, which also checks no stop was requested.
+            const kept = await LinearSyncJobModel.transition(
+              this.db,
+              this.scope,
+              taskId,
+              [AsyncTaskStatus.Processing],
+              { metadata: following },
+            );
+            if (kept) {
+              current = following;
+              continue;
+            }
+            await LinearSyncJobModel.settleStopped(this.db, this.scope, taskId, {
+              duration: Date.now() - startedAt,
+              metadata: outcome,
+            });
+            return;
+          }
+          // Out of time: a new request takes the next round.
+          const queued = await this.continueJob!(taskId, following);
+          if (queued) return;
         }
-        return done;
-      });
-      if (!succeeded) {
-        await LinearSyncJobModel.settleStopped(this.db, this.scope, taskId, {
-          duration: Date.now() - startedAt,
-          metadata: outcome,
+        // The rule shows its last finished run; a round in between, or a run
+        // stopped part-way, leaves the previous one in place. The job turns
+        // successful together with that record, or neither changes and the
+        // failure below marks the job failed.
+        const succeeded = await this.db.transaction(async (tx) => {
+          const done = await LinearSyncJobModel.transition(
+            tx,
+            this.scope,
+            taskId,
+            [AsyncTaskStatus.Processing],
+            {
+              duration: Date.now() - startedAt,
+              metadata: outcome,
+              status: AsyncTaskStatus.Success,
+            },
+          );
+          if (done && current.kind === 'rule' && current.ruleId) {
+            await LinearSyncRuleModel.recordRun(tx, current.ruleId, this.scope, result);
+          }
+          return done;
         });
+        if (!succeeded) {
+          await LinearSyncJobModel.settleStopped(this.db, this.scope, taskId, {
+            duration: Date.now() - startedAt,
+            metadata: outcome,
+          });
+        }
+        return;
       }
     } catch (error) {
       const code = toErrorCode(error);

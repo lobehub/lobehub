@@ -4,7 +4,11 @@ import { TRPCClientError } from '@trpc/client';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LinearConnectionModel, LinearSyncRuleModel } from '@/database/models/linear';
+import {
+  LinearConnectionModel,
+  LinearSyncJobModel,
+  LinearSyncRuleModel,
+} from '@/database/models/linear';
 import {
   asyncTasks,
   linearConnections,
@@ -15,7 +19,11 @@ import {
   workspaces,
 } from '@/database/schemas';
 import { continueLinearRuleSyncJob } from '@/server/services/linear/startSyncJob';
-import { LINEAR_SYNC_MAX_ROUNDS, LinearSyncJobService } from '@/server/services/linear/syncJob';
+import {
+  LINEAR_SYNC_MAX_ROUNDS,
+  LINEAR_SYNC_RUN_BUDGET_MS,
+  LinearSyncJobService,
+} from '@/server/services/linear/syncJob';
 
 import { linearRouter } from '../linear';
 
@@ -290,10 +298,19 @@ describe('linearRouter', () => {
         return { id, rule };
       };
 
-      /** The service as the async router builds it, able to queue the next round. */
-      const routerService = () =>
-        new LinearSyncJobService(serverDB, userId, undefined, (taskId, metadata) =>
-          continueLinearRuleSyncJob(serverDB, userId, undefined, taskId, metadata),
+      /**
+       * The service as the async router builds it, able to queue the next
+       * round. With no time budget, every round is handed to a new request,
+       * as a run that outlasts one request is.
+       */
+      const routerService = (runBudgetMs = 0) =>
+        new LinearSyncJobService(
+          serverDB,
+          userId,
+          undefined,
+          (taskId, metadata) =>
+            continueLinearRuleSyncJob(serverDB, userId, undefined, taskId, metadata),
+          runBudgetMs,
         );
 
       const settle = async () => {
@@ -349,6 +366,59 @@ describe('linearRouter', () => {
         expect(jobs[0].result).not.toHaveProperty('resumeAfter');
         const [saved] = await caller({ userId }).listSyncRules({ projectId });
         expect(saved.lastResult).toMatchObject({ created: 242, truncated: false });
+      });
+
+      it('runs the rounds one after another in the same request while it has time', async () => {
+        mocks.syncByFilter
+          .mockResolvedValueOnce(round(100, true, '100'))
+          .mockResolvedValueOnce(round(100, true, '200'))
+          .mockResolvedValueOnce(round(100, true, '300'))
+          .mockResolvedValueOnce(round(100, true, '400'))
+          .mockResolvedValueOnce(round(100, true, '500'))
+          .mockResolvedValueOnce(round(42, false))
+          .mockResolvedValueOnce(round(0, false));
+        const { id, rule } = await startRule();
+
+        await routerService(LINEAR_SYNC_RUN_BUDGET_MS).run(id);
+        await settle();
+
+        // One hand-off, the one that started the run: no chain of requests
+        // each waiting on the next, which the host cuts off a few deep.
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(startAfterOfCalls()).toEqual([
+          undefined,
+          '100',
+          '200',
+          '300',
+          '400',
+          '500',
+          undefined,
+        ]);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, id, result: { created: 542, truncated: false }, status: 'success' },
+        ]);
+        const [saved] = await caller({ userId }).listSyncRules({ projectId });
+        expect(saved).toMatchObject({ id: rule.id, lastResult: { created: 542 } });
+      });
+
+      it('stops after the current round when stopped during a run in one request', async () => {
+        const { id } = await startRule();
+        mocks.syncByFilter
+          .mockResolvedValueOnce(round(100, true, '100'))
+          .mockImplementationOnce(async () => {
+            await caller({ userId }).cancelSync({ jobId: id, projectId });
+            return round(100, true, '200');
+          });
+
+        await routerService(LINEAR_SYNC_RUN_BUDGET_MS).run(id);
+
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(2);
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'canceled', id, result: { created: 200 }, status: 'error' },
+        ]);
+        const [rule] = await caller({ userId }).listSyncRules({ projectId });
+        expect(rule).toMatchObject({ lastResult: null, lastRunAt: null });
       });
 
       it('stops when a round neither creates nor moves on, and asks to run again', async () => {
@@ -643,14 +713,35 @@ describe('linearRouter', () => {
       });
 
       it('leaves a job the router accepted to the router, even when the response is lost', async () => {
-        mocks.runSync.mockRejectedValue(new TRPCClientError('fetch failed'));
+        // The router claimed the job and is running it; only its answer is lost.
+        mocks.runSync.mockImplementation(async ({ taskId }: { taskId: string }) => {
+          await LinearSyncJobModel.claim(serverDB, { userId, workspaceId: null }, taskId);
+          throw new TRPCClientError('fetch failed');
+        });
 
         const { id } = await startRule();
         await settled(1);
 
         expect(mocks.runSync).toHaveBeenCalledTimes(1);
         expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
-          { error: null, id, status: 'pending' },
+          { error: null, id, status: 'processing' },
+        ]);
+      });
+
+      it('fails a job the host turned away before the router saw it, instead of leaving it queued', async () => {
+        // Vercel answers a request deep in a chain of requests with a 508.
+        mocks.runSync.mockRejectedValue(
+          new TRPCClientError('Loop Detected', {
+            meta: { response: { status: 508 } },
+          } as any),
+        );
+
+        const { id } = await startRule();
+        await settled(1);
+
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'failed', id, status: 'error' },
         ]);
       });
     });
