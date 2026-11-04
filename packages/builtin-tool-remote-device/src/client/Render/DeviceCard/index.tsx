@@ -128,14 +128,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, activated, variant = 'card' 
         <span {...stylex.props(styles.hostname)}>{displayName}</span>
         {!activated && (
           <span {...stylex.props(styles.status)}>
-            <span
-              className={[
-                stylex.props(styles.statusDot).className,
-                stylex.props(device.online ? styles.statusDotOnline : undefined).className,
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            />
+            <span {...stylex.props(styles.statusDot, device.online && styles.statusDotOnline)} />
             {t(
               device.online
                 ? 'builtins.lobe-remote-device.render.online'
