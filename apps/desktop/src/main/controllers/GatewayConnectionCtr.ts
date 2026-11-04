@@ -285,6 +285,16 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.service.resolveCurrentDeviceId();
   }
 
+  /**
+   * The id this machine holds as a device of `workspaceId` — derived locally,
+   * whether or not it is enrolled there — so the renderer can tell its own
+   * workspace device apart from other machines.
+   */
+  @IpcMethod()
+  async getWorkspaceDeviceId({ workspaceId }: { workspaceId: string }): Promise<string> {
+    return this.service.resolveWorkspaceDeviceId(workspaceId);
+  }
+
   @IpcMethod()
   async getDeviceInfo(): Promise<{
     deviceId: string;
