@@ -13,26 +13,51 @@ import path from 'node:path';
  * path always see each other's result.
  */
 const pathQueues = new Map<string, Promise<unknown>>();
+let pendingLock = Promise.resolve();
 
 /**
  * Case-insensitive file systems (the default on Windows and macOS) map
  * `Foo.ts` and `foo.ts` to one file. Folding case there only ever
  * over-serializes on a case-sensitive volume, which is harmless.
  */
-const lockKey = (filePath: string) => {
-  const resolved = path.resolve(filePath);
+const lockKey = async (filePath: string) => {
+  let resolved = path.resolve(filePath);
+  let ancestor = resolved;
+  while (true) {
+    try {
+      resolved = path.join(await realpath(ancestor), path.relative(ancestor, resolved));
+      break;
+    } catch (error) {
+      // New files must share a queue even through a symlinked parent. Other
+      // lookup errors are left to the file operation's existing error handling.
+      const parent = path.dirname(ancestor);
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || parent === ancestor) break;
+      ancestor = parent;
+    }
+  }
   return process.platform === 'win32' || process.platform === 'darwin'
     ? resolved.toLowerCase()
     : resolved;
 };
 
 export const withFileLock = async <T>(filePath: string, task: () => Promise<T>): Promise<T> => {
-  const key = lockKey(filePath);
-  const previous = pathQueues.get(key) ?? Promise.resolve();
-  const current = previous.then(task, task);
-  // The queue tail must never reject, or the next caller would inherit it.
-  const tail = current.catch(() => {});
-  pathQueues.set(key, tail);
+  // Enroll in invocation order: asynchronous realpath lookups must not let
+  // a later edit overtake an earlier write. Only enrollment is serialized;
+  // operations on different files still execute concurrently.
+  const enrollment = pendingLock.then(async () => {
+    const key = await lockKey(filePath);
+    const previous = pathQueues.get(key) ?? Promise.resolve();
+    const current = previous.then(task, task);
+    // The queue tail must never reject, or the next caller would inherit it.
+    const tail = current.catch(() => {});
+    pathQueues.set(key, tail);
+    return { current, key, tail };
+  });
+  pendingLock = enrollment.then(
+    () => {},
+    () => {},
+  );
+  const { current, key, tail } = await enrollment;
 
   try {
     return await current;
