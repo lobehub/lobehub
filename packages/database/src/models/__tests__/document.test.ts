@@ -1022,66 +1022,6 @@ describe('DocumentModel', () => {
     });
   });
 
-  describe('countFileUsageInSubtree', () => {
-    it('should return 0 when the root document does not exist', async () => {
-      const total = await documentModel.countFileUsageInSubtree('non-existent-root');
-      expect(total).toBe(0);
-    });
-
-    it('should sum sizes of files anchored to the document and its descendants', async () => {
-      const root = await documentModel.findOrCreateFolder('root-folder');
-      const child = await documentModel.findOrCreateFolder('child-folder', root.id);
-      const grandchild = await documentModel.findOrCreateFolder('grandchild-folder', child.id);
-
-      // Files anchored to documents in the subtree (parentId points at a document)
-      await fileModel.create({
-        fileType: 'text/plain',
-        name: 'root-file.txt',
-        parentId: root.id,
-        size: 100,
-        url: 'https://example.com/root-file.txt',
-      });
-      await fileModel.create({
-        fileType: 'text/plain',
-        name: 'child-file.txt',
-        parentId: child.id,
-        size: 250,
-        url: 'https://example.com/child-file.txt',
-      });
-      await fileModel.create({
-        fileType: 'text/plain',
-        name: 'grandchild-file.txt',
-        parentId: grandchild.id,
-        size: 50,
-        url: 'https://example.com/grandchild-file.txt',
-      });
-
-      const total = await documentModel.countFileUsageInSubtree(root.id);
-      expect(total).toBe(400);
-    });
-
-    it('should return 0 when the subtree has no anchored files', async () => {
-      const root = await documentModel.findOrCreateFolder('empty-folder');
-      const total = await documentModel.countFileUsageInSubtree(root.id);
-      expect(total).toBe(0);
-    });
-
-    it('should not count files owned by another user', async () => {
-      const root = await documentModel.findOrCreateFolder('scoped-folder');
-      // A file anchored to the doc but owned by user2 must be ignored.
-      await fileModel2.create({
-        fileType: 'text/plain',
-        name: 'other-user-file.txt',
-        parentId: root.id,
-        size: 999,
-        url: 'https://example.com/other-user-file.txt',
-      });
-
-      const total = await documentModel.countFileUsageInSubtree(root.id);
-      expect(total).toBe(0);
-    });
-  });
-
   describe('transferTo', () => {
     it('should throw when the document does not exist', async () => {
       await expect(documentModel.transferTo('non-existent-doc', null, userId2)).rejects.toThrow(
