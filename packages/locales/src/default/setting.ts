@@ -854,6 +854,27 @@ export default {
   'devices.health.status.pending': 'Not uploaded yet',
   'devices.health.title': 'Health · last 12 hours',
   'devices.lastSeen': 'Last connected {{time}}',
+  'devices.managed.create.button': 'Create in cloud',
+  'devices.managed.create.class.label': 'Size',
+  'devices.managed.create.class.notIncluded': 'Not in your plan',
+  'devices.managed.create.class.placeholder': 'Choose a size',
+  'devices.managed.create.desc':
+    'LobeHub runs this device in the cloud for you. It sleeps when idle and wakes when an agent needs it.',
+  'devices.managed.create.failed': 'Could not create the cloud device. Try again.',
+  'devices.managed.create.forbidden':
+    'Only workspace members who can add devices can create a cloud device.',
+  'devices.managed.create.loadFailed': 'Could not load the cloud device options. Try again.',
+  'devices.managed.create.name.label': 'Name',
+  'devices.managed.create.name.placeholder': 'My cloud device',
+  'devices.managed.create.noClass': 'Your plan includes no cloud device size.',
+  'devices.managed.create.notIncluded': 'Your plan does not include cloud devices.',
+  'devices.managed.create.quota': '{{count}} of {{limit}} cloud devices used',
+  'devices.managed.create.quotaExceeded':
+    'You already have {{count}} of {{limit}} cloud devices. Remove one to create another.',
+  'devices.managed.create.quotaRefused': 'Your plan does not allow another cloud device right now.',
+  'devices.managed.create.submit': 'Create',
+  'devices.managed.create.success': 'Cloud device created. It starts in about a minute.',
+  'devices.managed.create.title': 'Create a cloud device',
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':
     'This disconnects the device from your account. It does not sign the device out, and it can re-register on next connect.',
