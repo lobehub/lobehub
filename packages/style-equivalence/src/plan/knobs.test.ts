@@ -141,7 +141,7 @@ describe('planFile condition knobs', () => {
     expect(entry.flags).toEqual(['VARIABLE_UNMODELED']);
   });
 
-  it('keeps the flag when the chain also replaces a component', () => {
+  it('models knobs once the replaced component is proven to receive the class unchanged', () => {
     const status: VariableUse[] = [{ kind: 'unknown', name: 'status' }];
     const entry = single(
       el('Video#0', 'Text', cls("status === 'error' ? styles.error : undefined"), status),
@@ -152,8 +152,26 @@ describe('planFile condition knobs', () => {
         status,
       ),
     );
-    expect(entry.flags).toEqual(['VARIABLE_UNMODELED']);
-    expect(entry.evidence).toEqual(['PLACEMENT_PRESERVED']);
+    expect(entry.flags).toEqual([]);
+    expect(entry.evidence).toEqual(['PLACEMENT_PRESERVED', 'CONDITION_KNOBS']);
+    expect(entry.knobs).toEqual(["status === 'error'"]);
+  });
+
+  it('keeps the flag when the replaced component does not receive the class the same way', () => {
+    const status: VariableUse[] = [{ kind: 'unknown', name: 'status' }];
+    const entry = single(
+      el('Video#0', 'Text', cls("status === 'error' ? styles.error : undefined"), status),
+      el(
+        'Video#0',
+        'Text',
+        cls(
+          "cx(stylex.props(styles.base).className, stylex.props(status === 'error' ? styles.error : undefined).className)",
+        ),
+        status,
+      ),
+    );
+    expect(entry.flags).toContain('VARIABLE_UNMODELED');
+    expect(entry.knobs).toBeUndefined();
   });
 
   it('keeps the flag when an ancestor changed its tag', () => {

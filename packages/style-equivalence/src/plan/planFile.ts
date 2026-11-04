@@ -135,7 +135,6 @@ export const planFile = (
         flags.add('PLACEMENT_NEUTRAL_PROP');
       item.flags.forEach((flag) => flags.add(flag));
     }
-    const structural = flags.size > 0;
     const properties = { base: base.slotProperties, head: head.slotProperties };
     const evidence: string[] = [];
     if (
@@ -149,6 +148,7 @@ export const planFile = (
       flags.delete('PLACEMENT_NEUTRAL_PROP');
       evidence.push('PLACEMENT_PRESERVED');
     }
+    const structural = flags.size > 0;
     const variables = new Map<string, PlanVariable>();
     for (const side of ['base', 'head'] as const)
       for (const item of chains[side])
