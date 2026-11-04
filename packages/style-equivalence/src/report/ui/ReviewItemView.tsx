@@ -1,6 +1,6 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { cropShotUrl, fetchRun, type ReviewView, type RunPayload } from '../api';
 import { reviewGrid } from '../review';
@@ -97,16 +97,13 @@ const Pair = ({
 
 const Details = ({ caseKey }: { caseKey: string }) => {
   const [run, setRun] = useState<RunPayload>();
+  useEffect(() => {
+    fetchRun().then(setRun);
+  }, []);
   return (
-    <details
-      onToggle={(event) => {
-        if ((event.target as HTMLDetailsElement).open && !run) fetchRun().then(setRun);
-      }}
-      {...stylex.props(styles.details)}
-    >
-      <summary>详情：源码对比 · 生效的规则 · 比较了哪些条件</summary>
+    <section {...stylex.props(styles.details)}>
       {run ? <CaseView caseKey={caseKey} payload={run} /> : null}
-    </details>
+    </section>
   );
 };
 
