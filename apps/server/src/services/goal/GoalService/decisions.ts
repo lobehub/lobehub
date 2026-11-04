@@ -325,8 +325,8 @@ export const reopenForChanges = async (
     if (!current || current.archivedAt || !REOPENABLE_GOAL_STATUSES.has(current.status))
       return false;
 
-    // A sign-off archived the Goal's finished Tasks (`archiveSignedOffTasks`);
-    // the runner refuses an archived Task, so the one being reworked comes back.
+    // The runner refuses an archived Task, so the one being reworked comes back
+    // even if it was archived on its own (or by an earlier sign-off).
     // Leave `completed` first: that archive only matches a finished Task, so one
     // racing this reopen either lands before the unarchive or matches nothing.
     await new TaskModel(tx, ctx.userId, ctx.workspaceId).updateStatus(taskId, 'backlog', {
