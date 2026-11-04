@@ -12,6 +12,7 @@ const setup = (overrides: Partial<McpAppBridgeHost> = {}) => {
     callTool: vi.fn().mockResolvedValue({ content: [{ text: 'rainy', type: 'text' }] }),
     hostContext: buildHostContext(false),
     onSizeChange: vi.fn(),
+    openLink: vi.fn().mockResolvedValue(true),
     sendMessage: vi.fn(),
     toolInput: () => ({ city: 'Paris' }),
     toolResult: () => ({ content: [{ text: 'sunny', type: 'text' }] }),
@@ -36,6 +37,26 @@ describe('connectMcpAppBridge', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
+  });
+
+  it('leaves ui/open-link to the host, which may decline it', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const { fromView, host, response } = setup();
+
+    await fromView({ id: 1, method: 'ui/open-link', params: { url: 'https://example.com/?q=1' } });
+    expect(host.openLink).toHaveBeenCalledWith('https://example.com/?q=1', expect.any(AbortSignal));
+    expect(response(1)?.result.isError).toBeUndefined();
+
+    vi.mocked(host.openLink).mockResolvedValueOnce(false);
+    await fromView({ id: 2, method: 'ui/open-link', params: { url: 'https://example.com/' } });
+    expect(response(2)?.result.isError).toBe(true);
+
+    // Only web links reach the host
+    await fromView({ id: 3, method: 'ui/open-link', params: { url: 'javascript:alert(1)' } });
+    expect(host.openLink).toHaveBeenCalledTimes(2);
+    expect(response(3)?.result.isError).toBe(true);
+    // The bridge never opens anything itself
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('answers ui/initialize, then sends the tool input and result', async () => {
@@ -116,19 +137,6 @@ describe('connectMcpAppBridge', () => {
       params: { content: [{ text: 'Plan a trip to Rome', type: 'text' }], role: 'user' },
     });
     expect(response(6)?.result).toEqual({ isError: true });
-  });
-
-  it('only opens http(s) links', async () => {
-    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
-    const { fromView, response } = setup();
-    await fromView({ method: 'ui/notifications/initialized' });
-
-    await fromView({ id: 4, method: 'ui/open-link', params: { url: 'javascript:alert(1)' } });
-    await fromView({ id: 5, method: 'ui/open-link', params: { url: 'https://example.com' } });
-
-    expect(response(4)?.result).toEqual({ isError: true });
-    expect(open).toHaveBeenCalledTimes(1);
-    expect(open).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener,noreferrer');
   });
 
   it('reports size changes and ignores messages from other windows', async () => {

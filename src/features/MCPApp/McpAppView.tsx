@@ -19,7 +19,7 @@ import { getToolStoreState } from '@/store/tool';
 import { anySignal } from './abortSignal';
 import { mcpAppNameSelector } from './appName';
 import { buildHostContext, connectMcpAppBridge } from './bridge';
-import { confirmAppMessage, confirmAppToolCall } from './confirm';
+import { confirmAppMessage, confirmAppOpenLink, confirmAppToolCall } from './confirm';
 import {
   buildAppFrameDocument,
   isAppFrameNavigatedNotice,
@@ -121,6 +121,8 @@ const McpAppView = memo<McpAppViewProps>(
 
       // One message at a time, so a view can't line up runs behind a pending one
       let sending = false;
+      // One link prompt at a time, so a view can't stack them up
+      let linking = false;
       // Approvals queue up and open one at a time; a few per view, so a view
       // can't bury the user under modals
       let pendingToolApprovals = 0;
@@ -209,6 +211,27 @@ const McpAppView = memo<McpAppViewProps>(
         },
         hostContext: buildHostContext(latest.current.isDark),
         onSizeChange: (nextHeight) => setHeight(Math.min(nextHeight, MAX_HEIGHT)),
+        // A view can ask without a gesture and carry data in the URL, so the
+        // user sees the link before it opens
+        openLink: async (url, request) => {
+          if (linking) return false;
+          linking = true;
+          try {
+            const { agentId: currentAgentId, identifier: currentIdentifier } = latest.current;
+            const allowed = await awaitApproval(request, (signal) =>
+              confirmAppOpenLink({
+                appName: getAppName(currentIdentifier, currentAgentId),
+                signal,
+                url,
+              }),
+            );
+            if (allowed) window.open(url, '_blank', 'noopener,noreferrer');
+
+            return allowed;
+          } finally {
+            linking = false;
+          }
+        },
         // A message starts a billed run. Parent activation and iframe focus
         // cannot prove which opaque-origin view the user acted in, so every
         // message needs consent in the host.

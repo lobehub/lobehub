@@ -8,6 +8,7 @@ import McpAppView from './McpAppView';
 
 const {
   confirmAppMessage,
+  confirmAppOpenLink,
   confirmAppToolCall,
   getAppToolCallPolicy,
   invokeMcpToolCall,
@@ -15,6 +16,7 @@ const {
   swr,
 } = vi.hoisted(() => ({
   confirmAppMessage: vi.fn(),
+  confirmAppOpenLink: vi.fn(),
   confirmAppToolCall: vi.fn(),
   getAppToolCallPolicy: vi.fn(),
   invokeMcpToolCall: vi.fn(),
@@ -58,7 +60,7 @@ vi.mock('@/store/tool', () => ({ getToolStoreState: () => ({}) }));
 
 vi.mock('./appName', () => ({ mcpAppNameSelector: () => () => 'Weather Demo' }));
 
-vi.mock('./confirm', () => ({ confirmAppMessage, confirmAppToolCall }));
+vi.mock('./confirm', () => ({ confirmAppMessage, confirmAppOpenLink, confirmAppToolCall }));
 
 vi.mock('./toolCallPolicy', () => ({ getAppToolCallPolicy }));
 
@@ -403,6 +405,42 @@ describe('McpAppView', () => {
       expect.objectContaining({ apiName: 'get_forecast', identifier: 'weather-demo' }),
       { agentId: 'agt_1', fromMcpApp: true, signal: expect.any(AbortSignal) },
     );
+  });
+
+  it('opens a link the view asks for only after the user allows it', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const { fromView, response } = setup();
+    const link = (id: number) =>
+      fromView({ id, method: 'ui/open-link', params: { url: 'https://example.com/?d=sunny' } });
+
+    confirmAppOpenLink.mockResolvedValueOnce(false);
+    await link(1);
+    expect(confirmAppOpenLink).toHaveBeenCalledWith(
+      expect.objectContaining({ appName: 'Weather Demo', url: 'https://example.com/?d=sunny' }),
+    );
+    expect(open).not.toHaveBeenCalled();
+    expect(response(1)?.result.isError).toBe(true);
+
+    confirmAppOpenLink.mockResolvedValueOnce(true);
+    await link(2);
+    expect(open).toHaveBeenCalledWith(
+      'https://example.com/?d=sunny',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    expect(response(2)?.result.isError).toBeUndefined();
+  });
+
+  it('asks about one link at a time', async () => {
+    vi.spyOn(window, 'open').mockReturnValue(null);
+    confirmAppOpenLink.mockImplementation(() => new Promise(() => {}));
+    const { fromView, response } = setup();
+
+    await fromView({ id: 1, method: 'ui/open-link', params: { url: 'https://a.example' } });
+    await fromView({ id: 2, method: 'ui/open-link', params: { url: 'https://b.example' } });
+
+    expect(confirmAppOpenLink).toHaveBeenCalledTimes(1);
+    expect(response(2)?.result.isError).toBe(true);
   });
 
   it('keeps a loaded view connected when a revalidation of its HTML fails', async () => {

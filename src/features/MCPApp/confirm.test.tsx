@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { confirmAppMessage, confirmAppToolCall } from './confirm';
+import { confirmAppMessage, confirmAppOpenLink, confirmAppToolCall } from './confirm';
 
 interface OpenedModal {
   close: ReturnType<typeof vi.fn>;
@@ -52,6 +52,21 @@ describe('MCP App confirm queue', () => {
 
     opened[1].onOpenChange(false);
     await expect(second).resolves.toBe(false);
+  });
+
+  it('queues link prompts with the other requests and resolves false when dismissed', async () => {
+    const first = toolCall();
+    const link = confirmAppOpenLink({ appName: 'Weather Demo', url: 'https://example.com' });
+    await flush();
+    expect(opened).toHaveLength(1);
+
+    opened[0].onOpenChange(false);
+    await first;
+    await flush();
+    expect(opened).toHaveLength(2);
+
+    opened[1].onOpenChange(false);
+    await expect(link).resolves.toBe(false);
   });
 
   it('drops a waiting request at once when its view goes away, without opening it', async () => {

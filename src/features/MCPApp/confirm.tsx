@@ -121,3 +121,32 @@ export const confirmAppMessage = ({
     signal,
     title: t('mcpApp.message.confirm.title', { ns: 'plugin' }),
   });
+
+/**
+ * Ask before opening a link a view asked for. A view can request one without
+ * any gesture and put data in the URL, which would leave past its network
+ * policy (on desktop straight to the system browser), so the user sees it first.
+ */
+export const confirmAppOpenLink = ({
+  appName,
+  signal,
+  url,
+}: {
+  appName: string;
+  signal?: AbortSignal;
+  url: string;
+}) =>
+  confirm({
+    cancelText: t('mcpApp.openLink.confirm.cancel', { ns: 'plugin' }),
+    content: (
+      <Flexbox gap={12}>
+        <Text>{t('mcpApp.openLink.confirm.content', { app: appName, ns: 'plugin' })}</Text>
+        <Highlighter actionIconSize={'small'} language={'txt'} wrap={true}>
+          {url}
+        </Highlighter>
+      </Flexbox>
+    ),
+    okText: t('mcpApp.openLink.confirm.ok', { ns: 'plugin' }),
+    signal,
+    title: t('mcpApp.openLink.confirm.title', { ns: 'plugin' }),
+  });

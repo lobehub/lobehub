@@ -29,6 +29,11 @@ export interface McpAppBridgeHost {
   hostContext: McpUiHostContext;
   onSizeChange: (height: number) => void;
   /**
+   * Open an http(s) link the view asked for; resolves `false` when the host
+   * declined it. `signal` aborts when the view stops waiting for the answer.
+   */
+  openLink: (url: string, signal: AbortSignal) => Promise<boolean>;
+  /**
    * Post a user message into the conversation; resolves `false` when the host
    * declined it. `signal` aborts when the view stops waiting for the answer.
    */
@@ -63,11 +68,10 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
     return sent === false ? { isError: true } : {};
   };
 
-  bridge.onopenlink = async ({ url }) => {
+  bridge.onopenlink = async ({ url }, { mcpReq }) => {
     if (!/^https?:\/\//i.test(url)) return { isError: true };
 
-    window.open(url, '_blank', 'noopener,noreferrer');
-    return {};
+    return (await host.openLink(url, mcpReq.signal)) ? {} : { isError: true };
   };
 
   const handleSizeChange = ({ height }: McpUiSizeChangedNotification['params']) => {

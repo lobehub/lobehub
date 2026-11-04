@@ -909,6 +909,10 @@ export default {
   'mcpApp.message.confirm.ok': 'Send',
   'mcpApp.message.confirm.title': 'Send this message from the view?',
   'mcpApp.message.source': 'Follow-up from the {{app}} view',
+  'mcpApp.openLink.confirm.cancel': 'Cancel',
+  'mcpApp.openLink.confirm.content': 'The {{app}} view wants to open this link.',
+  'mcpApp.openLink.confirm.ok': 'Open',
+  'mcpApp.openLink.confirm.title': 'Open this link from the view?',
   'mcpApp.toolCall.busy':
     'The tool "{{tool}}" was not run: too many of this view\'s tool calls are waiting for approval. Try again once they are answered.',
   'mcpApp.toolCall.confirm.cancel': 'Deny',
