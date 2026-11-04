@@ -66,8 +66,9 @@ export async function startManagedDevice(logger: {
     throw new Error('process.exit');
   }
   const { config } = read;
-  // Tool calls and agent runs inherit this process's environment; the
-  // long-lived secret must not reach them.
+  // Keep the secret out of the environment that tool calls and agent runs
+  // inherit. Processes of the same user can still read the environment this
+  // process started with.
   delete process.env[MANAGED_DEVICE_SECRET_ENV];
 
   const events: ManagedDeviceEvents = {

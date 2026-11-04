@@ -73,9 +73,17 @@ platform supervises the process and restarts it when it exits.
 | `LOBEHUB_DEVICE_ACTIVITY_COMMAND` | no       | A command to run while the device does work (see below).    |
 
 If a required variable is missing, the CLI names it and exits with status 1.
-`--managed` cannot be used with `--token`, `--gateway`, `--device-id`,
-`--workspace`, `--public` or `--daemon`. The CLI removes the secret from its own
-environment after it reads it, so tool calls and agent runs do not inherit it.
+`LOBEHUB_SERVER` and `LOBEHUB_DEVICE_GATEWAY_URL` must use `https`; `http` is
+accepted only for `localhost`, `127.0.0.1` and `::1`. `--managed` cannot be used
+with `--token`, `--gateway`, `--device-id`, `--workspace`, `--public` or
+`--daemon`.
+
+After the CLI reads the secret, it removes it from its own environment, so the
+processes it starts (tool calls, agent runs) do not inherit it. This does not
+hide the secret from the device: other processes of the same user can still
+read the environment the CLI started with (for example `/proc/<pid>/environ`).
+The secret only gets tokens for this device, and it stops working when the
+device is deleted.
 
 **Token.** The CLI sends `POST {LOBEHUB_SERVER}/api/device/managed/token` with
 `{ "deviceId", "secret" }` and gets `{ "token", "expiresAt" }`. The token's
