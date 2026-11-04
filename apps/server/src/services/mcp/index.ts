@@ -190,12 +190,24 @@ export class MCPService {
   }
 
   // listTools now accepts MCPClientParams
-  async listRawTools(params: MCPClientParams): Promise<McpTool[]> {
-    return this.withSessionRetry(params, 'listing tools', async (client) => {
-      const result = await client.listTools();
-      log(`Tools listed successfully, result count: %d`, result.length);
-      return result;
-    });
+  async listRawTools(
+    params: MCPClientParams,
+    /**
+     * List on a session that announces MCP Apps (the user's `mcp_apps` flag):
+     * a server may list the tools only its views call just to such a client.
+     */
+    { mcpApps = false }: { mcpApps?: boolean } = {},
+  ): Promise<McpTool[]> {
+    return this.withSessionRetry(
+      params,
+      'listing tools',
+      async (client) => {
+        const result = await client.listTools();
+        log(`Tools listed successfully, result count: %d`, result.length);
+        return result;
+      },
+      { mcpApps },
+    );
   }
 
   // listResources now accepts MCPClientParams
@@ -440,6 +452,8 @@ export class MCPService {
       type: 'none' | 'bearer' | 'oauth2';
     },
     headers?: Record<string, string>,
+    /** Discover on a session that announces MCP Apps, so view-only tools are found too. */
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<ToolManifest> {
     const mcpParams = { name: identifier, type: 'http' as const, url };
 
@@ -453,7 +467,7 @@ export class MCPService {
       (mcpParams as any).headers = headers;
     }
 
-    const rawTools = await this.listRawTools(mcpParams);
+    const rawTools = await this.listRawTools(mcpParams, { mcpApps });
     const tools = this.transformMCPToolToLobeAPI(rawTools);
 
     return {
@@ -477,6 +491,8 @@ export class MCPService {
   async getStdioMcpServerManifest(
     params: Omit<StdioMCPParams, 'type'>,
     metadata?: CustomPluginMetadata,
+    /** Discover on a session that announces MCP Apps, so view-only tools are found too. */
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<ToolManifest> {
     const mcpParams = {
       args: params.args,
@@ -486,7 +502,7 @@ export class MCPService {
       type: 'stdio' as const,
     };
 
-    const client = await this.getClient(mcpParams); // Get client using params
+    const client = await this.getClient(mcpParams, false, { mcpApps });
 
     const manifest = await client.listManifests();
 

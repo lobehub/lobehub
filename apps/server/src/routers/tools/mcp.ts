@@ -75,13 +75,15 @@ const mcpProcedure = wsCompatProcedure
 export const mcpRouter = router({
   getStreamableMcpServerManifest: mcpProcedure
     .input(GetStreamableMcpServerManifestInputSchema)
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       return await mcpService.getStreamableMcpServerManifest(
         input.identifier,
         input.url,
         input.metadata,
         input.auth,
         input.headers,
+        // With MCP Apps on, the tools only views call are listed and kept too
+        { mcpApps: await isMcpAppsEnabled(ctx.userId) },
       );
     }),
   // --- MCP Interaction ---

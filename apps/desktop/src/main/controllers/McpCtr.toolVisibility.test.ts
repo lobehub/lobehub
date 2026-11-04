@@ -9,8 +9,11 @@ const { mcpClientMocks } = vi.hoisted(() => ({ mcpClientMocks: vi.fn() }));
 
 vi.mock('../libs/mcp/client', () => ({
   MCPClient: class {
-    constructor(public params: unknown) {
-      return mcpClientMocks();
+    constructor(
+      public params: unknown,
+      options?: unknown,
+    ) {
+      return mcpClientMocks(options);
     }
   },
   MCPConnectionError: class extends Error {
@@ -51,6 +54,34 @@ describe('McpCtr tool visibility', () => {
     vi.resetAllMocks();
     mcpClientMocks.mockImplementation(makeClient);
     ctr = new McpCtr(mockApp);
+  });
+
+  it.each([
+    [
+      'stdio manifest',
+      (ctr: McpCtr) =>
+        ctr.getStdioMcpServerManifest(serializeMcpIpcPayload({ ...stdio, mcpApps: true })),
+    ],
+    [
+      'HTTP manifest',
+      (ctr: McpCtr) =>
+        ctr.getStreamableMcpServerManifest(
+          serializeMcpIpcPayload({ identifier: 'dash', mcpApps: true, url: http.url }),
+        ),
+    ],
+    [
+      'stdio listing',
+      (ctr: McpCtr) => ctr.listTools(serializeMcpIpcPayload({ mcpApps: true, stdio } as any)),
+    ],
+    [
+      'HTTP listing',
+      (ctr: McpCtr) => ctr.listTools(serializeMcpIpcPayload({ http, mcpApps: true } as any)),
+    ],
+  ])('discovers on a session announcing MCP Apps when on (%s)', async (_, discover) => {
+    // A server may list the tools only its views call just to such a client
+    await discover(ctr);
+
+    expect(mcpClientMocks).toHaveBeenCalledWith({ mcpApps: true });
   });
 
   it('keeps view-only tools out of the stdio manifest the model reads', async () => {

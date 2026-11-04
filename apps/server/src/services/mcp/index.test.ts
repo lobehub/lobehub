@@ -323,6 +323,28 @@ describe('MCPService', () => {
     getClientSpy = vi.spyOn(mcpService as any, 'getClient').mockResolvedValue(mockClient);
   });
 
+  describe('manifest discovery with MCP Apps', () => {
+    it('discovers on a session announcing MCP Apps when asked, so view-only tools are found', async () => {
+      mockClient.listTools.mockResolvedValue([]);
+      mockClient.listManifests.mockResolvedValue({ tools: [] });
+
+      await mcpService.getStreamableMcpServerManifest(
+        'srv',
+        'https://mcp.example.com',
+        undefined,
+        undefined,
+        undefined,
+        { mcpApps: true },
+      );
+      await mcpService.getStdioMcpServerManifest({ command: 'srv', name: 'srv' }, undefined, {
+        mcpApps: true,
+      });
+
+      expect(getClientSpy).toHaveBeenNthCalledWith(1, expect.anything(), false, { mcpApps: true });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, expect.anything(), false, { mcpApps: true });
+    });
+  });
+
   describe('manifest descriptions', () => {
     it.each(['My server description'])(
       'keeps stdio descriptions as metadata (%s)',

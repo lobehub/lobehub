@@ -10,6 +10,7 @@ const {
   connectors,
   environment,
   ipcCall,
+  ipcListTools,
   ipcRead,
   relayCall,
   relayRead,
@@ -22,6 +23,7 @@ const {
   connectors: new Map<string, unknown>(),
   environment: { deviceGatewayConfigured: false, isDesktop: true },
   ipcCall: vi.fn(),
+  ipcListTools: vi.fn(),
   ipcRead: vi.fn(),
   plugins: new Map<string, unknown>(),
   relayCall: vi.fn(),
@@ -71,7 +73,9 @@ vi.mock('@/store/electron', () => ({
 }));
 
 vi.mock('@/utils/electron/ipc', () => ({
-  ensureElectronIpc: () => ({ mcp: { callTool: ipcCall, readUiResource: ipcRead } }),
+  ensureElectronIpc: () => ({
+    mcp: { callTool: ipcCall, listTools: ipcListTools, readUiResource: ipcRead },
+  }),
 }));
 
 vi.mock('./discover', () => ({
@@ -169,6 +173,19 @@ describe('mcpService.readMcpAppResource on desktop', () => {
     expect(relayRead).toHaveBeenCalledWith({
       params: expect.objectContaining({ headers: { 'x-key': 'k' } }),
       uri: 'ui://app',
+    });
+  });
+});
+
+describe('mcpService tool discovery on desktop with MCP Apps on', () => {
+  it("lists a local server's tools on a session that announces MCP Apps", async () => {
+    // A server may list the tools only its views call just to such a client
+    ipcListTools.mockResolvedValue(serializeMcpIpcPayload([]));
+
+    await mcpService.listLocalMcpTools({ stdio: { command: 'dash-mcp', name: 'dash' } });
+
+    expect(deserializeMcpIpcPayload(ipcListTools.mock.calls[0][0])).toMatchObject({
+      mcpApps: true,
     });
   });
 });

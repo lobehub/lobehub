@@ -93,7 +93,7 @@ interface CustomPluginMetadata {
   name?: string;
 }
 
-interface GetStdioMcpServerManifestInput {
+interface GetStdioMcpServerManifestInput extends McpSessionOptions {
   args?: string[];
   command: string;
   env?: Record<string, string>;
@@ -102,7 +102,7 @@ interface GetStdioMcpServerManifestInput {
   type?: 'stdio';
 }
 
-interface GetStreamableMcpServerManifestInput {
+interface GetStreamableMcpServerManifestInput extends McpSessionOptions {
   auth?: {
     accessToken?: string;
     token?: string;
@@ -137,9 +137,11 @@ export interface HttpCallToolInput extends McpCallOptions {
 export type CallToolInput = StdioCallToolInput | HttpCallToolInput;
 
 /** List a stdio or local-network HTTP server's tools, as the server declares them. */
-export type ListToolsInput =
-  | { http: HttpCallToolInput['http']; stdio?: undefined }
-  | { http?: undefined; stdio: GetStdioMcpServerManifestInput };
+export type ListToolsInput = McpSessionOptions &
+  (
+    | { http: HttpCallToolInput['http']; stdio?: undefined }
+    | { http?: undefined; stdio: GetStdioMcpServerManifestInput }
+  );
 
 /** A tool as `listTools` reports it, with its MCP Apps `visibility` when declared. */
 export interface ListedMcpTool {
@@ -592,7 +594,7 @@ export default class McpCtr extends ControllerModule {
 
     let client: MCPClient | undefined;
     try {
-      client = await this.acquireClient(params);
+      client = await this.acquireClient(params, { mcpApps: input.mcpApps });
       // Lease for the manifest refresh too: a concurrent stale-session
       // eviction must not disconnect underneath this pending request.
       const manifest = await this.withClientLease(client, () => client!.listManifests());
@@ -654,7 +656,7 @@ export default class McpCtr extends ControllerModule {
       url: input.url,
     };
 
-    const client = await this.createClient(params);
+    const client = await this.createClient(params, { mcpApps: input.mcpApps });
     try {
       const tools = await client.listTools();
       const api = toModelApi(tools);
@@ -696,7 +698,10 @@ export default class McpCtr extends ControllerModule {
       }));
 
     if (input.http) {
-      const client = await this.createClient({ ...input.http, type: 'http' });
+      const client = await this.createClient(
+        { ...input.http, type: 'http' },
+        { mcpApps: input.mcpApps },
+      );
       try {
         return serializePayload(toListed(await client.listTools()));
       } finally {
@@ -713,7 +718,7 @@ export default class McpCtr extends ControllerModule {
     };
     let client: MCPClient | undefined;
     try {
-      client = await this.acquireClient(params);
+      client = await this.acquireClient(params, { mcpApps: input.mcpApps });
       const tools = await this.withClientLease(client, () => client!.listTools());
       return serializePayload(toListed(tools));
     } catch (error) {

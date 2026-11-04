@@ -75,6 +75,12 @@ const markLocalView = async <T>(result: T): Promise<T> => {
   return result;
 };
 
+/** The user's `mcp_apps` flag: whether sessions on this machine announce MCP Apps. */
+const isMcpAppsOn = () => {
+  const state = getServerConfigStoreState();
+  return !!state && serverConfigSelectors.enableMcpApps(state);
+};
+
 /**
  * Build the MCP client params for an installed/custom plugin: its stored
  * connection plus the user's plugin settings as HTTP headers or stdio env.
@@ -153,8 +159,7 @@ class MCPService {
     const s = getToolStoreState();
     const { identifier, arguments: args, apiName } = payload;
     // Calls run on this machine announce MCP Apps only under the user's flag
-    const serverConfigState = getServerConfigStoreState();
-    const mcpApps = !!serverConfigState && serverConfigSelectors.enableMcpApps(serverConfigState);
+    const mcpApps = isMcpAppsOn();
 
     // Connector-first: HTTP connectors use their server-held credentials.
     // Standalone desktop stdio connectors use local IPC; configured device
@@ -515,7 +520,8 @@ class MCPService {
     // This avoids accessing user local services through remote server in production
     if (isDesktop && isLocalOrPrivateUrl(params.url)) {
       // Note: IPC doesn't support AbortSignal yet
-      const serialized = serializeMcpIpcPayload(params);
+      // With MCP Apps on, the tools only views call are listed and kept too
+      const serialized = serializeMcpIpcPayload({ ...params, mcpApps: isMcpAppsOn() });
       const serializedResult = await ensureElectronIpc().mcp.getStreamableMcpServerManifest(
         serialized as any,
       );
@@ -544,7 +550,8 @@ class MCPService {
       | { stdio: { args?: string[]; command: string; env?: Record<string, string>; name: string } },
   ): Promise<LocalMcpTool[]> {
     const serializedResult = await ensureElectronIpc().mcp.listTools(
-      serializeMcpIpcPayload(params) as any,
+      // With MCP Apps on, a server may list its view-only tools only then
+      serializeMcpIpcPayload({ ...params, mcpApps: isMcpAppsOn() }) as any,
     );
     return deserializeMcpIpcPayload<LocalMcpTool[]>(serializedResult);
   }
@@ -561,7 +568,8 @@ class MCPService {
   ) {
     void _signal;
     // Note: IPC doesn't support AbortSignal yet
-    const serialized = serializeMcpIpcPayload({ ...stdioParams, metadata });
+    // With MCP Apps on, the tools only views call are listed and kept too
+    const serialized = serializeMcpIpcPayload({ ...stdioParams, mcpApps: isMcpAppsOn(), metadata });
     const serializedResult = await ensureElectronIpc().mcp.getStdioMcpServerManifest(
       serialized as any,
     );

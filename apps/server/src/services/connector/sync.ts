@@ -7,6 +7,7 @@ import { ConnectorMcpConnectionType, ConnectorStatus } from '@/database/schemas'
 import type { AuthConfig } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { mcpService } from '@/server/services/mcp';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { ensureFreshConnectorToken } from './tokens';
 
@@ -99,7 +100,8 @@ export const buildHttpAuthFromCredentials = (
  */
 export const syncConnectorToolsById = async (
   connectorId: string,
-  ctx: ConnectorToolSyncContext,
+  /** `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed too. */
+  ctx: ConnectorToolSyncContext & { userId?: string | null },
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);
   if (!connector) throw new Error('Connector not found');
@@ -115,7 +117,11 @@ export const syncConnectorToolsById = async (
 
   let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
   try {
-    rawTools = await mcpService.listRawTools(mcpParams);
+    // A server may list the tools only its views call just to a client
+    // announcing MCP Apps; they are synced, and kept from the model, all the same
+    rawTools = await mcpService.listRawTools(mcpParams, {
+      mcpApps: await isMcpAppsEnabled(ctx.userId),
+    });
   } catch (err) {
     await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
     throw err;

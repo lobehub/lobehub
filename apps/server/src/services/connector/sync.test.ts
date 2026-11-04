@@ -12,6 +12,8 @@ import {
 } from './sync';
 
 vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
+const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: async (connector: unknown) => connector }));
 
 const httpConnector = (
@@ -225,4 +227,24 @@ describe('syncConnectorToolsById', () => {
       expect.objectContaining({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
     ]);
   });
+
+  it.each([true, false])(
+    "lists on a session announcing MCP Apps under the user's flag (%s)",
+    async (enabled) => {
+      // A server may list the tools only its views call just to such a client
+      mcpAppsEnabled.mockResolvedValueOnce(enabled);
+      vi.mocked(mcpService.listRawTools).mockResolvedValue([]);
+
+      await syncConnectorToolsById('c1', {
+        connectorModel: { findById: async () => httpConnector(null), updateStatus: vi.fn() } as any,
+        connectorToolModel: { upsertMany: vi.fn() } as any,
+        userId: 'user-1',
+      });
+
+      expect(mcpAppsEnabled).toHaveBeenCalledWith('user-1');
+      expect(mcpService.listRawTools).toHaveBeenCalledWith(expect.anything(), {
+        mcpApps: enabled,
+      });
+    },
+  );
 });

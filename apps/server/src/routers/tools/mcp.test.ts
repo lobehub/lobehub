@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mcpRouter } from './mcp';
 
-const { mockCallTool, mockMcpAppsEnabled, mockReadUiResource } = vi.hoisted(() => ({
-  mockCallTool: vi.fn(),
-  mockMcpAppsEnabled: vi.fn(),
-  mockReadUiResource: vi.fn(),
-}));
+const { mockCallTool, mockGetStreamableManifest, mockMcpAppsEnabled, mockReadUiResource } =
+  vi.hoisted(() => ({
+    mockCallTool: vi.fn(),
+    mockGetStreamableManifest: vi.fn(),
+    mockMcpAppsEnabled: vi.fn(),
+    mockReadUiResource: vi.fn(),
+  }));
 
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mockMcpAppsEnabled }));
 
@@ -36,7 +38,11 @@ vi.mock('@/server/services/file', () => ({
 }));
 
 vi.mock('@/server/services/mcp', () => ({
-  mcpService: { callTool: mockCallTool, readUiResource: mockReadUiResource },
+  mcpService: {
+    callTool: mockCallTool,
+    getStreamableMcpServerManifest: mockGetStreamableManifest,
+    readUiResource: mockReadUiResource,
+  },
 }));
 
 describe('tools mcpRouter.callTool', () => {
@@ -79,6 +85,29 @@ describe('tools mcpRouter.callTool', () => {
       expect(mockCallTool).toHaveBeenCalledWith(expect.objectContaining({ fromApp }));
     },
   );
+});
+
+describe('tools mcpRouter.getStreamableMcpServerManifest', () => {
+  it.each([true, false])("discovers under the caller's mcp_apps flag (%s)", async (enabled) => {
+    mockMcpAppsEnabled.mockResolvedValue(enabled);
+    mockGetStreamableManifest.mockResolvedValue({ api: [] });
+    const caller = mcpRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
+
+    await caller.getStreamableMcpServerManifest({
+      identifier: 'srv',
+      url: 'https://mcp.example.com/mcp',
+    });
+
+    expect(mockMcpAppsEnabled).toHaveBeenCalledWith('user-1');
+    expect(mockGetStreamableManifest).toHaveBeenCalledWith(
+      'srv',
+      'https://mcp.example.com/mcp',
+      undefined,
+      undefined,
+      undefined,
+      { mcpApps: enabled },
+    );
+  });
 });
 
 describe('tools mcpRouter.readUiResource', () => {

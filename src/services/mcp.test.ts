@@ -762,7 +762,11 @@ describe('MCPService', () => {
       const input = { stdio: { command: 'dash-mcp', name: 'dash' } };
 
       await expect(mcpService.listLocalMcpTools(input)).resolves.toEqual(tools);
-      expect(superjson.deserialize(mockElectronIpc.mcp.listTools.mock.calls[0][0])).toEqual(input);
+      expect(superjson.deserialize(mockElectronIpc.mcp.listTools.mock.calls[0][0])).toEqual({
+        ...input,
+        // MCP Apps off for this user: listed on a session that doesn't announce them
+        mcpApps: false,
+      });
     });
   });
 
@@ -801,7 +805,11 @@ describe('MCPService', () => {
 
       expect(result).toEqual(mockManifest);
       const callArg = vi.mocked(mockElectronIpc.mcp.getStdioMcpServerManifest).mock.calls[0][0];
-      expect(superjson.deserialize(callArg as any)).toEqual({ ...stdioParams, metadata });
+      expect(superjson.deserialize(callArg as any)).toEqual({
+        ...stdioParams,
+        mcpApps: false,
+        metadata,
+      });
     });
 
     it('should handle abort signal for stdio manifest', async () => {
@@ -834,6 +842,7 @@ describe('MCPService', () => {
       const callArg = vi.mocked(mockElectronIpc.mcp.getStdioMcpServerManifest).mock.calls[0][0];
       expect(superjson.deserialize(callArg as any)).toEqual({
         ...stdioParams,
+        mcpApps: false,
         metadata: undefined,
       });
     });
@@ -866,6 +875,7 @@ describe('MCPService', () => {
       const callArg = vi.mocked(mockElectronIpc.mcp.getStdioMcpServerManifest).mock.calls[0][0];
       expect(superjson.deserialize(callArg as any)).toEqual({
         ...stdioParams,
+        mcpApps: false,
         metadata: undefined,
       });
     });
