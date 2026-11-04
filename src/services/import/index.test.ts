@@ -141,6 +141,38 @@ describe('ImportService', () => {
         expect(callbacks.onSuccess).not.toHaveBeenCalled();
       });
 
+      it('should handle server response with success: false', async () => {
+        const mockData = {
+          messages: Array.from({ length: 100 }).fill({ id: '1', content: 'test' }),
+          version: 1,
+        };
+
+        const mockResult = {
+          error: { message: 'Transaction failed' },
+          results: {},
+          success: false as const,
+        };
+
+        vi.mocked(lambdaClient.importer.importByPost.mutate).mockResolvedValue(mockResult);
+
+        const callbacks = {
+          onError: vi.fn(),
+          onStageChange: vi.fn(),
+          onSuccess: vi.fn(),
+        };
+
+        await importService.importData(mockData as any, callbacks);
+
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Importing);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Transaction failed',
+          }),
+        );
+        expect(callbacks.onSuccess).not.toHaveBeenCalled();
+      });
+
       it('should calculate duration correctly', async () => {
         const mockData = {
           messages: Array.from({ length: 10 }).fill({ id: '1', content: 'test' }),
@@ -233,6 +265,7 @@ describe('ImportService', () => {
         vi.mocked(uploadService.uploadDataToS3).mockRejectedValue(new Error('S3 upload failed'));
 
         const callbacks = {
+          onError: vi.fn(),
           onStageChange: vi.fn(),
         };
 
@@ -241,6 +274,83 @@ describe('ImportService', () => {
         );
 
         expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Uploading);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'S3 upload failed',
+          }),
+        );
+      });
+
+      it('should handle string upload error message like UPLOAD_NETWORK_ERROR', async () => {
+        const mockData = {
+          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
+          version: 1,
+        };
+
+        vi.mocked(uploadService.uploadDataToS3).mockRejectedValue('UPLOAD_NETWORK_ERROR');
+
+        const callbacks = {
+          onError: vi.fn(),
+          onStageChange: vi.fn(),
+        };
+
+        await expect(importService.importData(mockData as any, callbacks)).rejects.toThrow(
+          'Upload Error',
+        );
+
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Uploading);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            code: 'UPLOAD_NETWORK_ERROR',
+            message: 'UPLOAD_NETWORK_ERROR',
+          }),
+        );
+      });
+
+      it('should handle server response with success: false after successful upload', async () => {
+        const mockData = {
+          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
+          version: 1,
+        };
+
+        const mockUploadResult = {
+          data: {
+            date: '2024-01-01',
+            dirname: 'import_config',
+            filename: 'mock-uuid-123.json',
+            path: 'import_config/mock-uuid-123.json',
+          },
+          success: true as const,
+        };
+
+        const mockResult = {
+          error: { message: 'File import validation failed' },
+          results: {},
+          success: false as const,
+        };
+
+        vi.mocked(uploadService.uploadDataToS3).mockResolvedValue(mockUploadResult as any);
+        vi.mocked(lambdaClient.importer.importByFile.mutate).mockResolvedValue(mockResult);
+
+        const callbacks = {
+          onError: vi.fn(),
+          onStageChange: vi.fn(),
+          onSuccess: vi.fn(),
+        };
+
+        await importService.importData(mockData as any, callbacks);
+
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Uploading);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Importing);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'File import validation failed',
+          }),
+        );
+        expect(callbacks.onSuccess).not.toHaveBeenCalled();
       });
 
       it('should handle import error after successful upload', async () => {
@@ -500,6 +610,41 @@ describe('ImportService', () => {
           path: '/api/import/pg',
         });
       });
+
+      it('should handle server response with success: false', async () => {
+        const mockData = {
+          data: {
+            users: [{ id: 1 }],
+          },
+          mode: 'postgres' as const,
+          schemaHash: 'hash123',
+        };
+
+        const mockResult = {
+          error: { message: 'Transaction failed' },
+          results: {},
+          success: false as const,
+        };
+
+        vi.mocked(lambdaClient.importer.importPgByPost.mutate).mockResolvedValue(mockResult);
+
+        const callbacks = {
+          onError: vi.fn(),
+          onStageChange: vi.fn(),
+          onSuccess: vi.fn(),
+        };
+
+        await importService.importPgData(mockData as any, { callbacks });
+
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Importing);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Transaction failed',
+          }),
+        );
+        expect(callbacks.onSuccess).not.toHaveBeenCalled();
+      });
     });
 
     describe('large dataset (>= 500 items)', () => {
@@ -549,6 +694,118 @@ describe('ImportService', () => {
         );
         expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Importing);
         expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Success);
+      });
+
+      it('should transition to Error stage and call onError when S3 upload fails', async () => {
+        const mockData = {
+          data: {
+            messages: Array.from({ length: 500 }).fill({ id: 1, content: 'test' }),
+          },
+          mode: 'postgres' as const,
+          schemaHash: 'hash123',
+        };
+
+        vi.mocked(uploadService.uploadDataToS3).mockRejectedValue(
+          new Error('Network disconnected'),
+        );
+
+        const callbacks = {
+          onError: vi.fn(),
+          onStageChange: vi.fn(),
+          onSuccess: vi.fn(),
+        };
+
+        await expect(importService.importPgData(mockData as any, { callbacks })).rejects.toThrow(
+          'Upload Error',
+        );
+
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Uploading);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Network disconnected',
+          }),
+        );
+        expect(callbacks.onSuccess).not.toHaveBeenCalled();
+      });
+
+      it('should handle string upload error message like UPLOAD_NETWORK_ERROR', async () => {
+        const mockData = {
+          data: {
+            messages: Array.from({ length: 500 }).fill({ id: 1, content: 'test' }),
+          },
+          mode: 'postgres' as const,
+          schemaHash: 'hash123',
+        };
+
+        vi.mocked(uploadService.uploadDataToS3).mockRejectedValue('UPLOAD_NETWORK_ERROR');
+
+        const callbacks = {
+          onError: vi.fn(),
+          onStageChange: vi.fn(),
+          onSuccess: vi.fn(),
+        };
+
+        await expect(importService.importPgData(mockData as any, { callbacks })).rejects.toThrow(
+          'Upload Error',
+        );
+
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Uploading);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            code: 'UPLOAD_NETWORK_ERROR',
+            message: 'UPLOAD_NETWORK_ERROR',
+          }),
+        );
+        expect(callbacks.onSuccess).not.toHaveBeenCalled();
+      });
+
+      it('should handle server response with success: false after successful upload', async () => {
+        const mockData = {
+          data: {
+            messages: Array.from({ length: 500 }).fill({ id: 1, content: 'test' }),
+          },
+          mode: 'postgres' as const,
+          schemaHash: 'hash123',
+        };
+
+        const mockUploadResult = {
+          data: {
+            date: '2024-01-01',
+            dirname: 'import_config',
+            filename: 'mock-uuid-123.json',
+            path: 'import_config/mock-uuid-123.json',
+          },
+          success: true as const,
+        };
+
+        const mockResult = {
+          error: { message: 'File processing failed' },
+          results: {},
+          success: false as const,
+        };
+
+        vi.mocked(uploadService.uploadDataToS3).mockResolvedValue(mockUploadResult as any);
+        vi.mocked(lambdaClient.importer.importByFile.mutate).mockResolvedValue(mockResult);
+
+        const callbacks = {
+          onError: vi.fn(),
+          onStageChange: vi.fn(),
+          onSuccess: vi.fn(),
+        };
+
+        await importService.importPgData(mockData as any, { callbacks });
+
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Uploading);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Importing);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'File processing failed',
+          }),
+        );
+        expect(callbacks.onSuccess).not.toHaveBeenCalled();
       });
 
       it('should handle multiple tables with varying sizes', async () => {
