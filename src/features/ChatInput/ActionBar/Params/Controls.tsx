@@ -80,15 +80,43 @@ const styles = createStaticStyles(({ css }) => ({
       border-block-start: none;
     }
   `,
-  sectionHeader: css`
+  section: css`
+    padding-block: 4px;
+    padding-inline: 12px;
+  `,
+  sectionExtra: css`
+    overflow: hidden;
+
+    min-width: 0;
+
+    font-size: 12px;
+    line-height: 20px;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  sectionHeading: css`
+    padding-block-start: 8px;
+  `,
+  sectionTitle: css`
+    user-select: none;
+
+    flex: none;
+
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+    color: ${cssVar.colorText};
+  `,
+  sectionToggle: css`
     cursor: pointer;
 
     width: calc(100% + 16px);
     margin-inline: -8px;
-    padding-block: 12px;
+    padding-block: 8px;
     padding-inline: 8px;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
 
     font: inherit;
     color: ${cssVar.colorTextTertiary};
@@ -102,33 +130,10 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
     }
 
-    &:hover .section-header-label {
-      color: ${cssVar.colorText};
-    }
-
     &:focus-visible {
       outline: 1px solid ${cssVar.colorBorder};
       outline-offset: 2px;
     }
-  `,
-  sectionTitle: css`
-    user-select: none;
-
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 20px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  subAgentSection: css`
-    margin-block: 12px 8px;
-  `,
-  subAgentTitle: css`
-    user-select: none;
-
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 20px;
-    color: ${cssVar.colorText};
   `,
   body: css`
     overflow-y: auto;
@@ -137,18 +142,10 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1 1 auto;
     flex-direction: column;
 
+    gap: 12px;
+
     min-height: 0;
-    padding-block-end: 4px;
-    padding-inline: 12px;
-  `,
-  commonSection: css`
-    display: flex;
-    flex-direction: column;
-    padding-block: 0;
-  `,
-  divider: css`
-    height: 1px;
-    background: ${cssVar.colorSplit};
+    padding: 12px;
   `,
   hint: css`
     font-size: 12px;
@@ -217,9 +214,6 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorTextTertiary};
     }
   `,
-  modelConfigSection: css`
-    padding-block: 12px;
-  `,
   panel: css`
     overflow: hidden;
     display: flex;
@@ -247,7 +241,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
   `,
   rowRoot: css`
-    padding-block: 12px;
+    padding-block: 8px;
   `,
   tag: css`
     user-select: none;
@@ -332,7 +326,6 @@ const PARAM_ORDER: ParamKey[] = ['temperature', 'top_p', 'frequency_penalty', 'p
 const REASONING_PARAMS_SET = new Set<string>(MODEL_REASONING_EXTEND_PARAMS);
 
 const ADVANCED_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-advanced-open';
-const MODEL_CONFIG_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-model-config-open';
 
 const getStoredOpen = (storageKey: string) => {
   if (typeof window === 'undefined') return false;
@@ -389,20 +382,47 @@ const ControlRow = ({ action, children, muted, tag, title, tooltip }: ControlRow
   </Flexbox>
 );
 
-interface SectionHeaderProps {
-  onToggle: () => void;
-  open: boolean;
+interface SectionProps {
+  children?: ReactNode;
+  /** Present for a section the user can fold away; the open state is owned by the caller. */
+  collapse?: { onToggle: () => void; open: boolean };
+  /** Muted text after the title, e.g. the model these params apply to. */
+  extra?: ReactNode;
+  /** One line under the title saying what the section applies to. */
+  note?: ReactNode;
   title: string;
 }
 
-const SectionHeader = memo<SectionHeaderProps>(({ onToggle, open, title }) => (
-  <button aria-expanded={open} className={styles.sectionHeader} type="button" onClick={onToggle}>
-    <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-      <span className={cx(styles.sectionTitle, 'section-header-label')}>{title}</span>
-      <Icon icon={open ? ChevronUp : ChevronDown} size={16} />
+// Every group in the panel is one of these cards, so each reads as its own part
+// rather than one long list; the title is the strongest text inside it.
+const Section = ({ children, collapse, extra, note, title }: SectionProps) => {
+  const heading = (
+    <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+      <span className={styles.sectionTitle}>{title}</span>
+      {extra && <span className={styles.sectionExtra}>{extra}</span>}
+      {collapse && <Icon icon={collapse.open ? ChevronUp : ChevronDown} size={16} />}
     </Flexbox>
-  </button>
-));
+  );
+
+  return (
+    <Block className={styles.section} variant={'filled'}>
+      {collapse ? (
+        <button
+          aria-expanded={collapse.open}
+          className={styles.sectionToggle}
+          type="button"
+          onClick={collapse.onToggle}
+        >
+          {heading}
+        </button>
+      ) : (
+        <div className={styles.sectionHeading}>{heading}</div>
+      )}
+      {note && <div className={styles.hint}>{note}</div>}
+      {(!collapse || collapse.open) && children}
+    </Block>
+  );
+};
 
 interface SliderFieldProps extends SliderConfig {
   disabled?: boolean;
@@ -471,12 +491,11 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const hasReasoningExtendParams = (modelExtendParamsList ?? []).some((param) =>
     REASONING_PARAMS_SET.has(param),
   );
+  const mainModelName =
+    useAiInfraStore((s) => aiModelSelectors.getModelCard(model, provider)(s)?.displayName) || model;
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
   const form = useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
-  const [modelConfigOpen, setModelConfigOpen] = useState(() =>
-    getStoredOpen(MODEL_CONFIG_OPEN_STORAGE_KEY),
-  );
   const [, refreshFormValues] = useState(0);
 
   const enableContextCompression = form.getValue('chatConfig.enableContextCompression');
@@ -734,14 +753,6 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     });
   }, []);
 
-  const handleModelConfigOpenChange = useCallback(() => {
-    setModelConfigOpen((open) => {
-      const nextOpen = !open;
-      setStoredOpen(MODEL_CONFIG_OPEN_STORAGE_KEY, nextOpen);
-      return nextOpen;
-    });
-  }, []);
-
   return (
     <div className={cx(styles.form, variant === 'sidebar' && styles.formSidebar)}>
       <div className={cx(styles.panel, variant === 'sidebar' && styles.sidebarPanel)}>
@@ -754,7 +765,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
           )}
         </div>
         <div className={styles.body}>
-          <div className={styles.commonSection}>
+          <Section title={t('settingModel.params.panel.section.context')}>
             <ControlRow
               tag="compression"
               title={t('settingModel.params.panel.contextCompression')}
@@ -815,20 +826,8 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                 />
               }
             />
-            <ControlRow
-              tag="autoScroll"
-              title={t('settingChat.enableAutoScrollOnStreaming.title')}
-              tooltip={t('settingChat.enableAutoScrollOnStreaming.desc')}
-              action={
-                <Switch
-                  checked={Boolean(enableAutoScrollOnStreaming)}
-                  size={'small'}
-                  onChange={(checked) => {
-                    handleFieldChange('chatConfig.enableAutoScrollOnStreaming', checked);
-                  }}
-                />
-              }
-            />
+          </Section>
+          <Section title={t('settingModel.params.panel.section.chat')}>
             <ControlRow
               tag="streaming"
               title={t('settingChat.enableStreaming.title')}
@@ -839,6 +838,20 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   size={'small'}
                   onChange={(checked) => {
                     handleFieldChange('chatConfig.enableStreaming', checked);
+                  }}
+                />
+              }
+            />
+            <ControlRow
+              tag="autoScroll"
+              title={t('settingChat.enableAutoScrollOnStreaming.title')}
+              tooltip={t('settingChat.enableAutoScrollOnStreaming.desc')}
+              action={
+                <Switch
+                  checked={Boolean(enableAutoScrollOnStreaming)}
+                  size={'small'}
+                  onChange={(checked) => {
+                    handleFieldChange('chatConfig.enableAutoScrollOnStreaming', checked);
                   }}
                 />
               }
@@ -876,38 +889,148 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                 }}
               />
             </ControlRow>
-          </div>
+          </Section>
           {hasModelConfig && (
-            <>
-              <div className={styles.divider} />
-              <SectionHeader
-                open={modelConfigOpen}
-                title={t('ModelSwitchPanel.detail.config', { ns: 'components' })}
-                onToggle={handleModelConfigOpenChange}
+            <Section
+              extra={mainModelName}
+              title={t('ModelSwitchPanel.detail.config', { ns: 'components' })}
+            >
+              <ControlsForm
+                hideReasoningParams
+                disabled={!canCreate}
+                model={model}
+                provider={provider}
+                onUpdatingChange={setUpdating}
               />
-              {modelConfigOpen && (
-                <div className={styles.modelConfigSection}>
-                  <ControlsForm
-                    hideReasoningParams
-                    disabled={!canCreate}
-                    model={model}
-                    provider={provider}
-                    onUpdatingChange={setUpdating}
-                  />
-                </div>
-              )}
-            </>
+            </Section>
           )}
-          {/* Sub-agent settings come last, in their own titled card, so none of their
-           * controls read as the main agent's identically named ones above. */}
+          {!enableAgentMode && (
+            <Section
+              collapse={{ onToggle: handleAdvancedOpenChange, open: advancedOpen }}
+              title={t('settingModel.params.panel.advanced')}
+            >
+              <div className={styles.advancedContent}>
+                {PARAM_ORDER.filter((key) => !disabledParams?.includes(key)).map((key) => {
+                  const meta = PARAM_CONFIG[key];
+                  const enabled = enabledMap[key];
+
+                  return (
+                    <ControlRow
+                      key={key}
+                      muted={!enabled}
+                      tag={meta.tag}
+                      title={t(meta.labelKey)}
+                      tooltip={t(meta.descKey)}
+                      action={
+                        <Switch
+                          checked={enabled}
+                          disabled={!canCreate}
+                          size={'small'}
+                          onChange={(checked) => {
+                            handleToggle(key, checked);
+                          }}
+                        />
+                      }
+                    >
+                      {enabled && (
+                        <SliderField
+                          disabled={!canCreate}
+                          value={form.getValue(PARAM_NAME_MAP[key])}
+                          onChange={(value) => {
+                            handleFieldChange(PARAM_NAME_MAP[key], value);
+                          }}
+                          {...meta.slider}
+                        />
+                      )}
+                    </ControlRow>
+                  );
+                })}
+                <ControlRow
+                  tag="max_tokens"
+                  title={t('settingModel.params.panel.responseLength')}
+                  tooltip={t('settingModel.maxTokens.desc')}
+                  action={
+                    <Switch
+                      checked={Boolean(enableMaxTokens)}
+                      disabled={!canCreate}
+                      size={'small'}
+                      onChange={(checked) => {
+                        if (checked && typeof maxTokensValue !== 'number') {
+                          form.setValue('params.max_tokens', 4096);
+                        }
+                        handleFieldChange('chatConfig.enableMaxTokens', checked);
+                      }}
+                    />
+                  }
+                >
+                  {enableMaxTokens && (
+                    <SliderField
+                      unlimitedInput
+                      disabled={!canCreate}
+                      inputWidth={64}
+                      max={32_000}
+                      min={0}
+                      step={100}
+                      value={typeof maxTokensValue === 'number' ? maxTokensValue : 4096}
+                      onChange={(value) => {
+                        handleFieldChange('params.max_tokens', value);
+                      }}
+                    />
+                  )}
+                </ControlRow>
+                {!hasReasoningExtendParams && (
+                  <ControlRow
+                    tag="reasoning_effort"
+                    title={t('settingModel.reasoningEffort.title')}
+                    tooltip={t('settingModel.reasoningEffort.desc')}
+                    action={
+                      <Switch
+                        checked={Boolean(enableReasoningEffort)}
+                        size={'small'}
+                        onChange={(checked) => {
+                          if (checked && typeof reasoningEffortValue !== 'string') {
+                            form.setValue('params.reasoning_effort', 'medium');
+                          }
+                          handleFieldChange('chatConfig.enableReasoningEffort', checked);
+                        }}
+                      />
+                    }
+                  >
+                    {enableReasoningEffort && (
+                      <Select
+                        size={'small'}
+                        style={{ width: '100%' }}
+                        options={[
+                          { label: t('settingModel.reasoningEffort.options.low'), value: 'low' },
+                          {
+                            label: t('settingModel.reasoningEffort.options.medium'),
+                            value: 'medium',
+                          },
+                          {
+                            label: t('settingModel.reasoningEffort.options.high'),
+                            value: 'high',
+                          },
+                        ]}
+                        value={
+                          typeof reasoningEffortValue === 'string' ? reasoningEffortValue : 'medium'
+                        }
+                        onChange={(value) => {
+                          handleFieldChange('params.reasoning_effort', value);
+                        }}
+                      />
+                    )}
+                  </ControlRow>
+                )}
+              </div>
+            </Section>
+          )}
+          {/* Sub-agent settings come last, so none of their controls read as the
+           * main agent's identically named ones above. */}
           {enableAgentMode && (
-            <Block className={styles.subAgentSection} padding={12} variant={'filled'}>
-              <Flexbox gap={2}>
-                <span className={styles.subAgentTitle}>
-                  {t('settingModel.params.panel.subAgent.title')}
-                </span>
-                <span className={styles.hint}>{t('settingModel.params.panel.subAgent.desc')}</span>
-              </Flexbox>
+            <Section
+              note={t('settingModel.params.panel.subAgent.desc')}
+              title={t('settingModel.params.panel.subAgent.title')}
+            >
               <ControlRow
                 tag="subAgentModel"
                 title={t('settingModel.params.panel.subAgent.model')}
@@ -937,134 +1060,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   />
                 )}
               </ControlRow>
-            </Block>
-          )}
-          {!enableAgentMode && (
-            <>
-              <div className={styles.divider} />
-              <SectionHeader
-                open={advancedOpen}
-                title={t('settingModel.params.panel.advanced')}
-                onToggle={handleAdvancedOpenChange}
-              />
-              {advancedOpen && (
-                <div className={styles.advancedContent}>
-                  {PARAM_ORDER.filter((key) => !disabledParams?.includes(key)).map((key) => {
-                    const meta = PARAM_CONFIG[key];
-                    const enabled = enabledMap[key];
-
-                    return (
-                      <ControlRow
-                        key={key}
-                        muted={!enabled}
-                        tag={meta.tag}
-                        title={t(meta.labelKey)}
-                        tooltip={t(meta.descKey)}
-                        action={
-                          <Switch
-                            checked={enabled}
-                            disabled={!canCreate}
-                            size={'small'}
-                            onChange={(checked) => {
-                              handleToggle(key, checked);
-                            }}
-                          />
-                        }
-                      >
-                        {enabled && (
-                          <SliderField
-                            disabled={!canCreate}
-                            value={form.getValue(PARAM_NAME_MAP[key])}
-                            onChange={(value) => {
-                              handleFieldChange(PARAM_NAME_MAP[key], value);
-                            }}
-                            {...meta.slider}
-                          />
-                        )}
-                      </ControlRow>
-                    );
-                  })}
-                  <ControlRow
-                    tag="max_tokens"
-                    title={t('settingModel.params.panel.responseLength')}
-                    tooltip={t('settingModel.maxTokens.desc')}
-                    action={
-                      <Switch
-                        checked={Boolean(enableMaxTokens)}
-                        disabled={!canCreate}
-                        size={'small'}
-                        onChange={(checked) => {
-                          if (checked && typeof maxTokensValue !== 'number') {
-                            form.setValue('params.max_tokens', 4096);
-                          }
-                          handleFieldChange('chatConfig.enableMaxTokens', checked);
-                        }}
-                      />
-                    }
-                  >
-                    {enableMaxTokens && (
-                      <SliderField
-                        unlimitedInput
-                        disabled={!canCreate}
-                        inputWidth={64}
-                        max={32_000}
-                        min={0}
-                        step={100}
-                        value={typeof maxTokensValue === 'number' ? maxTokensValue : 4096}
-                        onChange={(value) => {
-                          handleFieldChange('params.max_tokens', value);
-                        }}
-                      />
-                    )}
-                  </ControlRow>
-                  {!hasReasoningExtendParams && (
-                    <ControlRow
-                      tag="reasoning_effort"
-                      title={t('settingModel.reasoningEffort.title')}
-                      tooltip={t('settingModel.reasoningEffort.desc')}
-                      action={
-                        <Switch
-                          checked={Boolean(enableReasoningEffort)}
-                          size={'small'}
-                          onChange={(checked) => {
-                            if (checked && typeof reasoningEffortValue !== 'string') {
-                              form.setValue('params.reasoning_effort', 'medium');
-                            }
-                            handleFieldChange('chatConfig.enableReasoningEffort', checked);
-                          }}
-                        />
-                      }
-                    >
-                      {enableReasoningEffort && (
-                        <Select
-                          size={'small'}
-                          style={{ width: '100%' }}
-                          options={[
-                            { label: t('settingModel.reasoningEffort.options.low'), value: 'low' },
-                            {
-                              label: t('settingModel.reasoningEffort.options.medium'),
-                              value: 'medium',
-                            },
-                            {
-                              label: t('settingModel.reasoningEffort.options.high'),
-                              value: 'high',
-                            },
-                          ]}
-                          value={
-                            typeof reasoningEffortValue === 'string'
-                              ? reasoningEffortValue
-                              : 'medium'
-                          }
-                          onChange={(value) => {
-                            handleFieldChange('params.reasoning_effort', value);
-                          }}
-                        />
-                      )}
-                    </ControlRow>
-                  )}
-                </div>
-              )}
-            </>
+            </Section>
           )}
         </div>
       </div>

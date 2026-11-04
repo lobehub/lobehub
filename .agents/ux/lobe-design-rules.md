@@ -138,8 +138,8 @@ Reply is the primary Channel message action. Replying to a person only posts a q
 
 Source: user correction of the proposed in-channel reply semantics (2026-10-31).
 
-## LOBE-UX-020 — Settings for a second owner get their own titled surface
+## LOBE-UX-020 — Design a settings panel's groups together, each on its own titled surface
 
-When one panel holds the same settings for two owners (the main agent and its sub-agents, an agent and its members), moving the second owner's group below the first and giving it a muted section title is not enough: identically named rows still read as one list. Put the second owner's group in a common region (`Block variant="filled"`) whose title is the strongest text inside it (not lighter than the rows it heads), with one line saying what it applies to and that the first owner is unaffected. Judge it on a full-panel screenshot that shows both groups' identically named controls in one frame.
+When users cannot tell the parts of a settings panel apart, regroup the whole panel instead of patching the one group they named. Group rows by what they affect (context, chat behavior, model params, a second owner such as sub-agents), give every group the same treatment — a `Block variant="filled"` card whose title is the strongest text inside it — and add a model name or a one-line scope note where two groups share labels. Giving only one group a surface makes the rest read as one lump; reordering under a muted title does not separate identically named rows. Judge it on a full-panel screenshot in light and dark.
 
-Source: user rejection of the Agent params panel round 1, which only reordered the sub-agent block under a grey 12px title (“位置没问题了，但是我感觉还是有点难于区分”, 2026-11-03).
+Source: user rejections of the Agent params panel — round 1 reordered the sub-agent block under a grey title (“位置没问题了，但是我感觉还是有点难于区分”), round 2 carded only the sub-agent group (“现在感觉还是一坨（除了这个 subagent，它单独有一个背景）整体一起设计掉吧”), 2026-11-03/04.
