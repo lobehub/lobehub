@@ -20,7 +20,7 @@ export const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     fontVariantNumeric: 'tabular-nums',
   },
-  // Keep each price on one line; the row wraps between prices, never inside one.
+  // The rates stay on one line: the popover widens to fit them instead of breaking the row.
   priceItem: { whiteSpace: 'nowrap' },
 });
 
@@ -86,7 +86,6 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
             align={'center'}
             className={stylex.props(styles.pricing).className}
             gap={8}
-            style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}
           >
             {t('messages.modelCard.creditPricing')}:
             {prices.cachedInput && (

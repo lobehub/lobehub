@@ -1175,7 +1175,7 @@ export default {
   'messages.dm.sentTo': 'Visible only to {{name}}',
   'messages.dm.title': 'DM',
   'messages.modelCard.credit': 'Cost',
-  'messages.modelCard.creditPricing': 'Price per 1M tokens',
+  'messages.modelCard.creditPricing': 'Pricing',
   'messages.modelCard.creditTooltip':
     'Prices are shown in US dollars. Example: $3/M tokens means $3 per million tokens.',
   'messages.modelCard.pricing.inputCachedTokens': 'Cached input ${{amount}}/M',

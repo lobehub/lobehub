@@ -1849,7 +1849,7 @@
   "messages.dm.sentTo": "仅对 {{name}} 可见",
   "messages.dm.title": "私信",
   "messages.modelCard.credit": "费用",
-  "messages.modelCard.creditPricing": "每百万 token 单价",
+  "messages.modelCard.creditPricing": "定价",
   "messages.modelCard.creditTooltip": "价格以美元显示。例如 $3/M tokens 即每百万 token 3 美元。",
   "messages.modelCard.pricing.inputCachedTokens": "缓存输入 ${{amount}}/M",
   "messages.modelCard.pricing.inputCharts": "${{amount}}/M 字符",
