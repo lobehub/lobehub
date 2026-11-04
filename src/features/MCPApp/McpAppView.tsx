@@ -5,14 +5,12 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { type AppBridge } from '@modelcontextprotocol/ext-apps/app-bridge';
 import * as stylex from '@stylexjs/stylex';
 import { useLatest } from 'ahooks';
-import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
 import { useIsDark } from '@/hooks/useIsDark';
-import { useClientDataSWR } from '@/libs/swr';
-import { mcpAppKeys } from '@/libs/swr/keys';
-import { mcpService } from '@/services/mcp';
+import { useToolStore } from '@/store/tool';
 
 import { connectAppView, getAppViewPhase } from './appHost';
 import { buildHostContext } from './bridge';
@@ -55,6 +53,8 @@ export interface McpAppViewProps {
   resourceUri: string;
   /** Tool call result envelope (`{ content, state, success }`). */
   result: { content: string; state?: any };
+  /** The MCP server the result came from; the view is read from no other. */
+  server?: string;
   toolCallId: string;
 }
 
@@ -71,6 +71,7 @@ const McpAppView = memo<McpAppViewProps>(
     messageId,
     resourceUri,
     result,
+    server,
     toolCallId,
   }) => {
     const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -84,17 +85,16 @@ const McpAppView = memo<McpAppViewProps>(
     const agentId = useConversationStore(mcpAppAgentIdSelector(messageId));
     const { t } = useTranslation('plugin');
 
-    const { data, error, isLoading } = useClientDataSWR(
-      mcpAppKeys.resource(identifier, resourceUri, agentId),
-      () => mcpService.readMcpAppResource(identifier, resourceUri, agentId),
-      { revalidateOnFocus: false, revalidateOnReconnect: false },
-    );
+    const useFetchMcpAppResource = useToolStore((s) => s.useFetchMcpAppResource);
+    const { data, error, isLoading } = useFetchMcpAppResource(identifier, resourceUri, {
+      agentId,
+      server,
+    });
 
-    const resource = useMemo(() => pickAppResource(data, resourceUri), [data, resourceUri]);
-    const srcDoc = useMemo(
-      () => resource && buildAppFrameDocument(resource.html, buildAppCsp(resource.meta?.csp)),
-      [resource],
-    );
+    const resource = pickAppResource(data, resourceUri);
+    // A string: the effects below compare it by value, so no memo is needed
+    const srcDoc =
+      resource && buildAppFrameDocument(resource.html, buildAppCsp(resource.meta?.csp));
     // The document whose view tried to leave it, so the wrapper dropped the view
     const [droppedDoc, setDroppedDoc] = useState<string>();
     const navigated = !!srcDoc && droppedDoc === srcDoc;
