@@ -73,7 +73,13 @@ export type GoalTickBranch =
   /** A repeated batch's gate passed; the coordinator releases the next wave. */
   | 'rollout_gate'
   /** A repeated batch's gate is blocked; the coordinator hands it to a person. */
-  | 'pattern_break';
+  | 'pattern_break'
+  /**
+   * The main Agent planner acted before the frontier was read: it settled,
+   * replaced or dispatched a planning turn, or paused the goal on one. Not a
+   * `decideNextMove` decision, so replay skips it.
+   */
+  | 'manager_turn';
 
 export type GoalTickOutcome =
   'advanced' | 'achieved' | 'waiting_human' | 'waiting_external' | 'no_progress' | 'failed';
@@ -282,6 +288,8 @@ export interface GoalTickSnapshot {
 export type GoalEffectType =
   | 'created_task'
   | 'started_run'
+  /** A main Agent planning turn was dispatched; `operationId` is its run. */
+  | 'started_planning_turn'
   | 'opened_decision'
   | 'resolved_decision'
   | 'created_node'

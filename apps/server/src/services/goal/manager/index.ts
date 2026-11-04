@@ -1,3 +1,4 @@
+import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
 import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import { buildGoalManagerPrompt } from '@lobechat/prompts';
 import type {
@@ -63,6 +64,8 @@ export {
 } from './turnState';
 
 const TIMEOUT_MS = 20 * 60_000;
+/** Consecutive turns that left no run record before the Goal pauses on it. */
+export const MAX_UNCONFIRMED_MANAGER_TURNS = 3;
 /** Task comments listed in one planning turn's message; older ones are counted, not shown. */
 const FEEDBACK_NOTE_LIMIT = 20;
 
@@ -124,7 +127,11 @@ export class GoalManagerService {
     return devices.some((device) => device.deviceId === route.deviceId);
   };
 
-  private pause = async (goalId: string, message: string): Promise<GoalTickResult> => {
+  private pause = async (
+    goalId: string,
+    message: string,
+    effects?: GoalAdvanceEffect[],
+  ): Promise<GoalTickResult> => {
     await this.db.transaction(async (db) => {
       const model = new GoalRepository(db, this.userId, this.workspaceId);
       const goal = await model.lockById(goalId);
@@ -133,6 +140,7 @@ export class GoalManagerService {
         // The system paused it (a spent turn budget, an unconfirmed main Agent
         // turn), so the timeline must not file it as the owner's pause.
         await this.coordinatorGraph(db).recordGoalStatus(goalId, goal.status, 'paused', message);
+        effects?.push({ type: 'goal_status', detail: 'paused' });
       }
     });
     return { goalId, outcome: 'no_progress', message };
@@ -173,10 +181,11 @@ export class GoalManagerService {
    */
   advance = async (
     graph: GoalGraphSnapshot,
-    options?: { mayStartTurn?: boolean },
+    options?: { effects?: GoalAdvanceEffect[]; mayStartTurn?: boolean },
   ): Promise<GoalTickResult | null> => {
     if (!this.eligible(graph)) return null;
-    const settled = await this.settleInFlight(graph);
+    const effects = options?.effects;
+    const settled = await this.settleInFlight(graph, effects);
     if (settled) return settled;
     const waiting = await new GoalWaitService(this.db, this.userId, this.workspaceId).advance(
       graph,
@@ -184,7 +193,7 @@ export class GoalManagerService {
     if (waiting) return waiting;
     const state = graph.goal.config?.managerState;
     if (options?.mayStartTurn === false && !state?.replanReason && !state?.wait?.wake) return null;
-    return this.startTurn(graph);
+    return this.startTurn(graph, undefined, undefined, { effects });
   };
 
   /**
@@ -201,15 +210,16 @@ export class GoalManagerService {
   takeOver = async (
     graph: GoalGraphSnapshot,
     problem: GoalTakeoverProblem,
+    options?: { effects?: GoalAdvanceEffect[] },
   ): Promise<GoalTickResult | null> => {
     if (!this.eligible(graph)) return null;
     // Already answered: a takeover turn that ran for THIS problem has had its say,
     // so handing it over again would buy the same plan instead of asking a person.
     // `answeredProblem` is what the caller attaches to the gate.
     if (answeredProblem(graph.goal.config?.managerState)?.key === problemKey(problem)) return null;
-    const settled = await this.settleInFlight(graph);
+    const settled = await this.settleInFlight(graph, options?.effects);
     if (settled) return settled;
-    return this.startTurn(graph, problem);
+    return this.startTurn(graph, problem, undefined, { effects: options?.effects });
   };
 
   /**
@@ -280,7 +290,10 @@ export class GoalManagerService {
    * Poll a dispatched turn. Runs on every tick regardless of who leads planning:
    * a turn already paid for has to be settled, or its plan would never land.
    */
-  private settleInFlight = async (graph: GoalGraphSnapshot): Promise<GoalTickResult | null> => {
+  private settleInFlight = async (
+    graph: GoalGraphSnapshot,
+    effects?: GoalAdvanceEffect[],
+  ): Promise<GoalTickResult | null> => {
     const { goal } = graph;
     const state = goal.config?.managerState;
     if (state && !state.consumed) {
@@ -300,19 +313,26 @@ export class GoalManagerService {
       // pausing left the Goal stuck for good, because every resume re-read this
       // same turn and paused again.
       //
-      // Nothing is inferred from rows: a missing operation row proves nothing
-      // (the runtime keeps going when that insert fails), and a missing planning
-      // message may be one the owner deleted or one a still-pending call has not
-      // written yet. Every other turn still pauses as unconfirmed; the owner can
-      // confirm its exit on resume. An adopted turn is exempt.
-      const neverStarted =
-        !state.adopted &&
-        !operation &&
-        !!state.dispatchNeverStarted &&
-        Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS;
+      // A refused reservation is the one verdict taken from the error itself;
+      // every other turn without a run record is replaced once it times out
+      // (below). An adopted turn is exempt: it has no minted token to rotate.
+      const timedOut = Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS;
+      const neverStarted = !state.adopted && !operation && !!state.dispatchNeverStarted && timedOut;
+      // A dispatched turn that still has no run record when its time is up is
+      // replaced instead of pausing the Goal. A heterogeneous run refuses to
+      // start without its operation row, and the built-in runtime only goes on
+      // without one when that insert fails, so twenty minutes without a row is
+      // almost always a dispatch that never got going — a usage window, an
+      // unreachable device, a crashed dispatch. The rare straggler is contained:
+      // the next turn mints a new token, so it can no longer commit a plan, and
+      // the topic reservation refuses a second run while one holds the topic.
+      // Pausing instead stopped Goals whose work was done until a person
+      // noticed, and every resume paused on the same turn again.
+      const unconfirmed = !state.adopted && !operation && !state.dispatchNeverStarted && timedOut;
       if (
         !settledLocally &&
         !neverStarted &&
+        !unconfirmed &&
         (!operation || isAgentOperationInFlight(operation.status))
       ) {
         if (operation?.status === 'waiting_for_human') {
@@ -323,10 +343,14 @@ export class GoalManagerService {
             message: 'Main Agent is waiting for a human decision',
           };
         }
-        if (Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS) {
+        if (timedOut) {
+          // A run is on record and still live, so a replacement would run beside it.
           return this.pause(
             goal.id,
-            `Main Agent execution is unconfirmed or timed out; no replacement was dispatched. Once its run has ended, confirm and resume with: lh goal resume ${goal.id} --confirm-exit`,
+            operation
+              ? `Main Agent run ${operation.id} is still ${operation.status} after ${TIMEOUT_MS / 60_000} minutes; no replacement was dispatched beside it. Interrupt it, or once it has ended resume with: lh goal resume ${goal.id}`
+              : `Main Agent execution is unconfirmed or timed out; no replacement was dispatched. Once its run has ended, confirm and resume with: lh goal resume ${goal.id} --confirm-exit`,
+            effects,
           );
         }
         return this.wait(goal.id, 'Waiting for main Agent CLI planning turn');
@@ -345,14 +369,52 @@ export class GoalManagerService {
           offlineDevice: undefined,
           offlineTurns: undefined,
           retryAfter: undefined,
+          unconfirmedTurns: undefined,
         };
+        // An unconfirmed turn whose dispatch threw is settled on that error, the
+        // same way as a run that ended in it.
+        const error =
+          operation?.status === 'error'
+            ? operation.error
+            : unconfirmed
+              ? current.dispatchError
+              : undefined;
         // A committed plan is progress whatever the run's ending; only an errored
         // turn that committed nothing gates the next dispatch.
-        if (current.submitted || operation?.status !== 'error') {
+        if (current.submitted || (!error && !unconfirmed)) {
           await saveManagerState(db, goal.id, { ...settled, ...cleared });
           return;
         }
-        const decision = decideFailedTurn(operation.error, current);
+        if (!error) {
+          const unconfirmedTurns = (current.unconfirmedTurns ?? 0) + 1;
+          if (unconfirmedTurns >= MAX_UNCONFIRMED_MANAGER_TURNS) {
+            // Same as a failed-turn pause: settled in this transaction, with a
+            // fresh streak for whoever resumes it.
+            await saveManagerState(db, goal.id, { ...settled, ...cleared });
+            const reason = `Main Agent ${goal.agentId} did not start ${unconfirmedTurns} planning turns in a row: none left a run record within ${TIMEOUT_MS / 60_000} minutes. Check that it can run (device online, usage limit, credentials), then resume with: lh goal resume ${goal.id}`;
+            if (activeStatuses.has(fresh!.status)) {
+              await new GoalRepository(db, this.userId, this.workspaceId).updateStatus(
+                goal.id,
+                'paused',
+              );
+              await this.coordinatorGraph(db).recordGoalStatus(
+                goal.id,
+                fresh!.status,
+                'paused',
+                reason,
+              );
+            }
+            return { action: 'pause' as const, reason };
+          }
+          // Nothing ran, so the turn is not charged; the streak bounds the loop.
+          await saveManagerState(db, goal.id, {
+            ...settled,
+            turns: Math.max(0, current.turns - 1),
+            unconfirmedTurns,
+          });
+          return { action: 'replace' as const, unconfirmedTurns };
+        }
+        const decision = decideFailedTurn(error, current);
         if (decision.action === 'pause') {
           // The person who resumes the Goal gets a fresh retry schedule. Pause in
           // this same transaction: committing the consumed receipt first would
@@ -374,16 +436,25 @@ export class GoalManagerService {
           failedTurns: decision.failedTurns || undefined,
           offlineDevice:
             decision.failure.kind === 'device_unavailable'
-              ? readDeviceDispatchRoute(operation.error)
+              ? readDeviceDispatchRoute(error)
               : undefined,
           offlineTurns: decision.offlineTurns || undefined,
           retryAfter: decision.retryAfter,
           turns: decision.charged ? current.turns : Math.max(0, current.turns - 1),
+          unconfirmedTurns: undefined,
         });
         return decision;
       });
-      if (failed?.action === 'pause')
+      if (failed?.action === 'pause') {
+        effects?.push({ type: 'goal_status', detail: 'paused' });
         return { goalId: goal.id, outcome: 'no_progress', message: failed.reason };
+      }
+      if (failed?.action === 'replace')
+        return {
+          goalId: goal.id,
+          outcome: 'advanced',
+          message: `Main Agent planning turn left no run record within ${TIMEOUT_MS / 60_000} minutes; dispatching a replacement turn (${failed.unconfirmedTurns}/${MAX_UNCONFIRMED_MANAGER_TURNS - 1} before pausing)`,
+        };
       if (failed) {
         await scheduleGoalAdvance({
           goalId: goal.id,
@@ -394,7 +465,7 @@ export class GoalManagerService {
         return {
           goalId: goal.id,
           outcome: 'waiting_external',
-          message: `Main Agent turn failed without a plan (${failed.failure.kind}); the next turn starts after ${failed.retryAfter}`,
+          message: `Main Agent turn ${operation ? 'failed' : 'could not be dispatched'} without a plan (${failed.failure.kind}); the next turn starts after ${failed.retryAfter}`,
         };
       }
       return {
@@ -445,7 +516,10 @@ export class GoalManagerService {
     continuation?: string,
     // A hand-over has the system planner's plan to fall back on, so a dispatch
     // proven never started declines instead of waiting out the turn.
-    { declineRefused = false }: { declineRefused?: boolean } = {},
+    {
+      declineRefused = false,
+      effects,
+    }: { declineRefused?: boolean; effects?: GoalAdvanceEffect[] } = {},
   ): Promise<GoalTickResult | null> => {
     const { goal } = graph;
     const policy = goal.config!.manager!;
@@ -484,7 +558,7 @@ export class GoalManagerService {
       // a gate carrying the actual problem; pausing here would replace that
       // question with "the main Agent is out of turns" and lose it.
       if (problem) return null;
-      return this.pause(goal.id, 'Goal or main Agent turn budget exhausted');
+      return this.pause(goal.id, 'Goal or main Agent turn budget exhausted', effects);
     }
     // The previous turn failed without a plan. Its settlement already queued the
     // wakeup for this time, so a tick arriving earlier (the sweep, a Task event)
@@ -574,6 +648,7 @@ export class GoalManagerService {
         // Failure streaks span turns; settling a turn that did not error resets them.
         ...(freshState?.failedTurns && { failedTurns: freshState.failedTurns }),
         ...(freshState?.offlineTurns && { offlineTurns: freshState.offlineTurns }),
+        ...(freshState?.unconfirmedTurns && { unconfirmedTurns: freshState.unconfirmedTurns }),
         reviewSnapshot: reviews.hash,
         topicId,
         turns: (state?.turns ?? 0) + 1,
@@ -654,6 +729,11 @@ export class GoalManagerService {
           });
         }
       });
+      effects?.push({
+        detail: `planning turn ${claimed.turns}`,
+        operationId: result.operationId,
+        type: 'started_planning_turn',
+      });
     } catch (error) {
       console.error(
         '[goal:manager] dispatch failed; next wakeup adopts any persisted operation',
@@ -674,6 +754,10 @@ export class GoalManagerService {
           return false;
         });
         if (recorded && declineRefused) return null;
+      } else {
+        await this.recordDispatchError(goal.id, claimed.token, error).catch((saveError) => {
+          console.error('[goal:manager] failed to record the dispatch error', saveError);
+        });
       }
     }
     return this.wait(goal.id, 'Main Agent dispatched with CLI planning access');
@@ -718,6 +802,33 @@ export class GoalManagerService {
         ...(settle && { consumed: true }),
       });
       return true;
+    });
+
+  /**
+   * Keep what the dispatch threw on the receipt. It decides nothing on its own —
+   * the turn still waits out its timeout, since a failure can come after a run
+   * went live — but a turn that never left a run record is then settled on it.
+   */
+  private recordDispatchError = async (goalId: string, token: string, error: unknown) =>
+    this.db.transaction(async (db) => {
+      const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goalId);
+      if (fresh?.config?.managerState?.token !== token) return;
+      const e = (error ?? {}) as Record<string, unknown>;
+      const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
+      await saveManagerState(db, goalId, {
+        ...fresh.config.managerState,
+        dispatchError: {
+          // The quota reset rides on the body; JSON keeps it storable.
+          body:
+            e.body && typeof e.body === 'object'
+              ? (JSON.parse(JSON.stringify(e.body)) as Record<string, unknown>)
+              : undefined,
+          category: text(e.category),
+          code: text(e.code),
+          message: text(e.message) ?? String(error),
+          type: text(e.type) ?? text(e.name),
+        },
+      });
     });
 
   /** The verdict `submit` would reach right now; see `admission.ts`. */

@@ -299,6 +299,19 @@ export interface GoalManagerState {
   adoptedOperationId?: string;
   consumed?: boolean;
   /**
+   * What the dispatch call for this turn threw, when it threw anything other
+   * than a refused topic reservation. Kept so a turn that never left a run
+   * record is settled on the real failure (a usage window, an offline device,
+   * missing credentials) instead of an anonymous timeout.
+   */
+  dispatchError?: {
+    body?: Record<string, unknown>;
+    category?: string;
+    code?: string;
+    message?: string;
+    type?: string;
+  };
+  /**
    * Set when the dispatch for this turn was refused its topic reservation — the
    * one failure raised before anything of the run is written — so no run exists
    * and none can start. Decided from the error itself, never from rows the
@@ -383,6 +396,12 @@ export interface GoalManagerState {
   token: string;
   topicId: string;
   turns: number;
+  /**
+   * Consecutive turns that left no run record by their timeout. Each one is
+   * replaced; reaching the limit pauses the Goal with that reason instead of
+   * looping. Reset by any turn whose run is seen.
+   */
+  unconfirmedTurns?: number;
   wait?: GoalManagerWait;
 }
 

@@ -99,11 +99,26 @@ export const tickOnce = async (
     // in flight; new turns start from `gateOrTakeOver` below, where the
     // coordinator has run out of moves. A Goal whose only planner is the main
     // Agent keeps being led by it.
+    const effects: GoalAdvanceEffect[] = [];
     const result = await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).advance(
       graph,
-      { mayStartTurn: !graph.goal.config.exploration },
+      { effects, mayStartTurn: !graph.goal.config.exploration },
     );
-    if (result) return result;
+    if (result) {
+      // Recorded like any other tick, so a trace shows the turn that was settled,
+      // replaced or dispatched instead of only the pause that may follow.
+      options?.onDecision?.({
+        at,
+        branch: 'manager_turn',
+        candidates: [],
+        effects,
+        graphState: toTraceGraphState(graph),
+        message: result.message,
+        outcome: result.outcome,
+        taskId: result.taskId,
+      });
+      return result;
+    }
   }
   // A plan the owner sent back waits on the main Agent's rewrite, not on the
   // frontier: every probe has settled and nothing else is ready to run.
