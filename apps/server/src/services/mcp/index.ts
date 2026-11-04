@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import {
+  getMcpServerFingerprint,
   lacksUiResourceMeta,
   partitionMcpToolsForViews,
   withListingUiMeta,
@@ -310,10 +311,12 @@ export class MCPService {
           fromApp ? undefined : processContentBlocksFn,
         );
 
-        // MCP Apps: let the chat UI know which `ui://` resource renders this result
+        // MCP Apps: let the chat UI know which `ui://` resource renders this
+        // result, and from which server it may be read back
         if (uiResourceUri && !result.isError) {
           processedResult.state.mcpApp = {
             resourceUri: uiResourceUri,
+            server: await getMcpServerFingerprint(clientParams),
           };
         }
 

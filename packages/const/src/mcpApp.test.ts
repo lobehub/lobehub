@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildMcpToolMetadata,
+  getMcpServerFingerprint,
   getMcpToolVisibility,
   isMcpToolVisibleTo,
   isSyncedMcpToolVisibleTo,
@@ -98,5 +99,33 @@ describe('withListingUiMeta', () => {
         { _meta: { ui: { csp } }, uri: 'ui://app' },
       ]).contents,
     ).toEqual([own]);
+  });
+});
+
+describe('getMcpServerFingerprint', () => {
+  it('names a server the same however it is reached, and keeps its address out', async () => {
+    const url = 'https://mcp.example.com/mcp?token=secret';
+    const http = await getMcpServerFingerprint({ type: 'http', url });
+
+    expect(http).toMatch(/^[\da-f]{64}$/);
+    expect(http).not.toContain('secret');
+    expect(await getMcpServerFingerprint({ type: 'http', url })).toBe(http);
+    expect(
+      await getMcpServerFingerprint({ args: ['mcp.js'], command: 'node', type: 'stdio' }),
+    ).toBe(await getMcpServerFingerprint({ args: ['mcp.js'], command: 'node', type: 'stdio' }));
+  });
+
+  it('tells different servers apart', async () => {
+    const fingerprints = await Promise.all([
+      getMcpServerFingerprint({ type: 'http', url: 'https://a.example.com/mcp' }),
+      getMcpServerFingerprint({ type: 'http', url: 'https://b.example.com/mcp' }),
+      getMcpServerFingerprint({ args: ['a.js'], command: 'node', type: 'stdio' }),
+      getMcpServerFingerprint({ args: ['b.js'], command: 'node', type: 'stdio' }),
+      // Not the same as one argument holding both
+      getMcpServerFingerprint({ args: ['a.js b.js'], command: 'node', type: 'stdio' }),
+      getMcpServerFingerprint({ args: ['a.js', 'b.js'], command: 'node', type: 'stdio' }),
+    ]);
+
+    expect(new Set(fingerprints).size).toBe(fingerprints.length);
   });
 });

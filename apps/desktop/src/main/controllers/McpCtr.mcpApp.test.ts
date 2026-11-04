@@ -1,3 +1,4 @@
+import { getMcpServerFingerprint } from '@lobechat/const/mcpApp';
 import { deserializeMcpIpcPayload, serializeMcpIpcPayload } from '@lobechat/utils/mcpIpcPayload';
 import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -61,7 +62,11 @@ describe('McpCtr MCP Apps', () => {
     } as any);
 
     expect(mcpClientMocks).toHaveBeenCalledWith({ mcpApps: true });
-    expect((result.state as any).mcpApp).toEqual({ resourceUri: 'ui://weather/view' });
+    // With the server the view may be read back from
+    expect((result.state as any).mcpApp).toEqual({
+      resourceUri: 'ui://weather/view',
+      server: await getMcpServerFingerprint({ ...stdioParams, type: 'stdio' }),
+    });
   });
 
   it("neither announces MCP Apps nor looks up views while the user's flag is off", async () => {

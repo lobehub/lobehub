@@ -1,6 +1,7 @@
 import { inspect } from 'node:util';
 
 import type * as LobeConst from '@lobechat/const';
+import { getMcpServerFingerprint } from '@lobechat/const/mcpApp';
 import {
   ProtocolError,
   ProtocolErrorCode,
@@ -557,7 +558,11 @@ describe('MCPService', () => {
 
       expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
       expect(mockClient.getToolUiResourceUri).toHaveBeenCalledWith('weather');
-      expect(result.state.mcpApp).toEqual({ resourceUri: 'ui://weather/view.html' });
+      // With the server it may be read back from
+      expect(result.state.mcpApp).toEqual({
+        resourceUri: 'ui://weather/view.html',
+        server: await getMcpServerFingerprint(mockParams),
+      });
     });
 
     it("runs a view's call to a tool whose visibility includes the app", async () => {

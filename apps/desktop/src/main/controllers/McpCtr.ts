@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import {
+  getMcpServerFingerprint,
   getMcpToolVisibility,
   isMcpToolVisibleTo,
   lacksUiResourceMeta,
@@ -931,8 +932,15 @@ export default class McpCtr extends ControllerModule {
             const state = {
               ...raw,
               content: processed,
-              // MCP Apps: the `ui://` resource the chat renders this result with
-              ...(uiResourceUri && !raw.isError && { mcpApp: { resourceUri: uiResourceUri } }),
+              // MCP Apps: the `ui://` resource the chat renders this result with,
+              // and the server it may be read back from
+              ...(uiResourceUri &&
+                !raw.isError && {
+                  mcpApp: {
+                    resourceUri: uiResourceUri,
+                    server: await getMcpServerFingerprint(params),
+                  },
+                }),
             };
             return {
               content,

@@ -1,3 +1,4 @@
+import { getMcpServerFingerprint } from '@lobechat/const/mcpApp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -260,8 +261,25 @@ describe('callConnectorToolById', () => {
 });
 
 describe('readConnectorUiResourceById', () => {
-  beforeEach(() => {
+  // The server the connector reaches, which the results in these cases came from
+  let SERVER: string;
+
+  beforeEach(async () => {
     mcpAppsEnabled.mockResolvedValue(true);
+    SERVER = await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl! });
+  });
+
+  it('refuses a view whose result came from another server than the connector reaches', async () => {
+    const other = await getMcpServerFingerprint({ type: 'http', url: 'https://old.example.com' });
+
+    await expect(
+      readConnectorUiResourceById(
+        { identifier: 'my-conn', server: other, uri: 'ui://app' },
+        makeCtx([connector], []),
+      ),
+    ).rejects.toHaveProperty('code', 'NOT_FOUND');
+    expect(ensureFreshConnectorToken).not.toHaveBeenCalled();
+    expect(mcpService.readUiResource).not.toHaveBeenCalled();
   });
 
   it('refuses to read a view while the mcp_apps flag is off', async () => {
@@ -269,7 +287,7 @@ describe('readConnectorUiResourceById', () => {
     const ctx = { ...makeCtx([connector], []), userId: 'user-1' };
 
     await expect(
-      readConnectorUiResourceById({ identifier: 'my-conn', uri: 'ui://app' }, ctx),
+      readConnectorUiResourceById({ identifier: 'my-conn', server: SERVER, uri: 'ui://app' }, ctx),
     ).rejects.toHaveProperty('code', 'FORBIDDEN');
 
     expect(mcpAppsEnabled).toHaveBeenCalledWith('user-1');
@@ -281,7 +299,10 @@ describe('readConnectorUiResourceById', () => {
     vi.mocked(mcpService.readUiResource).mockResolvedValue({ contents: [] } as any);
     const ctx = makeCtx([connector], []);
 
-    await readConnectorUiResourceById({ identifier: 'my-conn', uri: 'ui://app' }, ctx);
+    await readConnectorUiResourceById(
+      { identifier: 'my-conn', server: SERVER, uri: 'ui://app' },
+      ctx,
+    );
 
     expect(ensureFreshConnectorToken).toHaveBeenCalledWith(connector, ctx.connectorModel);
     expect(mcpService.readUiResource).toHaveBeenCalledWith(
@@ -292,17 +313,20 @@ describe('readConnectorUiResourceById', () => {
 
   it('rejects missing, disabled and stdio connectors', async () => {
     await expect(
-      readConnectorUiResourceById({ identifier: 'x', uri: 'ui://app' }, makeCtx([], [])),
+      readConnectorUiResourceById(
+        { identifier: 'x', server: SERVER, uri: 'ui://app' },
+        makeCtx([], []),
+      ),
     ).rejects.toHaveProperty('code', 'NOT_FOUND');
     await expect(
       readConnectorUiResourceById(
-        { identifier: 'my-conn', uri: 'ui://app' },
+        { identifier: 'my-conn', server: SERVER, uri: 'ui://app' },
         makeCtx([{ ...connector, isEnabled: false }], []),
       ),
     ).rejects.toHaveProperty('code', 'FORBIDDEN');
     await expect(
       readConnectorUiResourceById(
-        { identifier: 'my-conn', uri: 'ui://app' },
+        { identifier: 'my-conn', server: SERVER, uri: 'ui://app' },
         makeCtx([{ ...connector, mcpConnectionType: 'stdio' }], []),
       ),
     ).rejects.toHaveProperty('code', 'BAD_REQUEST');
@@ -314,7 +338,7 @@ describe('readConnectorUiResourceById', () => {
     const ctx = makeCtx([connector], []);
 
     await readConnectorUiResourceById(
-      { agentId: 'agt_1', identifier: 'my-conn', uri: 'ui://app' },
+      { agentId: 'agt_1', identifier: 'my-conn', server: SERVER, uri: 'ui://app' },
       ctx,
     );
 
@@ -327,7 +351,7 @@ describe('readConnectorUiResourceById', () => {
 
     await expect(
       readConnectorUiResourceById(
-        { identifier: 'my-conn', uri: 'ui://app' },
+        { identifier: 'my-conn', server: SERVER, uri: 'ui://app' },
         makeCtx([{ ...connector, mcpServerUrl: 'http://192.168.1.20:8080/mcp' }], []),
       ),
     ).rejects.toHaveProperty('code', 'BAD_REQUEST');
@@ -376,7 +400,7 @@ describe('agent-scoped connectors of an agent the caller cannot see', () => {
 
     await expect(
       readConnectorUiResourceById(
-        { agentId: 'agt_private', identifier: 'my-conn', uri: 'ui://app' },
+        { agentId: 'agt_private', identifier: 'my-conn', server: 'any', uri: 'ui://app' },
         ctx,
       ),
     ).rejects.toHaveProperty('code', 'NOT_FOUND');

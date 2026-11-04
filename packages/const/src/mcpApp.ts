@@ -109,3 +109,21 @@ export const withListingUiMeta = <R extends { contents?: UiResourceItem[] }>(
     ),
   };
 };
+
+/** The part of an MCP connection that says which server it reaches. */
+export type McpServerAddress =
+  { type: 'http'; url: string } | { args?: readonly string[]; command: string; type: 'stdio' };
+
+/**
+ * Names the MCP server a tool result came from without storing its address
+ * (a URL may carry a token): a SHA-256 of the URL, or of the command and its
+ * arguments. A result's view is only read back from the server it names.
+ */
+export const getMcpServerFingerprint = async (address: McpServerAddress): Promise<string> => {
+  const source =
+    address.type === 'http'
+      ? `http ${address.url}`
+      : `stdio ${JSON.stringify([address.command, ...(address.args ?? [])])}`;
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+};

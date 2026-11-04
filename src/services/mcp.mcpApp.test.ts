@@ -1,3 +1,4 @@
+import { getMcpServerFingerprint } from '@lobechat/const/mcpApp';
 import { deserializeMcpIpcPayload, serializeMcpIpcPayload } from '@lobechat/utils/mcpIpcPayload';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -111,6 +112,10 @@ beforeEach(() => {
 });
 
 const view = { contents: [{ text: '<html />', uri: 'ui://app' }] };
+// The servers the results in these cases came from
+const LOCAL = await getMcpServerFingerprint({ type: 'http', url: 'http://127.0.0.1:3000/mcp' });
+const REMOTE = await getMcpServerFingerprint({ type: 'http', url: 'https://mcp.example.com/mcp' });
+const STDIO = await getMcpServerFingerprint({ args: ['mcp.js'], command: 'node', type: 'stdio' });
 const httpPlugin = (url: string) => ({
   customParams: { mcp: { headers: { 'x-key': 'k' }, type: 'http', url } },
 });
@@ -127,7 +132,9 @@ describe('mcpService.readMcpAppResource on desktop', () => {
   it('reads views of localhost / LAN http servers over IPC, not the server relay', async () => {
     plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
 
-    await expect(mcpService.readMcpAppResource('local', 'ui://app')).resolves.toEqual(view);
+    await expect(
+      mcpService.readMcpAppResource('local', 'ui://app', { server: LOCAL }),
+    ).resolves.toEqual(view);
 
     expect(relayRead).not.toHaveBeenCalled();
     expect(deserializeMcpIpcPayload(ipcRead.mock.calls[0][0])).toEqual({
@@ -144,9 +151,9 @@ describe('mcpService.readMcpAppResource on desktop', () => {
     plugins.set('remote', httpPlugin('https://mcp.example.com/mcp'));
     toolState.pluginsLoaded = false;
 
-    await expect(mcpService.readMcpAppResource('remote', 'ui://app', 'agt_1')).resolves.toEqual(
-      view,
-    );
+    await expect(
+      mcpService.readMcpAppResource('remote', 'ui://app', { agentId: 'agt_1', server: REMOTE }),
+    ).resolves.toEqual(view);
 
     expect(toolState.refreshPlugins).toHaveBeenCalledTimes(1);
     expect(connectorRead).not.toHaveBeenCalled();
@@ -159,9 +166,9 @@ describe('mcpService.readMcpAppResource on desktop', () => {
     connectors.set('agt_1:remote', { id: 'conn_1', identifier: 'remote', isEnabled: true });
     toolState.pluginsLoaded = false;
 
-    await expect(mcpService.readMcpAppResource('remote', 'ui://app', 'agt_1')).resolves.toEqual(
-      view,
-    );
+    await expect(
+      mcpService.readMcpAppResource('remote', 'ui://app', { agentId: 'agt_1', server: REMOTE }),
+    ).resolves.toEqual(view);
 
     expect(toolState.refreshPlugins).toHaveBeenCalledTimes(1);
     expect(connectorRead).not.toHaveBeenCalled();
@@ -173,7 +180,7 @@ describe('mcpService.readMcpAppResource on desktop', () => {
       customParams: { mcp: { type: 'http', url: 'https://mcp.example.com/mcp' } },
     });
 
-    await mcpService.readMcpAppResource('remote', 'ui://app');
+    await mcpService.readMcpAppResource('remote', 'ui://app', { server: REMOTE });
 
     // The runtime's manifest params carry no `headers` key, and sessions are keyed by params
     expect(relayRead.mock.calls[0][0].params).not.toHaveProperty('headers');
@@ -182,7 +189,9 @@ describe('mcpService.readMcpAppResource on desktop', () => {
   it('keeps public http servers on the server relay', async () => {
     plugins.set('remote', httpPlugin('https://mcp.example.com/mcp'));
 
-    await expect(mcpService.readMcpAppResource('remote', 'ui://app')).resolves.toEqual(view);
+    await expect(
+      mcpService.readMcpAppResource('remote', 'ui://app', { server: REMOTE }),
+    ).resolves.toEqual(view);
 
     expect(ipcRead).not.toHaveBeenCalled();
     expect(relayRead).toHaveBeenCalledWith({
@@ -227,7 +236,9 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
   });
 
   it('reads the view on the desktop with the fresh stdio configuration', async () => {
-    await expect(mcpService.readMcpAppResource('files', 'ui://app')).resolves.toEqual(view);
+    await expect(
+      mcpService.readMcpAppResource('files', 'ui://app', { server: STDIO }),
+    ).resolves.toEqual(view);
 
     expect(connectorEdit).toHaveBeenCalledWith({ id: 'conn_1' });
     expect(deserializeMcpIpcPayload(ipcRead.mock.calls[0][0])).toEqual({
@@ -245,7 +256,9 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     ]) {
       connectorEdit.mockResolvedValueOnce(current);
 
-      await expect(mcpService.readMcpAppResource('files', 'ui://app')).resolves.toBeUndefined();
+      await expect(
+        mcpService.readMcpAppResource('files', 'ui://app', { server: STDIO }),
+      ).resolves.toBeUndefined();
     }
     expect(ipcRead).not.toHaveBeenCalled();
   });
@@ -257,9 +270,9 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
       connectors.set(`${agentId}:files`, stdioConnector);
     });
 
-    await expect(mcpService.readMcpAppResource('files', 'ui://app', 'agt_1')).resolves.toEqual(
-      view,
-    );
+    await expect(
+      mcpService.readMcpAppResource('files', 'ui://app', { agentId: 'agt_1', server: STDIO }),
+    ).resolves.toEqual(view);
 
     expect(toolState.ensureConfirmedConnectors).toHaveBeenCalledWith('agt_1');
     expect(connectorRead).not.toHaveBeenCalled();
@@ -274,7 +287,7 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     toolState.ensureConfirmedConnectors.mockRejectedValueOnce(new Error('offline'));
 
     await expect(
-      mcpService.readMcpAppResource('files', 'ui://app', 'agt_1'),
+      mcpService.readMcpAppResource('files', 'ui://app', { agentId: 'agt_1', server: STDIO }),
     ).resolves.toBeUndefined();
 
     expect(connectorEdit).not.toHaveBeenCalled();
@@ -283,10 +296,24 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     expect(relayRead).not.toHaveBeenCalled();
   });
 
+  it('reads no view once the connector runs another command than the one that produced it', async () => {
+    connectorEdit.mockResolvedValueOnce({
+      ...detail,
+      mcpStdioConfig: { args: ['other.js'], command: 'node', env: {} },
+    });
+
+    await expect(
+      mcpService.readMcpAppResource('files', 'ui://app', { server: STDIO }),
+    ).resolves.toBeUndefined();
+    expect(ipcRead).not.toHaveBeenCalled();
+  });
+
   it('falls back without a request off the desktop, where nothing can run the command', async () => {
     environment.isDesktop = false;
 
-    await expect(mcpService.readMcpAppResource('files', 'ui://app')).resolves.toBeUndefined();
+    await expect(
+      mcpService.readMcpAppResource('files', 'ui://app', { server: STDIO }),
+    ).resolves.toBeUndefined();
 
     expect(connectorEdit).not.toHaveBeenCalled();
     expect(connectorRead).not.toHaveBeenCalled();
@@ -303,16 +330,43 @@ describe('mcpService MCP App calls for agents', () => {
     connectorCall.mockResolvedValue({ content: 'ok', success: true });
   });
 
-  it('lets the server resolve a connector only the agent owns', async () => {
-    await expect(mcpService.readMcpAppResource('agent-app', 'ui://app', 'agt_1')).resolves.toEqual(
-      view,
-    );
+  it("reads an agent's connector view on the server, which checks the result's server", async () => {
+    connectors.set('agt_1:agent-app', {
+      isEnabled: true,
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+    });
+
+    await expect(
+      mcpService.readMcpAppResource('agent-app', 'ui://app', { agentId: 'agt_1', server: REMOTE }),
+    ).resolves.toEqual(view);
 
     expect(connectorRead).toHaveBeenCalledWith({
       agentId: 'agt_1',
       identifier: 'agent-app',
+      server: REMOTE,
       uri: 'ui://app',
     });
+  });
+
+  it('reads no view for a result that came from another server than the identifier reaches now', async () => {
+    // The connector that produced it was disabled; a plugin of the same identifier remains
+    connectors.set('agt_1:shared', {
+      isEnabled: false,
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+    });
+    plugins.set('shared', httpPlugin('https://other.example.com/mcp'));
+
+    await expect(
+      mcpService.readMcpAppResource('shared', 'ui://app', { agentId: 'agt_1', server: REMOTE }),
+    ).resolves.toBeUndefined();
+    // Nor for a result that names no server
+    await expect(
+      mcpService.readMcpAppResource('shared', 'ui://app', { agentId: 'agt_1' }),
+    ).resolves.toBeUndefined();
+
+    expect(relayRead).not.toHaveBeenCalled();
+    expect(ipcRead).not.toHaveBeenCalled();
+    expect(connectorRead).not.toHaveBeenCalled();
   });
 
   it('sends the agent with connector tool calls', async () => {

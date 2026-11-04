@@ -863,6 +863,8 @@ export const connectorRouter = router({
       z.object({
         agentId: z.string().optional(),
         identifier: z.string().min(1),
+        /** The server the result came from (`getMcpServerFingerprint`). */
+        server: z.string().min(1),
         uri: z.string().startsWith('ui://'),
       }),
     )

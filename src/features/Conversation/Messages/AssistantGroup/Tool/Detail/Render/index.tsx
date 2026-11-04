@@ -93,6 +93,7 @@ const ToolRender = memo<ToolRenderProps>(
           messageId={messageId}
           resourceUri={mcpApp.resourceUri}
           result={{ content: resolvedContent, state: unwrapMcpToolState(resolvedState) }}
+          server={mcpApp.server}
           toolCallId={toolCallId}
         />
       );

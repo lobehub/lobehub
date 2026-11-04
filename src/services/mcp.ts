@@ -1,5 +1,9 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
-import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import {
+  getMcpServerFingerprint,
+  isSyncedMcpToolVisibleTo,
+  type McpServerAddress,
+} from '@lobechat/const/mcpApp';
 import {
   type ChatToolPayload,
   type CheckMcpInstallResult,
@@ -389,14 +393,21 @@ class MCPService {
 
   /**
    * Read the MCP Apps `ui://` resource (HTML view) a tool result renders with,
-   * from the same server the tool ran on. Returns undefined when the tool's
-   * server can't serve views from here (cloud plugins, stdio off desktop).
+   * from the same server the tool ran on: `server` names it
+   * (`getMcpServerFingerprint`), and the identifier must still resolve to it.
+   * Returns undefined when it doesn't, or when that server can't serve views
+   * from here (cloud plugins, stdio off desktop).
    */
   async readMcpAppResource(
     identifier: string,
     uri: string,
-    agentId?: string,
+    { agentId, server }: { agentId?: string; server?: string },
   ): Promise<ReadResourceResult | undefined> {
+    // A result that doesn't name its server can't be matched to one
+    if (!server) return;
+    const reaches = async (address: McpServerAddress) =>
+      (await getMcpServerFingerprint(address)) === server;
+
     const { pluginSelectors } = await import('@/store/tool/selectors');
     const { getToolStoreState } = await import('@/store/tool/store');
     let s = getToolStoreState();
@@ -443,6 +454,9 @@ class MCPService {
       const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
       const config = detail.mcpStdioConfig;
       if (!detail.isEnabled || detail.mcpConnectionType !== 'stdio' || !config?.command) return;
+      if (!(await reaches({ args: config.args ?? [], command: config.command, type: 'stdio' }))) {
+        return;
+      }
 
       const result = await ensureElectronIpc().mcp.readUiResource(
         serializeMcpIpcPayload({
@@ -463,14 +477,16 @@ class MCPService {
       pluginSelectors.getInstalledPluginById(identifier)(s) ||
       pluginSelectors.getCustomPluginById(identifier)(s);
 
-    // Same resolution as `invokeMcpToolCall`: the view must come from the
-    // connector the tool ran on, which the server resolves for the agent.
-    const isConnector = connector ? connectorServes : !!agentId && !plugin;
-    if (isConnector) {
+    // Same resolution as `invokeMcpToolCall`: the view comes from the connector
+    // the tool ran on. The agent's lists are loaded by now, so an identifier
+    // with no connector here has none on the server either.
+    if (connectorServes) {
       const { lambdaClient } = await import('@/libs/trpc/client');
+      // The server checks `server` against the connector it resolves
       return (await lambdaClient.connector.readUiResource.query({
         agentId,
         identifier,
+        server,
         uri,
       })) as ReadResourceResult;
     }
@@ -479,6 +495,7 @@ class MCPService {
     if (!plugin || (type !== 'http' && type !== 'stdio')) return;
 
     const { params } = buildPluginMcpParams(plugin, identifier);
+    if (!(await reaches(params))) return;
 
     // Stdio servers and localhost / LAN endpoints are only reachable from this
     // machine, so the desktop reads them over IPC instead of the server relay.

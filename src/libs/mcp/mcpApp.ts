@@ -25,6 +25,12 @@ export interface McpAppToolState {
    */
   deviceId?: string;
   resourceUri: string;
+  /**
+   * The MCP server that produced the result (`getMcpServerFingerprint`). The
+   * view is only read from that server: the identifier may resolve to another
+   * one now, which must not get this result's arguments and data.
+   */
+  server?: string;
 }
 
 const isUiUri = (value: unknown): value is string =>
@@ -84,13 +90,15 @@ export const unwrapMcpToolState = <T = any>(state: T): T => {
 export const getMcpAppFromState = (state: unknown): McpAppToolState | undefined => {
   const mcpApp = (
     unwrapMcpToolState(state) as
-      { mcpApp?: { deviceId?: unknown; resourceUri?: unknown } } | undefined
+      { mcpApp?: { deviceId?: unknown; resourceUri?: unknown; server?: unknown } } | undefined
   )?.mcpApp;
   if (!isUiUri(mcpApp?.resourceUri)) return;
 
-  return typeof mcpApp.deviceId === 'string'
-    ? { deviceId: mcpApp.deviceId, resourceUri: mcpApp.resourceUri }
-    : { resourceUri: mcpApp.resourceUri };
+  return {
+    ...(typeof mcpApp.deviceId === 'string' && { deviceId: mcpApp.deviceId }),
+    resourceUri: mcpApp.resourceUri,
+    ...(typeof mcpApp.server === 'string' && { server: mcpApp.server }),
+  };
 };
 
 /**

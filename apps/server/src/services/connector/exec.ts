@@ -1,4 +1,4 @@
-import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -162,7 +162,8 @@ export const callConnectorToolById = async (
  * `mcp_apps` flag is off, since the read opens a session that advertises MCP Apps.
  */
 export const readConnectorUiResourceById = async (
-  params: { agentId?: string; identifier: string; uri: string },
+  /** `server`: the server the result came from; the view is read from no other. */
+  params: { agentId?: string; identifier: string; server: string; uri: string },
   ctx: ConnectorExecContext,
 ) => {
   if (!(await isMcpAppsEnabled(ctx.userId))) {
@@ -192,6 +193,18 @@ export const readConnectorUiResourceById = async (
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
       'Interactive views are not supported for local-network connectors yet',
+    );
+  }
+
+  // The identifier may name another server now (the connector was edited, or
+  // the agent's copy replaced): its HTML must not get this result's data
+  if (
+    !connector.mcpServerUrl ||
+    (await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl })) !== params.server
+  ) {
+    throw new ConnectorToolCallError(
+      'NOT_FOUND',
+      'This view came from another server than the connector reaches now',
     );
   }
 

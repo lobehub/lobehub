@@ -545,12 +545,16 @@ export const fileKeys = {
 
 // ---- MCP Apps (interactive tool result views) -----------------------------
 export const mcpAppKeys = {
-  resource: def('mcpApp:resource', (identifier: string, uri: string, agentId?: string) => [
+  resource: def(
     'mcpApp:resource',
-    identifier,
-    uri,
-    agentId ?? null,
-  ]),
+    (identifier: string, uri: string, agentId?: string, server?: string) => [
+      'mcpApp:resource',
+      identifier,
+      uri,
+      agentId ?? null,
+      server ?? null,
+    ],
+  ),
 };
 
 // ---- api key (settings/apikey) -------------------------------------------
