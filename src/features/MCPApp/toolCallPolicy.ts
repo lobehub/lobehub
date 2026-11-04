@@ -123,6 +123,15 @@ const findToolIntervention = (
   );
   if (!api) return null;
 
+  // A plugin's tool permissions live on a connector of the same identifier
+  // (syncPluginTools), applied as the conversation applies them
+  // (patchManifestWithPermissions). Until the server confirms the lists they
+  // may be stale or missing, so ask.
+  if (!s.isConnectorListConfirmed(agentId)) return { intervention: 'required' };
+  const permission = connector?.tools.find((t) => t.toolName === toolName)?.permission;
+  if (permission === 'disabled') return null;
+  if (permission === 'needs_approval') return { intervention: 'required' };
+
   return { intervention: api.humanIntervention ?? manifest?.humanIntervention };
 };
 

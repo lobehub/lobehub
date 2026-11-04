@@ -154,6 +154,36 @@ describe('getAppToolCallPolicy', () => {
     });
   });
 
+  describe("a plugin's connector permissions", () => {
+    // syncPluginTools keeps a marketplace plugin's permissions on a connector with no endpoint
+    const permissionsOnly = (permission: string) => ({
+      isEnabled: true,
+      tools: [{ permission, toolName: 'send' }],
+    });
+
+    it('asks before a plugin tool its connector marks as needing approval', async () => {
+      plugins.set('weather', plugin());
+      connectors.set('weather', permissionsOnly('needs_approval'));
+
+      expect(await getAppToolCallPolicy('weather', 'send')).toBe('confirm');
+    });
+
+    it('refuses a plugin tool its connector disabled', async () => {
+      plugins.set('weather', plugin());
+      connectors.set('weather', permissionsOnly('disabled'));
+
+      expect(await getAppToolCallPolicy('weather', 'send')).toBe('deny');
+    });
+
+    it("asks about a plugin tool while the connector permissions aren't confirmed", async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      plugins.set('weather', plugin());
+      toolStore.ensureConfirmedConnectors.mockRejectedValueOnce(new Error('offline'));
+
+      expect(await getAppToolCallPolicy('weather', 'send')).toBe('confirm');
+    });
+  });
+
   describe('agent-owned connectors', () => {
     it("loads the agent's tools before judging, so its stricter copy decides", async () => {
       connectors.set('mail', connector('auto'));
