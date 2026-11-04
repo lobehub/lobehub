@@ -150,7 +150,7 @@ describe('TableOfContents', () => {
     fireEvent.focus(screen.getByRole('button'));
 
     expect(panelMotion.initial).toMatchObject({ opacity: 0, scale: 0.9 });
-    expect(panelMotion.exit).toMatchObject({ opacity: 0, scale: 0.9 });
+    expect(panelMotion.exit).toMatchObject({ opacity: 0, pointerEvents: 'none', scale: 0.9 });
   });
 
   it('fades the panel without scaling when reduced motion is preferred', async () => {

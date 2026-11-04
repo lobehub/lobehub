@@ -2,7 +2,6 @@
 
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import type { Transition } from 'motion/react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import type { RefObject } from 'react';
@@ -19,20 +18,9 @@ const MIN_HEADINGS = 2;
 // Kept tight to the pane edge: the strip the rail takes is width wide tables lose.
 const RAIL_INSET = 4;
 const RAIL_PADDING_INLINE = 4;
-// The panel grows out of the rail and folds back into it. Opacity settles early on
-// the way in and late on the way out, so the scale stays visible in both directions.
+// The panel grows out of the rail and folds back into it.
 const PANEL_COLLAPSED_SCALE = 0.9;
-const PANEL_EASE_OUT = [0.22, 1, 0.36, 1] as const;
-const PANEL_ENTER: Transition = {
-  duration: 0.22,
-  ease: PANEL_EASE_OUT,
-  opacity: { duration: 0.12, ease: 'linear' },
-};
-const PANEL_EXIT: Transition = {
-  duration: 0.16,
-  ease: PANEL_EASE_OUT,
-  opacity: { duration: 0.16, ease: [0.4, 0, 1, 1] },
-};
+const PANEL_SPRING = { damping: 30, stiffness: 320, type: 'spring' } as const;
 
 const prefersReducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -300,10 +288,13 @@ const TableOfContents = memo<TableOfContentsProps>(({ contentRef, onVisibleChang
       <AnimatePresence>
         {expanded && (
           <m.div
-            animate={{ opacity: 1, scale: 1, transition: PANEL_ENTER }}
-            exit={{ opacity: 0, scale: collapsedScale, transition: PANEL_EXIT }}
+            animate={{ opacity: 1, pointerEvents: 'auto', scale: 1 }}
+            // The spring settles well after the panel is invisible; until it
+            // unmounts it must not catch hovers or clicks meant for the page.
+            exit={{ opacity: 0, pointerEvents: 'none', scale: collapsedScale }}
             // `y` centers the panel on the rail; no target animates it.
             initial={{ opacity: 0, scale: collapsedScale, y: '-50%' }}
+            transition={PANEL_SPRING}
             {...stylex.props(styles.panel)}
           >
             <div {...stylex.props(styles.title)}>{t('pageEditor.toc.title')}</div>
