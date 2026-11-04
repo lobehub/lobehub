@@ -3,6 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { KnowledgeRepo } from '../../repositories/knowledge';
 import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
@@ -75,6 +76,65 @@ afterEach(async () => {
 });
 
 describe('DocumentModel.transferTo', () => {
+  describe.each([
+    { source: wsId1, target: wsId2 },
+    { source: wsId1, target: null },
+    { source: undefined, target: wsId1 },
+  ])('nested resource transfer from $source to $target', ({ source, target }) => {
+    it.each(['page', 'folder'])(
+      'moves the selected %s to the root and preserves its descendants',
+      async (kind) => {
+        const sourceModel = new DocumentModel(serverDB, userId, source);
+        const parent = await createFolder(sourceModel, 'Source parent', 'source-parent');
+        const root = await (kind === 'folder' ? createFolder : createPage)(
+          sourceModel,
+          'Selected root',
+          'selected-root',
+          parent.id,
+        );
+        const child = await createPage(sourceModel, 'Child', 'nested-child', root.id);
+        const subfolder = await createFolder(sourceModel, 'Subfolder', 'nested-subfolder', root.id);
+        const grandchild = await createPage(
+          sourceModel,
+          'Grandchild',
+          'nested-grandchild',
+          subfolder.id,
+        );
+        const [file] = await serverDB
+          .insert(files)
+          .values({
+            fileType: 'text/plain',
+            name: 'nested.txt',
+            parentId: subfolder.id,
+            size: 10,
+            url: 'nested.txt',
+            userId,
+            workspaceId: source ?? null,
+          })
+          .returning();
+
+        await sourceModel.transferTo(root.id, target, userId);
+
+        const targetRoot = await new KnowledgeRepo(serverDB, userId, target ?? undefined).query({
+          parentId: null,
+        });
+        expect(targetRoot.map((item) => item.id)).toEqual([root.id]);
+        const targetModel = new DocumentModel(serverDB, userId, target ?? undefined);
+        expect(await targetModel.findById(root.id)).toMatchObject({
+          parentId: null,
+          workspaceId: target,
+        });
+        expect(await targetModel.findById(child.id)).toMatchObject({ parentId: root.id });
+        expect(await targetModel.findById(subfolder.id)).toMatchObject({ parentId: root.id });
+        expect(await targetModel.findById(grandchild.id)).toMatchObject({ parentId: subfolder.id });
+        const [movedFile] = await serverDB.select().from(files).where(eq(files.id, file!.id));
+        expect(movedFile).toMatchObject({ parentId: subfolder.id, workspaceId: target });
+        expect(await sourceModel.findById(root.id)).toBeUndefined();
+        expect(await sourceModel.findById(parent.id)).toBeDefined();
+      },
+    );
+  });
+
   it('transfers a single page from personal to workspace', async () => {
     const model = new DocumentModel(serverDB, userId);
     const page = await createPage(model, 'My Page', 'my-page');
