@@ -20,6 +20,10 @@ export const MANAGED_TOKEN_PATH = '/api/device/managed/token';
 export const MANAGED_TOKEN_REFRESH_RATIO = 0.8;
 /** Never schedule a refresh sooner than this, even for a nearly expired token. */
 export const MANAGED_TOKEN_MIN_REFRESH_DELAY_MS = 5000;
+/** A longer lifetime is malformed; the server issues 1 h tokens. */
+export const MANAGED_TOKEN_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
+/** Refresh delay used for a token whose lifetime is malformed. */
+export const MANAGED_TOKEN_FALLBACK_REFRESH_DELAY_MS = 5 * 60 * 1000;
 export const MANAGED_TOKEN_RETRY_INITIAL_DELAY_MS = 1000;
 export const MANAGED_TOKEN_RETRY_MAX_DELAY_MS = 60_000;
 export const MANAGED_TOKEN_REQUEST_TIMEOUT_MS = 15_000;
@@ -35,11 +39,17 @@ export interface ManagedDeviceConfig {
 export type ManagedDeviceConfigResult =
   { config: ManagedDeviceConfig; ok: true } | { message: string; ok: false };
 
-const parseHttpUrl = (value: string): string | undefined => {
+const NOT_A_SERVICE_URL = 'is not an https URL (http is allowed only for localhost).';
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '[::1]', 'localhost']);
+
+/** An https URL, or an http one on this machine; the secret and tokens travel over it. */
+const parseServiceUrl = (value: string): string | undefined => {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
-    return value.replace(/\/+$/, '');
+    const allowed =
+      url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname));
+    return allowed ? value.replace(/\/+$/, '') : undefined;
   } catch {
     return undefined;
   }
@@ -72,13 +82,13 @@ export function readManagedDeviceConfig(
     };
   }
 
-  const serverUrl = parseHttpUrl(server!);
+  const serverUrl = parseServiceUrl(server!);
   if (!serverUrl) {
-    return { message: `${MANAGED_SERVER_ENV} is not an http(s) URL.`, ok: false };
+    return { message: `${MANAGED_SERVER_ENV} ${NOT_A_SERVICE_URL}`, ok: false };
   }
-  const gatewayUrl = parseHttpUrl(gateway!);
+  const gatewayUrl = parseServiceUrl(gateway!);
   if (!gatewayUrl) {
-    return { message: `${MANAGED_GATEWAY_ENV} is not an http(s) URL.`, ok: false };
+    return { message: `${MANAGED_GATEWAY_ENV} ${NOT_A_SERVICE_URL}`, ok: false };
   }
 
   const activityCommand = read(DEVICE_ACTIVITY_COMMAND_ENV);
@@ -198,9 +208,14 @@ export function readManagedTokenPrincipal(
   throw new Error('The managed device token has no sub or workspace_id claim.');
 }
 
-/** Delay before refreshing a token: 80% of its lifetime, at least 5 s. */
+/**
+ * Delay before refreshing a token: 80% of its lifetime, at least 5 s. A
+ * lifetime above 24 h is malformed and gets the 5 min fallback, which also
+ * keeps the delay inside the range `setTimeout` accepts.
+ */
 export function getManagedTokenRefreshDelay(token: ManagedDeviceToken): number {
   const lifetime = token.expiresAt - token.issuedAt;
+  if (lifetime > MANAGED_TOKEN_MAX_LIFETIME_MS) return MANAGED_TOKEN_FALLBACK_REFRESH_DELAY_MS;
   return Math.max(MANAGED_TOKEN_MIN_REFRESH_DELAY_MS, lifetime * MANAGED_TOKEN_REFRESH_RATIO);
 }
 

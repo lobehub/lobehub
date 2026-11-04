@@ -53,8 +53,33 @@ describe('readManagedDeviceConfig', () => {
 
   it('rejects a non-http URL without printing any value', () => {
     const result = readManagedDeviceConfig({ ...FULL_ENV, LOBEHUB_SERVER: 'ftp://top-secret' });
-    expect(result).toEqual({ message: 'LOBEHUB_SERVER is not an http(s) URL.', ok: false });
+    expect(result).toEqual({
+      message: 'LOBEHUB_SERVER is not an https URL (http is allowed only for localhost).',
+      ok: false,
+    });
   });
+
+  it('rejects plain http to a remote host', () => {
+    const result = readManagedDeviceConfig({
+      ...FULL_ENV,
+      LOBEHUB_DEVICE_GATEWAY_URL: 'http://gateway.example.com',
+    });
+    expect(result).toEqual({
+      message:
+        'LOBEHUB_DEVICE_GATEWAY_URL is not an https URL (http is allowed only for localhost).',
+      ok: false,
+    });
+  });
+
+  it.each(['http://localhost:3010', 'http://127.0.0.1:3010', 'http://[::1]:3010'])(
+    'accepts plain http to this machine (%s)',
+    (server) => {
+      expect(readManagedDeviceConfig({ ...FULL_ENV, LOBEHUB_SERVER: server })).toMatchObject({
+        config: { serverUrl: server },
+        ok: true,
+      });
+    },
+  );
 
   it('rejects an activity command that cannot be split', () => {
     const result = readManagedDeviceConfig({
@@ -175,6 +200,19 @@ describe('refresh and retry delays', () => {
     );
     expect(getManagedTokenRefreshDelay({ expiresAt: 1000, issuedAt: 0, token: 't' })).toBe(5000);
     expect(getManagedTokenRefreshDelay({ expiresAt: 0, issuedAt: 1000, token: 't' })).toBe(5000);
+  });
+
+  it('treats a lifetime above 24 h as malformed and refreshes after 5 min', () => {
+    const day = 24 * 60 * 60 * 1000;
+    expect(getManagedTokenRefreshDelay({ expiresAt: day, issuedAt: 0, token: 't' })).toBe(
+      day * 0.8,
+    );
+    expect(getManagedTokenRefreshDelay({ expiresAt: day + 1, issuedAt: 0, token: 't' })).toBe(
+      300_000,
+    );
+    expect(
+      getManagedTokenRefreshDelay({ expiresAt: Number.MAX_SAFE_INTEGER, issuedAt: 0, token: 't' }),
+    ).toBe(300_000);
   });
 
   it('doubles from 1 s to a 60 s cap with ±20% jitter', () => {
