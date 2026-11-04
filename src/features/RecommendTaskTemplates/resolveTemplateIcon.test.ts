@@ -1,4 +1,4 @@
-import { SiGithub } from '@icons-pack/react-simple-icons';
+import SiGithub from '@icons-pack/react-simple-icons/icons/SiGithub';
 import type { TaskTemplate } from '@lobechat/const';
 import { BookOpen, type LucideIcon, Sparkles } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
