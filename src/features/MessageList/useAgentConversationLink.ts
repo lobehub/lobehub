@@ -1,7 +1,7 @@
+import { CHANNEL_URL } from '@lobechat/const';
 import { type MouseEvent, useCallback, useEffect, useRef } from 'react';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { channelPath } from '@/features/Channels/paths';
 import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -49,7 +49,7 @@ export const useAgentConversationLink = (agentId: string, agentUrl: string) => {
       };
       void channelActions
         .openDirect(agentId)
-        .then((channelId) => go(channelId ? channelPath(channelId) : agentUrl))
+        .then((channelId) => go(channelId ? CHANNEL_URL(channelId) : agentUrl))
         .catch((error) => {
           console.error('[channel] Failed to open the direct Channel', error);
           go(agentUrl);
@@ -61,6 +61,6 @@ export const useAgentConversationLink = (agentId: string, agentUrl: string) => {
     [agentId, agentUrl, navigate],
   );
 
-  if (directChannelId) return { url: channelPath(directChannelId) };
+  if (directChannelId) return { url: CHANNEL_URL(directChannelId) };
   return { onClick: enabled ? onClick : undefined, url: agentUrl };
 };
