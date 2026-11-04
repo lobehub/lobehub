@@ -20,7 +20,6 @@ import {
 } from './agencyConfig';
 import {
   AMP_AGENT_MODES,
-  codexModelSupportsFastSpeed,
   getCodexReasoningEffortLevels,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   resolveAmpAgentMode,
@@ -886,18 +885,6 @@ describe('codex speed mode', () => {
     );
   });
 
-  it('reports fast support for catalog models and the default selection', () => {
-    expect(codexModelSupportsFastSpeed(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)).toBe(true);
-    expect(codexModelSupportsFastSpeed('gpt-5.6')).toBe(true);
-    expect(codexModelSupportsFastSpeed('gpt-5.6-sol')).toBe(true);
-    expect(codexModelSupportsFastSpeed('gpt-5.6-terra')).toBe(true);
-    expect(codexModelSupportsFastSpeed('gpt-5.6-luna')).toBe(true);
-    expect(codexModelSupportsFastSpeed('gpt-5.5')).toBe(true);
-    expect(codexModelSupportsFastSpeed('gpt-5.4')).toBe(true);
-    expect(codexModelSupportsFastSpeed('gpt-5.4-mini')).toBe(false);
-    expect(codexModelSupportsFastSpeed('gpt-5.3-codex-spark')).toBe(false);
-  });
-
   it('appends service_tier config for Codex spawns when fast is selected', () => {
     expect(buildHeteroSpawnArgs({ speed: 'fast', type: 'codex' })).toEqual([
       '-c',
@@ -1324,12 +1311,12 @@ describe('applyTopicModelToHeterogeneousProvider - speed pin', () => {
     expect(applyTopicModelToHeterogeneousProvider(config, { effort: undefined })).toBe(config);
   });
 
-  it('drops a Fast pin the effective model cannot run', () => {
+  it('leaves native speed capability validation to the execution device', () => {
     const effective = applyTopicModelToHeterogeneousProvider(
       { model: 'gpt-5.6-sol', type: 'codex' },
-      { model: 'gpt-5.3-codex', provider: 'codex', speed: 'fast' },
+      { model: 'gpt-6.1-sol', provider: 'codex', speed: 'fast' },
     );
 
-    expect(effective.speed).toBe('default');
+    expect(effective.speed).toBe('fast');
   });
 });

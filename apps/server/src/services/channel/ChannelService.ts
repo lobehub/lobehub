@@ -23,6 +23,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
+import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { wakeChannel } from './queue';
 import { resolveChannelRoutingConfig } from './routingConfig';
@@ -190,10 +191,10 @@ export class ChannelService {
   };
 
   /**
-   * The direct conversation a person starts with an Agent they just created, titled with the
-   * Agent's name. The Agent keeps the device and directory a new Channel would give it, checked
-   * the same way; an external Agent with no device to run on gets none, as it could not join a
-   * group either.
+   * The direct conversation between a person and an Agent, titled with the Agent's name. The Agent
+   * keeps the device and directory a new Channel would give it, checked the same way. An external
+   * Agent with no device yet still gets its conversation; it asks for a device in the Channel
+   * before it can reply.
    */
   createDirect = async (agentId: string, { localDeviceId }: { localDeviceId?: string } = {}) => {
     const agent = await this.agentService.getAgentConfigById(agentId);
@@ -205,13 +206,26 @@ export class ChannelService {
       localDeviceId,
       runtime,
     });
-    if (!deviceId && runtime !== 'native') return;
-    const { config } = await this.resolveAgent({ agentId, deviceId }, agent);
+    const { config } =
+      deviceId || runtime === 'native'
+        ? await this.resolveAgent({ agentId, deviceId }, agent)
+        : { config: {} };
     return this.repository.create({
       agentConfig: config,
       agentId,
       title: agentDisplayName(agent, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
     });
+  };
+
+  /**
+   * The direct conversation a person opens with an existing Agent, e.g. one created before direct
+   * Channels. An existing conversation opens as it is, without probing its device again; one the
+   * person moved to the trash stays there, and the Agent opens as before.
+   */
+  openDirect = async (agentId: string, options: { localDeviceId?: string } = {}) => {
+    const existing = await this.repository.findDirectAccess(agentId);
+    if (existing) return existing.channel.isDeleted ? undefined : existing;
+    return this.createDirect(agentId, options);
   };
 
   /**
@@ -323,6 +337,7 @@ export class ChannelService {
       ...input,
       routing: config ? 'decision' : 'fallback',
     });
+    notifyChannelMentions(this.db, { userId: this.userId, workspaceId: this.workspaceId }, message);
     // Human quotes only update the public feed; they never schedule Agent work.
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);

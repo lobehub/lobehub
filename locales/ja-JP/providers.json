@@ -35,7 +35,6 @@
   "jina.description": "Jina AIは2020年に設立された検索AIのリーディングカンパニーで、ベクトルモデル、リランカー、小型言語モデルを含む検索スタックにより、高品質な生成・マルチモーダル検索アプリを構築できます。",
   "kimicodingplan.description": "Moonshot AIのKimi Codeは、K2.5を含むKimiモデルへのアクセスを提供します。",
   "lmstudio.description": "LM Studioは、ローカルPC上でLLMの開発と実験ができるデスクトップアプリです。",
-  "lobehub.description": "LobeHub Cloudは、公式APIを使用してAIモデルにアクセスし、モデルトークンに紐づいたクレジットで使用量を測定します。",
   "longcat.description": "LongCatは、Meituanが独自に開発した生成AIの大型モデルシリーズです。効率的な計算アーキテクチャと強力なマルチモーダル機能を通じて、企業内部の生産性を向上させ、革新的なアプリケーションを可能にすることを目的としています。",
   "magpie.description": "magpieはLLMゲートウェイです。そこにあるすべてのモデルとサブスクリプションが1つのエンドポイントで提供されます。",
   "meta.description": "Metaは、LlamaやMuseモデルファミリーを含む、人々がつながり、創造し、物事を成し遂げるのを助けるAIモデルと製品を構築しています。",

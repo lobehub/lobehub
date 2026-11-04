@@ -11,7 +11,7 @@ export default {
   'table.columns.billableDuration': 'Billable Duration',
   'table.columns.duration': 'Duration',
   'table.columns.model': 'Model',
-  'table.columns.spend': 'Credits',
+  'table.columns.spend': 'Cost',
   'table.columns.time': 'Time',
   'table.columns.totalTokens': 'Token Usage',
   'table.columns.trigger.enums.agent_meta': 'Agent Profile',
@@ -66,7 +66,7 @@ export default {
   'table.columns.type.title': 'Type',
   'table.agentShareDesc':
     'Every model call a visitor of this share triggered, billed to your account.',
-  'table.desc': 'Details of credit usage for text generation, embedding, image generation, etc.',
+  'table.desc': 'Details of spend for text generation, embedding, image generation, etc.',
   'table.filters.allTypes': 'All types',
   'table.filters.endDate': 'End date',
   'table.filters.reset': 'Reset',
@@ -103,4 +103,5 @@ export default {
   'usageStats.range': 'Time range',
   'usageStats.rangeSuffix': 'Last {{count}}d',
   'usageStats.title': 'Statistics',
+  'table.columns.spendUsd': 'Cost',
 };

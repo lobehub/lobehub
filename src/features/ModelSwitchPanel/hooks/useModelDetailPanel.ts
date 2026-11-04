@@ -1,4 +1,3 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { getCachedTextInputUnitRate } from '@lobechat/utils';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
@@ -32,7 +31,7 @@ import { useGlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
-import { formatNumber, formatShortenNumber, formatTokenNumber } from '@/utils/format';
+import { formatTokenNumber } from '@/utils/format';
 import { formatPriceByCurrency, getOriginalUnitRateByName, getUnitRateByName } from '@/utils/index';
 
 import type { PricingMode } from '../types';
@@ -48,61 +47,29 @@ interface TextPriceSummary {
   output: FormattedUnitPrice;
 }
 
-const BRANDING_CREDIT_UNIT = 1_000_000;
-const MILLION_SCALE_UNITS = new Set<PricingUnit['unit']>(['millionCharacters', 'millionTokens']);
-
-interface FormatPricingRateOptions {
-  isCreditPricing?: boolean;
-  unit?: PricingUnit['unit'];
-}
-
-const formatBrandingCreditRate = (rate: number, unit?: PricingUnit['unit']) => {
-  if (unit && MILLION_SCALE_UNITS.has(unit)) return `${formatNumber(rate)}M`;
-
-  return String(formatShortenNumber(Math.round(rate * BRANDING_CREDIT_UNIT)));
-};
-
-const formatPricingRate = (
-  rate: number | undefined,
-  currency?: ModelPriceCurrency,
-  options: FormatPricingRateOptions = {},
-) => {
+const formatPricingRate = (rate: number | undefined, currency?: ModelPriceCurrency) => {
   if (typeof rate !== 'number') return '0';
 
-  return options.isCreditPricing
-    ? formatBrandingCreditRate(rate, options.unit)
-    : formatPriceByCurrency(rate, currency);
+  return formatPriceByCurrency(rate, currency);
 };
 
-const getFormattedUnitPrice = (
-  pricing: Pricing,
-  unitName: PricingUnitName,
-  isCreditPricing: boolean,
-): FormattedUnitPrice => {
+const getFormattedUnitPrice = (pricing: Pricing, unitName: PricingUnitName): FormattedUnitPrice => {
   const currency = pricing.currency as ModelPriceCurrency | undefined;
   const currentRate = getUnitRateByName(pricing, unitName);
   const originalRate = getOriginalUnitRateByName(pricing, unitName);
 
   return {
-    current: formatPricingRate(currentRate, currency, {
-      isCreditPricing,
-      unit: 'millionTokens',
-    }),
+    current: formatPricingRate(currentRate, currency),
     original:
-      typeof originalRate === 'number'
-        ? formatPricingRate(originalRate, currency, {
-            isCreditPricing,
-            unit: 'millionTokens',
-          })
-        : undefined,
+      typeof originalRate === 'number' ? formatPricingRate(originalRate, currency) : undefined,
   };
 };
 
-export const getPrice = (pricing: Pricing, isCreditPricing: boolean): TextPriceSummary => {
+export const getPrice = (pricing: Pricing): TextPriceSummary => {
   return {
-    cachedInput: getFormattedUnitPrice(pricing, 'textInput_cacheRead', isCreditPricing),
-    input: getFormattedUnitPrice(pricing, 'textInput', isCreditPricing),
-    output: getFormattedUnitPrice(pricing, 'textOutput', isCreditPricing),
+    cachedInput: getFormattedUnitPrice(pricing, 'textInput_cacheRead'),
+    input: getFormattedUnitPrice(pricing, 'textInput'),
+    output: getFormattedUnitPrice(pricing, 'textOutput'),
   };
 };
 
@@ -164,15 +131,9 @@ const UNIT_LABEL_MAP: Record<string, string> = {
   second: '/s',
 };
 
-const formatUnitRate = (
-  unit: PricingUnit,
-  currency?: ModelPriceCurrency,
-  isCreditPricing?: boolean,
-): FormattedUnitPrice => {
-  const formatRate = (rate: number) =>
-    formatPricingRate(rate, currency, { isCreditPricing, unit: unit.unit });
-  const formatRange = (low: string, high: string) =>
-    isCreditPricing ? `${low} ~ ${high}` : `${low} ~ $${high}`;
+const formatUnitRate = (unit: PricingUnit, currency?: ModelPriceCurrency): FormattedUnitPrice => {
+  const formatRate = (rate: number) => formatPricingRate(rate, currency);
+  const formatRange = (low: string, high: string) => `${low} ~ $${high}`;
 
   if (unit.strategy === 'fixed') {
     const fixedUnit = unit as FixedPricingUnit;
@@ -316,9 +277,8 @@ export const useModelDetailPanel = ({
     () => applyBusinessModelPricing({ model: modelId, pricing, provider }),
     [applyBusinessModelPricing, modelId, pricing, provider],
   );
-  const isCreditPricing = provider === BRANDING_PROVIDER;
   const hasPricing = !!displayPricing;
-  const formatPrice = displayPricing ? getPrice(displayPricing, isCreditPricing) : null;
+  const formatPrice = displayPricing ? getPrice(displayPricing) : null;
   const hasCachedInputPricing = displayPricing
     ? !!getCachedTextInputUnitRate(displayPricing)
     : false;
@@ -331,50 +291,24 @@ export const useModelDetailPanel = ({
     if (!displayPricing || !pricingMode) return null;
     const currency = displayPricing.currency as ModelPriceCurrency | undefined;
     if (pricingMode === 'image' && typeof displayPricing.approximatePricePerImage === 'number') {
-      const amount = isCreditPricing
-        ? formatBrandingCreditRate(displayPricing.approximatePricePerImage, 'image')
-        : formatPriceByCurrency(displayPricing.approximatePricePerImage, currency);
-      return t(
-        isCreditPricing
-          ? 'ModelSwitchPanel.detail.pricing.credits.perImage'
-          : 'ModelSwitchPanel.detail.pricing.perImage',
-        {
-          amount,
-          defaultValue: isCreditPricing ? '~ {{amount}} credits / image' : '~ ${{amount}} / image',
-        },
-      );
+      const amount = formatPriceByCurrency(displayPricing.approximatePricePerImage, currency);
+      return t('ModelSwitchPanel.detail.pricing.perImage', {
+        amount,
+        defaultValue: '~ ${{amount}} / image',
+      });
     }
     if (pricingMode === 'video' && typeof displayPricing.approximatePricePerVideo === 'number') {
-      const amount = isCreditPricing
-        ? formatBrandingCreditRate(displayPricing.approximatePricePerVideo)
-        : formatPriceByCurrency(displayPricing.approximatePricePerVideo, currency);
-      return t(
-        isCreditPricing
-          ? 'ModelSwitchPanel.detail.pricing.credits.perVideo'
-          : 'ModelSwitchPanel.detail.pricing.perVideo',
-        {
-          amount,
-          defaultValue: isCreditPricing ? '~ {{amount}} credits / video' : '~ ${{amount}} / video',
-        },
-      );
+      const amount = formatPriceByCurrency(displayPricing.approximatePricePerVideo, currency);
+      return t('ModelSwitchPanel.detail.pricing.perVideo', {
+        amount,
+        defaultValue: '~ ${{amount}} / video',
+      });
     }
     return null;
-  }, [displayPricing, isCreditPricing, pricingMode, t]);
-
-  const getCreditsUnitLabel = useCallback(
-    (unit: PricingUnit['unit']) =>
-      t(`ModelSwitchPanel.detail.pricing.credits.${unit}` as any, {
-        defaultValue: `credits${UNIT_LABEL_MAP[unit] || ''}`,
-      }),
-    [t],
-  );
+  }, [displayPricing, pricingMode, t]);
 
   const getPricingTooltip = useCallback(
     (key: 'cachedInput' | 'input' | 'output', amount: string): string => {
-      if (isCreditPricing) {
-        return t(`ModelSwitchPanel.detail.pricing.credits.${key}` as any, { amount });
-      }
-
       const fallbackKey =
         key === 'cachedInput'
           ? 'ModelSwitchPanel.detail.pricing.cachedInput'
@@ -382,19 +316,17 @@ export const useModelDetailPanel = ({
 
       return t(fallbackKey as any, { amount });
     },
-    [isCreditPricing, t],
+    [t],
   );
 
   const formatUnitPrice = useCallback(
-    (unit: PricingUnit) =>
-      formatUnitRate(unit, displayPricing?.currency as ModelPriceCurrency, isCreditPricing),
-    [displayPricing?.currency, isCreditPricing],
+    (unit: PricingUnit) => formatUnitRate(unit, displayPricing?.currency as ModelPriceCurrency),
+    [displayPricing?.currency],
   );
 
   const getUnitPriceSuffix = useCallback(
-    (unit: PricingUnit['unit']) =>
-      isCreditPricing ? ` ${getCreditsUnitLabel(unit)}` : UNIT_LABEL_MAP[unit] || '',
-    [getCreditsUnitLabel, isCreditPricing],
+    (unit: PricingUnit['unit']) => UNIT_LABEL_MAP[unit] || '',
+    [],
   );
 
   const handleExpandedChange = useCallback(
@@ -432,7 +364,6 @@ export const useModelDetailPanel = ({
     hasCachedInputPricing,
     hasPricing,
     isAbilitiesExpanded: expandedKeys.includes('abilities'),
-    isCreditPricing,
     isPricingExpanded: expandedKeys.includes('pricing'),
     model,
     pricingGroups,

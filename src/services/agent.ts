@@ -131,8 +131,14 @@ class AgentService {
    * Get an agent by forkedFromIdentifier stored in params
    * @returns agent id if exists, null otherwise
    */
-  getAgentByForkedFromIdentifier = async (forkedFromIdentifier: string): Promise<string | null> => {
-    return lambdaClient.agent.getAgentByForkedFromIdentifier.query({ forkedFromIdentifier });
+  getAgentByForkedFromIdentifier = async (
+    forkedFromIdentifier: string,
+    options?: { virtual?: boolean },
+  ): Promise<string | null> => {
+    return lambdaClient.agent.getAgentByForkedFromIdentifier.query({
+      forkedFromIdentifier,
+      ...options,
+    });
   };
 
   /**

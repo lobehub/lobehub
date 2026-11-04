@@ -129,6 +129,7 @@ export default {
   'status.cancelled': 'Stopped',
   'blocked.device_approval_pending': 'Waiting for device approval',
   'blocked.device_offline': 'Waiting for device to connect',
+  'blocked.device_required': 'Choose a device for this Agent to run on',
   'blocked.directory_locked': 'Waiting for this directory to be released',
   'blocked.member_busy': 'Waiting for the previous reply',
   'blocked.unavailable': 'Agent unavailable',

@@ -154,7 +154,13 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       // lets it state the destination it is creating, so the cwd lands in the
       // same slot the pending `local` pick will read from.
       const localTarget = options?.localTarget === true;
-      const writeDeviceId = localTarget ? currentDeviceId : targetDeviceId;
+      const writeDeviceId = localTarget
+        ? currentDeviceId
+        : (targetDeviceId ??
+          activeTopic?.metadata?.boundDeviceId ??
+          (entry && activeTopicId
+            ? await getElectronStoreState().resolveGatewayDeviceId()
+            : undefined));
       // A `local` pick on a workspace agent always means this member's own
       // machine, which routes to the per-user slot rather than the shared row.
       const writePersonalSlot = localTarget
@@ -164,6 +170,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       // The session cwd anchors to the source repo for hetero (stable across
       // worktree switches) and to the effective/worktree path otherwise.
       const sessionCwd = isHetero ? getWorkingDirSourcePath(entry) : effectivePath;
+      // Save the reusable device entry before changing the selection. A failed
+      // recent-directory write must not leave a chip that looks successfully saved.
+      if (entry && effectivePath && writeDeviceId) {
+        await updateDeviceCwd(writeDeviceId, entry, { setDefault: false });
+      }
       // Topic override wins once a conversation exists; otherwise persist the
       // agent's per-device choice so a new topic inherits it.
       if (activeTopicId) {
@@ -187,11 +198,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           // moved to another device keeps the directory just chosen there. An
           // unresolved target keeps the topic's own pin (or this desktop's id)
           // rather than leaving the new path with no machine at all.
-          boundDeviceId: entry
-            ? (writeDeviceId ??
-              activeTopic?.metadata?.boundDeviceId ??
-              (await getElectronStoreState().resolveGatewayDeviceId()))
-            : undefined,
+          boundDeviceId: entry ? writeDeviceId : undefined,
           ...(shouldUpdateHeteroSession ? { heteroSessionId: scopedHeteroSessionId } : {}),
           workingDirectory: sessionCwd,
           workingDirectoryConfig: entry ? toAgentWorkingDirConfig(entry) : undefined,
@@ -233,11 +240,6 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
         if (!writePersonalSlot && !effectivePath && legacyAgentWorkingDirectory) {
           await updateAgentRuntimeEnvConfigById(agentId, { workingDirectory: undefined });
         }
-      }
-      // Record on the target device's recent list (not the device-wide default —
-      // a per-agent pick shouldn't repoint other agents on the same device).
-      if (entry && effectivePath && targetDeviceId) {
-        await updateDeviceCwd(targetDeviceId, entry, { setDefault: false });
       }
     },
     [

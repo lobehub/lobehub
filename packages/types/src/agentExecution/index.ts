@@ -716,6 +716,8 @@ export interface ExecSubAgentResult {
   success: boolean;
   /** The Thread ID where the execution is isolated */
   threadId: string;
+  /** Short-lived Gateway ticket for streaming this run (absent when withheld) */
+  token?: string;
 }
 
 /**

@@ -40,7 +40,6 @@
   "generation.editing.hint": "変更内容を説明してください。他の部分はそのまま残ります",
   "generation.editing.modelLocked": "編集は元のビデオのモデルを保持します",
   "generation.editing.title": "編集 V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 無料枠を使い切りました。クレジットが消費されます",
   "generation.freeQuota.remaining": "🎁 本日残りの無料ビデオ数：{{remaining}}",
   "generation.status.editing": "編集を生成中...",
   "generation.status.failed": "生成に失敗しました",

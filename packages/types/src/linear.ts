@@ -119,6 +119,13 @@ export interface LinearIssuePage {
   issues: LinearIssueSummary[];
 }
 
+/** How many issues match a picker filter; counting stops at a limit. */
+export interface LinearIssueCount {
+  /** True when more issues match than were counted; `count` is then a lower bound. */
+  capped: boolean;
+  count: number;
+}
+
 /** Why an issue was left alone. */
 export type LinearSyncSkipReason =
   /** Linear closed it, but the task is running; it is not interrupted. */

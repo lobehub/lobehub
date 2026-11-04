@@ -199,6 +199,15 @@ class TaskService {
 
   batchDelete = async (ids: string[]) => lambdaClient.task.batchDelete.mutate({ ids });
 
+  /** Undo of a batch status / field / archive change (the `reverts` it returned). */
+  batchRevert = async (
+    reverts: Parameters<typeof lambdaClient.task.batchRevert.mutate>[0]['reverts'],
+  ) => lambdaClient.task.batchRevert.mutate({ reverts });
+
+  /** Undo of a batch delete: restore the tasks from the recycle bin. */
+  batchRestoreDeleted = async (ids: string[]) =>
+    lambdaClient.task.batchRestoreDeleted.mutate({ ids });
+
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
 
   archive = async (id: string, archived: boolean) =>

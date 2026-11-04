@@ -1,4 +1,9 @@
-import type { LinearSyncJobErrorCode, LinearSyncJobView, LinearSyncResult } from '@lobechat/types';
+import type {
+  LinearIssueCount,
+  LinearSyncJobErrorCode,
+  LinearSyncJobView,
+  LinearSyncResult,
+} from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
 import type { TFunction } from 'i18next';
 
@@ -33,6 +38,28 @@ export const formatLinearSyncResult = (
   if (parts.length === 0) parts.push(t('linear.sync.result.upToDate'));
   if (result.truncated) parts.push(t('linear.sync.result.truncated'));
   return parts.join(' · ');
+};
+
+/**
+ * Header counts of the issue picker. The list loads one page at a time, so the
+ * loaded count is the total only once every page is in; until then the total
+ * comes from the separate count, or reads as "at least" what is loaded.
+ */
+export const linearIssueListCounts = (
+  { hasMore, loaded, total }: { hasMore: boolean; loaded: number; total?: LinearIssueCount },
+  t: TFunction<'integration'>,
+): { loaded?: string; total: string } => {
+  if (!hasMore) return { total: t('linear.sync.list.count', { count: loaded }) };
+
+  // The count can lag behind pages loaded later, or stop at its limit below them.
+  const count = Math.max(total?.count ?? 0, loaded);
+  const exact = !!total && !total.capped && total.count > loaded;
+  return {
+    loaded: t('linear.sync.list.loaded', { count: loaded }),
+    total: exact
+      ? t('linear.sync.list.count', { count })
+      : t('linear.sync.list.countAtLeast', { count }),
+  };
 };
 
 export const isActiveLinearSyncJob = (job: Pick<LinearSyncJobView, 'status'>) =>

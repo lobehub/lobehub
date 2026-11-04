@@ -112,6 +112,8 @@ export interface State extends PublicState {
   editor?: IEditor;
   inputCompletionError?: InputCompletionError;
   inputCompletionErrorDismissed: boolean;
+  /** Market agents/skills picked from the @ menu are being installed before the send commits. */
+  installingMarketMentions: boolean;
   isContentEmpty: boolean;
   markdownContent: string;
   slashMenuRef: ChatInputProps['slashMenuRef'];
@@ -123,6 +125,7 @@ export const initialState: State = {
   expand: false,
   feature: DEFAULT_CHAT_INPUT_FEATURE,
   inputCompletionErrorDismissed: false,
+  installingMarketMentions: false,
   isContentEmpty: false,
   leftActions: [],
   markdownContent: '',

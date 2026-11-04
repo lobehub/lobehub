@@ -268,7 +268,29 @@ vi.mock('./useLocalFileTag', () => ({
     searchLocalFiles: vi.fn(async () => []),
   }),
 }));
-vi.mock('./useMentionCategories', () => ({ useMentionCategories: () => [] }));
+vi.mock('@/services/mentionMarketInstall', () => ({
+  prepareMentionedMarketAgent: vi.fn(),
+  prepareMentionedMarketSkill: vi.fn(),
+}));
+vi.mock('./marketMentionItems', () => ({
+  searchMarketForMention: vi.fn(async () => ({ agents: [], skills: [] })),
+  toMarketAgentItem: vi.fn(),
+  toMarketSkillItem: vi.fn(),
+}));
+vi.mock('./useMentionCategories', () => ({
+  useMentionCategories: () => ({
+    categories: [],
+    market: {
+      agentCategory: undefined,
+      agentVisibility: 'public',
+      agents: false,
+      installedAgentSources: new Set(),
+      installedSkills: new Set(),
+      skillCategory: { icon: null, id: 'skill', label: 'Skills' },
+      skills: false,
+    },
+  }),
+}));
 
 describe('ChatInput InputEditor', () => {
   beforeEach(() => {

@@ -271,6 +271,8 @@ export const readRouter = router({
     .input(
       z.object({
         agentId: z.string().optional(),
+        /** List only archived goals; omitted, archived goals are left out. */
+        archived: z.boolean().optional(),
         limit: z.number().optional(),
         offset: z.number().optional(),
         projectId: z.string().optional(),

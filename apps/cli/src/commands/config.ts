@@ -235,7 +235,7 @@ export function registerConfigCommand(program: Command) {
 
   usage
     .command('quota')
-    .description("Show how much of this cycle's credit allowance is used and left")
+    .description("Show how much of this cycle's usage allowance is used and left")
     .option(
       '--workspace <id|slug>',
       'Read the allowance in this workspace (defaults to the active scope)',
@@ -260,11 +260,11 @@ export function registerConfigCommand(program: Command) {
 
       const { quota } = summary;
       if (!quota) {
-        console.log('No credit allowance on this server.');
+        console.log('No usage allowance on this server.');
         return;
       }
 
-      console.log(pc.bold('Credit Allowance'));
+      console.log(pc.bold('Usage Allowance'));
       console.log(`  Source:    ${QUOTA_SOURCE_LABELS[quota.source]}`);
       if (quota.limit === null) {
         console.log(`  Used:      ${formatCost(quota.used)} ${pc.dim('(no cap)')}`);
@@ -294,6 +294,6 @@ interface UsageSummary {
 
 const QUOTA_SOURCE_LABELS: Record<NonNullable<UsageSummary['quota']>['source'], string> = {
   member_budget: 'your member limit in this workspace',
-  personal: 'personal credits',
-  workspace_pool: 'workspace credit pool',
+  personal: 'personal usage',
+  workspace_pool: 'workspace usage pool',
 };
