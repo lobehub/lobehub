@@ -435,7 +435,12 @@ describe('sendMessage continuing a source topic', () => {
   });
 
   // The path only exists on the machine it was recorded on.
-  it('keeps the agent default when the source directory is on another machine', async () => {
+  // A legacy topic never recorded its machine: the same absolute path on the
+  // receiving machine may be an unrelated checkout, so it is not inherited.
+  it.each([
+    ['on another machine', { boundDeviceId: OTHER_DEVICE_ID, workingDirectory: SOURCE_PATH }],
+    ['on an unknown machine', { workingDirectory: SOURCE_PATH }],
+  ])('keeps the agent default when the source directory is %s', async (_, metadata) => {
     mockConstEnv.isDesktop = true;
     setupMockSelectors({
       agentConfig: {
@@ -447,9 +452,7 @@ describe('sendMessage continuing a source topic', () => {
       },
     });
 
-    const params = await sendForward({
-      metadata: { boundDeviceId: OTHER_DEVICE_ID, workingDirectory: SOURCE_PATH },
-    });
+    const params = await sendForward({ metadata });
 
     expect(params.newTopicMetadata).toEqual(
       expect.objectContaining({ workingDirectory: AGENT_DEFAULT_PATH }),

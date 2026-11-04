@@ -101,8 +101,8 @@ export const resolveSendProjectRun = async <T extends { boundDeviceId?: string }
  * A topic's cwd is a bare path that only holds on the machine it was pinned on
  * — never hand another machine's path to this run (mirrors the server's
  * `topicPinFitsDevice`). A new topic may inherit a handoff source's cwd; that
- * has no binding on the new topic yet, so it must name the machine this run
- * resolves a cwd for, not merely not contradict it.
+ * has no binding on the new topic yet, so the source must have recorded the
+ * machine this run resolves a cwd for — not merely not contradict it.
  */
 export const resolveRunCwd = async (params: {
   agentWorkingDirectory: string | undefined;
@@ -117,9 +117,11 @@ export const resolveRunCwd = async (params: {
   const { existingTopic, inheritedTopic, resolvePath, runMachine } = params;
   const runCwdDeviceId = runMachine.deviceId;
   const pinnedDeviceId = (existingTopic ?? inheritedTopic)?.metadata?.boundDeviceId;
+  // An inherited path needs a known, matching machine: an unpinned legacy source
+  // could name an unrelated checkout that merely shares the path here.
   const fits = existingTopic
     ? !pinnedDeviceId || !runCwdDeviceId || pinnedDeviceId === runCwdDeviceId
-    : !pinnedDeviceId || pinnedDeviceId === runCwdDeviceId;
+    : !!pinnedDeviceId && pinnedDeviceId === runCwdDeviceId;
   let metadata = fits ? (existingTopic ?? inheritedTopic)?.metadata : undefined;
   // An existing topic's cwd is its own (the spawn guide offers a way back); an
   // inherited one is dropped when it is known to be gone.
