@@ -691,10 +691,16 @@ describe('DeviceModel', () => {
     it('should remove the row', async () => {
       await deviceModel.register({ deviceId: 'dev-1', identitySource: 'machine-id' });
 
-      await deviceModel.delete('dev-1');
+      const removed = await deviceModel.delete('dev-1');
 
+      expect(removed).toHaveLength(1);
+      expect(removed[0]).toMatchObject({ deviceId: 'dev-1', identitySource: 'machine-id', userId });
       const row = await deviceModel.findByDeviceId('dev-1');
       expect(row).toBeUndefined();
+    });
+
+    it('should return nothing when no row matches', async () => {
+      await expect(deviceModel.delete('missing-device')).resolves.toEqual([]);
     });
   });
 

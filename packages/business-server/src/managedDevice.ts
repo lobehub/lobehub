@@ -50,3 +50,24 @@ export type ManagedDeviceTokenResult =
 export const exchangeManagedDeviceToken = async (
   _request: ManagedDeviceTokenRequest,
 ): Promise<ManagedDeviceTokenResult> => ({ status: 'unavailable' });
+
+/**
+ * A managed cloud device whose `devices` row was just deleted. `userId` is the
+ * row's own user (for a workspace device, the member who enrolled it), not
+ * necessarily the member who removed it.
+ */
+export interface ManagedDeviceRemoval extends ManagedDeviceScope {
+  deviceId: string;
+}
+
+/**
+ * Called after a user removes a managed cloud device (`removeDevice`,
+ * `removeWorkspaceDevice`), so the deployment can release whatever backs the
+ * device. The row is already gone when this runs; a rejection is logged and
+ * does not fail the removal. It runs inside the request, so return once the
+ * release is recorded rather than when it completes.
+ *
+ * Rows deleted any other way (a member leaving a workspace, a cascade from a
+ * deleted user or workspace) do not call it; the deployment reconciles those.
+ */
+export const onManagedDeviceRemoved = async (_removal: ManagedDeviceRemoval): Promise<void> => {};
