@@ -78,7 +78,11 @@ import { useEvalStore } from '@/store/eval';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { isExperimentLaunching, startBackgroundLaunch } from '../launchBackground';
+import {
+  forgetExperimentLaunch,
+  isExperimentLaunching,
+  startBackgroundLaunch,
+} from '../launchBackground';
 import { launchServices } from '../launchServices';
 
 const styles = stylex.create({
@@ -456,6 +460,7 @@ const NewExperiment = memo(() => {
       onOk: async () => {
         if (isExperimentLaunching(launch.experimentId)) return;
         await clearLaunch(launch.experimentId);
+        if (userId) forgetExperimentLaunch(userId, workspaceId, launch.experimentId);
         setOutcome(undefined);
       },
       title: t('lobeBench.new.launch.abandon.title'),
