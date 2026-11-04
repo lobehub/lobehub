@@ -127,7 +127,7 @@ export class MCPService {
     params: MCPClientParams,
     operationName: string,
     operation: (client: MCPClient) => Promise<T>,
-    { mcpApp = false }: { mcpApp?: boolean } = {},
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<T> {
     const connection = this.getConnectionLogMetadata(params);
 
@@ -143,7 +143,7 @@ export class MCPService {
           // failure (bad URL/token, stdio spawn error) is NOT a stale-session
           // error, so it must bail immediately instead of retrying — otherwise
           // we'd repeat auth attempts / respawn stdio commands needlessly.
-          const client = await this.getClient(params, skipCache, { mcpApp });
+          const client = await this.getClient(params, skipCache, { mcpApps });
           return await operation(client);
         } catch (error) {
           // Only retry for NoValidSessionId errors
@@ -230,7 +230,7 @@ export class MCPService {
       params,
       `reading resource "${uri}"`,
       (client) => client.readResource(uri),
-      { mcpApp: true },
+      { mcpApps: true },
     );
   }
 
@@ -241,7 +241,7 @@ export class MCPService {
     /**
      * The call comes from an MCP App view (`tools/call`), not the model. Only
      * tools whose `_meta.ui.visibility` includes "app" run; others, and any
-     * call while `mcpApp` is off, return a failed result without reaching the tool.
+     * call while `mcpApps` is off, return a failed result without reaching the tool.
      */
     fromApp?: boolean;
     /**
@@ -249,14 +249,14 @@ export class MCPService {
      * MCP Apps and the result carries the tool's `ui://` view. Off: the call
      * runs as it did before MCP Apps, with no capability and no tool lookup.
      */
-    mcpApp?: boolean;
+    mcpApps?: boolean;
     processContentBlocks?: ProcessContentBlocksFn;
     toolName: string;
   }): Promise<any> {
     const {
       clientParams,
       fromApp = false,
-      mcpApp = false,
+      mcpApps = false,
       toolName,
       argsStr,
       processContentBlocks: processContentBlocksFn,
@@ -269,7 +269,7 @@ export class MCPService {
 
       // Resolved before the call: a stale-session error here is retried by
       // withSessionRetry, which must never re-run a tool that already executed.
-      if (fromApp && !(mcpApp && (await client.isToolCallableByApp(toolName)))) {
+      if (fromApp && !(mcpApps && (await client.isToolCallableByApp(toolName)))) {
         const message = `The tool "${toolName}" can't be called from an interactive view.`;
         return {
           content: message,
@@ -277,7 +277,7 @@ export class MCPService {
           success: false,
         };
       }
-      const uiResourceUri = mcpApp ? await client.getToolUiResourceUri(toolName) : undefined;
+      const uiResourceUri = mcpApps ? await client.getToolUiResourceUri(toolName) : undefined;
 
       try {
         // Delegate the call to the MCPClient instance
@@ -327,14 +327,14 @@ export class MCPService {
       }
     };
 
-    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, run, { mcpApp });
+    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, run, { mcpApps });
   }
 
   // Private method to get or initialize a client based on parameters
   private async getClient(
     params: MCPClientParams,
     skipCache = false,
-    { mcpApp = false }: { mcpApp?: boolean } = {},
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<MCPClient> {
     // Every server caller (including connector sync and agent tool execution)
     // must enforce the same Desktop-only stdio boundary, even for cached clients.
@@ -348,7 +348,7 @@ export class MCPService {
 
     // A session announces its capabilities once, at initialize, so sessions
     // with and without MCP Apps are cached apart.
-    const key = `${this.serializeParams(params)}${mcpApp ? '#mcp-app' : ''}`;
+    const key = `${this.serializeParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
 
     if (!skipCache && this.clients.has(key)) {
       return this.clients.get(key)!;
@@ -357,7 +357,7 @@ export class MCPService {
     const connection = this.getConnectionLogMetadata(params);
     log(`No cached client found, Initializing new client.`);
     try {
-      const client = new MCPClient(params, { mcpApp });
+      const client = new MCPClient(params, { mcpApps });
       await client.initialize({
         onProgress: (progress) => {
           log(`New client initializing... ${progress.progress}/${progress.total}`);

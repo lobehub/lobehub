@@ -20,8 +20,8 @@ vi.mock('@/server/services/deviceGateway', () => ({
     queryDeviceList: vi.fn().mockResolvedValue([]),
   },
 }));
-const mcpAppEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
-vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppEnabled: mcpAppEnabled }));
+const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
 vi.mock('@/server/services/deviceGateway/dispatchAuthorization', () => ({
   resolveDeviceDispatchAuthorizationFailure: vi.fn().mockResolvedValue(undefined),
 }));
@@ -743,7 +743,7 @@ describe('ToolExecutionService', () => {
     it.each([true, false])(
       "passes the run owner's mcp_apps flag (%s) to the server MCP call",
       async (enabled) => {
-        mcpAppEnabled.mockResolvedValueOnce(enabled);
+        mcpAppsEnabled.mockResolvedValueOnce(enabled);
         const callTool = vi.fn().mockResolvedValue({ ok: true });
         const service = makeService({ callTool });
 
@@ -752,8 +752,8 @@ describe('ToolExecutionService', () => {
           contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
         );
 
-        expect(mcpAppEnabled).toHaveBeenCalledWith('user-1');
-        expect(callTool).toHaveBeenCalledWith(expect.objectContaining({ mcpApp: enabled }));
+        expect(mcpAppsEnabled).toHaveBeenCalledWith('user-1');
+        expect(callTool).toHaveBeenCalledWith(expect.objectContaining({ mcpApps: enabled }));
       },
     );
 

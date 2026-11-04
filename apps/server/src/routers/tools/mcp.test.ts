@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mcpRouter } from './mcp';
 
-const { mockCallTool, mockMcpAppEnabled, mockReadUiResource } = vi.hoisted(() => ({
+const { mockCallTool, mockMcpAppsEnabled, mockReadUiResource } = vi.hoisted(() => ({
   mockCallTool: vi.fn(),
-  mockMcpAppEnabled: vi.fn(),
+  mockMcpAppsEnabled: vi.fn(),
   mockReadUiResource: vi.fn(),
 }));
 
-vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppEnabled: mockMcpAppEnabled }));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mockMcpAppsEnabled }));
 
 vi.mock('./_helpers', () => ({ scheduleToolCallReport: vi.fn() }));
 
@@ -47,7 +47,7 @@ describe('tools mcpRouter.callTool', () => {
   it.each([true, false])(
     'passes the caller mcp_apps flag (%s) to the MCP call',
     async (enabled) => {
-      mockMcpAppEnabled.mockResolvedValue(enabled);
+      mockMcpAppsEnabled.mockResolvedValue(enabled);
       mockCallTool.mockResolvedValue({ content: 'ok', state: { content: [] }, success: true });
       const caller = mcpRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
 
@@ -57,15 +57,15 @@ describe('tools mcpRouter.callTool', () => {
         toolName: 'forecast',
       });
 
-      expect(mockMcpAppEnabled).toHaveBeenCalledWith('user-1');
-      expect(mockCallTool).toHaveBeenCalledWith(expect.objectContaining({ mcpApp: enabled }));
+      expect(mockMcpAppsEnabled).toHaveBeenCalledWith('user-1');
+      expect(mockCallTool).toHaveBeenCalledWith(expect.objectContaining({ mcpApps: enabled }));
     },
   );
 
   it.each([true, undefined])(
     'passes whether a view made the call (%s) to the MCP call',
     async (fromApp) => {
-      mockMcpAppEnabled.mockResolvedValue(true);
+      mockMcpAppsEnabled.mockResolvedValue(true);
       mockCallTool.mockResolvedValue({ content: 'ok', state: { content: [] }, success: true });
       const caller = mcpRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
 
@@ -84,11 +84,11 @@ describe('tools mcpRouter.callTool', () => {
 describe('tools mcpRouter.readUiResource', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockMcpAppEnabled.mockResolvedValue(true);
+    mockMcpAppsEnabled.mockResolvedValue(true);
   });
 
   it('refuses to read a view while the mcp_apps flag is off', async () => {
-    mockMcpAppEnabled.mockResolvedValue(false);
+    mockMcpAppsEnabled.mockResolvedValue(false);
     const caller = mcpRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
 
     await expect(
@@ -98,7 +98,7 @@ describe('tools mcpRouter.readUiResource', () => {
       }),
     ).rejects.toHaveProperty('code', 'FORBIDDEN');
 
-    expect(mockMcpAppEnabled).toHaveBeenCalledWith('user-1');
+    expect(mockMcpAppsEnabled).toHaveBeenCalledWith('user-1');
     expect(mockReadUiResource).not.toHaveBeenCalled();
   });
 

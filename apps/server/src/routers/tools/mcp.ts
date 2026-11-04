@@ -18,7 +18,7 @@ import { serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { processContentBlocks } from '@/server/services/mcp/contentProcessor';
-import { isMcpAppEnabled } from '@/server/services/mcp/featureGate';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { scheduleToolCallReport } from './_helpers';
 
@@ -119,7 +119,7 @@ export const mcpRouter = router({
   readUiResource: mcpProcedure
     .input(z.object({ params: mcpClientParamsSchema, uri: z.string().startsWith('ui://') }))
     .mutation(async ({ ctx, input }) => {
-      if (!(await isMcpAppEnabled(ctx.userId))) {
+      if (!(await isMcpAppsEnabled(ctx.userId))) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Interactive views are turned off' });
       }
 
@@ -197,7 +197,7 @@ export const mcpRouter = router({
           argsStr: input.args,
           clientParams: input.params,
           fromApp: input.fromApp,
-          mcpApp: await isMcpAppEnabled(ctx.userId),
+          mcpApps: await isMcpAppsEnabled(ctx.userId),
           processContentBlocks: boundProcessContentBlocks,
           toolName: input.toolName,
         });

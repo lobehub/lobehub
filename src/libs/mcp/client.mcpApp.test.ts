@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from './client';
-import { MCP_APP_CLIENT_CAPABILITIES } from './mcpApp';
+import { MCP_APPS_CLIENT_CAPABILITIES } from './mcpApp';
 
 const { clientOptions, listTools } = vi.hoisted(() => ({
   clientOptions: [] as unknown[],
@@ -33,12 +33,12 @@ afterEach(() => {
 describe('MCPClient MCP Apps capability', () => {
   it('announces the MCP Apps extension only when asked to', () => {
     new MCPClient(params);
-    new MCPClient(params, { mcpApp: false });
-    new MCPClient(params, { mcpApp: true });
+    new MCPClient(params, { mcpApps: false });
+    new MCPClient(params, { mcpApps: true });
 
     expect(
       clientOptions.map((options) => (options as { capabilities?: unknown }).capabilities),
-    ).toEqual([undefined, undefined, MCP_APP_CLIENT_CAPABILITIES]);
+    ).toEqual([undefined, undefined, MCP_APPS_CLIENT_CAPABILITIES]);
   });
 });
 
@@ -50,7 +50,7 @@ describe('MCPClient.getToolUiResourceUri', () => {
         { name: 'search' },
       ],
     });
-    const client = new MCPClient(params, { mcpApp: true });
+    const client = new MCPClient(params, { mcpApps: true });
 
     await expect(client.getToolUiResourceUri('forecast')).resolves.toBe('ui://weather/view');
     await expect(client.getToolUiResourceUri('search')).resolves.toBeUndefined();
@@ -60,7 +60,7 @@ describe('MCPClient.getToolUiResourceUri', () => {
   it('does not list tools again on every call after a failed listing', async () => {
     listTools.mockRejectedValue(new Error('upstream 500'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const client = new MCPClient(params, { mcpApp: true });
+    const client = new MCPClient(params, { mcpApps: true });
 
     await expect(client.getToolUiResourceUri('forecast')).resolves.toBeUndefined();
     await expect(client.getToolUiResourceUri('forecast')).resolves.toBeUndefined();
@@ -75,7 +75,7 @@ describe('MCPClient.getToolUiResourceUri', () => {
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
     listTools.mockRejectedValueOnce(new Error('upstream 500'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const client = new MCPClient(params, { mcpApp: true });
+    const client = new MCPClient(params, { mcpApps: true });
 
     await expect(client.getToolUiResourceUri('forecast')).resolves.toBeUndefined();
 
@@ -101,7 +101,7 @@ describe('MCPClient.getToolUiResourceUri', () => {
   it('picks views up again once a later listing succeeds', async () => {
     listTools.mockRejectedValueOnce(new Error('upstream 500'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const client = new MCPClient(params, { mcpApp: true });
+    const client = new MCPClient(params, { mcpApps: true });
     await client.getToolUiResourceUri('forecast');
 
     // e.g. a manifest refresh on the same session
@@ -125,7 +125,7 @@ describe('MCPClient.isToolCallableByApp', () => {
         { name: 'search' },
       ],
     });
-    const client = new MCPClient(params, { mcpApp: true });
+    const client = new MCPClient(params, { mcpApps: true });
 
     await expect(client.isToolCallableByApp('delete_all')).resolves.toBe(false);
     await expect(client.isToolCallableByApp('refresh')).resolves.toBe(true);
@@ -137,7 +137,7 @@ describe('MCPClient.isToolCallableByApp', () => {
   it('refuses while the tools can not be listed', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     listTools.mockRejectedValue(new Error('offline'));
-    const client = new MCPClient(params, { mcpApp: true });
+    const client = new MCPClient(params, { mcpApps: true });
 
     await expect(client.isToolCallableByApp('search')).resolves.toBe(false);
   });

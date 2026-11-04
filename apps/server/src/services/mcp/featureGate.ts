@@ -7,7 +7,7 @@ import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFla
  *
  * Never fails the tool call it gates: a flag that can't be read counts as off.
  */
-export const isMcpAppEnabled = async (userId?: string | null): Promise<boolean> => {
+export const isMcpAppsEnabled = async (userId?: string | null): Promise<boolean> => {
   try {
     return (
       (await getServerFeatureFlagsStateFromRuntimeConfig(userId ?? undefined)).enableMcpApps ===

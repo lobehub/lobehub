@@ -4,7 +4,7 @@ import type { AgentModel } from '@/database/models/agent';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
-import { isMcpAppEnabled } from '@/server/services/mcp/featureGate';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
@@ -141,7 +141,7 @@ export const callConnectorToolById = async (
     argsStr: params.args ?? '{}',
     clientParams: buildConnectorMcpParams(fresh),
     fromApp: params.fromApp,
-    mcpApp: await isMcpAppEnabled(ctx.userId),
+    mcpApps: await isMcpAppsEnabled(ctx.userId),
     toolName: params.toolName,
   });
 };
@@ -156,7 +156,7 @@ export const readConnectorUiResourceById = async (
   params: { agentId?: string; identifier: string; uri: string },
   ctx: ConnectorExecContext,
 ) => {
-  if (!(await isMcpAppEnabled(ctx.userId))) {
+  if (!(await isMcpAppsEnabled(ctx.userId))) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Interactive views are turned off');
   }
 

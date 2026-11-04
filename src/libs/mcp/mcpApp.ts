@@ -7,12 +7,12 @@
  */
 
 /** Capability key a client advertises to tell servers it can render MCP Apps. */
-export const MCP_APP_EXTENSION_ID = 'io.modelcontextprotocol/ui';
+export const MCP_APPS_EXTENSION_ID = 'io.modelcontextprotocol/ui';
 export const MCP_APP_MIME_TYPE = 'text/html;profile=mcp-app';
 
 /** Client capabilities that advertise MCP Apps support during `initialize`. */
-export const MCP_APP_CLIENT_CAPABILITIES = {
-  extensions: { [MCP_APP_EXTENSION_ID]: { mimeTypes: [MCP_APP_MIME_TYPE] } },
+export const MCP_APPS_CLIENT_CAPABILITIES = {
+  extensions: { [MCP_APPS_EXTENSION_ID]: { mimeTypes: [MCP_APP_MIME_TYPE] } },
 };
 
 export interface McpAppToolState {

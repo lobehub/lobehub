@@ -1,30 +1,30 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isMcpAppEnabled } from './featureGate';
+import { isMcpAppsEnabled } from './featureGate';
 
 const getFlags = vi.hoisted(() => vi.fn());
 vi.mock('@/server/featureFlags', () => ({ getServerFeatureFlagsStateFromRuntimeConfig: getFlags }));
 
-describe('isMcpAppEnabled', () => {
+describe('isMcpAppsEnabled', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('follows the mcp_apps flag for the user', async () => {
     getFlags.mockResolvedValue({ enableMcpApps: true });
-    await expect(isMcpAppEnabled('user-1')).resolves.toBe(true);
+    await expect(isMcpAppsEnabled('user-1')).resolves.toBe(true);
     expect(getFlags).toHaveBeenCalledWith('user-1');
 
     getFlags.mockResolvedValue({ enableMcpApps: false });
-    await expect(isMcpAppEnabled('user-1')).resolves.toBe(false);
+    await expect(isMcpAppsEnabled('user-1')).resolves.toBe(false);
   });
 
   it('treats an unreadable flag as off instead of failing the tool call', async () => {
     getFlags.mockRejectedValue(new Error('redis down'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(isMcpAppEnabled('user-1')).resolves.toBe(false);
+    await expect(isMcpAppsEnabled('user-1')).resolves.toBe(false);
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });

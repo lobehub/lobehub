@@ -154,8 +154,8 @@ describe('MCPService MCP Apps sessions', () => {
 
   it('advertises MCP Apps only on sessions for users with the flag, cached apart', async () => {
     const service = new MCPService();
-    const call = (mcpApp: boolean) =>
-      service.callTool({ argsStr: '{}', clientParams: httpParams, mcpApp, toolName: 'forecast' });
+    const call = (mcpApps: boolean) =>
+      service.callTool({ argsStr: '{}', clientParams: httpParams, mcpApps, toolName: 'forecast' });
 
     await call(false);
     await call(true);
@@ -164,8 +164,8 @@ describe('MCPService MCP Apps sessions', () => {
 
     // One session per capability set, each reused
     expect(MCPClient).toHaveBeenCalledTimes(2);
-    expect(MCPClient).toHaveBeenNthCalledWith(1, httpParams, { mcpApp: false });
-    expect(MCPClient).toHaveBeenNthCalledWith(2, httpParams, { mcpApp: true });
+    expect(MCPClient).toHaveBeenNthCalledWith(1, httpParams, { mcpApps: false });
+    expect(MCPClient).toHaveBeenNthCalledWith(2, httpParams, { mcpApps: true });
     expect(MCPClient.prototype.getToolUiResourceUri).toHaveBeenCalledTimes(2);
   });
 });
@@ -528,12 +528,12 @@ describe('MCPService', () => {
 
       const result = await mcpService.callTool({
         clientParams: mockParams,
-        mcpApp: true,
+        mcpApps: true,
         toolName: 'weather',
         argsStr: '{}',
       });
 
-      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApp: true });
+      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
       expect(mockClient.getToolUiResourceUri).toHaveBeenCalledWith('weather');
       expect(result.state.mcpApp).toEqual({ resourceUri: 'ui://weather/view.html' });
     });
@@ -548,7 +548,7 @@ describe('MCPService', () => {
         argsStr: '{}',
         clientParams: mockParams,
         fromApp: true,
-        mcpApp: true,
+        mcpApps: true,
         toolName: 'weather',
       });
 
@@ -564,7 +564,7 @@ describe('MCPService', () => {
         argsStr: '{}',
         clientParams: mockParams,
         fromApp: true,
-        mcpApp: true,
+        mcpApps: true,
         toolName: 'delete_all',
       });
 
@@ -600,7 +600,7 @@ describe('MCPService', () => {
       });
 
       // A session without the MCP Apps capability, and no listTools round trip
-      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApp: false });
+      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: false });
       expect(mockClient.getToolUiResourceUri).not.toHaveBeenCalled();
       expect(result.state.mcpApp).toBeUndefined();
     });
@@ -614,7 +614,7 @@ describe('MCPService', () => {
 
       const result = await mcpService.callTool({
         clientParams: mockParams,
-        mcpApp: true,
+        mcpApps: true,
         toolName: 'weather',
         argsStr: '{}',
       });
@@ -672,8 +672,8 @@ describe('MCPService', () => {
       expect(result.success).toBe(true);
       expect(mockClient.callTool).toHaveBeenCalledTimes(2);
       // Retry must drop the cached client: first attempt skipCache=false, retry skipCache=true
-      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false, { mcpApp: false });
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApp: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
     });
 
     it('should retry up to 3 times for NoValidSessionId error', async () => {
@@ -750,7 +750,7 @@ describe('MCPService', () => {
       await expect(mcpService.readUiResource(mockParams, 'ui://app')).resolves.toEqual(resource);
       expect(mockClient.readResource).toHaveBeenCalledWith('ui://app');
       // The session that advertised MCP Apps, like the call that stored the view
-      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApp: true });
+      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
     });
 
     it('rejects non-ui:// URIs without touching the server', async () => {
@@ -917,7 +917,7 @@ describe('MCPService', () => {
 
       expect(result).toEqual(resources);
       expect(mockClient.listResources).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApp: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {
@@ -945,7 +945,7 @@ describe('MCPService', () => {
 
       expect(result).toEqual(prompts);
       expect(mockClient.listPrompts).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApp: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {

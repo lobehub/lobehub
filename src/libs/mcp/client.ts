@@ -15,7 +15,7 @@ import { type Progress, type Transport } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import debug from 'debug';
 
-import { getToolUiResourceUri, isToolVisibleToApp, MCP_APP_CLIENT_CAPABILITIES } from './mcpApp';
+import { getToolUiResourceUri, isToolVisibleToApp, MCP_APPS_CLIENT_CAPABILITIES } from './mcpApp';
 import {
   type MCPClientParams,
   type MCPError,
@@ -175,7 +175,7 @@ export interface MCPClientOptions {
    * interactive views. Off: the client announces itself as it did before MCP
    * Apps, and servers answer as they would any other client.
    */
-  mcpApp?: boolean;
+  mcpApps?: boolean;
 }
 
 export class MCPClient {
@@ -189,12 +189,12 @@ export class MCPClient {
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
   private uiResourceListFailedAt?: number;
 
-  constructor(params: MCPClientParams, { mcpApp = false }: MCPClientOptions = {}) {
+  constructor(params: MCPClientParams, { mcpApps = false }: MCPClientOptions = {}) {
     this.params = params;
     this.mcp = new Client(
       { name: 'lobehub-mcp-client', version: '1.0.0' },
       {
-        ...(mcpApp ? { capabilities: MCP_APP_CLIENT_CAPABILITIES } : {}),
+        ...(mcpApps ? { capabilities: MCP_APPS_CLIENT_CAPABILITIES } : {}),
         // Stdio stays legacy: auto would spawn a sibling probe process and can
         // wait the entire probe timeout on servers that ignore unknown requests.
         versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },

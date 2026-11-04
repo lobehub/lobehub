@@ -12,8 +12,8 @@ vi.mock('@/server/services/mcp', () => ({
   mcpService: { callTool: vi.fn(), readUiResource: vi.fn() },
 }));
 vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: { isConfigured: false } }));
-const mcpAppEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
-vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppEnabled: mcpAppEnabled }));
+const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: vi.fn(async (c) => c) }));
 // The background tool-list refresh is exercised in refresh.test.ts. Here we only
 // verify the call site wires it up and stays isolated from it.
@@ -52,7 +52,7 @@ const makeCtx = (connectors: any[], tools: any[], { agentVisible = true } = {}) 
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mcpAppEnabled.mockResolvedValue(false);
+  mcpAppsEnabled.mockResolvedValue(false);
   vi.mocked(ensureFreshConnectorToken).mockImplementation(async (c: any) => c);
   (deviceGateway as any).isConfigured = false;
 });
@@ -112,14 +112,14 @@ describe('callConnectorToolById', () => {
   });
 
   it.each([true, false])('passes the caller mcp_apps flag (%s) through', async (enabled) => {
-    mcpAppEnabled.mockResolvedValueOnce(enabled);
+    mcpAppsEnabled.mockResolvedValueOnce(enabled);
     vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
     const ctx = { ...makeCtx([connector], [tool()]), userId: 'user-1' };
 
     await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
 
-    expect(mcpAppEnabled).toHaveBeenCalledWith('user-1');
-    expect(mcpService.callTool).toHaveBeenCalledWith(expect.objectContaining({ mcpApp: enabled }));
+    expect(mcpAppsEnabled).toHaveBeenCalledWith('user-1');
+    expect(mcpService.callTool).toHaveBeenCalledWith(expect.objectContaining({ mcpApps: enabled }));
   });
 
   it.each([true, undefined])(
@@ -245,18 +245,18 @@ describe('callConnectorToolById', () => {
 
 describe('readConnectorUiResourceById', () => {
   beforeEach(() => {
-    mcpAppEnabled.mockResolvedValue(true);
+    mcpAppsEnabled.mockResolvedValue(true);
   });
 
   it('refuses to read a view while the mcp_apps flag is off', async () => {
-    mcpAppEnabled.mockResolvedValue(false);
+    mcpAppsEnabled.mockResolvedValue(false);
     const ctx = { ...makeCtx([connector], []), userId: 'user-1' };
 
     await expect(
       readConnectorUiResourceById({ identifier: 'my-conn', uri: 'ui://app' }, ctx),
     ).rejects.toHaveProperty('code', 'FORBIDDEN');
 
-    expect(mcpAppEnabled).toHaveBeenCalledWith('user-1');
+    expect(mcpAppsEnabled).toHaveBeenCalledWith('user-1');
     expect(ensureFreshConnectorToken).not.toHaveBeenCalled();
     expect(mcpService.readUiResource).not.toHaveBeenCalled();
   });
@@ -355,7 +355,7 @@ describe('agent-scoped connectors of an agent the caller cannot see', () => {
   });
 
   it('does not read their views', async () => {
-    mcpAppEnabled.mockResolvedValue(true);
+    mcpAppsEnabled.mockResolvedValue(true);
     const ctx = makeCtx([connector], [], { agentVisible: false });
 
     await expect(
