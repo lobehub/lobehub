@@ -38,11 +38,12 @@ export const LINEAR_SYNC_UNCLAIMED_MS = 2 * 60 * 1000;
  */
 export const LINEAR_SYNC_MAX_ROUNDS = 50;
 /**
- * How long one request keeps starting new rounds before it hands the run to
- * a new request. Well inside the async route's time limit (800s on Vercel),
- * leaving room for the round still running when the budget runs out.
+ * How long one request may keep running rounds before it hands the run to a
+ * new request; inside the async route's time limit (800s on Vercel). A round
+ * starts only when twice the slowest round so far still fits, so a slow
+ * round near the end goes to a fresh request instead of being cut off.
  */
-export const LINEAR_SYNC_RUN_BUDGET_MS = 10 * 60 * 1000;
+export const LINEAR_SYNC_RUN_BUDGET_MS = 12 * 60 * 1000;
 
 /**
  * The outcome of a run that took several rounds. What a round wrote happens
@@ -197,8 +198,11 @@ export class LinearSyncJobService {
     // which left the run queued until it showed as cut off.
     let current = metadata;
     try {
+      let slowestRound = 0;
       for (;;) {
+        const roundStartedAt = Date.now();
         const round = await this.execute(current);
+        slowestRound = Math.max(slowestRound, Date.now() - roundStartedAt);
         const roundResult = withoutResumePoint(round);
         const rounds = (current.rounds ?? 0) + 1;
         const result = mergeLinearSyncResults(current.result, roundResult, {
@@ -228,7 +232,7 @@ export class LinearSyncJobService {
             rounds,
           };
           log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
-          if (Date.now() - startedAt < this.runBudgetMs) {
+          if (Date.now() - startedAt + 2 * slowestRound < this.runBudgetMs) {
             // Record the total so far, which also checks no stop was requested.
             const kept = await LinearSyncJobModel.transition(
               this.db,

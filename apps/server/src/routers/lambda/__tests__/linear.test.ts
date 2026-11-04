@@ -401,6 +401,32 @@ describe('linearRouter', () => {
         expect(saved).toMatchObject({ id: rule.id, lastResult: { created: 542 } });
       });
 
+      it('hands a slow run to a new request before a round could outlast this one', async () => {
+        // Each round takes 5 minutes: after the first, two more would not fit
+        // in the budget, so the next round goes to a fresh request.
+        let clock = Date.now();
+        const now = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+        try {
+          mocks.syncByFilter.mockImplementation(async (_t, _f, options) => {
+            clock += 5 * 60 * 1000;
+            return options.startAfter ? round(5, false) : round(100, true, '100');
+          });
+          const { id } = await startRule();
+
+          await routerService(LINEAR_SYNC_RUN_BUDGET_MS).run(id);
+          await settle();
+
+          expect(mocks.syncByFilter).toHaveBeenCalledTimes(1);
+          expect(mocks.runSync).toHaveBeenCalledTimes(2);
+        } finally {
+          now.mockRestore();
+        }
+        // Queued for the next request, with the total so far.
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, result: { created: 100 }, status: 'pending' },
+        ]);
+      });
+
       it('stops after the current round when stopped during a run in one request', async () => {
         const { id } = await startRule();
         mocks.syncByFilter
@@ -728,12 +754,38 @@ describe('linearRouter', () => {
         ]);
       });
 
-      it('fails a job the host turned away before the router saw it, instead of leaving it queued', async () => {
-        // Vercel answers a request deep in a chain of requests with a 508.
+      it('fails a job the host answered with an error the router never ran', async () => {
         mocks.runSync.mockRejectedValue(
-          new TRPCClientError('Loop Detected', {
-            meta: { response: { status: 508 } },
+          new TRPCClientError('Service Unavailable', {
+            meta: { response: { status: 503 } },
           } as any),
+        );
+
+        const { id } = await startRule();
+        await settled(1);
+
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'failed', id, status: 'error' },
+        ]);
+      });
+
+      it('leaves a job queued when the connection drops without an answer, so the router can still claim it', async () => {
+        mocks.runSync.mockRejectedValue(new TRPCClientError('fetch failed'));
+
+        const { id } = await startRule();
+        await settled(1);
+
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, id, status: 'pending' },
+        ]);
+      });
+
+      it('fails a job the host turned away before the router saw it, instead of leaving it queued', async () => {
+        // Vercel answers a request deep in a chain of requests with a 508
+        // page, which the tRPC client fails to read as JSON.
+        mocks.runSync.mockRejectedValue(
+          TRPCClientError.from(new SyntaxError('Unexpected token \'<\', "<!DOCTYPE "...')),
         );
 
         const { id } = await startRule();

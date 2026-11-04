@@ -136,13 +136,15 @@ const dispatchJob = async (
       } catch (error) {
         // A dropped response (a proxy timing out a long run) is not a failed
         // sync: the async router claimed the job and owns it from there. A
-        // request the host turned away before it reached the router (e.g.
-        // Vercel's 508 on a deep chain of requests) left the job unclaimed;
-        // `fail` only applies to that one, so it is shown as failed now
-        // instead of sitting queued until it times out.
+        // request the host answered without running it (e.g. Vercel's 508 on
+        // a deep chain of requests) left the job unclaimed for good, so it is
+        // shown as failed now instead of sitting queued until it times out.
+        // An error without an answer (a dropped connection) may still be on
+        // its way to the router, which must be able to claim it; that job
+        // times out as unclaimed if it never arrives.
         if (!isRejectedHandOff(error)) {
           console.error('[linear-sync] hand-off of sync %s failed: %O', taskId, error);
-          await fail();
+          if (isAnsweredHandOff(error)) await fail();
           return;
         }
         console.warn(
@@ -159,6 +161,16 @@ const dispatchJob = async (
     }
   });
 };
+
+/**
+ * The host sent an answer, so the request is over: had the router run it, it
+ * would have claimed the job first, and `fail` only touches an unclaimed one.
+ * A tRPC answer carries its response; a host page that is not tRPC JSON (such
+ * as Vercel's 508) fails to parse, which a dropped connection never does.
+ */
+const isAnsweredHandOff = (error: unknown) =>
+  error instanceof TRPCClientError &&
+  (error.meta?.response !== undefined || error.cause instanceof SyntaxError);
 
 /** The async router refused the call before running it, so the job is still unclaimed. */
 const isRejectedHandOff = (error: unknown) =>
