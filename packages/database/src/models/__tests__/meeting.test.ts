@@ -107,6 +107,7 @@ describe('MeetingModel', () => {
       expect(await member.delete(meeting.id)).toBeUndefined();
       expect(await member.pause(meeting.id)).toBeUndefined();
       expect(await member.finish(meeting.id)).toBeUndefined();
+      expect(await member.completeRefinement(meeting.id)).toBeUndefined();
       expect(
         await member.appendSegments(meeting.id, [
           { endMs: 1, seq: 0, source: 'realtime', startMs: 0, text: 'x' },
@@ -219,6 +220,28 @@ describe('MeetingModel', () => {
       await personal.pause(meeting.id);
 
       expect(await personal.finish(meeting.id)).toMatchObject({ status: 'transcribing' });
+    });
+
+    it('completes the refine pass only from transcribing', async () => {
+      const meeting = await personal.create({ ...base, platform: 'desktop' });
+
+      // Refinement has not started while the recorder is still live.
+      await expect(personal.completeRefinement(meeting.id)).rejects.toBeInstanceOf(
+        MeetingStateError,
+      );
+
+      await personal.attachAudio(meeting.id, { localAudioPath: '/Users/a/meetings/x.wav' });
+      await personal.finish(meeting.id);
+      await personal.appendSegments(meeting.id, [
+        { endMs: 1000, seq: 0, source: 'refine', startMs: 0, text: 'refined' },
+      ]);
+
+      expect(await personal.completeRefinement(meeting.id)).toMatchObject({
+        status: 'summarizing',
+      });
+      await expect(personal.completeRefinement(meeting.id)).rejects.toBeInstanceOf(
+        MeetingStateError,
+      );
     });
   });
 
@@ -394,7 +417,11 @@ describe('MeetingModel', () => {
       expect(midway!.segmentSource).toBe('realtime');
       expect(midway!.segments).toHaveLength(2);
 
-      await serverDB.update(meetings).set({ status: 'ready' }).where(eq(meetings.id, meeting.id));
+      // The refine pass is over: the meeting leaves `transcribing`, so reads now
+      // serve the refined transcript instead of the draft.
+      await personal.finish(meeting.id);
+      await personal.attachAudio(meeting.id, { localAudioPath: '/Users/a/meetings/x.wav' });
+      await personal.completeRefinement(meeting.id);
 
       const refined = await personal.getDetail(meeting.id);
       expect(refined!.segmentSource).toBe('refine');
@@ -454,6 +481,17 @@ describe('MeetingModel', () => {
 
       const detail = await personal.getDetail(meeting.id);
       expect(detail!.minutes).toMatchObject({ summary: 'v2' });
+    });
+
+    it('marks a summarizing meeting ready once the minutes are saved', async () => {
+      const meeting = await personal.create(base);
+      await personal.finish(meeting.id);
+      await personal.attachAudio(meeting.id, { localAudioPath: '/Users/a/meetings/x.wav' });
+      await personal.completeRefinement(meeting.id);
+
+      await personal.saveMinutes(meeting.id, { summary: 'done' });
+
+      expect(await personal.findById(meeting.id)).toMatchObject({ status: 'ready' });
     });
   });
 });

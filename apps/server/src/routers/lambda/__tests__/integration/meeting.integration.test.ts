@@ -124,7 +124,10 @@ describe('meeting router integration', () => {
     const { data: midway } = (await owner.detail({ id: meeting.id }))!;
     expect(midway.segmentSource).toBe('realtime');
 
-    await testDB.update(meetings).set({ status: 'ready' }).where(eq(meetings.id, meeting.id));
+    // The refine pass is over: the meeting leaves `transcribing` through the API,
+    // so reads switch to the refined transcript without touching the row directly.
+    const { data: completed } = (await owner.completeRefinement({ id: meeting.id }))!;
+    expect(completed.status).toBe('summarizing');
 
     const { data: detail } = (await owner.detail({ id: meeting.id }))!;
     expect(detail.segmentSource).toBe('refine');
@@ -188,6 +191,7 @@ describe('meeting router integration', () => {
       () => memberInWs.delete({ id: wsPublic.id }),
       () => memberInWs.pause({ id: wsPublic.id }),
       () => memberInWs.finish({ id: wsPublic.id }),
+      () => memberInWs.completeRefinement({ id: wsPublic.id }),
       () => memberInWs.saveMinutes({ meetingId: wsPublic.id, summary: 'x' }),
       () =>
         memberInWs.appendSegments({

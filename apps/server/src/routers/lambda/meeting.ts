@@ -222,6 +222,20 @@ export const meetingRouter = router({
       }
     }),
 
+  /**
+   * The refine pass finished: `transcribing` → `summarizing`, so `detail`
+   * serves the refined transcript instead of the realtime draft.
+   */
+  completeRefinement: meetingWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      const data = await ctx.meetingModel.completeRefinement(input.id);
+      if (!data) throw notFound();
+      return { data, message: 'Refinement completed', success: true };
+    } catch (error) {
+      fail(error, 'complete the refinement of');
+    }
+  }),
+
   /** Delete the meeting, its transcript and minutes, and reclaim its uploaded audio. */
   delete: meetingWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {

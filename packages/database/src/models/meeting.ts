@@ -294,6 +294,21 @@ export class MeetingModel {
     });
   }
 
+  /**
+   * The refine pass finished: `transcribing` → `summarizing`.
+   *
+   * Nothing else leaves `transcribing`, so a caller that stored every refined
+   * batch had no way to make reads serve it (see `MEETING_REFINED_STATUSES`)
+   * and had to write `meetings.status` directly. Segments are written by
+   * `appendSegments`; this only advances the lifecycle, so the minutes can then
+   * be saved on top of the refined transcript.
+   */
+  async completeRefinement(id: string) {
+    return this.transition(id, 'complete the refinement of', (status) =>
+      status === 'transcribing' ? 'summarizing' : null,
+    );
+  }
+
   // ── Transcript ──
 
   /**
@@ -371,25 +386,40 @@ export class MeetingModel {
 
   // ── Minutes ──
 
-  /** Create or replace the meeting's minutes; omitted fields keep their stored value. */
+  /**
+   * Create or replace the meeting's minutes; omitted fields keep their stored value.
+   *
+   * Minutes are the last stage of the lifecycle, so saving them finishes a
+   * meeting waiting in `summarizing` — the status `completeRefinement` leaves
+   * behind once the refined transcript is complete.
+   */
   async saveMinutes(meetingId: string, input: SaveMeetingMinutesInput) {
-    const meeting = await this.findManageable(meetingId);
-    if (!meeting) return undefined;
+    return this.db.transaction(async (tx) => {
+      const meeting = await this.lockManageable(meetingId, tx);
+      if (!meeting) return undefined;
 
-    const values = Object.fromEntries(
-      Object.entries(input).filter(([, value]) => value !== undefined),
-    ) as SaveMeetingMinutesInput;
+      const values = Object.fromEntries(
+        Object.entries(input).filter(([, value]) => value !== undefined),
+      ) as SaveMeetingMinutesInput;
 
-    const [minutes] = await this.db
-      .insert(meetingMinutes)
-      .values({ ...values, meetingId })
-      .onConflictDoUpdate({
-        set: { ...values, updatedAt: new Date() },
-        target: meetingMinutes.meetingId,
-      })
-      .returning();
+      const [minutes] = await tx
+        .insert(meetingMinutes)
+        .values({ ...values, meetingId })
+        .onConflictDoUpdate({
+          set: { ...values, updatedAt: new Date() },
+          target: meetingMinutes.meetingId,
+        })
+        .returning();
 
-    return minutes;
+      if (meeting.status === 'summarizing') {
+        await tx
+          .update(meetings)
+          .set({ status: 'ready', updatedAt: new Date() })
+          .where(eq(meetings.id, meetingId));
+      }
+
+      return minutes;
+    });
   }
 
   // ── Internals ──
