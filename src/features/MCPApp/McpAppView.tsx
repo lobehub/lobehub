@@ -1,6 +1,5 @@
 'use client';
 
-import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox, Skeleton, Spin, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { type AppBridge } from '@modelcontextprotocol/ext-apps/app-bridge';
@@ -14,26 +13,13 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { useClientDataSWR } from '@/libs/swr';
 import { mcpAppKeys } from '@/libs/swr/keys';
 import { mcpService } from '@/services/mcp';
-import { getToolStoreState } from '@/store/tool';
 
-import { anySignal } from './abortSignal';
-import { mcpAppNameSelector } from './appName';
-import { buildHostContext, connectMcpAppBridge } from './bridge';
-import { confirmAppMessage, confirmAppOpenLink, confirmAppToolCall } from './confirm';
-import {
-  buildAppFrameDocument,
-  isAppFrameNavigatedNotice,
-  VIEW_FRAME_SANDBOX,
-} from './frameDocument';
-import { sendAppMessage } from './sendAppMessage';
-import { getAppToolCallPolicy } from './toolCallPolicy';
-import { APP_IFRAME_ALLOW, buildAppCsp, pickAppResource, toCallToolResult } from './utils';
-import { restoreMediaForView } from './viewToolResult';
+import { connectAppView, getAppViewPhase } from './appHost';
+import { buildHostContext } from './bridge';
+import { buildAppFrameDocument, VIEW_FRAME_SANDBOX } from './frameDocument';
+import { APP_IFRAME_ALLOW, buildAppCsp, pickAppResource } from './utils';
 
 const DEFAULT_HEIGHT = 320;
-const MAX_HEIGHT = 2000;
-// Tool calls from one view that may wait for approval at once; more are refused as busy
-const MAX_PENDING_TOOL_APPROVALS = 3;
 
 const styles = stylex.create({
   bordered: {
@@ -68,9 +54,6 @@ export interface McpAppViewProps {
   result: { content: string; state?: any };
   toolCallId: string;
 }
-
-const getAppName = (identifier: string, agentId?: string) =>
-  mcpAppNameSelector(identifier, agentId)(getToolStoreState());
 
 /**
  * Renders an MCP Apps (SEP-1865) view: the `ui://` HTML a tool declares, in a
@@ -108,183 +91,22 @@ const McpAppView = memo<McpAppViewProps>(
     const bridgeRef = useRef<AppBridge>(undefined);
 
     useEffect(() => {
-      const iframe = iframeRef.current;
-      const target = iframe?.contentWindow;
-      if (!srcDoc || navigated || !iframe || !target) return;
+      const target = iframeRef.current?.contentWindow;
+      if (!srcDoc || navigated || !target) return;
 
-      const handleFrameNotice = (event: MessageEvent) => {
-        if (event.source === target && isAppFrameNavigatedNotice(event.data)) {
-          console.warn(`[MCPApp] ${resourceUri} left its document and was removed`);
-          setDroppedDoc(srcDoc);
-        }
-      };
-      window.addEventListener('message', handleFrameNotice);
-
-      // One message at a time, so a view can't line up runs behind a pending one
-      let sending = false;
-      // One link prompt at a time, so a view can't stack them up
-      let linking = false;
-      // Approvals queue up and open one at a time; a few per view, so a view
-      // can't bury the user under modals
-      let pendingToolApprovals = 0;
-      // Drops this view's approvals, waiting or shown, once it goes away
-      const approvals = new AbortController();
-      // The view can't see the modal its request waits for, possibly behind
-      // another view's, so say under it that it's waiting rather than hung
-      const awaitApproval = async (
-        request: AbortSignal,
-        ask: (signal: AbortSignal) => Promise<boolean>,
-      ) => {
-        // An approval also lapses once the view stops waiting for its request (it
-        // timed out behind other modals): answering it would run work nobody reads
-        const { dispose, signal } = anySignal([approvals.signal, request]);
-        setWaitingApprovals((count) => count + 1);
-        try {
-          return await ask(signal);
-        } finally {
-          dispose();
-          setWaitingApprovals((count) => count - 1);
-        }
-      };
-
-      const { bridge, dispose } = connectMcpAppBridge(target, {
-        // Views may only call tools on the server that rendered them, and
-        // under the same approval rules as the conversation.
-        callTool: async (name, toolArgs, request) => {
-          const { agentId: currentAgentId, identifier: currentIdentifier, t: tr } = latest.current;
-          const policy = await getAppToolCallPolicy(currentIdentifier, name, {
-            agentId: currentAgentId,
-            toolArgs,
-          });
-          let allowed = policy === 'allow';
-          if (policy === 'confirm') {
-            if (pendingToolApprovals >= MAX_PENDING_TOOL_APPROVALS) {
-              return {
-                content: [{ text: tr('mcpApp.toolCall.busy', { tool: name }), type: 'text' }],
-                isError: true,
-              };
-            }
-
-            pendingToolApprovals += 1;
-            try {
-              allowed = await awaitApproval(request, (signal) =>
-                confirmAppToolCall({
-                  appName: getAppName(currentIdentifier, currentAgentId),
-                  args: toolArgs,
-                  signal,
-                  tool: name,
-                }),
-              );
-            } finally {
-              pendingToolApprovals -= 1;
-            }
-          }
-
-          if (!allowed) {
-            return {
-              content: [{ text: tr('mcpApp.toolCall.rejected', { tool: name }), type: 'text' }],
-              isError: true,
-            };
-          }
-
-          // The view may have gone, or stopped waiting, while the policy loaded
-          // or an approval was open: nobody would read the result, so don't run it.
-          const { dispose: disposeCall, signal } = anySignal([approvals.signal, request]);
-          try {
-            if (signal.aborted) throw new DOMException('The view stopped waiting', 'AbortError');
-
-            return toCallToolResult(
-              await mcpService.invokeMcpToolCall(
-                {
-                  apiName: name,
-                  arguments: JSON.stringify(toolArgs),
-                  id: `${toolCallId}:${name}`,
-                  identifier: currentIdentifier,
-                  type: 'mcp',
-                },
-                // The view's HTML came from this machine for a local server, so its calls do too
-                { agentId: currentAgentId, fromMcpApp: true, signal },
-              ),
-            );
-          } finally {
-            disposeCall();
-          }
-        },
-        hostContext: buildHostContext(latest.current.isDark),
-        onSizeChange: (nextHeight) => setHeight(Math.min(nextHeight, MAX_HEIGHT)),
-        // A view can ask without a gesture and carry data in the URL, so the
-        // user sees the link before it opens
-        openLink: async (url, request) => {
-          if (linking) return false;
-          linking = true;
-          try {
-            const { agentId: currentAgentId, identifier: currentIdentifier } = latest.current;
-            const allowed = await awaitApproval(request, (signal) =>
-              confirmAppOpenLink({
-                appName: getAppName(currentIdentifier, currentAgentId),
-                signal,
-                url,
-              }),
-            );
-            if (allowed) window.open(url, '_blank', 'noopener,noreferrer');
-
-            return allowed;
-          } finally {
-            linking = false;
-          }
-        },
-        // A message starts a billed run. Parent activation and iframe focus
-        // cannot prove which opaque-origin view the user acted in, so every
-        // message needs consent in the host.
-        sendMessage: async (text, request) => {
-          if (sending) return false;
-          sending = true;
-          try {
-            const { agentId: currentAgentId, identifier: currentIdentifier } = latest.current;
-            if (
-              !(await awaitApproval(request, (signal) =>
-                confirmAppMessage({
-                  appName: getAppName(currentIdentifier, currentAgentId),
-                  signal,
-                  text,
-                }),
-              ))
-            ) {
-              return false;
-            }
-
-            // Until the conversation accepts it, the view going away or giving up
-            // on the request cancels the send rather than starting a reply
-            const { dispose: disposeSend, signal } = anySignal([approvals.signal, request]);
-            try {
-              return await sendAppMessage(
-                latest.current.sendMessage,
-                text,
-                currentIdentifier,
-                signal,
-              );
-            } finally {
-              disposeSend();
-            }
-          } finally {
-            sending = false;
-          }
-        },
-        toolInput: () => safeParseJSON(latest.current.args || '{}') ?? {},
-        // The chat stored this result's media as uploads; the view reads base64
-        toolResult: () => {
-          const { result: toolResult } = latest.current;
-          return restoreMediaForView(
-            toCallToolResult({ ...toolResult, success: !toolResult.state?.isError }),
-          );
-        },
+      const { bridge, dispose } = connectAppView({
+        getContext: () => latest.current,
+        onHeight: setHeight,
+        onNavigated: () => setDroppedDoc(srcDoc),
+        onWaitingApprovalsChange: (delta) => setWaitingApprovals((count) => count + delta),
+        resourceUri,
+        target,
+        toolCallId,
       });
       bridgeRef.current = bridge;
 
       return () => {
-        window.removeEventListener('message', handleFrameNotice);
         bridgeRef.current = undefined;
-        approvals.abort();
         dispose();
       };
     }, [latest, navigated, resourceUri, srcDoc, toolCallId]);
@@ -297,11 +119,9 @@ const McpAppView = memo<McpAppViewProps>(
       if (error) console.warn(`[MCPApp] failed to load ${resourceUri}:`, error);
     }, [error, resourceUri]);
 
-    if (isLoading) return <Skeleton height={DEFAULT_HEIGHT} width={'100%'} />;
-
-    // A failed revalidation keeps a view that already loaded: whether the
-    // iframe (and the bridge bound to it) exists depends on the document alone.
-    if (!srcDoc || navigated) return fallback;
+    const phase = getAppViewPhase({ isLoading, navigated, srcDoc });
+    if (phase === 'loading') return <Skeleton height={DEFAULT_HEIGHT} width={'100%'} />;
+    if (phase === 'fallback') return fallback;
 
     return (
       <Flexbox gap={8}>

@@ -1,10 +1,11 @@
 /**
  * @vitest-environment happy-dom
  */
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import McpAppView from './McpAppView';
+import { connectAppView, getAppViewPhase, MAX_APP_VIEW_HEIGHT } from './appHost';
+import { buildAppFrameDocument, VIEW_FRAME_SANDBOX } from './frameDocument';
+import { APP_IFRAME_ALLOW, buildAppCsp } from './utils';
 
 const {
   confirmAppMessage,
@@ -13,7 +14,6 @@ const {
   getAppToolCallPolicy,
   invokeMcpToolCall,
   sendMessage,
-  swr,
 } = vi.hoisted(() => ({
   confirmAppMessage: vi.fn(),
   confirmAppOpenLink: vi.fn(),
@@ -21,38 +21,7 @@ const {
   getAppToolCallPolicy: vi.fn(),
   invokeMcpToolCall: vi.fn(),
   sendMessage: vi.fn(),
-  // A failed revalidation leaves the cached view in `data`
-  swr: { error: undefined as Error | undefined },
 }));
-
-vi.mock('react-i18next', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: () => ({
-    data: {
-      contents: [
-        {
-          _meta: { ui: { permissions: { camera: {}, clipboardWrite: {}, microphone: {} } } },
-          mimeType: 'text/html;profile=mcp-app',
-          text: '<p>weather</p>',
-          uri: 'ui://weather/view',
-        },
-      ],
-    },
-    error: swr.error,
-    isLoading: false,
-  }),
-}));
-
-vi.mock('@/features/Conversation/store', () => ({
-  useConversationStore: (selector: (s: unknown) => unknown) =>
-    selector({ context: { agentId: 'agt_1' }, sendMessage }),
-}));
-
-vi.mock('@/hooks/useIsDark', () => ({ useIsDark: () => false }));
 
 vi.mock('@/services/mcp', () => ({ mcpService: { invokeMcpToolCall } }));
 
@@ -64,33 +33,52 @@ vi.mock('./confirm', () => ({ confirmAppMessage, confirmAppOpenLink, confirmAppT
 
 vi.mock('./toolCallPolicy', () => ({ getAppToolCallPolicy }));
 
-const originalUserActivation = Object.getOwnPropertyDescriptor(navigator, 'userActivation');
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+const disposers: (() => void)[] = [];
+
+/** Connect a view in a fresh frame, as McpAppView does once the frame has loaded. */
 const setup = () => {
-  // Fresh props each time, so the memoized view renders again and reads the SWR state
-  const element = () => (
-    <McpAppView
-      apiName={'get_weather'}
-      arguments={'{"city":"Paris"}'}
-      fallback={<div>fallback</div>}
-      identifier={'weather-demo'}
-      resourceUri={'ui://weather/view'}
-      result={{ content: 'sunny' }}
-      toolCallId={'call_1'}
-    />
-  );
-  const { container, rerender: rerenderElement } = render(element());
-  const rerender = () => rerenderElement(element());
-  const iframe = container.querySelector('iframe')!;
+  const iframe = document.createElement('iframe');
+  document.body.append(iframe);
   const target = iframe.contentWindow!;
   const posted = vi.spyOn(target, 'postMessage');
+  const onHeight = vi.fn();
+  const onNavigated = vi.fn();
+  let waiting = 0;
+  const onWaitingApprovalsChange = vi.fn((delta: 1 | -1) => (waiting += delta));
+
+  const { dispose } = connectAppView({
+    getContext: () => ({
+      agentId: 'agt_1',
+      args: '{"city":"Paris"}',
+      identifier: 'weather-demo',
+      isDark: false,
+      result: { content: 'sunny' },
+      sendMessage,
+      t: (key: string) => key,
+    }),
+    onHeight,
+    onNavigated,
+    onWaitingApprovalsChange,
+    resourceUri: 'ui://weather/view',
+    target,
+    toolCallId: 'call_1',
+  });
+  let disposed = false;
+  const goAway = () => {
+    if (disposed) return;
+    disposed = true;
+    dispose();
+  };
+  disposers.push(goAway);
 
   /** Deliver a JSON-RPC message as if the view posted it. */
   const fromView = async (data: Record<string, unknown>) => {
     window.dispatchEvent(
       new MessageEvent('message', { data: { jsonrpc: '2.0', ...data }, source: target }),
     );
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flush();
   };
   const response = (id: number) =>
     posted.mock.calls.map(([message]) => message as any).find((message) => message.id === id);
@@ -100,100 +88,109 @@ const setup = () => {
       method: 'ui/message',
       params: { content: [{ text, type: 'text' }], role: 'user' },
     });
-
-  return { fromView, iframe, message, rerender, response };
-};
-
-const setupToolCalls = () => {
-  const view = setup();
   const call = (id: number, city: string) =>
-    view.fromView({
-      id,
-      method: 'tools/call',
-      params: { arguments: { city }, name: 'get_forecast' },
-    });
+    fromView({ id, method: 'tools/call', params: { arguments: { city }, name: 'get_forecast' } });
 
-  return { ...view, call };
+  return {
+    call,
+    dispose: goAway,
+    fromView,
+    iframe,
+    message,
+    onHeight,
+    onNavigated,
+    onWaitingApprovalsChange,
+    response,
+    target,
+    waiting: () => waiting,
+  };
 };
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-describe('McpAppView', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    getAppToolCallPolicy.mockResolvedValue('confirm');
-    swr.error = undefined;
-    sendMessage.mockImplementation(async ({ onMessageAccepted }) => onMessageAccepted?.());
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.restoreAllMocks();
-    if (originalUserActivation) {
-      Object.defineProperty(navigator, 'userActivation', originalUserActivation);
-    } else {
-      Reflect.deleteProperty(navigator, 'userActivation');
-    }
-  });
-
+describe('the frame an MCP App view runs in', () => {
   it('keeps powerful features off whatever permissions the view declares', () => {
-    const { iframe } = setup();
-    const allow = iframe.getAttribute('allow')!;
-
     for (const feature of ['camera', 'microphone', 'geolocation', 'clipboard-write']) {
-      expect(allow).toContain(`${feature} 'none'`);
+      expect(APP_IFRAME_ALLOW).toContain(`${feature} 'none'`);
     }
-    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
+    expect(VIEW_FRAME_SANDBOX).toBe('allow-scripts allow-forms');
   });
 
   it('loads the view behind the wrapper that holds it to its declared frame domains', () => {
-    const { iframe } = setup();
-    const doc = iframe.getAttribute('srcdoc')!;
+    const doc = buildAppFrameDocument('<p>weather</p>', buildAppCsp(undefined));
 
     expect(doc.indexOf('Content-Security-Policy')).toBeLessThan(doc.indexOf('<script>'));
     expect(doc).toContain(`frame-src 'none'`);
     expect(doc).toContain('frame.srcdoc = ');
     expect(doc).toContain('\\u003cp>weather\\u003c/p>');
   });
+});
 
-  it('falls back to the plain result once the wrapper drops a view that left its document', async () => {
+describe('getAppViewPhase', () => {
+  it('shows the skeleton while the document loads', () => {
+    expect(getAppViewPhase({ isLoading: true, navigated: false })).toBe('loading');
+  });
+
+  it('falls back without a document, or once the view left its document', () => {
+    expect(getAppViewPhase({ isLoading: false, navigated: false })).toBe('fallback');
+    expect(getAppViewPhase({ isLoading: false, navigated: true, srcDoc: '<p />' })).toBe(
+      'fallback',
+    );
+  });
+
+  it('keeps a loaded view when a revalidation of its HTML fails', () => {
+    // A failed SWR revalidation keeps `data`: the document, not the error, decides
+    expect(getAppViewPhase({ isLoading: false, navigated: false, srcDoc: '<p />' })).toBe('view');
+  });
+});
+
+describe('connectAppView', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getAppToolCallPolicy.mockResolvedValue('confirm');
+    sendMessage.mockImplementation(async ({ onMessageAccepted }) => onMessageAccepted?.());
+  });
+
+  afterEach(() => {
+    for (const dispose of disposers.splice(0)) dispose();
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('caps the height a view asks for', async () => {
+    const { fromView, onHeight } = setup();
+
+    await fromView({ method: 'ui/notifications/size-changed', params: { height: 99_999 } });
+
+    expect(onHeight).toHaveBeenCalledWith(MAX_APP_VIEW_HEIGHT);
+  });
+
+  it('reports a view that left its document, only from its own frame', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { iframe } = setup();
+    const { onNavigated, target } = setup();
     const notice = { source: 'lobe-mcp-app-frame', type: 'navigated' };
 
-    // Only the view's own frame can report it
     window.dispatchEvent(new MessageEvent('message', { data: notice, source: window }));
     await flush();
-    expect(screen.queryByText('fallback')).toBeNull();
+    expect(onNavigated).not.toHaveBeenCalled();
 
-    window.dispatchEvent(
-      new MessageEvent('message', { data: notice, source: iframe.contentWindow }),
-    );
-    expect(await screen.findByText('fallback')).toBeTruthy();
-    expect(document.querySelector('iframe')).toBeNull();
+    window.dispatchEvent(new MessageEvent('message', { data: notice, source: target }));
+    expect(onNavigated).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('left its document'));
   });
 
-  it('drops the approvals of a view that left its document', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('drops the approvals of a view once it goes away, as after leaving its document', async () => {
     confirmAppToolCall.mockImplementation(() => new Promise(() => {}));
-    const { call, iframe } = setupToolCalls();
+    const { call, dispose } = setup();
 
     await call(1, 'Rome');
     const { signal } = confirmAppToolCall.mock.calls[0][0] as { signal: AbortSignal };
     expect(signal.aborted).toBe(false);
 
-    window.dispatchEvent(
-      new MessageEvent('message', {
-        data: { source: 'lobe-mcp-app-frame', type: 'navigated' },
-        source: iframe.contentWindow,
-      }),
-    );
-    await screen.findByText('fallback');
+    // McpAppView disposes the session when the wrapper reports the view left
+    dispose();
     expect(signal.aborted).toBe(true);
   });
 
-  it('requires consent when another view activates the parent and the sender focuses itself', async () => {
+  it('requires consent for a message from any of several views, whichever has focus', async () => {
     const clock = vi.spyOn(performance, 'now').mockReturnValue(0);
     Object.defineProperty(navigator, 'userActivation', {
       configurable: true,
@@ -214,6 +211,7 @@ describe('McpAppView', () => {
     );
     expect(sendMessage).not.toHaveBeenCalled();
     expect(second.response(1)?.result).toEqual({ isError: true });
+    Reflect.deleteProperty(navigator, 'userActivation');
   });
 
   it('asks before sending a message posted without a gesture, and drops it when declined', async () => {
@@ -242,20 +240,16 @@ describe('McpAppView', () => {
     expect(confirmAppMessage).toHaveBeenCalledTimes(1);
 
     confirmMessage(true);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flush();
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(response(1)?.result).toEqual({});
   });
 
   it('shows the app by name and the arguments before a tool call that needs approval', async () => {
     confirmAppToolCall.mockResolvedValue(false);
-    const { fromView, response } = setup();
+    const { call, response } = setup();
 
-    await fromView({
-      id: 1,
-      method: 'tools/call',
-      params: { arguments: { city: 'Rome' }, name: 'get_forecast' },
-    });
+    await call(1, 'Rome');
 
     expect(confirmAppToolCall).toHaveBeenCalledWith({
       appName: 'Weather Demo',
@@ -271,7 +265,7 @@ describe('McpAppView', () => {
     const answers: ((allowed: boolean) => void)[] = [];
     confirmAppToolCall.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
     invokeMcpToolCall.mockResolvedValue({ content: 'rainy', success: true });
-    const { call, response } = setupToolCalls();
+    const { call, response } = setup();
 
     await call(1, 'Rome');
     await call(2, 'Oslo');
@@ -293,7 +287,7 @@ describe('McpAppView', () => {
   it('refuses tool calls as busy, not denied, once too many wait for approval', async () => {
     const answers: ((allowed: boolean) => void)[] = [];
     confirmAppToolCall.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
-    const { call, response } = setupToolCalls();
+    const { call, response } = setup();
 
     for (const id of [1, 2, 3, 4]) await call(id, 'Rome');
 
@@ -312,13 +306,13 @@ describe('McpAppView', () => {
 
   it('withdraws its pending approvals when the view goes away', async () => {
     confirmAppToolCall.mockReturnValue(new Promise(() => {}));
-    const { call } = setupToolCalls();
+    const { call, dispose } = setup();
 
     await call(1, 'Rome');
     const { signal } = confirmAppToolCall.mock.calls[0][0] as { signal: AbortSignal };
     expect(signal.aborted).toBe(false);
 
-    cleanup();
+    dispose();
     expect(signal.aborted).toBe(true);
   });
 
@@ -330,7 +324,7 @@ describe('McpAppView', () => {
       );
     confirmAppToolCall.mockImplementation(settle);
     confirmAppMessage.mockImplementation(settle);
-    const { call, fromView, message } = setupToolCalls();
+    const { call, fromView, message } = setup();
     const cancel = (requestId: number) =>
       fromView({ method: 'notifications/cancelled', params: { reason: 'timeout', requestId } });
 
@@ -360,7 +354,7 @@ describe('McpAppView', () => {
       throw new TypeError('AbortSignal.any is not a function');
     });
     confirmAppToolCall.mockReturnValue(new Promise(() => {}));
-    const { call, fromView } = setupToolCalls();
+    const { call, fromView } = setup();
 
     await call(1, 'Rome');
     expect(confirmAppToolCall).toHaveBeenCalledTimes(1);
@@ -371,35 +365,32 @@ describe('McpAppView', () => {
     expect(signal.aborted).toBe(true);
   });
 
-  it('says under the view that it is waiting while its approval is unanswered', async () => {
+  it('counts its requests waiting for an answer, for the status under the view', async () => {
     const answers: ((allowed: boolean) => void)[] = [];
     confirmAppToolCall.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
-    const { call } = setupToolCalls();
-    expect(screen.queryByText('mcpApp.waitingApproval')).toBeNull();
+    const { call, waiting } = setup();
+    expect(waiting()).toBe(0);
 
     await call(1, 'Rome');
     await call(2, 'Oslo');
-    expect(await screen.findByText('mcpApp.waitingApproval')).toBeTruthy();
+    expect(waiting()).toBe(2);
 
     // Still waiting while the second one is unanswered
     answers[0](false);
     await flush();
-    expect(screen.getByText('mcpApp.waitingApproval')).toBeTruthy();
+    expect(waiting()).toBe(1);
 
     answers[1](false);
-    await waitFor(() => expect(screen.queryByText('mcpApp.waitingApproval')).toBeNull());
+    await flush();
+    expect(waiting()).toBe(0);
   });
 
   it('runs an approved view tool call on this machine for local servers', async () => {
     confirmAppToolCall.mockResolvedValue(true);
     invokeMcpToolCall.mockResolvedValue({ content: 'rainy', success: true });
-    const { fromView } = setup();
+    const { call } = setup();
 
-    await fromView({
-      id: 1,
-      method: 'tools/call',
-      params: { arguments: { city: 'Rome' }, name: 'get_forecast' },
-    });
+    await call(1, 'Rome');
 
     expect(invokeMcpToolCall).toHaveBeenCalledWith(
       expect.objectContaining({ apiName: 'get_forecast', identifier: 'weather-demo' }),
@@ -423,12 +414,12 @@ describe('McpAppView', () => {
   it('cancels an approved message before acceptance once the view goes away', async () => {
     confirmAppMessage.mockResolvedValue(true);
     sendMessage.mockImplementation(() => new Promise(() => {}));
-    const { message } = setup();
+    const { dispose, message } = setup();
 
     await message(1, 'Follow up');
     const { signal } = sendMessage.mock.calls[0][0] as { signal: AbortSignal };
 
-    cleanup();
+    dispose();
     expect(signal.aborted).toBe(true);
   });
 
@@ -468,29 +459,13 @@ describe('McpAppView', () => {
     expect(response(2)?.result.isError).toBe(true);
   });
 
-  it('keeps a loaded view connected when a revalidation of its HTML fails', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    getAppToolCallPolicy.mockResolvedValue('allow');
-    invokeMcpToolCall.mockResolvedValue({ content: 'rainy', success: true });
-    const view = setupToolCalls();
-
-    swr.error = new Error('revalidation failed');
-    view.rerender();
-    expect(screen.queryByText('fallback')).toBeNull();
-    expect(document.querySelector('iframe')).toBe(view.iframe);
-
-    // The bridge is still bound to the frame on screen
-    await view.call(1, 'Rome');
-    expect(invokeMcpToolCall).toHaveBeenCalledTimes(1);
-  });
-
   it('does not run an allowed call once the view went away while its policy loaded', async () => {
     let decide!: (policy: string) => void;
     getAppToolCallPolicy.mockReturnValue(new Promise((resolve) => (decide = resolve)));
-    const { call } = setupToolCalls();
+    const { call, dispose } = setup();
 
     await call(1, 'Rome');
-    cleanup();
+    dispose();
     decide('allow');
     await flush();
 
@@ -500,7 +475,7 @@ describe('McpAppView', () => {
   it('does not run an allowed call the view cancelled while its policy loaded', async () => {
     let decide!: (policy: string) => void;
     getAppToolCallPolicy.mockReturnValue(new Promise((resolve) => (decide = resolve)));
-    const { call, fromView } = setupToolCalls();
+    const { call, fromView } = setup();
 
     await call(1, 'Rome');
     await fromView({ method: 'notifications/cancelled', params: { requestId: 1 } });
@@ -513,13 +488,13 @@ describe('McpAppView', () => {
   it('cancels a running call once the view goes away', async () => {
     getAppToolCallPolicy.mockResolvedValue('allow');
     invokeMcpToolCall.mockReturnValue(new Promise(() => {}));
-    const { call } = setupToolCalls();
+    const { call, dispose } = setup();
 
     await call(1, 'Rome');
     const { signal } = invokeMcpToolCall.mock.calls[0][1] as { signal: AbortSignal };
     expect(signal.aborted).toBe(false);
 
-    cleanup();
+    dispose();
     expect(signal.aborted).toBe(true);
   });
 });
