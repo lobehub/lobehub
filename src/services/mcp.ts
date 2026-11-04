@@ -403,14 +403,15 @@ class MCPService {
 
     // An agent's own connectors (e.g. a stdio one only it has) may not be loaded
     // in a conversation opened cold; without them the view would be read from
-    // the base connector, or sent to the server route. Unloadable means the
-    // base resolution below, as before.
+    // the base connector, or sent to the server route. If they can't be loaded,
+    // no view: one from another server would get this tool's result.
     if (agentId) {
       try {
         await s.ensureConfirmedConnectors(agentId);
         s = getToolStoreState();
       } catch (error) {
         console.warn(`[MCPApp] failed to load the tools of agent ${agentId}:`, error);
+        return;
       }
     }
 

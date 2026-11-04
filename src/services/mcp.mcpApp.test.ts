@@ -268,6 +268,21 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     });
   });
 
+  it("reads no view when the agent's own connectors can't be loaded", async () => {
+    // The base connector of the same identifier is loaded; the agent's own copy is not
+    connectors.set('agt_1:files', stdioConnector);
+    toolState.ensureConfirmedConnectors.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(
+      mcpService.readMcpAppResource('files', 'ui://app', 'agt_1'),
+    ).resolves.toBeUndefined();
+
+    expect(connectorEdit).not.toHaveBeenCalled();
+    expect(ipcRead).not.toHaveBeenCalled();
+    expect(connectorRead).not.toHaveBeenCalled();
+    expect(relayRead).not.toHaveBeenCalled();
+  });
+
   it('falls back without a request off the desktop, where nothing can run the command', async () => {
     environment.isDesktop = false;
 
