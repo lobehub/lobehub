@@ -16,7 +16,7 @@
   "table.columns.totalTokens": "Uso de Tokens",
   "table.columns.trigger.enums.agent_meta": "Perfil do Agente",
   "table.columns.trigger.enums.agent_share": "Compartilhamento do Agente",
-  "table.columns.trigger.enums.agent_signal": "Sinal do Agente",
+  "table.columns.trigger.enums.agent_signal": "Agent Signal",
   "table.columns.trigger.enums.api": "Chamada de API",
   "table.columns.trigger.enums.asr": "Transcrição de Voz",
   "table.columns.trigger.enums.bot": "Mensagem do Bot",

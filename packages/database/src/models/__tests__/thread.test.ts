@@ -288,6 +288,29 @@ describe('ThreadModel', () => {
       expect(result.map((thread) => thread.id)).toEqual(['visible-subagent-thread']);
     });
 
+    it('hides sub-agent threads of a task-result wakeup from topic thread lists', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(threads).values({
+          id: 'task-callback-subagent-thread',
+          status: ThreadStatus.Active,
+          title: 'Wakeup sub-agent',
+          topicId,
+          type: ThreadType.Isolation,
+          userId,
+        });
+        await tx.insert(agentOperations).values({
+          id: 'task-callback-subagent-operation',
+          status: 'done',
+          threadId: 'task-callback-subagent-thread',
+          topicId,
+          trigger: RequestTrigger.TaskCallback,
+          userId,
+        });
+      });
+
+      expect(await threadModel.queryByTopicId(topicId)).toEqual([]);
+    });
+
     it('hides marked onboarding Understanding writing threads from topic thread lists', async () => {
       await serverDB.insert(threads).values({
         id: 'understanding-thread',

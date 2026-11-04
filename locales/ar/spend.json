@@ -16,7 +16,7 @@
   "table.columns.totalTokens": "استخدام الرموز",
   "table.columns.trigger.enums.agent_meta": "ملف الوكيل",
   "table.columns.trigger.enums.agent_share": "مشاركة الوكيل",
-  "table.columns.trigger.enums.agent_signal": "إشارة الوكيل",
+  "table.columns.trigger.enums.agent_signal": "Agent Signal",
   "table.columns.trigger.enums.api": "استدعاء API",
   "table.columns.trigger.enums.asr": "نسخ الصوت",
   "table.columns.trigger.enums.bot": "رسالة بوت",

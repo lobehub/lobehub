@@ -47,7 +47,7 @@
   "agentProfile.skills_one": "{{count}} مهارة",
   "agentProfile.skills_other": "{{count}} مهارات",
   "agentSender.sourceTopic": "موضوع المصدر",
-  "agentSignal.receipts.agentSignalLabel": "إشارة الوكيل",
+  "agentSignal.receipts.agentSignalLabel": "Agent Signal",
   "agentSignal.receipts.memory.detail": "تم حفظ هذا للردود المستقبلية",
   "agentSignal.receipts.memory.openInMemory": "افتح في الذاكرة",
   "agentSignal.receipts.memory.title": "تم حفظ الذاكرة",

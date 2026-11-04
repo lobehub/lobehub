@@ -16,7 +16,7 @@
   "table.columns.totalTokens": "Sử dụng token",
   "table.columns.trigger.enums.agent_meta": "Hồ sơ Agent",
   "table.columns.trigger.enums.agent_share": "Chia sẻ của đại lý",
-  "table.columns.trigger.enums.agent_signal": "Tín hiệu đại lý",
+  "table.columns.trigger.enums.agent_signal": "Agent Signal",
   "table.columns.trigger.enums.api": "Gọi API",
   "table.columns.trigger.enums.asr": "Chuyển giọng nói thành văn bản",
   "table.columns.trigger.enums.bot": "Tin nhắn Bot",

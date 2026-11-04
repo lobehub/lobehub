@@ -16,7 +16,7 @@
   "table.columns.totalTokens": "Использование токенов",
   "table.columns.trigger.enums.agent_meta": "Профиль Агента",
   "table.columns.trigger.enums.agent_share": "Доля агента",
-  "table.columns.trigger.enums.agent_signal": "Сигнал агента",
+  "table.columns.trigger.enums.agent_signal": "Agent Signal",
   "table.columns.trigger.enums.api": "Вызов API",
   "table.columns.trigger.enums.asr": "Распознавание речи",
   "table.columns.trigger.enums.bot": "Сообщение бота",

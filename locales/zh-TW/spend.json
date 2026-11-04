@@ -16,7 +16,7 @@
   "table.columns.totalTokens": "權杖使用量",
   "table.columns.trigger.enums.agent_meta": "代理檔案",
   "table.columns.trigger.enums.agent_share": "代理分享",
-  "table.columns.trigger.enums.agent_signal": "代理信號",
+  "table.columns.trigger.enums.agent_signal": "Agent Signal",
   "table.columns.trigger.enums.api": "API 呼叫",
   "table.columns.trigger.enums.asr": "語音轉錄",
   "table.columns.trigger.enums.bot": "機器人訊息",
