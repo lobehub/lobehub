@@ -452,7 +452,6 @@
   "qa.list.embeddings.a": "Lưu trữ vector không bằng kích thước gốc của dữ liệu bạn tải lên hoặc nhập, mà được tính dựa trên việc chuyển đổi nội dung văn bản thuần thành vector. Ví dụ, một tệp PDF 1 trang (1000-1500 ký tự) có thể chỉ chiếm khoảng 1 mục lưu trữ vector sau khi trích xuất và chuyển đổi. Bạn có thể xem mức sử dụng tại \"{{usage}}\".",
   "qa.list.embeddings.q": "Lưu trữ vector được tính như thế nào?",
   "qa.list.free.q": "Có thể sử dụng {{name}} miễn phí không?",
-  "qa.list.management.a": "Tại trang {{subscribe}}, bạn có thể \"Nâng cấp / Hạ cấp\" gói đăng ký hiện tại, hoặc chuyển đổi giữa thanh toán hàng năm và hàng tháng. Thông qua \"{{usage}}-{{management}}\" bạn có thể truy cập Stripe để quản lý đăng ký, và có thể hủy bất kỳ lúc nào. Sau khi hủy, bạn sẽ tự động được chuyển về phiên bản miễn phí khi gói hiện tại hết hạn.",
   "qa.list.management.q": "Làm thế nào để thay đổi hoặc hủy đăng ký?",
   "qa.support.community": "Hỗ trợ cộng đồng",
   "qa.support.email": "Hỗ trợ qua email",

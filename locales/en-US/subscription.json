@@ -696,7 +696,7 @@
   "qa.list.limit.newA.lead": "When you reach a limit, you can:",
   "qa.list.limit.newA.wait": "Wait for the limit to reset, or upgrade your plan.",
   "qa.list.limit.q": "What if I reach a usage limit?",
-  "qa.list.management.a": "On the {{subscribe}} page, you can \"Upgrade / Downgrade\" your current subscription plan, or switch between yearly and monthly billing. Through \"{{usage}}-{{management}}\" you can go to Stripe for subscription management, and you can cancel your subscription at any time. After cancellation, you will be automatically downgraded to the free version when your current plan expires.",
+  "qa.list.management.a": "On the \"{{plans}}\" page, you can \"Upgrade / Downgrade\" your current subscription plan, or switch between yearly and monthly billing. Through \"{{usage}}-{{management}}\" you can go to Stripe for subscription management, and you can cancel your subscription at any time. After cancellation, you will be automatically downgraded to the free version when your current plan expires.",
   "qa.list.management.q": "How do I change or cancel my subscription?",
   "qa.support.community": "Community support",
   "qa.support.email": "Email support",

@@ -452,7 +452,6 @@
   "qa.list.embeddings.a": "Vektör depolama, yüklediğiniz veya içe aktardığınız veri kümesinin orijinal boyutuna eşit değildir, dosyalarınızdaki saf metin içeriğinin vektörleştirilmesine göre hesaplanır. Örneğin, 1 sayfalık bir PDF dosyası (1000-1500 karakter) saf metne dönüştürülüp vektörleştirildiğinde yalnızca yaklaşık 1 vektör girdisi kaplayabilir. Kullanımınızı \"{{usage}}\" altında görüntüleyebilirsiniz.",
   "qa.list.embeddings.q": "Vektör depolama nasıl hesaplanır?",
   "qa.list.free.q": "{{name}} ücretsiz kullanılabilir mi?",
-  "qa.list.management.a": "{{subscribe}} sayfasında mevcut abonelik planınızı \"Yükselt / Düşür\" seçeneğiyle değiştirebilir veya yıllık ve aylık faturalama arasında geçiş yapabilirsiniz. \"{{usage}}-{{management}}\" üzerinden Stripe'a giderek abonelik yönetimi yapabilir ve istediğiniz zaman aboneliğinizi iptal edebilirsiniz. İptal sonrası, mevcut plan süresi dolduğunda otomatik olarak ücretsiz sürüme geçersiniz.",
   "qa.list.management.q": "Aboneliğimi nasıl değiştiririm veya iptal ederim?",
   "qa.support.community": "Topluluk Desteği",
   "qa.support.email": "E-posta Desteği",

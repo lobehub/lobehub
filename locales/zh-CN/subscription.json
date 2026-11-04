@@ -696,7 +696,7 @@
   "qa.list.limit.newA.lead": "限额用完后，你可以：",
   "qa.list.limit.newA.wait": "等待限额重置，或升级套餐。",
   "qa.list.limit.q": "达到用量限额后怎么办？",
-  "qa.list.management.a": "在 {{subscribe}} 页面，你可以“升级 / 降级”当前订阅套餐，或切换年付与月付。在“{{usage}}-{{management}}”中可跳转至 Stripe 进行订阅管理，你可随时取消订阅。取消后，当前套餐到期时将自动降级为免费版。",
+  "qa.list.management.a": "在“{{plans}}”页面，你可以“升级 / 降级”当前订阅套餐，或切换年付与月付。在“{{usage}}-{{management}}”中可跳转至 Stripe 进行订阅管理，你可随时取消订阅。取消后，当前套餐到期时将自动降级为免费版。",
   "qa.list.management.q": "如何更改或取消订阅？",
   "qa.support.community": "社区支持",
   "qa.support.email": "邮件支持",

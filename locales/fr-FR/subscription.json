@@ -452,7 +452,6 @@
   "qa.list.embeddings.a": "Le stockage vectoriel ne correspond pas à la taille originale de vos fichiers, mais est calculé à partir du texte extrait. Par exemple, un PDF d’une page (1000-1500 caractères) équivaut à environ 1 entrée vectorielle. Consultez votre utilisation dans « {{usage}} ».",
   "qa.list.embeddings.q": "Comment est calculé le stockage vectoriel ?",
   "qa.list.free.q": "Peut-on utiliser {{name}} gratuitement ?",
-  "qa.list.management.a": "Sur la page {{subscribe}}, vous pouvez « Mettre à niveau / rétrograder » votre plan ou changer de cycle de facturation. Via « {{usage}}-{{management}} », accédez à Stripe pour gérer votre abonnement. Vous pouvez annuler à tout moment. Après annulation, vous passerez automatiquement au plan gratuit à l’expiration.",
   "qa.list.management.q": "Comment modifier ou annuler mon abonnement ?",
   "qa.support.community": "Support communautaire",
   "qa.support.email": "Support par e-mail",

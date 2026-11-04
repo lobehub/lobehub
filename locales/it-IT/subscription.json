@@ -452,7 +452,6 @@
   "qa.list.embeddings.a": "Lo spazio di archiviazione vettoriale non corrisponde alla dimensione originale del dataset caricato o importato, ma viene calcolato in base alla vettorializzazione del contenuto testuale puro. Ad esempio, un file PDF di una pagina (1000-1500 caratteri) può occupare solo una voce di archiviazione vettoriale. Puoi visualizzare l'utilizzo sotto \"{{usage}}\".",
   "qa.list.embeddings.q": "Come viene calcolata l'archiviazione vettoriale?",
   "qa.list.free.q": "È possibile usare {{name}} gratuitamente?",
-  "qa.list.management.a": "Nella pagina {{subscribe}}, puoi \"Effettuare Upgrade / Downgrade\" del tuo piano attuale o passare dalla fatturazione annuale a quella mensile. Tramite \"{{usage}}-{{management}}\" puoi accedere a Stripe per la gestione dell'abbonamento e annullarlo in qualsiasi momento. Dopo l'annullamento, verrai automaticamente retrocesso alla versione gratuita alla scadenza del piano attuale.",
   "qa.list.management.q": "Come posso modificare o annullare il mio abbonamento?",
   "qa.support.community": "Supporto della Comunità",
   "qa.support.email": "Supporto Email",

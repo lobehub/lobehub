@@ -452,7 +452,6 @@
   "qa.list.embeddings.a": "Der Vektorspeicher entspricht nicht der Originalgröße Ihrer Daten, sondern basiert auf der Vektorisierung des reinen Textinhalts. Eine PDF-Seite (1000–1500 Zeichen) ergibt etwa einen Vektoreintrag. Ihre Nutzung finden Sie unter \"{{usage}}\".",
   "qa.list.embeddings.q": "Wie wird der Vektorspeicher berechnet?",
   "qa.list.free.q": "Kann man {{name}} kostenlos nutzen?",
-  "qa.list.management.a": "Auf der Seite {{subscribe}} können Sie Ihren Plan upgraden/downgraden oder zwischen monatlicher und jährlicher Abrechnung wechseln. Unter \"{{usage}}-{{management}}\" gelangen Sie zu Stripe zur Verwaltung. Nach Kündigung erfolgt ein automatischer Wechsel zum kostenlosen Plan.",
   "qa.list.management.q": "Wie ändere oder kündige ich mein Abonnement?",
   "qa.support.community": "Community-Support",
   "qa.support.email": "E-Mail-Support",

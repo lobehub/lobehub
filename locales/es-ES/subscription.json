@@ -452,7 +452,6 @@
   "qa.list.embeddings.a": "El almacenamiento vectorial no equivale al tamaño original de tus datos cargados o importados, sino que se calcula en base a la vectorización del contenido de texto puro. Por ejemplo, un archivo PDF de 1 página (1000-1500 caracteres) puede ocupar solo 1 entrada vectorial al ser extraído y vectorizado. Puedes ver tu uso en \"{{usage}}\".",
   "qa.list.embeddings.q": "¿Cómo se calcula el almacenamiento vectorial?",
   "qa.list.free.q": "¿Se puede usar {{name}} gratis?",
-  "qa.list.management.a": "En la página de {{subscribe}}, puedes \"Actualizar / Degradar\" tu plan actual, o cambiar entre facturación anual y mensual. A través de \"{{usage}}-{{management}}\" puedes ir a Stripe para gestionar tu suscripción, y puedes cancelarla en cualquier momento. Tras la cancelación, se te degradará automáticamente al plan gratuito cuando expire tu plan actual.",
   "qa.list.management.q": "¿Cómo cambio o cancelo mi suscripción?",
   "qa.support.community": "Soporte Comunitario",
   "qa.support.email": "Soporte por Correo",

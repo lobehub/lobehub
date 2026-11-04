@@ -20,6 +20,8 @@ export const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     fontVariantNumeric: 'tabular-nums',
   },
+  // Keep each price on one line; the row wraps between prices, never inside one.
+  priceItem: { whiteSpace: 'nowrap' },
 });
 
 interface ModelCardProps extends LobeDefaultAiModelListItem {
@@ -84,6 +86,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
             align={'center'}
             className={stylex.props(styles.pricing).className}
             gap={8}
+            style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}
           >
             {t('messages.modelCard.creditPricing')}:
             {prices.cachedInput && (
@@ -92,7 +95,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
                   amount: prices.cachedInput.amount,
                 })}
               >
-                <Flexbox horizontal gap={2}>
+                <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                   <Icon icon={CircleFadingArrowUp} />
                   {prices.cachedInput.text}
                 </Flexbox>
@@ -104,7 +107,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
                   amount: prices.writeCacheInput.amount,
                 })}
               >
-                <Flexbox horizontal gap={2}>
+                <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                   <Icon icon={BookUp2Icon} />
                   {prices.writeCacheInput.text}
                 </Flexbox>
@@ -115,7 +118,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
                 amount: prices.input.amount,
               })}
             >
-              <Flexbox horizontal gap={2}>
+              <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                 <Icon icon={ArrowUpFromDot} />
                 {prices.input.text}
               </Flexbox>
@@ -125,7 +128,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
                 amount: prices.output.amount,
               })}
             >
-              <Flexbox horizontal gap={2}>
+              <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                 <Icon icon={ArrowDownToDot} />
                 {prices.output.text}
               </Flexbox>

@@ -452,7 +452,6 @@
   "qa.list.embeddings.a": "O armazenamento vetorial não equivale ao tamanho original do seu conjunto de dados, mas é calculado com base na vetorização do conteúdo textual puro dos arquivos. Por exemplo, um PDF de 1 página (1000-1500 caracteres) pode gerar apenas 1 entrada vetorial. Você pode ver seu uso em \"{{usage}}\".",
   "qa.list.embeddings.q": "Como é calculado o armazenamento vetorial?",
   "qa.list.free.q": "O {{name}} pode ser usado gratuitamente?",
-  "qa.list.management.a": "Na página {{subscribe}}, você pode \"Atualizar / Rebaixar\" seu plano atual ou alternar entre cobrança mensal e anual. Em \"{{usage}}-{{management}}\" você será redirecionado ao Stripe para gerenciar sua assinatura, podendo cancelá-la a qualquer momento. Após o cancelamento, você será automaticamente rebaixado para a versão gratuita ao final do plano atual.",
   "qa.list.management.q": "Como alterar ou cancelar minha assinatura?",
   "qa.support.community": "Suporte da Comunidade",
   "qa.support.email": "Suporte por E-mail",

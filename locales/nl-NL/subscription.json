@@ -452,7 +452,6 @@
   "qa.list.embeddings.a": "Vectoropslag is niet gelijk aan de originele grootte van je dataset, maar gebaseerd op de tekstuele inhoud. Een PDF van 1 pagina (1000-1500 tekens) kan ongeveer 1 vectoritem opleveren. Bekijk je gebruik onder \"{{usage}}\".",
   "qa.list.embeddings.q": "Hoe wordt vectoropslag berekend?",
   "qa.list.free.q": "Kan ik {{name}} gratis gebruiken?",
-  "qa.list.management.a": "Op de pagina {{subscribe}} kun je je abonnement upgraden/downgraden of wisselen tussen maand- en jaarfacturatie. Via \"{{usage}}-{{management}}\" ga je naar Stripe voor beheer. Na annulering wordt je automatisch teruggezet naar het gratis plan.",
   "qa.list.management.q": "Hoe wijzig of annuleer ik mijn abonnement?",
   "qa.support.community": "Communityondersteuning",
   "qa.support.email": "E-mailondersteuning",
