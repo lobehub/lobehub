@@ -79,6 +79,7 @@ const McpAppView = memo<McpAppViewProps>(
     const [waitingApprovals, setWaitingApprovals] = useState(0);
     const isDark = useIsDark();
     const sendMessage = useConversationStore((s) => s.sendMessage);
+    const canSendMessage = useConversationStore((s) => s.composerTarget.writable);
     // The agent that produced the result: in a group, the member, not the supervisor
     const agentId = useConversationStore(mcpAppAgentIdSelector(messageId));
     const { t } = useTranslation('plugin');
@@ -100,7 +101,16 @@ const McpAppView = memo<McpAppViewProps>(
 
     // Everything the bridge reads after mount goes through a ref, so the
     // iframe session is created once per document instead of per render.
-    const latest = useLatest({ agentId, args, identifier, isDark, result, sendMessage, t });
+    const latest = useLatest({
+      agentId,
+      args,
+      canSendMessage,
+      identifier,
+      isDark,
+      result,
+      sendMessage,
+      t,
+    });
     const bridgeRef = useRef<AppBridge>(undefined);
 
     useEffect(() => {

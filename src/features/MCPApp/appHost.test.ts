@@ -38,7 +38,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const disposers: (() => void)[] = [];
 
 /** Connect a view in a fresh frame, as McpAppView does once the frame has loaded. */
-const setup = () => {
+const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => {
   const iframe = document.createElement('iframe');
   document.body.append(iframe);
   const target = iframe.contentWindow!;
@@ -52,6 +52,7 @@ const setup = () => {
     getContext: () => ({
       agentId: 'agt_1',
       args: '{"city":"Paris"}',
+      canSendMessage,
       identifier: 'weather-demo',
       isDark: false,
       result: { content: 'sunny' },
@@ -225,6 +226,16 @@ describe('connectAppView', () => {
       signal: expect.any(AbortSignal),
       text: 'Posted on load',
     });
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(response(1)?.result).toEqual({ isError: true });
+  });
+
+  it('refuses a message in a conversation that takes none, without asking', async () => {
+    const { message, response } = setup({ canSendMessage: false });
+
+    await message(1, 'Reply in this thread');
+
+    expect(confirmAppMessage).not.toHaveBeenCalled();
     expect(sendMessage).not.toHaveBeenCalled();
     expect(response(1)?.result).toEqual({ isError: true });
   });

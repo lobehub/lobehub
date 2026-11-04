@@ -25,6 +25,11 @@ export interface AppViewContext {
   agentId?: string;
   /** Raw JSON arguments of the tool call. */
   args?: string;
+  /**
+   * The conversation surface takes new messages: its composer is writable. A
+   * read-only one (a thread a tool started) keeps the view from posting too.
+   */
+  canSendMessage: boolean;
   identifier: string;
   isDark: boolean;
   /** Tool call result envelope (`{ content, state, success }`). */
@@ -182,7 +187,7 @@ export const connectAppView = ({
     // cannot prove which opaque-origin view the user acted in, so every
     // message needs consent in the host.
     sendMessage: async (text, request) => {
-      if (sending) return false;
+      if (sending || !getContext().canSendMessage) return false;
       sending = true;
       try {
         const { agentId, identifier } = getContext();
