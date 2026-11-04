@@ -1,4 +1,5 @@
 import type { DocumentReviewTextAnchor } from '@lobechat/types';
+import { truncateSurrogateSafe } from '@lobechat/utils';
 
 /**
  * Plain-text projection of a document body and text-quote anchoring.
@@ -119,6 +120,24 @@ export interface QuoteMatch {
 
 const CONTEXT_RADIUS = 40;
 
+/** 0xDC00–0xDFFF: the tail half of a surrogate pair. */
+const isLowSurrogate = (codeUnit: number) => codeUnit >= 0xdc_00 && codeUnit <= 0xdf_ff;
+
+/**
+ * Context slices must not split a surrogate pair. The anchor is persisted in a
+ * jsonb column, and PostgreSQL rejects a lone surrogate outright, so an emoji
+ * on either boundary would fail the whole impact save with valid model output.
+ * The prefix walks forward past a cut-off pair, the suffix stops before one.
+ */
+const contextPrefix = (text: string, start: number): string => {
+  let from = Math.max(0, start - CONTEXT_RADIUS);
+  if (from > 0 && isLowSurrogate(text.charCodeAt(from))) from += 1;
+  return text.slice(from, start);
+};
+
+const contextSuffix = (text: string, end: number): string =>
+  truncateSurrogateSafe(text.slice(end), CONTEXT_RADIUS);
+
 /**
  * Find a quote in the body. Exact match first; then a punctuation-folded pass
  * and a whitespace-tolerant pass, because models routinely swap full-width
@@ -200,10 +219,10 @@ export const buildAnchor = (
   return {
     end: match.end,
     label,
-    prefix: text.slice(Math.max(0, match.start - CONTEXT_RADIUS), match.start),
+    prefix: contextPrefix(text, match.start),
     quote,
     start: match.start,
-    suffix: text.slice(match.end, match.end + CONTEXT_RADIUS),
+    suffix: contextSuffix(text, match.end),
   };
 };
 
