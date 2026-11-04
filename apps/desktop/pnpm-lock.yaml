@@ -679,6 +679,9 @@ importers:
 
   ../../packages/types:
     dependencies:
+      '@lobechat/business-const':
+        specifier: workspace:*
+        version: link:../business/const
       '@lobehub/market-sdk':
         specifier: 0.46.0
         version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)

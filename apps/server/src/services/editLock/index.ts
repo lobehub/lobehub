@@ -216,6 +216,34 @@ export class EditLockService {
   }
 
   /**
+   * `getBlockingHolder` (without an owner id) for many resources in one MGET,
+   * so a batch write costs one Redis round trip instead of one per resource.
+   * Same fail-open rule: a Redis error reports every resource as unlocked.
+   */
+  async getBlockingHolders(
+    type: EditLockResourceType,
+    ids: readonly string[],
+  ): Promise<Map<string, string>> {
+    const blocking = new Map<string, string>();
+    const redis = this.redis;
+    if (!redis || ids.length === 0) return blocking;
+    let raws: (string | null)[];
+    try {
+      raws = await redis.mget(ids.map((id) => lockKey(type, id)));
+    } catch (error) {
+      log('getBlockingHolders failed for %s (%d ids) %O', type, ids.length, error);
+      return blocking;
+    }
+    ids.forEach((id, index) => {
+      const raw = raws[index];
+      if (!raw) return;
+      const holder = parseStoredLock(raw);
+      if (holder.userId !== this.userId) blocking.set(id, holder.userId);
+    });
+    return blocking;
+  }
+
+  /**
    * Validate a content write against the current lease. When a caller provides
    * an owner id, the active Redis lock must still belong to that owner; otherwise
    * a stale tab whose lease expired could save over a newer editor. Without an

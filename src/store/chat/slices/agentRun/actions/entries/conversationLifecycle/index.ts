@@ -140,8 +140,8 @@ import {
 import { pageConversationNeedsGateway, preparePageConversation } from '../pageConversation';
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
-import { resolveProjectDirectoryRun } from '../resolveProjectDirectoryRun';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
+import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
 
 /**
@@ -171,6 +171,8 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    * own `switchTopic` handles the transition on the global chat store.
    */
   onTopicCreated?: (topicId: string) => void | Promise<void>;
+  /** Topic a new topic continues (a handoff): only its cwd carries over, never its CLI session. */
+  sourceTopic?: SourceTopicDirectory;
 }
 
 /**
@@ -284,6 +286,7 @@ export class ConversationLifecycleActionImpl {
     onTopicCreated,
     preserveComposer,
     signal,
+    sourceTopic,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
     throwIfSendAborted(signal);
 
@@ -440,21 +443,16 @@ export class ConversationLifecycleActionImpl {
     const boundTopic = context.topicId
       ? topicSelectors.getTopicById(context.topicId)(this.#get())
       : undefined;
-    // A blank conversation opened from a project "+" runs in the directory (or
-    // just the project) it staged; the new topic is born bound to it.
     const pendingDirectory = this.#get().pendingNewTopicDirectory;
-    const projectRun = await resolveProjectDirectoryRun({
+    const { inheritedTopic, ...projectRun } = await resolveSendProjectRun({
       agencyConfig,
       boundDirectoryId: boundTopic?.projectWorkingDirectoryId,
+      context,
+      directMentionRoute: !!directMentionRoute,
       isGatewayMode,
-      staged:
-        !context.topicId &&
-        !context.isolatedTopic &&
-        !context.groupId &&
-        !directMentionRoute &&
-        pendingDirectory?.agentId === ownerAgentId
-          ? pendingDirectory
-          : undefined,
+      ownerAgentId,
+      pendingDirectory,
+      sourceTopic,
     });
     ({ agencyConfig } = projectRun);
     const { newTopicProject, stagedDirectory, stagedProjectId } = projectRun;
@@ -1205,23 +1203,14 @@ export class ConversationLifecycleActionImpl {
     const resolveWorkingDirPath = isLocalCliHetero
       ? getWorkingDirSourcePath
       : getWorkingDirEffectivePath;
-    // A topic's cwd is a bare path that only holds on the machine it was pinned
-    // on — never hand another machine's path to this run (mirrors the server's
-    // `topicPinFitsDevice`).
-    const topicDeviceId = existingTopic?.metadata?.boundDeviceId;
-    const topicCwdMetadata =
-      topicDeviceId && runCwdDeviceId && topicDeviceId !== runCwdDeviceId
-        ? undefined
-        : existingTopic?.metadata;
-    const workingDirectory =
-      resolveWorkingDirPath(topicCwdMetadata?.workingDirectoryConfig) ??
-      topicCwdMetadata?.workingDirectory ??
-      agentWorkingDirectory;
-    const workingDirectoryConfig =
-      topicCwdMetadata?.workingDirectoryConfig ??
-      (topicCwdMetadata?.workingDirectory
-        ? { path: topicCwdMetadata.workingDirectory }
-        : agentWorkingDirectoryConfig);
+    const { workingDirectory, workingDirectoryConfig } = await resolveRunCwd({
+      agentWorkingDirectory,
+      agentWorkingDirectoryConfig,
+      existingTopic,
+      inheritedTopic: !stagedDirectory && resolvesRunCwd ? inheritedTopic : undefined,
+      resolvePath: resolveWorkingDirPath,
+      runMachine: { deviceId: runCwdDeviceId, target: runEffectiveTarget },
+    });
     // Record which machine a new conversation runs on, so its next turn — and
     // the device picker — stay on it after the agent default changes. `auto`
     // has not picked a machine yet; the server stamps the one it routes to.
@@ -1794,6 +1783,8 @@ export class ConversationLifecycleActionImpl {
           clientOperations,
           replacesOperationId: replaceableGatewayOperationId,
           optimisticTopic,
+          // An isolated handoff topic has no optimistic row to carry its cwd.
+          newTopicMetadata: sourceTopic && !optimisticTopic ? workingDirectoryMetadata : undefined,
           ...newTopicProject,
           // Forward @-mentioned tool ids so the server runtime enables them for
           // this run — the gateway/server path otherwise never sees the mention

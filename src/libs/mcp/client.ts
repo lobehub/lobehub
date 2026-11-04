@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { toRecord } from '@lobechat/utils/object';
 import {
   Client,
@@ -473,7 +474,7 @@ export class MCPClient {
           content: [
             {
               type: 'text',
-              text: 'This MCP tool requires user input that LobeHub does not support yet. Use a tool that does not require additional input.',
+              text: `This MCP tool requires user input that ${BRANDING_NAME} does not support yet. Use a tool that does not require additional input.`,
             },
           ],
           isError: true,

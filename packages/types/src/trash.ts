@@ -23,6 +23,7 @@ export const TRASH_RESOURCE_TYPES = [
   'dashboard',
   'channel',
   'channelThread',
+  'task',
 ] as const;
 export type TrashResourceType = (typeof TRASH_RESOURCE_TYPES)[number];
 

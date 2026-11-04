@@ -1,3 +1,4 @@
+import type * as BusinessConst from '@lobechat/business-const';
 import {
   Client,
   SdkError,
@@ -52,8 +53,42 @@ describe('MCP SDK v2 error handling', () => {
     );
     await expect(httpClient().callTool('test', {})).resolves.toMatchObject({
       isError: true,
-      content: [{ type: 'text', text: expect.stringContaining('requires user input') }],
+      content: [
+        {
+          type: 'text',
+          text: 'This MCP tool requires user input that LobeHub does not support yet. Use a tool that does not require additional input.',
+        },
+      ],
     });
+  });
+
+  it("names the deployment's own app in the input_required failure under custom branding", async () => {
+    vi.resetModules();
+    vi.doMock('@lobechat/business-const', async (importOriginal) => ({
+      ...(await importOriginal<typeof BusinessConst>()),
+      BRANDING_NAME: 'Acme',
+    }));
+    // Under vitest 5 a `doMock` only lands once the test file itself imports
+    // something, so pull the mocked module in before the one under test.
+    await import('@lobechat/business-const');
+    const sdk = await import('@modelcontextprotocol/client');
+    const { MCPClient: BrandedClient } = await import('./client');
+    vi.spyOn(sdk.Client.prototype, 'callTool').mockRejectedValue(
+      new sdk.SdkError(sdk.SdkErrorCode.UnsupportedResultType, 'input_required', {
+        resultType: 'input_required',
+        method: 'tools/call',
+      }),
+    );
+
+    const result = await new BrandedClient({
+      name: 'test',
+      type: 'http',
+      url: 'https://mcp.example.com',
+    }).callTool('test', {});
+
+    expect(result.content[0].text).toContain('user input that Acme does not support yet');
+    vi.doUnmock('@lobechat/business-const');
+    vi.resetModules();
   });
 
   it('classifies initialize HTTP 401 without a status in the message', async () => {

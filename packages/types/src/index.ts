@@ -40,6 +40,7 @@ export * from './followUpAction';
 export * from './ftsSearch';
 export * from './generation';
 export * from './goal';
+export * from './goalArchive';
 export * from './goalReport';
 export * from './goalRetro';
 export * from './goalRollout';
