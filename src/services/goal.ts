@@ -189,7 +189,7 @@ class GoalService {
   close = async (id: string, status: 'achieved' | 'canceled') =>
     lambdaClient.goal.close.mutate({ id, status });
 
-  /** Archive (or restore) a signed-off or canceled goal; archived goals leave every list. */
+  /** Archive (or restore) a completed or canceled goal; archived goals leave every list. */
   archive = async (id: string, archived: boolean) =>
     lambdaClient.goal.archive.mutate({ archived, id });
 
