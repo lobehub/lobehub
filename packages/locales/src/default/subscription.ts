@@ -645,11 +645,15 @@ export default {
     'After one-time payment, you can upgrade anytime, but downgrade requires waiting for expiration. Storage pay-as-you-go is not supported. Please confirm your selection.',
   'plans.payonce.tooltip':
     'One-time payment only supports upgrading to a higher tier or longer duration',
-  'plans.payonce.upgradeOk': 'Confirm Upgrade',
-  'plans.payonce.upgradePopconfirm':
-    'Remaining value from your current plan will be applied as a discount to the new plan.',
-  'plans.payonce.upgradePopconfirmNoProration':
-    'You will be charged the full price of the new plan. Your current plan will be replaced immediately.',
+  'plans.payonce.upgradeCheckoutCredit':
+    'Includes {{credit}} credit from your current plan (list price {{original}})',
+  'plans.payonce.upgradeHint.blocked':
+    'Your current plan is worth more than this. Choose a longer duration',
+  'plans.payonce.upgradeHint.credit': '{{amount}} credit from your current plan applied',
+  'plans.payonce.upgradeHint.error':
+    "Couldn't load your upgrade price. Checkout shows the final amount",
+  'plans.payonce.upgradeHint.fullPrice': 'Full price. Replaces your current plan',
+  'plans.payonce.upgradeHint.noProration': "Days left on your current plan aren't credited",
   'plans.plan.enterprise.contactSales': 'Contact Sales',
   'plans.plan.enterprise.title': 'Enterprise',
   'plans.plan.free.desc': 'For first-time users',
@@ -726,6 +730,10 @@ export default {
     '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, we provide all registered users with {{credit}} of free usage per month, ready to use without complex configuration. If you need more usage, you can subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
   'qa.list.free.newA':
     '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets {{credit}} of free usage per month, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
+  'qa.list.free.limit.a':
+    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets a free monthly usage limit, ready to use without complex configuration. If you need more usage, you can subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
+  'qa.list.free.limit.newA':
+    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets a free monthly usage limit, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
   'qa.list.free.q': 'Can {{name}} be used for free?',
   'qa.list.limit.a':
     '{{cloud}} subscription plans are divided into {{starter}}, {{premium}} and {{ultimate}}, each providing a different usage allowance. If your current plan\'s usage is insufficient, we recommend upgrading. You can also buy top-up packs on the <fundsLink>"{{funds}}"</fundsLink> page for pay-as-you-go usage. Alternatively, you can set up a custom model API key to use API credits purchased from other sources.',
@@ -948,6 +956,7 @@ export default {
   'balance.subscriptionQuotaDesc': 'Subscription usage is spent first, then your balance',
   'compare.hobbyQuotaTooltip': 'No monthly usage included; configure your own model API',
   'compare.monthlyQuota': 'Monthly Usage',
+  'plans.quota.freeLimit': 'Monthly limit, resets every month',
   'plans.quota.freeTip': '{{amount}} free each month',
   'plans.quota.none': 'No built-in usage',
   'plans.quota.title': 'Usage',

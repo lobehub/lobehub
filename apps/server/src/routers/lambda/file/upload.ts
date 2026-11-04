@@ -9,6 +9,7 @@ import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
 import { checkFileStorageUsage } from '@/business/server/trpc-middlewares/lambda';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { router } from '@/libs/trpc/lambda';
+import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
 import type { FileService } from '@/server/services/file';
 import { downloadRemoteImage } from '@/server/services/file/downloadRemoteImage';
 import {
@@ -35,10 +36,14 @@ const isStoredObjectAvailable = async (fileService: FileService, url: string): P
 
 /**
  * A run's operation token reaches `createFile` only to upload evidence into its
- * own acceptance round (see `authorizeHeteroOperationEvidence`). Keep what it
- * creates out of the creator's library: no folder or document parent, no
- * knowledge base, never public, and always filed as acceptance evidence, which
- * the resource listings hide.
+ * own acceptance round, or an image its tools returned (see
+ * `authorizeHeteroOperationEvidence`). Keep what it creates out of the
+ * creator's library: no folder or document parent, no knowledge base, never
+ * public, and always filed under a source the resource listings hide.
+ *
+ * An upload that names no source is evidence when the token may file evidence
+ * (the acceptance CLI sends none), and a tool-result image otherwise (so does
+ * the image uploader of a CLI released before `ToolResult` existed).
  */
 const scopeOperationTokenUpload = <
   T extends {
@@ -49,20 +54,28 @@ const scopeOperationTokenUpload = <
   },
 >(
   input: T,
+  capabilities: HeteroOperationCapability[] = [],
 ): T => {
+  const allowed = [
+    ...(capabilities.includes('acceptance:evidence') ? [FileSource.Acceptance] : []),
+    ...(capabilities.includes('hetero:ingest') ? [FileSource.ToolResult] : []),
+  ];
+  const source = input.source === undefined ? allowed[0] : toFileSource(input.source);
+
   if (
     input.parentId ||
     input.knowledgeBaseId ||
     input.visibility === 'public' ||
-    (input.source !== undefined && input.source !== FileSource.Acceptance)
+    !source ||
+    !allowed.includes(source)
   ) {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: "This run's token can only upload acceptance evidence",
+      message: "This run's token can only upload acceptance evidence or tool-result images",
     });
   }
 
-  return { ...input, source: FileSource.Acceptance, visibility: 'private' };
+  return { ...input, source, visibility: 'private' };
 };
 
 export const uploadRouter = router({
@@ -89,7 +102,9 @@ export const uploadRouter = router({
       }),
     )
     .mutation(async ({ ctx, input: requested }) => {
-      const input = ctx.heteroOperationScope ? scopeOperationTokenUpload(requested) : requested;
+      const input = ctx.heteroOperationScope
+        ? scopeOperationTokenUpload(requested, ctx.heteroOperationCapabilities)
+        : requested;
       const metadata = stripAgentShareFileProvenance(input.metadata);
       const existingFile = await ctx.fileModel.checkHash(input.hash!);
       const { isExist } = existingFile;

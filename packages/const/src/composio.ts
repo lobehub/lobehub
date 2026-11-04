@@ -1,5 +1,6 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiCaldotcom, SiX } from '@icons-pack/react-simple-icons';
+import SiCaldotcom from '@icons-pack/react-simple-icons/icons/SiCaldotcom';
+import SiX from '@icons-pack/react-simple-icons/icons/SiX';
 
 export interface ComposioAppType {
   appSlug: string;

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   findPolicyById: vi.fn(),
   findReportByRun: vi.fn(),
   goalFindByGraphTask: vi.fn(),
+  goalLockById: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
   taskFindById: vi.fn(),
@@ -59,7 +60,7 @@ vi.mock('@/database/models/task', () => ({
 }));
 vi.mock('@/database/models/goal', () => ({
   GoalModel: vi.fn(function () {
-    return { findByGraphTask: mocks.goalFindByGraphTask };
+    return { findByGraphTask: mocks.goalFindByGraphTask, lockById: mocks.goalLockById };
   }),
 }));
 vi.mock('@/database/models/topic', () => ({ TopicModel: vi.fn() }));
@@ -73,7 +74,9 @@ vi.mock('@/server/workflows/expertiseRejection', () => ({
   ExpertiseRejectionWorkflow: { trigger: mocks.distilRejections },
 }));
 
-const service = () => new AcceptanceService({} as any, 'user-1');
+// A goal-guarded reject runs in a transaction; the mocked models ignore the handle.
+const db = { transaction: (run: (tx: unknown) => unknown) => run(db) };
+const service = () => new AcceptanceService(db as any, 'user-1');
 
 const taskAcceptance = (status: string) => ({
   id: 'acc-1',
@@ -87,6 +90,7 @@ describe('AcceptanceService task lifecycle', () => {
     vi.clearAllMocks();
     mocks.findPolicyById.mockImplementation((...args: unknown[]) => mocks.findById(...args));
     mocks.goalFindByGraphTask.mockResolvedValue(undefined);
+    mocks.goalLockById.mockImplementation(async (id: string) => ({ archivedAt: null, id }));
     mocks.taskResolve.mockResolvedValue({ automationMode: null, id: 'task_1', status: 'running' });
     // The row read back after the completion write.
     mocks.taskFindById.mockResolvedValue({ id: 'task_1', status: 'completed' });
@@ -344,6 +348,18 @@ describe('AcceptanceService task lifecycle', () => {
         id: 'task_1',
         status: 'completed',
       });
+    });
+
+    it('refuses a Task of a goal found archived under its lock, recording nothing', async () => {
+      mocks.goalFindByGraphTask.mockResolvedValue({ archivedAt: null, id: 'goal-1' });
+      mocks.goalLockById.mockResolvedValue({ archivedAt: new Date(), id: 'goal-1' });
+
+      await expect(service().reject('acc-1', 'Fix the header')).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+      });
+      expect(mocks.setDecision).not.toHaveBeenCalled();
+      expect(mocks.updateStatus).not.toHaveBeenCalled();
+      expect(mocks.taskUpdateStatusIfCurrent).not.toHaveBeenCalled();
     });
 
     it('moves the completed task back to paused', async () => {

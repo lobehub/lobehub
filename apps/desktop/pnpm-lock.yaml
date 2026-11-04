@@ -319,7 +319,7 @@ importers:
   ../../packages/const:
     dependencies:
       '@icons-pack/react-simple-icons':
-        specifier: ^13.8.0
+        specifier: ^13.15.1
         version: 13.15.1(react@19.2.7)
       '@lobechat/business-const':
         specifier: workspace:*
@@ -637,6 +637,9 @@ importers:
 
   ../../packages/prompts:
     dependencies:
+      '@lobechat/business-const':
+        specifier: workspace:*
+        version: link:../business/const
       '@lobechat/const':
         specifier: workspace:*
         version: link:../const
@@ -676,6 +679,9 @@ importers:
 
   ../../packages/types:
     dependencies:
+      '@lobechat/business-const':
+        specifier: workspace:*
+        version: link:../business/const
       '@lobehub/market-sdk':
         specifier: 0.46.0
         version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)
