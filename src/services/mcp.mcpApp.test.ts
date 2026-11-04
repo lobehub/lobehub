@@ -62,8 +62,12 @@ vi.mock('@/store/serverConfig/store', () => ({
   }),
 }));
 
+const { resolveGatewayDeviceId } = vi.hoisted(() => ({
+  resolveGatewayDeviceId: vi.fn(async (): Promise<string | undefined> => 'this-desktop'),
+}));
+
 vi.mock('@/store/electron', () => ({
-  getElectronStoreState: () => ({ resolveGatewayDeviceId: async () => 'this-desktop' }),
+  getElectronStoreState: () => ({ resolveGatewayDeviceId }),
 }));
 
 vi.mock('@/utils/electron/ipc', () => ({
@@ -368,6 +372,23 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
       deviceId: 'this-desktop',
       resourceUri: 'ui://dash/view',
     });
+  });
+
+  it("offers no view when this desktop's id can't be resolved", async () => {
+    plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
+    resolveGatewayDeviceId.mockResolvedValueOnce(undefined);
+    ipcCall.mockResolvedValueOnce(
+      serializeMcpIpcPayload({
+        content: 'ok',
+        state: { content: [], mcpApp: { resourceUri: 'ui://dash/view' } },
+        success: true,
+      }),
+    );
+
+    const result = await mcpService.invokeMcpToolCall(refresh, { fromMcpApp: true });
+
+    // Unmarked, any desktop opening the conversation would serve it
+    expect(result?.state).toEqual({ content: [] });
   });
 
   it('keeps conversation calls to localhost / LAN http servers on their existing route', async () => {
