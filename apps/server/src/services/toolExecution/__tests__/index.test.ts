@@ -775,7 +775,7 @@ describe('ToolExecutionService', () => {
       },
     );
 
-    it("gives the model only an HTTP MCP result's text, keeping view data in its state", async () => {
+    it("gives the model only the text of an HTTP MCP result with a view, keeping the view's data in its state", async () => {
       const raw = {
         _meta: { view: { rows: ['secret'] } },
         content: [{ text: 'Found 1 row', type: 'text' }],
@@ -797,6 +797,22 @@ describe('ToolExecutionService', () => {
       expect(result.state).toMatchObject({
         state: { _meta: raw._meta, mcpApp: { resourceUri: 'ui://rows' } },
       });
+    });
+
+    it("keeps an HTTP MCP result's structured output for the model when it has no view", async () => {
+      const callTool = vi.fn().mockResolvedValue({
+        content: '',
+        state: { content: [], structuredContent: { temperature: 20 } },
+        success: true,
+      });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
+      );
+
+      expect(JSON.parse(result.content).state.structuredContent).toEqual({ temperature: 20 });
     });
 
     it.each([
