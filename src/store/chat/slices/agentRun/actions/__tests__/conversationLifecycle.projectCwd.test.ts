@@ -7,6 +7,7 @@ import { aiChatService } from '@/services/aiChat';
 import { deviceService } from '@/services/device';
 import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 import { getPendingTopicRepos, setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
+import { useElectronStore } from '@/store/electron';
 import { type ProjectDirectory, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 import { getSessionStoreState } from '@/store/session';
 import { useUserStore } from '@/store/user';
@@ -457,6 +458,28 @@ describe('sendMessage continuing a source topic', () => {
     expect(params.newTopicMetadata).toEqual(
       expect.objectContaining({ workingDirectory: AGENT_DEFAULT_PATH }),
     );
+  });
+
+  // `auto` resolves this desktop client-side, but the server may route the run
+  // to another online device; a machine-specific path cannot be inherited until
+  // the run's machine is actually known.
+  it('keeps the agent default for an auto-routed agent', async () => {
+    mockConstEnv.isDesktop = true;
+    vi.spyOn(useElectronStore.getState(), 'resolveGatewayDeviceId').mockResolvedValue(DEVICE_ID);
+    setupMockSelectors({
+      agentConfig: {
+        agencyConfig: {
+          executionTarget: 'auto',
+          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
+        },
+      },
+    });
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: SOURCE_PATH },
+    });
+
+    expect(params.newTopicMetadata?.workingDirectory).not.toBe(SOURCE_PATH);
   });
 
   // A source directory the receiving agent cannot resolve (deleted, gateway

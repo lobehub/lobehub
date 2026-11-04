@@ -1209,7 +1209,7 @@ export class ConversationLifecycleActionImpl {
       existingTopic,
       inheritedTopic: !stagedDirectory && resolvesRunCwd ? inheritedTopic : undefined,
       resolvePath: resolveWorkingDirPath,
-      runMachine: { deviceId: runCwdDeviceId, local: isDesktop && runEffectiveTarget === 'local' },
+      runMachine: { deviceId: runCwdDeviceId, target: runEffectiveTarget },
     });
     // Record which machine a new conversation runs on, so its next turn — and
     // the device picker — stay on it after the agent default changes. `auto`

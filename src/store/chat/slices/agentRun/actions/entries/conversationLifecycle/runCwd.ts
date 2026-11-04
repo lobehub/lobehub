@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import type { ChatTopic, ConversationContext, WorkingDirConfig } from '@lobechat/types';
 
 import { deviceService } from '@/services/device';
@@ -12,11 +13,15 @@ export type SourceTopicDirectory = Pick<
   'metadata' | 'projectId' | 'projectWorkingDirectoryId'
 >;
 
-/** The machine a run's cwd lives on: this desktop in-process, else a device. */
+/** The machine a run's cwd lives on, and the execution target that picked it. */
 export interface RunMachine {
   deviceId?: string;
-  local: boolean;
+  target?: string;
 }
+
+/** `local`/`device` fix the run's machine client-side; `auto` is routed by the server. */
+const isMachineFixed = (machine: RunMachine) =>
+  machine.target === 'local' || machine.target === 'device';
 
 /**
  * Whether a handoff source's directory is KNOWN to be gone on the run's machine
@@ -26,11 +31,12 @@ export interface RunMachine {
  */
 const isKnownMissingDirectory = async (path: string, machine: RunMachine): Promise<boolean> => {
   try {
-    const stat = machine.local
-      ? await ensureElectronIpc().workspace.statPath({ path })
-      : machine.deviceId
-        ? await deviceService.statPath(machine.deviceId, path)
-        : null;
+    const stat =
+      isDesktop && machine.target === 'local'
+        ? await ensureElectronIpc().workspace.statPath({ path })
+        : machine.deviceId
+          ? await deviceService.statPath(machine.deviceId, path)
+          : null;
     return !!stat && (!stat.exists || !stat.isDirectory);
   } catch (error) {
     console.warn('[sendMessage] Could not verify the source working directory:', error);
@@ -84,7 +90,7 @@ export const resolveSendProjectRun = async <T extends { boundDeviceId?: string }
     // The server only checks the device is online on send; the source's bare cwd
     // is this same path, so a gone directory drops the inheritance entirely.
     // Project directories run through the gateway on their device, even this one.
-    const machine = { deviceId: directory?.deviceId ?? undefined, local: false };
+    const machine = { deviceId: directory?.deviceId ?? undefined, target: 'device' };
     if (directory && (await isKnownMissingDirectory(directory.path, machine))) {
       return { ...(await resolveProjectDirectoryRun(runParams)), inheritedTopic: undefined };
     }
@@ -121,7 +127,7 @@ export const resolveRunCwd = async (params: {
   // could name an unrelated checkout that merely shares the path here.
   const fits = existingTopic
     ? !pinnedDeviceId || !runCwdDeviceId || pinnedDeviceId === runCwdDeviceId
-    : !!pinnedDeviceId && pinnedDeviceId === runCwdDeviceId;
+    : isMachineFixed(runMachine) && !!pinnedDeviceId && pinnedDeviceId === runCwdDeviceId;
   let metadata = fits ? (existingTopic ?? inheritedTopic)?.metadata : undefined;
   // An existing topic's cwd is its own (the spawn guide offers a way back); an
   // inherited one is dropped when it is known to be gone.
