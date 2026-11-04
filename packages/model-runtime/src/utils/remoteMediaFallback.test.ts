@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DEFAULT_INLINE_IMAGE_BUDGET } from '../core/contextBuilders/inlineImageBudget';
 import type { OpenAIChatMessage } from '../types';
 import { imageUrlToBase64 } from './imageToBase64';
 import {
@@ -174,6 +175,36 @@ describe('remoteMediaFallback', () => {
     );
     expect((result[5].content as any[])[0]).toEqual({
       text: '[Image omitted: the model provider could not download or process it. Original URL: https://files.example.com/5.png]',
+      type: 'text',
+    });
+  });
+
+  it('skips a download whose remaining allowance rounds to zero', async () => {
+    // Fill the budget down to a single base64 byte: the next binary allowance would be 0,
+    // which `imageUrlToBase64` reads as "no limit".
+    const { maxTotalBase64Bytes } = DEFAULT_INLINE_IMAGE_BUDGET;
+    const prefixLength = 'data:image/png;base64,'.length;
+    const perImage = 1024 * 1024;
+    const lastLength = maxTotalBase64Bytes - 1 - 3 * (perImage + prefixLength) - prefixLength;
+
+    const lengths = [perImage, perImage, perImage, lastLength, perImage];
+    vi.mocked(imageUrlToBase64).mockImplementation(async (url) => {
+      const index = Number(new URL(url).pathname.replaceAll(/\D/g, ''));
+      return { base64: 'A'.repeat(lengths[index]), mimeType: 'image/png' };
+    });
+
+    const many: OpenAIChatMessage[] = Array.from({ length: 5 }, (_, index) => ({
+      content: [
+        { image_url: { url: `https://files.example.com/${index}.png` }, type: 'image_url' },
+      ],
+      role: 'user',
+    }));
+
+    const result = await inlineRemoteImages(many);
+
+    expect(imageUrlToBase64).toHaveBeenCalledTimes(4);
+    expect((result[4].content as any[])[0]).toEqual({
+      text: '[Image omitted: the model provider could not download or process it. Original URL: https://files.example.com/4.png]',
       type: 'text',
     });
   });

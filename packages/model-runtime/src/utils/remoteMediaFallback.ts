@@ -147,15 +147,16 @@ const downloadDataUri = async (
   remainingBase64Bytes: number,
   signal?: AbortSignal,
 ): Promise<string | undefined> => {
+  const maxBytes = Math.floor((Math.min(MAX_IMAGE_BASE64_BYTES, remainingBase64Bytes) * 3) / 4);
+  // `imageUrlToBase64` reads 0 as "no limit", so a leftover allowance below one byte has to
+  // skip the download instead of passing it a value that disables the cap.
+  if (maxBytes <= 0) return undefined;
+
   const timeout = AbortSignal.timeout(INLINE_IMAGE_TIMEOUT_MS);
   const abort = signal ? AbortSignal.any([signal, timeout]) : timeout;
-  const budgetBase64Bytes = Math.min(MAX_IMAGE_BASE64_BYTES, remainingBase64Bytes);
 
   try {
-    const { base64, mimeType } = await imageUrlToBase64(url, {
-      maxBytes: Math.floor((budgetBase64Bytes * 3) / 4),
-      signal: abort,
-    });
+    const { base64, mimeType } = await imageUrlToBase64(url, { maxBytes, signal: abort });
 
     // A failed fetch can still return an HTML error page; never send that as an image.
     return mimeType.startsWith('image/') ? `data:${mimeType};base64,${base64}` : undefined;
