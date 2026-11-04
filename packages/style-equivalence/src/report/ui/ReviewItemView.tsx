@@ -168,7 +168,7 @@ export const ReviewItemView = ({
               >
                 <Pair combo={cell.combo} condition={cell.condition} item={item} />
                 <div {...stylex.props(styles.verdict, cell.differs ? styles.error : styles.ok)}>
-                  {cell.differs ? `● 不一样：${cell.summary.join('；')}` : '✓ 一致'}
+                  {cell.differs ? `不一样：${cell.summary.join('；')}` : '一致'}
                 </div>
               </div>
             )),

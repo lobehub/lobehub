@@ -36,22 +36,30 @@ const styles = stylex.create({
     textAlign: 'start',
     width: '100%',
   },
-  mark: { flex: 'none', fontSize: 12, textAlign: 'center', width: 16 },
-  markChanged: { color: cssVar.colorInfo },
-  markPassed: { color: cssVar.colorSuccess },
-  markReworked: { color: cssVar.colorError },
-  markTodo: { color: cssVar.colorTextQuaternary },
-  markWaiting: { color: cssVar.colorWarning },
+  mark: { borderRadius: '50%', flex: 'none', height: 8, marginInline: 4, width: 8 },
+  markChanged: { backgroundColor: cssVar.colorInfo },
+  markPassed: { backgroundColor: cssVar.colorSuccess },
+  markReworked: { backgroundColor: cssVar.colorError },
+  markTodo: { backgroundColor: cssVar.colorTextQuaternary },
+  markWaiting: { backgroundColor: cssVar.colorWarning },
   resolved: { color: cssVar.colorTextTertiary, fontSize: 12, paddingBlock: 4, paddingInline: 16 },
   root: { paddingBlock: 12 },
 });
 
-const MARKS: Record<ReviewState, { mark: string; style: stylex.StyleXStyles }> = {
-  'changed': { mark: '●', style: styles.markChanged },
-  'passed': { mark: '✓', style: styles.markPassed },
-  'reworked': { mark: '↩', style: styles.markReworked },
-  'todo': { mark: '●', style: styles.markTodo },
-  'waiting-agent': { mark: '…', style: styles.markWaiting },
+const MARKS: Record<ReviewState, stylex.StyleXStyles> = {
+  'changed': styles.markChanged,
+  'passed': styles.markPassed,
+  'reworked': styles.markReworked,
+  'todo': styles.markTodo,
+  'waiting-agent': styles.markWaiting,
+};
+
+const STATE_LABELS: Record<ReviewState, string> = {
+  'changed': '已修改',
+  'passed': '已通过',
+  'reworked': '已打回',
+  'todo': '待看',
+  'waiting-agent': '等 agent',
 };
 
 const HINTS: Partial<Record<ReviewState, string>> = {
@@ -91,9 +99,11 @@ export const ReviewQueue = ({
             onClick={() => onSelect(item.key)}
             {...stylex.props(styles.item, item.key === current && styles.current)}
           >
-            <span {...stylex.props(styles.mark, MARKS[item.state].style)}>
-              {MARKS[item.state].mark}
-            </span>
+            <span
+              aria-label={STATE_LABELS[item.state]}
+              role="img"
+              {...stylex.props(styles.mark, MARKS[item.state])}
+            />
             <span>{item.title}</span>
             {HINTS[item.state] && <span {...stylex.props(styles.hint)}>{HINTS[item.state]}</span>}
           </button>
@@ -105,7 +115,7 @@ export const ReviewQueue = ({
         <div {...stylex.props(styles.file)}>已解决</div>
         {payload.resolved.map((entry) => (
           <div key={entry.key} {...stylex.props(styles.resolved)}>
-            ✓ {entry.key.slice(entry.key.indexOf('|') + 1)}：{entry.note}
+            {entry.key.slice(entry.key.indexOf('|') + 1)}：{entry.note}
           </div>
         ))}
       </div>

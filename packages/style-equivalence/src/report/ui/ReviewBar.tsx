@@ -95,7 +95,7 @@ export const ReviewBar = ({
         onClick={onRework}
         {...stylex.props(styles.button, styles.danger)}
       >
-        ↩ 打回
+        打回
       </button>
       <button
         disabled={busy || !item.canPass || (passNeedsNote && !note.trim())}
@@ -104,7 +104,7 @@ export const ReviewBar = ({
         onClick={onPass}
         {...stylex.props(styles.button, item.canPass && styles.primary)}
       >
-        ✓ 没问题
+        没问题
       </button>
       <span {...stylex.props(styles.keys)}>J / K 上下条 · Y 通过 · N 打回</span>
     </div>
