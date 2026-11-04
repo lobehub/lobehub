@@ -44,16 +44,21 @@ const ensureObject = async (repo: string, sha: string) => {
 
 const resolvePullRequest = async (repo: string, pr: string) => {
   if (!/^[1-9]\d*$/.test(pr)) throw new Error('INVALID_PR_NUMBER');
-  const { stdout } = await run('gh', ['pr', 'view', pr, '--json', 'baseRefOid,headRefOid'], {
-    cwd: repo,
-  });
-  const { baseRefOid, headRefOid } = JSON.parse(stdout) as {
+  const { stdout } = await run(
+    'gh',
+    ['pr', 'view', pr, '--json', 'baseRefOid,headRefOid,headRefName,number,title'],
+    { cwd: repo },
+  );
+  const { baseRefOid, headRefName, headRefOid, number, title } = JSON.parse(stdout) as {
     baseRefOid: string;
+    headRefName: string;
     headRefOid: string;
+    number: number;
+    title: string;
   };
   await ensureObject(repo, baseRefOid);
   await ensureObject(repo, headRefOid);
-  return { base: baseRefOid, head: headRefOid };
+  return { base: baseRefOid, head: headRefOid, pr: { branch: headRefName, number, title } };
 };
 
 const main = async () => {

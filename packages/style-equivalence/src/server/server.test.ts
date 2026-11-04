@@ -124,7 +124,7 @@ describe('report server', () => {
     expect((await response.json()).error).toMatch(/^UNFLAGGED_DIFFERENCE/);
   });
 
-  it('writes a valid sign-off into the repository and recomputes the verdict', async () => {
+  it('writes a valid sign-off into the records reviews and recomputes the verdict', async () => {
     const response = await post('/api/signoff', {
       keys: ['src/A.tsx|A#1'],
       note: 'div stands in for the antd Image',
@@ -134,9 +134,11 @@ describe('report server', () => {
     expect(response.status).toBe(200);
     expect((await response.json()).verdict.reasons).toEqual(['difference 1']);
     const stored = JSON.parse(
-      await readFile(path.join(repo, '.style-equivalence/signoffs/src/A.tsx.json'), 'utf8'),
+      await readFile(path.join(path.dirname(runDir), 'reviews/src/A.tsx.json'), 'utf8'),
     );
-    expect(stored).toMatchObject([{ hash: 'hash-src/A.tsx|A#1', reason: 'PLACEMENT_SUBSTITUTED' }]);
+    expect(stored.passes).toMatchObject([
+      { hash: 'hash-src/A.tsx|A#1', reason: 'PLACEMENT_SUBSTITUTED' },
+    ]);
   });
 
   it('captures one case again from the stored builds', async () => {

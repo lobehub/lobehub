@@ -38,9 +38,16 @@ export interface RunOptions {
   keepWorktrees?: boolean;
   mutationOperators?: MutationOperator[];
   mutations?: number;
+  pr?: PullRequestInfo;
   recordsDir: string;
   repo: string;
   restrictTo?: string[];
+}
+
+export interface PullRequestInfo {
+  branch: string;
+  number: number;
+  title: string;
 }
 
 export interface CaseRecord {
@@ -226,6 +233,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       extractions: synthesis.extractions,
       mutation,
       plans: synthesis.plans,
+      recordsDir: options.recordsDir,
       roots,
       scope,
       verifierVersion: VERIFIER_VERSION,
@@ -254,6 +262,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       durationMs: result.durationMs,
       head,
       pageErrors: capture.pageErrors,
+      ...(options.pr ? { pr: options.pr } : {}),
       repo: options.repo,
       runId,
       scope,

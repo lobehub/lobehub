@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { readSignoffs, writeSignoffs } from '../signoff/store';
+import { readReviews, writeReviews } from '../review/store';
 import { decideVerdict, signCases, type VerdictItem } from '../verdict';
 
 const run = promisify(execFile);
@@ -14,6 +14,7 @@ export interface StoredRun {
   extractions: Record<string, unknown>;
   items: VerdictItem[];
   mutation: { passed: boolean };
+  recordsDir: string;
   results: { cases: Array<{ category: string; key: string; plan: { file: string } }> };
   run: Record<string, unknown> & { repo?: string };
 }
@@ -39,6 +40,7 @@ export const loadRun = async (runDir: string): Promise<StoredRun> => {
     extractions: await readJson(runDir, 'extractions.json', {}),
     items: verdict.items.map(({ signoff: _signoff, ...item }) => item),
     mutation: await readJson(runDir, 'mutation.json', { passed: false }),
+    recordsDir: path.dirname(runDir),
     results: await readJson(runDir, 'results.json', { cases: [] }),
     run: await readJson(runDir, 'run.json', {}),
   };
@@ -52,12 +54,12 @@ export const currentVerdict = async (stored: StoredRun) =>
     calibration: stored.calibration,
     items: stored.items,
     mutation: stored.mutation,
-    signoffs: stored.run.repo
-      ? await readSignoffs(
-          stored.run.repo,
-          stored.items.map((item) => item.file),
-        )
-      : new Map(),
+    signoffs: (
+      await readReviews(
+        stored.recordsDir,
+        stored.items.map((item) => item.file),
+      )
+    ).passes,
   });
 
 export class ApiError extends Error {
@@ -102,10 +104,12 @@ export const applySignoff = async (
   let records;
   try {
     records = signCases({
-      existing: await readSignoffs(
-        repo,
-        stored.items.map((item) => item.file),
-      ),
+      existing: (
+        await readReviews(
+          stored.recordsDir,
+          stored.items.map((item) => item.file),
+        )
+      ).passes,
       items: stored.items,
       keys: body.keys.map(String),
       note: body.note,
@@ -122,6 +126,6 @@ export const applySignoff = async (
     const file = stored.items.find((item) => item.key === record.key)!.file;
     byFile.set(file, [...(byFile.get(file) ?? []), record]);
   }
-  for (const [file, list] of byFile) await writeSignoffs(repo, file, list);
+  for (const [file, list] of byFile) await writeReviews(stored.recordsDir, file, { passes: list });
   return { records, verdict: await currentVerdict(stored) };
 };
