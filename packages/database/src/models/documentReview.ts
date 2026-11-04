@@ -959,10 +959,20 @@ export const rehomeDocumentReviews = async (
   // `loadBaseline` requires the pinned snapshot to carry the caller's
   // workspace, so a baseline left behind in the source workspace turns every
   // later Analyze on a transferred review into BASELINE_NOT_FOUND.
+  //
+  // Both predicates matter: a session's `baseHistoryId` is accepted without a
+  // document check, so an id can point at another document's snapshot. Moving
+  // only rows that both the transfer owns and a transferred session pins keeps
+  // an unrelated document's history in its own workspace.
   await db
     .update(documentHistories)
     .set({ workspaceId })
-    .where(inArray(documentHistories.id, baseHistoryIdsOf(db, documentIds)));
+    .where(
+      and(
+        inArray(documentHistories.documentId, documentIds),
+        inArray(documentHistories.id, baseHistoryIdsOf(db, documentIds)),
+      ),
+    );
 };
 
 /** Reviews cannot follow a document into personal scope; children cascade. */
