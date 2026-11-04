@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  documentHistories,
   documentReviewCheckResults,
   documentReviewRuleSets,
   documentReviewSessions,
@@ -413,6 +414,48 @@ describe('DocumentReviewModel', () => {
         .from(documentReviewCheckResults)
         .where(eq(documentReviewCheckResults.sessionId, session.id));
       expect(results.every((r) => r.workspaceId === otherWorkspaceId)).toBe(true);
+    });
+
+    it('moves pinned baselines it owns and leaves a foreign one behind', async () => {
+      const { session } = await setupChecklist();
+      const [ownHistory, foreignHistory] = await serverDB
+        .insert(documentHistories)
+        .values([
+          {
+            documentId,
+            editorData: {},
+            saveSource: 'manual' as const,
+            savedAt: new Date(),
+            userId: ownerId,
+            workspaceId,
+          },
+          {
+            documentId: secondDocumentId,
+            editorData: {},
+            saveSource: 'manual' as const,
+            savedAt: new Date(),
+            userId: ownerId,
+            workspaceId,
+          },
+        ])
+        .returning();
+      await model.updateSession(session.id, { baseHistoryId: ownHistory.id });
+      // A second session may pin a snapshot the transfer does not own.
+      const otherSession = await model.createSession({ documentId });
+      await model.updateSession(otherSession.id, { baseHistoryId: foreignHistory.id });
+
+      await new DocumentModel(serverDB, ownerId, workspaceId).transferTo(
+        documentId,
+        otherWorkspaceId,
+        ownerId,
+      );
+
+      const rows = await serverDB
+        .select({ id: documentHistories.id, workspaceId: documentHistories.workspaceId })
+        .from(documentHistories);
+      const byId = new Map(rows.map((row) => [row.id, row.workspaceId]));
+      expect(byId.get(ownHistory.id)).toBe(otherWorkspaceId);
+      expect(byId.get(foreignHistory.id)).toBe(workspaceId);
     });
 
     it("treats another member's review as a foreign row for a non-owner transfer", async () => {
