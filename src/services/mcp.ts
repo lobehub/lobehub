@@ -416,18 +416,24 @@ class MCPService {
 
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
     const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    // Same test as `invokeMcpToolCall`: only an enabled connector with its own
+    // endpoint serves the view. Any other (e.g. the endpoint-less row a plugin's
+    // tools are synced to) leaves it to the plugin.
+    const connectorServes =
+      !!connector?.isEnabled &&
+      (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio');
 
     // A conversation opened cold has not loaded the installed plugins yet, and an
-    // unloaded list would send a plugin's view to the connector route. Load the
-    // server's records first, as the tool call did before it ran.
-    if (!connector && !pluginSelectors.isInstalledPluginsServerConfirmed(s)) {
+    // unloaded list would lose a plugin's view or send it to the connector route.
+    // Load the server's records first, as the tool call did before it ran.
+    if (!connectorServes && !pluginSelectors.isInstalledPluginsServerConfirmed(s)) {
       await s.refreshPlugins();
       s = getToolStoreState();
     }
 
     // Stdio connectors run on a desktop app, never on the server, so only the
     // desktop can read their view: it spawns the same command over IPC.
-    if (connector?.isEnabled && connector.mcpConnectionType === 'stdio') {
+    if (connectorServes && connector?.mcpConnectionType === 'stdio') {
       if (!isDesktop) return;
 
       const { lambdaClient } = await import('@/libs/trpc/client');
@@ -458,9 +464,7 @@ class MCPService {
 
     // Same resolution as `invokeMcpToolCall`: the view must come from the
     // connector the tool ran on, which the server resolves for the agent.
-    const isConnector = connector
-      ? connector.isEnabled && !!connector.mcpServerUrl
-      : !!agentId && !plugin;
+    const isConnector = connector ? connectorServes : !!agentId && !plugin;
     if (isConnector) {
       const { lambdaClient } = await import('@/libs/trpc/client');
       return (await lambdaClient.connector.readUiResource.query({

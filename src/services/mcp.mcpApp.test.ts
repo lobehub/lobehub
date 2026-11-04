@@ -153,6 +153,21 @@ describe('mcpService.readMcpAppResource on desktop', () => {
     expect(relayRead).toHaveBeenCalledWith(expect.objectContaining({ uri: 'ui://app' }));
   });
 
+  it("loads the installed plugins in a cold conversation when only the plugin's tool row is", async () => {
+    plugins.set('remote', httpPlugin('https://mcp.example.com/mcp'));
+    // The endpoint-less row a plugin's tools sync to, loaded before the plugins
+    connectors.set('agt_1:remote', { id: 'conn_1', identifier: 'remote', isEnabled: true });
+    toolState.pluginsLoaded = false;
+
+    await expect(mcpService.readMcpAppResource('remote', 'ui://app', 'agt_1')).resolves.toEqual(
+      view,
+    );
+
+    expect(toolState.refreshPlugins).toHaveBeenCalledTimes(1);
+    expect(connectorRead).not.toHaveBeenCalled();
+    expect(relayRead).toHaveBeenCalledWith(expect.objectContaining({ uri: 'ui://app' }));
+  });
+
   it("reads a headerless plugin's view with the runtime's params, so on its session", async () => {
     plugins.set('remote', {
       customParams: { mcp: { type: 'http', url: 'https://mcp.example.com/mcp' } },
