@@ -129,6 +129,12 @@ vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({ allowed: true, reason: '' }),
 }));
 
+const accessState = vi.hoisted(() => ({ canEditResource: true }));
+
+vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
+  useResourceAccess: () => ({ canEditResource: accessState.canEditResource }),
+}));
+
 vi.mock('../store', () => ({
   selectors: {},
   usePageEditorStore: (selector: (state: { isWorkspaceScopedPage: boolean }) => unknown) =>
@@ -209,6 +215,7 @@ describe('useDocumentReview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     swrState.cache.clear();
+    accessState.canEditResource = true;
     mocks.listSessions.mockResolvedValue([session]);
     mocks.listRuleSets.mockResolvedValue([detailWith([]).ruleSet]);
     mocks.getSession.mockResolvedValue(detailWith([checkResult('failed')]));
@@ -242,6 +249,22 @@ describe('useDocumentReview', () => {
     expect(result.current.ruleSet?.rules.map((item) => item.title)).toEqual(['Payment trigger']);
     expect(result.current.session?.id).toBe('ses-1');
     expect(result.current.actionError).toBeNull();
+  });
+
+  it('hides the write actions when only the role allows editing, not the document', async () => {
+    accessState.canEditResource = false;
+
+    const { result } = renderReview();
+    await waitFor(() => expect(result.current.checkResults).toHaveLength(1));
+
+    expect(result.current.canWrite).toBe(false);
+
+    await act(async () => {
+      await result.current.analyze();
+    });
+
+    expect(mocks.createSession).not.toHaveBeenCalled();
+    expect(mocks.analyzeImpacts).not.toHaveBeenCalled();
   });
 
   it('shows needs_recheck right after applying a fix, then the re-check verdict', async () => {

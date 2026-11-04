@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { mutate as mutateSWR, useClientDataSWR } from '@/libs/swr';
 import { documentReviewKeys } from '@/libs/swr/keys';
@@ -60,8 +61,17 @@ export const useDocumentReview = ({ documentId }: UseDocumentReviewOptions) => {
   const { t } = useTranslation('file');
   const workspaceId = useActiveWorkspaceId();
   const isWorkspaceScopedPage = usePageEditorStore((s) => s.isWorkspaceScopedPage);
-  const { allowed: canWrite } = usePermission('edit_own_content');
   const hasWorkspace = Boolean(workspaceId) && isWorkspaceScopedPage;
+  const { allowed: canEditOwnContent } = usePermission('edit_own_content');
+  // Every review write is authorized against the parent document, so the panel
+  // must ask the document, not only the role: a member whose role allows
+  // editing their own content but who holds only view access to *this*
+  // document used to get Analyze / Adopt / Apply controls that every server
+  // mutation rejected. `useResourceAccess` ignores the record outside a
+  // workspace and stays permissive while it loads, like the other edit checks;
+  // the server still verifies each write.
+  const { canEditResource } = useResourceAccess('document', hasWorkspace ? documentId : undefined);
+  const canWrite = canEditOwnContent && canEditResource;
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ReviewAction | null>(null);
