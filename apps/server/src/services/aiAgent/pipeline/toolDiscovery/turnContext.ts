@@ -104,12 +104,19 @@ export const resolveOperationGroup = async (
     // it for whatever agentId the caller passed), so it must NOT alone
     // authorize the group-orchestration toolset — otherwise any run marked
     // `{ orchestrationRole: 'supervisor', groupId }` could dispatch members.
-    // Verify against the persisted, ownership-scoped membership instead.
-    if (appContext.orchestrationRole === 'supervisor') {
+    // Verify against the persisted, ownership-scoped membership instead. The
+    // roster decides even without the claim: resumed and queued supervisor
+    // runs do not carry it, and a `false` here walls the tools off entirely.
+    // Runs spawned by another operation never orchestrate, even when they run
+    // as the supervisor agent (a `callSubAgent` child inherits its agentId and
+    // groupId), and neither does an explicit member run.
+    const isSpawnedRun = !!appContext.isSubAgent || !!appContext.isolationThread;
+    const role = appContext.orchestrationRole;
+    if (role === 'supervisor' || (role === undefined && !isSpawnedRun)) {
       isGroupSupervisor = roster.some(
         (member) => member.agentId === resolvedAgentId && member.role === 'supervisor',
       );
-      if (!isGroupSupervisor)
+      if (!isGroupSupervisor && role === 'supervisor')
         log(
           'execAgent: orchestrationRole=supervisor but agent %s is not the supervisor of group %s — denying group tools',
           resolvedAgentId,
