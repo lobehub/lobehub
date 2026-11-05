@@ -2,7 +2,6 @@ import { isRecord } from '@lobechat/utils/object';
 import { z } from 'zod';
 
 import type { InterventionAnswer } from '../askUser';
-import type { ToolRequestUserInputQuestion } from './protocol/experimental/ToolRequestUserInputQuestion';
 import type { ToolRequestUserInputResponse } from './protocol/experimental/ToolRequestUserInputResponse';
 
 const questionSchema = z.object({
@@ -15,7 +14,7 @@ const questionSchema = z.object({
     .max(16)
     .nullable(),
   question: z.string().min(1).max(4000),
-}) satisfies z.ZodType<Omit<ToolRequestUserInputQuestion, 'isOther'>>;
+});
 
 export const parseCodexUserInput = (params: unknown) => {
   const request = z
