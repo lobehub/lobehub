@@ -27,7 +27,10 @@ import {
 import {
   CfgSliderInput,
   DimensionControlGroup,
+  FrameCountSliderInput,
+  FrameDurationSliderInput,
   ImageNum,
+  OutputFormatSelect,
   QualitySelect,
   ResolutionSelect,
   SeedNumberInput,
@@ -177,6 +180,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportPromptExtend = useImageStore(isSupportedParamSelector('promptExtend'));
   const isSupportWatermark = useImageStore(isSupportedParamSelector('watermark'));
   const isSupportWebSearch = useImageStore(isSupportedParamSelector('webSearch'));
+  const isSupportOutputFormat = useImageStore(isSupportedParamSelector('outputFormat'));
+  const isSupportFrameCount = useImageStore(isSupportedParamSelector('frameCount'));
+  const isSupportFrameDurationMs = useImageStore(isSupportedParamSelector('frameDurationMs'));
+  const isAnimatedOutput = useImageStore(imageGenerationConfigSelectors.isAnimatedOutput);
   const isLogin = useUserStore(authSelectors.isLogin);
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
   const isModelConfigReady = useAiInfraStore((s) =>
@@ -269,6 +276,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     createImage,
   ]);
 
+  // `canDropImage` is false while GIF output is selected (see `useImageReferenceUpload`).
   const showInlineRef = canDropImage;
   const hasRefImages = imagePreviewUrls.length > 0;
   const displayVisibility = activeGenerationTopic
@@ -348,6 +356,27 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                     <Flexbox gap={6}>
                       <Text fontSize={12}>{t('config.quality.label')}</Text>
                       <QualitySelect />
+                    </Flexbox>
+                  )}
+                  {isSupportOutputFormat && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.outputFormat.label')}</Text>
+                      <OutputFormatSelect
+                        // In-flight uploads count too: they land as references after finishing.
+                        disableAnimated={hasRefImages || uploadingPreviews.length > 0}
+                      />
+                    </Flexbox>
+                  )}
+                  {isAnimatedOutput && isSupportFrameCount && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.frameCount.label')}</Text>
+                      <FrameCountSliderInput />
+                    </Flexbox>
+                  )}
+                  {isAnimatedOutput && isSupportFrameDurationMs && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.frameDurationMs.label')}</Text>
+                      <FrameDurationSliderInput />
                     </Flexbox>
                   )}
                   {isSupportResolution && (
