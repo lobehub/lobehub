@@ -75,9 +75,9 @@ const styles = stylex.create({
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
   section: {
-    borderBlockEndWidth: { 'default': '1px', ':last-child': 0 },
-    borderBlockEndStyle: 'solid',
-    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
   },
 });
 

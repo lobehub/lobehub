@@ -55,6 +55,7 @@ const styles = stylex.create({
   panelEmbedded: {
     borderBlockStartStyle: 'none',
     flex: '1',
+    flexShrink: 1,
     minHeight: 0,
   },
   sheetSeamless: {
