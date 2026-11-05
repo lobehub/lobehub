@@ -17,7 +17,7 @@ import { toApiAnchor } from './useDevtoolsEntries';
 
 const styles = stylex.create({
   card: {
-    scrollMarginBlockStart: '16px',
+    scrollMarginBlockStart: '80px',
     overflow: 'hidden',
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
