@@ -20,13 +20,9 @@ import { useTranslation } from 'react-i18next';
 import { ProviderItemRender } from '@/components/ModelSelect';
 import type { PricingMode } from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import ModelDetailPanel from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
-import {
-  descendantStyles,
-  styles as modelSwitchPanelStyles,
-} from '@/features/ModelSwitchPanel/styles';
+import { styles as modelSwitchPanelStyles } from '@/features/ModelSwitchPanel/styles';
 import type { ListItem } from '@/features/ModelSwitchPanel/types';
 import { menuKey } from '@/features/ModelSwitchPanel/utils';
-import { sx } from '@/styles/sx';
 import type { EnabledProviderWithModels } from '@/types/index';
 
 interface GenerationMultipleProvidersItemProps {
@@ -73,9 +69,9 @@ const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProp
             <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
               <DropdownMenuPopup
                 className={
-                  sx(
-                    [modelSwitchPanelStyles.detailPopup, modelSwitchPanelStyles.dropdownMenu],
-                    descendantStyles.dropdownMenu,
+                  stylex.props(
+                    modelSwitchPanelStyles.detailPopup,
+                    modelSwitchPanelStyles.dropdownMenu,
                   ).className
                 }
               >

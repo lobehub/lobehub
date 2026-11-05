@@ -20,9 +20,8 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProviderItemRender } from '@/components/ModelSelect';
-import { sx } from '@/styles/sx';
 
-import { descendantStyles, styles } from '../../styles';
+import { styles } from '../../styles';
 import { type ModelWithProviders } from '../../types';
 import { menuKey } from '../../utils';
 import ModelDetailPanel from '../ModelDetailPanel';
@@ -118,10 +117,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         <DropdownMenuPortal>
           <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
             <DropdownMenuPopup
-              className={
-                sx([styles.detailPopup, styles.dropdownMenu], descendantStyles.dropdownMenu)
-                  .className
-              }
+              className={stylex.props(styles.detailPopup, styles.dropdownMenu).className}
             >
               <ModelDetailPanel
                 model={data.model.id}
@@ -138,6 +134,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
 
                   return (
                     <DropdownMenuItem
+                      className={stylex.props(styles.providerMenuItem).className}
                       key={key}
                       onClick={() => {
                         if (providerRestricted) {

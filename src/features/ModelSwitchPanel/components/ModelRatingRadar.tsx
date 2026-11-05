@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- @lobehub/charts RadarChart renders the recharts PolarGrid with a hard-coded stroke and exposes no prop or slot for it
 import './ModelRatingRadar.css';
 
 import { RadarChart } from '@lobehub/charts';
@@ -38,7 +39,6 @@ export interface RadarDimensionDatum {
   tooltip?: string;
 }
 
-/** Class names of the radar's chart DOM overrides (see ModelRatingRadar.css). */
 export const radarStyles = {
   radar: 'lobe-model-rating-radar-dfbbb915-radar',
 } as const;
