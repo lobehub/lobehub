@@ -1,8 +1,5 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the paragraphs are rendered markdown inside MarkdownMessage, which no prop reaches
-import './userRequest.css';
-
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { ActionIcon, Avatar } from '@lobehub/ui';
@@ -26,7 +23,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { sx } from '@/styles/sx';
 
-import { styles } from './styles';
+import { fallback, styles } from './styles';
 import { type GlobalApprovalGroup } from './useGlobalPendingApprovals';
 
 interface ApprovalCardProps {
@@ -175,7 +172,7 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
         <div {...stylex.props(styles.requestContext)}>
           <div {...stylex.props(styles.headerTitle)}>{topicTitle || t('globalApproval.title')}</div>
           {userRequest && (
-            <div {...sx([styles.userRequestBody], 'lobe-user-request-bac9c8fa-body')}>
+            <div {...sx([styles.userRequestBody], fallback.userRequestBody)}>
               <MarkdownMessage>{userRequest}</MarkdownMessage>
             </div>
           )}

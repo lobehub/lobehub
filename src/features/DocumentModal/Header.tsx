@@ -1,12 +1,11 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- ShareButton is a business slot whose cloud implementation renders the buttons and takes no className or xstyle
-import './Header.css';
-
 import {
   ActionIcon,
   Avatar,
   copyToClipboard,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- business ShareButton slot takes no className
+  createStaticStyles,
   cssVar,
   DropdownMenu,
   Flexbox,
@@ -34,6 +33,14 @@ import { editorSelectors } from '@/store/document/slices/editor';
 import { buildDocumentModalUrl } from './url';
 
 const HEADER_HEIGHT = 44;
+
+const fallback = createStaticStyles(({ css }) => ({
+  shareButton: css`
+    & button:not(:hover, :focus-visible) {
+      background: transparent;
+    }
+  `,
+}));
 
 const DocumentModalHeader = memo(() => {
   const { t } = useTranslation(['file', 'common']);
@@ -89,7 +96,7 @@ const DocumentModalHeader = memo(() => {
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={4}>
         {documentId && (
-          <span className={'lobe-header-ef249f99-share-button'}>
+          <span className={fallback.shareButton}>
             <ShareButton documentId={documentId} />
           </span>
         )}

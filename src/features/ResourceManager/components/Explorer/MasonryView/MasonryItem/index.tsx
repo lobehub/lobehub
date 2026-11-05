@@ -1,12 +1,10 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the drag-over inversion recolors every descendant, including rendered markdown/note previews and lobe-ui Checkbox, DropdownMenu and Tag internals that no prop reaches
-import './index.css';
-
 import {
   CUSTOM_DOCUMENT_FILE_TYPE,
   CUSTOM_FOLDER_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
 } from '@lobechat/const';
-import { Checkbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- drag-over inversion recolors every descendant
+import { Checkbox, createStaticStyles, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { LockIcon } from 'lucide-react';
@@ -163,6 +161,14 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
 });
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  dragOver: css`
+    * {
+      color: ${cssVar.colorBgElevated} !important;
+    }
+  `,
+}));
 
 interface MasonryFileItemProps extends FileListItem {
   knowledgeBaseId?: string;
@@ -355,7 +361,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
             isDragging && styles.dragging,
             isOver && styles.dragOver,
           ],
-          isOver ? 'lobe-masonry-item-7030772c-drag-over' : undefined,
+          isOver ? fallback.dragOver : undefined,
         )}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}

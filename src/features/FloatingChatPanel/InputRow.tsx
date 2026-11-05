@@ -1,8 +1,7 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- ::view-transition-* pseudo-elements hang off the document root, outside any element StyleX can style
-import './InputRowViewTransition.css';
-
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- ::view-transition-* pseudo-elements are global
+import { createGlobalStyle } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { type FocusEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
@@ -21,6 +20,14 @@ const styles = stylex.create({
     viewTransitionName: 'floating-chat-panel-input',
   },
 });
+
+const InputRowViewTransitionStyle = createGlobalStyle`
+  ::view-transition-old(floating-chat-panel-input),
+  ::view-transition-new(floating-chat-panel-input) {
+    animation-duration: 240ms;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+`;
 
 interface ViewTransitionLike {
   finished: Promise<void>;
@@ -102,6 +109,7 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand, showExpandBar = t
 
   return (
     <>
+      <InputRowViewTransitionStyle />
       <div
         {...stylex.props(styles.row)}
         data-collapsed={isCollapsed}
