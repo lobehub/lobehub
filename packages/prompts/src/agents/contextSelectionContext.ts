@@ -14,6 +14,7 @@ const formatSelectionAttributes = (selection: ContextSelection): string => {
 
   if (selection.title) attrs.push(`title="${escapeXmlAttr(selection.title)}"`);
   if (selection.source === 'page') attrs.push(`pageId="${escapeXmlAttr(selection.pageId)}"`);
+  if (selection.source === 'game') attrs.push(`sceneId="${escapeXmlAttr(selection.sceneId)}"`);
   if (selection.source === 'code') {
     attrs.push(`filePath="${escapeXmlAttr(selection.filePath)}"`);
     if (selection.language) attrs.push(`language="${escapeXmlAttr(selection.language)}"`);

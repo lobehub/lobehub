@@ -215,7 +215,23 @@ export class ChatPortalActionImpl {
     this.#get = get;
   }
 
-  clearPortalStack = (): void => {
+  /**
+   * Closes every Portal view. With `keepMiniGame`, an open mini game stays: it
+   * belongs to the agent the user plays with, not to one conversation, so a
+   * send that creates a topic must not close it (and interrupt the walk the
+   * agent is about to start).
+   */
+  clearPortalStack = (options?: { keepMiniGame?: boolean }): void => {
+    const { portalStack, showPortal } = this.#get();
+    if (
+      options?.keepMiniGame === true &&
+      showPortal &&
+      getCurrentViewType(portalStack) === PortalViewType.MiniGame
+    ) {
+      const view = { type: PortalViewType.MiniGame } as const;
+      this.#set({ portalStack: [view] }, false, 'clearPortalStack/keepMiniGame');
+      return;
+    }
     this.#set({ portalStack: [], showPortal: false }, false, 'clearPortalStack');
   };
 
@@ -720,6 +736,16 @@ export class ChatPortalActionImpl {
 
   openNotebook = (): void => {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
+  };
+
+  /** Opens the mini game beside the chat, or closes it when it is the open view. */
+  toggleMiniGame = (): void => {
+    const { portalStack, showPortal } = this.#get();
+    if (showPortal && getCurrentViewType(portalStack) === PortalViewType.MiniGame) {
+      this.#get().popPortalView();
+    } else {
+      this.#get().pushPortalView({ type: PortalViewType.MiniGame });
+    }
   };
 
   openTaskDetail = (taskId: string): void => {

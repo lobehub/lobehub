@@ -55,8 +55,8 @@ const MainChatInput = memo(() => {
     : contextWindowRightActions;
 
   // The model chip lives on the right, next to Send (see rightActions); the
-  // left bar keeps the "+" menu, dictation and the expand toggle.
-  const leftActions: ActionKeys[] = useMemo(() => ['plus', 'voiceDictation'], []);
+  // left bar keeps the "+" menu, dictation, the mini game and the expand toggle.
+  const leftActions: ActionKeys[] = useMemo(() => ['plus', 'voiceDictation', 'miniGame'], []);
   // `im_layout` opens conversations as channels: the slim composer preset of
   // the side panels (small actions and send button, no control bar).
   const imLayout = useImLayout();

@@ -5,6 +5,7 @@ import Clear from './Clear';
 import History from './History';
 import Memory from './Memory';
 import Mention from './Mention';
+import MiniGame from './MiniGame';
 import Model from './Model';
 import Params from './Params';
 import Plus from './Plus';
@@ -24,6 +25,7 @@ export const actionMap = {
   history: History,
   memory: Memory,
   mention: Mention,
+  miniGame: MiniGame,
   model: Model,
   params: Params,
   promptTransform: PromptTransform,

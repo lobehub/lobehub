@@ -202,4 +202,49 @@ describe('ContextSelectionsInjector', () => {
       expect(result.messages[0].content).toContain('const value = 1;');
     });
   });
+  describe('mini game snapshots', () => {
+    const game = (x: number) => ({
+      content: `<game_state><self x="${x}" y="4"/></game_state>`,
+      format: 'xml',
+      id: 'game:pixel-yard',
+      sceneId: 'pixel-yard',
+      source: 'game',
+      title: 'Pixel Yard',
+    });
+
+    it('injects only the latest message snapshot and keeps older non-game selections', async () => {
+      const injector = new ContextSelectionsInjector({ enabled: true });
+      const result = await injector.process(
+        createContext([
+          {
+            content: 'go sit',
+            metadata: {
+              contextSelections: [game(6), { content: 'note', id: 't-1', source: 'text' }],
+            },
+            role: 'user',
+          },
+          { content: 'On my way!', role: 'assistant' },
+          { content: 'now the pond', metadata: { contextSelections: [game(2)] }, role: 'user' },
+        ]),
+      );
+
+      expect(result.messages[0].content).not.toContain('source="game"');
+      expect(result.messages[0].content).toContain('source="text"');
+      expect(result.messages[2].content).toContain('source="game"');
+      expect(result.messages[2].content).toContain('<self x="2" y="4"/>');
+    });
+
+    it('drops every snapshot once the latest message has none (the game was closed)', async () => {
+      const injector = new ContextSelectionsInjector({ enabled: true });
+      const result = await injector.process(
+        createContext([
+          { content: 'go sit', metadata: { contextSelections: [game(6)] }, role: 'user' },
+          { content: 'Done.', role: 'assistant' },
+          { content: 'and now?', role: 'user' },
+        ]),
+      );
+
+      expect(result.messages.map((m: any) => m.content).join('\n')).not.toContain('game_state');
+    });
+  });
 });

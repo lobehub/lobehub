@@ -30,6 +30,7 @@ import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { MiniGameManifest } from '@lobechat/builtin-tool-mini-game';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
@@ -65,6 +66,7 @@ export const builtinToolIdentifiers: string[] = [
   BrowserManifest.identifier,
   LocalSystemManifest.identifier,
   MemoryManifest.identifier,
+  MiniGameManifest.identifier,
   NotebookManifest.identifier,
   PageAgentManifest.identifier,
   selfFeedbackIntentManifest.identifier,

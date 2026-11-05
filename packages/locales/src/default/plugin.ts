@@ -1090,4 +1090,9 @@ export default {
   'store.title': 'Skill Store',
   'unknownError': 'Unknown error',
   'unknownPlugin': 'Unknown Skill',
+  'builtins.lobe-mini-game.apiName.getGameState': 'Look around',
+  'builtins.lobe-mini-game.apiName.moveTo': 'Walk to',
+  'builtins.lobe-mini-game.apiName.sitOn': 'Sit on',
+  'builtins.lobe-mini-game.apiName.watch': 'Watch',
+  'builtins.lobe-mini-game.title': 'Mini Game',
 };

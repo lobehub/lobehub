@@ -1,10 +1,15 @@
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Code2Icon, SquareDashedMousePointer } from 'lucide-react';
+import { Code2Icon, Gamepad2, SquareDashedMousePointer } from 'lucide-react';
 import { memo } from 'react';
 
-import type { ContextSelection, ElementContextSelection, PageSelection } from '@/types/index';
+import type {
+  ContextSelection,
+  ElementContextSelection,
+  GameContextSelection,
+  PageSelection,
+} from '@/types/index';
 
 type UserContextSelection = ContextSelection | PageSelection;
 
@@ -67,6 +72,21 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     whiteSpace: 'pre-wrap',
   },
+  gameChip: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: cssVar.colorFillQuaternary,
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '999px',
+    borderStyle: 'solid',
+    borderWidth: '1px',
+    color: cssVar.colorTextSecondary,
+    display: 'inline-flex',
+    fontSize: '12px',
+    gap: '4px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+  },
   elementText: {
     overflow: 'hidden',
     display: '-webkit-box',
@@ -116,6 +136,19 @@ const isElementSelection = (
   selection: UserContextSelection,
 ): selection is ElementContextSelection =>
   isContextSelection(selection) && selection.source === 'element';
+
+const isGameSelection = (selection: UserContextSelection): selection is GameContextSelection =>
+  isContextSelection(selection) && selection.source === 'game';
+
+/** The mini game snapshot is for the agent; the user sees only which game it came from. */
+const GameSelection = memo<{ selection: GameContextSelection }>(({ selection }) => (
+  <div data-testid="game-context-chip" {...stylex.props(styles.gameChip)}>
+    <Gamepad2 size={12} />
+    {selection.preview || selection.title}
+  </div>
+));
+
+GameSelection.displayName = 'UserMessageGameSelection';
 
 const getCodeSelectionMeta = (selection: ContextSelection): string => {
   if (selection.source !== 'code') return selection.title || '';
@@ -176,6 +209,7 @@ QuoteSelection.displayName = 'UserMessageQuoteSelection';
 const SelectionItem = memo<{ selection: UserContextSelection }>(({ selection }) => {
   if (isCodeSelection(selection)) return <CodeSelection selection={selection} />;
   if (isElementSelection(selection)) return <ElementSelection selection={selection} />;
+  if (isGameSelection(selection)) return <GameSelection selection={selection} />;
 
   return <QuoteSelection selection={selection} />;
 });

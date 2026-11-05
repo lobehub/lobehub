@@ -37,6 +37,11 @@ export type IFeatureFlagsState = {
    * and the widget / dashboard APIs answer FORBIDDEN.
    */
   enableDashboard: boolean | undefined;
+  /**
+   * Mini game panel and the `lobe-mini-game` agent tool (`mini_game`). Off by
+   * default: the entry button is hidden and the tool is never offered.
+   */
+  enableMiniGame: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
    * Rail layout trial (`im_layout`): icon rail, IM-style Messages list,

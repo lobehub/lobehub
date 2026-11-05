@@ -25,6 +25,7 @@ import { HomeBody, HomeTitle } from './Home';
 import { LocalFile } from './LocalFile';
 import { MemoryDetail } from './MemoryDetail';
 import { MessageDetail } from './MessageDetail';
+import { MiniGame } from './MiniGame';
 import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
 import { TaskDetail } from './TaskDetail';
@@ -59,6 +60,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.LocalFile]: LocalFile,
   [PortalViewType.MemoryDetail]: MemoryDetail,
   [PortalViewType.MessageDetail]: MessageDetail,
+  [PortalViewType.MiniGame]: MiniGame,
   [PortalViewType.ToolUI]: Plugins,
   [PortalViewType.TaskDetail]: TaskDetail,
   [PortalViewType.TaskResult]: TaskResult,

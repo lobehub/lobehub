@@ -48,14 +48,21 @@ export class ContextSelectionsInjector extends BaseEveryUserContentProvider {
   protected buildContentForMessage(
     message: Message,
     index: number,
+    isLastUser: boolean,
   ): { content: string; contextType: string } | null {
     if (!this.config.enabled) {
       return null;
     }
 
-    const contextSelections =
+    const attached =
       (message.metadata?.contextSelections as ContextSelection[] | undefined) ??
       fromLegacyPageSelections(message.metadata?.pageSelections as PageSelection[] | undefined);
+    // A game snapshot describes the game at one moment and is replaced by the
+    // next message's. Older snapshots would only repeat stale state (and keep
+    // showing a game after it was closed), so only the latest message keeps it.
+    const contextSelections = isLastUser
+      ? attached
+      : attached?.filter((selection) => selection.source !== 'game');
 
     if (!contextSelections || contextSelections.length === 0) {
       return null;
