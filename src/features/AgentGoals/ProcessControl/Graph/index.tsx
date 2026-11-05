@@ -24,16 +24,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { ChevronRight, DoorOpen, HandIcon, Maximize2, X } from 'lucide-react';
-import {
-  type CSSProperties,
-  memo,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
@@ -43,7 +34,6 @@ import RightPanel from '@/features/RightPanel';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { sx } from '@/styles/sx';
 
 import {
   type GoalGraphNodeKind,
@@ -77,6 +67,7 @@ import {
   verdictChecks,
 } from './batchModel';
 import { batchStageId, batchStages, layoutBatchScope } from './batchScopeLayout';
+import { canvasRootProps } from './canvasRoot';
 import { edgeDirection } from './edgeRouting';
 import ExperimentGroup, { type ExperimentGroupData } from './ExperimentGroup';
 import { batchContainerStatus } from './experimentStatus';
@@ -90,8 +81,6 @@ import {
   type EdgeTone,
   edgeTone,
   isNodeDimmed,
-  MUTED_EDGE_OPACITY,
-  MUTED_EDGE_OPACITY_DARK,
   nodeEmphasis,
   resolveMainline,
   shownMainline,
@@ -110,13 +99,6 @@ import { type GraphViewMode, isStageWholeMap, stageNodeIds } from './viewMode';
  * overlay, not a taller box, and carries its own right-hand portal panel so
  * node drill-down keeps working.
  */
-
-const CANVAS_SCOPE_CLASS = 'lobe-canvas-e3dae3fb-canvas';
-
-const EDGE_OPACITY_VARS = {
-  '--goal-muted-edge-opacity': MUTED_EDGE_OPACITY,
-  '--goal-muted-edge-opacity-dark': MUTED_EDGE_OPACITY_DARK,
-} as CSSProperties;
 
 const styles = stylex.create({
   // Fullscreen chrome floats over the canvas in two corner cards instead of a
@@ -152,8 +134,6 @@ const styles = stylex.create({
     boxShadow: cssVar.boxShadowTertiary,
   },
   floatRight: { insetInlineEnd: '16px' },
-  canvas: { position: 'relative', width: '100%', height: '560px' },
-  canvasFull: { height: '100%' },
   overlay: {
     position: 'fixed',
     zIndex: 1000,
@@ -379,7 +359,6 @@ const Canvas = memo<
     GraphProps,
     'bridges' | 'graph' | 'highlightedIds' | 'onSelect' | 'planning' | 'selectedId'
   > & {
-    className: string;
     fullscreen: boolean;
     hiddenKinds: ReadonlySet<GoalGraphNodeKind>;
     /** Bump after the frame around the canvas changes size to keep the selection in view. */
@@ -396,7 +375,6 @@ const Canvas = memo<
 >(
   ({
     bridges: hostBridges,
-    className,
     fullscreen,
     graph,
     hiddenKinds,
@@ -924,11 +902,7 @@ const Canvas = memo<
     }, [refitKey, selectedId, getInternalNode, getViewport, setCenter]);
 
     return (
-      <div
-        className={className}
-        ref={containerRef}
-        style={fullscreen ? EDGE_OPACITY_VARS : { ...EDGE_OPACITY_VARS, height: inlineHeight }}
-      >
+      <div ref={containerRef} {...canvasRootProps(fullscreen, inlineHeight)}>
         {/* Embedded graphs keep ordinary scrolling available to the page.
             Both views support drag, pinch, double-click and zoom controls;
             fullscreen also uses two-finger scrolling to pan. */}
@@ -1184,7 +1158,6 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
             <Canvas
               {...props}
               fullscreen
-              className={sx([styles.canvas, styles.canvasFull], CANVAS_SCOPE_CLASS).className}
               collapsed={collapsed}
               graph={scopedGraph}
               hiddenKinds={hiddenKinds}
@@ -1249,7 +1222,6 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       <ReactFlowProvider>
         <Canvas
           {...props}
-          className={sx([styles.canvas], CANVAS_SCOPE_CLASS).className}
           collapsed={collapsed}
           fullscreen={false}
           graph={scopedGraph}
