@@ -1,5 +1,3 @@
-import './InputBanner.css';
-
 import { ActionIcon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -14,7 +12,7 @@ const styles = stylex.create({
   banner: {
     position: 'relative',
     zIndex: 0,
-    display: 'flex',
+    display: { 'default': 'flex', ':is([data-home-input-banner] ~ *)': 'none' },
     gap: '12px',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -34,6 +32,9 @@ const styles = stylex.create({
   },
   clickable: {
     cursor: 'pointer',
+  },
+  queue: {
+    display: 'contents',
   },
 });
 
@@ -89,5 +90,5 @@ export const InputBannerSegment = ({ children, dismissId }: InputBannerSegmentPr
 };
 
 export const InputBannerQueue = ({ children }: { children: ReactNode }) => (
-  <div className={'lobe-input-banner-4acbe29d-queue'}>{children}</div>
+  <div {...stylex.props(styles.queue)}>{children}</div>
 );

@@ -1,5 +1,3 @@
-import './index.css';
-
 import { Center, Checkbox, ContextMenuTrigger, cx, Flexbox, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -21,15 +19,41 @@ import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
 import FileListItemMenu, { type FileListItemMenuGetter } from './FileListItemMenu';
 import FileListItemName from './FileListItemName';
+import { styles as sharedStyles } from './styles';
 import { useFileListItemDrag } from './useFileListItemDrag';
 import { useFileListItemMeta } from './useFileListItemMeta';
 import { useFileListItemRename } from './useFileListItemRename';
-import { styles as sharedStyles } from './styles';
 
 export const FILE_DATE_WIDTH = 160;
 export const FILE_SIZE_WIDTH = 140;
 
 const styles = stylex.create({
+  row: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: `background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut}`,
+  },
+  evenRow: {
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  selected: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+  },
+  dragging: {
+    willChange: 'transform',
+    opacity: 0.5,
+  },
+  dragOver: {
+    outlineWidth: '1px',
+    outlineStyle: 'dashed',
+    outlineColor: cssVar.colorPrimaryBorder,
+    outlineOffset: '-2px',
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
   item: {
     paddingBlock: 0,
     paddingInlineStart: 0,
@@ -262,12 +286,14 @@ const FileListItem = ({
         height={48}
         paddingInline={8}
         className={cx(
-          'lobe-list-item-4202baab-container',
+          stylex.props(
+            styles.row,
+            index % 2 === 0 && styles.evenRow,
+            isSelected && styles.selected,
+            isDragging && styles.dragging,
+            isOver && styles.dragOver,
+          ).className,
           'file-list-item-group',
-          index % 2 === 0 && 'lobe-list-item-4202baab-even-row',
-          isSelected && 'lobe-list-item-4202baab-selected',
-          isDragging && 'lobe-list-item-4202baab-dragging',
-          isOver && 'lobe-list-item-4202baab-drag-over',
         )}
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,

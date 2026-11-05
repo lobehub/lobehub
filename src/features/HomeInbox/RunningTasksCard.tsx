@@ -1,5 +1,3 @@
-import './RunningTasksCard.css';
-
 import { agentDisplayName } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -66,16 +64,16 @@ const styles = stylex.create({
     paddingInline: '8px',
     borderRadius: cssVar.borderRadius,
   },
-  // The stack's overlap rule (`.avatars > :not(:first-child)`) also reaches this
-  // count and outranks any margin set here, so none is declared.
   overflowCount: {
     flex: 'none',
+    marginInlineStart: { 'default': null, ':not(:first-child)': '-6px' },
     fontSize: '12px',
     color: cssVar.colorTextTertiary,
   },
   // Ring in the card's own background so overlapping avatars stay separable.
   stackedAvatar: {
     flex: 'none',
+    marginInlineStart: { 'default': null, ':not(:first-child)': '-6px' },
     boxShadow: `0 0 0 2px ${cssVar.colorBgContainer}`,
   },
 });
@@ -113,12 +111,7 @@ const RunningAgentAvatars = memo<{ running: InboxTopic[] }>(({ running }) => {
   if (shown.length === 0) return null;
 
   return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={'lobe-running-tasks-card-ac1bd65a-avatars'}
-      flex={'none'}
-    >
+    <Flexbox horizontal align={'center'} flex={'none'}>
       {shown.map((agentId) => (
         <StackedAgentAvatar agentId={agentId} key={agentId} />
       ))}

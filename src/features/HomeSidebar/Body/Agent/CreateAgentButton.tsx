@@ -1,7 +1,5 @@
 'use client';
 
-import './CreateAgentButton.css';
-
 import {
   ActionIcon,
   Block,
@@ -14,6 +12,7 @@ import {
   Tooltip,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +21,23 @@ import { usePermission } from '@/hooks/usePermission';
 import { SessionDefaultGroup } from '@/types/session';
 
 import { useCreateMenuItems } from '../../hooks';
+
+const styles = stylex.create({
+  actions: {
+    width: {
+      'default': 0,
+      ':has([data-popup-open])': 'unset',
+      [stylex.when.ancestor(':hover')]: 'unset',
+    },
+    marginInlineEnd: '2px',
+    opacity: {
+      'default': 0,
+      ':has([data-popup-open])': 1,
+      [stylex.when.ancestor(':hover')]: 1,
+    },
+    transition: `opacity 0.2s ${cssVar.motionEaseOut}`,
+  },
+});
 
 interface CreateAgentButtonProps {
   className?: string;
@@ -91,7 +107,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
     <Block
       horizontal
       align={'center'}
-      className={cx('lobe-create-agent-button-149dbad1-container', className)}
+      className={cx(stylex.props(stylex.defaultMarker()).className, className)}
       clickable={canCreate}
       gap={8}
       height={36}
@@ -110,7 +126,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
         <Flexbox
           horizontal
           align={'center'}
-          className={'lobe-create-agent-button-149dbad1-actions'}
+          className={stylex.props(styles.actions).className}
           flex={'none'}
           justify={'flex-end'}
           onClick={(e) => {

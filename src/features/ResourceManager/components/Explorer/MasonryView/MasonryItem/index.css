@@ -1,4 +1,3 @@
-/* Every descendant of a card being dragged over takes the inverted text colour. */
 .lobe-masonry-item-7030772c-drag-over * {
   color: var(--lobe-color-bg-elevated) !important;
 }

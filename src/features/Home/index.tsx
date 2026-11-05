@@ -1,8 +1,6 @@
 'use client';
 
-import './index.css';
-
-import { cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
@@ -34,18 +32,8 @@ import InputArea from './InputArea';
 import { homeLayoutVars, MINIMAL_STACK_GAP, minimalVars } from './layoutVars';
 import PortraitBubble from './PortraitBubble';
 import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
+import { styles } from './styles';
 import type { HomeMode } from './types';
-
-const stylesAtomic = stylex.create({
-  header: { minWidth: '0' },
-  bubbleSlot: { width: 'max-content', minWidth: '0', maxWidth: '100%', marginBlockEnd: '4px' },
-  portrait: {
-    pointerEvents: 'none',
-    flex: 'none',
-    alignSelf: 'stretch',
-    width: 'calc(var(--home-portrait-width) + var(--home-portrait-inset))',
-  },
-});
 
 export const DEFAULT_HOME_MODE: HomeMode = 'chat';
 export const ONBOARDING_HOME_MODE_PARAM = 'onboarding';
@@ -136,9 +124,13 @@ const Home = memo(() => {
 
   if (minimal)
     return (
-      <Flexbox className={'lobe-home-5119153d-minimal'} gap={MINIMAL_STACK_GAP} style={minimalVars}>
+      <Flexbox
+        className={stylex.props(styles.minimal).className}
+        gap={MINIMAL_STACK_GAP}
+        style={minimalVars}
+      >
         <HomeHeader centered />
-        <div className={'lobe-home-5119153d-input-area'}>
+        <div {...stylex.props(styles.inputArea)}>
           <InputArea
             inputValue={inputValue}
             mode={mode}
@@ -150,25 +142,28 @@ const Home = memo(() => {
     );
 
   return (
-    <Flexbox className={'lobe-home-5119153d-grid'} style={homeLayoutVars}>
+    <Flexbox className={stylex.props(styles.grid).className} style={homeLayoutVars}>
       <div
         data-rail-collapsed={contentCollapsed}
-        className={cx(
-          'lobe-home-5119153d-hero',
-          portraitVisible && 'lobe-home-5119153d-hero-with-speech',
-          'lobe-home-5119153d-hero-collapsed',
+        {...stylex.props(
+          styles.hero,
+          portraitVisible && styles.heroWithSpeech,
+          contentCollapsed && styles.heroCollapsed,
         )}
       >
-        <div {...stylex.props(stylesAtomic['header'])}>
+        <div {...stylex.props(styles.header)}>
           <HomeHeader />
         </div>
         {portraitVisible && (
-          <div className={'lobe-home-5119153d-speech'} data-collapsed={contentCollapsed}>
+          <div
+            data-collapsed={contentCollapsed}
+            {...stylex.props(styles.speech, contentCollapsed && styles.speechCollapsed)}
+          >
             {/* Keep the agent's line and artwork together in both header layouts. */}
-            <div {...stylex.props(stylesAtomic['bubbleSlot'])}>
+            <div {...stylex.props(styles.bubbleSlot)}>
               <PortraitBubble promo={promo} />
             </div>
-            <div {...stylex.props(stylesAtomic['portrait'])}>
+            <div {...stylex.props(styles.portrait)}>
               <HomePortrait />
             </div>
           </div>
@@ -176,16 +171,12 @@ const Home = memo(() => {
       </div>
 
       <Flexbox
+        className={stylex.props(styles.main, contentCollapsed && styles.mainCollapsed).className}
         data-rail-collapsed={contentCollapsed}
         data-testid={'home-main'}
         gap={24}
-        className={cx(
-          'lobe-home-5119153d-main',
-          'lobe-home-5119153d-content',
-          'lobe-home-5119153d-content-collapsed',
-        )}
       >
-        <Flexbox className={'lobe-home-5119153d-input-area'} gap={12}>
+        <Flexbox className={stylex.props(styles.inputArea).className} gap={12}>
           <InputArea
             showNewModelShortcuts
             inputValue={inputValue}
@@ -204,11 +195,11 @@ const Home = memo(() => {
       {isLogin && (
         <aside
           aria-hidden={railCollapsed}
-          className={`${'lobe-home-5119153d-rail'} ${'lobe-home-5119153d-rail-surface'}`}
           data-collapsed={railCollapsed}
           data-testid={'home-rail'}
           id={'home-rail'}
           inert={railCollapsed}
+          {...stylex.props(styles.rail, railCollapsed && styles.railCollapsed)}
         >
           {/* The inbox reads assistant replies, which carry internal entity
               links; only the acceptance drawer can show a detail here. */}
