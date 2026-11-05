@@ -202,6 +202,7 @@ const resolveCredentials = async (
 
 /** Platforms the message tool can reach through a per-agent bot provider. */
 const PROVIDER_PLATFORMS = [
+  'dingtalk',
   'discord',
   'feishu',
   'imessage',
