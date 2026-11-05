@@ -1,9 +1,9 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
-import { applyWorkingDirByDevicePatch } from '@lobechat/types';
+import { applyWorkingDirByDevicePatch, upsertPluginMode } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -494,4 +494,32 @@ export const updateSlug = async (
   }
 
   return { success: true };
+};
+
+/** Retire explicit personal grants without re-enabling an older account as fallback. */
+export const disablePersonalPluginForAgents = async (
+  ctx: AgentModelContext,
+  agentIds: string[],
+  identifier: string,
+): Promise<void> => {
+  if (agentIds.length === 0) return;
+  const affected = await ctx.db
+    .select({ id: agents.id, plugins: agents.plugins })
+    .from(agents)
+    .where(
+      and(eq(agents.userId, ctx.userId), isNull(agents.workspaceId), inArray(agents.id, agentIds)),
+    )
+    .orderBy(agents.id)
+    .for('update');
+  for (const agent of affected)
+    await ctx.db
+      .update(agents)
+      .set({
+        plugins: upsertPluginMode(
+          agent.plugins ?? undefined,
+          identifier,
+          'disabled',
+        ) as unknown as string[],
+      })
+      .where(eq(agents.id, agent.id));
 };

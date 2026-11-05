@@ -1,5 +1,6 @@
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import type { ConnectorMetadata, OIDCConfig } from '@lobechat/types';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -14,7 +15,7 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
-import type { ConnectorMetadata, OIDCConfig } from '@/database/schemas';
+import { ConnectorRepository } from '@/database/repositories/connector';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -68,6 +69,7 @@ const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
   return opts.next({
     ctx: {
       connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
+      connectorRepository: new ConnectorRepository(ctx.serverDB, ctx.userId, wsId),
       connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId),
       pluginModel: new PluginModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -526,7 +528,7 @@ export const connectorRouter = router({
         });
       }
 
-      const created = await ctx.connectorModel.copyToAgent(input.connectorId, input.agentId);
+      const created = await ctx.connectorRepository.copyToAgent(input.connectorId, input.agentId);
       if (!created) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       return { id: created.id };
     }),
@@ -781,7 +783,7 @@ export const connectorRouter = router({
         if (!target.agentId) await ctx.pluginModel.delete(target.identifier);
       }
 
-      await ctx.connectorModel.delete(input.id);
+      await ctx.connectorRepository.delete(input.id);
 
       // Agent-owned connector: also unpin its tool from the owning agent's
       // `plugins`, so deleting it here matches the agent-profile delete (row +

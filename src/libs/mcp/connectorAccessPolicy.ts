@@ -1,6 +1,5 @@
 import { readComposioToolVersion } from '@lobechat/connector-data';
-
-import type { ConnectorMetadata } from '@/database/schemas';
+import type { ConnectorMetadata } from '@lobechat/types';
 
 interface AccessControlledConnector {
   agentId?: string | null;

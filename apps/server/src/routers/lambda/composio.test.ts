@@ -66,6 +66,12 @@ vi.mock('@/database/models/connector', () => ({
   }),
 }));
 
+vi.mock('@/database/repositories/connector', () => ({
+  ConnectorRepository: class {
+    delete = mocks.connectorDelete;
+  },
+}));
+
 vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: vi.fn().mockImplementation(function () {
     return {

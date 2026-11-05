@@ -1,5 +1,6 @@
 import { ConnectorModel, type PublicConnectorRecord } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { ConnectorRepository } from '@/database/repositories/connector';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -157,7 +158,7 @@ export class McpServerService extends BaseService {
 
   async deleteServer(id: string): Promise<{ id: string }> {
     await this.requireManageableServer(id);
-    await this.connectorModel.delete(id);
+    await new ConnectorRepository(this.db, this.userId, this.workspaceId).delete(id);
     return { id };
   }
 

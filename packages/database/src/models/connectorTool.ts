@@ -36,6 +36,21 @@ export class ConnectorToolModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, userConnectorTools);
 
+  /** Preserve synced definitions and user permissions on an independent connector copy. */
+  cloneForConnector = async (sourceId: string, newConnectorId: string): Promise<void> => {
+    const tools = await this.db
+      .select()
+      .from(userConnectorTools)
+      .where(and(eq(userConnectorTools.userConnectorId, sourceId), this.ownership()));
+    if (tools.length === 0) return;
+    await this.db.insert(userConnectorTools).values(
+      tools.map(({ id: _id, createdAt: _created, updatedAt: _updated, ...tool }) => ({
+        ...tool,
+        userConnectorId: newConnectorId,
+      })),
+    );
+  };
+
   findById = async (toolId: string): Promise<UserConnectorToolItem | undefined> => {
     const [row] = await this.db
       .select()

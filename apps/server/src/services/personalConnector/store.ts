@@ -1,13 +1,13 @@
+import type { ConnectorMetadata, UserConnectorItem } from '@lobechat/types';
 import { getDisabledPluginIds, upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel, type SyncToolInput } from '@/database/models/connectorTool';
 import {
   agents,
-  type ConnectorMetadata,
-  type UserConnectorItem,
   userConnectors,
   userConnectorTools,
   userInstalledPlugins,
@@ -84,14 +84,16 @@ export class DatabasePersonalConnectionStore implements PersonalConnectionStore 
             !getDisabledPluginIds(agent.plugins ?? undefined).includes(row.identifier),
         )
         .map((agent) => agent.id);
-      const resolved = await Promise.all(
-        agentIds.map(async (agentId: string) => {
+      const resolved = await pMap(
+        agentIds,
+        async (agentId: string) => {
           const [selected] = await new ConnectorModel(
             db as LobeChatDatabase,
             this.userId,
           ).resolveByIdentifiers([row.identifier], agentId);
           return selected?.id === row.id ? agentId : null;
-        }),
+        },
+        { concurrency: 5 },
       );
       agentIds = resolved.filter((id): id is string => id !== null);
       const tools = await db
@@ -239,7 +241,7 @@ export class DatabasePersonalConnectionStore implements PersonalConnectionStore 
     const rows = (await this.db.select().from(userConnectors).where(this.scope())).filter((row) =>
       this.canonical(row),
     );
-    return Promise.all(rows.map((row) => this.project(row)));
+    return pMap(rows, (row) => this.project(row), { concurrency: 5 });
   }
 
   private async raw(id: string, db: Database = this.db) {

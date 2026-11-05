@@ -1,8 +1,7 @@
-import { upsertPluginMode } from '@lobechat/types';
+import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '@lobechat/types';
 import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
-import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
-import { agents, ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
+import { ConnectorStatus, userConnectors } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { withNativeConnectorLock } from '../utils/nativeConnectorLock';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -181,129 +180,40 @@ export class ConnectorModel {
     return result;
   };
 
-  /**
-   * Clone an existing connector into an agent scope ("Copy user tool"): a new
-   * independent row with the same config, bound to `agentId`. The encrypted
-   * `credentials` ciphertext is copied verbatim (same vault key, so no
-   * decrypt/re-encrypt needed) — which is why copying must happen server-side:
-   * the client never receives the ciphertext. Any mount reference on the source
-   * is dropped so the copy is a standalone agent-owned connector.
-   */
-  copyToAgent = async (sourceId: string, agentId: string): Promise<UserConnectorItem | null> => {
-    const [source] = await this.db
-      .select()
-      .from(userConnectors)
-      .where(and(eq(userConnectors.id, sourceId), this.ownership()))
-      .limit(1);
-    if (!source) return null;
-
-    if (source.metadata && Object.hasOwn(source.metadata, 'nativeAccess'))
-      throw new Error('Managed connections require confirmed agent scope assignment');
-
-    const copy = async (db: LobeChatDatabase, original: UserConnectorItem) => {
-      const [source] = await db
-        .select()
-        .from(userConnectors)
-        .where(and(eq(userConnectors.id, sourceId), this.ownership()))
-        .limit(1);
-      if (!source) return null;
-      if (source.metadata && Object.hasOwn(source.metadata, 'nativeAccess'))
-        throw new Error('Managed connections require confirmed agent scope assignment');
-      if (
-        source.metadata?.composio?.connectedAccountId !==
-        original.metadata?.composio?.connectedAccountId
-      )
-        throw new Error('The account changed before copying');
-      const { id: _id, createdAt: _c, updatedAt: _u, metadata, ...rest } = source;
-      const cleanedMetadata = metadata
-        ? (() => {
-            const { mountedByAgentId: _m, ...restMeta } = metadata;
-            return restMeta;
-          })()
-        : metadata;
-
-      const [created] = await db
-        .insert(userConnectors)
-        .values({ ...rest, agentId, metadata: cleanedMetadata })
-        .returning();
-
-      // Clone the connector's tools (user_connector_tools) onto the new row —
-      // otherwise the copy has no callable tools and the runtime resolves nothing.
-      const sourceTools = await db
-        .select()
-        .from(userConnectorTools)
-        .where(eq(userConnectorTools.userConnectorId, sourceId));
-
-      if (sourceTools.length > 0) {
-        await db.insert(userConnectorTools).values(
-          sourceTools.map(({ id: _toolId, createdAt: _tc, updatedAt: _tu, ...toolRest }) => ({
-            ...toolRest,
-            userConnectorId: created.id,
-          })),
-        );
-      }
-
-      return created;
-    };
-    return source.metadata?.composio
-      ? withNativeConnectorLock(
-          this.db,
-          source.metadata.composio.linkedByUserId ?? source.userId,
-          source.identifier,
-          (tx) => copy(tx as LobeChatDatabase, source),
-        )
-      : copy(this.db, source);
-  };
-
-  delete = async (id: string): Promise<void> => {
-    const [candidate] = await this.db
+  /** Scoped raw row for repository mutations; credentials remain encrypted. */
+  lockById = async (id: string): Promise<UserConnectorItem | undefined> => {
+    const [row] = await this.db
       .select()
       .from(userConnectors)
       .where(and(eq(userConnectors.id, id), this.ownership()))
-      .limit(1);
-    if (!candidate) return;
-    if (!candidate.workspaceId) {
-      // Existing web deletion must also retire the explicit selection. Otherwise
-      // removing its row would silently select an older agent/plugin account.
-      await withNativeConnectorLock(this.db, this.userId, candidate.identifier, async (tx) => {
-        const [current] = await tx
-          .select()
-          .from(userConnectors)
-          .where(and(eq(userConnectors.id, id), this.ownership()))
-          .limit(1)
-          .for('update');
-        if (!current) return;
-        if (current.identifier !== candidate.identifier)
-          throw new Error('The connection changed before deleting');
-        const ids = current?.metadata?.nativeAccess?.agentIds;
-        if (Array.isArray(ids) && ids.length) {
-          const affected = await tx
-            .select({ id: agents.id, plugins: agents.plugins })
-            .from(agents)
-            .where(
-              and(
-                eq(agents.userId, this.userId),
-                isNull(agents.workspaceId),
-                inArray(agents.id, ids),
-              ),
-            )
-            .orderBy(agents.id);
-          for (const agent of affected)
-            await tx
-              .update(agents)
-              .set({
-                plugins: upsertPluginMode(
-                  agent.plugins ?? undefined,
-                  candidate.identifier,
-                  'disabled',
-                ) as unknown as string[],
-              })
-              .where(eq(agents.id, agent.id));
-        }
-        await tx.delete(userConnectors).where(and(eq(userConnectors.id, id), this.ownership()));
-      });
-      return;
-    }
+      .limit(1)
+      .for('update');
+    return row;
+  };
+
+  /** Insert only this aggregate; the repository copies tools in the same transaction. */
+  cloneRowToAgent = async (
+    source: UserConnectorItem,
+    agentId: string,
+  ): Promise<UserConnectorItem> => {
+    if (source.metadata && Object.hasOwn(source.metadata, 'nativeAccess'))
+      throw new Error('Managed connections require confirmed agent scope assignment');
+    const { id: _id, createdAt: _c, updatedAt: _u, metadata, ...rest } = source;
+    const cleanedMetadata = metadata
+      ? (() => {
+          const { mountedByAgentId: _m, ...restMeta } = metadata;
+          return restMeta;
+        })()
+      : metadata;
+    const [created] = await this.db
+      .insert(userConnectors)
+      .values({ ...rest, agentId, metadata: cleanedMetadata })
+      .returning();
+    return created;
+  };
+
+  /** Delete only the connector aggregate. Runtime callers use ConnectorRepository. */
+  delete = async (id: string): Promise<void> => {
     await this.db.delete(userConnectors).where(and(eq(userConnectors.id, id), this.ownership()));
   };
 

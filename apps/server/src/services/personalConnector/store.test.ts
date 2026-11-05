@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
+import { ConnectorRepository } from '@/database/repositories/connector';
 import { agents, userConnectors, userConnectorTools, users } from '@/database/schemas';
 import { getConnectorToolPermission } from '@/libs/mcp/connectorPermissionCheck';
 
@@ -154,16 +155,14 @@ describe('personal connection persistence', () => {
   });
 
   it('requires confirmed scope assignment instead of copying native grants to another row', async () => {
-    const { ConnectorModel } = await import('@/database/models/connector');
     const store = owner();
     const { connection } = await store.reserve('gmail', 'copy', 'session', Date.now() + 60000);
     await expect(
-      new ConnectorModel(db, 'native-owner').copyToAgent(connection.id, 'work'),
+      new ConnectorRepository(db, 'native-owner').copyToAgent(connection.id, 'work'),
     ).rejects.toThrow(/confirmed|managed/i);
     expect(await store.list()).toHaveLength(1);
   });
   it('retires a grant adopted after the ordinary delete initially read an unmanaged row', async () => {
-    const { ConnectorModel } = await import('@/database/models/connector');
     const { eq } = await import('drizzle-orm');
     const store = owner();
     const [base, older] = await db
@@ -232,7 +231,7 @@ describe('personal connection persistence', () => {
         return typeof value === 'function' ? value.bind(target) : value;
       },
     });
-    await new ConnectorModel(racingDB, 'native-owner').delete(base.id);
+    await new ConnectorRepository(racingDB, 'native-owner').delete(base.id);
     expect(await store.get(base.id)).toBeNull();
     expect(
       await getConnectorToolPermission(
@@ -246,8 +245,7 @@ describe('personal connection persistence', () => {
     ).toBe('disabled');
   });
 
-  it('also stops legacy fallback when a managed connection is deleted through the existing model', async () => {
-    const { ConnectorModel } = await import('@/database/models/connector');
+  it('also stops legacy fallback when a managed connection is deleted through the shared repository', async () => {
     const store = owner();
     const { connection } = await store.reserve(
       'gmail',
@@ -288,7 +286,7 @@ describe('personal connection persistence', () => {
         replacements: [{ id: older.id, revision: (await store.get(older.id))!.revision }],
       },
     );
-    await new ConnectorModel(db, 'native-owner').delete(selected.id);
+    await new ConnectorRepository(db, 'native-owner').delete(selected.id);
     expect(
       await getConnectorToolPermission(
         db,

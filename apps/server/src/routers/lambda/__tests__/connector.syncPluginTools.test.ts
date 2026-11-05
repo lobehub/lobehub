@@ -10,6 +10,7 @@ import { connectorRouter } from '../connector';
 
 const mocks = vi.hoisted(() => ({
   connectedAccountsDelete: vi.fn(),
+  connectorDelete: vi.fn(),
 }));
 
 // `vi.mock` is hoisted by vitest's transformer above all imports at runtime,
@@ -19,6 +20,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
+vi.mock('@/database/repositories/connector', () => ({
+  ConnectorRepository: class {
+    delete = mocks.connectorDelete;
+  },
+}));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
 vi.mock('@/libs/composio', () => ({
   getComposioClient: () => ({
@@ -434,7 +440,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
 
     await caller().delete({ id: DELETE_ID });
 
-    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
+    expect(mocks.connectorDelete).toHaveBeenCalledWith(DELETE_ID);
     expect(agentModelMock.getAgentConfigById).toHaveBeenCalledWith('agent-1');
     // 'gmail' removed, 'notion' preserved.
     expect(agentModelMock.update).toHaveBeenCalledWith('agent-1', { plugins: ['notion'] });
@@ -450,7 +456,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
 
     await caller().delete({ id: DELETE_ID });
 
-    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
+    expect(mocks.connectorDelete).toHaveBeenCalledWith(DELETE_ID);
     expect(agentModelMock.getAgentConfigById).not.toHaveBeenCalled();
     expect(agentModelMock.update).not.toHaveBeenCalled();
   });
@@ -474,7 +480,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
 
     expect(mocks.connectedAccountsDelete).toHaveBeenCalledWith('ca-github');
     expect(pluginModelMock.delete).toHaveBeenCalledWith('github');
-    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
+    expect(mocks.connectorDelete).toHaveBeenCalledWith(DELETE_ID);
   });
 
   it('still deletes local projections when remote Composio revocation fails', async () => {
@@ -497,7 +503,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
       expect.any(Error),
     );
     expect(pluginModelMock.delete).toHaveBeenCalledWith('gmail');
-    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
+    expect(mocks.connectorDelete).toHaveBeenCalledWith(DELETE_ID);
     warn.mockRestore();
   });
 
@@ -514,7 +520,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
 
     expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
     expect(pluginModelMock.delete).not.toHaveBeenCalled();
-    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
+    expect(mocks.connectorDelete).toHaveBeenCalledWith(DELETE_ID);
   });
 
   it('is a no-op on the agent when the connector row is already gone', async () => {
@@ -522,7 +528,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
 
     await caller().delete({ id: DELETE_ID });
 
-    expect(connectorModelMock.delete).not.toHaveBeenCalled();
+    expect(mocks.connectorDelete).not.toHaveBeenCalled();
     expect(agentModelMock.update).not.toHaveBeenCalled();
   });
 });

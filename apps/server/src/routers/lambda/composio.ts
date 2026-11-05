@@ -1,7 +1,12 @@
 import { createGmailConnectorClient, hasGmailReadPermission } from '@lobechat/connector-data/gmail';
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { type ToolManifest, upsertPluginMode } from '@lobechat/types';
+import {
+  type ComposioConnectorMetadata,
+  type ConnectorMetadata,
+  type ToolManifest,
+  upsertPluginMode,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -14,13 +19,8 @@ import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
-import {
-  agents,
-  type ComposioConnectorMetadata,
-  type ConnectorMetadata,
-  ConnectorSourceType,
-  ConnectorStatus,
-} from '@/database/schemas';
+import { ConnectorRepository } from '@/database/repositories/connector';
+import { agents, ConnectorSourceType, ConnectorStatus } from '@/database/schemas';
 import { getComposioClient } from '@/libs/composio';
 import { withNativeConnectorLock } from '@/libs/mcp/nativeConnectorLock';
 import { inferCrudType } from '@/libs/mcp/utils';
@@ -47,7 +47,14 @@ const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
   const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
 
   return opts.next({
-    ctx: { ...ctx, composioClient: client, connectorModel, connectorToolModel, pluginModel },
+    ctx: {
+      ...ctx,
+      composioClient: client,
+      connectorModel,
+      connectorRepository: new ConnectorRepository(ctx.serverDB, ctx.userId, wsId),
+      connectorToolModel,
+      pluginModel,
+    },
   });
 });
 
@@ -252,11 +259,12 @@ async function upsertComposioConnector(
 /** Remove the connector projection for a Composio identifier (tools cascade). */
 async function deleteComposioConnector(
   connectorModel: ConnectorModel,
+  connectorRepository: ConnectorRepository,
   identifier: string,
   agentId?: string,
 ): Promise<void> {
   const existing = await connectorModel.findScopedByIdentifier(identifier, agentId);
-  if (existing) await connectorModel.delete(existing.id);
+  if (existing) await connectorRepository.delete(existing.id);
 }
 
 /**
@@ -421,7 +429,12 @@ export const composioRouter = router({
       // Agent connections have no plugin-table row; only remove the base plugin
       // projection for personal connections.
       if (!input.agentId) await ctx.pluginModel.delete(input.identifier);
-      await deleteComposioConnector(ctx.connectorModel, input.identifier, input.agentId);
+      await deleteComposioConnector(
+        ctx.connectorModel,
+        ctx.connectorRepository,
+        input.identifier,
+        input.agentId,
+      );
 
       return { success: true };
     }),
@@ -490,7 +503,12 @@ export const composioRouter = router({
     .mutation(async ({ input, ctx }) => {
       await assertComposioRowManageable(ctx, input.identifier, input.agentId);
       if (!input.agentId) await ctx.pluginModel.delete(input.identifier);
-      await deleteComposioConnector(ctx.connectorModel, input.identifier, input.agentId);
+      await deleteComposioConnector(
+        ctx.connectorModel,
+        ctx.connectorRepository,
+        input.identifier,
+        input.agentId,
+      );
       return { success: true };
     }),
 
