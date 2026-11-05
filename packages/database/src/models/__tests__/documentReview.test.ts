@@ -7,6 +7,7 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   documentHistories,
   documentReviewCheckResults,
+  documentReviewRules,
   documentReviewRuleSets,
   documentReviewSessions,
   documents,
@@ -488,6 +489,54 @@ describe('DocumentReviewModel', () => {
 
       expect((await verdict)?.status).toBe('needs_recheck');
       expect((await model.findCheckResultById(id))?.status).toBe('needs_recheck');
+    });
+
+    it('waits for an uncommitted rule edit before committing a verdict', async () => {
+      const { checks } = await setupChecklist();
+      const id = checks[0].id;
+
+      const rule = (await model.findRuleById(checks[0].ruleId))!;
+      const expectedRevisions = { ruleUpdatedAt: rule.updatedAt };
+
+      // `updateRule` only invalidates results whose status is not `unchecked`, so
+      // an in-flight check is not caught by that predicate. While the edit is
+      // uncommitted the committed revision still matches `expectedRevisions`: a
+      // verdict that reads it without the rule lock commits as `passed` against
+      // the instruction the edit is replacing. Holding the rule row forces the
+      // verdict to see the committed revision or start after the edit.
+      let releaseEdit = () => {};
+      const released = new Promise<void>((resolve) => {
+        releaseEdit = resolve;
+      });
+      let signalEdited = () => {};
+      const edited = new Promise<void>((resolve) => {
+        signalEdited = resolve;
+      });
+
+      const edit = serverDB.transaction(async (trx) => {
+        await trx
+          .update(documentReviewRules)
+          .set({ updatedAt: new Date(rule.updatedAt.getTime() + 1000) })
+          .where(eq(documentReviewRules.id, rule.id));
+        signalEdited();
+        await released;
+      });
+      await edited;
+
+      const verdict = model.transitionCheck(id, {
+        event: 'check',
+        expectedRevisions,
+        outcome: 'passed',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      releaseEdit();
+      await edit;
+
+      // An `unchecked` row has nothing to invalidate, so the discarded verdict
+      // leaves it `unchecked` rather than `needs_recheck` — the point is that it
+      // never becomes `passed` for the rule the edit replaces.
+      expect((await verdict)?.status).toBe('unchecked');
+      expect((await model.findCheckResultById(id))?.status).toBe('unchecked');
     });
 
     it('switching the session rule set discards stale results', async () => {

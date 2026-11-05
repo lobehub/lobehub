@@ -757,18 +757,32 @@ export class DocumentReviewModel {
     return this.db.transaction(async (trx) => {
       const tx = trx as LobeChatDatabase;
 
-      // Serialize the revision read with body writes. `DocumentService.updateDocument`
-      // locks the document row, commits the body, then drops checked results to
-      // `needs_recheck`, so this path takes the same order: document row first,
-      // result row second. An unlocked read of `documents.updated_at` can see the
-      // previous committed version while an autosave still holds its uncommitted
-      // body update; the verdict would then commit as `passed` for the old body and
-      // the autosave would skip the now-`passed` row. Waiting on the document lock
-      // makes the autosave either commit first (caught by `isVerdictStale` below) or
-      // start after this verdict.
-      if (params.event === 'check' && params.expectedRevisions?.documentUpdatedAt !== undefined) {
+      // Serialize the revision read with the writers that move those revisions.
+      // `DocumentService.updateDocument` locks the document row, commits the body,
+      // then drops checked results to `needs_recheck`; `updateRule` locks the rule
+      // row, then invalidates its results. This path therefore takes the same
+      // order — document row, rule row, result row — so every writer either
+      // commits before the revision is read (caught by `isVerdictStale` below) or
+      // starts after the verdict. An unlocked read can see the previous committed
+      // revision while the writer still holds its uncommitted update: the verdict
+      // would commit as `passed` for content that is already being replaced, and
+      // the writer's invalidation would skip the now-`passed` row.
+      //
+      // The rule lock matters separately from the document lock: `updateRule`
+      // invalidates results whose status is not `unchecked`, so a check that is
+      // still `unchecked` is not caught by that predicate. Without the rule lock
+      // the verdict reads the old `updated_at` while the edit is uncommitted and
+      // lands as `passed` against the instruction it is replacing.
+      if (
+        params.event === 'check' &&
+        (params.expectedRevisions?.documentUpdatedAt !== undefined ||
+          params.expectedRevisions?.ruleUpdatedAt !== undefined)
+      ) {
         const [target] = await tx
-          .select({ sessionId: documentReviewCheckResults.sessionId })
+          .select({
+            ruleId: documentReviewCheckResults.ruleId,
+            sessionId: documentReviewCheckResults.sessionId,
+          })
           .from(documentReviewCheckResults)
           .where(
             and(
@@ -784,7 +798,7 @@ export class DocumentReviewModel {
               .where(eq(documentReviewSessions.id, target.sessionId))
               .limit(1)
           : [];
-        if (parentSession) {
+        if (parentSession && params.expectedRevisions?.documentUpdatedAt !== undefined) {
           await tx
             .select({ id: documents.id })
             .from(documents)
@@ -792,6 +806,19 @@ export class DocumentReviewModel {
               and(
                 eq(documents.id, parentSession.documentId),
                 eq(documents.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1)
+            .for('update');
+        }
+        if (target && params.expectedRevisions?.ruleUpdatedAt !== undefined) {
+          await tx
+            .select({ id: documentReviewRules.id })
+            .from(documentReviewRules)
+            .where(
+              and(
+                eq(documentReviewRules.id, target.ruleId),
+                eq(documentReviewRules.workspaceId, workspaceId),
               ),
             )
             .limit(1)
