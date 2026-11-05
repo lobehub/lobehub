@@ -2,6 +2,7 @@ import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/con
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import type { AgentModel } from '@/database/models/agent';
+import type { DecryptedConnector } from '@/database/models/connector';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
@@ -61,14 +62,23 @@ const findConnector = async (
  * Refreshes the OAuth token first, then calls the remote MCP with the decrypted
  * credentials. Shared by the `connector.callTool` tRPC procedure.
  */
-/** Whether an HTTP connector reaches `server` (`getMcpServerFingerprint`). */
+/**
+ * Whether an HTTP connector reaches `server` (`getMcpServerFingerprint`): its
+ * URL and headers as its calls send them.
+ */
 const reachesServer = async (
-  connector: { mcpServerUrl?: string | null },
+  connector: DecryptedConnector,
   server: string | undefined,
-): Promise<boolean> =>
-  !!server &&
-  !!connector.mcpServerUrl &&
-  (await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl })) === server;
+): Promise<boolean> => {
+  if (!server || !connector.mcpServerUrl) return false;
+  const params = buildConnectorMcpParams(connector);
+  if (params.type !== 'http') return false;
+
+  return (
+    (await getMcpServerFingerprint({ headers: params.headers, type: 'http', url: params.url })) ===
+    server
+  );
+};
 
 export const callConnectorToolById = async (
   params: {

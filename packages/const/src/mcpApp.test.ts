@@ -124,6 +124,12 @@ describe('getMcpServerFingerprint', () => {
       // Not the same as one argument holding both
       getMcpServerFingerprint({ args: ['a.js b.js'], command: 'node', type: 'stdio' }),
       getMcpServerFingerprint({ args: ['a.js', 'b.js'], command: 'node', type: 'stdio' }),
+      // So are the headers a gateway may route by
+      getMcpServerFingerprint({
+        headers: { 'x-tenant': 'a' },
+        type: 'http',
+        url: 'https://a.example.com/mcp',
+      }),
       // The environment, which may pick the endpoint, is part of it
       getMcpServerFingerprint({
         args: ['a.js'],

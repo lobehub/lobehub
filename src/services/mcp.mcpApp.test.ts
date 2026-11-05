@@ -113,8 +113,21 @@ beforeEach(() => {
 
 const view = { contents: [{ text: '<html />', uri: 'ui://app' }] };
 // The servers the results in these cases came from
-const LOCAL = await getMcpServerFingerprint({ type: 'http', url: 'http://127.0.0.1:3000/mcp' });
-const REMOTE = await getMcpServerFingerprint({ type: 'http', url: 'https://mcp.example.com/mcp' });
+// `httpPlugin` sends the `x-key` header, which is part of which server it reaches
+const LOCAL = await getMcpServerFingerprint({
+  headers: { 'x-key': 'k' },
+  type: 'http',
+  url: 'http://127.0.0.1:3000/mcp',
+});
+const REMOTE = await getMcpServerFingerprint({
+  headers: { 'x-key': 'k' },
+  type: 'http',
+  url: 'https://mcp.example.com/mcp',
+});
+const REMOTE_BARE = await getMcpServerFingerprint({
+  type: 'http',
+  url: 'https://mcp.example.com/mcp',
+});
 const STDIO = await getMcpServerFingerprint({
   args: ['mcp.js'],
   command: 'node',
@@ -165,6 +178,34 @@ describe('mcpService.readMcpAppResource on desktop', () => {
     expect(relayRead).toHaveBeenCalledWith(expect.objectContaining({ uri: 'ui://app' }));
   });
 
+  it('reads no view once only the plugin headers changed, which may route to another server', async () => {
+    plugins.set('remote', {
+      customParams: {
+        mcp: { headers: { 'x-key': 'other' }, type: 'http', url: 'https://mcp.example.com/mcp' },
+      },
+    });
+
+    await expect(
+      mcpService.readMcpAppResource('remote', 'ui://app', { server: REMOTE }),
+    ).resolves.toBeUndefined();
+    expect(relayRead).not.toHaveBeenCalled();
+  });
+
+  it("reads a server-run result's view with the runtime's params, which its fingerprint names", async () => {
+    // The runtime ran it without the plugin settings this client merges into headers
+    const runtime = { name: 'remote', type: 'http', url: 'https://mcp.example.com/mcp' };
+    plugins.set('remote', {
+      customParams: { mcp: { type: 'http', url: 'https://mcp.example.com/mcp' } },
+      manifest: { mcpParams: runtime },
+      settings: { 'x-api-key': 'secret' },
+    });
+
+    await expect(
+      mcpService.readMcpAppResource('remote', 'ui://app', { server: REMOTE_BARE }),
+    ).resolves.toEqual(view);
+    expect(relayRead).toHaveBeenCalledWith({ params: runtime, uri: 'ui://app' });
+  });
+
   it('loads the installed plugins first when the conversation was opened cold', async () => {
     plugins.set('remote', httpPlugin('https://mcp.example.com/mcp'));
     toolState.pluginsLoaded = false;
@@ -198,7 +239,7 @@ describe('mcpService.readMcpAppResource on desktop', () => {
       customParams: { mcp: { type: 'http', url: 'https://mcp.example.com/mcp' } },
     });
 
-    await mcpService.readMcpAppResource('remote', 'ui://app', { server: REMOTE });
+    await mcpService.readMcpAppResource('remote', 'ui://app', { server: REMOTE_BARE });
 
     // The runtime's manifest params carry no `headers` key, and sessions are keyed by params
     expect(relayRead.mock.calls[0][0].params).not.toHaveProperty('headers');

@@ -156,6 +156,19 @@ describe('callConnectorToolById', () => {
     },
   );
 
+  it("refuses a view's call once only the connector's routing headers changed", async () => {
+    const server = await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl! });
+    const retargeted = { ...connector, metadata: { customHeaders: { 'X-Tenant': 'b' } } };
+
+    await expect(
+      callConnectorToolById(
+        { fromApp: true, identifier: 'my-conn', server, toolName: 'do_thing' },
+        makeCtx([retargeted], [tool()]),
+      ),
+    ).rejects.toHaveProperty('code', 'FORBIDDEN');
+    expect(mcpService.callTool).not.toHaveBeenCalled();
+  });
+
   it("refuses a view's call once the connector reaches another server than the view's", async () => {
     const ctx = makeCtx([connector], [tool()]);
     const other = await getMcpServerFingerprint({ type: 'http', url: 'https://old.example.com' });

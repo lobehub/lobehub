@@ -114,7 +114,12 @@ export const withListingUiMeta = <R extends { contents?: UiResourceItem[] }>(
 
 /** The part of an MCP connection that says which server it reaches. */
 export type McpServerAddress =
-  | { type: 'http'; url: string }
+  | {
+      /** Part of which server it is: a gateway may route by header (tenant, backend). */
+      headers?: Record<string, string> | null;
+      type: 'http';
+      url: string;
+    }
   | {
       args?: readonly string[];
       command: string;
@@ -123,25 +128,27 @@ export type McpServerAddress =
       type: 'stdio';
     };
 
-const stdioIdentity = ({
-  args = [],
-  command,
-  env,
-}: Extract<McpServerAddress, { type: 'stdio' }>): string => {
-  const launch = JSON.stringify([command, ...args]);
-  // Sorted, so the same variables name the same server in any order
-  const vars = Object.entries(env ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  return vars.length > 0 ? `${launch} ${JSON.stringify(vars)}` : launch;
+// Sorted, so the same entries name the same server in any order; none and `{}` alike
+const withEntries = (base: string, entries: Record<string, string> | null | undefined) => {
+  const sorted = Object.entries(entries ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return sorted.length > 0 ? `${base} ${JSON.stringify(sorted)}` : base;
 };
+
+const serverIdentity = (address: McpServerAddress): string =>
+  address.type === 'http'
+    ? withEntries(`http ${address.url}`, address.headers)
+    : withEntries(
+        `stdio ${JSON.stringify([address.command, ...(address.args ?? [])])}`,
+        address.env,
+      );
 
 /**
  * Names the MCP server a tool result came from without storing its address
- * (a URL may carry a token): a SHA-256 of the URL, or of the command, its
- * arguments and environment. A result's view is only read back from the server it names.
+ * (a URL or header may carry a token): a SHA-256 of the URL and headers, or of
+ * the command, its arguments and environment. Auth (`params.auth`) is not part
+ * of it: a refreshed token reaches the same server. A result's view is only read back from the server it names.
  */
 export const getMcpServerFingerprint = async (address: McpServerAddress): Promise<string> => {
-  const source =
-    address.type === 'http' ? `http ${address.url}` : `stdio ${stdioIdentity(address)}`;
   // Not `crypto.subtle`: browsers leave it out of pages that aren't a secure context
-  return sha256Hex(source);
+  return sha256Hex(serverIdentity(address));
 };

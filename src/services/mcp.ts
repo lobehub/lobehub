@@ -87,6 +87,24 @@ const isViewServer = async (server: string | undefined, address: McpServerAddres
   !!server && (await getMcpServerFingerprint(address)) === server;
 
 const VIEW_SERVER_MOVED = 'This view came from another server than the tool reaches now';
+
+/**
+ * The params, of a plugin's two current ones, that reach the server a view came
+ * from: as configured here (its settings merged in), or as the server's runtime
+ * ran it (`manifest.mcpParams`). The view is read, and calls, with exactly those.
+ */
+const pickViewServerParams = async (
+  server: string | undefined,
+  plugin: { manifest?: unknown },
+  configured: any,
+): Promise<any | undefined> => {
+  const runtime = (plugin.manifest as { mcpParams?: { type?: string } } | undefined)?.mcpParams;
+  for (const params of [configured, runtime]) {
+    if (params?.type !== 'http' && params?.type !== 'stdio') continue;
+    if (await isViewServer(server, params)) return params;
+  }
+  return undefined;
+};
 const VIEW_SITE_MISMATCH = "This view's server runs elsewhere than this call would";
 
 /** The user's `mcp_apps` flag: whether sessions on this machine announce MCP Apps. */
@@ -289,10 +307,18 @@ class MCPService {
     if (!plugin) return;
 
     const connection = plugin.customParams?.mcp;
-    const { params, pluginSettings } = buildPluginMcpParams(plugin, identifier);
+    const configured = buildPluginMcpParams(plugin, identifier);
+    const { pluginSettings } = configured;
 
     const isStdio = plugin?.customParams?.mcp?.type === 'stdio';
     const isCloud = plugin?.customParams?.mcp?.type === 'cloud';
+    // A view's calls reach the server its result came from, never another
+    // (cloud servers refuse view calls below)
+    let params = configured.params;
+    if (fromMcpApp && !isCloud) {
+      params = await pickViewServerParams(server, plugin, configured.params);
+      if (!params) throw new Error(VIEW_SERVER_MOVED);
+    }
     // A view's call to an http server runs where its result was produced: over
     // IPC when this desktop's process produced it (a localhost / LAN endpoint
     // only it reaches), else on the server, which may reach its own LAN
@@ -326,10 +352,9 @@ class MCPService {
     };
 
     // Cloud servers refuse view calls below
-    if (fromMcpApp && !isCloud) {
-      if (!(await isViewServer(server, params))) throw new Error(VIEW_SERVER_MOVED);
-      // Stdio runs only on this desktop, which then marked the result as its own
-      if (isStdio && !(isDesktop && onThisDevice)) throw new Error(VIEW_SITE_MISMATCH);
+    // Stdio runs only on this desktop, which then marked the result as its own
+    if (fromMcpApp && isStdio && !(isDesktop && onThisDevice)) {
+      throw new Error(VIEW_SITE_MISMATCH);
     }
 
     // Before the timing starts: a call cancelled here never ran, so isn't reported
@@ -558,8 +583,12 @@ class MCPService {
     const type = plugin?.customParams?.mcp?.type;
     if (!plugin || (type !== 'http' && type !== 'stdio')) return;
 
-    const { params } = buildPluginMcpParams(plugin, identifier);
-    if (!(await reaches(params))) return;
+    const params = await pickViewServerParams(
+      server,
+      plugin,
+      buildPluginMcpParams(plugin, identifier).params,
+    );
+    if (!params) return;
 
     // A result this desktop's process produced (stdio, or a localhost / LAN
     // endpoint only it reaches) has its view read here over IPC; any other on
