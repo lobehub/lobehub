@@ -170,6 +170,60 @@ describe('DocumentReviewModel', () => {
       });
       expect(await model.replaceImpacts(session.id, [])).toEqual([]);
     });
+
+    it('waits for a concurrent session writer before replacing the impact list', async () => {
+      // `replaceImpacts` is a delete-then-insert. Without the session row lock a
+      // second analysis can land between the two statements and leave a list
+      // that mixes both runs, so the replacement has to wait for the row. A
+      // writer is parked on that row here to make the overlap deterministic —
+      // the sequential tests above pass either way.
+      const session = await model.createSession({ documentId });
+      await model.replaceImpacts(session.id, [
+        { category: 'textual', kind: 'related_clause', reason: 'first', title: 'first' },
+      ]);
+
+      let releaseWriter = () => {};
+      const released = new Promise<void>((resolve) => {
+        releaseWriter = resolve;
+      });
+      let signalLocked = () => {};
+      const locked = new Promise<void>((resolve) => {
+        signalLocked = resolve;
+      });
+
+      const writer = serverDB.transaction(async (trx) => {
+        await trx
+          .select({ id: documentReviewSessions.id })
+          .from(documentReviewSessions)
+          .where(eq(documentReviewSessions.id, session.id))
+          .for('update');
+        signalLocked();
+        await released;
+      });
+      await locked;
+
+      let replaced = false;
+      const replacement = model
+        .replaceImpacts(session.id, [
+          { category: 'textual', kind: 'related_clause', reason: 'second', title: 'second' },
+        ])
+        .then((items) => {
+          replaced = true;
+          return items;
+        });
+
+      // Give the replacement time to reach the row lock. Without the lock it
+      // finishes here, mid-write.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const replacedWhileLocked = replaced;
+
+      releaseWriter();
+      await writer;
+      await replacement;
+
+      expect(replacedWhileLocked).toBe(false);
+      expect((await model.listImpacts(session.id)).map((i) => i.title)).toEqual(['second']);
+    });
   });
 
   describe('rule sets', () => {

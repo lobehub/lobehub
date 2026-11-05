@@ -240,7 +240,22 @@ export class DocumentReviewModel {
     const workspaceId = this.requireWorkspaceId();
     return this.db.transaction(async (trx) => {
       const tx = trx as LobeChatDatabase;
-      const session = await this.scoped(tx).findSessionById(sessionId);
+      // Serialize writers on the session row before rewriting its derived rows.
+      // The delete-then-insert below is only atomic against callers that take
+      // this lock first: two editors analysing the same session concurrently
+      // would both delete, then both insert, and the list would end up mixing
+      // the two analyses instead of showing one of them.
+      const [session] = await tx
+        .select({ id: documentReviewSessions.id })
+        .from(documentReviewSessions)
+        .where(
+          and(
+            eq(documentReviewSessions.id, sessionId),
+            eq(documentReviewSessions.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1)
+        .for('update');
       if (!session) throw new Error(DOCUMENT_REVIEW_NOT_FOUND);
 
       await tx
