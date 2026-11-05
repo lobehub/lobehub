@@ -96,8 +96,16 @@ const BranchField = memo<{
     <InlineField
       label={t('environments.form.ref')}
       placeholder={t('environments.form.refDefault')}
-      select={canPick ? { loading: isLoading, options: data?.branches ?? [] } : undefined}
       value={value}
+      select={
+        canPick
+          ? {
+              emptyLabel: t('environments.form.refDefault'),
+              loading: isLoading,
+              options: data?.branches ?? [],
+            }
+          : undefined
+      }
       onEditingChange={setEditing}
       onSave={onSave}
     />
