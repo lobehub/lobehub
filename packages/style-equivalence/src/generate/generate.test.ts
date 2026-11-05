@@ -143,7 +143,7 @@ const plan: FilePlan = {
   ],
   file: 'a.tsx',
   gaps: [],
-  unpaired: [],
+  unpaired: [{ elementId: 'A#1', side: 'base' }],
 };
 
 const load = async () => {
@@ -155,6 +155,7 @@ const load = async () => {
   );
   return (await import(file)) as {
     cases: Record<string, (combo: Record<string, boolean>) => unknown>;
+    unpaired: Record<string, () => unknown>;
   };
 };
 
@@ -200,6 +201,14 @@ describe('generateModule', () => {
     expect(() => cases['a.tsx|K#1']({})).toThrow('KNOB_UNBOUND');
   });
 
+  it('renders an element that exists on one side only with every condition off', async () => {
+    const { unpaired } = await load();
+    expect(Object.keys(unpaired)).toEqual(['a.tsx|unpaired:base:A#1']);
+    expect(render(unpaired['a.tsx|unpaired:base:A#1']())).toBe(
+      '<div data-flex="" class="item"><span data-synthetic-element="A#1" class="a">Ag 文本 Text</span></div>',
+    );
+  });
+
   it('substitutes non-layout components with a div and renders neutral props as children', async () => {
     const { cases } = await load();
     expect(render(cases['a.tsx|B#0']({}))).toBe(
@@ -235,6 +244,21 @@ describe('CaseList', () => {
     );
     expect(one.match(/data-case=/g)).toHaveLength(1);
     expect(one).toContain('class="item itemDragging"');
+  });
+
+  it('renders a one-sided element only when it is selected', async () => {
+    const mod = await load();
+    const all = render(createElement(CaseList, { modules: { 'a.tsx': mod }, plan: [plan] }));
+    expect(all).not.toContain('unpaired');
+    const one = render(
+      createElement(CaseList, {
+        modules: { 'a.tsx': mod },
+        plan: [plan],
+        selection: { caseKey: 'a.tsx|unpaired:base:A#1', combo: 0 },
+      }),
+    );
+    expect(one.match(/data-case="[^"]*"/g)).toEqual(['data-case="a.tsx|unpaired:base:A#1|0"']);
+    expect(one).toContain('<span data-synthetic-element="A#1" class="a">');
   });
 
   it('renders only the cases named in the cases query parameter', async () => {

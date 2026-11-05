@@ -64,6 +64,40 @@ const __opaque: any = new Proxy(function () {}, {
   get: (_, key) => (key === Symbol.toPrimitive ? () => '' : key === 'then' ? undefined : __opaque),
 });`;
 
+const readsThrough = (expressions: string[], name: string) =>
+  expressions.some((expr) => new RegExp(`(^|[^\\w$.])${name}\\s*(\\?\\.|\\.|\\[)`).test(expr));
+
+const UNPAIRED_VALUES: Record<string, string> = {
+  boolean: 'false',
+  call: '() => false',
+  member: '__member(false)',
+};
+
+export const unpairedKey = (file: string, side: Side, elementId: string) =>
+  `${file}|unpaired:${side}:${elementId}`;
+
+const unpairedEntry = (
+  key: string,
+  chain: StyleElement[],
+  layout: Set<string>,
+  config: GenerateConfig,
+) => {
+  const expressions = chain.flatMap((item) => item.bindings.map((binding) => binding.expr));
+  const declared = new Set<string>();
+  const lines: string[] = [];
+  for (const variable of chain.flatMap((item) => item.variables)) {
+    if (declared.has(variable.name)) continue;
+    declared.add(variable.name);
+    const value =
+      variable.name === 'cx' && config.cxFallback
+        ? '__cx'
+        : (UNPAIRED_VALUES[variable.kind] ??
+          (readsThrough(expressions, variable.name) ? '__opaque' : 'undefined'));
+    lines.push(`const ${variable.name} = ${value};`);
+  }
+  return `${JSON.stringify(key)}: () => { ${lines.join(' ')} return (${renderChain(chain, layout, (binding) => binding.expr)}); }`;
+};
+
 export const generateModule = (
   extraction: FileExtraction,
   plan: FilePlan,
@@ -104,8 +138,6 @@ export const generateModule = (
       );
     }
     const expressions = chain.flatMap((item) => item.bindings.map((binding) => binding.expr));
-    const readThrough = (name: string) =>
-      expressions.some((expr) => new RegExp(`(^|[^\\w$.])${name}\\s*(\\?\\.|\\.|\\[)`).test(expr));
     for (const item of chain)
       for (const variable of item.variables) {
         if (declared.has(variable.name)) continue;
@@ -113,11 +145,21 @@ export const generateModule = (
         lines.push(
           variable.name === 'cx' && config.cxFallback
             ? `const cx = __cx;`
-            : `const ${variable.name} = ${readThrough(variable.name) ? '__opaque' : 'undefined'};`,
+            : `const ${variable.name} = ${readsThrough(expressions, variable.name) ? '__opaque' : 'undefined'};`,
         );
       }
     return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean>) => { ${lines.join(' ')} return (${renderChain(chain, layout, (binding) => bound.get(binding)!)}); }`;
   });
+  const unpaired = plan.unpaired
+    .filter((entry) => entry.side === side && byId.has(entry.elementId))
+    .map((entry) =>
+      unpairedEntry(
+        unpairedKey(plan.file, side, entry.elementId),
+        chainOf(byId.get(entry.elementId)!, byId),
+        layout,
+        config,
+      ),
+    );
   return [
     extraction.prelude,
     config.cxFallback
@@ -126,6 +168,7 @@ export const generateModule = (
     NEUTRAL,
     `export const side = ${JSON.stringify(side)};`,
     `export const cases = {\n${entries.join(',\n')}\n};`,
+    `export const unpaired = {\n${unpaired.join(',\n')}\n};`,
   ]
     .filter(Boolean)
     .join('\n');

@@ -3,7 +3,10 @@ import { Component, type ComponentType, type ReactNode } from 'react';
 import type { FilePlan } from '../plan/planFile';
 
 type CaseRender = (combo: Record<string, boolean>) => ReactNode;
-export type CaseModules = Record<string, { cases: Record<string, CaseRender>; error?: string }>;
+export type CaseModules = Record<
+  string,
+  { cases: Record<string, CaseRender>; error?: string; unpaired?: Record<string, () => ReactNode> }
+>;
 
 export type CaseSelection = { caseKey: string; combo: number } | { caseKeys: string[] };
 
@@ -44,6 +47,31 @@ const CaseView = ({
 
 export const SECTION_WIDTH = 360;
 
+const Section = ({ caseKey, children }: { caseKey: string; children: ReactNode }) => (
+  <section
+    data-case={caseKey}
+    style={{ boxSizing: 'border-box', padding: 8, position: 'relative', width: SECTION_WIDTH }}
+  >
+    <Boundary>{children}</Boundary>
+  </section>
+);
+
+const UnpairedView = ({ modules, selection }: { modules: CaseModules; selection: string }) => {
+  const file = selection.slice(0, selection.indexOf('|unpaired:'));
+  const render = modules[file]?.unpaired?.[selection];
+  return (
+    <Section caseKey={`${selection}|0`}>
+      {modules[file]?.error ? (
+        <div data-synthetic-error={modules[file].error} />
+      ) : render ? (
+        render()
+      ) : (
+        <div data-synthetic-error="CASE_RENDER_MISSING" />
+      )}
+    </Section>
+  );
+};
+
 export const CaseList = ({
   modules,
   plan,
@@ -54,33 +82,26 @@ export const CaseList = ({
   selection?: CaseSelection;
 }) => (
   <main data-synthetic-cases="">
-    {plan.flatMap((file) =>
-      file.cases.flatMap((entry) =>
-        entry.combos.map((combo, index) => {
-          if (!isSelected(selection, entry.key, index)) return null;
-          const key = `${entry.key}|${index}`;
-          return (
-            <section
-              data-case={key}
-              key={key}
-              style={{
-                boxSizing: 'border-box',
-                padding: 8,
-                position: 'relative',
-                width: SECTION_WIDTH,
-              }}
-            >
-              <Boundary>
+    {selection && 'caseKey' in selection && selection.caseKey.includes('|unpaired:') ? (
+      <UnpairedView modules={modules} selection={selection.caseKey} />
+    ) : (
+      plan.flatMap((file) =>
+        file.cases.flatMap((entry) =>
+          entry.combos.map((combo, index) => {
+            if (!isSelected(selection, entry.key, index)) return null;
+            const key = `${entry.key}|${index}`;
+            return (
+              <Section caseKey={key} key={key}>
                 <CaseView
                   combo={combo}
                   error={modules[file.file]?.error}
                   render={modules[file.file]?.cases[entry.key]}
                 />
-              </Boundary>
-            </section>
-          );
-        }),
-      ),
+              </Section>
+            );
+          }),
+        ),
+      )
     )}
   </main>
 );
