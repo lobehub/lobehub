@@ -1,3 +1,4 @@
+import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import type { DingTalkAdapter, DingTalkRawMessage } from '@lobechat/chat-adapter-dingtalk';
 import {
   createDingTalkAdapter,
@@ -5,6 +6,7 @@ import {
   DingTalkApiError,
 } from '@lobechat/chat-adapter-dingtalk';
 import type { Chat as ChatBot, Message } from 'chat';
+import { Chat, ConsoleLogger } from 'chat';
 import debug from 'debug';
 
 import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
@@ -303,15 +305,12 @@ class DingTalkGatewayClient extends DingTalkClientBase {
         this.bot = null;
       }
 
-      const { Chat, ConsoleLogger } = await import('chat');
-
       const chatConfig: any = {
         adapters: { dingtalk: this.buildAdapter() },
         userName: `lobehub-gateway-${this.applicationId}`,
       };
 
       if (this.context.redisClient) {
-        const { createIoRedisState } = await import('@chat-adapter/state-ioredis');
         chatConfig.state = createIoRedisState({
           client: this.context.redisClient as any,
           logger: new ConsoleLogger(),
