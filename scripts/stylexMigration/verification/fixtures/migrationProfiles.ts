@@ -1,6 +1,8 @@
 import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
+  ['AttachmentThumbs', 'src/features/Acceptance/Viewer/Evidence/attachments.tsx'],
+  ['VideoEvidencePlayer', 'src/features/Acceptance/Viewer/Evidence/Video/VideoEvidencePlayer.tsx'],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -9,6 +11,24 @@ export const migrationFixtures = [
 ] as const;
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
+  AttachmentThumbs: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    exportName: 'AttachmentThumbs',
+    variants: [{ id: 'chip' }, { id: 'comment' }, { id: 'dark-comment', appearance: 'dark' }],
+    boundaries: [
+      {
+        importer: 'src/features/Acceptance/Viewer/Evidence/attachments.tsx',
+        source: '@/store/file',
+        replacement: 'fixtures/FixtureBusinessData.ts',
+      },
+    ],
+  },
+  VideoEvidencePlayer: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    exportName: 'VideoEvidencePlayer',
+    settleFrames: 2,
+    variants: [{ id: 'player' }, { id: 'frame-height' }, { id: 'dark-player', appearance: 'dark' }],
+  },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     i18n: true,

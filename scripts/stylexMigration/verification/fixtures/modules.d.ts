@@ -97,6 +97,11 @@ declare module 'verification:component' {
     selected: boolean;
     onToggle: () => void;
   }>;
+  export const AttachmentThumbs: ComponentType<{
+    attachments: Array<{ id: string; name: string; url: string }>;
+    size: 'chip' | 'comment';
+  }>;
+  export const VideoEvidencePlayer: ComponentType<{ frameMaxHeight?: string; src: string }>;
   export const OptionRow: ComponentType<{
     active: boolean;
     desc: string;
