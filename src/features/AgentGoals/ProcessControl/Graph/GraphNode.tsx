@@ -113,9 +113,9 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorFillSecondary,
     backgroundImage: 'none',
     animationName: { default: ghostPulse, [REDUCED_MOTION]: 'none' },
-    animationDuration: '1.6s',
-    animationTimingFunction: 'ease-in-out',
-    animationIterationCount: 'infinite',
+    animationDuration: { default: '1.6s', [REDUCED_MOTION]: '0s' },
+    animationTimingFunction: { default: 'ease-in-out', [REDUCED_MOTION]: 'ease' },
+    animationIterationCount: { default: 'infinite', [REDUCED_MOTION]: 1 },
   },
   glyph: {
     display: 'flex',

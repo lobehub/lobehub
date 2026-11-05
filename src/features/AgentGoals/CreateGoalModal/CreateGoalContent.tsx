@@ -121,9 +121,9 @@ const styles = stylex.create({
   },
   generatingTextTrack: {
     animationName: { default: generationRoll, [REDUCED_MOTION]: 'none' },
-    animationDuration: '16s',
-    animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
-    animationIterationCount: 'infinite',
+    animationDuration: { default: '16s', [REDUCED_MOTION]: '0s' },
+    animationTimingFunction: { default: 'cubic-bezier(0.4, 0, 0.2, 1)', [REDUCED_MOTION]: 'ease' },
+    animationIterationCount: { default: 'infinite', [REDUCED_MOTION]: 1 },
   },
   generatingTextViewport: { overflow: 'hidden', height: '22px' },
   head: {
@@ -165,7 +165,7 @@ const styles = stylex.create({
     color: 'inherit',
     backgroundColor: 'transparent',
     backgroundImage: 'none',
-    outlineStyle: 'none',
+    outline: 'none',
   },
   titleStatic: {
     paddingBlockStart: '4px',

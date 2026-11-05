@@ -23,7 +23,7 @@ import type { CriterionOutcome, CriterionOutcomeState } from './goalResultState'
  */
 
 const styles = stylex.create({
-  arrow: { flex: 'none', color: cssVar.colorTextQuaternary, transition: 'transform 0.2s' },
+  arrow: { flex: 'none', color: cssVar.colorTextQuaternary },
   item: {
     borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
     borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
