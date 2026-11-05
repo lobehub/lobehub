@@ -52,9 +52,15 @@ const styles = stylex.create({
     borderBlockStartColor: cssVar.colorBgContainer,
     borderRadius: '50%',
     animationName: { 'default': spin, '@media (prefers-reduced-motion: reduce)': 'none' },
-    animationDuration: '800ms',
-    animationTimingFunction: 'linear',
-    animationIterationCount: 'infinite',
+    animationDuration: { 'default': '800ms', '@media (prefers-reduced-motion: reduce)': '0s' },
+    animationTimingFunction: {
+      'default': 'linear',
+      '@media (prefers-reduced-motion: reduce)': 'ease',
+    },
+    animationIterationCount: {
+      'default': 'infinite',
+      '@media (prefers-reduced-motion: reduce)': 1,
+    },
   },
 });
 

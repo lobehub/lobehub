@@ -34,8 +34,8 @@ const styles = stylex.create({
   },
   clickable: {
     cursor: 'pointer',
-    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
-    backgroundImage: { 'default': null, ':hover': 'none' },
+    backgroundColor: { 'default': cssVar.colorBgElevated, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: 'none',
   },
   cost: {
     flexShrink: 0,

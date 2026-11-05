@@ -43,9 +43,9 @@ export const styles = stylex.create({
   // and drops the rotation.
   refreshSpin: {
     animationName: { default: refreshSpin, [REDUCED_MOTION]: 'none' },
-    animationDuration: '600ms',
-    animationTimingFunction: 'linear',
-    animationIterationCount: 'infinite',
+    animationDuration: { default: '600ms', [REDUCED_MOTION]: '0s' },
+    animationTimingFunction: { default: 'linear', [REDUCED_MOTION]: 'ease' },
+    animationIterationCount: { default: 'infinite', [REDUCED_MOTION]: 1 },
     opacity: { default: null, [REDUCED_MOTION]: 0.45 },
   },
   subtitle: {

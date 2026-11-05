@@ -43,7 +43,10 @@ const styles = stylex.create({
       box-shadow ${cssVar.motionDurationFast}`,
   },
   cardInfo: { paddingBlockStart: '8px', paddingBlockEnd: '12px', paddingInline: '12px' },
-  clickable: { cursor: 'pointer', borderColor: { 'default': null, ':hover': cssVar.colorBorder } },
+  clickable: {
+    cursor: 'pointer',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+  },
   footer: { overflow: 'hidden', marginBlockStart: '8px' },
   identityMeta: { flex: '1', minWidth: '0' },
   identifier: {
