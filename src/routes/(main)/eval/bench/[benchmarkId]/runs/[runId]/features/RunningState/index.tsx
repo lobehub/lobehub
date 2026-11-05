@@ -106,15 +106,27 @@ const styles = stylex.create({
     width: '200px',
     height: '200px',
     animationName: { 'default': orbitSpin, '@media (prefers-reduced-motion: reduce)': 'none' },
-    animationDuration: '20s',
-    animationTimingFunction: 'linear',
-    animationIterationCount: 'infinite',
+    animationDuration: { 'default': '20s', '@media (prefers-reduced-motion: reduce)': '0s' },
+    animationTimingFunction: {
+      'default': 'linear',
+      '@media (prefers-reduced-motion: reduce)': 'ease',
+    },
+    animationIterationCount: {
+      'default': 'infinite',
+      '@media (prefers-reduced-motion: reduce)': 1,
+    },
   },
   spinner: {
     animationName: { 'default': spin, '@media (prefers-reduced-motion: reduce)': 'none' },
-    animationDuration: '1.5s',
-    animationTimingFunction: 'linear',
-    animationIterationCount: 'infinite',
+    animationDuration: { 'default': '1.5s', '@media (prefers-reduced-motion: reduce)': '0s' },
+    animationTimingFunction: {
+      'default': 'linear',
+      '@media (prefers-reduced-motion: reduce)': 'ease',
+    },
+    animationIterationCount: {
+      'default': 'infinite',
+      '@media (prefers-reduced-motion: reduce)': 1,
+    },
   },
 });
 
