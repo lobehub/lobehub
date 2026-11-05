@@ -157,6 +157,7 @@ export const inspectorStyles = stylex.create({
   },
   tableRow: {
     cursor: 'pointer',
+    outlineWidth: 'medium',
     outlineStyle: 'none',
     outlineColor: 'currentcolor',
     boxShadow: { 'default': null, ':focus-visible': `inset 0 0 0 2px ${cssVar.colorPrimary}` },
