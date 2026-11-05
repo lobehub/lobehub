@@ -337,24 +337,40 @@ describe('GoalGraphModel', () => {
     },
   );
 
-  it('reports which tasks back a retired goal node', async () => {
-    // The acceptance rollup closes a round that settles after retirement; it
-    // asks this to tell a dropped step from a live one.
+  it('settles a task acceptance closed once its goal node is retired', async () => {
+    // A round still verifying at retirement lands afterwards: the settle closes
+    // it under the row lock retirement also takes, while a live step still
+    // moves to `delivered` and a user's decision is never overwritten.
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Late settle' });
     const retired = await graphModel.createNode(goal.id, { kind: 'task', title: 'Dropped' });
     const live = await graphModel.createNode(goal.id, { kind: 'task', title: 'Live' });
     const taskModel = new TaskModel(serverDB, userId);
     const dropped = await taskModel.create({ instruction: 'Dropped work' });
     const running = await taskModel.create({ instruction: 'Live work' });
-    const standalone = await taskModel.create({ instruction: 'No goal' });
+    const decided = await taskModel.create({ instruction: 'Accepted work' });
     await graphModel.bindTask(goal.id, retired!.id, dropped.id);
     await graphModel.bindTask(goal.id, live!.id, running.id);
+    const [late, onLive, accepted] = await serverDB
+      .insert(acceptances)
+      .values([
+        { status: 'verifying', subjectId: dropped.id, subjectType: 'task', userId },
+        { status: 'verifying', subjectId: running.id, subjectType: 'task', userId },
+        { status: 'accepted', subjectId: decided.id, subjectType: 'task', userId },
+      ])
+      .returning();
     await graphModel.updateNodeStatus(goal.id, retired!.id, 'retired');
 
     const acceptanceModel = new AcceptanceModel(serverDB, userId);
-    expect(await acceptanceModel.isRetiredGoalTask(dropped.id)).toBe(true);
-    expect(await acceptanceModel.isRetiredGoalTask(running.id)).toBe(false);
-    expect(await acceptanceModel.isRetiredGoalTask(standalone.id)).toBe(false);
+    expect(await acceptanceModel.settleTaskPolicyStatus(late.id, 'delivered')).toBe('closed');
+    expect(await acceptanceModel.settleTaskPolicyStatus(onLive.id, 'delivered')).toBe('delivered');
+    expect(await acceptanceModel.settleTaskPolicyStatus(accepted.id, 'delivered')).toBe('accepted');
+
+    const rows = await serverDB.select().from(acceptances);
+    const rowOf = (id: string) => rows.find((row) => row.id === id);
+    expect(rowOf(late.id)).toMatchObject({ status: 'closed' });
+    expect(rowOf(late.id)?.completedAt).toBeInstanceOf(Date);
+    expect(rowOf(onLive.id)).toMatchObject({ completedAt: null, status: 'delivered' });
+    expect(rowOf(accepted.id)).toMatchObject({ status: 'accepted' });
   });
 
   it('treats a same-status write as a no-op instead of churning the graph', async () => {

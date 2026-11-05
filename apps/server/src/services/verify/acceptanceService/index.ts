@@ -7,7 +7,7 @@ import type {
   VerifyCheckTally,
   VerifyRunDecisionDetail,
 } from '@lobechat/types';
-import { isClosedByRetirement, statusFromRound } from '@lobechat/utils/verify/acceptanceStatus';
+import { statusFromRound } from '@lobechat/utils/verify/acceptanceStatus';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -376,19 +376,18 @@ export class AcceptanceService {
     if (acceptance.status === 'rejected' && current.userDecision === 'reject') return 'rejected';
 
     const report = await this.reportModel.findByRun(current.id);
-    let status = statusFromRound(current, Boolean(report));
-    // A round still verifying when its goal node was retired settles here, after
-    // the retirement already closed what was waiting (GoalGraphModel
-    // updateNodeStatus). The Goal discarded that node's outcome, so a settled
-    // result must not reopen a sign-off request for dropped work.
-    if (
-      isClosedByRetirement(status) &&
-      acceptance.subjectType === 'task' &&
-      (await this.acceptanceModel.isRetiredGoalTask(acceptance.subjectId))
-    )
-      status = 'closed';
+    const derived = statusFromRound(current, Boolean(report));
+    // A task acceptance settles under a row lock that also closes it when its
+    // goal node has been retired: a round still verifying at retirement lands
+    // here afterwards, and the Goal discarded that node's outcome, so it must
+    // not reopen a sign-off request for dropped work.
+    const status =
+      acceptance.subjectType === 'task'
+        ? ((await this.acceptanceModel.settleTaskPolicyStatus(acceptanceId, derived)) ?? derived)
+        : derived;
     if (status !== acceptance.status) {
-      await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
+      if (acceptance.subjectType !== 'task')
+        await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
       notifyAcceptance(acceptanceId, 'session');
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
     }

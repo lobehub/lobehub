@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { isClosedByRetirement } from '@lobechat/utils/verify/acceptanceStatus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AcceptanceService } from '../acceptanceService';
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   goalFindByGraphTask: vi.fn(),
   goalLockById: vi.fn(),
   isRetiredGoalTask: vi.fn(),
+  settleTaskPolicyStatus: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
   taskFindById: vi.fn(),
@@ -32,7 +34,7 @@ vi.mock('@/database/models/acceptance', () => ({
     return {
       findById: mocks.findById,
       findPolicyById: mocks.findPolicyById,
-      isRetiredGoalTask: mocks.isRetiredGoalTask,
+      settleTaskPolicyStatus: mocks.settleTaskPolicyStatus,
       updatePolicyStatus: mocks.updatePolicyStatus,
       updateStatus: mocks.updateStatus,
     };
@@ -94,6 +96,18 @@ describe('AcceptanceService task lifecycle', () => {
     mocks.goalFindByGraphTask.mockResolvedValue(undefined);
     mocks.goalLockById.mockImplementation(async (id: string) => ({ archivedAt: null, id }));
     mocks.isRetiredGoalTask.mockResolvedValue(false);
+    // Mirrors AcceptanceModel.settleTaskPolicyStatus: closes a settled status on
+    // a retired goal node, keeps a user's terminal decision, writes on change.
+    mocks.settleTaskPolicyStatus.mockImplementation(async (id: string, status: string) => {
+      const row = await mocks.findById(id);
+      if (row?.status === 'accepted' || row?.status === 'closed') return row.status;
+      const next =
+        isClosedByRetirement(status) && (await mocks.isRetiredGoalTask(row?.subjectId))
+          ? 'closed'
+          : status;
+      if (next !== row?.status) await mocks.updatePolicyStatus(id, next);
+      return next;
+    });
     mocks.taskResolve.mockResolvedValue({ automationMode: null, id: 'task_1', status: 'running' });
     // The row read back after the completion write.
     mocks.taskFindById.mockResolvedValue({ id: 'task_1', status: 'completed' });

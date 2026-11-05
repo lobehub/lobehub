@@ -1015,6 +1015,15 @@ export class GoalGraphModel {
       // acceptance reach their terminal states together. A round still
       // verifying is left to land; settling it closes it (recomputeStatus).
       if (status === 'retired' && node.taskId) {
+        // Lock the acceptance whatever its status: a round settling right now
+        // (AcceptanceModel.settleTaskPolicyStatus) holds the same lock while it
+        // checks for retirement, so a `verifying` row skipped here cannot be
+        // written back to `delivered` after this commits unseen.
+        await tx
+          .select({ id: acceptances.id })
+          .from(acceptances)
+          .where(and(eq(acceptances.subjectType, 'task'), eq(acceptances.subjectId, node.taskId)))
+          .for('update');
         await tx
           .update(acceptances)
           .set({ completedAt: new Date(), status: 'closed' })

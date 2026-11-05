@@ -5,6 +5,7 @@ import type {
   AcceptanceStatus,
   AcceptanceSubjectType,
 } from '@lobechat/types';
+import { isClosedByRetirement } from '@lobechat/utils/verify/acceptanceStatus';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, exists, inArray, isNull, lt, ne, not, or, sql } from 'drizzle-orm';
 
@@ -316,17 +317,52 @@ export class AcceptanceModel {
   };
 
   /**
-   * Whether a task is a retired step of a goal graph. The Goal discards a
-   * retired node's outcome, so its acceptance has nothing left to sign off.
-   * A task backs at most one goal node (`goal_nodes_task_id_unique`).
+   * Settle a task acceptance's rollup status, closing it instead when the task
+   * is a retired step of a goal graph (the Goal discards a retired node's
+   * outcome, so nothing is left to sign off). Returns the status now stored.
+   *
+   * The acceptance row is locked before the goal node is read, and node
+   * retirement locks the same row (GoalGraphModel.updateNodeStatus), so the two
+   * cannot interleave: whichever commits second sees the other's write. A
+   * user's `accepted` / `closed` that landed meanwhile is kept.
    */
-  isRetiredGoalTask = async (taskId: string): Promise<boolean> => {
-    const [row] = await this.db
-      .select({ id: goalNodes.id })
-      .from(goalNodes)
-      .where(and(eq(goalNodes.taskId, taskId), eq(goalNodes.status, 'retired')))
-      .limit(1);
-    return Boolean(row);
+  settleTaskPolicyStatus = async (
+    id: string,
+    status: AcceptanceStatus,
+  ): Promise<AcceptanceStatus | undefined> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ status: acceptances.status, subjectId: acceptances.subjectId })
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), policyScope))
+        .for('update');
+      if (!row) return undefined;
+      const current = row.status as AcceptanceStatus;
+      if (current === 'accepted' || current === 'closed') return current;
+
+      let next = status;
+      if (isClosedByRetirement(status)) {
+        const [retired] = await tx
+          .select({ id: goalNodes.id })
+          .from(goalNodes)
+          .where(and(eq(goalNodes.taskId, row.subjectId), eq(goalNodes.status, 'retired')))
+          .limit(1);
+        if (retired) next = 'closed';
+      }
+      if (next !== current)
+        await tx
+          .update(acceptances)
+          .set({
+            completedAt: TERMINAL_ACCEPTANCE_STATUSES.has(next) ? new Date() : null,
+            status: next,
+          })
+          .where(eq(acceptances.id, id));
+      return next;
+    });
   };
 
   /**
