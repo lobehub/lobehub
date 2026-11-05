@@ -145,6 +145,15 @@ export const extractFile = (
         }
     }
   }
+  for (const statement of ast.statements)
+    if (ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.Const)
+      for (const declaration of statement.declarationList.declarations) {
+        const value = declaration.initializer;
+        if (!ts.isIdentifier(declaration.name) || !value || !ts.isStringLiteralLike(value))
+          continue;
+        if (value.text.split(/\s+/).some((token) => globalClasses.has(token)))
+          derived.set(declaration.name.text, JSON.stringify(value.text));
+      }
   const expandedOf = (expression: ts.Expression) => {
     const start = expression.getStart(ast);
     let text = expression.getText(ast);

@@ -289,3 +289,54 @@ export const Docx = () => <div className={fallback.scroll} />;
     expect(run('boxShadowSecondary').flags).toContain('INNER_TARGET');
   });
 });
+
+describe('a stylesheet class held in a local constant', () => {
+  it('maps the constant to its stylesheet and proves the rule restored in a fallback', () => {
+    const css = `.kanban-14c7-card * {\n  cursor: default;\n}\n\n.kanban-14c7-card:active * {\n  cursor: grabbing;\n}\n`;
+    const before = `import './Card.css';
+
+import * as stylex from '@stylexjs/stylex';
+
+import { sx } from '@/styles/sx';
+
+const CARD_SCOPE_CLASS = 'kanban-14c7-card';
+
+const styles = stylex.create({ card: { cursor: 'default' } });
+
+export const Card = () => <div {...sx([styles.card], CARD_SCOPE_CLASS)} />;
+`;
+    const after = (rule = 'cursor: grabbing;') => `import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+
+import { sx } from '@/styles/sx';
+
+const styles = stylex.create({ card: { cursor: 'default' } });
+
+const fallback = createStaticStyles(({ css }) => ({
+  card: css\`
+    & * {
+      cursor: default;
+    }
+
+    &:active * {
+      ${rule}
+    }
+  \`,
+}));
+
+export const Card = () => <div {...sx([styles.card], fallback.card)} />;
+`;
+    const run = (head: string) =>
+      planFile(
+        'a.tsx',
+        extractFile(before, 'a.tsx', options({ './Card.css': css })),
+        extractFile(head, 'a.tsx', options({})),
+        { layoutComponents: [] },
+      ).cases[0];
+    const base = extractFile(before, 'a.tsx', options({ './Card.css': css }));
+    expect(base.elements[0].slots).toContain('global.kanban-14c7-card');
+    expect(run(after()).evidence).toContain('EMOTION_RULE_KEPT');
+    expect(run(after()).flags).toEqual([]);
+    expect(run(after('cursor: move;')).evidence ?? []).not.toContain('EMOTION_RULE_KEPT');
+  });
+});
