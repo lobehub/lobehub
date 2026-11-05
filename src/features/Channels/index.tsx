@@ -14,6 +14,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelConversation } from './ChannelConversation';
+import { MemberAvatar } from './MemberAvatar';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
 import { styles } from './styles';
@@ -33,6 +34,10 @@ function EnabledChannelPage() {
   const view = { channelId: channelId ?? '', threadId: null };
   const sync = channelActions.useFetchDetail(channelId ? view : null);
   const detail = visibleChannelDetail(useChannelStore(channelSelectors.detail(view)), sync.error);
+  // A direct conversation is titled by its Agent, so it shows the Agent rather than a `#`.
+  const directAgent = detail?.channel.agentId
+    ? detail.members.find((member) => member.agentId === detail.channel.agentId)
+    : undefined;
   const membersOpen =
     !!detail?.channel.workspaceId &&
     membersChannelId === channelId &&
@@ -45,7 +50,7 @@ function EnabledChannelPage() {
       <NavHeader
         left={
           <Flexbox horizontal align="center" gap={8}>
-            <Hash size={18} />
+            {directAgent ? <MemberAvatar member={directAgent} size={24} /> : <Hash size={18} />}
             <Text ellipsis weight={500}>
               {detail?.channel.title || t('title')}
             </Text>
