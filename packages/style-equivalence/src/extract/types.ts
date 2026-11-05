@@ -22,6 +22,7 @@ export interface StyleElement {
   literalProps: Record<string, LiteralValue>;
   owner: string;
   parent?: string;
+  runtimeStyle?: string;
   slots: string[];
   tag: string;
   variables: VariableUse[];

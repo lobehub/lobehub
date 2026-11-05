@@ -28,6 +28,7 @@ const renderChain = (
   chain: StyleElement[],
   layout: Set<string>,
   exprOf: (binding: StyleBinding) => string,
+  probed: Set<string>,
 ): string => {
   const [element, ...rest] = chain;
   const tag = placementTag(element, layout);
@@ -42,10 +43,12 @@ const renderChain = (
     else if (binding.prop === 'className') attributes.push(`className={${expr}}`);
     else neutral.push(`{__neutral(${JSON.stringify(binding.prop)}, ${expr})}`);
   }
+  if (element.runtimeStyle && probed.has(element.runtimeStyle))
+    attributes.push(`style={${element.runtimeStyle}}`);
   const open = `<${tag} ${attributes.join(' ')}`;
   if (VOID_TAGS.has(tag)) return `<>${open} />${neutral.join('')}</>`;
   const inner = rest.length
-    ? renderChain(rest, layout, exprOf)
+    ? renderChain(rest, layout, exprOf, probed)
     : `{${JSON.stringify(SAMPLE_TEXT)}}`;
   return `${open}>${inner}${neutral.join('')}</${tag}>`;
 };
@@ -57,6 +60,7 @@ const NEUTRAL = `const __neutral = (prop: string, value: unknown): any => {
   if (typeof value === 'object') return Object.entries(value as Record<string, unknown>).map(([key, item]) => <div key={key} data-synthetic-slot={key}>{__neutral(prop + '.' + key, item)}</div>);
   return null;
 };
+const __probe = (name: string): any => ({ '--style-equivalence-probe': name, tabSize: 7 });
 const __member = (value: boolean): any => new Proxy({}, { get: () => value });
 const __opaque: any = new Proxy(function () {}, {
   apply: () => __opaque,
@@ -90,7 +94,16 @@ export const generateModule = (
       return `${JSON.stringify(entry.key)}: () => { throw new Error('KNOB_UNBOUND'); }`;
     const declared = new Set<string>();
     const lines: string[] = [];
+    const probed = new Set<string>();
     for (const variable of entry.variables) {
+      if (variable.probe) {
+        probed.add(variable.name);
+        declared.add(variable.name);
+        lines.push(
+          `const ${variable.name} = __v[${JSON.stringify(variable.name)}] ? __probe(${JSON.stringify(variable.name)}) : undefined;`,
+        );
+        continue;
+      }
       const kind = variable.kinds[side];
       if (!kind) continue;
       declared.add(variable.name);
@@ -116,7 +129,7 @@ export const generateModule = (
             : `const ${variable.name} = ${readThrough(variable.name) ? '__opaque' : 'undefined'};`,
         );
       }
-    return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean | string>) => { ${lines.join(' ')} return (${renderChain(chain, layout, (binding) => bound.get(binding)!)}); }`;
+    return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean | string>) => { ${lines.join(' ')} return (${renderChain(chain, layout, (binding) => bound.get(binding)!, probed)}); }`;
   });
   return [
     extraction.prelude,

@@ -69,6 +69,8 @@ const extraction: FileExtraction = {
     element('T#0', 'span', 'cx(styles.a, TONE[tone])', {
       variables: [{ kind: 'unknown', name: 'tone' }],
     }),
+    element('P#0', 'div', 'styles.a', { runtimeStyle: 'laneStyle' }),
+    element('P#1', 'span', 'styles.b', { parent: 'P#0' }),
     element('K#1', 'span', 'cx(styles.a,', {
       variables: [{ kind: 'unknown', name: 'state' }],
     }),
@@ -140,6 +142,14 @@ const plan: FilePlan = {
           values: ['off', 'on', '__style_equivalence_absent__'],
         },
       ],
+    },
+    {
+      combos: [],
+      elementIds: { base: 'P#1', head: 'P#1' },
+      file: 'a.tsx',
+      flags: [],
+      key: 'a.tsx|P#1',
+      variables: [{ kinds: { head: 'unknown' }, name: 'laneStyle', probe: true }],
     },
     {
       combos: [],
@@ -222,6 +232,15 @@ describe('generateModule', () => {
     );
   });
 
+  it('passes a probe style to the runtime style of the chain only when the combo turns it on', async () => {
+    const { cases } = await load();
+    const on = render(cases['a.tsx|P#1']({ laneStyle: true }));
+    expect(on).toContain(
+      '<div data-synthetic-element="P#0" class="a" style="--style-equivalence-probe:laneStyle;tab-size:7">',
+    );
+    expect(render(cases['a.tsx|P#1']({ laneStyle: false }))).not.toContain('style=');
+  });
+
   it('fails a knob case it cannot bind instead of rendering it unbound', async () => {
     const { cases } = await load();
     expect(() => cases['a.tsx|K#1']({})).toThrow('KNOB_UNBOUND');
@@ -242,7 +261,7 @@ describe('CaseList', () => {
       {
         ...plan,
         cases: plan.cases
-          .filter((entry) => entry.key !== 'a.tsx|K#1' && entry.key !== 'a.tsx|T#0')
+          .filter((entry) => !['a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(entry.key))
           .map((entry) => ({
             ...entry,
             combos:
@@ -270,7 +289,7 @@ describe('CaseList', () => {
       {
         ...plan,
         cases: plan.cases
-          .filter((entry) => entry.key !== 'a.tsx|K#1' && entry.key !== 'a.tsx|T#0')
+          .filter((entry) => !['a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(entry.key))
           .map((entry) => ({
             ...entry,
             combos:

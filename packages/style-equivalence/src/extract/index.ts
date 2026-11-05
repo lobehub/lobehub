@@ -135,6 +135,7 @@ export const extractFile = (
       const literalProps: Record<string, LiteralValue> = {};
       const slots = new Set<string>();
       const expressions: ts.Expression[] = [];
+      let runtimeStyle: string | undefined;
       for (const attribute of opening.attributes.properties) {
         if (ts.isJsxSpreadAttribute(attribute)) {
           if (!referencesStyle(attribute.expression)) continue;
@@ -184,6 +185,8 @@ export const extractFile = (
         }
         const literal = literalOf(expression);
         if (literal !== undefined) literalProps[name] = literal;
+        else if (name === 'style' && ts.isIdentifier(expression) && !GLOBALS.has(expression.text))
+          runtimeStyle = expression.text;
       }
       let current = parent;
       if (bindings.length) {
@@ -221,6 +224,9 @@ export const extractFile = (
           literalProps,
           owner,
           parent,
+          ...(runtimeStyle && !opening.attributes.properties.some(ts.isJsxSpreadAttribute)
+            ? { runtimeStyle }
+            : {}),
           slots: [...slots].sort(),
           tag,
           variables: [...names].sort().map((name) => ({

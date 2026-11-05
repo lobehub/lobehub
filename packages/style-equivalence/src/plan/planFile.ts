@@ -9,6 +9,7 @@ import {
   sharedConditions,
   type SideProperties,
 } from './placement';
+import { runtimeStyleProbe } from './probes';
 import { tableDomain } from './tables';
 
 export { isIntrinsicTag } from './placement';
@@ -27,6 +28,7 @@ export const PASS_THROUGH_VARIABLES = new Set([
 export interface PlanVariable {
   kinds: Partial<Record<Side, VariableKind>>;
   name: string;
+  probe?: boolean;
   values?: string[];
 }
 
@@ -163,14 +165,18 @@ export const planFile = (
     const sorted = [...variables.values()].sort((a, b) => a.name.localeCompare(b.name));
     const tables = { base: base.tables, head: head.tables };
     const found: Record<string, string[]> = {};
+    const probes = new Set<string>();
     for (const variable of sorted) {
       if (!Object.values(variable.kinds).includes('unknown')) continue;
       const domain = tableDomain(variable.name, chains, tables);
       if (domain) found[variable.name] = domain;
+      else if (runtimeStyleProbe(variable.name, chains)) probes.add(variable.name);
     }
     const model = (domains: Record<string, string[]>) => {
       const unknown = (variable: PlanVariable) =>
-        !domains[variable.name] && Object.values(variable.kinds).includes('unknown');
+        !domains[variable.name] &&
+        !probes.has(variable.name) &&
+        Object.values(variable.kinds).includes('unknown');
       const knobs =
         sorted.some(unknown) && !structural ? conditionKnobs(chains, properties) : undefined;
       const modeled: PlanVariable[] = [];
@@ -179,6 +185,10 @@ export const planFile = (
         for (const variable of sorted) {
           if (unknown(variable)) {
             added.add('VARIABLE_UNMODELED');
+            continue;
+          }
+          if (probes.has(variable.name)) {
+            modeled.push({ ...variable, probe: true });
             continue;
           }
           if (!variable.kinds.base || !variable.kinds.head) added.add('ASYMMETRIC_CONDITION');
@@ -198,6 +208,7 @@ export const planFile = (
     modeling.added.forEach((flag) => flags.add(flag));
     if (knobs) evidence.push('CONDITION_KNOBS');
     if (Object.keys(modeling.used).length) evidence.push('TABLE_KEYS');
+    if (modeled.some((variable) => variable.probe)) evidence.push('RUNTIME_STYLE_PROBED');
     if (pairwise) flags.add('COMBINATIONS_PAIRWISE');
     return {
       combos,
