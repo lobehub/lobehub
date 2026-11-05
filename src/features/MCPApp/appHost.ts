@@ -221,7 +221,9 @@ export const connectAppView = ({
 
         // Until the conversation accepts it, the view going away or giving up
         // on the request cancels the send rather than starting a reply
-        const { dispose: disposeSend, signal } = anySignal([session.signal, request]);
+        // Its lifetime is the prompts', not the session's: a view being removed
+        // may still save its edits, but never starts a reply
+        const { dispose: disposeSend, signal } = anySignal([approvals.signal, request]);
         try {
           return await sendAppMessage(getContext().sendMessage, text, identifier, signal);
         } finally {

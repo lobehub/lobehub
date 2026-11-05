@@ -462,6 +462,19 @@ describe('connectAppView', () => {
     expect(invokeMcpToolCall).toHaveBeenCalledTimes(1);
   });
 
+  it('cancels an approved message not yet accepted the moment its view starts to go away', async () => {
+    confirmAppMessage.mockResolvedValue(true);
+    sendMessage.mockImplementation(() => new Promise(() => {}));
+    const { fromView, message, teardown } = setup();
+    await fromView({ method: 'ui/notifications/initialized' });
+
+    await message(1, 'Follow up');
+    const { signal } = sendMessage.mock.calls[0][0] as { signal: AbortSignal };
+    void teardown();
+
+    expect(signal.aborted).toBe(true);
+  });
+
   it('drops a prompt the moment its view starts to go away', async () => {
     getAppToolCallPolicy.mockResolvedValue('confirm');
     confirmAppToolCall.mockImplementation(
