@@ -6,7 +6,6 @@ import { voiceSendButtonMarker } from '../markers.stylex';
 const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
 const SEND_CIRCLE_COLLAPSED = 'circle(14px at calc(100% - 16px) 50%)';
 const SEND_CIRCLE_EXPANDED = 'circle(150% at calc(100% - 16px) 50%)';
-const SEND_FOCUSED = stylex.when.ancestor(':focus-visible', voiceSendButtonMarker);
 
 const voiceMessageEnter = stylex.keyframes({
   from: { transform: 'translateX(8px)', opacity: 0 },
@@ -119,13 +118,17 @@ export const styles = stylex.create({
     zIndex: 2,
     insetBlockStart: '50%',
     insetInlineEnd: '2px',
-    transform: { default: 'translateY(-50%)', [SEND_FOCUSED]: 'translateY(-50%) translateX(6px)' },
+    transform: {
+      default: 'translateY(-50%)',
+      [stylex.when.ancestor(':focus-visible', voiceSendButtonMarker)]:
+        'translateY(-50%) translateX(6px)',
+    },
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     width: '28px',
     height: '28px',
-    opacity: { default: 1, [SEND_FOCUSED]: 0 },
+    opacity: { default: 1, [stylex.when.ancestor(':focus-visible', voiceSendButtonMarker)]: 0 },
     transition: { default: 'opacity 100ms ease, transform 160ms ease', [REDUCED_MOTION]: 'none' },
   },
   sendArrowHidden: {
@@ -202,7 +205,10 @@ export const styles = stylex.create({
     position: 'absolute',
     zIndex: 2,
     inset: '0',
-    transform: { default: 'translateY(4px)', [SEND_FOCUSED]: 'translateY(0)' },
+    transform: {
+      default: 'translateY(4px)',
+      [stylex.when.ancestor(':focus-visible', voiceSendButtonMarker)]: 'translateY(0)',
+    },
     display: 'flex',
     gap: '8px',
     alignItems: 'center',
@@ -212,7 +218,7 @@ export const styles = stylex.create({
     fontSize: cssVar.fontSize,
     fontWeight: cssVar.fontWeightStrong,
     whiteSpace: 'nowrap',
-    opacity: { default: 0, [SEND_FOCUSED]: 1 },
+    opacity: { default: 0, [stylex.when.ancestor(':focus-visible', voiceSendButtonMarker)]: 1 },
     transition: { default: 'opacity 100ms ease, transform 160ms ease', [REDUCED_MOTION]: 'none' },
   },
   sendLabelExpanded: {
