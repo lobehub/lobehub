@@ -46,6 +46,12 @@ beforeAll(async () => {
   await write('head-scrollbar', scrollbar('css-1x2y3z', '4px'));
   await write('head-scrollbar-wide', scrollbar('css-1x2y3z', '8px'));
   await write(
+    'base-elsewhere-container',
+    page(
+      '.t { color: black; } @container grid (min-width: 560px) { .elsewhere > :nth-child(n+3) { display: flex; } } .elsewhere:has(> :where(button, a):active) { color: red; }',
+    ),
+  );
+  await write(
     'base-document-pseudo',
     page('.t { color: black; } ::view-transition-old(panel) { animation-duration: 240ms; }'),
   );
@@ -170,6 +176,11 @@ describe('captureRun + analyzeRun', () => {
     expect(same.gaps).toEqual([]);
     const [changed] = await run('base-scrollbar', 'head-scrollbar-wide');
     expect(changed.gaps).toEqual(['PSEUDO_UNMODELED']);
+  });
+
+  it('does not pin a rule on a case when only its pseudo parts were stripped', async () => {
+    const [result] = await run('base-elsewhere-container', 'head-media');
+    expect(result.gaps).toEqual([]);
   });
 
   it('does not pin a document-level pseudo rule on every case', async () => {

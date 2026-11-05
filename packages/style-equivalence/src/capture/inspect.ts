@@ -47,8 +47,34 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
     ({ forceable, pseudoElements, staticClasses }) => {
       const sections = [...document.querySelectorAll('[data-case]')];
       const root = document.querySelector('[data-synthetic-cases]') ?? document.body;
-      const broaden = (selector: string) =>
-        selector.replaceAll(/::?[a-z-]+(\([^()]*\))?/gi, '').trim() || '*';
+      const broaden = (selector: string) => {
+        let text = '';
+        for (let index = 0; index < selector.length; index++) {
+          const char = selector[index];
+          if (char === '\\') {
+            text += selector.slice(index, index + 2);
+            index++;
+            continue;
+          }
+          if (char !== ':') {
+            text += char;
+            continue;
+          }
+          while (selector[index + 1] === ':') index++;
+          while (/[\w-]/.test(selector[index + 1] ?? '')) index++;
+          if (selector[index + 1] !== '(') continue;
+          let depth = 0;
+          for (index++; index < selector.length; index++) {
+            if (selector[index] === '(') depth++;
+            if (selector[index] === ')' && --depth === 0) break;
+          }
+        }
+        const filled = text
+          .replaceAll(/([>+~])\s*(?=[>+~]|$)/g, '$1 *')
+          .replace(/^\s*([>+~])/, '* $1')
+          .trim();
+        return filled || '*';
+      };
       const styleParent = (rule: CSSRule) => {
         let parent = rule.parentRule;
         while (parent && !(parent instanceof CSSStyleRule)) parent = parent.parentRule;
