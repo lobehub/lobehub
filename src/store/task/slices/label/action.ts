@@ -123,7 +123,6 @@ export class TaskLabelSliceActionImpl {
       // One request, one transaction: on failure nothing was written, so
       // rolling the optimistic state back matches the server.
       await taskLabelService.changeForTask(taskId, { add: added, remove: removed });
-      collections.commit();
     } catch (error) {
       collections.rollback();
       if (hasDetail) {
@@ -142,9 +141,19 @@ export class TaskLabelSliceActionImpl {
       return false;
     }
 
+    // The overlay only swaps the row's labels; it cannot move a card to its
+    // new label column or out of a label filter it no longer matches. Commit it
+    // once the lists have re-fetched (placement then comes from the server);
+    // if that refetch fails, drop the overlay rather than persist a row in a
+    // collection it no longer belongs to — the next refetch shows it correctly.
+    try {
+      await this.#get().refreshTaskList();
+      collections.commit();
+    } catch {
+      collections.rollback();
+    }
     await Promise.all([
       hasDetail ? this.#get().internal_refreshTaskDetail(taskId) : undefined,
-      this.#get().refreshTaskList(),
       this.refreshTaskLabels(),
     ]).catch(() => {});
     return true;

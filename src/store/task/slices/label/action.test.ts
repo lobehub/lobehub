@@ -112,5 +112,40 @@ describe('TaskLabelSliceAction', () => {
       expect(taskLabelService.addToTask).not.toHaveBeenCalled();
       expect(taskLabelService.removeFromTask).not.toHaveBeenCalled();
     });
+
+    const stubCollections = (refresh: () => Promise<void>) => {
+      const overlay = { commit: vi.fn(), rollback: vi.fn() };
+      useTaskStore.setState({
+        internal_beginCollectionTaskOptimistic: vi.fn(() => overlay),
+        refreshTaskList: vi.fn(refresh),
+      } as any);
+      vi.mocked(taskLabelService.changeForTask).mockResolvedValue([]);
+      return overlay;
+    };
+
+    it('commits the list overlay only after the lists re-fetched', async () => {
+      const order: string[] = [];
+      const overlay = stubCollections(async () => {
+        order.push('refresh');
+      });
+      overlay.commit.mockImplementation(() => order.push('commit'));
+
+      await useTaskStore.getState().setTaskLabels('T-1', [], [label('l2', 'Backend')]);
+
+      expect(order).toEqual(['refresh', 'commit']);
+      expect(overlay.rollback).not.toHaveBeenCalled();
+    });
+
+    it('drops the overlay instead of persisting it when the re-fetch fails', async () => {
+      const overlay = stubCollections(async () => {
+        throw new Error('offline');
+      });
+
+      const ok = await useTaskStore.getState().setTaskLabels('T-1', [], [label('l2', 'Backend')]);
+
+      expect(ok).toBe(true);
+      expect(overlay.commit).not.toHaveBeenCalled();
+      expect(overlay.rollback).toHaveBeenCalled();
+    });
   });
 });
