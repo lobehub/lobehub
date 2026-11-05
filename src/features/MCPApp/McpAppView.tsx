@@ -5,16 +5,17 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { type AppBridge } from '@modelcontextprotocol/ext-apps/app-bridge';
 import * as stylex from '@stylexjs/stylex';
 import { useLatest } from 'ahooks';
-import { memo, type ReactNode, useEffect, useRef, useState } from 'react';
+import { memo, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useToolStore } from '@/store/tool';
 
-import { connectAppView, getAppViewPhase } from './appHost';
+import { type AppViewSession, connectAppView, getAppViewPhase } from './appHost';
 import { buildHostContext } from './bridge';
 import { buildAppFrameDocument, VIEW_FRAME_SANDBOX } from './frameDocument';
+import { retireAppFrame } from './frameRetire';
 import { APP_IFRAME_ALLOW, buildAppCsp, pickAppResource } from './utils';
 import { mcpAppAgentIdSelector } from './viewAgent';
 
@@ -118,12 +119,14 @@ const McpAppView = memo<McpAppViewProps>(
       t,
     });
     const bridgeRef = useRef<AppBridge>(undefined);
+    // The session of the view now in the frame
+    const sessionRef = useRef<AppViewSession>(undefined);
 
     useEffect(() => {
       const target = iframeRef.current?.contentWindow;
       if (!srcDoc || navigated || !target) return;
 
-      const { bridge, dispose } = connectAppView({
+      const session = connectAppView({
         getContext: () => latest.current,
         onHeight: setHeight,
         onNavigated: () => setDroppedDoc(srcDoc),
@@ -132,13 +135,40 @@ const McpAppView = memo<McpAppViewProps>(
         target,
         toolCallId,
       });
-      bridgeRef.current = bridge;
+      sessionRef.current = session;
+      bridgeRef.current = session.bridge;
 
       return () => {
+        // A frame being removed was handed to `retireAppFrame`, which ends it
+        if (sessionRef.current !== session) return;
+        sessionRef.current = undefined;
         bridgeRef.current = undefined;
-        dispose();
+        session.dispose();
       };
     }, [latest, navigated, resourceUri, srcDoc, toolCallId]);
+
+    // While the frame is about to be removed it still runs here (a layout
+    // cleanup), so its view is told and given time to finish first
+    const hasFrame = !!srcDoc && !navigated;
+    useLayoutEffect(() => {
+      if (!hasFrame) return;
+      const frame = iframeRef.current;
+
+      return () => {
+        const session = sessionRef.current;
+        if (!frame || !session) return;
+        const retired = retireAppFrame(frame, {
+          // Not removed after all: a session started since replaces this one
+          keep: () => {
+            if (sessionRef.current !== session) session.dispose();
+          },
+          teardown: session.teardown,
+        });
+        if (!retired) return;
+        sessionRef.current = undefined;
+        bridgeRef.current = undefined;
+      };
+    }, [hasFrame]);
 
     useEffect(() => {
       bridgeRef.current?.setHostContext(buildHostContext(isDark));

@@ -45,7 +45,8 @@ export interface McpAppBridgeHost {
 
 /**
  * Connect LobeHub to an MCP Apps view living in `target` (the sandboxed
- * iframe's window). Returns a disposer that closes the session.
+ * iframe's window). `dispose` closes the session at once; `teardown` first
+ * lets the view finish, as MCP Apps asks before a view is removed.
  */
 export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
   const bridge = new AppBridge(
@@ -79,7 +80,9 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
     if (typeof height === 'number' && height > 0) host.onSizeChange(Math.ceil(height));
   };
 
+  let initialized = false;
   const handleInitialized = () => {
+    initialized = true;
     void bridge.sendToolInput({ arguments: host.toolInput() });
     void Promise.resolve(host.toolResult()).then((result) => bridge.sendToolResult(result));
   };
@@ -88,12 +91,30 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
   bridge.addEventListener('initialized', handleInitialized);
   void bridge.connect(new PostMessageTransport(target, target));
 
+  const dispose = () => {
+    bridge.removeEventListener('sizechange', handleSizeChange);
+    bridge.removeEventListener('initialized', handleInitialized);
+    void bridge.close();
+  };
+
   return {
     bridge,
-    dispose: () => {
-      bridge.removeEventListener('sizechange', handleSizeChange);
-      bridge.removeEventListener('initialized', handleInitialized);
-      void bridge.close();
+    dispose,
+    /**
+     * Tell the view it is going away (`ui/resource-teardown`) and give it up to
+     * `timeoutMs` to finish (save pending edits) before the session closes. A
+     * view that never initialized has nothing to finish.
+     */
+    teardown: async (timeoutMs: number) => {
+      if (initialized) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+          bridge.teardownResource({}).catch(() => {}),
+          new Promise<void>((resolve) => (timer = setTimeout(resolve, timeoutMs))),
+        ]);
+        clearTimeout(timer);
+      }
+      dispose();
     },
   };
 };

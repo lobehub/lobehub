@@ -61,9 +61,21 @@ const getAppName = (identifier: string, agentId?: string) =>
 /**
  * Connect LobeHub to one MCP App view: the bridge session plus what LobeHub
  * does for the view's requests (tool calls, messages, links), under the same
- * approval rules as the conversation. Call `dispose` once the view goes away:
- * it ends the session and drops the view's approvals, waiting or shown.
+ * approval rules as the conversation. Once the view goes away call `dispose`,
+ * or `teardown` while its frame still runs: both end the session and drop the
+ * view's approvals, waiting or shown.
  */
+/** How long a view removed from the page may take to finish (save pending edits). */
+export const APP_VIEW_TEARDOWN_TIMEOUT_MS = 3000;
+
+export interface AppViewSession {
+  bridge: AppBridge;
+  /** End the session at once: the view is already gone. */
+  dispose: () => void;
+  /** Let the view finish, within {@link APP_VIEW_TEARDOWN_TIMEOUT_MS}, then end the session. */
+  teardown: () => Promise<void>;
+}
+
 export const connectAppView = ({
   getContext,
   onHeight,
@@ -72,7 +84,7 @@ export const connectAppView = ({
   resourceUri,
   target,
   toolCallId,
-}: ConnectAppViewOptions): { bridge: AppBridge; dispose: () => void } => {
+}: ConnectAppViewOptions): AppViewSession => {
   const handleFrameNotice = (event: MessageEvent) => {
     if (event.source === target && isAppFrameNavigatedNotice(event.data)) {
       console.warn(`[MCPApp] ${resourceUri} left its document and was removed`);
@@ -108,7 +120,7 @@ export const connectAppView = ({
     }
   };
 
-  const { bridge, dispose } = connectMcpAppBridge(target, {
+  const { bridge, dispose, teardown } = connectMcpAppBridge(target, {
     // Views may only call tools on the server that rendered them, and
     // under the same approval rules as the conversation.
     callTool: async (name, toolArgs, request) => {
@@ -223,12 +235,21 @@ export const connectAppView = ({
     },
   });
 
+  // The view's requests waiting for the user are dropped either way
+  const stop = () => {
+    window.removeEventListener('message', handleFrameNotice);
+    approvals.abort();
+  };
+
   return {
     bridge,
     dispose: () => {
-      window.removeEventListener('message', handleFrameNotice);
-      approvals.abort();
+      stop();
       dispose();
+    },
+    teardown: () => {
+      stop();
+      return teardown(APP_VIEW_TEARDOWN_TIMEOUT_MS);
     },
   };
 };

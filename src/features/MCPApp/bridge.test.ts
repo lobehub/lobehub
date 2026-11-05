@@ -158,4 +158,44 @@ describe('connectMcpAppBridge', () => {
     await fromView({ method: 'ui/notifications/size-changed', params: { height: 100 } });
     expect(host.onSizeChange).toHaveBeenCalledTimes(1);
   });
+  it('tells an initialized view it is going away and waits for its answer before closing', async () => {
+    const { connection, fromView, sent } = setup();
+    await fromView({ method: 'ui/notifications/initialized' });
+    const close = vi.spyOn(connection.bridge, 'close');
+
+    let done = false;
+    const teardown = connection.teardown(3000).then(() => (done = true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const request = sent().find((m) => m.method === 'ui/resource-teardown');
+    expect(request).toBeDefined();
+    expect(done).toBe(false);
+    expect(close).not.toHaveBeenCalled();
+
+    // The view saved its edits and answers
+    await fromView({ id: request.id, result: {} });
+    await teardown;
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('closes a view that never answers once the wait is over, and one never initialized at once', async () => {
+    vi.useFakeTimers();
+    try {
+      const silent = setup();
+      silent.fromView({ method: 'ui/notifications/initialized' });
+      await vi.advanceTimersByTimeAsync(0);
+      const closeSilent = vi.spyOn(silent.connection.bridge, 'close');
+      const teardown = silent.connection.teardown(3000);
+      await vi.advanceTimersByTimeAsync(3000);
+      await teardown;
+      expect(closeSilent).toHaveBeenCalled();
+
+      const fresh = setup();
+      const closeFresh = vi.spyOn(fresh.connection.bridge, 'close');
+      await fresh.connection.teardown(3000);
+      expect(fresh.sent().some((m) => m.method === 'ui/resource-teardown')).toBe(false);
+      expect(closeFresh).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
