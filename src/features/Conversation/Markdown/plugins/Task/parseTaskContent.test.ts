@@ -86,4 +86,12 @@ Instruction: child task
     expect(parsed.parentTaskBlock).toContain('<parentTask identifier="T-1"');
     expect(parsed.parentTaskBlock).toContain('</parentTask>');
   });
+
+  it('renders mention tags as @name', () => {
+    const parsed = parseTaskContent(`T-1 demo
+Status: ⭕ backlog     Priority: -
+Instruction: ask <mention name="Lobe AI" id="agt_1" /> and <mention id="user_2" /> to review`);
+
+    expect(parsed.instruction).toBe('ask @Lobe AI and @user_2 to review');
+  });
 });

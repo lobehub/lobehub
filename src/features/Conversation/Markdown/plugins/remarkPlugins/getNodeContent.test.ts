@@ -499,4 +499,21 @@ describe('treeNodeToString', () => {
       expect(result).toEqual(`[](citation-1)`);
     });
   });
+
+  it('restores self-closing tag nodes created by earlier plugins', () => {
+    const nodes = [
+      {
+        children: [
+          { type: 'text', value: 'ask ' },
+          {
+            data: { hName: 'mention', hProperties: { id: 'agt_1', name: 'Lobe "AI"' } },
+            type: 'mention',
+          },
+        ],
+        type: 'paragraph',
+      },
+    ] as Parent[];
+
+    expect(treeNodeToString(nodes)).toBe(`ask <mention id="agt_1" name='Lobe "AI"' />`);
+  });
 });
