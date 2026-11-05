@@ -80,6 +80,18 @@ export default {
     'On the QQ Open Platform, create a bot and finish its basic setup.',
   'channel.quickSetup.qq.credentials.title': 'Copy the App ID and App Secret',
   'channel.quickSetup.qq.credentials.desc': "Find them in the bot's Development settings.",
+  'channel.quickSetup.dingtalk.create.title': 'Create an internal app',
+  'channel.quickSetup.dingtalk.create.desc':
+    'In the DingTalk developer console, create an internal app, then copy the Client ID and Client Secret from Credentials & Basic Info.',
+  'channel.quickSetup.dingtalk.robot.title': 'Add the robot and choose Stream mode',
+  'channel.quickSetup.dingtalk.robot.desc':
+    'Under App Capabilities, add Robot, fill in its details and set the message receiving mode to Stream mode.',
+  'channel.quickSetup.dingtalk.permissions.title': 'Grant the robot send permission',
+  'channel.quickSetup.dingtalk.permissions.desc':
+    'Under Permissions, request qyapi_robot_sendmsg so the bot can reply in single and group chats.',
+  'channel.quickSetup.dingtalk.publish.title': 'Publish a version',
+  'channel.quickSetup.dingtalk.publish.desc':
+    'Under Version Management, publish and choose who can see the robot. Internal apps go live without review.',
   'channel.quickSetup.line.account.title': 'Create a LINE Official Account',
   'channel.quickSetup.line.account.desc':
     'Sign in with your LINE Business ID and create the account the bot speaks as.',
@@ -149,6 +161,8 @@ export default {
   'channel.home.title': 'Chat with <avatar/>{{name}} on Your Favorite Chat App',
   'channel.platform.default.description':
     'Let people reach this agent from {{name}} without switching apps—ideal for anyone who wants help close at hand.',
+  'channel.platform.dingtalk.description':
+    'Answer questions and assist work in single chats and group @-mentions—ideal for teams that collaborate in DingTalk.',
   'channel.platform.discord.description':
     'Support communities in servers and DMs—ideal for moderators, member support, and always-on help.',
   'channel.platform.feishu.description':
