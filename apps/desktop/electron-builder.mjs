@@ -351,6 +351,7 @@ const config = {
   dmg: {
     artifactName: '${productName}-${version}-${arch}.${ext}',
     background: 'resources/dmg.png',
+    format: 'UDBZ',
     contents: [
       { type: 'file', x: 150, y: 240 },
       { type: 'link', path: '/Applications', x: 450, y: 240 },
@@ -393,7 +394,8 @@ const config = {
       'Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist',
       'Contents/Resources/bin/auv',
     ],
-    compression: 'maximum',
+    // 'maximum' zips with 15-pass deflate: 7.7x slower for 0.2% smaller, up to 20 min on Intel CI. dmg.format keeps UDBZ separately.
+    compression: 'normal',
     entitlementsInherit: 'build/entitlements.mac.plist',
     ...(macCommunicationEntitlements
       ? {

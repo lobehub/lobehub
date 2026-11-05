@@ -9,6 +9,7 @@ import type OpenAI from 'openai';
 import type { ComputeChatCostOptions } from '../core/usageConverters/utils/computeChatCost';
 import type { ModelPricingContext } from './pricing';
 import type { ModelRuntimeDiagnostics } from './providerDiagnostics';
+import type { RouteAttemptIdentity } from './routeAttempt';
 import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
 
 export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
@@ -290,13 +291,8 @@ export interface OnFinishData {
   providerReportedCost?: number;
   reasoning?: ModelReasoning;
   /** Stable identities and terminal outcome for the provider attempt producing this result. */
-  routeAttempt?: {
-    attemptId: string;
-    /** Router channel that served the attempt. */
-    channelId?: string;
+  routeAttempt?: RouteAttemptIdentity & {
     outcome?: 'completed' | 'empty' | 'interrupted' | 'cancelled' | 'failed';
-    requestId: string;
-    routerId?: string;
   };
   speed?: ModelPerformance;
   text: string;

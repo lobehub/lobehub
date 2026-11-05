@@ -1,15 +1,9 @@
 'use client';
 
 import type { BuiltinRender, BuiltinRenderProps } from '@lobechat/types';
-import {
-  Block,
-  createStaticStyles,
-  Flexbox,
-  Highlighter,
-  Image,
-  PreviewGroup,
-  Text,
-} from '@lobehub/ui';
+import { Block, Flexbox, Highlighter, Image, PreviewGroup, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';
 
@@ -21,14 +15,16 @@ import {
 } from '../Inspector/browserMcpLabels';
 import { type IntrinsicImageSize, reservedImageProps } from './reservedImageProps';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  row: css`
-    padding-block: 6px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+  },
+});
 
 /**
  * A screenshot echoed back by the in-app browser. The MCP handler returns the
@@ -64,7 +60,7 @@ const PageRow = memo<{ content?: string }>(({ content }) => {
   if (!content) return null;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.row} gap={6}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.row).className} gap={6}>
       <Globe size={14} />
       <Text ellipsis>{content}</Text>
     </Flexbox>

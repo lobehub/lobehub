@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Rechercher des bibliothèques",
   "knowledgeBases.updateFailed": "Impossible de mettre à jour la bibliothèque",
   "list.deleteAction": "Supprimer le projet",
-  "list.deleteConfirmDescription": "Supprimer « {{name}} » ? Ses tâches de projet, objectifs, sujets et liaisons seront définitivement supprimés.",
-  "list.deleteConfirmTitle": "Supprimer le projet ?",
   "list.deleteError": "Impossible de supprimer le projet.",
   "list.deleteSuccess": "« {{name}} » supprimé",
   "list.emptyDescription": "Créez votre premier projet pour organiser vos objectifs, tâches et ressources.",

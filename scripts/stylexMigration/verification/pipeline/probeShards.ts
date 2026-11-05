@@ -145,7 +145,6 @@ export const createProbeShardController = (
         budget,
         durationMs: clock() - started,
         gaps: [...gaps],
-        gateEligible: false as const,
         mode: 'bounded-in-process-shards' as const,
         plannedProbeIds,
         shards,

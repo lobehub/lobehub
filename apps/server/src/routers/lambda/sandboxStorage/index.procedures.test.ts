@@ -46,6 +46,8 @@ function expected(): Array<
     ['listGithubRepositories', 'query', 11],
     ['listInstanceSessions', 'query', 15],
     ['listInstances', 'query', 15],
+    ['prepareDownload', 'mutation', 15],
+    ['preparePreview', 'mutation', 15],
     ['readFile', 'query', 15],
     ['refreshStorageUsage', 'mutation', 13],
     ['removeEnvironment', 'mutation', 15],

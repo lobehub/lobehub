@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Bibliotheken durchsuchen",
   "knowledgeBases.updateFailed": "Die Bibliothek konnte nicht aktualisiert werden",
   "list.deleteAction": "Projekt löschen",
-  "list.deleteConfirmDescription": "„{{name}}“ löschen? Die zugehörigen Projektaufgaben, Ziele, Themen und Verknüpfungen werden dauerhaft entfernt.",
-  "list.deleteConfirmTitle": "Projekt löschen?",
   "list.deleteError": "Das Projekt konnte nicht gelöscht werden.",
   "list.deleteSuccess": "„{{name}}“ wurde gelöscht",
   "list.emptyDescription": "Erstellen Sie Ihr erstes Projekt, um Ziele, Aufgaben und Ressourcen zu organisieren.",

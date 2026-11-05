@@ -17,6 +17,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     family: 'kimi',
     generation: 'kimi-k3.1',
     id: 'kimi-k3.1-pro',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -48,6 +49,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     family: 'kimi',
     generation: 'kimi-k3.1',
     id: 'kimi-k3.1-pro-highspeed',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -80,6 +82,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     family: 'kimi',
     generation: 'kimi-k3',
     id: 'kimi-k3',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -114,6 +117,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     family: 'kimi',
     generation: 'kimi-k2.7',
     id: 'kimi-k2.7-code',
+    isOfficial: true,
     maxOutput: 32_768,
     pricing: {
       currency: 'USD',
@@ -168,6 +172,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     family: 'kimi',
     generation: 'kimi-k2.6',
     id: 'kimi-k2.6',
+    isOfficial: true,
     maxOutput: 32_768,
     pricing: {
       currency: 'USD',

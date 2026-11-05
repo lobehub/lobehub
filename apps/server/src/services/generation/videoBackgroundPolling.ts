@@ -178,6 +178,7 @@ export async function processBackgroundVideoPolling(
         model: resolvedModelId,
         prechargeResult,
         provider,
+        route,
         usage: pollResult.usage ?? measureVideoOutputUsage(resolvedModelId, processResult),
         userId,
         workspaceId,

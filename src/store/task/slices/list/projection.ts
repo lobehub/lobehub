@@ -1,5 +1,5 @@
 import type { TaskCompletedWindow } from '@lobechat/builtin-tool-task';
-import type { TaskStatus } from '@lobechat/types';
+import type { TaskListFilter, TaskStatus } from '@lobechat/types';
 
 import { defineReplica, type ReplicaEntityAdapter, stableQueryKey } from '@/libs/replica';
 import type { taskService } from '@/services/task';
@@ -31,6 +31,8 @@ export interface TaskListQuery {
   complete?: boolean;
   /** Completed / canceled tasks closed outside this window are left out server-side. */
   completedWithin?: TaskCompletedWindow;
+  /** The Tasks page filter, normalized (`normalizeTaskListFilter`) so equal filters share an entry. */
+  filter?: TaskListFilter;
   /** Archived tasks are hidden unless the "Show archived" option is on. */
   includeArchived?: boolean;
   /** One server page of a paginated collection (scheduled / "My tasks"); ignored by `complete`. */
@@ -59,6 +61,8 @@ export interface TaskGroupListQuery {
   completedWithin?: TaskCompletedWindow;
   /** Sorted. */
   excludeStatuses?: TaskStatus[];
+  /** Normalized, like `TaskListQuery.filter`. */
+  filter?: TaskListFilter;
   groupBy: TaskKanbanGroupBy;
   includeArchived?: boolean;
   projectId?: string;
