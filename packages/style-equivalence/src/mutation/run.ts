@@ -117,7 +117,7 @@ const writeMutant = async (
       adapters: context.config.adapters,
       layoutComponents: context.config.layoutComponents,
       readModule: moduleReader(context.headRoot, context.config.aliases),
-      readStylesheet: stylesheetReader(context.headRoot),
+      readStylesheet: stylesheetReader(context.headRoot, context.config.aliases),
       realComponents: context.config.realComponents,
     });
   }

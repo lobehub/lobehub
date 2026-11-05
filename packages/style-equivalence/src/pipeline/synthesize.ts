@@ -7,6 +7,7 @@ import { extractFile, type FileExtraction } from '../extract';
 import { generateHost, HOST_HTML } from '../generate/host';
 import { generateModule } from '../generate/module';
 import { type FilePlan, planFile, type Side } from '../plan/planFile';
+import { packageFile } from '../source/aliases';
 import { resolveSpecifier } from '../source/declarations';
 import type { ScopeFile } from '../source/scope';
 import { fileFlags } from '../verdict/fileItems';
@@ -33,11 +34,13 @@ export const moduleReader =
       : undefined;
   };
 
-export const stylesheetReader = (root: string) => (fromFile: string, specifier: string) => {
-  if (!specifier.startsWith('.')) return undefined;
-  const target = path.resolve(root, path.dirname(fromFile), specifier);
-  return existsSync(target) ? readFileSync(target, 'utf8') : undefined;
-};
+export const stylesheetReader =
+  (root: string, aliases: Record<string, string> = {}) =>
+  (fromFile: string, specifier: string) => {
+    const local = resolveSpecifier(root, fromFile, specifier, aliases);
+    const target = local ? path.join(root, local) : packageFile(root, fromFile, specifier);
+    return target && existsSync(target) ? readFileSync(target, 'utf8') : undefined;
+  };
 
 export interface Synthesis {
   extractions: Record<string, Record<Side, FileExtraction>>;
@@ -62,7 +65,7 @@ export const synthesize = async (
         layoutComponents: config.layoutComponents,
         readBaseModule: side === 'head' ? moduleReader(roots.base, config.aliases) : undefined,
         readModule: moduleReader(roots[side], config.aliases),
-        readStylesheet: stylesheetReader(roots[side]),
+        readStylesheet: stylesheetReader(roots[side], config.aliases),
         realComponents: config.realComponents,
       });
     };

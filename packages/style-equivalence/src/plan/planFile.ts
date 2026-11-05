@@ -123,6 +123,13 @@ const alignedProofs = <T extends { head: string }>(
       })
     : [];
 
+const PACKAGE_STYLESHEET = /^STYLESHEET_UNREADABLE:(@\w[\w.-]*\/)?\w[\w.-]*\//;
+
+const fileGaps = (base: string[], head: string[]) =>
+  [...new Set([...base, ...head])].filter(
+    (gap) => !(PACKAGE_STYLESHEET.test(gap) && base.includes(gap) && head.includes(gap)),
+  );
+
 const groupByOwner = (elements: StyleElement[]) => {
   const owners = new Map<string, StyleElement[]>();
   for (const element of elements)
@@ -198,6 +205,11 @@ export const planFile = (
     const provenItems = new Set(
       [...movedAt, ...keptAt].flatMap(({ index }) => [chains.base[index], chains.head[index]]),
     );
+    const keptWhole = new Set(
+      keptAt
+        .filter(({ proof }) => proof.exhaustive)
+        .flatMap(({ index }) => [chains.base[index], chains.head[index]]),
+    );
     if (left.tag !== right.tag) flags.add('TAG_CHANGED');
     const realItems = realItemsOf(chains, config.realComponents);
     for (const item of [...chains.base, ...chains.head]) {
@@ -214,7 +226,9 @@ export const planFile = (
       const inner = item.flags.includes('INNER_TARGET') && (reached || provenItems.has(item));
       if (inner && reached && !isReplaced && !forward && !evidence.includes('DESCENDANT_RENDERED'))
         evidence.push('DESCENDANT_RENDERED');
-      item.flags.forEach((flag) => !(inner && flag === 'INNER_TARGET') && flags.add(flag));
+      const cleared = (flag: string) =>
+        (inner && flag === 'INNER_TARGET') || (keptWhole.has(item) && flag === 'CROSS_COMPONENT');
+      item.flags.forEach((flag) => !cleared(flag) && flags.add(flag));
     }
     if (isReplaced) evidence.push('DESCENDANT_REPLACED');
     if (forward) evidence.push('FORWARDED_RENDERED');
@@ -227,7 +241,8 @@ export const planFile = (
       placementPreserved(
         chains.base,
         chains.head.map((item, index) => {
-          const placement = movedAt.find((entry) => entry.index === index)?.proof.placement;
+          const placement = [...movedAt, ...keptAt].find((entry) => entry.index === index)?.proof
+            .placement;
           return placement
             ? { ...item, bindings: [{ ...item.bindings[0], expr: placement }] }
             : item;
@@ -350,7 +365,7 @@ export const planFile = (
   return {
     cases,
     file,
-    gaps: [...new Set([...base.gaps, ...head.gaps])],
+    gaps: fileGaps(base.gaps, head.gaps),
     ...(Object.keys(unpairedStandIns).length ? { standIns: unpairedStandIns } : {}),
     unpaired: [
       ...unpairedBase.map((element) => ({ elementId: element.id, side: 'base' as const })),

@@ -5,6 +5,7 @@ import postcss from 'postcss';
 import ts from 'typescript';
 
 import { classNamesIn } from '../extract/selectors';
+import { aliasCandidates } from './aliases';
 
 const EXTENSIONS = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
 
@@ -54,17 +55,15 @@ export const resolveSpecifier = (
   specifier: string,
   aliases: Record<string, string>,
 ) => {
-  const alias = Object.entries(aliases).find(([prefix]) => specifier.startsWith(prefix));
-  const base = specifier.startsWith('.')
-    ? path.join(path.dirname(from), specifier)
-    : alias
-      ? alias[1] + specifier.slice(alias[0].length)
-      : undefined;
-  if (!base) return undefined;
-  return EXTENSIONS.map((extension) => path.normalize(base + extension)).find((candidate) => {
-    const absolute = path.join(root, candidate);
-    return existsSync(absolute) && path.extname(candidate) !== '';
-  });
+  const bases = specifier.startsWith('.')
+    ? [path.join(path.dirname(from), specifier)]
+    : aliasCandidates(root, specifier, aliases);
+  return bases
+    .flatMap((base) => EXTENSIONS.map((extension) => path.normalize(base + extension)))
+    .find((candidate) => {
+      const absolute = path.join(root, candidate);
+      return existsSync(absolute) && path.extname(candidate) !== '';
+    });
 };
 
 export const importsOf = (code: string) => {
