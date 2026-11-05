@@ -1,6 +1,10 @@
 import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
+  [
+    'PullRequestDockActionButton',
+    'src/features/Conversation/WorkingSidebar/PullRequest/DockActionButton.tsx',
+  ],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -9,6 +13,18 @@ export const migrationFixtures = [
 ] as const;
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
+  PullRequestDockActionButton: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    selector: '[data-component-mount] button',
+    variants: [
+      { id: 'merge-success', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'merge-error', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'merge-plain', states: ['default', 'hover'] },
+      { id: 'update-busy', states: ['default', 'hover'] },
+      { id: 'secondary', states: ['default', 'hover'] },
+      { id: 'dark-merge-error', appearance: 'dark', states: ['default', 'hover'] },
+    ],
+  },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     i18n: true,
