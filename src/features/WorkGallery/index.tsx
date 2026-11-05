@@ -46,7 +46,8 @@ const styles = stylex.create({
     gridTemplateColumns: {
       'default': 'repeat(3, minmax(280px, 1fr))',
       '@media (width >= 1600px)': 'repeat(4, minmax(280px, 1fr))',
-      '@media (620px < width <= 920px)': 'repeat(2, minmax(280px, 1fr))',
+      // StyleX turns `620px < width` into 620.01px, which Chrome rounds back onto 620px.
+      '@media (620.02px <= width <= 920px)': 'repeat(2, minmax(280px, 1fr))',
       '@media (width <= 620px)': 'minmax(0, 1fr)',
     },
     gap: '16px',
