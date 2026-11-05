@@ -5,6 +5,8 @@ export {
   DINGTALK_API_BASE_URL,
   DingTalkApiClient,
   DingTalkApiError,
+  MAX_MSG_PARAM_TEXT_BYTES,
+  truncateUtf8,
 } from './api';
 export { signCallback, verifyCallbackSignature } from './crypto';
 export { DingTalkFormatConverter } from './format-converter';

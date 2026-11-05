@@ -216,6 +216,20 @@ export default {
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
+  'channel.dingtalk.clientId': 'Client ID (AppKey)',
+  'channel.dingtalk.clientIdHint':
+    'From the DingTalk developer console → your internal app → Credentials & Basic Info. Formerly called AppKey.',
+  'channel.dingtalk.clientIdPlaceholder': 'e.g. dingxxxxxxxxxxxxxxxx',
+  'channel.dingtalk.clientSecret': 'Client Secret (AppSecret)',
+  'channel.dingtalk.clientSecretHint':
+    'Shown next to the Client ID. Formerly called AppSecret. It will be encrypted and stored securely.',
+  'channel.dingtalk.description':
+    'Connect this agent to a DingTalk robot for single chats and group @-mentions.',
+  'channel.dingtalk.identifierInvalid':
+    'Use only letters, digits, hyphens and underscores. Copy the value from the DingTalk developer console without spaces.',
+  'channel.dingtalk.robotCode': 'RobotCode',
+  'channel.dingtalk.robotCodeHint':
+    "Optional. An internal-app robot's RobotCode is its Client ID, which is used when this is blank. Fill it in only if the robot page shows a different code.",
   'channel.feishu.description': 'Connect this agent to Feishu for private and group chats.',
   'channel.feishu.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.feishu.webhookMigrationDesc':
@@ -799,6 +813,8 @@ export default {
   'channel.userIdMissingDesc':
     "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Send /whoami to the bot to get your ID, then fill it in on the Access tab.",
   'channel.userIdMissingTitle': 'Add your platform User ID',
+  'channel.userIdHint.dingtalk':
+    'Your DingTalk user ID (staff ID). Find it in the DingTalk admin console \u2192 Contacts \u2192 member details, or send /whoami to the bot in a direct message.',
   'channel.userIdHint.discord':
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
   'channel.userIdHint.feishu':

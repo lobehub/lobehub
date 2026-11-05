@@ -452,3 +452,55 @@ sequenceDiagram
 | D4  | 群聊 `text.content` 是否总是去掉 @机器人（含多人 @ 场景）                     |
 | D5  | 20001 配额耗尽载荷形态                                                        |
 | D6  | 入站图片下载码有效期、下载后 MIME（当前图片 / 音视频不预设 MIME，由下游嗅探） |
+
+## 11. 服务端平台接入（`apps/server/src/services/bot/platforms/dingtalk/`）
+
+### 11.1 文件
+
+| 文件                 | 职责                                                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `definition.ts`      | `PlatformDefinition`：`id: 'dingtalk'`、默认 Stream 模式、`supportsMarkdown: true`、`supportsMessageEdit: false`、不支持的消息 API     |
+| `schema.ts`          | 凭证与设置表单：`applicationId` = Client ID，`credentials.clientSecret`（password），`credentials.robotCode`（可选）；复用通用设置字段 |
+| `const.ts`           | 默认连接模式、字符上限、标识符格式、sessionWebhook 域名白名单                                                                          |
+| `client.ts`          | `DingTalkClientFactory`：Stream / HTTP 回调两种客户端、`validateCredentials`（真实调用 accessToken）、入站附件解析、messenger          |
+| `send.ts`            | 出站：sessionWebhook 优先，失败或缺失时回退 `groupMessages/send` / `oToMessages/batchSend`                                             |
+| `sendAttachments.ts` | 出站附件：公网图片走 `sampleImageMsg`，其余降级为链接并上报 `failures`                                                                 |
+| `sessionWebhook.ts`  | 验签通过的回调把 `sessionWebhook` 写入 Redis（`bot-reply` scope），供另一个进程发最终回复                                              |
+| `service.ts`         | `lobe-message` 运行时：仅 `sendMessage`，其余抛 `PlatformUnsupportedError`                                                             |
+| `threadId.ts`        | `dingtalk:<single\|group>:<id>` 编解码（id 内可含 `:`）                                                                                |
+
+不加 AgentId 字段：机器人收发接口（`oToMessages/batchSend`、`groupMessages/send`、sessionWebhook、Stream）只认 Client ID / Secret 与 RobotCode，AgentId 只用于工作通知。
+
+### 11.2 凭证校验与错误码
+
+`validateCredentials` 调用 `POST /v1.0/oauth2/accessToken`，错误按 `classifyDingTalkCredentialError` 映射到通用的 `channel.connectionError.<code>` 文案：
+
+| 情况                                                   | code                   |
+| ------------------------------------------------------ | ---------------------- |
+| 缺 Client ID / Client Secret                           | `missing_credentials`  |
+| 4xx（如真实返回 `400 invalidClientIdOrSecret`）        | `invalid_credentials`  |
+| 403 或 `Forbidden*`（IP 白名单、应用停用等）           | `permission_denied`    |
+| 429 或限流类 code                                      | `rate_limited`         |
+| 5xx / `system.error` / 网络失败（DNS、超时、连接拒绝） | `upstream_unavailable` |
+
+### 11.3 收发链路
+
+```
+钉钉 Stream CALLBACK
+ → DingTalkStreamConnection（ACK + 签名转发）
+ → POST /api/agent/webhooks/dingtalk/:clientId
+ → BotMessageRouter.getWebhookHandler → loadBot → DingTalkClientFactory.createClient → createAdapter
+ → withSessionWebhookCapture（验签后把 sessionWebhook 存 Redis）→ DingTalkAdapter.handleWebhook（验签、解析）
+ → chat.processMessage → onNewMention / onSubscribedMessage（访问策略、命令）
+ → AgentBridgeService.handleMention / handleSubscribedMessage（创建或复用 topic，thread state 存 topicId）
+ → AiAgentService.execAgent（server runtime + agent gateway，hooks 带 platformThreadId）
+ → BotCallbackService → client.getMessenger(platformThreadId).createMessage
+ → sendDingTalkMessage：sessionWebhook → 回退 groupMessages/send（群）/ oToMessages/batchSend（单聊）
+```
+
+本地运行时（`localMode`）的回复走 `thread.post` → `DingTalkAdapter.postMessage`，同样 sessionWebhook 优先。
+
+### 11.4 未覆盖
+
+- 外部 message gateway 服务（仓库外）需要实现 `dingtalk` 平台的 Stream 连接后，Cloud 的 gateway 模式才会为钉钉建立长连接；本仓库内的 `GatewayManager` 进程内客户端已可用。
+- 出站文件 / 语音 / 视频需要旧版媒体上传接口的 `mediaId`，目前降级为链接。
