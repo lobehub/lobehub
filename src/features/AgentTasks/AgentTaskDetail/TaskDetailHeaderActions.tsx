@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   confirmModal,
+  cssVar,
   type DropdownItem,
   DropdownMenu,
   Icon,
@@ -22,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { FavoriteButton, useFavoriteMenuItem } from '@/features/Favorites';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -90,6 +92,17 @@ const TaskDetailHeaderActions = memo(() => {
       ),
     );
   }, [archiveTask, canArchive, isArchived, t, taskId]);
+
+  // ActionIcon overwrites an `aria-disabled` prop with its own `disabled` state,
+  // so the blocked state is set on the element directly.
+  const archiveButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (!node) return;
+      if (canArchive) node.removeAttribute('aria-disabled');
+      else node.setAttribute('aria-disabled', 'true');
+    },
+    [canArchive],
+  );
 
   const triggerPublish = useCallback(() => {
     if (!canEditTask) return;
@@ -185,15 +198,6 @@ const TaskDetailHeaderActions = memo(() => {
       { type: 'divider' },
       ...(favoriteMenuItem ? [favoriteMenuItem, { type: 'divider' as const }] : []),
       {
-        desc: archiveDeniedKey && t(archiveDeniedKey),
-        disabled: !canArchive,
-        icon: <Icon icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon} />,
-        key: 'archive',
-        label: t(isArchived ? 'taskList.contextMenu.unarchive' : 'taskList.contextMenu.archive'),
-        onClick: toggleArchive,
-      },
-      { type: 'divider' },
-      {
         danger: true,
         disabled: !canEditTask,
         icon: <Icon icon={Trash} />,
@@ -264,10 +268,6 @@ const TaskDetailHeaderActions = memo(() => {
     takesOver,
     t,
     triggerDelete,
-    toggleArchive,
-    isArchived,
-    archiveDeniedKey,
-    canArchive,
     triggerPublish,
     triggerMakePrivate,
     canEditTask,
@@ -276,9 +276,28 @@ const TaskDetailHeaderActions = memo(() => {
 
   if (!taskId) return null;
 
+  const archiveLabel = t(
+    isArchived ? 'taskList.contextMenu.unarchive' : 'taskList.contextMenu.archive',
+  );
+  const archiveDeniedReason = archiveDeniedKey ? t(archiveDeniedKey) : undefined;
+
   return (
     <>
       {favoriteTarget && <FavoriteButton {...favoriteTarget} />}
+      {/* A blocked archive is aria-disabled but not natively disabled, so hover
+          and keyboard users can still read why; toggleArchive no-ops. */}
+      <ActionIcon
+        aria-description={archiveDeniedReason}
+        aria-label={archiveLabel}
+        color={canArchive ? undefined : cssVar.colorTextDisabled}
+        icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon}
+        ref={archiveButtonRef}
+        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        style={canArchive ? undefined : { cursor: 'not-allowed' }}
+        title={archiveDeniedReason ?? archiveLabel}
+        tooltipProps={{ placement: 'bottom' }}
+        onClick={() => void toggleArchive()}
+      />
       <DropdownMenu items={menuItems}>
         <ActionIcon icon={MoreHorizontal} size={'small'} />
       </DropdownMenu>

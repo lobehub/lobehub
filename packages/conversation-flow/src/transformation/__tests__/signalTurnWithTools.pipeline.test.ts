@@ -316,3 +316,172 @@ describe('wake-up turns that call tools after a toolless closing reply', () => {
     expect(flat.map((m) => m.id)).toEqual(['u1', 'RUN', 'u2', 'a2']);
   });
 });
+
+/**
+ * Observed in a production topic: three background subagents. The first wake-up called a tool,
+ * the second only replied ("one more to go"), the third called a tool and then
+ * wrote the final summary. Both later wake-ups hang off the first wake-up's tool
+ * result. The text-only wake-up rendered below the final summary.
+ */
+describe('a text-only wake-up between wake-ups that call tools', () => {
+  const signal = (sourceToolCallId: string) =>
+    ({ signal: { sourceToolCallId, sourceToolName: 'Agent', type: 'task-completion' } }) as any;
+
+  const messages: Message[] = [
+    { content: 'go', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 },
+    {
+      agentId: 'a',
+      content: '',
+      createdAt: 100,
+      id: 'RUN',
+      parentId: 'u1',
+      role: 'assistant',
+      tools: [...toolArr('agentA'), ...toolArr('agentB'), ...toolArr('agentC')],
+      updatedAt: 100,
+    },
+    ...['agentA', 'agentB', 'agentC'].map(
+      (callId, index) =>
+        ({
+          content: 'launched',
+          createdAt: 101 + index,
+          id: `tool_${callId}`,
+          parentId: 'RUN',
+          role: 'tool',
+          tool_call_id: callId,
+          updatedAt: 101 + index,
+        }) as any,
+    ),
+    {
+      agentId: 'a',
+      content: 'launched three subagents',
+      createdAt: 110,
+      id: 'REPLY',
+      parentId: 'RUN',
+      role: 'assistant',
+      updatedAt: 110,
+    },
+    {
+      agentId: 'a',
+      content: '',
+      createdAt: 120,
+      id: 'WAKE_A',
+      metadata: signal('agentA'),
+      parentId: 'tool_agentC',
+      role: 'assistant',
+      tools: toolArr('readA'),
+      updatedAt: 120,
+    },
+    {
+      content: 'source',
+      createdAt: 121,
+      id: 'toolReadA',
+      parentId: 'WAKE_A',
+      role: 'tool',
+      tool_call_id: 'readA',
+      updatedAt: 121,
+    } as any,
+    {
+      agentId: 'a',
+      content: 'A checked, two still running',
+      createdAt: 125,
+      id: 'WAKE_A_REPLY',
+      parentId: 'WAKE_A',
+      role: 'assistant',
+      updatedAt: 125,
+    },
+    {
+      agentId: 'a',
+      content: 'C is done, waiting on B',
+      createdAt: 130,
+      id: 'DONE_C',
+      metadata: signal('agentC'),
+      parentId: 'toolReadA',
+      role: 'assistant',
+      updatedAt: 130,
+    },
+    {
+      agentId: 'a',
+      content: '',
+      createdAt: 140,
+      id: 'WAKE_B',
+      metadata: signal('agentB'),
+      parentId: 'toolReadA',
+      role: 'assistant',
+      tools: toolArr('readB'),
+      updatedAt: 140,
+    },
+    {
+      content: 'source',
+      createdAt: 141,
+      id: 'toolReadB',
+      parentId: 'WAKE_B',
+      role: 'tool',
+      tool_call_id: 'readB',
+      updatedAt: 141,
+    } as any,
+    {
+      agentId: 'a',
+      content: 'final summary',
+      createdAt: 150,
+      id: 'FINAL',
+      parentId: 'WAKE_B',
+      role: 'assistant',
+      updatedAt: 150,
+    },
+  ];
+
+  const everyStep = ['RUN', 'REPLY', 'WAKE_A', 'WAKE_A_REPLY', 'DONE_C', 'WAKE_B', 'FINAL'];
+
+  it('renders every turn in creation order', () => {
+    expect(groupStepIds(flatten(messages))).toEqual(everyStep);
+
+    const groups = parse(messages).contextTree.filter((n) => n.type === 'assistantGroup') as any[];
+    expect(groups).toHaveLength(1);
+    expect(groups[0].children.map((step: { id: string }) => step.id)).toEqual(everyStep);
+  });
+
+  it('keeps each wake-up’s own signal on its block', () => {
+    const group = flatten(messages).find((m) => m.role === ('assistantGroup' as any)) as any;
+    const signals = Object.fromEntries(
+      group.children.map((block: any) => [block.id, block.metadata?.signal?.sourceToolCallId]),
+    );
+
+    expect(signals).toEqual({
+      DONE_C: 'agentC',
+      FINAL: undefined,
+      REPLY: undefined,
+      RUN: undefined,
+      WAKE_A: 'agentA',
+      WAKE_A_REPLY: undefined,
+      WAKE_B: 'agentB',
+    });
+    expect(group.metadata?.signal).toBeUndefined();
+  });
+
+  it('keeps a follow-up sent to the spine tail when the text-only wake-up ends the run', () => {
+    const run = messages.filter((m) => !['WAKE_B', 'toolReadB', 'FINAL'].includes(m.id));
+    const flat = flatten([
+      ...run,
+      {
+        content: 'follow-up',
+        createdAt: 200,
+        id: 'u2',
+        parentId: 'WAKE_A_REPLY',
+        role: 'user',
+        updatedAt: 200,
+      },
+      {
+        agentId: 'a',
+        content: 'answer',
+        createdAt: 210,
+        id: 'a2',
+        parentId: 'u2',
+        role: 'assistant',
+        updatedAt: 210,
+      },
+    ]);
+
+    expect(groupStepIds(flat)).toEqual(['RUN', 'REPLY', 'WAKE_A', 'WAKE_A_REPLY', 'DONE_C']);
+    expect(flat.map((m) => m.id)).toEqual(['u1', 'RUN', 'u2', 'a2']);
+  });
+});

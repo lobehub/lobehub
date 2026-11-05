@@ -12,6 +12,8 @@ import NavPanelUpgradeEntry from '@/business/client/features/NavPanelUpgradeEntr
 import { isDesktop } from '@/const/version';
 import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';
 import Footer from '@/features/HomeSidebar/Footer';
+import { LIST_COLUMN_BACKGROUND } from '@/features/NavRail/const';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useGlobalStore } from '@/store/global';
 import {
   NAV_PANEL_MAX_WIDTH,
@@ -40,6 +42,13 @@ const draggableStyles = stylex.create({
     minWidth: '240px',
     maxWidth: '100%',
     minHeight: '0',
+  },
+  imPanel: {
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: stylexCssVar.colorBorderSecondary,
+    backgroundColor: `color-mix(in srgb, ${stylexCssVar.colorBgContainer} 55%, ${stylexCssVar.colorBgLayout})`,
+    backgroundImage: 'none',
   },
   layer: {
     position: 'absolute',
@@ -91,12 +100,17 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
     defaultWidthRef.current = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
   }
 
+  const imLayout = useImLayout();
   const styles = useMemo(
     () => ({
-      background: isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout,
+      background: imLayout
+        ? LIST_COLUMN_BACKGROUND
+        : isDesktop && isMacOS()
+          ? MAC_VIBRANCY_BACKGROUND
+          : cssVar.colorBgLayout,
       zIndex: 11,
     }),
-    [],
+    [imLayout],
   );
 
   if (defaultWidthRef.current === 0) {
@@ -119,7 +133,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       showBorder={false}
       style={styles}
       className={[
-        stylex.props(draggableStyles.panel).className,
+        stylex.props(draggableStyles.panel, imLayout && draggableStyles.imPanel).className,
         'lobe-nav-panel-draggable-4efd33c1-panel',
       ].join(' ')}
       onExpandChange={togglePanel}
@@ -151,9 +165,12 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       <Suspense fallback={null}>
         <NavPanelUpgradeEntry />
       </Suspense>
-      <Suspense>
-        <Footer />
-      </Suspense>
+      {/* The rail owns settings and help under `im_layout`. */}
+      {!imLayout && (
+        <Suspense>
+          <Footer />
+        </Suspense>
+      )}
     </DraggablePanel>
   );
 });

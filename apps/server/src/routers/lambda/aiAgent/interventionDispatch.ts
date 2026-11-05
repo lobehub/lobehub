@@ -25,6 +25,8 @@ import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory'
 import type { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
 
+import { mergeContinuationUserInterventionConfig } from './continuationInterventionConfig';
+
 const log = debug('lobe-server:ai-agent-router');
 
 /** Each expected claim is a separate plugin read; a large batch must not open them all at once. */
@@ -421,9 +423,9 @@ const repairRuntimeActionContinuationAnchor = async (
  * foreground approval preference: only a run that could wait for a human can
  * park on an intervention, so the answered run was never headless.
  *
- * The owner's persisted allow list is merged in either way: an "Approve, and
- * don't ask again" answer writes the tool key there before this dispatch, and
- * the snapshot in the parked run predates it.
+ * The owner's answers on the approval card itself ("don't ask again", "switch
+ * to auto approve") are persisted before this dispatch and the parked run's
+ * snapshot predates them — see `mergeContinuationUserInterventionConfig`.
  *
  * A share visitor's continuation uses neither owner fallback: the parked run
  * carries the VISITOR's approval mode, a visitor can never "remember" into
@@ -445,24 +447,13 @@ const resolveContinuationUserInterventionConfig = async (
       return undefined;
     }),
   ]);
-  const intervention = (settings?.tool as UserToolConfig | undefined)?.humanIntervention;
-  const persistedAllowList = intervention?.allowList ?? [];
-
   const inherited = sourceState ? selectUserInterventionConfig(sourceState) : undefined;
   if (ctx.shareGate) return inherited ?? { approvalMode: 'manual' };
-  if (inherited) {
-    const inheritedAllowList = inherited.allowList ?? [];
-    const remembered = persistedAllowList.filter((key) => !inheritedAllowList.includes(key));
-    if (remembered.length === 0) return inherited;
-    return { ...inherited, allowList: [...inheritedAllowList, ...remembered] };
-  }
 
-  const approvalMode =
-    intervention?.approvalMode === 'headless'
-      ? 'auto-run'
-      : (intervention?.approvalMode ?? 'manual');
-
-  return { allowList: persistedAllowList, approvalMode };
+  return mergeContinuationUserInterventionConfig({
+    inherited,
+    persisted: (settings?.tool as UserToolConfig | undefined)?.humanIntervention,
+  });
 };
 
 /**

@@ -5,7 +5,6 @@ import { Center, ContextMenuTrigger, Empty, Flexbox, Icon, SearchBar, Tooltip } 
 import {
   ActionIcon,
   Button,
-  confirmModal,
   type DropdownItem,
   DropdownMenu,
   Text,
@@ -32,6 +31,7 @@ import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
+import { createDeleteProjectModal } from '@/features/Projects/DeleteProjectModal';
 import ProjectDisabled from '@/features/Projects/ProjectDisabled';
 import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
@@ -144,12 +144,12 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
     setDeleting(true);
     try {
       await deleteProject(project.id);
-      toast.success(t('list.deleteSuccess', { name: project.name }));
     } catch (error) {
-      console.error('Failed to delete project', error);
-      toast.error(t('list.deleteError'));
+      // On success the row unmounts, so only a failure re-enables it.
       setDeleting(false);
+      throw error;
     }
+    toast.success(t('list.deleteSuccess', { name: project.name }));
   };
 
   const menuItems: DropdownItem[] = [
@@ -159,13 +159,9 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
       key: 'delete',
       label: t('list.deleteAction'),
       onClick: () => {
-        confirmModal({
-          cancelText: t('cancel', { ns: 'common' }),
-          content: t('list.deleteConfirmDescription', { name: project.name }),
-          okButtonProps: { danger: true },
-          okText: t('delete', { ns: 'common' }),
-          onOk: () => void handleDelete(),
-          title: t('list.deleteConfirmTitle'),
+        createDeleteProjectModal({
+          onConfirm: handleDelete,
+          project: { id: project.id, name: project.name },
         });
       },
     },

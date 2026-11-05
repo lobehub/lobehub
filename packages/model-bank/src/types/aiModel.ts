@@ -317,6 +317,12 @@ export interface AIBaseModelCard {
   generation?: string;
   id: string;
   /**
+   * Whether this card is listed by the vendor that makes the model, so its `pricing` is the
+   * official list price. Resellers that list another vendor's model (e.g. DeepSeek on Qwen)
+   * leave it unset. Unset also means "not checked yet", so treat it as unknown, not as false.
+   */
+  isOfficial?: boolean;
+  /**
    * knowledge cutoff date (YYYY-MM). When the provider distinguishes a "reliable
    * knowledge cutoff" from the broader training-data cutoff, use the reliable one.
    */

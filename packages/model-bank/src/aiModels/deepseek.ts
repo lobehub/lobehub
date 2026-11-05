@@ -17,6 +17,7 @@ const deepseekChatModels: AIChatModelCard[] = [
     family: 'deepseek',
     generation: 'deepseek-v4',
     id: 'deepseek-flash',
+    isOfficial: true,
     maxOutput: 393_216,
     pricing: {
       currency: 'USD',
@@ -46,6 +47,7 @@ const deepseekChatModels: AIChatModelCard[] = [
     family: 'deepseek',
     generation: 'deepseek-v4',
     id: 'deepseek-v4-flash',
+    isOfficial: true,
     maxOutput: 393_216,
     pricing: {
       currency: 'USD',
@@ -75,6 +77,7 @@ const deepseekChatModels: AIChatModelCard[] = [
     family: 'deepseek',
     generation: 'deepseek-v4',
     id: 'deepseek-v4-pro',
+    isOfficial: true,
     maxOutput: 393_216,
     pricing: {
       currency: 'USD',
@@ -105,6 +108,7 @@ const deepseekChatModels: AIChatModelCard[] = [
     family: 'deepseek',
     generation: 'deepseek-v4',
     id: 'deepseek-v4-flash-vision-exp',
+    isOfficial: true,
     maxOutput: 393_216,
     pricing: {
       currency: 'USD',

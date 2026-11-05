@@ -3,17 +3,9 @@
 import { type ChatMessageError } from '@lobechat/types';
 import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
-import {
-  Alert,
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Highlighter,
-  Select,
-  Spin,
-} from '@lobehub/ui';
+import { Alert, Button, Flexbox, Highlighter, Select, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleCheckIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -26,11 +18,7 @@ import { chatService } from '@/services/chat';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
-const styles = createStaticStyles(({ css }) => ({
-  popup: css`
-    width: 380px;
-  `,
-}));
+const styles = stylex.create({ popup: { width: '380px' } });
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
   const { t } = useTranslation(['error', 'modelRuntime']);
   const providerName = useProviderName(error.body?.provider);
@@ -199,7 +187,7 @@ const Checker = memo<ConnectionCheckerProps>(
             disabled={!canManageProvider}
             listItemHeight={36}
             options={sortedModels.map((id) => ({ label: id, value: id }))}
-            popupClassName={cx(styles.popup)}
+            popupClassName={stylex.props(styles.popup).className}
             suffixIcon={isProviderConfigUpdating && <Spin size="small" />}
             value={checkModel}
             optionRender={({ value }) => {

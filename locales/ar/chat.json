@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/> غيّر الأولوية من <from/> إلى <to/>",
   "taskDetail.activities.status.changed": "<actor/> غيّر الحالة من <from/> إلى <to/>",
   "taskDetail.activitiesEmpty": "لا توجد أي نشاطات بعد",
+  "taskDetail.activitiesLoadMore": "عرض النشاط الأقدم ({{count}})",
   "taskDetail.addSubtask": "إضافة مهمة فرعية",
   "taskDetail.artifactInaccessible": "المستند غير متاح — لا يوجد وصول",
   "taskDetail.artifactMenu.delete": "إزالة من المهمة",

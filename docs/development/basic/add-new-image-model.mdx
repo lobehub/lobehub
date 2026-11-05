@@ -32,10 +32,10 @@ All image generation models must use the standard parameters defined in `package
 
 These models can be requested using the OpenAI SDK, with request parameters and return values consistent with DALL-E and GPT-Image-X series.
 
-Taking Zhipu's CogView-4 as an example, which is an OpenAI-compatible model, you can add it by adding the model configuration in the corresponding AI models file `packages/model-bank/src/aiModels/zhipu.ts`:
+Taking Zhipu's CogView-4 as an example, which is an OpenAI-compatible model, you can add it by adding the model configuration in the corresponding AI models file `packages/model-bank/src/aiModels/zhipu/nonChat.ts`:
 
 ```ts
-const zhipuImageModels: AIImageModelCard[] = [
+export const zhipuImageModels: AIImageModelCard[] = [
   // Add model configuration
   // https://bigmodel.cn/dev/howuse/image-generation-model/cogview-4
   {
