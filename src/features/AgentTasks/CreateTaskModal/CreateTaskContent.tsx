@@ -26,11 +26,13 @@ import {
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
 import { releaseEditorSelection } from '@/features/EditorCanvas/releaseEditorSelection';
+import { resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
 import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
 import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { getTaskStoreState, useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -106,9 +108,26 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState(defaultPriority);
+    const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+    const labelRegistry = useTaskStore(taskLabelSelectors.labels);
     const [labels, setLabels] = useState<TaskLabelRef[]>(() =>
-      getTaskStoreState().taskLabels.filter((label) => defaultLabelIds?.includes(label.id)),
+      resolveTaskLabelRefs(getTaskStoreState().taskLabels, defaultLabelIds),
     );
+    // Opened before the registry loaded (a cold start on a label-grouped
+    // list): hold the column's labels until they can be resolved, instead of
+    // filtering them against an empty registry and losing them.
+    const pendingDefaultLabelIdsRef = useRef(
+      getTaskStoreState().taskLabelsInit ? undefined : defaultLabelIds,
+    );
+    useEffect(() => {
+      const pending = pendingDefaultLabelIdsRef.current;
+      if (!isLabelsInit || !pending?.length) return;
+      pendingDefaultLabelIdsRef.current = undefined;
+      // Keep anything the user already picked meanwhile.
+      setLabels((current) =>
+        current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
+      );
+    }, [isLabelsInit, labelRegistry]);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
     // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
     const [memberChoice, setMemberChoice] = useState<string | null | undefined>();

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTaskLabelPickerSections,
   canCreateTaskLabel,
+  resolveTaskLabelRefs,
   toggleTaskLabelSelection,
   toTaskLabelRef,
 } from './labelPickerModel';
@@ -63,5 +64,21 @@ describe('canCreateTaskLabel', () => {
     expect(canCreateTaskLabel(registry, ' ')).toBe(false);
     expect(canCreateTaskLabel(registry, 'bug')).toBe(false);
     expect(canCreateTaskLabel(registry, 'Backend')).toBe(true);
+  });
+});
+
+describe('resolveTaskLabelRefs', () => {
+  it('keeps id order, drops unknown ids and groups', () => {
+    const registry = [
+      label('g', 'Type', { isGroup: true }),
+      label('bug', 'Bug', { parentId: 'g' }),
+      label('fe', 'Frontend'),
+    ];
+
+    expect(resolveTaskLabelRefs(registry, ['fe', 'gone', 'g', 'bug']).map((l) => l.id)).toEqual([
+      'fe',
+      'bug',
+    ]);
+    expect(resolveTaskLabelRefs(registry, undefined)).toEqual([]);
   });
 });

@@ -27,13 +27,15 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
 import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
 import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { taskService } from '@/services/task';
 import { useGlobalStore } from '@/store/global';
-import { useTaskStore } from '@/store/task';
+import { getTaskStoreState, useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { shinyTextStyles } from '@/styles';
@@ -121,6 +123,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const navigate = useWorkspaceAwareNavigate();
   const [priority, setPriority] = useState(0);
   const [labels, setLabels] = useState<TaskLabelRef[]>([]);
+  const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+  const labelRegistry = useTaskStore(taskLabelSelectors.labels);
+  // Label ids read from a draft before the registry loaded; resolved (and
+  // stale ones dropped) once it has.
+  const pendingDraftLabelIdsRef = useRef<string[] | undefined>(undefined);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
   const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -258,6 +265,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     // Labels belong to a workspace: one picked in the previous scope would be a
     // foreign id here and fail the create.
     setLabels([]);
+    pendingDraftLabelIdsRef.current = undefined;
     setVisibility(defaultVisibility);
     setExecution(undefined);
     if (!lockAssignee) setAssigneeAgentId(agentId);
@@ -283,6 +291,16 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         setMemberChoice(draft.assigneeUserId);
       }
       if (draft.visibility) setVisibility(draft.visibility);
+      const labelIds = Array.isArray(draft.labelIds)
+        ? draft.labelIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      if (labelIds.length > 0) {
+        if (getTaskStoreState().taskLabelsInit) {
+          setLabels(resolveTaskLabelRefs(getTaskStoreState().taskLabels, labelIds));
+        } else {
+          pendingDraftLabelIdsRef.current = labelIds;
+        }
+      }
     } catch {
       /* ignore a malformed draft */
     }
@@ -297,6 +315,15 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     isMembersLoading,
     lockAssignee,
   ]);
+
+  useEffect(() => {
+    const pending = pendingDraftLabelIdsRef.current;
+    if (!isLabelsInit || !pending?.length) return;
+    pendingDraftLabelIdsRef.current = undefined;
+    setLabels((current) =>
+      current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
+    );
+  }, [isLabelsInit, labelRegistry]);
 
   // Back the draft to storage on every change. Gated behind the restore pass so
   // the initial render can't clobber a just-read draft. Emptying the editor
@@ -316,6 +343,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         // `undefined` (the whole selection is `undefined`) drops the key, so
         // an untouched composer writes the same draft shape as before.
         execution,
+        labelIds: labels.length > 0 ? labels.map((label) => label.id) : undefined,
         markdown,
         priority,
         visibility,
@@ -329,6 +357,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     editor,
     execution,
     instruction,
+    labels,
     lockAssignee,
     memberChoice,
     priority,

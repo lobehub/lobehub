@@ -46,6 +46,23 @@ export const toTaskLabelRef = (label: TaskLabel): TaskLabelRef => ({
 });
 
 /**
+ * Resolve label ids against the registry, keeping the ids' order. Ids the
+ * registry does not hold (deleted, or from another workspace) are dropped, and
+ * group rows are never returned (they cannot be assigned).
+ */
+export const resolveTaskLabelRefs = (
+  registry: TaskLabel[],
+  ids: readonly string[] | undefined,
+): TaskLabelRef[] => {
+  if (!ids?.length) return [];
+  const byId = new Map(registry.map((label) => [label.id, label]));
+  return ids.flatMap((id) => {
+    const label = byId.get(id);
+    return label && !label.isGroup ? [toTaskLabelRef(label)] : [];
+  });
+};
+
+/**
  * Toggle one label in a selection. Picking a grouped label replaces the
  * sibling from the same group (one label per group, as the server enforces).
  */
