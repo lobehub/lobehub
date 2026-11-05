@@ -1,6 +1,7 @@
 import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
+  ['AskUserQuestionView', 'packages/shared-tool-ui/src/AskUserQuestion/AskUserQuestionView.tsx'],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -9,6 +10,17 @@ export const migrationFixtures = [
 ] as const;
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
+  AskUserQuestionView: {
+    dependencies: ['lucide-react', 'path-browserify-esm'],
+    exportName: 'AskUserQuestionView',
+    selector: '[data-component-mount] [role="tab"]',
+    settleFrames: 2,
+    variants: [
+      { id: 'questions', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'escape' },
+      { id: 'dark-questions', appearance: 'dark' },
+    ],
+  },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     i18n: true,
