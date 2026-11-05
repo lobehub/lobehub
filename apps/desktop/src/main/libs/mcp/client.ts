@@ -395,6 +395,13 @@ export class MCPClient {
         inputRequired: { autoFulfill: false },
       },
     );
+    // A server whose tools changed (a view's visibility, its `ui://` resource)
+    // voids what its last listing taught; the next lookup lists them again
+    this.mcp.setNotificationHandler('notifications/tools/list_changed', () => {
+      this.uiResourceUris = undefined;
+      this.appHiddenTools = undefined;
+      this.modelHiddenTools = undefined;
+    });
 
     switch (params.type) {
       case 'http': {

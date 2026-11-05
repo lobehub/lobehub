@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MCPClient } from './client';
 import { MCP_APPS_CLIENT_CAPABILITIES } from './mcpApp';
 
-const { clientOptions, listTools } = vi.hoisted(() => ({
+const { clientOptions, listTools, notificationHandlers } = vi.hoisted(() => ({
   clientOptions: [] as unknown[],
   listTools: vi.fn(),
+  // The handlers each client registered, by notification method
+  notificationHandlers: new Map<string, () => void>(),
 }));
 
 vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
@@ -13,6 +15,8 @@ vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
   Client: class {
     getProtocolEra = () => 'legacy';
     listTools = listTools;
+    setNotificationHandler = (method: string, handler: () => void) =>
+      notificationHandlers.set(method, handler);
     constructor(_info: unknown, options?: unknown) {
       clientOptions.push(options);
     }
@@ -166,5 +170,26 @@ describe('MCPClient.isToolHiddenFromModel', () => {
     const client = new MCPClient(params, { mcpApps: true });
 
     await expect(client.isToolHiddenFromModel('load_page')).resolves.toBe(false);
+  });
+});
+
+describe('web MCPClient after the server changes its tools', () => {
+  it('lists them again for visibility and views once it says they changed', async () => {
+    listTools.mockResolvedValueOnce({
+      tools: [{ _meta: { ui: { resourceUri: 'ui://old', visibility: ['app'] } }, name: 'page' }],
+    });
+    const client = new MCPClient(params, { mcpApps: true });
+    await expect(client.isToolCallableByApp('page')).resolves.toBe(true);
+
+    // The server takes the tool from views and moves its view
+    listTools.mockResolvedValueOnce({
+      tools: [{ _meta: { ui: { resourceUri: 'ui://new', visibility: ['model'] } }, name: 'page' }],
+    });
+    notificationHandlers.get('notifications/tools/list_changed')?.();
+
+    await expect(client.isToolCallableByApp('page')).resolves.toBe(false);
+    await expect(client.getToolUiResourceUri('page')).resolves.toBe('ui://new');
+    await expect(client.isToolHiddenFromModel('page')).resolves.toBe(false);
+    expect(listTools).toHaveBeenCalledTimes(2);
   });
 });
