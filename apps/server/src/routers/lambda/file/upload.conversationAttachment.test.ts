@@ -116,7 +116,10 @@ describe('uploadRouter.createFile for a conversation attachment', () => {
   it('never lets a run operation token publish an attachment', async () => {
     mocks.getAgentVisibility.mockResolvedValue('public');
 
-    await workspaceCaller({ heteroOperationScope: 'op_task_run' }).createFile(upload);
+    await workspaceCaller({
+      heteroOperationCapabilities: ['acceptance:evidence'],
+      heteroOperationScope: 'op_task_run',
+    }).createFile(upload);
 
     expectCreated({ source: FileSource.Acceptance, visibility: 'private' });
   });
