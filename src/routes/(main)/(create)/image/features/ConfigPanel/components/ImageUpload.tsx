@@ -268,10 +268,16 @@ const Placeholder: FC<PlaceholderProps> = memo(({ isDragOver, onClick, height })
 
   return (
     <Center
-      className={stylex.props(styles.placeholder, isDragOver && configStyles.dragOver).className}
       gap={16}
       horizontal={false}
       style={height ? { height } : undefined}
+      className={
+        stylex.props(
+          styles.placeholder,
+          configStyles.dragTransition,
+          isDragOver && configStyles.dragOver,
+        ).className
+      }
       onClick={onClick}
     >
       <ImageIcon
@@ -348,6 +354,7 @@ const SuccessDisplay: FC<SuccessDisplayProps> = memo(
         {...stylex.props(
           imageUploadMarker,
           styles.successDisplay,
+          configStyles.dragTransition,
           isDragOver && configStyles.dragOver,
         )}
       >
