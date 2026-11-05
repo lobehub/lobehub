@@ -3,9 +3,13 @@ import { BaseFormatConverter, parseMarkdown, stringifyMarkdown } from 'chat';
 
 import type { DingTalkOutboundMessage } from './types';
 
-/** Markdown syntax DingTalk renders in `sampleMarkdown` (headings, emphasis, links, lists, quotes, code). */
+/**
+ * Markdown syntax DingTalk renders in `sampleMarkdown` (headings, emphasis, links, lists, quotes, code).
+ * Link parts exclude their own opening delimiter so an unclosed `[` / `(` cannot make the scan
+ * restart from every later position (polynomial backtracking).
+ */
 const MARKDOWN_SYNTAX =
-  /(^|\n)\s{0,3}(#{1,6}\s|>\s|[-*+]\s|\d+\.\s)|\*\*|__|`|!?\[[^\]]*]\([^)]+\)/;
+  /(^|\n)\s{0,3}(#{1,6}\s|>\s|[-*+]\s|\d+\.\s)|\*\*|__|`|!?\[[^[\]]*]\([^()]+\)/;
 const TITLE_MAX_LENGTH = 20;
 
 export class DingTalkFormatConverter extends BaseFormatConverter {
@@ -49,7 +53,7 @@ export class DingTalkFormatConverter extends BaseFormatConverter {
         .split('\n')
         .map((line) =>
           line
-            .replaceAll(/!?\[([^\]]*)]\([^)]*\)/g, '$1')
+            .replaceAll(/!?\[([^[\]]*)]\([^()]*\)/g, '$1')
             .replaceAll(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/g, '')
             .replaceAll(/[*_`~]/g, '')
             .trim(),
