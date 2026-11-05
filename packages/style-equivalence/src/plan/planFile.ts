@@ -343,6 +343,8 @@ export const planFile = (
     if (Object.keys(modeling.used).length) evidence.push('TABLE_KEYS');
     if (modeled.some((variable) => variable.probe)) evidence.push('RUNTIME_STYLE_PROBED');
     if (pairwise) flags.add('COMBINATIONS_PAIRWISE');
+    if (Object.values(shared).some((list) => list.some((style) => style.reordered)))
+      flags.add('INLINE_STYLE_SPREAD_ORDER');
     return {
       combos,
       elementIds: { base: left.id, head: right.id },

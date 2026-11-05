@@ -44,6 +44,7 @@ export interface SharedStyle {
   binding: number;
   index: number;
   names: string[];
+  reordered: boolean;
   without: string;
 }
 
@@ -57,12 +58,15 @@ export const sharedInlineStyles = (chains: Record<'base' | 'head', StyleElement[
       ['base', left, right],
     ] as const) {
       const sx = sxStyleOf(own);
-      if (!sx || !other.styleExpr || other.runtimeStyle || other.foreignSpread) continue;
+      if (!sx || !other.styleExpr || other.runtimeStyle) continue;
       if (compact(other.styleExpr) !== sx.style) continue;
       (found[side] ??= []).push({
         binding: sx.binding,
         index,
         names: sx.names,
+        reordered:
+          Boolean(own.foreignSpread) !== Boolean(other.foreignSpread) ||
+          Boolean(own.spreadAfterStyle) !== Boolean(other.spreadAfterStyle),
         without: sx.without,
       });
     }

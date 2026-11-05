@@ -28,6 +28,7 @@ export const FLAG_LABELS: Record<string, string> = {
   CONTAINER_UNMODELED: '容器查询未建模',
   CROSS_COMPONENT: '跨组件选择器',
   DIFFERENCE_NOT_REPRODUCED: '差异没有复现',
+  INLINE_STYLE_SPREAD_ORDER: 'style 与展开属性顺序变了',
   INNER_TARGET: '命中组件内部',
   MEDIA_UNMODELED: '媒体条件未建模',
   PLACEMENT_NEUTRAL_PROP: '非 className 属性',
@@ -102,6 +103,8 @@ export const FLAG_EXPLANATIONS: Record<string, string> = {
     '别的组件的选择器会命中这个元素（比如 .muted .control-label），合成环境里没有那个外层组件，这条规则的效果没有被比较。',
   DIFFERENCE_NOT_REPRODUCED:
     '一些条件下出现过差异，单独重跑这些用例时没有复现。可能是渲染时序造成的抖动，也可能只在整页组合下出现，需要人工确认。',
+  INLINE_STYLE_SPREAD_ORDER:
+    '两侧传的 style={…} 写法一样，但它和 {...props} 这类展开属性的先后顺序两侧不同，或者只有一侧有展开属性。展开对象里如果带 style，两侧谁覆盖谁就不同；工具不知道展开对象里有什么。',
   INNER_TARGET:
     '全局 CSS 的选择器指向组件内部的元素（比如 Image 里的 img），合成渲染看不到组件内部。',
   MEDIA_UNMODELED:

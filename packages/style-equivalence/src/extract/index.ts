@@ -243,9 +243,15 @@ export const extractFile = (
       };
       let runtimeStyle: string | undefined;
       let styleExpr: string | undefined;
-      for (const attribute of opening.attributes.properties) {
+      let lastStyle = -1;
+      let lastForeign = -1;
+      for (const [position, attribute] of opening.attributes.properties.entries()) {
         if (ts.isJsxSpreadAttribute(attribute)) {
-          if (!referencesStyle(attribute.expression, '...')) continue;
+          if (!referencesStyle(attribute.expression, '...')) {
+            lastForeign = position;
+            continue;
+          }
+          lastStyle = position;
           bindingOf(attribute.expression, '...', true);
           continue;
         }
@@ -291,6 +297,7 @@ export const extractFile = (
           !(ts.isIdentifier(expression) && GLOBALS.has(expression.text))
         ) {
           styleExpr = expression.getText(ast).replaceAll(/\s+/g, ' ');
+          lastStyle = position;
           if (ts.isIdentifier(expression)) runtimeStyle = expression.text;
         }
       }
@@ -349,6 +356,7 @@ export const extractFile = (
           bindings.filter((binding) => binding.spread).length
             ? { foreignSpread: true }
             : {}),
+          ...(lastForeign > lastStyle && lastStyle >= 0 ? { spreadAfterStyle: true } : {}),
           ...(used.size ? { aliases: Object.fromEntries([...used].sort()) } : {}),
           tag,
           variables: [...names].sort().map((name) => ({

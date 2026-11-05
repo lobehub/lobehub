@@ -33,6 +33,7 @@ export interface StyleElement {
   real?: boolean;
   runtimeStyle?: string;
   slots: string[];
+  spreadAfterStyle?: boolean;
   styleExpr?: string;
   subtreeComponents?: string[];
   subtreeTags?: Record<string, number>;

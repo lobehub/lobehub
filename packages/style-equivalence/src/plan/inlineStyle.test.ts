@@ -8,29 +8,34 @@ import { planFile } from './planFile';
 
 const options = { adapters: [emotionStaticAdapter, stylexAdapter], layoutComponents: [] };
 
-const base = `import { createStaticStyles } from '@lobehub/ui';
+const baseWith = (
+  attributes = 'className={styles.divider} style={{ left: `${view.ratio * 100}%` }}',
+) => `import { createStaticStyles } from '@lobehub/ui';
 
 const styles = createStaticStyles(({ css }) => ({ divider: css\`width: 4px;\` }));
 
-export const Split = ({ view }) => (
-  <div className={styles.divider} style={{ left: \`\${view.ratio * 100}%\` }} />
+export const Split = ({ handlers, view }) => (
+  <div ${attributes} />
 );
 `;
 
+const base = baseWith();
+
 const head = (
   style = '{ left: `${view.ratio * 100}%` }',
+  spread = '',
 ) => `import * as stylex from '@stylexjs/stylex';
 
 import { sx } from '@/styles/sx';
 
 const styles = stylex.create({ divider: { width: '4px' } });
 
-export const Split = ({ view }) => <div {...sx([styles.divider], undefined, ${style})} />;
+export const Split = ({ handlers, view }) => <div ${spread}{...sx([styles.divider], undefined, ${style})} />;
 `;
 
-const plan = (after: string) => {
+const plan = (after: string, before = base) => {
   const pair = {
-    base: extractFile(base, 'a.tsx', options),
+    base: extractFile(before, 'a.tsx', options),
     head: extractFile(after, 'a.tsx', options),
   };
   return { pair, plan: planFile('a.tsx', pair.base, pair.head, { layoutComponents: [] }) };
@@ -53,5 +58,23 @@ describe('an inline style moved from the style prop into sx', () => {
     const [entry] = plan(head('{ left: `${view.ratio * 50}%` }')).plan.cases;
     expect(entry.inlineStyles).toBeUndefined();
     expect(entry.flags).toContain('VARIABLE_UNMODELED');
+  });
+
+  it('shares the style next to a spread whose order relative to it did not change', () => {
+    const before = baseWith(
+      '{...handlers} className={styles.divider} style={{ left: `${view.ratio * 100}%` }}',
+    );
+    const [entry] = plan(head(undefined, '{...handlers} '), before).plan.cases;
+    expect(entry.inlineStyles?.head).toHaveLength(1);
+    expect(entry.flags).toEqual([]);
+  });
+
+  it('flags a style that moved from before a spread to after it', () => {
+    const before = baseWith(
+      'className={styles.divider} style={{ left: `${view.ratio * 100}%` }} {...handlers}',
+    );
+    const [entry] = plan(head(undefined, '{...handlers} '), before).plan.cases;
+    expect(entry.inlineStyles?.head).toHaveLength(1);
+    expect(entry.flags).toEqual(['INLINE_STYLE_SPREAD_ORDER']);
   });
 });

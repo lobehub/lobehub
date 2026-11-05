@@ -71,9 +71,9 @@ describe('runtime style passed through on both sides', () => {
     expect(cases[0].flags).toEqual(['VARIABLE_UNMODELED']);
   });
 
-  it('keeps the flag when the style sits next to a spread whose order is not recorded', () => {
+  it('flags a style that only one side places next to a spread', () => {
     const cases = plan(base('<div {...props} className={styles.lane} style={laneStyle}>'), head());
-    expect(cases[0].flags).toContain('VARIABLE_UNMODELED');
+    expect(cases[0].flags).toEqual(['INLINE_STYLE_SPREAD_ORDER']);
   });
 
   it('keeps the flag when the other side reads into the value', () => {
