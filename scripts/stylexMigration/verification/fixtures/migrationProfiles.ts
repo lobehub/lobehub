@@ -3,6 +3,10 @@ import type { FixtureProfile } from './fixtureRegistry';
 export const migrationFixtures = [
   ['CommandMenuTheme', 'src/features/CommandMenu/ThemeMenu.tsx'],
   ['DashboardLayoutEditor', 'src/features/Dashboard/Board/LayoutEditor.tsx'],
+  [
+    'TaskBulkActionsPanel',
+    'src/features/AgentTasks/AgentTaskList/selection/TaskBulkActionsPanel.tsx',
+  ],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -12,8 +16,45 @@ export const migrationFixtures = [
 
 const commandMenuData = 'fixtures/CommandMenuFixtureData.tsx';
 const dashboardData = 'fixtures/DashboardFixtureData.tsx';
+const taskBulkData = 'fixtures/TaskBulkActionsFixtureData.tsx';
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
+  TaskBulkActionsPanel: {
+    dependencies: ['cmdk', 'lucide-react', 'i18next', 'react-i18next'],
+    selector: '[data-component-mount] [cmdk-item][data-value="copy ids identifiers"]',
+    selectors: {
+      'hover': '[data-component-mount] [cmdk-item][data-value="copy ids identifiers"]',
+      'focus-visible': '[data-component-mount] [cmdk-input]',
+    },
+    settleFrames: 2,
+    variants: [
+      { id: 'light', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'dark', appearance: 'dark', states: ['default', 'hover'] },
+    ],
+    boundaries: [
+      'react-dom',
+      '@lobechat/types',
+      '@/business/client/hooks/useActiveWorkspaceId',
+      '@/components/AgentAvatar',
+      '@/hooks/useFetchAgentList',
+      '@/hooks/usePermission',
+      '@/store/home',
+      '@/store/home/selectors',
+      '@/store/user',
+      '@/store/user/selectors',
+      '../../features/TaskPriorityTag',
+      '../../features/taskStatusMeta',
+      '../../shared/memberAssigneeMode',
+      './BulkDeleteConfirmContent',
+      './store',
+      './taskSelectionModel',
+      './useTaskBatchActions',
+    ].map((source) => ({
+      importer: 'src/features/AgentTasks/AgentTaskList/selection/TaskBulkActionsPanel.tsx',
+      source,
+      replacement: taskBulkData,
+    })),
+  },
   CommandMenuTheme: {
     dependencies: ['cmdk', 'lucide-react', 'i18next', 'react-i18next'],
     selector: '[data-component-mount] [cmdk-item][data-value="theme-dark"]',

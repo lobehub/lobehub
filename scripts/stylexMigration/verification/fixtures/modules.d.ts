@@ -26,6 +26,10 @@ declare module 'verification:component' {
   }
   export const LiteTable: ComponentType<Props>;
   export const CommandMenuTheme: ComponentType;
+  export const TaskBulkActionsPanel: ComponentType<{
+    onClose: () => void;
+    tasks: Array<{ archivedAt: null; id: string; identifier: string }>;
+  }>;
   export const DashboardLayoutEditor: ComponentType<{
     dashboardId: string;
     initialLayouts: Record<string, { h: number; w: number; x: number; y: number }>;
