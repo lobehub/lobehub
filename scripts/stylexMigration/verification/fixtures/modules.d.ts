@@ -25,6 +25,17 @@ declare module 'verification:component' {
     tableLayout: 'auto' | 'fixed';
   }
   export const LiteTable: ComponentType<Props>;
+  export const CommandMenuTheme: ComponentType;
+  export const DashboardLayoutEditor: ComponentType<{
+    dashboardId: string;
+    initialLayouts: Record<string, { h: number; w: number; x: number; y: number }>;
+    items: Array<{
+      item: { id: string };
+      view: undefined;
+      widget: { id: string; title: string; userId: string };
+    }>;
+    onDone: () => void;
+  }>;
   export const WorkPreview: ComponentType<{
     item: WorkSummaryItem;
     title: string;

@@ -1,6 +1,8 @@
 import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
+  ['CommandMenuTheme', 'src/features/CommandMenu/ThemeMenu.tsx'],
+  ['DashboardLayoutEditor', 'src/features/Dashboard/Board/LayoutEditor.tsx'],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -8,7 +10,71 @@ export const migrationFixtures = [
   ['WorkPreviewStatus', 'src/features/WorkGallery/WorkPreview.tsx'],
 ] as const;
 
+const commandMenuData = 'fixtures/CommandMenuFixtureData.tsx';
+const dashboardData = 'fixtures/DashboardFixtureData.tsx';
+
 export const migrationProfiles: Record<string, FixtureProfile> = {
+  CommandMenuTheme: {
+    dependencies: ['cmdk', 'lucide-react', 'i18next', 'react-i18next'],
+    selector: '[data-component-mount] [cmdk-item][data-value="theme-dark"]',
+    selectors: {
+      'hover': '[data-component-mount] [cmdk-item][data-value="theme-dark"]',
+      'focus-visible': '[data-component-mount] [cmdk-input]',
+    },
+    variants: [
+      { id: 'light', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'dark', appearance: 'dark', states: ['default', 'hover'] },
+    ],
+    boundaries: [
+      ...['./useCommandMenu', 'next-themes'].map((source) => ({
+        importer: 'src/features/CommandMenu/ThemeMenu.tsx',
+        source,
+        replacement: commandMenuData,
+      })),
+      ...[
+        '@lobechat/types',
+        '@/components/AgentAvatar',
+        '@/store/agent',
+        '@/store/agent/selectors',
+        '../CommandMenuContext',
+        '../useCommandMenu',
+      ].map((source) => ({
+        importer: 'src/features/CommandMenu/components/CommandInput.tsx',
+        source,
+        replacement: commandMenuData,
+      })),
+    ],
+  },
+  DashboardLayoutEditor: {
+    dependencies: [
+      '@dnd-kit/core',
+      '@dnd-kit/sortable',
+      '@dnd-kit/utilities',
+      'lucide-react',
+      'i18next',
+      'react-i18next',
+    ],
+    selector: '[data-component-mount] [data-layout-cell="a"]',
+    selectors: {
+      'hover': '[data-component-mount] [data-layout-cell="a"]',
+      'focus-visible': '[data-component-mount] [data-layout-cell="a"] [data-resize-handle]',
+    },
+    variants: [
+      { id: 'light', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'dark', appearance: 'dark', states: ['default', 'hover'] },
+    ],
+    boundaries: [
+      '@/store/dashboard',
+      '@/store/user',
+      '@/store/user/selectors',
+      '../WidgetCard',
+      '../WidgetEditModal',
+    ].map((source) => ({
+      importer: 'src/features/Dashboard/Board/LayoutEditor.tsx',
+      source,
+      replacement: dashboardData,
+    })),
+  },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     i18n: true,
