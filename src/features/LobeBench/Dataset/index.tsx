@@ -189,8 +189,6 @@ const LobeBenchDataset = memo(() => {
         </Flexbox>
       </Flexbox>
 
-      <DatasetConnections datasetId={dataset.id} editable={own} />
-
       <CaseTable benchmarkIds={benchmarkIds} dataset={dataset} />
 
       {/* The runs on this dataset, as the Evaluation Lab lists a dataset's runs. */}
@@ -233,6 +231,7 @@ const LobeBenchDataset = memo(() => {
           </div>
         )}
       </Flexbox>
+      <DatasetConnections datasetId={dataset.id} editable={own} key={dataset.id} />
     </Flexbox>
   );
 });

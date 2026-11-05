@@ -2,7 +2,7 @@
 
 import type { AgentEvalDatasetPackageBindings } from '@lobechat/types';
 import { Block, Button, Flexbox, Modal, Spin, Text, toast } from '@lobehub/ui';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -106,6 +106,8 @@ export const DatasetConnections = ({
   editable: boolean;
 }) => {
   const { t } = useTranslation('eval');
+  const detailsId = useId();
+  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [fetchBindings, fetchConnectors] = useEvalStore((s) => [
     s.useFetchDatasetConnectorBindings,
@@ -151,7 +153,13 @@ export const DatasetConnections = ({
                   : t('connections.configured')}
             </Text>
           </Flexbox>
-          {editable && <Button onClick={() => setEditing(true)}>{t('connections.manage')}</Button>}
+          <Button
+            aria-controls={detailsId}
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {t(expanded ? 'connections.hideDetails' : 'connections.showDetails')}
+          </Button>
         </Flexbox>
         {connectorError && (
           <AsyncError
@@ -160,86 +168,97 @@ export const DatasetConnections = ({
             onRetry={() => void refreshConnectors()}
           />
         )}
-        {connectors?.length === 0 && <Text type="secondary">{t('connections.empty')}</Text>}
-        <Flexbox gap={16} style={{ maxHeight: 400, overflowY: 'auto' }}>
-          {(connectors ?? []).map((connection) => {
-            const usages = data.requirements.filter((requirement) =>
-              Object.values(requirement.bindings).some(
-                (binding) => binding.connectorId === connection.id,
-              ),
-            );
-            return (
-              <Flexbox
-                horizontal
-                align="center"
-                gap={12}
-                justify="space-between"
-                key={connection.id}
-                wrap="wrap"
-              >
-                <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-                  <Text>{connection.name}</Text>
-                  {!connection.isEnabled && (
-                    <Text type="secondary">{t('connections.disabled')}</Text>
-                  )}
-                  <Text fontSize={13} type="secondary">
-                    {connection.mcpServerUrl ?? '--'}
-                  </Text>
-                  <Text fontSize={13} type="secondary">
-                    {t(
-                      connection.hasCredentials ? 'connections.authSaved' : 'connections.authNone',
-                    )}
-                    {' · '}
-                    {t(
-                      connection.status === 'connected'
-                        ? 'connections.statusConnected'
-                        : connection.status === 'error'
-                          ? 'connections.statusError'
-                          : 'connections.statusDisconnected',
-                    )}
-                  </Text>
-                  <Text fontSize={13} type="secondary">
-                    {usages.length
-                      ? usages.map((item) => item.name).join(' · ')
-                      : t('connections.unbound')}
-                  </Text>
-                </Flexbox>
-                {editable && (
-                  <Button
-                    onClick={() =>
-                      openConnectionEditor({
-                        datasetId,
-                        id: connection.id,
-                        onSaved: async () => {
-                          await Promise.all([mutate(), refreshConnectors()]);
-                        },
-                        title: connection.name,
-                      })
-                    }
-                  >
-                    {t('connections.edit')}
-                  </Button>
-                )}
+        {expanded && (
+          <Flexbox gap={12} id={detailsId}>
+            {editable && (
+              <Flexbox horizontal justify="flex-end">
+                <Button onClick={() => setEditing(true)}>{t('connections.manage')}</Button>
               </Flexbox>
-            );
-          })}
-        </Flexbox>
-        {editable && (
-          <Button
-            onClick={() =>
-              openConnectionEditor({
-                datasetId,
-                onSaved: refreshConnectors,
-                title: t('connections.create'),
-              })
-            }
-          >
-            {t('connections.create')}
-          </Button>
+            )}
+            {connectors?.length === 0 && <Text type="secondary">{t('connections.empty')}</Text>}
+            <Flexbox gap={16} style={{ maxHeight: 400, overflowY: 'auto' }}>
+              {(connectors ?? []).map((connection) => {
+                const usages = data.requirements.filter((requirement) =>
+                  Object.values(requirement.bindings).some(
+                    (binding) => binding.connectorId === connection.id,
+                  ),
+                );
+                return (
+                  <Flexbox
+                    horizontal
+                    align="center"
+                    gap={12}
+                    justify="space-between"
+                    key={connection.id}
+                    wrap="wrap"
+                  >
+                    <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                      <Text>{connection.name}</Text>
+                      {!connection.isEnabled && (
+                        <Text type="secondary">{t('connections.disabled')}</Text>
+                      )}
+                      <Text fontSize={13} type="secondary">
+                        {connection.mcpServerUrl ?? '--'}
+                      </Text>
+                      <Text fontSize={13} type="secondary">
+                        {t(
+                          connection.hasCredentials
+                            ? 'connections.authSaved'
+                            : 'connections.authNone',
+                        )}
+                        {' · '}
+                        {t(
+                          connection.status === 'connected'
+                            ? 'connections.statusConnected'
+                            : connection.status === 'error'
+                              ? 'connections.statusError'
+                              : 'connections.statusDisconnected',
+                        )}
+                      </Text>
+                      <Text fontSize={13} type="secondary">
+                        {usages.length
+                          ? usages.map((item) => item.name).join(' · ')
+                          : t('connections.unbound')}
+                      </Text>
+                    </Flexbox>
+                    {editable && (
+                      <Button
+                        onClick={() =>
+                          openConnectionEditor({
+                            datasetId,
+                            id: connection.id,
+                            onSaved: async () => {
+                              await Promise.all([mutate(), refreshConnectors()]);
+                            },
+                            title: connection.name,
+                          })
+                        }
+                      >
+                        {t('connections.edit')}
+                      </Button>
+                    )}
+                  </Flexbox>
+                );
+              })}
+            </Flexbox>
+            {editable && (
+              <Button
+                onClick={() =>
+                  openConnectionEditor({
+                    datasetId,
+                    onSaved: refreshConnectors,
+                    title: t('connections.create'),
+                  })
+                }
+              >
+                {t('connections.create')}
+              </Button>
+            )}
+            <Text fontSize={13} type="secondary">
+              {t('connections.datasetHint')}
+            </Text>
+          </Flexbox>
         )}
-        <Text fontSize={13} type="secondary">
-          {t('connections.datasetHint')}
-        </Text>
         {editing && (
           <DatasetConnectionsEditor
             datasetId={datasetId}

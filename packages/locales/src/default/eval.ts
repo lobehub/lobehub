@@ -1147,6 +1147,8 @@ export default {
   'connections.missing': '{{count}} service bindings need a connection before running.',
   'connections.configured': 'All required services have a connection.',
   'connections.manage': 'Configure connections',
+  'connections.showDetails': 'Show connections',
+  'connections.hideDetails': 'Hide connections',
   'connections.datasetHint':
     'Connections are shared by cases using the same environment. Availability here confirms the saved binding; the service is checked when a run starts.',
   'connections.settingsHint':
