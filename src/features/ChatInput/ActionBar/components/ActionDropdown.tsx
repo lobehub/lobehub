@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slots: DropdownMenu submenu popup, item indicator, group label, header, separator and submenu arrow (renderDropdownMenuItems renders them with no className or style prop), and the rules apply to every open menu, not only this one's popup
 import './ActionDropdown.global.css';
 
 import {

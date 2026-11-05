@@ -56,7 +56,10 @@
    padding and inflates the gap above/below group headers. Reset only the
    vertical padding for skill activation groups; other groups (e.g. the
    Knowledge submenu's Libraries/Files headers) keep their default padding. */
-[data-submenu] > [role='menu'] [role='group']:has([data-skill-activation-group]) > [role='presentation'] {
+[data-submenu]
+  > [role='menu']
+  [role='group']:has([data-skill-activation-group])
+  > [role='presentation'] {
   padding-block: 0;
 }
 
@@ -75,13 +78,6 @@
    Skills / Web Search / Attachments rows mark their extra icon with .lobe-submenu-chevron)
    render that chevron themselves; hide base-ui's default triangle submenu arrow
    — always the last child of the trigger's content — so the two don't stack. */
-.lobe-submenu-chevron {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
 [role='menuitem']:has(.lobe-submenu-chevron) > * > *:last-child {
   display: none;
 }

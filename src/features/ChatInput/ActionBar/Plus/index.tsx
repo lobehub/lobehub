@@ -7,7 +7,6 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   CheckIcon,
-  ChevronRight,
   Cloud,
   FileUp,
   LibraryBig,
@@ -47,6 +46,7 @@ import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
+import SubmenuChevron from '../components/SubmenuChevron';
 import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useControls as useToolsControls } from '../Tools/useControls';
@@ -377,7 +377,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               children: skillMenuItems,
               // Trailing chevron (replaces base-ui's default triangle submenu arrow,
               // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
-              extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
+              extra: <SubmenuChevron />,
               footer: skillMarketFooter,
               header: skillMarketHeader,
               icon: SkillsIcon,
@@ -465,7 +465,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
             ],
             // Trailing chevron (replaces base-ui's default triangle submenu arrow,
             // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
-            extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
+            extra: <SubmenuChevron />,
             footer: canConfigureResource ? knowledgeFooter : undefined,
             icon: LibraryBig,
             key: 'attachments',

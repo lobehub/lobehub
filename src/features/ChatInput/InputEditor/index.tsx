@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the paragraphs are Lexical editor content inside @lobehub/editor's Editor, which takes no className or style for them
 import './index.css';
 
 import { isDesktop, TRACING_SCENARIOS } from '@lobechat/const';
