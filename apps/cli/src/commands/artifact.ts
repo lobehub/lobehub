@@ -82,11 +82,14 @@ interface UploadEntry {
 
 /**
  * Mirrors what market compares before replaying an idempotent create: the
- * served files, the requested slug and the title.
+ * served files, the requested slug and the title. Entries are hashed in path
+ * order because asset reads complete concurrently, so the gathered order can
+ * differ between two runs of the same command.
  */
-const fingerprintCreate = (entries: UploadEntry[], requestedSlug: string, title: string) => {
+export const fingerprintCreate = (entries: UploadEntry[], requestedSlug: string, title: string) => {
   const hash = createHash('sha256').update(JSON.stringify([requestedSlug, title]));
-  for (const entry of entries) {
+  const sorted = [...entries].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  for (const entry of sorted) {
     hash.update(`\n${entry.path}\n${createHash('sha256').update(entry.body).digest('hex')}`);
   }
   return hash.digest('hex');

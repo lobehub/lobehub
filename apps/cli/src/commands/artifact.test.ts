@@ -6,7 +6,7 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { log } from '../utils/logger';
-import { registerArtifactCommand } from './artifact';
+import { fingerprintCreate, registerArtifactCommand } from './artifact';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -403,5 +403,31 @@ describe('artifact publish', () => {
 
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
+  });
+});
+
+describe('fingerprintCreate', () => {
+  const entry = (path: string, body: string) => ({
+    body: Buffer.from(body),
+    contentType: 'text/plain',
+    path,
+  });
+
+  it('does not depend on the order assets finished reading', () => {
+    const a = entry('/a.png', 'a');
+    const b = entry('/b.png', 'b');
+    const index = entry('/index.html', '<html></html>');
+
+    expect(fingerprintCreate([index, b, a], '', 'Site')).toBe(
+      fingerprintCreate([index, a, b], '', 'Site'),
+    );
+  });
+
+  it('changes when the title changes', () => {
+    const index = entry('/index.html', '<html></html>');
+
+    expect(fingerprintCreate([index], '', 'First')).not.toBe(
+      fingerprintCreate([index], '', 'Second'),
+    );
   });
 });
