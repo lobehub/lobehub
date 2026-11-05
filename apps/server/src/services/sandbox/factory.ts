@@ -1,4 +1,5 @@
 import { getSandboxProviderKind } from './deployment';
+import { BoxdSandboxProvider } from './providers/boxd';
 import { MarketSandboxProvider } from './providers/market';
 import { OnlyboxesSandboxProvider } from './providers/onlyboxes';
 import { SandboxMiddlewareService } from './service';
@@ -6,6 +7,10 @@ import type { SandboxProvider, SandboxService, SandboxServiceOptions } from './t
 
 const createSandboxProvider = (options: SandboxServiceOptions): SandboxProvider => {
   switch (getSandboxProviderKind()) {
+    case 'boxd': {
+      return new BoxdSandboxProvider(options);
+    }
+
     case 'onlyboxes': {
       return new OnlyboxesSandboxProvider(options);
     }

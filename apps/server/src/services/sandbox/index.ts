@@ -8,6 +8,7 @@ export type { MemberDriveUsage } from './driveUsage';
 export { readDriveUsage } from './driveUsage';
 export { resolveSandboxStorageClaim } from './entitlement';
 export { createSandboxService } from './factory';
+export { BoxdSandboxProvider } from './providers/boxd';
 export { MarketSandboxProvider, ServerSandboxService } from './providers/market';
 export { OnlyboxesSandboxProvider } from './providers/onlyboxes';
 export { normalizeSandboxCommandResult, SandboxMiddlewareService } from './service';
