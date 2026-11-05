@@ -14,6 +14,17 @@ describe('formatTextGenerationError', () => {
     );
   });
 
+  it('reads the finish reason from serialized diagnostics', () => {
+    const text = JSON.stringify({
+      body: { diagnostics: { finishReason: 'length' }, provider: 'openai' },
+      errorType: 'ModelEmptyCompletion',
+    });
+
+    expect(formatTextGenerationError(471, text)).toBe(
+      'Text generation failed: ModelEmptyCompletion (HTTP 471). The model returned no visible output. It reached the output-token limit before writing any text; reasoning can use up the budget. Raise --max-tokens and retry.',
+    );
+  });
+
   it('hints at --max-tokens for an empty completion without a known finish reason', () => {
     const text = JSON.stringify({ body: {}, errorType: 'ModelEmptyCompletion' });
 

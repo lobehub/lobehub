@@ -6,6 +6,8 @@ const OUTPUT_LIMIT_FINISH_REASONS = new Set(['length', 'max_tokens', 'MAX_TOKENS
 
 interface ChatErrorBody {
   body?: {
+    /** `/webapi/chat/[provider]` serializes the error's diagnostics here. */
+    diagnostics?: { finishReason?: unknown };
     error?: { message?: unknown };
     finishReason?: unknown;
     message?: unknown;
@@ -49,7 +51,10 @@ export const formatTextGenerationError = (
 
   if (errorType === 'ModelEmptyCompletion') {
     parts.push('The model returned no visible output.');
-    const finishReason = typeof body?.finishReason === 'string' ? body.finishReason : undefined;
+    // `/webapi/chat/lobehub` puts the finish reason on the body; `/webapi/chat/[provider]` keeps it
+    // in the serialized error diagnostics.
+    const rawFinishReason = body?.finishReason ?? body?.diagnostics?.finishReason;
+    const finishReason = typeof rawFinishReason === 'string' ? rawFinishReason : undefined;
     if (finishReason && OUTPUT_LIMIT_FINISH_REASONS.has(finishReason)) {
       parts.push(
         `It reached the output-token limit${options.maxTokens ? ` (--max-tokens ${options.maxTokens})` : ''} before writing any text; reasoning can use up the budget. Raise --max-tokens and retry.`,
