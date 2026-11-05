@@ -21,7 +21,6 @@ import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
 import FileListItemMenu, { type FileListItemMenuGetter } from './FileListItemMenu';
 import FileListItemName from './FileListItemName';
-import { styles as sharedStyles } from './styles';
 import { useFileListItemDrag } from './useFileListItemDrag';
 import { useFileListItemMeta } from './useFileListItemMeta';
 import { useFileListItemRename } from './useFileListItemRename';
