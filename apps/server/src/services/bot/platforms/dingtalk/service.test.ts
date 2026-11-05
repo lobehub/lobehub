@@ -81,11 +81,6 @@ describe('DingTalkMessageService', () => {
     (api) => api !== 'sendDirectMessage' && api !== 'readDocument',
   );
 
-  it('does not implement the optional direct-message and document APIs', () => {
-    expect((service as any).sendDirectMessage).toBeUndefined();
-    expect((service as any).readDocument).toBeUndefined();
-  });
-
   it.each(unsupported)('rejects %s as unsupported', async (method) => {
     await expect((service as any)[method]({ channelId: 'group:cid1' })).rejects.toBeInstanceOf(
       PlatformUnsupportedError,

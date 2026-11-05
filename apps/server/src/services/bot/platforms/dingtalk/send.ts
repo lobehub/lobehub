@@ -50,7 +50,12 @@ export const sendDingTalkMessage = async (
       await api.replyViaSessionWebhook(session.url, outbound);
       return undefined;
     } catch (error) {
-      log('sessionWebhook rejected for %s, falling back to OpenAPI: %O', threadId, error);
+      // Never serialize the error: it may carry the credential-bearing webhook URL.
+      log(
+        'sessionWebhook rejected for %s, falling back to OpenAPI: %s',
+        threadId,
+        error instanceof Error ? error.name : 'unknown',
+      );
       await redisService.botReply.forgetDingTalkSessionWebhook(applicationId, threadId);
     }
   }
