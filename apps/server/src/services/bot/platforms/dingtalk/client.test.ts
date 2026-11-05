@@ -290,8 +290,7 @@ describe('DingTalk gateway lifecycle', () => {
       expect(mocks.adapter.startGatewayListener).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(8 * 60 * 60 * 1000);
-
-      expect(mocks.adapter.startGatewayListener).toHaveBeenCalledTimes(2);
+      await vi.waitFor(() => expect(mocks.adapter.startGatewayListener).toHaveBeenCalledTimes(2));
       await client.stop();
       await vi.advanceTimersByTimeAsync(8 * 60 * 60 * 1000);
       expect(mocks.adapter.startGatewayListener).toHaveBeenCalledTimes(2);
