@@ -1,5 +1,6 @@
 'use client';
 
+import { BotIcon, Download, HomeIcon, Settings, ShapesIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import {
@@ -11,6 +12,12 @@ import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { delayed } from '@/components/Skeleton/Delayed';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
+import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
+import {
+  createSettingsTitleRouteMeta,
+  providerDetailRouteMeta,
+} from '@/features/Settings/features/routeMeta';
+import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRoutes';
 import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
 import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
@@ -34,10 +41,14 @@ const settingsTabSubElement = dynamicElement(
 
 const personalSettingsTabRoutes: RouteObject[] = [...new Set(Object.values(SettingsTabs))]
   .filter((tab) => tab !== SettingsTabs.Provider && tab !== SettingsTabs.Creds)
-  .flatMap((tab) => [
-    { element: settingsTabElement, handle: { settingsTab: tab }, path: tab },
-    { element: settingsTabSubElement, handle: { settingsTab: tab }, path: `${tab}/:sub` },
-  ]);
+  .flatMap((tab) => {
+    const meta = createSettingsTitleRouteMeta(tab);
+    return [
+      { element: settingsTabElement, handle: { meta, settingsTab: tab }, path: tab },
+      { element: settingsTabSubElement, handle: { meta, settingsTab: tab }, path: `${tab}/:sub` },
+    ];
+  });
+const settingsParamTabMeta = createSettingsTitleRouteMeta();
 
 // Mobile owns its home layout; it has no persistent desktop Home outside the outlet.
 const mobileHomeRoute: RouteObject = {
@@ -46,6 +57,14 @@ const mobileHomeRoute: RouteObject = {
       element: dynamicElement(() => import('@/routes/(mobile)/(home)/'), 'Mobile > Home', {
         preloadId: 'mobile-home',
       }),
+      // The workspace name under `/:workspaceSlug`; the layout keeps the loading skeleton.
+      handle: {
+        meta: routeMeta({
+          DynamicMeta: workspaceHomeRouteMeta.DynamicMeta,
+          icon: HomeIcon,
+          titleKey: 'navigation.home',
+        }),
+      },
       index: true,
     },
   ],
@@ -84,6 +103,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Mobile > Discover > List > Home',
               { preloadId: 'mobile-community' },
             ),
+            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
             index: true,
           },
           {
@@ -93,6 +113,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   () => import('@/routes/(main)/community/(list)/agent'),
                   'Mobile > Discover > List > Agent',
                 ),
+                handle: {
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverAssistants' }),
+                },
                 path: 'agent',
               },
             ],
@@ -104,6 +127,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   () => import('@/routes/(main)/community/(list)/model'),
                   'Mobile > Discover > List > Model',
                 ),
+                handle: {
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
+                },
                 path: 'model',
               },
             ],
@@ -113,6 +139,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(list)/provider'),
               'Mobile > Discover > List > Provider',
             ),
+            handle: {
+              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
+            },
             path: 'provider',
           },
           {
@@ -122,6 +151,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   () => import('@/routes/(main)/community/(list)/mcp'),
                   'Mobile > Discover > List > MCP',
                 ),
+                handle: {
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
+                },
                 path: 'mcp',
               },
             ],
@@ -131,6 +163,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(list)/skill'),
               'Mobile > Discover > List > Skill',
             ),
+            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
             path: 'skill',
           },
           {
@@ -163,6 +196,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 ),
               'Mobile > Discover > Detail > Agent',
             ),
+            handle: { meta: communityDetailRouteMeta.agent },
             path: 'agent/:slug',
           },
           {
@@ -171,6 +205,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 import('@/routes/(main)/community/(detail)/model').then((m) => m.MobileModelPage),
               'Mobile > Discover > Detail > Model',
             ),
+            handle: { meta: communityDetailRouteMeta.model },
             path: 'model/:slug',
           },
           {
@@ -181,6 +216,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 ),
               'Mobile > Discover > Detail > Provider',
             ),
+            handle: { meta: communityDetailRouteMeta.provider },
             path: 'provider/:slug',
           },
           {
@@ -188,6 +224,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(detail)/mcp').then((m) => m.MobileMcpPage),
               'Mobile > Discover > Detail > MCP',
             ),
+            handle: { meta: communityDetailRouteMeta.mcp },
             path: 'mcp/:slug',
           },
           {
@@ -196,6 +233,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 import('@/routes/(main)/community/(detail)/skill').then((m) => m.MobileSkillPage),
               'Mobile > Discover > Detail > Skill',
             ),
+            handle: { meta: communityDetailRouteMeta.skill },
             path: 'skill/:slug',
           },
           {
@@ -206,6 +244,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 ),
               'Mobile > Discover > Detail > Group Agent',
             ),
+            handle: { meta: communityDetailRouteMeta.groupAgent },
             path: 'group_agent/:slug',
           },
           {
@@ -216,6 +255,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 ),
               'Mobile > Discover > Detail > User',
             ),
+            handle: { meta: communityDetailRouteMeta.user },
             path: 'user/:slug',
           },
           {
@@ -226,6 +266,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 ),
               'Mobile > Discover > Detail > Organization',
             ),
+            handle: { meta: communityDetailRouteMeta.user },
             path: 'org/:slug',
           },
         ],
@@ -252,6 +293,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicElement(() => import('@/routes/(main)/agents'), 'Mobile > Agents', {
           preloadId: 'mobile-agents',
         }),
+        handle: { meta: routeMeta({ icon: BotIcon, titleKey: 'navigation.agents' }) },
         index: true,
       },
     ],
@@ -278,6 +320,7 @@ export const mobileRoutes: RouteObject[] = [
           fallback: delayed(<AppsSkeleton />),
         }),
         errorElement: <ErrorBoundary />,
+        handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.apps' }) },
         path: 'apps',
       },
 
@@ -290,6 +333,7 @@ export const mobileRoutes: RouteObject[] = [
               'Mobile > Settings',
               { preloadId: 'mobile-settings' },
             ),
+            handle: { meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }) },
             index: true,
           },
           // Provider routes with nested structure
@@ -305,6 +349,7 @@ export const mobileRoutes: RouteObject[] = [
                     import('@/routes/(main)/settings/provider').then((m) => m.ProviderDetailPage),
                   'Mobile > Settings > Provider > Detail',
                 ),
+                handle: { meta: providerDetailRouteMeta },
                 path: ':providerId',
               },
             ],
@@ -312,6 +357,7 @@ export const mobileRoutes: RouteObject[] = [
               () => import('@/routes/(mobile)/settings/provider/_layout'),
               'Mobile > Settings > Provider > Layout',
             ),
+            handle: { meta: routeMeta({ icon: Settings, titleKey: 'navigation.provider' }) },
             path: 'provider',
           },
           {
@@ -324,8 +370,12 @@ export const mobileRoutes: RouteObject[] = [
           // score, and the workspace tree would read `settings` as a slug.
           ...personalSettingsTabRoutes,
           // Other settings tabs (common, agent, memory, tts, about, etc.)
-          { element: settingsTabElement, path: ':tab' },
-          { element: settingsTabSubElement, path: ':tab/:sub' },
+          { element: settingsTabElement, handle: { meta: settingsParamTabMeta }, path: ':tab' },
+          {
+            element: settingsTabSubElement,
+            handle: { meta: settingsParamTabMeta },
+            path: ':tab/:sub',
+          },
         ],
         element: dynamicLayout(
           () => import('@/routes/(mobile)/settings/_layout'),
@@ -346,6 +396,7 @@ export const mobileRoutes: RouteObject[] = [
                   () => import('@/routes/(mobile)/me/(home)'),
                   'Mobile > Me > Home',
                 ),
+                handle: { meta: routeMeta({ titleKey: 'common:tab.me' }) },
                 index: true,
               },
             ],
@@ -361,6 +412,7 @@ export const mobileRoutes: RouteObject[] = [
                   () => import('@/routes/(mobile)/me/profile'),
                   'Mobile > Me > Profile',
                 ),
+                handle: { meta: routeMeta({ titleKey: 'common:userPanel.profile' }) },
                 path: 'profile',
               },
             ],
@@ -376,6 +428,7 @@ export const mobileRoutes: RouteObject[] = [
                   () => import('@/routes/(mobile)/me/settings'),
                   'Mobile > Me > Settings',
                 ),
+                handle: { meta: routeMeta({ titleKey: 'common:userPanel.setting' }) },
                 path: 'settings',
               },
             ],

@@ -1,5 +1,5 @@
 import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import { goalNodes } from '../schemas/goalGraph';
@@ -24,7 +24,7 @@ export class GoalArchivedError extends Error {
 /**
  * Whether the owner signed the goal off: its Goal-level acceptance Task has an
  * accepted acceptance. Correlated on `goals.id`, so it reads inside any query
- * over `goals`.
+ * over `goals`. Shown on list rows; archiving does not depend on it.
  */
 export const goalSignedOffSql = sql<boolean>`EXISTS (
   SELECT 1 FROM ${goalNodes}
@@ -38,7 +38,7 @@ export const goalSignedOffSql = sql<boolean>`EXISTS (
 
 /**
  * Archive writes for `goals`, kept out of `GoalModel` the way `TaskArchiveModel`
- * is: the "signed off or canceled" check is part of the UPDATE that sets
+ * is: the "completed or canceled" check is part of the UPDATE that sets
  * `archived_at`, so a resume or start racing it either lands first (and the
  * archive matches no row) or sees the archive under the row lock and refuses.
  */
@@ -57,7 +57,7 @@ export class GoalArchiveModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, goals);
 
   /**
-   * Archive a goal that is signed off or canceled (`isGoalArchiveBlocked`).
+   * Archive a goal that is completed (`achieved`) or canceled (`isGoalArchiveBlocked`).
    * Returns null when the goal is missing or not done with yet; an already
    * archived goal keeps its original `archived_at`. Only the `goals` row:
    * `GoalArchiveRepository` archives its Tasks with it.
@@ -67,11 +67,7 @@ export class GoalArchiveModel {
       .update(goals)
       .set({ archivedAt: sql`COALESCE(${goals.archivedAt}, now())`, updatedAt: new Date() })
       .where(
-        and(
-          eq(goals.id, id),
-          this.ownership(),
-          or(eq(goals.status, 'canceled'), and(eq(goals.status, 'achieved'), goalSignedOffSql)),
-        ),
+        and(eq(goals.id, id), this.ownership(), inArray(goals.status, ['achieved', 'canceled'])),
       )
       .returning();
     return goal ?? null;

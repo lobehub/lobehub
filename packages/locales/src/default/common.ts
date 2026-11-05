@@ -426,6 +426,7 @@ export default {
     "Can't delete: this includes other members' topics, comments, or tasks. Ask a workspace owner to delete it.",
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
   'openOnRight': 'Open on the right',
+  'openOriginalFile': 'Open original file',
   'openOnRightHint': 'Release to open side-by-side on the right',
   'operationFailed': 'Operation failed, please try again',
   'addNew': 'Add new',

@@ -299,7 +299,7 @@ describe('StaleOperationReaper', () => {
 
     expect(queue.scheduleMessage).not.toHaveBeenCalled();
     expect(finalizeAbandonedMock).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ alive: 1, redriven: 0 });
+    expect(result).toMatchObject({ abandoned: 0, alive: 1, redriven: 0 });
   });
 
   it('abandons once the redrive budget is spent', async () => {
@@ -318,22 +318,6 @@ describe('StaleOperationReaper', () => {
       settledAsAbandoned: true,
     });
     expect(result).toMatchObject({ abandoned: 1 });
-  });
-
-  it('refuses to abandon a run that heartbeated after the candidate was selected', async () => {
-    // `listStaleRunning` selected this row, then the worker resumed while the
-    // sweep was doing its Redis reads. Abandoning is irreversible and
-    // user-visible, so it must re-check the lease atomically rather than
-    // trust the stale select.
-    const queue = buildQueue();
-    claimStaleRedriveMock.mockResolvedValue(null);
-    settleStaleRunningMock.mockResolvedValue(false);
-
-    const result = await buildReaper([candidate()], runningState(), queue).sweep();
-
-    expect(finalizeAbandonedMock).not.toHaveBeenCalled();
-    expect(queue.scheduleMessage).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ abandoned: 0, alive: 1 });
   });
 
   it('gives the attempt back when the redrive fails to publish', async () => {

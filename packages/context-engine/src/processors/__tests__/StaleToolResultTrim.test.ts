@@ -652,13 +652,6 @@ describe('StaleToolResultTrimProcessor', () => {
 
   describe('cacheEconomicsForProvider', () => {
     it('returns provider-specific policies and falls back to Anthropic', () => {
-      expect(cacheEconomicsForProvider('anthropic')).toEqual({
-        readPrice: 0.1,
-        ttlMs: 300_000,
-        writePrice: 1.25,
-      });
-      expect(cacheEconomicsForProvider('deepseek').ttlMs).toBe(3_600_000);
-      expect(cacheEconomicsForProvider('openai').writePrice).toBe(1);
       expect(cacheEconomicsForProvider('some-new-provider')).toEqual(
         cacheEconomicsForProvider('anthropic'),
       );

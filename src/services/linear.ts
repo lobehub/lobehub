@@ -27,6 +27,10 @@ class LinearService {
   listIssues = async (params: LinearIssueFilterParams & { cursor?: string }) =>
     lambdaClient.linear.listIssues.query(params);
 
+  /** How many issues match the filter; the count stops at a server-side limit. */
+  countIssues = async (params: LinearIssueFilterParams) =>
+    lambdaClient.linear.countIssues.query(params);
+
   /** Starts a background import; returns the job id. */
   startImport = async (params: {
     connectionId: string;

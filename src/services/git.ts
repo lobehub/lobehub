@@ -143,15 +143,18 @@ class GitService {
     branch,
     deviceId,
     path,
+    sourcePath,
     worktreePath,
   }: {
     branch: string;
     deviceId?: string;
     path: string;
+    /** The repo's main checkout; the server keys the target folder on it. */
+    sourcePath?: string;
     worktreePath: string;
   }): Promise<DeviceGitAddWorktreeResult> {
     return deviceId
-      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path })
+      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path, sourcePath })
       : electronGitService.addGitWorktree({ branch, path, worktreePath });
   }
 

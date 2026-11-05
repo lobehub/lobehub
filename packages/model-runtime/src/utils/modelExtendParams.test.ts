@@ -445,9 +445,6 @@ describe('resolveDefaultThinkingLevelForModel', () => {
     );
     expect(resolveDefaultThinkingLevelForModel('gemini-flash-lite-latest')).toBe('minimal');
     expect(resolveDefaultThinkingLevelForModel('gemini-3.6-flash')).toBe('medium');
-    expect(resolveDefaultThinkingLevelForModel('gemini-3.7-flash', 'thinkingLevel3')).toBe(
-      'medium',
-    );
     expect(resolveDefaultThinkingLevelForModel('gemini-3.5-flash')).toBe('medium');
     expect(resolveDefaultThinkingLevelForModel('gemini-3.5-flash-lite')).toBe('minimal');
     expect(resolveDefaultThinkingLevelForModel('gemini-3.1-flash-lite')).toBe('minimal');

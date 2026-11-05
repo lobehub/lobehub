@@ -119,6 +119,13 @@ export interface LinearIssuePage {
   issues: LinearIssueSummary[];
 }
 
+/** How many issues match a picker filter; counting stops at a limit. */
+export interface LinearIssueCount {
+  /** True when more issues match than were counted; `count` is then a lower bound. */
+  capped: boolean;
+  count: number;
+}
+
 /** Why an issue was left alone. */
 export type LinearSyncSkipReason =
   /** Linear closed it, but the task is running; it is not interrupted. */
@@ -190,6 +197,12 @@ export interface LinearSyncJobMetadata {
    * does not reread what earlier rounds covered. Absent: read from the start.
    */
   cursor?: string;
+  /**
+   * Times a rule run was handed to a new request because one ran out of time.
+   * Each hand-off is one more request in a chain the host cuts off a few
+   * requests deep, so a run stops handing off after a few.
+   */
+  handOffs?: number;
   /** Picked issues (`kind: 'issues'`). */
   issueIds?: string[];
   kind: 'issues' | 'rule';

@@ -184,7 +184,7 @@ export const getWorkingDirEffectivePath = (
   return entry.git?.activeWorktree || entry.path;
 };
 
-export { deriveWorktreePath } from './worktreePath';
+export { deriveWorktreePath, type DeriveWorktreePathOptions } from './worktreePath';
 
 export interface WorkingDirEntry extends WorkingDirConfig {
   /**

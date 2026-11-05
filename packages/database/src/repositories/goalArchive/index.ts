@@ -36,7 +36,7 @@ export class GoalArchiveRepository {
     sql`(SELECT ${goals.archivedAt} FROM ${goals} WHERE ${goals.id} = ${goalId})`;
 
   /**
-   * Archive a signed-off or canceled goal and its Tasks. The goal's UPDATE
+   * Archive a completed or canceled goal and its Tasks. The goal's UPDATE
    * takes its row lock first. The Tasks go through the guarded task archive,
    * so one still running or with a live schedule / heartbeat stays where its
    * owner can see it, and they carry the goal's own archive time, which is how
