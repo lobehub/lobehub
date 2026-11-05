@@ -189,6 +189,9 @@ describe('report server', () => {
     expect(width(full)).toBeGreaterThanOrEqual(376);
     expect(width(cropped)).toBeLessThan(width(full));
     expect(width(cropped)).toBeGreaterThan(32);
+    const revealed = await shot('&crop=1&reveal=1');
+    expect(width(revealed)).toBe(width(cropped));
+    expect(revealed.equals(cropped)).toBe(false);
   }, 60_000);
 
   it('returns the stored self-test report beside the run', async () => {

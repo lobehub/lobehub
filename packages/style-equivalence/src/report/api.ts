@@ -142,7 +142,7 @@ export const fetchMethod = async (): Promise<{ selfTest: SelfTestPayload | null 
 };
 
 export const cropShotUrl = (key: string, side: 'base' | 'head', condition: string, combo: number) =>
-  `${shotUrl(key, side, condition, combo)}&crop=1`;
+  `${shotUrl(key, side, condition, combo)}&crop=1&reveal=1`;
 
 export type ReviewState = 'changed' | 'passed' | 'reworked' | 'todo' | 'waiting-agent';
 

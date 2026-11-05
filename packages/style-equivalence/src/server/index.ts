@@ -135,7 +135,12 @@ export const startServer = async ({
         if (action === 'snapshot') return json(response, 200, await caseSnapshot(inspect));
         const side = searchParams.get('side');
         if (side !== 'base' && side !== 'head') throw new ApiError(400, 'INVALID_SIDE');
-        const image = await caseShot({ ...inspect, crop: searchParams.get('crop') === '1', side });
+        const image = await caseShot({
+          ...inspect,
+          crop: searchParams.get('crop') === '1',
+          reveal: searchParams.get('reveal') === '1',
+          side,
+        });
         response.writeHead(200, { 'cache-control': 'max-age=3600', 'content-type': 'image/png' });
         response.end(image);
         return;
