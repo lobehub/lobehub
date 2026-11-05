@@ -19,6 +19,7 @@ import type {
   GitRemoteBranchListItem,
   GitRemoveWorktreeResult,
   GitRenameBranchResult,
+  GitResolveWorktreeBaseResult,
   GitWorkingTreeFiles,
   GitWorkingTreePatches,
   GitWorkingTreeStatus,
@@ -196,7 +197,17 @@ export default class GitController extends ControllerModule {
   }
 
   @IpcMethod()
+  async resolveGitWorktreeBase(payload: {
+    baseRef?: string;
+    path: string;
+  }): Promise<GitResolveWorktreeBaseResult> {
+    const { resolveGitWorktreeBase: runResolveGitWorktreeBase } = await loadGit();
+    return runResolveGitWorktreeBase(payload);
+  }
+
+  @IpcMethod()
   async addGitWorktree(payload: {
+    baseRef?: string;
     branch: string;
     path: string;
     worktreePath: string;

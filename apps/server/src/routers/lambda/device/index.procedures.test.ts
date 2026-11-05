@@ -88,6 +88,7 @@ function expected(): Array<
     ['renameGitBranch', 'mutation', 12],
     ['renameProjectFile', 'mutation', 15],
     ['resizeTerminal', 'mutation', 12],
+    ['resolveGitWorktreeBase', 'query', 12],
     ['restartCli', 'mutation', 12],
     ['revertGitFile', 'mutation', 12],
     ['revokeTunnel', 'mutation', 12],

@@ -20,6 +20,7 @@ import type {
   DeviceGitPullRequestMergeContext,
   DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
+  DeviceGitResolveWorktreeBaseResult,
   DeviceGitSyncResult,
   DeviceGitUpstreamRef,
   DeviceGitWorkingTreeStatus,
@@ -140,12 +141,14 @@ class GitService {
    * forwarded on the local IPC route where this machine owns the filesystem.
    */
   addGitWorktree({
+    baseRef,
     branch,
     deviceId,
     path,
     sourcePath,
     worktreePath,
   }: {
+    baseRef?: string;
     branch: string;
     deviceId?: string;
     path: string;
@@ -154,8 +157,23 @@ class GitService {
     worktreePath: string;
   }): Promise<DeviceGitAddWorktreeResult> {
     return deviceId
-      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path, sourcePath })
-      : electronGitService.addGitWorktree({ branch, path, worktreePath });
+      ? lambdaClient.device.addGitWorktree.mutate({ baseRef, branch, deviceId, path, sourcePath })
+      : electronGitService.addGitWorktree({ baseRef, branch, path, worktreePath });
+  }
+
+  /** What a new worktree would fork from: `baseRef`, or the directory's current HEAD. */
+  resolveGitWorktreeBase({
+    baseRef,
+    deviceId,
+    path,
+  }: {
+    baseRef?: string;
+    deviceId?: string;
+    path: string;
+  }): Promise<DeviceGitResolveWorktreeBaseResult> {
+    return deviceId
+      ? lambdaClient.device.resolveGitWorktreeBase.query({ baseRef, deviceId, path })
+      : electronGitService.resolveGitWorktreeBase({ baseRef, path });
   }
 
   /** Pull (`--ff-only`) the current branch of a working directory. */
