@@ -298,10 +298,16 @@ export const styles = stylex.create({
   thread: {
     paddingBlockEnd: '20px',
     borderBlockEndWidth: { 'default': '1px', ':last-child': 0 },
-    borderBlockEndStyle: 'solid',
-    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: { 'default': cssVar.colorBorderSecondary, ':last-child': 'currentColor' },
   },
-  threadCompact: { gap: '4px', paddingBlockEnd: 0, borderBlockEndWidth: 0 },
+  threadCompact: {
+    gap: '4px',
+    paddingBlockEnd: 0,
+    borderBlockEndWidth: 0,
+    borderBlockEndStyle: 'none',
+    borderBlockEndColor: 'currentColor',
+  },
   threadList: { gap: '8px' },
 });
 

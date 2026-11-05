@@ -48,7 +48,7 @@ const styles = stylex.create({
     opacity: { 'default': null, ':disabled': 0.7 },
     transform: { 'default': null, ':hover': 'scale(1.06)', ':active': 'scale(0.94)' },
     transition: `transform ${cssVar.motionDurationMid} ${cssVar.motionEaseOutBack}, background-color ${cssVar.motionDurationMid}, border-color ${cssVar.motionDurationMid}, color ${cssVar.motionDurationMid}, box-shadow ${cssVar.motionDurationMid}`,
-    outlineStyle: { 'default': null, ':focus-visible': 'none' },
+    outline: { 'default': null, ':focus-visible': 'none' },
     boxShadow: { 'default': null, ':focus-visible': `0 0 0 3px ${cssVar.colorPrimaryBg}` },
   },
   buttonPressed: {

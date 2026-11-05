@@ -24,7 +24,7 @@ const styles = stylex.create({
     backgroundImage: 'none',
     transition: `color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut}`,
     borderRadius: { 'default': null, ':focus-visible': cssVar.borderRadiusSM },
-    outlineStyle: { 'default': null, ':focus-visible': 'none' },
+    outline: { 'default': null, ':focus-visible': 'none' },
     boxShadow: { 'default': null, ':focus-visible': `0 0 0 2px ${cssVar.colorPrimaryBorder}` },
   },
   crumbLabel: { flexShrink: 0, fontSize: '13px' },

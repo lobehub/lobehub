@@ -96,8 +96,8 @@ const frontmatterStyles = stylex.create({
     paddingBlock: '8px',
     paddingInline: '12px',
     borderBlockEndWidth: { 'default': '1px', ':last-child': 0 },
-    borderBlockEndStyle: 'solid',
-    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: { 'default': cssVar.colorBorderSecondary, ':last-child': 'currentColor' },
   },
   value: { minWidth: 0, fontSize: '12px', whiteSpace: 'pre-wrap' },
 });
