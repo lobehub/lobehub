@@ -1,12 +1,13 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicListScopeContext } from '../../TopicListScope';
 import TopicItem from './index';
+import type * as MetaCardData from './metaCardData';
 
 const scopedTopicMock = vi.hoisted(() => ({
   value: undefined as { agentId: string; agentAvatar: string; agentName: string } | undefined,
@@ -22,7 +23,13 @@ const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefi
 const goalsEnabledMock = vi.hoisted(() => ({ value: true }));
 const topicMetaCardMock = vi.hoisted(() => ({
   value: undefined as
-    | { pullRequest?: { ciStatus?: 'failure' | 'pending' | 'success' | 'unknown'; state: string } }
+    | {
+        pullRequest?: {
+          ciStatus?: 'failure' | 'pending' | 'success' | 'unknown';
+          mergedAt?: string;
+          state: string;
+        };
+      }
     | undefined,
 }));
 
@@ -114,8 +121,10 @@ vi.mock('@/store/user/selectors', () => ({
 }));
 vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => onlyMineMock.value }));
 vi.mock('@/features/TopicCreatorAvatar', () => ({
-  default: ({ userId }: { userId?: string }) => (
-    <div data-testid="creator-avatar" data-user-id={userId} />
+  default: ({ corner, userId }: { corner?: ReactNode; userId?: string }) => (
+    <div data-testid="creator-avatar" data-user-id={userId}>
+      {corner}
+    </div>
   ),
   useTopicCreator: (userId?: string) => (userId ? { fullName: 'Member' } : undefined),
 }));
@@ -152,18 +161,20 @@ vi.mock('../../hooks/useTopicNavigation', () => ({
 vi.mock('./MetaHoverCard', () => ({
   default: () => null,
 }));
-vi.mock('./metaCardData', () => {
+vi.mock('./metaCardData', async (importOriginal) => {
+  const actual = await importOriginal<typeof MetaCardData>();
   const CiIcon = () => null;
   CiIcon.displayName = 'CiIcon';
   const PullRequestIcon = () => null;
   PullRequestIcon.displayName = 'PullRequestIcon';
 
   return {
+    ...actual,
     PR_STATE_VISUAL: {
+      ...actual.PR_STATE_VISUAL,
       open: { color: '#0a0', icon: PullRequestIcon, labelKey: 'metaCard.pr.open' },
     },
     getCiVisual: () => ({ color: '#fa0', icon: CiIcon, labelKey: 'metaCard.ci.pending' }),
-    getPullRequestState: () => 'open',
     // Defaults to undefined so TopicItem skips the hover Popover wrapper in tests.
     getTopicMetaCard: () => topicMetaCardMock.value,
   };
@@ -648,6 +659,31 @@ describe('TopicItem active state', () => {
       'CiIcon',
     ]);
   });
+
+  it.each([{ state: 'merged' }, { mergedAt: '2026-11-05T03:58:11Z', state: 'closed' }])(
+    'uses the merged PR icon as the avatar badge for %o regardless of CI',
+    (pullRequest) => {
+      useTopicNavigationMock.mockReturnValue({
+        isInAgentSubRoute: false,
+        isInTopicContextRoute: false,
+        navigateToTopic: vi.fn(),
+        routeTopicId: undefined,
+      });
+
+      for (const ciStatus of ['pending', 'failure', 'success'] as const) {
+        topicMetaCardMock.value = { pullRequest: { ...pullRequest, ciStatus } };
+
+        const { unmount } = render(<TopicItem id="tpc_test" title="Topic" userId="user-2" />);
+
+        expect(
+          within(screen.getByTestId('creator-avatar'))
+            .getAllByTestId('topic-item-icon')
+            .map((icon) => icon.dataset.icon),
+        ).toEqual(['GitMerge']);
+        unmount();
+      }
+    },
+  );
 
   it.each([
     ['scheduled', 'Clock'],
