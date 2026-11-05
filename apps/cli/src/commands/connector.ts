@@ -8,7 +8,8 @@ import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import type { LocalMcpParams } from '../utils/localMcp';
 import { listLocalMcpTools } from '../utils/localMcp';
 import { log } from '../utils/logger';
-import { isStdioLaunchTrusted, trustStdioLaunch } from '../utils/stdioTrust';
+import type { StdioLaunch } from '../utils/stdioTrust';
+import { hashStdioLaunch, isStdioLaunchTrusted, trustStdioLaunch } from '../utils/stdioTrust';
 
 type TrpcClient = Awaited<ReturnType<typeof getTrpcClient>>;
 type CreateConnectorInput = Parameters<TrpcClient['connector']['create']['mutate']>[0];
@@ -247,12 +248,20 @@ export function formatStdioCommand(params: { args?: string[]; command: string })
 const stdioTrustKey = (id: string) => `${resolveServerUrl()}#${id}`;
 
 /**
- * `confirmLocalCommand` for `add`: the command is the one the user just typed,
- * so record it as approved on this machine.
+ * `confirmLocalCommand` for `add`: record the launch as approved on this
+ * machine only when the stored config is exactly what the user typed. If it
+ * changed between `create` and the read-back (a concurrent overwrite), fall
+ * back to showing it and asking, like `refresh`.
  */
-export const trustTypedStdioCommand: ConfirmLocalCommand = async (detail, params) => {
-  trustStdioLaunch(stdioTrustKey(detail.id), params);
-};
+export const trustTypedStdioCommand =
+  (typed: StdioLaunch | undefined): ConfirmLocalCommand =>
+  async (detail, params) => {
+    if (typed && hashStdioLaunch(typed) === hashStdioLaunch(params)) {
+      trustStdioLaunch(stdioTrustKey(detail.id), params);
+      return;
+    }
+    await confirmSharedStdioCommand(detail, params);
+  };
 
 /**
  * `confirmLocalCommand` for `refresh`: a workspace stdio connector can be
@@ -467,7 +476,7 @@ export function registerConnectorCommand(program: Command) {
       let synced: { local: boolean; toolCount: number };
       try {
         synced = await syncConnectorTools(client, id, input, {
-          confirmLocalCommand: trustTypedStdioCommand,
+          confirmLocalCommand: trustTypedStdioCommand(input.mcpStdioConfig ?? undefined),
         });
       } catch (error) {
         fail(error, await rollback());
