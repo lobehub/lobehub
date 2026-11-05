@@ -39,6 +39,15 @@ declare module 'verification:component' {
     identifier: string;
   }>;
   export const ModelSelect: ComponentType<{ value?: { model: string; provider: string } }>;
+  export const MultipleProvidersModelItem: ComponentType<{
+    activeKey: string;
+    data: Record<string, unknown>;
+    isModelRestricted?: (model: string, provider: string) => boolean;
+    newLabel: string;
+    onClose: () => void;
+    onModelChange: (model: string, provider: string) => void;
+    proLabel?: string;
+  }>;
   export const RulesOnboarding: ComponentType<{
     agents?: { agentCount: number; lessonCount: number; name: string; onOpen: () => void };
     backlogRounds?: number;

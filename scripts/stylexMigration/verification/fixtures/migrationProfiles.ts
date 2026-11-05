@@ -2,6 +2,10 @@ import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
   ['AgentCard', 'src/features/AgentViewAll/AgentCard.tsx'],
+  [
+    'MultipleProvidersModelItem',
+    'src/features/ModelSwitchPanel/components/List/MultipleProvidersModelItem.tsx',
+  ],
   ['MCPConfigForm', 'src/features/MCP/MCPInstallProgress/MCPConfigForm.tsx'],
   ['ModelSelect', 'src/features/ModelSelect/index.tsx'],
   ['RulesOnboarding', 'src/features/MemoryRules/RulesOnboarding.tsx'],
@@ -84,6 +88,22 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
         replacement: 'fixtures/ModelSelectFixtureData.ts',
       },
     ],
+  },
+  MultipleProvidersModelItem: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    exportName: 'MultipleProvidersModelItem',
+    i18n: true,
+    settleFrames: 2,
+    variants: [{ id: 'normal' }, { id: 'active' }, { id: 'restricted' }],
+    boundaries: [
+      ['../../utils', '../ModelDetailPanel', './ModelRowRender', '@/components/ModelSelect'].map(
+        (source) => ({
+          importer: 'src/features/ModelSwitchPanel/components/List/MultipleProvidersModelItem.tsx',
+          source,
+          replacement: 'fixtures/ModelSwitchPanelFixtureData.tsx',
+        }),
+      ),
+    ].flat(),
   },
   RulesOnboarding: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next', 'react-router'],

@@ -74,7 +74,7 @@ describe('explicit fixture contract', () => {
   });
 
   it('connects all entries with explicit mounting and probe contracts', () => {
-    expect(fixtureIds).toHaveLength(26);
+    expect(fixtureIds).toHaveLength(27);
     for (const id of fixtureIds) {
       const fixture = getStyleFixture(id);
       expect(fixture.component.id).toBe(id);
