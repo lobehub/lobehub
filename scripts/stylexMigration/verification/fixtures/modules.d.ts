@@ -25,6 +25,8 @@ declare module 'verification:component' {
     tableLayout: 'auto' | 'fixed';
   }
   export const LiteTable: ComponentType<Props>;
+  export const GoalWorkspaceBreadcrumb: ComponentType<{ title: string }>;
+  export const TaskBreadcrumb: ComponentType<{ taskId?: string }>;
   export const WorkPreview: ComponentType<{
     item: WorkSummaryItem;
     title: string;
