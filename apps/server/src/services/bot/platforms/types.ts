@@ -731,4 +731,11 @@ export interface PlatformDefinition {
 }
 
 /** Serialized platform definition for frontend consumption (excludes runtime-only fields). */
-export type SerializedPlatformDefinition = Omit<PlatformDefinition, 'clientFactory'>;
+export type SerializedPlatformDefinition = Omit<PlatformDefinition, 'clientFactory'> & {
+  /**
+   * Set when this deployment cannot run the platform (see `requiresInProcessConnection`). The
+   * catalog still lists it so a bot configured earlier stays reachable to inspect, disable or
+   * remove; the channel list hides it for agents that have no such bot.
+   */
+  unavailableReason?: string;
+};
