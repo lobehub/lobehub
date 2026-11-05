@@ -343,7 +343,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         // `undefined` (the whole selection is `undefined`) drops the key, so
         // an untouched composer writes the same draft shape as before.
         execution,
-        labelIds: labels.length > 0 ? labels.map((label) => label.id) : undefined,
+        // While a restore waits for the registry, keep writing the ids it holds
+        // so a reload in that window does not drop them.
+        labelIds:
+          labels.length > 0 ? labels.map((label) => label.id) : pendingDraftLabelIdsRef.current,
         markdown,
         priority,
         visibility,
