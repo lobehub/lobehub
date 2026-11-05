@@ -44,6 +44,8 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
     const [selected, setSelected] = useState<Set<string>>(() => new Set());
     // Comments carry much of an issue's context, so they come along unless unchecked.
     const [syncComments, setSyncComments] = useState(true);
+    // Archived issues stay out, as in Linear, unless asked for.
+    const [includeArchived, setIncludeArchived] = useState(false);
     const [starting, setStarting] = useState<'import' | 'rule' | null>(null);
     const [jobId, setJobId] = useState<string>();
     // Shown as the running title until the job loads, so a single import never reads as a rule sync.
@@ -71,6 +73,12 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
       setFilter((current) => ({ ...current, ...patch }));
       setSavedRuleId(undefined);
       // The list changes with the scope; a hidden selection would import blind.
+      setSelected(new Set());
+    };
+
+    const changeIncludeArchived = (checked: boolean) => {
+      setIncludeArchived(checked);
+      // The list changes with it; a hidden selection would import blind.
       setSelected(new Set());
     };
 
@@ -126,7 +134,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
           ruleId = rule.id;
           setSavedRuleId(rule.id);
         }
-        return linearService.startRuleSync(ruleId, { syncComments });
+        return linearService.startRuleSync(ruleId, { includeArchived, syncComments });
       });
 
     const leaveRunning = () => {
@@ -235,6 +243,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
               selected={selected}
               filter={{
                 connectionId: connection.id,
+                includeArchived,
                 linearProjectId: filter.linearProjectId,
                 stateTypes: filter.stateTypes,
                 teamId: filter.teamId!,
@@ -243,7 +252,9 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
             />
             <ImportOptions
               disabled={starting !== null}
+              includeArchived={includeArchived}
               syncComments={syncComments}
+              onIncludeArchivedChange={changeIncludeArchived}
               onSyncCommentsChange={setSyncComments}
             />
           </Flexbox>

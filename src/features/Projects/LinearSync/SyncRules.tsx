@@ -77,6 +77,8 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
   // Tucked into each rule's sync menu; applies to the next run of any rule, and
   // re-running with it on fills in the comments already-synced tasks lack.
   const [syncComments, setSyncComments] = useState(true);
+  // Off by default, as in Linear; on, a run also reaches the rule's archived issues.
+  const [includeArchived, setIncludeArchived] = useState(false);
   const optionItems: DropdownItem[] = [
     {
       children: [
@@ -87,6 +89,15 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
           key: 'syncComments',
           label: t('linear.sync.options.syncComments'),
           onCheckedChange: setSyncComments,
+          type: 'checkbox',
+        },
+        {
+          checked: includeArchived,
+          closeOnClick: false,
+          desc: t('linear.sync.options.includeArchivedRuleDesc'),
+          key: 'includeArchived',
+          label: t('linear.sync.options.includeArchived'),
+          onCheckedChange: setIncludeArchived,
           type: 'checkbox',
         },
       ],
@@ -118,7 +129,7 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
   const runRule = async (rule: LinearSyncRuleView) => {
     setStarting(rule.id);
     try {
-      await linearService.startRuleSync(rule.id, { syncComments });
+      await linearService.startRuleSync(rule.id, { includeArchived, syncComments });
       onJobStarted();
     } catch (error) {
       toast.error(linearSyncErrorMessage(error, t));
