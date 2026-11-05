@@ -89,6 +89,27 @@ describe('askSentence', () => {
     expect(text).not.toContain('拿不准');
   });
 
+  it('says which components a partly forwarded rule may still reach', () => {
+    const text = askSentence(
+      {
+        category: 'needs-signoff',
+        flags: ['INNER_TARGET', 'INNER_TARGET_PARTLY_FORWARDED:h1|AcceptanceGoal,ReadChecks'],
+      },
+      { variables: [] },
+    );
+    expect(text).toContain('AcceptanceGoal、ReadChecks');
+    expect(text).toContain('h1');
+    expect(text).not.toMatch(/[A-Z]{3,}_[A-Z]/);
+  });
+
+  it('names a caller of a forwarded prop that was not compared', () => {
+    const text = askSentence(
+      { category: 'needs-signoff', flags: ['FORWARDED_CALLER_UNCHECKED:src/Other.tsx'] },
+      { variables: [] },
+    );
+    expect(text).toContain('src/Other.tsx');
+  });
+
   it('never prints flag codes', () => {
     const text = askSentence(
       { category: 'needs-signoff', flags: ['CROSS_COMPONENT', 'MEDIA_UNMODELED'] },

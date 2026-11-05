@@ -52,7 +52,7 @@ const targets = (parent: StyleElement, tag: string, rules: StyleRule[]) =>
     stepsOf(rule, scopes)?.some((step) => step.tag === '*' || step.tag === tag),
   );
 
-const innerSteps = (parent: StyleElement, rules: StyleRule[]) => {
+export const innerSteps = (parent: StyleElement, rules: StyleRule[]) => {
   const steps: Step[] = [];
   for (const { rule, scopes } of rulesOf(parent, rules)) {
     if (!targetsInnerTag(rule.selector)) continue;
@@ -63,35 +63,46 @@ const innerSteps = (parent: StyleElement, rules: StyleRule[]) => {
   return steps;
 };
 
-export const replacedDescendants = (
+export const counterparts = (
   base: FileExtraction,
   head: FileExtraction,
   pairs: Array<[StyleElement, StyleElement]>,
-  unpairedHead: StyleElement[],
 ) => {
   const baseById = new Map(elementsOf(base).map((element) => [element.id, element]));
   const headById = new Map(elementsOf(head).map((element) => [element.id, element]));
   const pairedParent = new Map(pairs.map(([left, right]) => [right.id, left]));
   const tagsOf = (ids: string[], byId: Map<string, StyleElement>) =>
     JSON.stringify(ids.map((id) => byId.get(id)?.tag));
-  const replaced: Array<[StyleElement, StyleElement]> = [];
-  for (const element of unpairedHead) {
+  return (element: StyleElement) => {
     const parent = element.parent ? pairedParent.get(element.parent) : undefined;
     const headParent = element.parent ? headById.get(element.parent) : undefined;
-    if (!parent || !headParent) continue;
+    if (!parent || !headParent) return undefined;
     const baseChildren = parent.children ?? [];
     const headChildren = headParent.children ?? [];
-    if (tagsOf(baseChildren, baseById) !== tagsOf(headChildren, headById)) continue;
+    if (tagsOf(baseChildren, baseById) !== tagsOf(headChildren, headById)) return undefined;
     const counterpart = baseById.get(baseChildren[headChildren.indexOf(element.id)]);
-    if (
-      counterpart &&
+    return counterpart &&
       !counterpart.bindings.length &&
       !counterpart.flags.length &&
       counterpart.tag === element.tag &&
-      sortedJson(counterpart.literalProps) === sortedJson(element.literalProps) &&
-      targets(parent, counterpart.tag, base.rules)
-    )
-      replaced.push([counterpart, element]);
+      sortedJson(counterpart.literalProps) === sortedJson(element.literalProps)
+      ? { counterpart, parent }
+      : undefined;
+  };
+};
+
+export const replacedDescendants = (
+  base: FileExtraction,
+  head: FileExtraction,
+  pairs: Array<[StyleElement, StyleElement]>,
+  unpairedHead: StyleElement[],
+) => {
+  const lookup = counterparts(base, head, pairs);
+  const replaced: Array<[StyleElement, StyleElement]> = [];
+  for (const element of unpairedHead) {
+    const found = lookup(element);
+    if (found && targets(found.parent, found.counterpart.tag, base.rules))
+      replaced.push([found.counterpart, element]);
   }
   return replaced;
 };

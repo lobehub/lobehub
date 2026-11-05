@@ -1,20 +1,15 @@
-import type {
-  FileExtraction,
-  LiteralValue,
-  RealComponent,
-  StyleBinding,
-  StyleElement,
-} from '../extract';
+import type { FileExtraction, RealComponent, StyleBinding, StyleElement } from '../extract';
+import type { ForwardElement } from '../extract/forward';
 import { elementsOf } from '../plan/descendants';
 import type { InnerNode } from '../plan/inner';
 import { bindKnobs } from '../plan/knobs';
 import { chainOf, type FilePlan, isIntrinsicTag, type Side } from '../plan/planFile';
 import { rendersReal } from '../plan/real';
+import { applicationOf, forwardImports, renderForward } from './forward';
 import { innerMarkup } from './inner';
+import { keepLiteral, renderLiteral, SAMPLE_TEXT, VOID_TAGS } from './literal';
 
-export const SAMPLE_TEXT = 'Ag 文本 Text';
-
-const VOID_TAGS = new Set(['area', 'br', 'col', 'embed', 'hr', 'img', 'input', 'source', 'wbr']);
+export { SAMPLE_TEXT } from './literal';
 
 export interface GenerateConfig {
   cxFallback?: { name: string; source: string };
@@ -25,18 +20,9 @@ export interface GenerateConfig {
 const placementTag = (element: StyleElement, layout: Set<string>) =>
   isIntrinsicTag(element.tag) || layout.has(element.tag) ? element.tag : 'div';
 
-const keepLiteral = (name: string, substituted: boolean) => {
-  if (name === 'key' || name === 'ref' || /^on[A-Z]/.test(name)) return false;
-  return substituted ? /^(?:data-|aria-|role$)/.test(name) : true;
-};
-
-const renderLiteral = (name: string, value: LiteralValue) =>
-  typeof value === 'string'
-    ? `${name}=${JSON.stringify(value)}`
-    : `${name}={${JSON.stringify(value)}}`;
-
 interface ChainContext {
   exprOf: (binding: StyleBinding) => string;
+  forward?: { application?: string; element: ForwardElement };
   inner?: Record<string, InnerNode[]>;
   layout: Set<string>;
   omitted?: number[];
@@ -51,6 +37,8 @@ const sampleContent = (samples: InnerNode[] | undefined) =>
 const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): string => {
   const { exprOf, layout, probed } = context;
   const [element, ...rest] = chain;
+  if (!rest.length && context.forward)
+    return renderForward(element.id, context.forward.element, context.forward.application);
   const real = rendersReal(element, !rest.length, context.real);
   const tag = real ? element.tag : placementTag(element, layout);
   const substituted = tag !== element.tag;
@@ -186,8 +174,15 @@ export const generateModule = (
             : `const ${variable.name} = ${readsThrough(expressions, variable.name) ? '__opaque' : 'undefined'};`,
         );
       }
+    const target = entry.forward?.[side];
+    const forwarded =
+      entry.forward && element.bindings.find((item) => item.prop === entry.forward!.prop);
     const context = {
       exprOf: (binding: StyleBinding) => bound.get(binding)!,
+      forward: target && {
+        application: forwarded && applicationOf(entry.forward!.application, bound.get(forwarded)!),
+        element: target,
+      },
       inner: entry.inner,
       layout,
       omitted: entry.neutralOmitted,
@@ -209,6 +204,7 @@ export const generateModule = (
     );
   return [
     extraction.prelude,
+    ...forwardImports(plan.cases, side),
     config.cxFallback
       ? `import { ${config.cxFallback.name} as __cx } from ${JSON.stringify(config.cxFallback.source)};`
       : '',

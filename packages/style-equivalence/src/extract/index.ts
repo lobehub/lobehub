@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import { collectChildren, literalOf } from './children';
 import { parseRules } from './css';
+import { applicationIn, componentOfStatement, forwardsOf } from './forward';
 import {
   declaredLocally,
   isJsxNode,
@@ -253,6 +254,16 @@ export const extractFile = (
             name,
           })),
         };
+        const forwards = forwardsOf(tag, bindings, file, top.importOf, options);
+        if (forwards.length) element.forwards = forwards;
+        const [binding] = bindings;
+        const [variable] = element.variables;
+        if (bindings.length === 1 && element.variables.length === 1 && !binding.spread) {
+          const fn = componentOfStatement(ast, statement);
+          const found = fn && applicationIn(fn, variable.name, ast);
+          if (found && 'element' in found && found.element === node)
+            element.forwardedParam = variable.name;
+        }
         elements.push(element);
         styled.set(node, element);
         current = id;

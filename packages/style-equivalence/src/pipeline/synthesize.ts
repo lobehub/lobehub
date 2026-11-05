@@ -10,6 +10,7 @@ import { type FilePlan, planFile, type Side } from '../plan/planFile';
 import { resolveSpecifier } from '../source/declarations';
 import type { ScopeFile } from '../source/scope';
 import { fileFlags } from '../verdict/fileItems';
+import { fileReader, flagUncheckedCallers, gitGrepWord } from './forwardCallers';
 
 export const HOST_DIR = '.style-equivalence-host';
 export const RUNTIME = path.resolve(import.meta.dirname, '../generate/hostRuntime.tsx');
@@ -59,6 +60,7 @@ export const synthesize = async (
       return extractFile(code, source, {
         adapters: config.adapters,
         layoutComponents: config.layoutComponents,
+        readBaseModule: side === 'head' ? moduleReader(roots.base, config.aliases) : undefined,
         readModule: moduleReader(roots[side], config.aliases),
         readStylesheet: stylesheetReader(roots[side]),
         realComponents: config.realComponents,
@@ -70,6 +72,11 @@ export const synthesize = async (
     extractions[file] = pair;
     plans.push(plan);
   }
+  await flagUncheckedCallers(plans, {
+    extractions,
+    grep: gitGrepWord(roots.head),
+    read: fileReader(roots.head),
+  });
   return { extractions, plans };
 };
 

@@ -47,9 +47,33 @@ const GAP_LABELS: Record<string, string> = {
   STYLESHEET_UNREADABLE: '样式表读不到',
 };
 
+const listed = (text: string) => text.split(',').filter(Boolean).join('、');
+
+export const partlyForwardedDetail = (detail: string) => {
+  const [tag, components = ''] = detail.split('|');
+  return { components: listed(components), tag };
+};
+
+const DETAIL_LABELS: Record<string, (detail: string) => string> = {
+  FORWARDED_CALLER_UNCHECKED: (detail) => `有调用方没比较：${listed(detail)}`,
+  INNER_TARGET_PARTLY_FORWARDED: (detail) =>
+    `只证明了传进组件的那个 ${partlyForwardedDetail(detail).tag}`,
+};
+
+const DETAIL_EXPLANATIONS: Record<string, (detail: string) => string> = {
+  FORWARDED_CALLER_UNCHECKED: (detail) =>
+    `组件内部这个元素按「调用方没有传这个样式」渲染并比较了。仓库里还有这些文件提到了这个属性，但工具没有逐一比较它们传进来的样式：${listed(detail)}。`,
+  INNER_TARGET_PARTLY_FORWARDED: (detail) => {
+    const { components, tag } = partlyForwardedDetail(detail);
+    return `旧规则命中容器里所有的 ${tag}；新代码只把样式交给了组件里的那一个 ${tag}，这一处已单独渲染证明。其余地方的 ${tag}（${components || '容器里的其它内容'} 里渲染的）迁移后不再有这条样式，工具没有证明它们不存在。`;
+  },
+};
+
 export const flagLabel = (flag: string) => {
   const [name, detail] = flag.split(/:(.*)/s);
-  return FLAG_LABELS[flag] ?? (GAP_LABELS[name] ? `${GAP_LABELS[name]}：${detail}` : flag);
+  if (FLAG_LABELS[flag]) return FLAG_LABELS[flag];
+  if (DETAIL_LABELS[name] && detail !== undefined) return DETAIL_LABELS[name](detail);
+  return GAP_LABELS[name] ? `${GAP_LABELS[name]}：${detail}` : flag;
 };
 
 export const shortKey = (key: string) => key.slice(key.indexOf('|') + 1);
@@ -87,5 +111,8 @@ export const FLAG_EXPLANATIONS: Record<string, string> = {
   VARIABLE_UNMODELED: '样式值依赖 props 或运行时数据，没法枚举取值。',
 };
 
-export const flagExplanation = (flag: string) =>
-  FLAG_EXPLANATIONS[flag] ?? FLAG_EXPLANATIONS[flag.split(':')[0]];
+export const flagExplanation = (flag: string) => {
+  const [name, detail] = flag.split(/:(.*)/s);
+  if (DETAIL_EXPLANATIONS[name] && detail !== undefined) return DETAIL_EXPLANATIONS[name](detail);
+  return FLAG_EXPLANATIONS[flag] ?? FLAG_EXPLANATIONS[name];
+};

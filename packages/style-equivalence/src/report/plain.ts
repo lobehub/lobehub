@@ -1,4 +1,5 @@
 import type { Combo } from '../plan/combos';
+import { partlyForwardedDetail } from './labels';
 
 interface Cause {
   after?: string;
@@ -95,6 +96,21 @@ export const askSentence = (item: { category: string; flags: string[] }, context
   if (names.has('PLACEMENT_SUBSTITUTED') || names.has('PLACEMENT_NEUTRAL_PROP'))
     lines.push(
       `样式交给 ${context.component ?? '组件'} 的 ${context.prop ?? 'className'} 处理，组件内部怎么用它工具看不到。`,
+    );
+  const partly = item.flags.find((flag) => flag.startsWith('INNER_TARGET_PARTLY_FORWARDED:'));
+  if (partly) {
+    const { components, tag } = partlyForwardedDetail(partly.slice(partly.indexOf(':') + 1));
+    lines.push(
+      `旧代码给容器里所有的 ${tag} 加了样式，新代码只把它传给了组件里的那一个 ${tag}（已单独证明）。${components ? `看一下 ${components} 里还会不会渲染 ${tag}，` : ''}如果会，那些 ${tag} 迁移后就没有这条样式了。`,
+    );
+  }
+  const callers = item.flags.find((flag) => flag.startsWith('FORWARDED_CALLER_UNCHECKED:'));
+  if (callers)
+    lines.push(
+      `这个元素的样式由调用方传进来。没传的情况已比较过；${callers
+        .slice(callers.indexOf(':') + 1)
+        .split(',')
+        .join('、')} 也提到了这个属性，工具没有比较它们传的样式。`,
     );
   if (names.has('RUNTIME_STYLE_DROPPED'))
     lines.push(

@@ -57,15 +57,17 @@ const directChildren = (node: JsxNode) => {
 
 const subtreeTags = (node: JsxNode, ast: ts.SourceFile) => {
   const counts: Record<string, number> = {};
+  const components = new Set<string>();
   const visit = (current: ts.Node) => {
     if (isElement(current)) {
       const tag = openingOf(current).tagName.getText(ast);
       if (isIntrinsic(tag)) counts[tag] = (counts[tag] ?? 0) + 1;
+      else components.add(tag);
     }
     ts.forEachChild(current, visit);
   };
   if (ts.isJsxElement(node)) node.children.forEach(visit);
-  return counts;
+  return { components: [...components].sort(), counts };
 };
 
 const plainAttributes = (opening: ts.JsxOpeningLikeElement, ast: ts.SourceFile) => {
@@ -112,7 +114,7 @@ export const collectChildren = (
       const { literalProps, opaque } = plainAttributes(opening, ast);
       const id = `${element.id}/${index}`;
       const real = classifyTag(tag);
-      const tags = subtreeTags(child, ast);
+      const { counts: tags } = subtreeTags(child, ast);
       plain.push({
         bindings: [],
         flags: opaque ? [PLAIN_ATTRIBUTES_UNMODELED] : [],
@@ -129,8 +131,9 @@ export const collectChildren = (
       return id;
     });
     if (children.length) element.children = children;
-    const tags = subtreeTags(jsx, ast);
-    if (Object.keys(tags).length) element.subtreeTags = tags;
+    const { components, counts } = subtreeTags(jsx, ast);
+    if (Object.keys(counts).length) element.subtreeTags = counts;
+    if (components.length) element.subtreeComponents = components;
   }
   return plain;
 };

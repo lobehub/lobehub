@@ -1,5 +1,7 @@
 import type ts from 'typescript';
 
+import type { ForwardResolution } from './forward';
+
 export type LiteralValue = string | number | boolean | { [key: string]: LiteralValue };
 
 export type VariableKind = 'boolean' | 'call' | 'member' | 'unknown';
@@ -19,6 +21,8 @@ export interface StyleElement {
   bindings: StyleBinding[];
   children?: string[];
   flags: string[];
+  forwardedParam?: string;
+  forwards?: ForwardResolution[];
   id: string;
   literalProps: Record<string, LiteralValue>;
   owner: string;
@@ -27,6 +31,7 @@ export interface StyleElement {
   runtimeStyle?: string;
   slots: string[];
   styleExpr?: string;
+  subtreeComponents?: string[];
   subtreeTags?: Record<string, number>;
   tag: string;
   variables: VariableUse[];
@@ -81,6 +86,7 @@ export interface RealComponent {
 export interface ExtractOptions {
   adapters: StyleAdapter[];
   layoutComponents: string[];
+  readBaseModule?: (fromFile: string, specifier: string) => string | undefined;
   readModule?: (fromFile: string, specifier: string) => string | undefined;
   readStylesheet?: (fromFile: string, specifier: string) => string | undefined;
   realComponents?: Record<string, RealComponent>;

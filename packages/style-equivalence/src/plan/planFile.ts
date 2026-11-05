@@ -2,6 +2,12 @@ import type { FileExtraction, RealComponent, StyleElement, VariableKind } from '
 import { mergeKinds, valueIdentifiers } from '../extract/identifiers';
 import { type Combo, combosFor, DOMAIN_COMBO_LIMIT } from './combos';
 import { childCovered, elementsOf, parentCovered, replacedDescendants } from './descendants';
+import {
+  forwardedDescendants,
+  forwardedInside,
+  type ForwardPlan,
+  partlyForwarded,
+} from './forwarded';
 import type { InnerNode } from './inner';
 import { bindKnobs, parseExpression } from './knobs';
 import { movedStylesheets } from './moved';
@@ -43,6 +49,8 @@ export interface PlanCase {
   evidence?: string[];
   file: string;
   flags: string[];
+  forward?: ForwardPlan;
+  forwardedParam?: string;
   inner?: Record<string, InnerNode[]>;
   key: string;
   knobs?: string[];
@@ -141,6 +149,19 @@ export const planFile = (
   const replacedHead = new Set(replaced.map(([, right]) => right));
   unpairedHead.splice(0, unpairedHead.length, ...unpairedHead.filter((e) => !replacedHead.has(e)));
   pairs.push(...replaced);
+  const forwarded = forwardedDescendants(base, head, pairs, unpairedHead, config.realComponents);
+  const forwardOf = new Map(forwarded.map((entry) => [entry.pair[1], entry.forward]));
+  const partial = new Map(
+    forwarded.map((entry) => [entry.parent.id, partlyForwarded(entry.parent, entry.tag, layout)]),
+  );
+  const inside = forwardedInside(base, head, pairs, unpairedHead);
+  const paramOf = new Map(inside.map((entry) => [entry.pair[1], entry.param]));
+  unpairedHead.splice(
+    0,
+    unpairedHead.length,
+    ...unpairedHead.filter((e) => !forwardOf.has(e) && !paramOf.has(e)),
+  );
+  pairs.push(...forwarded.map((entry) => entry.pair), ...inside.map((entry) => entry.pair));
   const rendered = new Set(pairs.map(([left]) => left.id));
   const covered = new Set(
     [...new Set(replaced.map(([left]) => left.parent!))].filter((id) =>
@@ -154,6 +175,9 @@ export const planFile = (
     const flags = new Set<string>();
     const evidence: string[] = [];
     const isReplaced = replacedHead.has(right);
+    const forward = forwardOf.get(right);
+    const param = paramOf.get(right);
+    const resolved = new Set(forward ? [left, right] : []);
     const movedAt =
       chains.base.length === chains.head.length
         ? chains.base.flatMap((item, index) => {
@@ -167,7 +191,7 @@ export const planFile = (
     if (left.tag !== right.tag) flags.add('TAG_CHANGED');
     const realItems = realItemsOf(chains, config.realComponents);
     for (const item of [...chains.base, ...chains.head]) {
-      const real = realItems.has(item);
+      const real = realItems.has(item) || resolved.has(item);
       if (!isIntrinsicTag(item.tag) && !layout.has(item.tag) && !real)
         flags.add('PLACEMENT_SUBSTITUTED');
       if (!real && item.bindings.some((binding) => !binding.spread && binding.prop !== 'className'))
@@ -175,13 +199,18 @@ export const planFile = (
       const reached =
         chains.base.includes(item) &&
         (covered.has(item.id) ||
+          (!!forward && item.id === left.parent) ||
           (isReplaced && item.id === left.parent && childCovered(item, left, base.rules)));
       const inner = item.flags.includes('INNER_TARGET') && (reached || movedItems.has(item));
-      if (inner && reached && !isReplaced && !evidence.includes('DESCENDANT_RENDERED'))
+      if (inner && reached && !isReplaced && !forward && !evidence.includes('DESCENDANT_RENDERED'))
         evidence.push('DESCENDANT_RENDERED');
       item.flags.forEach((flag) => !(inner && flag === 'INNER_TARGET') && flags.add(flag));
     }
     if (isReplaced) evidence.push('DESCENDANT_REPLACED');
+    if (forward) evidence.push('FORWARDED_RENDERED');
+    if (param) evidence.push('FORWARDED_PROP_ABSENT');
+    const partialFlag = partial.get(left.id);
+    if (partialFlag && flags.has('INNER_TARGET')) flags.add(partialFlag);
     const properties = { base: base.slotProperties, head: head.slotProperties };
     if (
       (flags.has('PLACEMENT_SUBSTITUTED') || flags.has('PLACEMENT_NEUTRAL_PROP')) &&
@@ -214,7 +243,7 @@ export const planFile = (
     for (const side of ['base', 'head'] as const)
       for (const item of chains[side])
         for (const variable of item.variables) {
-          if (PASS_THROUGH_VARIABLES.has(variable.name)) continue;
+          if (PASS_THROUGH_VARIABLES.has(variable.name) || variable.name === param) continue;
           const entry = variables.get(variable.name) ?? { kinds: {}, name: variable.name };
           entry.kinds[side] = mergeKinds([entry.kinds[side] ?? variable.kind, variable.kind]);
           variables.set(variable.name, entry);
@@ -274,6 +303,8 @@ export const planFile = (
       ...(evidence.length ? { evidence } : {}),
       file,
       flags: [...flags].sort(),
+      ...(forward ? { forward } : {}),
+      ...(param ? { forwardedParam: param } : {}),
       ...(Object.keys(inner).length ? { inner } : {}),
       key: `${file}|${left.id}`,
       ...(knobs ? { knobs } : {}),

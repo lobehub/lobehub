@@ -13,6 +13,18 @@ describe('flag labels', () => {
     expect(flagExplanation('RUNTIME_STYLE_DROPPED')).toContain('style=');
   });
 
+  it('names the components a partly forwarded descendant rule still reaches', () => {
+    const flag = 'INNER_TARGET_PARTLY_FORWARDED:h1|AcceptanceGoal,AcceptanceIdentity';
+    expect(flagLabel(flag)).toBe('只证明了传进组件的那个 h1');
+    expect(flagExplanation(flag)).toContain('AcceptanceGoal、AcceptanceIdentity');
+  });
+
+  it('names the callers of a forwarded prop that were not compared', () => {
+    const flag = 'FORWARDED_CALLER_UNCHECKED:a.tsx,b.tsx';
+    expect(flagLabel(flag)).toBe('有调用方没比较：a.tsx、b.tsx');
+    expect(flagExplanation(flag)).toContain('a.tsx、b.tsx');
+  });
+
   it('falls back to the raw flag when it has no label', () => {
     expect(flagLabel('SOMETHING_NEW')).toBe('SOMETHING_NEW');
   });
