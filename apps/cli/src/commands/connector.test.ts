@@ -5,7 +5,9 @@ import type * as FormatUtils from '../utils/format';
 import { log } from '../utils/logger';
 import {
   buildCreateInput,
+  buildLocalMcpParams,
   deriveIdentifier,
+  isMachineLocalConnector,
   parseHeaders,
   registerConnectorCommand,
   resolveConnectorId,
@@ -16,12 +18,16 @@ const { mockTrpcClient } = vi.hoisted(() => ({
     connector: {
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
+      getForEdit: { query: vi.fn() },
       list: { query: vi.fn() },
       startOAuth: { mutate: vi.fn() },
       syncTools: { mutate: vi.fn() },
+      syncToolsFromClientById: { mutate: vi.fn() },
     },
   },
 }));
+
+const { mockListLocalMcpTools } = vi.hoisted(() => ({ mockListLocalMcpTools: vi.fn() }));
 
 const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
   getTrpcClient: vi.fn(),
@@ -30,6 +36,7 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 const { mockConfirm } = vi.hoisted(() => ({ mockConfirm: vi.fn() }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../utils/localMcp', () => ({ listLocalMcpTools: mockListLocalMcpTools }));
 vi.mock('../utils/format', async (importOriginal) => {
   const actual = await importOriginal<typeof FormatUtils>();
   return { ...actual, confirm: mockConfirm };
@@ -51,6 +58,7 @@ describe('connector command', () => {
     errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     mockConfirm.mockReset();
+    mockListLocalMcpTools.mockReset();
     for (const method of Object.values(mockTrpcClient.connector)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
@@ -172,6 +180,68 @@ describe('connector command', () => {
     });
   });
 
+  describe('isMachineLocalConnector', () => {
+    it('treats stdio and local/private URLs as machine-local', () => {
+      expect(isMachineLocalConnector({ mcpConnectionType: 'stdio' })).toBe(true);
+      expect(
+        isMachineLocalConnector({
+          mcpConnectionType: 'http',
+          mcpServerUrl: 'http://localhost:3000',
+        }),
+      ).toBe(true);
+      expect(
+        isMachineLocalConnector({
+          mcpConnectionType: 'http',
+          mcpServerUrl: 'http://192.168.1.5/mcp',
+        }),
+      ).toBe(true);
+      expect(
+        isMachineLocalConnector({
+          mcpConnectionType: 'http',
+          mcpServerUrl: 'https://mcp.deepwiki.com',
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe('buildLocalMcpParams', () => {
+    it('maps stdio config', () => {
+      expect(
+        buildLocalMcpParams({
+          mcpConnectionType: 'stdio',
+          mcpStdioConfig: { args: ['-y', 'srv'], command: 'npx', env: { A: '1' } },
+        } as any),
+      ).toEqual({ args: ['-y', 'srv'], command: 'npx', env: { A: '1' }, type: 'stdio' });
+    });
+
+    it('merges custom headers, legacy header credentials and the bearer token', () => {
+      expect(
+        buildLocalMcpParams({
+          credentials: { token: 'tok', type: 'bearer' },
+          mcpConnectionType: 'http',
+          mcpServerUrl: 'http://localhost:3000/mcp',
+          metadata: { customHeaders: { 'X-Team': 'core' } },
+        } as any),
+      ).toEqual({
+        headers: { 'Authorization': 'Bearer tok', 'X-Team': 'core' },
+        type: 'http',
+        url: 'http://localhost:3000/mcp',
+      });
+      expect(
+        buildLocalMcpParams({
+          credentials: { headers: { 'X-Legacy': 'v' }, type: 'header' },
+          mcpServerUrl: 'http://10.0.0.2/mcp',
+        } as any).headers,
+      ).toEqual({ 'X-Legacy': 'v' });
+    });
+
+    it('rejects a stdio connector without a command', () => {
+      expect(() => buildLocalMcpParams({ mcpConnectionType: 'stdio' } as any)).toThrow(
+        'missing stdio config',
+      );
+    });
+  });
+
   describe('resolveConnectorId', () => {
     it('passes a uuid through without listing', async () => {
       await expect(resolveConnectorId(mockTrpcClient as any, ID)).resolves.toBe(ID);
@@ -272,7 +342,109 @@ describe('connector command', () => {
       });
       expect(mockTrpcClient.connector.syncTools.mutate).toHaveBeenCalledWith({ id: ID });
       expect(consoleSpy).toHaveBeenCalledWith(
-        JSON.stringify({ id: ID, identifier: 'deepwiki', isNew: true, toolCount: 3 }, null, 2),
+        JSON.stringify(
+          { id: ID, identifier: 'deepwiki', isNew: true, local: false, toolCount: 3 },
+          null,
+          2,
+        ),
+      );
+    });
+
+    it('lists stdio tools on this machine and reports them via syncToolsFromClientById', async () => {
+      const stdioConfig = {
+        args: ['-y', '@modelcontextprotocol/server-everything'],
+        command: 'npx',
+      };
+      const tools = [{ description: 'Echo', inputSchema: { type: 'object' }, toolName: 'echo' }];
+      mockTrpcClient.connector.create.mutate.mockResolvedValue({ id: ID, isNew: true });
+      mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
+        identifier: 'everything',
+        mcpConnectionType: 'stdio',
+        mcpStdioConfig: stdioConfig,
+      });
+      mockListLocalMcpTools.mockResolvedValue(tools);
+      mockTrpcClient.connector.syncToolsFromClientById.mutate.mockResolvedValue({ toolCount: 1 });
+
+      await run(
+        'add',
+        '--stdio-cmd',
+        'npx',
+        '--stdio-arg',
+        '-y',
+        '--stdio-arg',
+        '@modelcontextprotocol/server-everything',
+        '--identifier',
+        'everything',
+        '--json',
+      );
+
+      expect(mockTrpcClient.connector.syncTools.mutate).not.toHaveBeenCalled();
+      expect(mockListLocalMcpTools).toHaveBeenCalledWith({ ...stdioConfig, type: 'stdio' });
+      expect(mockTrpcClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
+        id: ID,
+        tools,
+      });
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          { id: ID, identifier: 'everything', isNew: true, local: true, toolCount: 1 },
+          null,
+          2,
+        ),
+      );
+    });
+
+    it('syncs a localhost HTTP connector from this machine with its bearer token', async () => {
+      mockTrpcClient.connector.create.mutate.mockResolvedValue({ id: ID, isNew: true });
+      mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
+        credentials: { token: 'tok', type: 'bearer' },
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'http://localhost:8787/mcp',
+      });
+      mockListLocalMcpTools.mockResolvedValue([{ toolName: 'a' }, { toolName: 'b' }]);
+      mockTrpcClient.connector.syncToolsFromClientById.mutate.mockResolvedValue({ toolCount: 2 });
+
+      await run('add', '--url', 'http://localhost:8787/mcp', '--token', 'tok', '--name', 'Local');
+
+      expect(mockTrpcClient.connector.syncTools.mutate).not.toHaveBeenCalled();
+      expect(mockListLocalMcpTools).toHaveBeenCalledWith({
+        headers: { Authorization: 'Bearer tok' },
+        type: 'http',
+        url: 'http://localhost:8787/mcp',
+      });
+      expect(String(consoleSpy.mock.calls[0][0])).toContain('synced from this machine');
+    });
+
+    it('rolls back when the local MCP server cannot be listed', async () => {
+      mockTrpcClient.connector.create.mutate.mockResolvedValue({ id: ID, isNew: true });
+      mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
+        mcpConnectionType: 'stdio',
+        mcpStdioConfig: { args: [], command: 'missing-bin' },
+      });
+      mockListLocalMcpTools.mockRejectedValue(new Error('spawn missing-bin ENOENT'));
+      mockTrpcClient.connector.delete.mutate.mockResolvedValue(undefined);
+
+      await expect(run('add', '--stdio-cmd', 'missing-bin')).rejects.toThrow('exit:1');
+
+      expect(mockTrpcClient.connector.syncToolsFromClientById.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.connector.delete.mutate).toHaveBeenCalledWith({ id: ID });
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Could not list tools from the MCP server on this machine: spawn missing-bin ENOENT',
+      );
+    });
+
+    it('reports the leftover connector id when the rollback delete fails', async () => {
+      mockTrpcClient.connector.create.mutate.mockResolvedValue({ id: ID, isNew: true });
+      mockTrpcClient.connector.syncTools.mutate.mockRejectedValue(new Error('unreachable'));
+      mockTrpcClient.connector.delete.mutate.mockRejectedValue(new Error('fetch failed'));
+
+      await expect(
+        run('add', '--url', 'https://a.example.com/mcp', '--identifier', 'a'),
+      ).rejects.toThrow('exit:1');
+
+      expect(errorSpy).toHaveBeenNthCalledWith(1, 'unreachable');
+      expect(errorSpy).toHaveBeenNthCalledWith(
+        2,
+        `Rollback failed: connector a (${ID}) was created but could not be removed (fetch failed). Remove it with: lh connector remove ${ID} --yes`,
       );
     });
 
@@ -369,15 +541,67 @@ describe('connector command', () => {
     });
   });
 
-  describe('sync', () => {
-    it('resolves the identifier and syncs tools', async () => {
-      mockTrpcClient.connector.list.query.mockResolvedValue([{ id: ID, identifier: 'deepwiki' }]);
-      mockTrpcClient.connector.syncTools.mutate.mockResolvedValue({ toolCount: 3 });
+  describe('refresh', () => {
+    it.each(['refresh', 'sync'])(
+      '%s resolves the identifier and syncs tools on the server',
+      async (command) => {
+        mockTrpcClient.connector.list.query.mockResolvedValue([
+          { id: ID, identifier: 'deepwiki', mcpServerUrl: 'https://mcp.deepwiki.com/mcp' },
+        ]);
+        mockTrpcClient.connector.syncTools.mutate.mockResolvedValue({ toolCount: 3 });
 
-      await run('sync', 'deepwiki', '--json');
+        await run(command, 'deepwiki', '--json');
 
-      expect(mockTrpcClient.connector.syncTools.mutate).toHaveBeenCalledWith({ id: ID });
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify({ id: ID, toolCount: 3 }, null, 2));
+        expect(mockTrpcClient.connector.syncTools.mutate).toHaveBeenCalledWith({ id: ID });
+        expect(consoleSpy).toHaveBeenCalledWith(
+          JSON.stringify({ id: ID, local: false, toolCount: 3 }, null, 2),
+        );
+      },
+    );
+
+    it('registers sync as an alias of refresh', () => {
+      const refresh = createProgram()
+        .commands.find((c) => c.name() === 'connector')!
+        .commands.find((c) => c.name() === 'refresh')!;
+      expect(refresh.aliases()).toEqual(['sync']);
+    });
+
+    it('refreshes a stdio connector from this machine', async () => {
+      mockTrpcClient.connector.list.query.mockResolvedValue([
+        { id: ID, identifier: 'everything', mcpConnectionType: 'stdio' },
+      ]);
+      mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
+        mcpConnectionType: 'stdio',
+        mcpStdioConfig: { command: 'srv' },
+      });
+      mockListLocalMcpTools.mockResolvedValue([{ toolName: 'echo' }]);
+      mockTrpcClient.connector.syncToolsFromClientById.mutate.mockResolvedValue({ toolCount: 1 });
+
+      await run('refresh', ID);
+
+      expect(mockTrpcClient.connector.syncTools.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
+        id: ID,
+        tools: [{ toolName: 'echo' }],
+      });
+    });
+
+    it('fails on an unknown uuid and on a local sync error', async () => {
+      mockTrpcClient.connector.list.query.mockResolvedValue([
+        { id: ID, identifier: 'local', mcpServerUrl: 'http://127.0.0.1:9000/mcp' },
+      ]);
+      await expect(run('refresh', OTHER_ID)).rejects.toThrow('exit:1');
+      expect(errorSpy).toHaveBeenCalledWith(`Connector "${OTHER_ID}" not found.`);
+
+      mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
+        mcpServerUrl: 'http://127.0.0.1:9000/mcp',
+      });
+      mockListLocalMcpTools.mockRejectedValue(new Error('fetch failed'));
+      await expect(run('refresh', 'local')).rejects.toThrow('exit:1');
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Could not list tools from the MCP server on this machine: fetch failed',
+      );
+      expect(mockTrpcClient.connector.syncTools.mutate).not.toHaveBeenCalled();
     });
   });
 

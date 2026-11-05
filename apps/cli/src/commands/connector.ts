@@ -1,12 +1,21 @@
+import { isLocalOrPrivateUrl } from '@lobechat/utils/url';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
+import type { LocalMcpParams } from '../utils/localMcp';
+import { listLocalMcpTools } from '../utils/localMcp';
 import { log } from '../utils/logger';
 
 type TrpcClient = Awaited<ReturnType<typeof getTrpcClient>>;
 type CreateConnectorInput = Parameters<TrpcClient['connector']['create']['mutate']>[0];
+type ConnectorDetail = Awaited<ReturnType<TrpcClient['connector']['getForEdit']['query']>>;
+
+interface ConnectorEndpoint {
+  mcpConnectionType?: string | null;
+  mcpServerUrl?: string | null;
+}
 
 export type ConnectorAuthType = 'none' | 'bearer' | 'oauth2';
 
@@ -163,8 +172,111 @@ export async function resolveConnectorId(client: TrpcClient, idOrIdentifier: str
   return matches[0].id as string;
 }
 
-function fail(error: unknown): never {
+/**
+ * Whether tools must be listed from the CLI host: stdio servers run on this
+ * machine and local/private-network URLs are unreachable from a hosted server,
+ * so the server-side `syncTools` would fail for both (same split as the desktop
+ * app's `syncConnectorTools`).
+ */
+export function isMachineLocalConnector(connector: ConnectorEndpoint): boolean {
+  if (connector.mcpConnectionType === 'stdio') return true;
+  return !!connector.mcpServerUrl && isLocalOrPrivateUrl(connector.mcpServerUrl);
+}
+
+/** Build local MCP connection params from `connector.getForEdit`, mirroring the desktop app. */
+export function buildLocalMcpParams(detail: ConnectorDetail): LocalMcpParams {
+  if (detail.mcpConnectionType === 'stdio') {
+    if (!detail.mcpStdioConfig?.command) throw new Error('Connector is missing stdio config.');
+    return {
+      args: detail.mcpStdioConfig.args ?? [],
+      command: detail.mcpStdioConfig.command,
+      env: detail.mcpStdioConfig.env ?? undefined,
+      type: 'stdio',
+    };
+  }
+
+  if (!detail.mcpServerUrl) throw new Error('Connector is missing an MCP server URL.');
+
+  // Custom headers live in metadata.customHeaders; legacy rows stored them as
+  // a 'header' credential — merge both, like the server-side sync.
+  const credentials = detail.credentials as
+    | { apiKey: string; type: 'apikey' }
+    | { headers: Record<string, string>; type: 'header' }
+    | { token: string; type: 'bearer' }
+    | null
+    | undefined;
+  const customHeaders = (detail.metadata as Record<string, unknown> | null | undefined)
+    ?.customHeaders as Record<string, string> | undefined;
+  const headers: Record<string, string> = {
+    ...(credentials?.type === 'header' ? credentials.headers : undefined),
+    ...customHeaders,
+  };
+  const token =
+    credentials?.type === 'bearer'
+      ? credentials.token
+      : credentials?.type === 'apikey'
+        ? credentials.apiKey
+        : undefined;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  return {
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
+    type: 'http',
+    url: detail.mcpServerUrl,
+  };
+}
+
+/**
+ * Refresh a connector's tools. Server-reachable connectors use
+ * `connector.syncTools`; machine-local ones are listed on this machine and
+ * reported through `connector.syncToolsFromClientById`.
+ */
+export async function syncConnectorTools(
+  client: TrpcClient,
+  id: string,
+  connector: ConnectorEndpoint,
+): Promise<{ local: boolean; toolCount: number }> {
+  if (!isMachineLocalConnector(connector)) {
+    const { toolCount } = await client.connector.syncTools.mutate({ id });
+    return { local: false, toolCount };
+  }
+
+  const detail = await client.connector.getForEdit.query({ id });
+  let tools: Awaited<ReturnType<typeof listLocalMcpTools>>;
+  try {
+    tools = await listLocalMcpTools(buildLocalMcpParams(detail));
+  } catch (error) {
+    throw new Error(
+      `Could not list tools from the MCP server on this machine: ${(error as Error)?.message ?? String(error)}`,
+      { cause: error },
+    );
+  }
+  const { toolCount } = await client.connector.syncToolsFromClientById.mutate({ id, tools });
+  return { local: true, toolCount };
+}
+
+/** Resolve a connector uuid or identifier to its `connector.list` row. */
+export async function resolveConnector(client: TrpcClient, idOrIdentifier: string) {
+  const connectors = await client.connector.list.query();
+  if (UUID_RE.test(idOrIdentifier)) {
+    const match = connectors.find((c: any) => c.id === idOrIdentifier);
+    if (!match) throw new Error(`Connector "${idOrIdentifier}" not found.`);
+    return match;
+  }
+
+  const matches = connectors.filter((c: any) => c.identifier === idOrIdentifier);
+  if (matches.length === 0) throw new Error(`Connector "${idOrIdentifier}" not found.`);
+  if (matches.length > 1) {
+    throw new Error(
+      `Multiple connectors match "${idOrIdentifier}": ${matches.map((c: any) => c.id).join(', ')}. Pass the id instead.`,
+    );
+  }
+  return matches[0];
+}
+
+function fail(error: unknown, note?: string): never {
   log.error((error as Error)?.message ?? String(error));
+  if (note) log.error(note);
   process.exit(1);
 }
 
@@ -252,9 +364,15 @@ export function registerConnectorCommand(program: Command) {
       const { id, isNew } = await client.connector.create.mutate(input);
 
       // Never leave a freshly created connector behind when setup fails (mirrors
-      // the web form), but keep a row the user already had.
-      const rollback = async () => {
-        if (isNew) await client.connector.delete.mutate({ id }).catch(() => {});
+      // the web form), but keep a row the user already had. If the cleanup
+      // itself fails, say so: the leftover row blocks a retry as a duplicate.
+      const rollback = async (): Promise<string | undefined> => {
+        if (!isNew) return;
+        try {
+          await client.connector.delete.mutate({ id });
+        } catch (cleanupError) {
+          return `Rollback failed: connector ${input.identifier} (${id}) was created but could not be removed (${(cleanupError as Error)?.message ?? String(cleanupError)}). Remove it with: lh connector remove ${id} --yes`;
+        }
       };
 
       if (authType === 'oauth2') {
@@ -262,8 +380,7 @@ export function registerConnectorCommand(program: Command) {
         try {
           ({ authorizationUrl } = await client.connector.startOAuth.mutate({ id }));
         } catch (error) {
-          await rollback();
-          fail(error);
+          fail(error, await rollback());
         }
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -279,54 +396,61 @@ export function registerConnectorCommand(program: Command) {
         console.log('Open this URL in your browser to authorize:');
         console.log(authorizationUrl);
         console.log(
-          pc.dim(`After authorizing, run: lh connector sync ${input.identifier} to fetch tools.`),
+          pc.dim(
+            `After authorizing, run: lh connector refresh ${input.identifier} to fetch tools.`,
+          ),
         );
         return;
       }
 
-      let toolCount: number;
+      let synced: { local: boolean; toolCount: number };
       try {
-        ({ toolCount } = await client.connector.syncTools.mutate({ id }));
+        synced = await syncConnectorTools(client, id, input);
       } catch (error) {
-        await rollback();
-        fail(error);
+        fail(error, await rollback());
       }
+      const { local, toolCount } = synced;
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson({ id, identifier: input.identifier, isNew, toolCount }, fields);
+        outputJson({ id, identifier: input.identifier, isNew, local, toolCount }, fields);
         return;
       }
 
       console.log(
-        `${pc.green('✓')} ${isNew ? 'Added' : 'Updated'} connector ${pc.bold(input.identifier)} ${pc.dim(`(${id})`)} with ${toolCount} tool(s)`,
+        `${pc.green('✓')} ${isNew ? 'Added' : 'Updated'} connector ${pc.bold(input.identifier)} ${pc.dim(`(${id})`)} with ${toolCount} tool(s)${local ? pc.dim(' (synced from this machine)') : ''}`,
       );
     });
 
-  // ── sync ──────────────────────────────────────────────
+  // ── refresh ───────────────────────────────────────────
 
   connector
-    .command('sync <idOrIdentifier>')
-    .description('Re-fetch the tool list from the MCP server')
+    .command('refresh <idOrIdentifier>')
+    .alias('sync')
+    .description('Refresh OAuth tokens and re-fetch the tool list from the MCP server')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(async (idOrIdentifier: string, options: { json?: string | boolean }) => {
       const client = await getTrpcClient();
+      let synced: { local: boolean; toolCount: number };
       let id: string;
       try {
-        id = await resolveConnectorId(client, idOrIdentifier);
+        const target = await resolveConnector(client, idOrIdentifier);
+        id = target.id;
+        synced = await syncConnectorTools(client, id, target);
       } catch (error) {
         fail(error);
       }
-
-      const { toolCount } = await client.connector.syncTools.mutate({ id });
+      const { local, toolCount } = synced;
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson({ id, toolCount }, fields);
+        outputJson({ id, local, toolCount }, fields);
         return;
       }
 
-      console.log(`${pc.green('✓')} Synced ${pc.bold(idOrIdentifier)}: ${toolCount} tool(s)`);
+      console.log(
+        `${pc.green('✓')} Refreshed ${pc.bold(idOrIdentifier)}: ${toolCount} tool(s)${local ? pc.dim(' (synced from this machine)') : ''}`,
+      );
     });
 
   // ── remove ────────────────────────────────────────────
