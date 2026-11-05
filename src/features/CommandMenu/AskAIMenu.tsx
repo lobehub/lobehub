@@ -62,25 +62,37 @@ const AskAIMenu = memo(() => {
 
   return (
     <Command.Group heading={heading}>
-      <Command.Item value="lobe-ai" onSelect={handleAskLobeAI}>
+      <Command.Item {...stylex.props(styles.cmdkItem)} value="lobe-ai" onSelect={handleAskLobeAI}>
         <Avatar emojiScaleWithBackground avatar={DEFAULT_INBOX_AVATAR} shape="square" size={18} />
         <div className={stylex.props(styles.itemContent).className}>
           <div className={stylex.props(styles.itemLabel).className}>{DEFAULT_INBOX_TITLE}</div>
         </div>
       </Command.Item>
-      <Command.Item value="agent-builder" onSelect={handleAgentBuilder}>
+      <Command.Item
+        {...stylex.props(styles.cmdkItem)}
+        value="agent-builder"
+        onSelect={handleAgentBuilder}
+      >
         <Bot {...stylex.props(styles.icon)} />
         <div {...stylex.props(styles.itemContent)}>
           <div {...stylex.props(styles.itemLabel)}>{t('agentBuilder.title', { ns: 'chat' })}</div>
         </div>
       </Command.Item>
-      <Command.Item value="group-builder" onSelect={handleGroupBuilder}>
+      <Command.Item
+        {...stylex.props(styles.cmdkItem)}
+        value="group-builder"
+        onSelect={handleGroupBuilder}
+      >
         <GroupBotSquareIcon {...stylex.props(styles.icon)} />
         <div {...stylex.props(styles.itemContent)}>
           <div {...stylex.props(styles.itemLabel)}>{t('starter.createGroup', { ns: 'home' })}</div>
         </div>
       </Command.Item>
-      <Command.Item value="ai-painting" onSelect={handleAIPainting}>
+      <Command.Item
+        {...stylex.props(styles.cmdkItem)}
+        value="ai-painting"
+        onSelect={handleAIPainting}
+      >
         <Image {...stylex.props(styles.icon)} />
         <div {...stylex.props(styles.itemContent)}>
           <div {...stylex.props(styles.itemLabel)}>{t('cmdk.aiPainting')}</div>

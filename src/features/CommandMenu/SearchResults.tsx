@@ -501,6 +501,7 @@ const SearchResults = memo<SearchResultsProps>(
 
       return (
         <Command.Item
+          {...stylex.props(styles.cmdkItem)}
           forceMount
           key={`search-more-${type}`}
           keywords={[`zzz-action-${type}`]}
@@ -710,6 +711,7 @@ const SearchResults = memo<SearchResultsProps>(
           <Command.Group forceMount>
             {[1, 2, 3].map((i) => (
               <Command.Item
+                {...stylex.props(styles.cmdkItem)}
                 disabled
                 key={`skeleton-${i}`}
                 keywords={[searchQuery]}

@@ -1,5 +1,3 @@
-import './modelPicker.css';
-
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import * as stylex from '@stylexjs/stylex';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
@@ -30,9 +28,6 @@ export const modelPickerStyles = stylex.create({
     whiteSpace: 'nowrap',
   },
 });
-
-/** Hides the option's model-info tags in the closed trigger (`lobe-model-info-tags`, see TAG_CLASSNAME). */
-export const modelPickerClassName = 'lobe-model-picker-12e68cf8-picker';
 
 export const resolveServerDefaultModelMeta = (
   model: string,

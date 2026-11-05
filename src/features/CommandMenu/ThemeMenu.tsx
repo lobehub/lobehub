@@ -15,7 +15,11 @@ const ThemeMenu = memo(() => {
 
   return (
     <>
-      <Command.Item value="theme-light" onSelect={() => handleThemeChange('light')}>
+      <Command.Item
+        {...stylex.props(styles.cmdkItem)}
+        value="theme-light"
+        onSelect={() => handleThemeChange('light')}
+      >
         <Sun {...stylex.props(styles.icon)} />
         <div {...stylex.props(styles.itemContent)}>
           <div {...stylex.props(styles.itemDetails)}>
@@ -26,7 +30,11 @@ const ThemeMenu = memo(() => {
           </div>
         </div>
       </Command.Item>
-      <Command.Item value="theme-dark" onSelect={() => handleThemeChange('dark')}>
+      <Command.Item
+        {...stylex.props(styles.cmdkItem)}
+        value="theme-dark"
+        onSelect={() => handleThemeChange('dark')}
+      >
         <Moon {...stylex.props(styles.icon)} />
         <div {...stylex.props(styles.itemContent)}>
           <div {...stylex.props(styles.itemDetails)}>
@@ -37,7 +45,11 @@ const ThemeMenu = memo(() => {
           </div>
         </div>
       </Command.Item>
-      <Command.Item value="theme-system" onSelect={() => handleThemeChange('system')}>
+      <Command.Item
+        {...stylex.props(styles.cmdkItem)}
+        value="theme-system"
+        onSelect={() => handleThemeChange('system')}
+      >
         <Monitor {...stylex.props(styles.icon)} />
         <div {...stylex.props(styles.itemContent)}>
           <div {...stylex.props(styles.itemDetails)}>

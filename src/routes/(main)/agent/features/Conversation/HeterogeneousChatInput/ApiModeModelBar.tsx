@@ -14,7 +14,6 @@ import {
   buildServerDefaultModelOptions,
   COMPACT_MODEL_PICKER_STYLE,
   compactModelTriggerText,
-  modelPickerClassName,
   modelPickerStyles,
   resolveServerDefaultAgentModels,
 } from '@/features/HeterogeneousAgent/modelPicker';
@@ -108,7 +107,6 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
     return (
       <TooltipGroup>
         <Select
-          className={modelPickerClassName}
           labelRender={compactTriggerLabel}
           loading={serverCapabilityLoading}
           options={serverDefaultModelOptions}

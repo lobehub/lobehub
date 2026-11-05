@@ -1,4 +1,3 @@
-/* ShareButton is a business component, so its buttons are reached by tag. */
 .lobe-header-ef249f99-share-button button:not(:hover, :focus-visible) {
   background: transparent;
 }

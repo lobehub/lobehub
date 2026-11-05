@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the paragraphs are rendered markdown inside MarkdownMessage, which no prop reaches
 import './userRequest.css';
 
 import { ActionIcon, Button, Icon } from '@lobehub/ui';
