@@ -1,5 +1,7 @@
 import type { AgentEvalRunTopicResult } from '@lobechat/types';
 
+import { runStats } from './lobeBench';
+
 interface ExperimentCase {
   id: string;
   metadata?: Record<string, unknown> | null;
@@ -86,6 +88,77 @@ export const attemptGradeState = (attempt: GradeAttempt): AttemptGradeState => {
     return 'noAnswer';
   if (attempt.status === 'external' || attempt.awaitingExternalEval) return 'awaitingExternal';
   return 'ungraded';
+};
+
+/** Live evidence counts, separate from the final quality estimates stored on a run. */
+export const experimentPassProgress = (
+  results: AgentEvalRunTopicResult[] | undefined,
+  k: number,
+  total: number,
+) => {
+  if (!results) return undefined;
+  let allPassed = 0;
+  let anyPassed = 0;
+  let evaluated = 0;
+  let errors = 0;
+  let hasVerdicts = false;
+  const cases = new Map(results.map((result) => [result.testCaseId, result]));
+  for (const result of cases.values()) {
+    const evaluation = result.evalResult;
+    const threads = evaluation?.threads;
+    const attempts: GradeAttempt[] = threads?.length
+      ? threads
+      : [{ ...evaluation, passed: result.passed, status: result.status }];
+    const states = attempts.map(attemptGradeState);
+    const passed = attempts.filter(
+      (attempt, index) => states[index] === 'graded' && attempt.passed === true,
+    ).length;
+    const caseError =
+      states.some((state) => state === 'error' || state === 'judgeError') ||
+      ['error', 'timeout', 'judge_error'].includes(result.status ?? '') ||
+      evaluation?.errorPhase === 'judge';
+    const distinct = !threads?.length || new Set(threads.map((t) => t.threadId)).size === k;
+    const graded = attempts.every(
+      (attempt, index) =>
+        (states[index] === 'graded' && typeof attempt.passed === 'boolean') ||
+        states[index] === 'noAnswer',
+    );
+    const complete = !caseError && attempts.length === k && distinct && graded;
+    if (passed > 0) anyPassed++;
+    if (complete && passed === k) allPassed++;
+    if (complete) evaluated++;
+    if (caseError) errors++;
+    if (
+      complete ||
+      attempts.some((attempt, i) => states[i] === 'graded' && typeof attempt.passed === 'boolean')
+    )
+      hasVerdicts = true;
+  }
+  return {
+    allPassed,
+    anyPassed,
+    complete: total > 0 && evaluated === total && cases.size === total && results.length === total,
+    errors,
+    evaluated,
+    hasVerdicts,
+    pending: Math.max(0, total - evaluated - errors),
+  };
+};
+
+/** Keep the table and complete-state insights on the same preserved verdict counts. */
+export const experimentRunStats = (
+  run: Parameters<typeof runStats>[0],
+  results: AgentEvalRunTopicResult[] | undefined,
+  totalCases?: number,
+) => {
+  const stats = runStats(run, totalCases);
+  const progress = experimentPassProgress(results, stats.k, stats.total);
+  return {
+    ...stats,
+    anyK: progress?.anyPassed ?? stats.anyK,
+    passed: progress?.allPassed ?? stats.passed,
+    progress,
+  };
 };
 
 export const experimentGradingCoverage = (results: AgentEvalRunTopicResult[]) => {

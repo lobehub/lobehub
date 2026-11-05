@@ -1,3 +1,4 @@
+import type { EvalThreadResult } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,8 +7,10 @@ import {
   defaultExperimentCaseFilter,
   experimentGradingCoverage,
   experimentGradingGaps,
+  experimentPassProgress,
   experimentResultCoverage,
   experimentResultsState,
+  experimentRunStats,
   isUnavailableExperimentResult,
   lowestPassRateCategory,
   orderExperimentContenders,
@@ -16,6 +19,166 @@ import {
 } from './experimentResults';
 
 describe('experiment results', () => {
+  const pass = (threadId: string) => ({
+    threadId,
+    status: 'passed' as const,
+    passed: true,
+    rubricScores: [{ rubricId: 'judge', score: 1 }],
+  });
+  const topic = (id: string, threads: EvalThreadResult[]) => ({
+    testCaseId: id,
+    topicId: id,
+    status: 'passed',
+    passed: true,
+    evalResult: { threads },
+  });
+
+  it('retains confirmed all-attempt passes while provider errors make the run incomplete', () => {
+    const results = [
+      topic('all', [pass('a1'), pass('a2'), pass('a3')]),
+      {
+        ...topic('mixed', [pass('b1'), pass('b2')]),
+        status: 'error',
+        evalResult: {
+          threads: [
+            pass('b1'),
+            pass('b2'),
+            { threadId: 'b3', status: 'error' as const, error: '429' },
+          ],
+        },
+      },
+      topic('still-running', [pass('c1')]),
+    ];
+    expect(experimentPassProgress(results, 3, 4)).toEqual({
+      allPassed: 1,
+      anyPassed: 3,
+      complete: false,
+      errors: 1,
+      evaluated: 1,
+      hasVerdicts: true,
+      pending: 2,
+    });
+  });
+
+  it('distinguishes missing grades from a genuine zero and preserves completed scores', () => {
+    expect(experimentPassProgress(undefined, 3, 1)).toBeUndefined();
+    expect(experimentPassProgress([], 3, 1)).toMatchObject({
+      complete: false,
+      hasVerdicts: false,
+      pending: 1,
+    });
+    const failed = [pass('a1'), pass('a2'), pass('a3')].map((t) => ({
+      ...t,
+      passed: false,
+      status: 'failed' as const,
+    }));
+    expect(experimentPassProgress([topic('a', failed)], 3, 1)).toMatchObject({
+      allPassed: 0,
+      anyPassed: 0,
+      complete: true,
+      evaluated: 1,
+      hasVerdicts: true,
+    });
+    expect(
+      experimentPassProgress([topic('a', [pass('a1'), pass('a2'), pass('a3')])], 3, 1),
+    ).toMatchObject({
+      allPassed: 1,
+      anyPassed: 1,
+      complete: true,
+    });
+  });
+
+  it('requires all expected distinct judged attempts, not a passing case status', () => {
+    for (const threads of [
+      [pass('a1'), pass('a2')],
+      [pass('a1'), pass('a1'), pass('a1')],
+      [pass('a1'), pass('a2'), { ...pass('a3'), passed: undefined }],
+      [pass('a1'), pass('a2'), { threadId: 'a3', status: 'external' as const }],
+    ]) {
+      expect(
+        experimentPassProgress([{ ...topic('a', []), evalResult: { threads } }], 3, 1),
+      ).toMatchObject({
+        allPassed: 0,
+        complete: false,
+        evaluated: 0,
+        pending: 1,
+      });
+    }
+  });
+
+  it('keeps Judge errors and timeouts out of passes even if a stale boolean says passed', () => {
+    for (const status of ['judge_error', 'timeout', 'error'] as const) {
+      const result = topic('a', [pass('a1'), pass('a2'), { ...pass('a3'), status }]);
+      expect(experimentPassProgress([result], 3, 1)).toMatchObject({
+        allPassed: 0,
+        anyPassed: 1,
+        complete: false,
+        errors: 1,
+        pending: 0,
+      });
+    }
+  });
+
+  it('does not turn duplicated case rows into complete coverage', () => {
+    const result = topic('a', [pass('a1'), pass('a2'), pass('a3')]);
+    expect(experimentPassProgress([result, result], 3, 2)).toMatchObject({ complete: false });
+  });
+
+  it('supports single-attempt results and explicit external verdicts', () => {
+    const single = {
+      testCaseId: 'a',
+      topicId: 'a',
+      status: 'passed',
+      passed: true,
+      evalResult: { rubricScores: [{ rubricId: 'judge', score: 1 }] },
+    };
+    expect(experimentPassProgress([single], 1, 1)).toMatchObject({ allPassed: 1, complete: true });
+    const external = {
+      ...topic('a', []),
+      evalResult: { threads: [{ threadId: 'a1', status: 'completed' as const, passed: true }] },
+    };
+    expect(experimentPassProgress([external], 1, 1)).toMatchObject({
+      allPassed: 1,
+      complete: true,
+    });
+  });
+
+  it('uses the same complete verdict counts for insights and the table when historical metrics are missing', () => {
+    const stats = experimentRunStats(
+      { config: { k: 3 }, metrics: { totalCases: 1 }, status: 'completed' } as Parameters<
+        typeof experimentRunStats
+      >[0],
+      [topic('a', [pass('a1'), pass('a2'), pass('a3')])],
+    );
+    expect(stats.progress).toMatchObject({ allPassed: 1, anyPassed: 1, complete: true });
+    expect(stats.passed).toBe(stats.progress?.allPassed);
+    expect(stats.anyK).toBe(stats.progress?.anyPassed);
+  });
+
+  it('preserves genuine zero for completed step-limit failures without treating an unknown grade as zero', () => {
+    const result = topic(
+      'a',
+      [1, 2, 3].map((i) => ({
+        threadId: `a${i}`,
+        status: 'failed',
+        passed: false,
+        error: 'Step cap reached',
+      })),
+    );
+    expect(experimentPassProgress([result], 3, 1)).toMatchObject({
+      complete: true,
+      allPassed: 0,
+      hasVerdicts: true,
+    });
+    expect(
+      experimentPassProgress(
+        [{ ...topic('a', []), evalResult: { threads: [{ ...pass('a1'), passed: undefined }] } }],
+        3,
+        1,
+      ),
+    ).toMatchObject({ complete: false, hasVerdicts: false });
+  });
+
   const cases = [
     { id: 'db-a', metadata: { caseId: 'native-a' } },
     { id: 'db-b', metadata: { caseId: 'native-b' } },

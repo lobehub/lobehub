@@ -669,11 +669,16 @@ export default {
   'lobeBench.dashboard.coverageGap':
     '{{name}}: {{available}} of {{expected}} case results are available; {{missing}} are missing. Saved summary scores are unchanged. Breakdowns and CSV include only available evidence.',
   'lobeBench.dashboard.statusIncomplete': 'Incomplete',
+  'lobeBench.dashboard.partialCounts':
+    'Counts show confirmed passes so far. Final pass rates and ranking are available once every case is fully evaluated.',
+  'lobeBench.dashboard.caseProgress':
+    '{{evaluated}}/{{total}} cases evaluated · {{errors}} with errors · {{pending}} awaiting completion',
+  'lobeBench.dashboard.col.passedAllK': 'All {{k}} passed',
   'lobeBench.dashboard.cases.unavailable':
     'No selected cases are available. Return to the case library to inspect this case set.',
   'lobeBench.dashboard.caseUnavailable': 'Result unavailable',
   'lobeBench.dashboard.errors':
-    '{{count}} attempts errored and count as non-passes. Rerun runs those cases again.',
+    '{{count}} cases have execution errors. Their results are incomplete; rerun these cases to finish the evaluation.',
   'lobeBench.dashboard.rerun': 'Rerun',
   'lobeBench.dashboard.rerun.hint':
     'Runs again every case with an attempt that has no verdict (error, timeout, or ungraded), with the same models and settings. Cases with verdicts stay.',

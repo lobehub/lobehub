@@ -35,6 +35,7 @@ import {
   experimentGradingGaps,
   experimentResultCoverage,
   experimentResultsState,
+  experimentRunStats,
   isUnavailableExperimentResult,
   lowestPassRateCategory,
   orderExperimentContenders,
@@ -249,7 +250,7 @@ const ExperimentDashboard = memo(() => {
     { error: experimentsError, loaded: isInit },
     { error: runsError, loaded: runs !== undefined },
     { error: casesError, loaded: !meta || datasetCases !== undefined },
-    { error: resultsError, loaded: runIds.length === 0 || resultsMap !== undefined },
+    { error: resultsError, loaded: runIds.every((id) => resultsMap?.[id] !== undefined) },
   ];
   const loadState = experimentResultsState(resources);
   const loadError = resources.find((item) => !item.loaded && item.error)?.error;
@@ -280,7 +281,12 @@ const ExperimentDashboard = memo(() => {
   const runOf = (contender: LobeBenchContender) =>
     (runs ?? []).find((r) => r.id === contender.runId);
   const statsOf = (contender: LobeBenchContender) =>
-    runStats(runOf(contender), scope.selectedCount);
+    experimentRunStats(
+      runOf(contender),
+      contender.runId ? resultsMap?.[contender.runId] : undefined,
+      scope.selectedCount,
+    );
+  const progressOf = (contender: LobeBenchContender) => statsOf(contender).progress;
   const resultUnavailable = (contender: LobeBenchContender, caseId: string) =>
     isUnavailableExperimentResult(
       runOf(contender)?.status,
@@ -299,7 +305,7 @@ const ExperimentDashboard = memo(() => {
   const incomplete =
     coverageGaps.length > 0 ||
     gradingGaps.length > 0 ||
-    contenders.some((c) => runOf(c)?.status !== 'completed');
+    contenders.some((c) => runOf(c)?.status !== 'completed' || !progressOf(c)?.complete);
   const attemptOf = (contender: LobeBenchContender, caseId: string) =>
     summarizeCaseResult(
       contender.runId
@@ -310,9 +316,13 @@ const ExperimentDashboard = memo(() => {
 
   const ranked = useMemo(
     () =>
-      orderExperimentContenders(contenders, (contender) => statsOf(contender).passed, incomplete),
+      orderExperimentContenders(
+        contenders,
+        (contender) => progressOf(contender)?.allPassed ?? 0,
+        incomplete,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [contenders, runs, scope.selectedCount, incomplete],
+    [contenders, runs, resultsMap, scope.selectedCount, incomplete],
   );
   const categories = useMemo(
     () => [...new Set((cases ?? []).map((item) => getCaseCategory(item)))],
@@ -714,6 +724,11 @@ const ExperimentDashboard = memo(() => {
               <Text weight={600}>
                 {t(incomplete ? 'lobeBench.contenders.title' : 'lobeBench.dashboard.ranking')}
               </Text>
+              {incomplete && (
+                <Text fontSize={12} type={'secondary'}>
+                  {t('lobeBench.dashboard.partialCounts')}
+                </Text>
+              )}
               <div
                 className={stylex.props(styles.grid).className}
                 style={{
@@ -731,7 +746,10 @@ const ExperimentDashboard = memo(() => {
                     : t('lobeBench.dashboard.col.passRate')}
                 </span>
                 <span className={stylex.props(styles.head).className}>
-                  {t('lobeBench.dashboard.col.passed')}
+                  {t(
+                    k > 1 ? 'lobeBench.dashboard.col.passedAllK' : 'lobeBench.dashboard.col.passed',
+                    { k },
+                  )}
                 </span>
                 <span className={stylex.props(styles.head).className}>
                   {k > 1 ? t('lobeBench.dashboard.col.anyK', { k }) : ''}
@@ -741,11 +759,9 @@ const ExperimentDashboard = memo(() => {
                 </span>
                 {ranked.map((contender, index) => {
                   const s = statsOf(contender);
+                  const progress = progressOf(contender);
                   const run = runOf(contender);
-                  const hasGap =
-                    run?.status !== 'completed' ||
-                    coverageGaps.some((gap) => gap.id === contender.id) ||
-                    gradingGaps.some((gap) => gap.id === contender.id);
+                  const hasGap = run?.status !== 'completed' || !progress?.complete;
                   return [
                     <span
                       className={stylex.props(styles.cell, styles.mono).className}
@@ -779,24 +795,33 @@ const ExperimentDashboard = memo(() => {
                       <Text fontSize={12} type={'secondary'}>
                         {settingsOf(contender)}
                       </Text>
+                      {hasGap && progress && (
+                        <Text fontSize={12} type={'secondary'}>
+                          {t('lobeBench.dashboard.caseProgress', { ...progress, total: s.total })}
+                        </Text>
+                      )}
                     </Flexbox>,
                     <span
                       className={stylex.props(styles.cell, styles.mono).className}
                       key={`${contender.id}-rate`}
                     >
-                      {hasGap ? '—' : formatPercent(s.passRate)}
+                      {hasGap ? '—' : formatPercent(progress.allPassed / s.total)}
                     </span>,
                     <span
                       className={stylex.props(styles.cell, styles.mono).className}
                       key={`${contender.id}-passed`}
                     >
-                      {s.passed}/{s.total}
+                      {progress?.hasVerdicts ? `${progress.allPassed}/${s.total}` : '—'}
                     </span>,
                     <span
                       className={stylex.props(styles.cell, styles.mono).className}
                       key={`${contender.id}-allk`}
                     >
-                      {k > 1 ? (s.anyK === undefined ? '—' : `${s.anyK}/${s.total}`) : ''}
+                      {k > 1
+                        ? progress?.hasVerdicts
+                          ? `${progress.anyPassed}/${s.total}`
+                          : '—'
+                        : ''}
                     </span>,
                     <span
                       className={stylex.props(styles.cell, styles.mono).className}
