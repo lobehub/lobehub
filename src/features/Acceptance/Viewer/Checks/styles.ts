@@ -39,8 +39,8 @@ export const styles = stylex.create({
   },
   chipClickable: {
     cursor: 'pointer',
-    color: { 'default': null, ':hover': cssVar.colorText },
-    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
   },
   emptyCard: {
     paddingBlock: '48px',
@@ -97,7 +97,7 @@ export const styles = stylex.create({
   },
   seqChipClickable: {
     cursor: 'copy',
-    color: { 'default': null, ':hover': cssVar.colorText },
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
   },
   rowActions: {
     height: '22px',

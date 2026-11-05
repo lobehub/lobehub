@@ -142,7 +142,7 @@ export const styles = stylex.create({
     borderStyle: 'none',
     backgroundColor: 'transparent',
     backgroundImage: 'none',
-    color: { 'default': null, ':hover': cssVar.colorText },
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
     textDecoration: { 'default': null, ':hover': 'underline' },
     transition: `color ${cssVar.motionDurationFast}`,
   },

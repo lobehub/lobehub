@@ -53,7 +53,7 @@ const styles = stylex.create({
       default: cssVar.colorBorderSecondary,
       [stylex.when.ancestor(':hover', roundHeaderMarker)]: cssVar.colorBorder,
     },
-    transition: `background-color ${cssVar.motionDurationFast}`,
+    transition: `background ${cssVar.motionDurationFast}`,
   },
   sentBack: {
     flex: 'none',

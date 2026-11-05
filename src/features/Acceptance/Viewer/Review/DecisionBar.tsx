@@ -43,9 +43,9 @@ const styles = stylex.create({
   repairingArc: {
     transformOrigin: 'center',
     animationName: { default: orbit, [reducedMotion]: 'none' },
-    animationDuration: '1.2s',
-    animationTimingFunction: 'linear',
-    animationIterationCount: 'infinite',
+    animationDuration: { default: '1.2s', [reducedMotion]: '0s' },
+    animationTimingFunction: { default: 'linear', [reducedMotion]: 'ease' },
+    animationIterationCount: { default: 'infinite', [reducedMotion]: 1 },
   },
   // Floats over the scrolling checklist — the decision stays reachable
   // however deep the review goes.
@@ -88,9 +88,9 @@ const styles = stylex.create({
   // user's next action (accept / send back) already is, not behind a filter.
   completePop: {
     animationName: { default: completePop, [reducedMotion]: 'none' },
-    animationDuration: '0.2s',
-    animationTimingFunction: 'ease-out',
-    animationFillMode: 'both',
+    animationDuration: { default: '0.2s', [reducedMotion]: '0s' },
+    animationTimingFunction: { default: 'ease-out', [reducedMotion]: 'ease' },
+    animationFillMode: { default: 'both', [reducedMotion]: 'none' },
   },
 });
 
