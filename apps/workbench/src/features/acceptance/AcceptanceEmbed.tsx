@@ -1,6 +1,4 @@
-import './AcceptanceEmbed.css';
-
-import { cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
@@ -33,6 +31,7 @@ const styles = stylex.create({
     paddingBlock: { 'default': '24px', '@media (width <= 767px)': '16px' },
     paddingInline: { 'default': '24px', '@media (width <= 767px)': '16px' },
   },
+  title: { overflow: 'visible', overflowWrap: 'anywhere', whiteSpace: 'normal' },
   page: {
     overflow: 'auto',
     width: '100%',
@@ -56,14 +55,8 @@ const EmbedContent = () => {
   );
 
   return (
-    <Flexbox
-      gap={24}
-      className={cx(
-        stylex.props(styles.content).className,
-        'lobe-acceptance-embed-fe01f599-content',
-      )}
-    >
-      <AcceptanceIdentity />
+    <Flexbox className={stylex.props(styles.content).className} gap={24}>
+      <AcceptanceIdentity titleXstyle={styles.title} />
       <AcceptanceGoal />
       <AcceptanceTabs
         active={tab}
