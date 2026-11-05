@@ -21,6 +21,7 @@ const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
 const onlyMineMock = vi.hoisted(() => ({ value: false }));
 const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefined }));
 const goalsEnabledMock = vi.hoisted(() => ({ value: true }));
+const hasDraftMock = vi.hoisted(() => ({ value: false }));
 const topicMetaCardMock = vi.hoisted(() => ({
   value: undefined as
     | {
@@ -66,6 +67,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     extra,
     href,
     icon,
+    slots,
     title,
   }: {
     actions?: ReactNode | (() => ReactNode);
@@ -74,11 +76,18 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     extra?: ReactNode;
     href?: string;
     icon?: ReactNode;
+    slots?: { iconBelow?: ReactNode; titlePrefix?: ReactNode };
     title?: ReactNode;
   }) => (
     <div data-active={String(active)} data-href={href} data-testid="nav-item">
-      {icon}
-      {title}
+      <div data-testid="nav-item-leading">
+        {icon}
+        {slots?.iconBelow}
+      </div>
+      <div data-testid="nav-item-title">
+        {slots?.titlePrefix}
+        {title}
+      </div>
       {description}
       {extra}
       {typeof actions === 'function' ? actions() : actions}
@@ -93,6 +102,9 @@ vi.mock('@/features/ChatInput/ControlBar/DirIcon', () => ({
 }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => 'team',
+}));
+vi.mock('@/features/ChatInput/draftStorage', () => ({
+  useHasDraft: () => hasDraftMock.value,
 }));
 vi.mock('@/features/AgentChannel/const', () => ({
   getPlatformIcon: () => null,
@@ -207,6 +219,7 @@ describe('TopicItem active state', () => {
     onlyMineMock.value = false;
     currentUserIdMock.value = 'user-1';
     goalsEnabledMock.value = true;
+    hasDraftMock.value = false;
     vi.useRealTimers();
   });
 
@@ -553,6 +566,39 @@ describe('TopicItem active state', () => {
     );
 
     expect(screen.getByText('repo/repo-fix · fix')).toBeInTheDocument();
+  });
+
+  describe('draft hint', () => {
+    beforeEach(() => {
+      hasDraftMock.value = true;
+      useTopicNavigationMock.mockReturnValue({
+        isInAgentSubRoute: false,
+        isInTopicContextRoute: false,
+        navigateToTopic: vi.fn(),
+        routeTopicId: undefined,
+      });
+    });
+
+    it('stacks the draft hint under the leading icon on a two-line row', () => {
+      render(
+        <TopicItem
+          showWorkingDirectory
+          id="tpc_test"
+          metadata={{ workingDirectory: '/repo' }}
+          title="Topic"
+        />,
+      );
+
+      expect(within(screen.getByTestId('nav-item-leading')).getByText('draft')).toBeInTheDocument();
+      expect(within(screen.getByTestId('nav-item-title')).queryByText('draft')).toBeNull();
+    });
+
+    it('keeps the draft hint before the title on a single-line row', () => {
+      render(<TopicItem id="tpc_test" title="Topic" />);
+
+      expect(within(screen.getByTestId('nav-item-title')).getByText('draft')).toBeInTheDocument();
+      expect(within(screen.getByTestId('nav-item-leading')).queryByText('draft')).toBeNull();
+    });
   });
 
   // The unread dot and the linked-PR marker compete for the same icon slot, and
