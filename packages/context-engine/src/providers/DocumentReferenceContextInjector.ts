@@ -27,6 +27,11 @@ export interface DocumentReferenceItem {
 }
 
 export interface DocumentReferenceContextInjectorConfig {
+  /**
+   * Whether this request is sent the lobe-agent-documents tool. Without it the hint
+   * must not promise a `readDocument` call the model cannot make.
+   */
+  canReadDocuments?: boolean;
   documentReferences?: DocumentReferenceItem[];
   enabled?: boolean;
 }
@@ -34,11 +39,19 @@ export interface DocumentReferenceContextInjectorConfig {
 const escapeAttr = (value: string) =>
   value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 
-const formatDocumentReferences = (items: DocumentReferenceItem[]): string | null => {
+const READABLE_HINT =
+  'The user referenced the following agent documents. Use their content as context. When a document is marked truncated, earlier_turn or unavailable, read it in full with the lobe-agent-documents readDocument tool using its id.';
+const UNREADABLE_HINT =
+  'The user referenced the following agent documents. Use their content as context. A document marked truncated only includes its beginning, and one marked earlier_turn or unavailable has no content here; you cannot read more of them in this conversation, so tell the user when the answer depends on the missing part.';
+
+const formatDocumentReferences = (
+  items: DocumentReferenceItem[],
+  canReadDocuments: boolean,
+): string | null => {
   if (items.length === 0) return null;
 
   const lines: string[] = [
-    '<referred_documents hint="The user referenced the following agent documents. Use their content as context. When a document is marked truncated, earlier_turn or unavailable, read it in full with the lobe-agent-documents readDocument tool using its id.">',
+    `<referred_documents hint="${canReadDocuments ? READABLE_HINT : UNREADABLE_HINT}">`,
   ];
 
   for (const item of items) {
@@ -93,7 +106,7 @@ export class DocumentReferenceContextInjector extends BaseLastUserContentProvide
       return this.markAsExecuted(clonedContext);
     }
 
-    const formattedContent = formatDocumentReferences(references);
+    const formattedContent = formatDocumentReferences(references, !!this.config.canReadDocuments);
     if (!formattedContent) return this.markAsExecuted(clonedContext);
 
     const lastUserIndex = this.findLastUserMessageIndex(clonedContext.messages);

@@ -57,6 +57,7 @@ describe('DocumentReferenceContextInjector', () => {
 
   it('marks truncated and unreadable documents so the agent can read them via the tool', async () => {
     const injector = new DocumentReferenceContextInjector({
+      canReadDocuments: true,
       documentReferences: [
         { content: 'partial', documentId: 'doc-1', title: 'Long', truncated: true },
         { documentId: 'doc-2', title: 'Gone' },
@@ -73,5 +74,23 @@ describe('DocumentReferenceContextInjector', () => {
     expect(content).toContain('<document id="doc-2" title="Gone" status="unavailable" />');
     expect(content).toContain('<document id="doc-3" title="Before" status="earlier_turn" />');
     expect(content).toContain('readDocument');
+  });
+
+  it('does not point at readDocument when the documents tool is not sent', async () => {
+    const injector = new DocumentReferenceContextInjector({
+      canReadDocuments: false,
+      documentReferences: [
+        { content: 'partial', documentId: 'doc-1', title: 'Long', truncated: true },
+      ],
+      enabled: true,
+    });
+    const result = await injector.process(
+      createContext([{ content: 'Hi', id: 'user-1', role: 'user' }]),
+    );
+    const content = result.messages[0].content as string;
+
+    expect(content).toContain('<document id="doc-1" title="Long" truncated="true">');
+    expect(content).not.toContain('readDocument');
+    expect(content).toContain('tell the user');
   });
 });
