@@ -40,6 +40,7 @@ const GroupConversation = memo<GroupConversationProps>(({ active, conversation }
 
   return (
     <ConversationRow
+      closeOnReselect
       active={active}
       activeAt={activeAt}
       contextMenuItems={contextMenuItems}

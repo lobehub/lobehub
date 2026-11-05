@@ -17,11 +17,12 @@ vi.mock('@/features/Workspace/WorkspaceLink', () => ({
   default: ({ to, ...rest }: { to: string }) => createElement('a', { href: to, ...rest }),
 }));
 
-const renderRow = (active: boolean, onClick = vi.fn()) => {
+const renderRow = (active: boolean, onClick = vi.fn(), closeOnReselect = true) => {
   render(
     createElement(ConversationRow, {
       active,
       avatar: null,
+      closeOnReselect,
       onClick,
       title: 'Dario',
       url: '/channels/chn_dario',
@@ -46,6 +47,16 @@ describe('ConversationRow', () => {
 
   it('opens an inactive conversation through its own click handling', () => {
     const { onClick, row } = renderRow(false);
+
+    fireEvent.click(row);
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  // Directory rows (the contacts tab) open a profile, so a second click must not leave it.
+  it('keeps the open row selected when it does not close on reselect', () => {
+    const { onClick, row } = renderRow(true, vi.fn(), false);
 
     fireEvent.click(row);
 

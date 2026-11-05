@@ -6,7 +6,7 @@ import { type ComponentProps, memo, type MouseEvent, type ReactNode, type Ref } 
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import WorkspaceLink, { type WorkspaceLinkProps } from '@/features/Workspace/WorkspaceLink';
 
 import { formatConversationTime, isPlainClick } from './conversations';
 import { styles } from './style';
@@ -15,6 +15,11 @@ export interface ConversationRowProps {
   active?: boolean;
   activeAt?: Date;
   avatar: ReactNode;
+  /**
+   * Clicking the open conversation again closes it, back to the Messages home with no row
+   * selected. Off for directory lists, whose rows open a profile rather than a conversation.
+   */
+  closeOnReselect?: boolean;
   contextMenuItems?: ComponentProps<typeof ContextMenuTrigger>['items'];
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
   onMouseEnter?: () => void;
@@ -31,9 +36,32 @@ export interface ConversationRowProps {
   url: string;
 }
 
+/** A row link that leaves the conversation when it is already open. Modified clicks keep the link. */
+const CloseOnReselectLink = ({
+  active,
+  onClick,
+  ...rest
+}: WorkspaceLinkProps & { active?: boolean }) => {
+  const navigate = useWorkspaceAwareNavigate();
+  return (
+    <WorkspaceLink
+      {...rest}
+      onClick={(event) => {
+        if (active && isPlainClick(event)) {
+          event.preventDefault();
+          navigate('/');
+          return;
+        }
+        onClick?.(event);
+      }}
+    />
+  );
+};
+
 const ConversationRow = memo<ConversationRowProps>(
   ({
     active,
+    closeOnReselect,
     activeAt,
     avatar,
     contextMenuItems,
@@ -49,28 +77,18 @@ const ConversationRow = memo<ConversationRowProps>(
     url,
   }) => {
     const { t } = useTranslation('common');
-    const navigate = useWorkspaceAwareNavigate();
-    // Clicking the open conversation again closes it, back to the Messages home with no row
-    // selected. Modified clicks keep the link's own behavior.
-    const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-      if (active && isPlainClick(event)) {
-        event.preventDefault();
-        navigate('/');
-        return;
-      }
-      onClick?.(event);
+    const link: WorkspaceLinkProps = {
+      'aria-current': active ? 'page' : undefined,
+      'aria-label': title,
+      ref,
+      ...stylex.props(styles.row, pinned && styles.rowPinned, active && styles.rowActive),
+      'to': url,
+      onClick,
+      onMouseEnter,
     };
 
-    const row = (
-      <WorkspaceLink
-        aria-current={active ? 'page' : undefined}
-        aria-label={title}
-        ref={ref}
-        {...stylex.props(styles.row, pinned && styles.rowPinned, active && styles.rowActive)}
-        to={url}
-        onClick={handleClick}
-        onMouseEnter={onMouseEnter}
-      >
+    const content = (
+      <>
         <span {...stylex.props(styles.avatar)}>
           {avatar}
           {!!unread && unread > 0 && (
@@ -102,7 +120,14 @@ const ConversationRow = memo<ConversationRowProps>(
             </Flexbox>
           )}
         </Flexbox>
-      </WorkspaceLink>
+      </>
+    );
+    const row = closeOnReselect ? (
+      <CloseOnReselectLink {...link} active={active}>
+        {content}
+      </CloseOnReselectLink>
+    ) : (
+      <WorkspaceLink {...link}>{content}</WorkspaceLink>
     );
 
     return contextMenuItems ? (
