@@ -1,7 +1,11 @@
+import { getMcpToolVisibility } from '@lobechat/const/mcpApp';
+
 export interface LocalMcpTool {
   description?: string;
   inputSchema?: Record<string, unknown>;
   toolName: string;
+  /** The tool's MCP Apps `_meta.ui.visibility`, when it declares one. */
+  visibility?: string[];
 }
 
 export type LocalMcpParams =
@@ -57,6 +61,9 @@ export async function listLocalMcpTools(params: LocalMcpParams): Promise<LocalMc
       description: tool.description,
       inputSchema: tool.inputSchema as Record<string, unknown> | undefined,
       toolName: tool.name,
+      // `syncToolsFromClientById` stores a missing visibility as null, which
+      // would make a view-only (`['app']`) tool model-visible.
+      visibility: getMcpToolVisibility(tool._meta),
     }));
   } catch (error) {
     const message = (error as Error)?.message ?? String(error);

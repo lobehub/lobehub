@@ -3,6 +3,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { resolveIdentityFingerprint } from '../auth/identity';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import type { LocalMcpParams } from '../utils/localMcp';
 import { listLocalMcpTools } from '../utils/localMcp';
@@ -227,6 +228,51 @@ export function buildLocalMcpParams(detail: ConnectorDetail): LocalMcpParams {
 }
 
 /**
+ * Gate before launching a stored stdio command on this machine. Called only
+ * when the connector may have been written by someone else (refresh), never
+ * for a command the user just typed (add).
+ */
+export type ConfirmLocalCommand = (
+  detail: ConnectorDetail,
+  params: Extract<LocalMcpParams, { type: 'stdio' }>,
+) => Promise<void>;
+
+/** Render a stdio launch as a shell-quoted argv the user can inspect. */
+export function formatStdioCommand(params: { args?: string[]; command: string }): string {
+  const quote = (value: string) =>
+    /^[\w./:=@%+-]+$/.test(value) ? value : `'${value.replaceAll("'", `'\\''`)}'`;
+  return [params.command, ...(params.args ?? [])].map(quote).join(' ');
+}
+
+/**
+ * `confirmLocalCommand` for `refresh`: a stdio connector in a workspace can be
+ * stored by another member, and refreshing it executes that command as the
+ * local OS user. Run it unprompted only when the current login created it;
+ * otherwise show the exact argv and require an interactive yes.
+ */
+export const confirmSharedStdioCommand: ConfirmLocalCommand = async (detail, params) => {
+  const creator = (detail as { userId?: string | null }).userId;
+  if (creator && resolveIdentityFingerprint() === `user:${creator}`) return;
+
+  const argv = formatStdioCommand(params);
+  const envKeys = Object.keys(params.env ?? {});
+  const owner = creator ? `another user (${creator})` : 'an unknown user';
+  const summary = [
+    `This stdio connector was created by ${owner}. Refreshing it runs this command on this machine:`,
+    `  ${argv}`,
+    ...(envKeys.length > 0 ? [`  with env: ${envKeys.join(', ')}`] : []),
+  ].join('\n');
+
+  if (!process.stdin.isTTY) {
+    throw new Error(`${summary}\nRefusing to run it without an interactive confirmation.`);
+  }
+  console.error(summary);
+  if (!(await confirm('Run this command?'))) {
+    throw new Error('Cancelled: the stdio command was not run.');
+  }
+};
+
+/**
  * Refresh a connector's tools. Server-reachable connectors use
  * `connector.syncTools`; machine-local ones are listed on this machine and
  * reported through `connector.syncToolsFromClientById`.
@@ -235,6 +281,7 @@ export async function syncConnectorTools(
   client: TrpcClient,
   id: string,
   connector: ConnectorEndpoint,
+  options: { confirmLocalCommand?: ConfirmLocalCommand } = {},
 ): Promise<{ local: boolean; toolCount: number }> {
   if (!isMachineLocalConnector(connector)) {
     const { toolCount } = await client.connector.syncTools.mutate({ id });
@@ -242,9 +289,12 @@ export async function syncConnectorTools(
   }
 
   const detail = await client.connector.getForEdit.query({ id });
+  const params = buildLocalMcpParams(detail);
+  if (params.type === 'stdio') await options.confirmLocalCommand?.(detail, params);
+
   let tools: Awaited<ReturnType<typeof listLocalMcpTools>>;
   try {
-    tools = await listLocalMcpTools(buildLocalMcpParams(detail));
+    tools = await listLocalMcpTools(params);
   } catch (error) {
     throw new Error(
       `Could not list tools from the MCP server on this machine: ${(error as Error)?.message ?? String(error)}`,
@@ -436,7 +486,9 @@ export function registerConnectorCommand(program: Command) {
       try {
         const target = await resolveConnector(client, idOrIdentifier);
         id = target.id;
-        synced = await syncConnectorTools(client, id, target);
+        synced = await syncConnectorTools(client, id, target, {
+          confirmLocalCommand: confirmSharedStdioCommand,
+        });
       } catch (error) {
         fail(error);
       }
