@@ -86,7 +86,8 @@ describe('getToolAccessDeniedError', () => {
   });
 
   it.each([
-    Object.assign(new Error('no_permission_to_act_as'), {
+    Object.assign(new Error('no_permission_to_act_as'), { status: 403 }),
+    Object.assign(new Error('Forbidden'), {
       errorBody: {
         error: 'no_permission_to_act_as',
         error_description:

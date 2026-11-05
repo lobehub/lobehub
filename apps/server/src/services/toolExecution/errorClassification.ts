@@ -219,7 +219,14 @@ export const getToolAccessDeniedError = (error: unknown, fallbackMessage: string
     return;
   }
 
-  const actAsDenied = [message, raw?.error, nested?.error, raw?.code, nested?.code].some(
+  const actAsDenied = [
+    message,
+    raw?.error,
+    raw?.code,
+    nested?.error,
+    nested?.code,
+    toRecord(raw?.errorBody)?.error,
+  ].some(
     (value) => typeof value === 'string' && value.toLowerCase().includes(ACT_AS_DENIED_SIGNAL),
   );
 
