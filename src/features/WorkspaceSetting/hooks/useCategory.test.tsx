@@ -131,7 +131,6 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsTabs.Devices,
       WorkspaceSettingsTabs.SubscriptionAccounts,
       WorkspaceSettingsTabs.Environments,
-      WorkspaceSettingsTabs.Drive,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Devices,

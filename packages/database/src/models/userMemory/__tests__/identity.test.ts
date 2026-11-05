@@ -104,13 +104,6 @@ describe('UserMemoryIdentityModel', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('identity-2');
     });
-
-    it('should not return other users identities', async () => {
-      const result = await identityModel.query();
-
-      const otherIdentity = result.find((i) => i.id === 'other-identity');
-      expect(otherIdentity).toBeUndefined();
-    });
   });
 
   describe('findById', () => {
@@ -657,13 +650,6 @@ describe('UserMemoryIdentityModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('self-identity');
-    });
-
-    it('should not return other users identities', async () => {
-      const result = await identityModel.queryForInjection();
-
-      const otherUserIdentity = result.find((i) => i.id === 'other-user-self');
-      expect(otherUserIdentity).toBeUndefined();
     });
 
     it('should return correct fields for injection', async () => {

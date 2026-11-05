@@ -82,7 +82,6 @@ You stay in charge — without staying online.
 ## 👋🏻 Getting Started & Join Our Community
 
 We are a group of e/acc design-engineers, hoping to provide modern design components and tools for AIGC.
-By adopting the Bootstrapping approach, we aim to provide developers and users with a more open, transparent, and user-friendly product ecosystem.
 
 Whether for users or professional developers, LobeHub will be your AI Agent playground. Please be aware that LobeHub is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
 
@@ -488,38 +487,6 @@ Copyright © 2026 [LobeHub][profile-link]. <br />
 This project is [LobeHub Community License](./LICENSE) licensed.
 
 <!-- LINK GROUP -->
-
-<!-- PROVIDER LIST -->
-
-- **[OpenCode Zen](https://lobechat.com/discover/provider/opencodezen)**:
-
-<details><summary><kbd>See more providers (+-9)</kbd></summary>
-
-</details>
-
-> 📊 Total providers: [<kbd>**1**</kbd>](https://lobechat.com/discover/providers)
-
- <!-- AGENT LIST -->
-
-| Recent Submits                                                                                                                                                                 | Description                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Turtle Soup Host](https://lobechat.com/discover/assistant/lateral-thinking-puzzle)<br/><sup>By **[CSY2022](https://github.com/CSY2022)** on **2025-06-19**</sup>              | A turtle soup host needs to provide the scenario, the complete story (truth of the event), and the key point (the condition for guessing correctly).<br/>`turtle-soup` `reasoning` `interaction` `puzzle` `role-playing` |
-| [Academic Writing Assistant](https://lobechat.com/discover/assistant/academic-writing-assistant)<br/><sup>By **[swarfte](https://github.com/swarfte)** on **2025-06-17**</sup> | Expert in academic research paper writing and formal documentation<br/>`academic-writing` `research` `formal-style`                                                                                                      |
-| [Gourmet Reviewer🍟](https://lobechat.com/discover/assistant/food-reviewer)<br/><sup>By **[renhai-lab](https://github.com/renhai-lab)** on **2025-06-17**</sup>                | Food critique expert<br/>`gourmet` `review` `writing`                                                                                                                                                                    |
-| [Minecraft Senior Developer](https://lobechat.com/discover/assistant/java-development)<br/><sup>By **[iamyuuk](https://github.com/iamyuuk)** on **2025-06-17**</sup>           | Expert in advanced Java development and Minecraft mod and server plugin development<br/>`development` `programming` `minecraft` `java`                                                                                   |
-
-> 📊 Total agents: [<kbd>**505**</kbd> ](https://lobechat.com/discover/assistants)
-
- <!-- PLUGIN LIST -->
-
-| Recent Submits                                                                                                             | Description                                                                                                                                     |
-| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Shopping tools](https://lobechat.com/discover/plugin/ShoppingTools)<br/><sup>By **shoppingtools** on **2026-01-12**</sup> | Search for products on eBay & AliExpress, find eBay events & coupons. Get prompt examples.<br/>`shopping` `e-bay` `ali-express` `coupons`       |
-| [SEO Assistant](https://lobechat.com/discover/plugin/seo_assistant)<br/><sup>By **webfx** on **2026-01-12**</sup>          | The SEO Assistant can generate search engine keyword information in order to aid the creation of content.<br/>`seo` `keyword`                   |
-| [Video Captions](https://lobechat.com/discover/plugin/VideoCaptions)<br/><sup>By **maila** on **2025-12-13**</sup>         | Convert Youtube links into transcribed text, enable asking questions, create chapters, and summarize its content.<br/>`video-to-text` `youtube` |
-| [WeatherGPT](https://lobechat.com/discover/plugin/WeatherGPT)<br/><sup>By **steven-tey** on **2025-12-13**</sup>           | Get current weather information for a specific location.<br/>`weather`                                                                          |
-
-> 📊 Total plugins: [<kbd>**40**</kbd>](https://lobechat.com/discover/plugins)
 
 [back-to-top]: https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square
 [blog]: https://lobehub.com/blog

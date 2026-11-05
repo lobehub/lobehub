@@ -55,7 +55,6 @@ import {
   updateTitle,
 } from './editing';
 import {
-  archiveSignedOffTasks,
   close,
   deleteGoal,
   pause,
@@ -191,7 +190,6 @@ export class GoalService {
       },
       answerClarifications: (...args) => self.answerClarifications(...args),
       answerReleaseGate: (...args) => self.answerReleaseGate(...args),
-      archiveSignedOffTasks: (...args) => self.archiveSignedOffTasks(...args),
       attachTaskDeliverables: (...args) => self.attachTaskDeliverables(...args),
       bindTopic: (...args) => self.bindTopic(...args),
       get briefs() {
@@ -374,9 +372,6 @@ export class GoalService {
   addEdge = (...args: MethodArgs<typeof addEdge>) => addEdge(this.context, ...args);
 
   delete = (...args: MethodArgs<typeof deleteGoal>) => deleteGoal(this.context, ...args);
-
-  archiveSignedOffTasks = (...args: MethodArgs<typeof archiveSignedOffTasks>) =>
-    archiveSignedOffTasks(this.context, ...args);
 
   private transitionStatus = (...args: MethodArgs<typeof transitionStatus>) =>
     transitionStatus(this.context, ...args);

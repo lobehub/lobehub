@@ -7,6 +7,7 @@ import type {
   WorkMetadata,
   WorkResourceType,
   WorkType,
+  WorkVersionMetadata,
   WorkVisibility,
 } from '@lobechat/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -15,6 +16,7 @@ import { documents } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import {
   documentOwnership,
@@ -59,27 +61,6 @@ const versionSnapshotSelection = {
   status: workVersions.status,
   title: workVersions.title,
   url: workVersions.url,
-};
-
-const isUniqueViolation = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  const code =
-    typeof error === 'object' && error && 'code' in error
-      ? String((error as { code?: unknown }).code)
-      : '';
-  const cause = error instanceof Error ? error.cause : undefined;
-  const causeCode =
-    typeof cause === 'object' && cause && 'code' in cause
-      ? String((cause as { code?: unknown }).code)
-      : '';
-
-  return (
-    code === '23505' ||
-    causeCode === '23505' ||
-    message.includes('23505') ||
-    message.includes('duplicate') ||
-    message.includes('unique')
-  );
 };
 
 const findVersionByToolCall = async (
@@ -128,6 +109,20 @@ const buildVersionSnapshot = (
   }
 
   return snapshot;
+};
+
+/**
+ * Version metadata follows the display snapshot: a partial registration keeps
+ * the current version's keys and overrides only the ones it carries, so a
+ * `gh pr edit` without `--head` does not drop the branch captured at create.
+ */
+const buildVersionMetadata = (
+  input: CreateVersionInput,
+  currentMetadata?: WorkVersionMetadata | null,
+): WorkVersionMetadata | null => {
+  if (!input.patchFields || !currentMetadata) return input.metadata ?? null;
+
+  return { ...currentMetadata, ...input.metadata };
 };
 
 /**
@@ -221,9 +216,9 @@ export const registerWorkVersion = async (
         if (dedupedUnderLock) return locked;
 
         const input = await buildInput(txCtx);
-        const [currentSnapshot] = locked.currentVersionId
+        const [currentVersion] = locked.currentVersionId
           ? await tx
-              .select(versionSnapshotSelection)
+              .select({ ...versionSnapshotSelection, metadata: workVersions.metadata })
               .from(workVersions)
               .where(
                 and(
@@ -233,6 +228,7 @@ export const registerWorkVersion = async (
               )
               .limit(1)
           : [];
+        const { metadata: currentMetadata, ...currentSnapshot } = currentVersion ?? {};
         const snapshot = buildVersionSnapshot(input, currentSnapshot);
 
         const now = new Date();
@@ -258,7 +254,7 @@ export const registerWorkVersion = async (
             description: snapshot.description,
             identifier: snapshot.identifier,
             messageId: params.messageId ?? null,
-            metadata: input.metadata ?? null,
+            metadata: buildVersionMetadata(input, currentMetadata),
             changeType: params.changeType,
             rootOperationId: params.rootOperationId ?? null,
             status: snapshot.status,

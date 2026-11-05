@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { LINEAR_DEFAULT_IMPORT_STATE_TYPES, LINEAR_OPEN_ISSUE_STATE_TYPES } from '@lobechat/types';
+import {
+  LINEAR_DEFAULT_IMPORT_STATE_TYPES,
+  LINEAR_NO_PROJECT_ID,
+  LINEAR_OPEN_ISSUE_STATE_TYPES,
+} from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -188,6 +192,32 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
         teamId: 'team-pkg',
       }),
     ).rejects.toThrow('timeout');
+  });
+
+  it('syncs a team’s issues without a project, never looking No project up as a project', async () => {
+    const noProjectFilter = {
+      linearProjectId: LINEAR_NO_PROJECT_ID,
+      stateTypes: [...filter.stateTypes],
+      teamId: TEAM,
+    };
+    serve([issue({ id: '1' })]);
+    const service = new LinearIssueSyncService(db, userId);
+    expect((await service.syncByFilter(TOKEN, noProjectFilter)).created).toBe(1);
+
+    // Moved into a project and closed there: the team-wide closing pass still closes it.
+    linear.listLinearIssues.mockResolvedValue({ hasMore: false, issues: [] });
+    linear.getLinearIssuesByIds.mockResolvedValue([
+      issue({
+        id: '1',
+        project: { id: 'project-1', name: 'Later' },
+        state: { name: 'Done', type: 'completed' },
+      }),
+    ]);
+    const result = await service.syncByFilter(TOKEN, noProjectFilter);
+
+    expect(linear.getLinearProjectTeamIds).not.toHaveBeenCalled();
+    expect(result.closed).toBe(1);
+    expect((await linkedTask('1'))?.status).toBe('completed');
   });
 
   it('does not interrupt a running task when its issue is closed', async () => {

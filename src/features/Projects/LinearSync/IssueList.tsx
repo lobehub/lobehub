@@ -7,6 +7,7 @@ import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 
 import LinearIcon from '@/features/Integrations/Linear/LinearIcon';
@@ -14,7 +15,7 @@ import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { type LinearIssueFilterParams, linearService } from '@/services/linear';
 
 import StateIcon from './StateIcon';
-import { linearSyncErrorMessage } from './utils';
+import { linearIssueListCounts, linearSyncErrorMessage } from './utils';
 
 const styles = stylex.create({
   body: {
@@ -39,6 +40,10 @@ const styles = stylex.create({
     borderBlockEndWidth: 1,
     height: 40,
     paddingInline: 12,
+  },
+  // Total and loaded counts sit at the far end of the header, apart from the selection.
+  headNote: {
+    marginInlineStart: 'auto',
   },
   identifier: {
     color: cssVar.colorTextTertiary,
@@ -92,6 +97,15 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
   const selectedCount = ids.filter((id) => selected.has(id)).length;
   const allSelected = ids.length > 0 && selectedCount === ids.length;
   const hasMore = data?.at(-1)?.hasMore;
+
+  // Counted only when the first page is not everything; the list does not wait for it.
+  const { data: total } = useSWR(
+    filter && data?.[0]?.hasMore ? linearKeys.issueCount(filter) : null,
+    () => linearService.countIssues(filter!),
+    { revalidateOnFocus: false },
+  );
+  const counts = linearIssueListCounts({ hasMore: !!hasMore, loaded: issues.length, total }, t);
+  const headNote = [selectedCount > 0 && counts.total, counts.loaded].filter(Boolean).join(' · ');
 
   const placeholder = (content: ReactNode) => (
     <Center gap={8} height={'100%'} paddingInline={24}>
@@ -204,8 +218,13 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
           <Text fontSize={12} type={'secondary'}>
             {selectedCount > 0
               ? t('linear.sync.list.selected', { count: selectedCount })
-              : t('linear.sync.list.count', { count: issues.length })}
+              : counts.total}
           </Text>
+          {headNote ? (
+            <Text fontSize={12} type={'secondary'} {...stylex.props(styles.headNote)}>
+              {headNote}
+            </Text>
+          ) : null}
         </Flexbox>
       ) : null}
       <div {...stylex.props(styles.body, !filter && styles.bodyWithoutHead)}>{body}</div>

@@ -1,5 +1,5 @@
 import type { LinearSyncJobMetadata } from '@lobechat/types';
-import { LINEAR_ISSUE_STATE_TYPES } from '@lobechat/types';
+import { isLinearNoProject, LINEAR_ISSUE_STATE_TYPES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -20,7 +20,11 @@ import {
   LinearApiError,
   revokeLinearToken,
 } from '@/server/services/linear/client';
-import { listLinearProjects, listLinearTeams } from '@/server/services/linear/issues';
+import {
+  countLinearIssues,
+  listLinearProjects,
+  listLinearTeams,
+} from '@/server/services/linear/issues';
 import { LinearIssueSyncService } from '@/server/services/linear/issueSync';
 import { startLinearRuleSyncJob, startLinearSyncJob } from '@/server/services/linear/startSyncJob';
 import { toLinearSyncJobView } from '@/server/services/linear/syncJob';
@@ -144,6 +148,14 @@ export const linearRouter = router({
       );
     }),
 
+  /** How many issues match the picker filter, counted up to a limit. */
+  countIssues: linearProcedure.input(issueFilterInput).query(async ({ ctx, input }) => {
+    await requireConnection(ctx, input.connectionId);
+    return callLinear(async () =>
+      countLinearIssues(await getLinearAccessToken(ctx.serverDB, input.connectionId), input),
+    );
+  }),
+
   /**
    * Import (or re-sync) the picked issues into a LobeHub project. Runs in the
    * background; poll `listSyncJobs` for the outcome.
@@ -218,7 +230,11 @@ export const linearRouter = router({
       const row = await LinearSyncRuleModel.create(ctx.serverDB, {
         connectionId: input.connectionId,
         linearProjectId: input.linearProjectId ?? null,
-        linearProjectName: input.linearProjectId ? (input.linearProjectName ?? null) : null,
+        // "No project" is labelled by the client; there is no Linear name to keep.
+        linearProjectName:
+          input.linearProjectId && !isLinearNoProject(input.linearProjectId)
+            ? (input.linearProjectName ?? null)
+            : null,
         projectId: input.projectId,
         stateTypes: input.stateTypes,
         teamId: input.teamId,

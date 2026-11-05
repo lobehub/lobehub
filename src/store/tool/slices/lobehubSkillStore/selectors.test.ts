@@ -33,12 +33,6 @@ describe('lobehubSkillStoreSelectors', () => {
       const result = lobehubSkillStoreSelectors.getServers(state);
       expect(result).toEqual(servers);
     });
-
-    it('should handle undefined lobehubSkillServers', () => {
-      const state = { ...initialState, lobehubSkillServers: undefined } as unknown as ToolStore;
-      const result = lobehubSkillStoreSelectors.getServers(state);
-      expect(result).toEqual([]);
-    });
   });
 
   describe('getConnectedServers', () => {

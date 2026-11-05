@@ -2,6 +2,7 @@ export {
   AmpAdapter,
   ClaudeCodeAdapter,
   CodeBuddyAdapter,
+  CopilotAcpAdapter,
   GrokBuildAdapter,
   QoderAdapter,
 } from './adapters';
@@ -34,6 +35,8 @@ export {
   CODEBUDDY_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
+  COPILOT_CLI_INSTALL_COMMANDS,
+  COPILOT_CLI_INSTALL_DOCS_URL,
   CURSOR_CLI_INSTALL_COMMANDS,
   CURSOR_CLI_INSTALL_DOCS_URL,
   DROID_CLI_INSTALL_COMMANDS,
@@ -58,6 +61,7 @@ export {
   QODER_CLI_INSTALL_DOCS_URL,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
   resolveHeterogeneousAgentCommand,
+  usesHeterogeneousSessionInitialModel,
 } from './config';
 export type {
   HeteroErrorAttribution,

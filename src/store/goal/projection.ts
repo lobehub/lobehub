@@ -83,7 +83,13 @@ export const goalListKey = (params: GoalListParams): string => {
 };
 
 /** Every tab of one scope, for a refresh that has to cover them all. */
-export const GOAL_LIST_FILTERS: GoalListFilter[] = ['all', 'review', 'running', 'achieved'];
+export const GOAL_LIST_FILTERS: GoalListFilter[] = [
+  'all',
+  'review',
+  'running',
+  'achieved',
+  'archived',
+];
 
 /** One scope's goal list, one entry per tab (`goalListByAgentId`). */
 export const goalListResource = defineReplica<GoalListParams, GoalListValue, GoalListResponse>({

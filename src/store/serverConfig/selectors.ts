@@ -11,10 +11,15 @@ export const serverConfigSelectors = {
   /** Runtime flag `dashboard`: dashboards, widget previews and the builtin-dashboard tool. */
   enableChannels: (s: ServerConfigStore) => s.featureFlags.enableChannels === true,
   enableDashboard: (s: ServerConfigStore) => s.featureFlags.enableDashboard === true,
+  /** Runtime flag `managed_cloud_device`: the entry that creates a managed cloud device. */
+  enableManagedCloudDevice: (s: ServerConfigStore) =>
+    s.featureFlags.enableManagedCloudDevice === true,
   enableGatewayMode: (s: ServerConfigStore) => s.serverConfig.enableGatewayMode || false,
   enableTopicPreview: (s: ServerConfigStore) => s.featureFlags.enableTopicPreview === true,
   enableLobehubSkill: (s: ServerConfigStore) => s.serverConfig.enableLobehubSkill || false,
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
+  /** Runtime flag `mcp_apps`: MCP Apps views in the conversation. */
+  enableMcpApps: (s: ServerConfigStore) => s.featureFlags.enableMcpApps === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
     s.serverConfig.enableMarketTrustedClient || false,
   enablePageCollab: (s: ServerConfigStore) => s.serverConfig.enablePageCollab || false,

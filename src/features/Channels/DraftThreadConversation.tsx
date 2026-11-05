@@ -50,6 +50,7 @@ export function DraftThreadConversation({
           <ArchivedNotice channel={detail.channel} threadId={null} />
         ) : (
           <Composer
+            channel={detail.channel}
             draftKey={channelDraftKey(detail.channel.id, `draft:${draft.root.id}`)}
             members={detail.members.filter((member) => member.status === 'active')}
             placeholder={t('threadComposer')}

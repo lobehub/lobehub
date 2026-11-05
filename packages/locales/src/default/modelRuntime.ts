@@ -64,7 +64,7 @@ export default {
   ModelEmptyCompletion:
     'The model provider returned an empty response. Even without visible content, this request may still incur charges. You can retry or switch models and try again.',
   ModelEmptyCompletionWithCost:
-    'The model provider returned an empty response. This request cost {{credits}} credits. Retrying may incur a similar cost, or you can switch models.',
+    'The model provider returned an empty response. This request cost ${{credits}}. Retrying may incur a similar cost, or you can switch models.',
   ModelRefusal:
     'The model declined to answer this request. Try rephrasing it or choose another model.',
   ModelNotFound:

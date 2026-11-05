@@ -9,6 +9,7 @@ import type { ChannelState } from './store';
 const EXTERNAL_BLOCKS = new Set<ChannelJobBlockCode>([
   'device_approval_pending',
   'device_offline',
+  'device_required',
   'unavailable',
   'workspace_changed',
 ]);
@@ -36,5 +37,8 @@ export const channelSelectors = {
       )
     );
   },
+  /** The caller's direct conversation with an Agent; a direct Channel never belongs to a project. */
+  directByAgent: (agentId: string) => (state: ChannelState) =>
+    state.listMap.all?.find((channel) => channel.agentId === agentId && !channel.projectId),
   list: (state: ChannelState) => state.listMap.all,
 };

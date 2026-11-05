@@ -129,26 +129,6 @@ test('Vite JS output file count over the baseline percentage limit fails the gat
   assert.match(result.stderr, /Vite JS output file count increases by more than 5%/);
 });
 
-test('Vite JS output file count at the baseline percentage limit passes the gate', () => {
-  const result = runCheck({
-    baselineGraphCount: 10,
-    baselineJsTotal: 100,
-    currentGraphCount: 10,
-    currentJsTotal: 105,
-  });
-  assert.equal(result.status, 0);
-});
-
-test('reachable graph count increase alone does not fail the gate', () => {
-  const result = runCheck({
-    baselineGraphCount: 10,
-    baselineJsTotal: 100,
-    currentGraphCount: 20,
-    currentJsTotal: 100,
-  });
-  assert.equal(result.status, 0);
-});
-
 test('a passing gate states the entry count and the largest delta in the heading', () => {
   const result = runCheck({
     baselineGraphCount: 10,

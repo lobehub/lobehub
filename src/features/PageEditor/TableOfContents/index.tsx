@@ -2,6 +2,8 @@
 
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
 import type { RefObject } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +18,9 @@ const MIN_HEADINGS = 2;
 // Kept tight to the pane edge: the strip the rail takes is width wide tables lose.
 const RAIL_INSET = 4;
 const RAIL_PADDING_INLINE = 4;
+// The panel grows out of the rail and folds back into it.
+const PANEL_COLLAPSED_SCALE = 0.9;
+const PANEL_SPRING = { damping: 30, stiffness: 320, type: 'spring' } as const;
 
 const prefersReducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -85,7 +90,9 @@ const styles = stylex.create({
     overflowY: 'auto',
     padding: 6,
     position: 'absolute',
-    transform: 'translateY(-50%)',
+    // The rail's center, so scaling reads as the panel unfolding from it. The
+    // vertical centering is a motion `y`, which composes with the scale.
+    transformOrigin: { 'default': 'right center', ':dir(rtl)': 'left center' },
     width: 240,
   },
   title: {
@@ -246,6 +253,9 @@ const TableOfContents = memo<TableOfContentsProps>(({ contentRef, onVisibleChang
 
   if (!visible) return null;
 
+  // Reduced motion keeps the fade but drops the scale.
+  const collapsedScale = prefersReducedMotion() ? 1 : PANEL_COLLAPSED_SCALE;
+
   return (
     <nav
       aria-label={t('pageEditor.toc.title')}
@@ -275,31 +285,42 @@ const TableOfContents = memo<TableOfContentsProps>(({ contentRef, onVisibleChang
           />
         ))}
       </div>
-      {expanded && (
-        <div {...stylex.props(styles.panel)}>
-          <div {...stylex.props(styles.title)}>{t('pageEditor.toc.title')}</div>
-          {headings.map((heading, index) => (
-            <div
-              aria-current={index === activeIndex ? 'location' : undefined}
-              key={index}
-              role="link"
-              {...stylex.props(
-                styles.item,
-                styles.itemIndent(ITEM_INDENT[heading.level]),
-                index === activeIndex && styles.itemActive,
-              )}
-              tabIndex={0}
-              title={heading.text}
-              onClick={() => scrollToHeading(heading, index)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') scrollToHeading(heading, index);
-              }}
-            >
-              {heading.text}
-            </div>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {expanded && (
+          <m.div
+            animate={{ opacity: 1, pointerEvents: 'auto', scale: 1 }}
+            // The spring settles well after the panel is invisible; until it
+            // unmounts it must not catch hovers or clicks meant for the page.
+            exit={{ opacity: 0, pointerEvents: 'none', scale: collapsedScale }}
+            // `y` centers the panel on the rail; no target animates it.
+            initial={{ opacity: 0, scale: collapsedScale, y: '-50%' }}
+            transition={PANEL_SPRING}
+            {...stylex.props(styles.panel)}
+          >
+            <div {...stylex.props(styles.title)}>{t('pageEditor.toc.title')}</div>
+            {headings.map((heading, index) => (
+              <div
+                aria-current={index === activeIndex ? 'location' : undefined}
+                key={index}
+                role="link"
+                {...stylex.props(
+                  styles.item,
+                  styles.itemIndent(ITEM_INDENT[heading.level]),
+                  index === activeIndex && styles.itemActive,
+                )}
+                tabIndex={0}
+                title={heading.text}
+                onClick={() => scrollToHeading(heading, index)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') scrollToHeading(heading, index);
+                }}
+              >
+                {heading.text}
+              </div>
+            ))}
+          </m.div>
+        )}
+      </AnimatePresence>
     </nav>
   );
 });

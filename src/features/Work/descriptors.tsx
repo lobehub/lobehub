@@ -1,5 +1,6 @@
 import { classifyEditedFile, getBasename } from '@lobechat/builtin-tools/fileEditScan';
 import {
+  type ExternalWorkResourceType,
   type ListedWorkType,
   type WorkListItem,
   workProviderOfResourceType,
@@ -9,13 +10,17 @@ import {
   type WorkVersionMetadata,
 } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { FileTypeIcon as FileTypeBadge } from '@lobehub/ui';
+import { cssVar, FileTypeIcon as FileTypeBadge } from '@lobehub/ui';
+import type { LucideIcon } from 'lucide-react';
 import {
+  CircleCheckIcon,
+  CircleDotIcon,
   ClipboardListIcon,
   FileBoxIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   FileTypeIcon,
+  GitPullRequestDraftIcon,
   LinkIcon,
   PanelsTopLeftIcon,
   PresentationIcon,
@@ -23,10 +28,15 @@ import {
 import type { ComponentType } from 'react';
 
 import { mimeTypeMap } from '@/components/FileIcon/config';
+import {
+  MERGED_PURPLE,
+  PR_STATE_VISUAL,
+  type PullRequestStateVisual,
+} from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 
 import LinearIcon from './icons/LinearIcon';
 
-type WorkIcon = ComponentType<{ className?: string; size?: number }>;
+export type WorkIcon = ComponentType<{ className?: string; size?: number }>;
 
 /**
  * Brand icon per skill provider for the unified `external` Work type. An
@@ -37,6 +47,73 @@ const PROVIDER_ICONS: Record<WorkSkillProvider, WorkIcon> = {
   github: Github,
   linear: LinearIcon,
 };
+
+/** Bind a color at module level so `getIcon` keeps a stable component identity. */
+const tintIcon = (Glyph: LucideIcon, color: string): WorkIcon => {
+  const TintedIcon: WorkIcon = ({ className, size }) => (
+    <Glyph className={className} color={color} size={size} />
+  );
+  return TintedIcon;
+};
+
+/** `topic` namespace label of a GitHub state, the tooltip of its glyph. */
+export type WorkStateLabelKey = PullRequestStateVisual['labelKey'] | 'metaCard.pr.draft';
+
+interface GithubStateVisual {
+  icon: WorkIcon;
+  labelKey: WorkStateLabelKey;
+}
+
+const prState = (state: keyof typeof PR_STATE_VISUAL): GithubStateVisual => ({
+  icon: tintIcon(PR_STATE_VISUAL[state].icon, PR_STATE_VISUAL[state].color),
+  labelKey: PR_STATE_VISUAL[state].labelKey,
+});
+
+/**
+ * GitHub state glyphs, matching the topic PR card: the icon's shape and color
+ * carry open / draft / merged / closed instead of a status word on the card.
+ * Keys are the `status` values the github normalizer writes; any other status
+ * keeps the brand icon.
+ */
+const GITHUB_STATES: Partial<Record<ExternalWorkResourceType, Map<string, GithubStateVisual>>> = {
+  github_issue: new Map([
+    [
+      'closed',
+      { icon: tintIcon(CircleCheckIcon, MERGED_PURPLE), labelKey: PR_STATE_VISUAL.closed.labelKey },
+    ],
+    [
+      'open',
+      {
+        icon: tintIcon(CircleDotIcon, cssVar.colorSuccess),
+        labelKey: PR_STATE_VISUAL.open.labelKey,
+      },
+    ],
+  ]),
+  github_pull_request: new Map([
+    ['closed', prState('closed')],
+    [
+      'draft',
+      {
+        icon: tintIcon(GitPullRequestDraftIcon, cssVar.colorTextTertiary),
+        labelKey: 'metaCard.pr.draft',
+      },
+    ],
+    ['merged', prState('merged')],
+    ['open', prState('open')],
+  ]),
+};
+
+const getGithubState = (
+  item: Pick<WorkListItem, 'resourceType' | 'status'>,
+): GithubStateVisual | undefined =>
+  item.status
+    ? GITHUB_STATES[item.resourceType as ExternalWorkResourceType]?.get(item.status.toLowerCase())
+    : undefined;
+
+export interface WorkBranch {
+  base: string | null;
+  head: string;
+}
 
 /**
  * Where opening a Work should lead. Components map this to their own action
@@ -81,6 +158,12 @@ type WorkItemOfType<T extends WorkType> =
 
 interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
   /**
+   * A pull request's branches, from the summary row's version metadata. Cards
+   * show the head branch in place of the description; `null` for every other
+   * Work and for PRs registered without a known branch.
+   */
+  getBranch?: (item: Item) => WorkBranch | null;
+  /**
    * Summary preview text. Summary payloads slim long free-text server-side
    * (linear content / github body / task instruction capped), so prefer the
    * description, then a short body/status — never a full document.
@@ -88,7 +171,8 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
   getDescription: (item: Item) => string | null;
   /**
    * The icon for one item. Constant for document/task; the `external` type
-   * resolves a per-provider brand icon from the item's resourceType.
+   * resolves a GitHub state glyph when the status is known, else a
+   * per-provider brand icon from the item's resourceType.
    */
   getIcon: (item: Item) => WorkIcon;
   /**
@@ -97,8 +181,16 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
    * further to `resourceId` when this is also null.
    */
   getIdentifier: (item: Item) => string | null;
+  /**
+   * Brand mark drawn before the identifier on the card's second line. GitHub
+   * cards spend their main icon on the issue/PR state, so the mark keeps
+   * `owner/repo#n` recognizable as a GitHub repository.
+   */
+  getIdentifierIcon?: (item: Item) => WorkIcon | null;
   /** Where a click should lead, or `null` when the Work is not clickable. */
   getOpenTarget: (item: Item) => WorkOpenTarget | null;
+  /** Label of the state `getIcon` draws, for its tooltip; `null` when the icon carries no state. */
+  getStateLabelKey?: (item: Item) => WorkStateLabelKey | null;
   /**
    * Display title straight from the `works` row (task name is live from the
    * tasks join). No synthesized fallback here: a nameless resource deliberately
@@ -237,19 +329,38 @@ export const WORK_TYPE_DESCRIPTORS: {
     },
   },
   external: {
-    getDescription: (item) => (item.description || item.status)?.trim() ?? null,
-    // Resolve the brand icon from the item's provider; unknown providers fall
-    // back to a generic link glyph (forward-compat).
+    getBranch: (item) => {
+      if (item.resourceType !== 'github_pull_request' || !('event' in item)) return null;
+      const metadata = item.event?.metadata;
+      return metadata?.headBranch
+        ? { base: metadata.baseBranch ?? null, head: metadata.headBranch }
+        : null;
+    },
+    // GitHub state is drawn by the icon, so only Linear falls back to its status text.
+    getDescription: (item) =>
+      (workProviderOfResourceType(item.resourceType) === 'github'
+        ? item.description
+        : item.description || item.status
+      )?.trim() ?? null,
+    // A GitHub issue/PR with a known state takes its state glyph; otherwise
+    // the provider's brand icon. Unknown providers fall back to a generic link
+    // glyph (forward-compat).
     getIcon: (item) => {
       const provider = workProviderOfResourceType(item.resourceType);
-      return provider ? PROVIDER_ICONS[provider] : LinkIcon;
+      if (!provider) return LinkIcon;
+      return getGithubState(item)?.icon ?? PROVIDER_ICONS[provider];
     },
     getIdentifier: (item) => item.identifier,
+    // Every GitHub card carries the mark, including a brand-icon card with an
+    // unknown state, so the identifiers line up in a list.
+    getIdentifierIcon: (item) =>
+      workProviderOfResourceType(item.resourceType) === 'github' ? Github : null,
     // External works registered from CLI/tool results may carry no URL (or a
     // member-planted non-http(s) scheme) — those cards have nothing safe to
     // open, so drop the click affordance entirely.
     getOpenTarget: (item) =>
       isSafeExternalUrl(item.url) ? { kind: 'external', url: item.url } : null,
+    getStateLabelKey: (item) => getGithubState(item)?.labelKey ?? null,
     getTitle: (item) => item.title,
   },
   task: {

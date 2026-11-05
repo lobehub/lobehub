@@ -231,15 +231,21 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
     isWorkspaceDeleteAll,
   ]);
 
+  const title = t('FileManager.actions.batchActions', 'Batch actions');
+
+  // Without edit permission the menu has no items, so show the reason instead of a menu.
+  // Keep the button as DropdownMenu's direct child: a Tooltip without a title returns its
+  // children as-is and drops the trigger's onClick/ref, so the menu would never open.
+  if (!canEditResources)
+    return (
+      <Tooltip title={reason}>
+        <ActionIconWithChevron disabled icon={CircleEllipsisIcon} title={title} />
+      </Tooltip>
+    );
+
   return (
     <DropdownMenu items={menuItems} placement="bottomLeft">
-      <Tooltip title={canEditResources ? undefined : reason}>
-        <ActionIconWithChevron
-          disabled={!canEditResources}
-          icon={CircleEllipsisIcon}
-          title={t('FileManager.actions.batchActions', 'Batch actions')}
-        />
-      </Tooltip>
+      <ActionIconWithChevron icon={CircleEllipsisIcon} title={title} />
     </DropdownMenu>
   );
 });

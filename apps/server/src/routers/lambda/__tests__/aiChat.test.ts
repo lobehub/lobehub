@@ -130,7 +130,6 @@ describe('aiChatRouter', () => {
       expect.objectContaining({
         content: expect.any(String),
         model: 'gpt-4o',
-        parentId: 'm-user',
         role: 'assistant',
         sessionId: 's1',
         topicId: 't1',
@@ -391,7 +390,6 @@ describe('aiChatRouter', () => {
     expect(mockCreateMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        parentId: 'm-user',
         role: 'assistant',
         sessionId: 's1',
         threadId: 'thread-123',
@@ -500,7 +498,6 @@ describe('aiChatRouter', () => {
     expect(mockCreateMessage).toHaveBeenNthCalledWith(
       4,
       expect.objectContaining({
-        parentId: 'm-user',
         role: 'assistant',
         sessionId: 's1',
         threadId: 'thread-123',
@@ -563,7 +560,6 @@ describe('aiChatRouter', () => {
     expect(mockCreateMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        parentId: 'm-user',
         role: 'assistant',
         sessionId: 's1',
         threadId: 'thread-new',
@@ -785,7 +781,6 @@ describe('aiChatRouter', () => {
         expect.objectContaining({
           agentId: 'supervisor-agent',
           groupId: 'group-123',
-          parentId: 'm-user',
           role: 'assistant',
           sessionId: 's1',
           topicId: 't1',

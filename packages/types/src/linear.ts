@@ -62,6 +62,16 @@ export const LINEAR_DEFAULT_IMPORT_STATE_TYPES: LinearIssueStateType[] = [
   'completed',
 ];
 
+/**
+ * `linearProjectId` value that scopes a filter or rule to the team's issues
+ * that belong to no Linear project. Linear project ids are UUIDs, so it never
+ * names a real project.
+ */
+export const LINEAR_NO_PROJECT_ID = 'none';
+
+export const isLinearNoProject = (linearProjectId: string | null | undefined): boolean =>
+  linearProjectId === LINEAR_NO_PROJECT_ID;
+
 /** Providers a task can be linked to through `task_external_links`. */
 export type TaskExternalProvider = 'linear';
 
@@ -117,6 +127,13 @@ export interface LinearIssuePage {
   cursor?: string;
   hasMore: boolean;
   issues: LinearIssueSummary[];
+}
+
+/** How many issues match a picker filter; counting stops at a limit. */
+export interface LinearIssueCount {
+  /** True when more issues match than were counted; `count` is then a lower bound. */
+  capped: boolean;
+  count: number;
 }
 
 /** Why an issue was left alone. */
@@ -190,6 +207,12 @@ export interface LinearSyncJobMetadata {
    * does not reread what earlier rounds covered. Absent: read from the start.
    */
   cursor?: string;
+  /**
+   * Times a rule run was handed to a new request because one ran out of time.
+   * Each hand-off is one more request in a chain the host cuts off a few
+   * requests deep, so a run stops handing off after a few.
+   */
+  handOffs?: number;
   /** Picked issues (`kind: 'issues'`). */
   issueIds?: string[];
   kind: 'issues' | 'rule';

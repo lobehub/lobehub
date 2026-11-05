@@ -1,62 +1,62 @@
 import { Plans } from '@lobechat/types';
-import { Center, createStaticStyles, cssVar, Flexbox, Tag } from '@lobehub/ui';
-import { Atom, Box, CircleSlash, Crown, Gem, Rocket, Sparkle, Zap } from 'lucide-react';
-import { type CSSProperties, type MouseEvent } from 'react';
-import { memo } from 'react';
+import { createStaticStyles, cssVar, cx, Tag } from '@lobehub/ui';
+import { type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { getPlanTagButtonProps } from './buttonProps';
+
+// lobe-design-ignore-file LOBE-RAW-COLOR: tier badge palettes are brand art that must stay identical in light and dark themes; no cssVar token carries them
+
+export interface PlanTheme {
+  background?: string;
+  color?: string;
+}
 
 export const themes = {
   [Plans.Free]: {
-    icon: CircleSlash,
     theme: {
       background: undefined,
       color: undefined,
     },
   },
   [Plans.Hobby]: {
-    icon: Box,
     theme: {
       background: 'linear-gradient(45deg, #21B2EE, #2271ED)',
       color: '#E5F8FF',
     },
   },
   [Plans.Starter]: {
-    icon: Sparkle,
     theme: {
       background: 'linear-gradient(45deg, #C57948, #803718)',
       color: '#FFC385',
     },
   },
   [Plans.Premium]: {
-    icon: Zap,
     theme: {
       background: 'linear-gradient(45deg, #A5B4C2, #606E7B)',
       color: '#FCFDFF',
     },
   },
   [Plans.Ultimate]: {
-    icon: Atom,
     theme: {
       background: 'linear-gradient(45deg, #F7A82F, #BB7227)',
       color: '#FCFA6E',
     },
   },
   [Plans.Plus]: {
-    icon: Rocket,
     theme: {
+      // lobe-design-ignore LOBE-PURPLE-GRADIENT: categorical hue that tells the Plus tier apart from the other tier badges, not a decorative hero gradient
       background: 'linear-gradient(45deg, #8B5CF6, #5B21B6)',
       color: '#EDE9FE',
     },
   },
   [Plans.Pro]: {
-    icon: Crown,
     theme: {
       background: 'linear-gradient(45deg, #10B981, #047857)',
       color: '#D1FAE5',
     },
   },
   [Plans.Max]: {
-    icon: Gem,
     theme: {
       background: 'linear-gradient(45deg, #374151, #111827)',
       color: '#FDE68A',
@@ -65,95 +65,64 @@ export const themes = {
 } satisfies Record<Plans, unknown>;
 
 const styles = createStaticStyles(({ css }) => ({
-  icon: css`
-    flex: none;
-    box-shadow: 0 0 0 1px ${cssVar.colorFillSecondary};
+  clickable: css`
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
+  `,
+  plain: css`
+    cursor: default;
   `,
 }));
 
-const getPlanIconMetrics = (size: number) => ({
-  glyphSize: Math.max(12, Math.round(size / 2)),
-  radius: Math.max(8, Math.round(size / 3)),
-});
+export interface PlanTagProps {
+  className?: string;
+  label: string;
+  /**
+   * Makes the tag a keyboard-operable button (Enter / Space). Without it the tag is plain
+   * text: no button role, no tab stop, and a default cursor.
+   */
+  onClick?: () => void;
+  style?: CSSProperties;
+  /** Gradient and text color. A missing background falls back to a neutral fill. */
+  theme?: PlanTheme;
+}
+
+/** Name pill shared by the personal and workspace plan tags. */
+export const PlanTag = ({ className, label, onClick, style, theme }: PlanTagProps) => (
+  <Tag
+    className={cx(onClick ? styles.clickable : styles.plain, className)}
+    variant={'filled'}
+    style={{
+      background: theme?.background ?? cssVar.colorFillSecondary,
+      border: 'none',
+      borderRadius: 12,
+      color: theme?.color ?? cssVar.colorText,
+      flex: 'none',
+      margin: 0,
+      ...style,
+    }}
+    {...getPlanTagButtonProps(onClick)}
+  >
+    {label}
+  </Tag>
+);
 
 interface PlanIconProps {
   className?: string;
-  mono?: boolean;
-  onClick?: (e: MouseEvent) => void;
+  onClick?: () => void;
   plan: Plans;
-  size?: number;
   style?: CSSProperties;
-  type?: 'icon' | 'tag' | 'combine';
 }
 
-const PlanIcon = memo<PlanIconProps>(
-  ({ type = 'icon', plan, size = 36, mono, style, className, onClick }) => {
-    const { icon: IconComponent, theme } = themes[plan];
-    const { t } = useTranslation('subscription');
-    const isTag = type === 'tag';
-    const isCombine = type === 'combine';
-    const isFree = plan === Plans.Free;
-    const { glyphSize, radius } = getPlanIconMetrics(size);
+/** Plan name pill. Plan icons are intentionally gone: the name is the only badge. */
+const PlanIcon = ({ plan, ...rest }: PlanIconProps) => {
+  const { t } = useTranslation('subscription');
 
-    if (isTag) {
-      return (
-        <Tag
-          className={className}
-          variant={'filled'}
-          style={{
-            ...(theme || { background: cssVar.colorFillSecondary, color: cssVar.colorText }),
-            border: 'none',
-            borderRadius: 12,
-            cursor: 'pointer',
-            flex: 'none',
-            margin: 0,
-            ...style,
-          }}
-          onClick={onClick}
-        >
-          {t(`plans.plan.${plan}.title`)}
-        </Tag>
-      );
-    }
-
-    const iconStyle = {
-      ...(mono
-        ? null
-        : {
-            ...theme,
-            border: isFree ? undefined : `2px solid ${theme.color}`,
-          }),
-      alignItems: 'center',
-      borderRadius: radius,
-      display: 'flex',
-      justifyContent: 'center',
-      lineHeight: 0,
-      ...style,
-    } satisfies CSSProperties;
-
-    const iconContent = (
-      <Center
-        className={styles.icon}
-        height={size}
-        style={iconStyle}
-        width={size}
-        onClick={onClick}
-      >
-        <IconComponent color={mono ? undefined : theme.color} size={glyphSize} />
-      </Center>
-    );
-
-    if (isCombine) {
-      return (
-        <Flexbox horizontal align={'center'} gap={8}>
-          {iconContent}
-          <span>{t(`plans.plan.${plan}.title`)}</span>
-        </Flexbox>
-      );
-    }
-
-    return iconContent;
-  },
-);
+  return <PlanTag {...rest} label={t(`plans.plan.${plan}.title`)} theme={themes[plan].theme} />;
+};
 
 export default PlanIcon;

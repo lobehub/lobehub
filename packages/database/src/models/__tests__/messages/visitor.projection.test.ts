@@ -102,7 +102,6 @@ describe('toVisitorMessage', () => {
         pluginError: { body: 'x', provider: 'openai' },
         pluginState: { model: 'gpt-4o', tool: { name: 'search', usage: {} } },
         provider: 'openai',
-        taskCompletions: [{ content: 'done', id: 'tc-1', usage: { totalTokens: 5 } }],
         taskDetail: {
           id: 'td-1',
           status: 'success',
@@ -123,7 +122,6 @@ describe('toVisitorMessage', () => {
     expect(visitor.pluginError).toEqual({ body: 'x' });
     expect(visitor.pluginState).toEqual({ tool: { name: 'search' } });
     expect(visitor.taskDetail).toEqual({ id: 'td-1', status: 'success' });
-    expect(asRecords(visitor.taskCompletions)[0]).toEqual({ content: 'done', id: 'tc-1' });
   });
 
   it('keeps the model snapshot when the share opts in', () => {

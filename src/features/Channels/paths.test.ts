@@ -1,20 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { channelPath, matchChannel } from './paths';
-
-describe('channelPath', () => {
-  it('builds the channel and thread paths', () => {
-    expect(channelPath('chn_1')).toBe('/channels/chn_1');
-    expect(channelPath('chn_1', 'cht_1')).toBe('/channels/chn_1?thread=cht_1');
-  });
-
-  it('opens a project Channel inside its project', () => {
-    expect(channelPath('chn_1', null, 'pro_1')).toBe('/project/pro_1/channels/chn_1');
-    expect(channelPath('chn_1', 'cht_1', 'pro_1')).toBe(
-      '/project/pro_1/channels/chn_1?thread=cht_1',
-    );
-  });
-});
+import { matchChannel } from './paths';
 
 describe('matchChannel', () => {
   it.each([

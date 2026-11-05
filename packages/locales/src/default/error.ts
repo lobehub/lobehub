@@ -130,7 +130,7 @@ export default {
   'response.FreePlanLimit':
     'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
   'response.InsufficientBudgetForModel':
-    'Your remaining credits are insufficient for this model. Please top up credits, upgrade your plan, or try a less expensive model.',
+    'Your remaining balance is insufficient for this model. Please top up, upgrade your plan, or try a less expensive model.',
   'response.GoogleAIBlockReason.BLOCKLIST':
     'The content includes blocked terms. Please rephrase and try again.',
   'response.GoogleAIBlockReason.IMAGE_SAFETY':
@@ -213,9 +213,9 @@ export default {
   'response.ServerAgentRuntimeError':
     'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
   'response.SubscriptionPlanLimit':
-    'Your subscription points have been exhausted, and you cannot use this feature. Please upgrade to a higher plan or configure a custom model API to continue using it.',
+    'You have reached your subscription usage limit, so this feature is unavailable. Upgrade your plan or configure a custom model API to continue.',
   'response.SubscriptionPlanLimitUltimate':
-    'Your subscription points have been exhausted, and you cannot use this feature. Please top up credits or configure a custom model API to continue using it.',
+    'You have reached your subscription usage limit, so this feature is unavailable. Top up or configure a custom model API to continue.',
   'response.SystemTimeNotMatchError':
     'Sorry, your system time does not match the server. Please check your system time and try again.',
   'response.LobeHubModelDeprecated':
@@ -249,16 +249,16 @@ export default {
   'workspaceFrozenByAdmin.frozenAt': 'Frozen at',
   'workspaceFrozenByAdmin.reason': 'Reason',
   'workspaceFrozenByAdmin.title': 'Workspace is frozen',
-  'workspaceFrozenByRiskControl.available': 'Available credits',
-  'workspaceFrozenByRiskControl.bannerDescription': 'Top up credits to resume spend.',
+  'workspaceFrozenByRiskControl.available': 'Available balance',
+  'workspaceFrozenByRiskControl.bannerDescription': 'Top up to resume spend.',
   'workspaceFrozenByRiskControl.bannerHint': 'Click for details',
   'workspaceFrozenByRiskControl.bannerTitle': 'Workspace frozen by risk control',
   'workspaceFrozenByRiskControl.contactSupport': 'Contact support',
   'workspaceFrozenByRiskControl.description':
-    'This workspace was auto-frozen by risk control after abnormal spending was detected. Top up credits so the workspace is ready to resume, and contact support to unfreeze.',
+    'This workspace was auto-frozen by risk control after abnormal spending was detected. Top up so the workspace is ready to resume, and contact support to unfreeze.',
   'workspaceFrozenByRiskControl.frozenAt': 'Frozen at',
   'workspaceFrozenByRiskControl.title': 'Workspace auto-frozen by risk control',
-  'workspaceFrozenByRiskControl.topup': 'Top up credits',
+  'workspaceFrozenByRiskControl.topup': 'Top up',
   'stt.responseError': 'Service request failed, please check the configuration or try again',
   'supervisor.decisionFailed':
     'The group host is unable to function. Please check your host configuration to ensure the correct model, API Key, and API endpoint are set.',

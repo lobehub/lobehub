@@ -49,7 +49,8 @@ export const channelKeys = {
   ),
   userCandidates: def(
     'channel:userCandidates',
-    (channelId: string, search: string) => ['channel:userCandidates', channelId, search] as const,
+    (channelId: string | undefined, search: string) =>
+      ['channel:userCandidates', channelId ?? null, search] as const,
   ),
 };
 
@@ -424,6 +425,11 @@ export const deviceKeys = {
     workspaceId,
     deviceId,
   ]),
+  systemInfo: def('device:systemInfo', (workspaceId: string | null, deviceId: string) => [
+    'device:systemInfo',
+    workspaceId,
+    deviceId,
+  ]),
   browseDirectory: def(
     'device:browseDirectory',
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
@@ -541,6 +547,22 @@ export const fileKeys = {
 // with cached prefixes — e.g. share/topicInfo is `share:` not `topic:`, portal
 // header is `portal:` not `document:`.
 // =========================================================================
+
+// ---- MCP Apps (interactive tool result views) -----------------------------
+export const mcpAppKeys = {
+  resource: def(
+    'mcpApp:resource',
+    (
+      identifier: string,
+      uri: string,
+      {
+        agentId,
+        onThisDevice = false,
+        server,
+      }: { agentId?: string; onThisDevice?: boolean; server?: string },
+    ) => ['mcpApp:resource', identifier, uri, agentId ?? null, onThisDevice, server ?? null],
+  ),
+};
 
 // ---- api key (settings/apikey) -------------------------------------------
 export const apiKeyKeys = {
@@ -981,6 +1003,11 @@ export const electronKeys = {
   proxySettings: def('electron:getProxySettings', () => ['electron:getProxySettings']),
   remoteServerConfig: def('electron:getRemoteServerConfig', () => [
     'electron:getRemoteServerConfig',
+  ]),
+  /** This machine's derived device id in a workspace (local, no network). */
+  workspaceDeviceId: def('electron:getWorkspaceDeviceId', (workspaceId: string) => [
+    'electron:getWorkspaceDeviceId',
+    workspaceId,
   ]),
 };
 

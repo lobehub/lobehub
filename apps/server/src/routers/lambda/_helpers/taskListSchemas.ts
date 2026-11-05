@@ -62,7 +62,9 @@ export const listSchema = z.object({
   filter: taskListFilterSchema.optional(),
   // Archived tasks are user-closed; lists leave them out unless asked.
   includeArchived: z.boolean().optional(),
-  limit: z.number().min(1).max(100).default(50),
+  // Up to 500: the Tasks list view walks the whole list page by page, and
+  // every page is a sequential round trip (refresh after each edit included).
+  limit: z.number().min(1).max(500).default(50),
   offset: z.number().min(0).default(0),
   // Which timestamp orders the page, newest first. Defaults to creation time.
   orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
@@ -93,7 +95,9 @@ export const groupListSchema = z
       .array(
         z.object({
           key: z.string(),
-          limit: z.number().min(1).max(100).default(50),
+          // Up to 500: the Tasks list view walks the whole list page by page, and
+          // every page is a sequential round trip (refresh after each edit included).
+          limit: z.number().min(1).max(500).default(50),
           offset: z.number().min(0).default(0),
           statuses: z.array(z.string()).min(1).max(10),
         }),

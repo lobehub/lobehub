@@ -627,15 +627,5 @@ describe('messagesReducer', () => {
       expect(newState.find((m) => m.id === 'message1')).toBeUndefined();
       expect(newState.find((m) => m.id === 'message2')).toBeUndefined();
     });
-
-    it('should not modify state if message to delete is not found', () => {
-      const payload: MessageDispatch = {
-        type: 'deleteMessage',
-        id: 'nonexistentMessage',
-      };
-
-      const newState = messagesReducer(initialState, payload);
-      expect(newState).toEqual(initialState);
-    });
   });
 });

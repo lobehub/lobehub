@@ -97,14 +97,14 @@ export const formatSubAgentCreditErrorReason = (error: unknown): string | undefi
   // the no-retry claim only holds for the same model (bot/replyTemplate gives
   // the same "switch to a less expensive model" advice).
   const modelCostShortfall = creditType === ChatErrorType.InsufficientBudgetForModel;
-  const shortfall = modelCostShortfall ? "can't cover this model's estimated cost" : 'are used up';
+  const shortfall = modelCostShortfall ? "can't cover this model's estimated cost" : 'is used up';
   const limit =
     budgetType === 'workspace'
-      ? `the workspace's shared LobeHub credits ${shortfall}; a workspace admin has to add credits`
+      ? `the workspace's shared LobeHub balance ${shortfall}; a workspace admin has to add balance`
       : budgetType === 'workspace_member'
-        ? `this member's workspace credit allowance ${modelCostShortfall ? shortfall : 'is used up'}; a workspace admin has to raise it`
+        ? `this member's workspace usage allowance ${modelCostShortfall ? shortfall : 'is used up'}; a workspace admin has to raise it`
         : modelCostShortfall
-          ? "the account's LobeHub credits are too low for this model; the account owner has to top up or upgrade"
+          ? "the account's LobeHub balance is too low for this model; the account owner has to top up or upgrade"
           : "the account's LobeHub plan limit was reached or the plan does not cover this model; the account owner has to upgrade the plan";
 
   const advice = modelCostShortfall

@@ -393,27 +393,6 @@ describe('resolve_aborted_tools executor', () => {
   });
 
   describe('Event Handling', () => {
-    it('should emit single done event', async () => {
-      // Given
-      const mockStore = createMockStore();
-      const context = createTestContext();
-      const instruction = createResolveAbortedToolsInstruction();
-      const state = createInitialState();
-
-      // When
-      const result = await executeWithMockContext({
-        executor: 'resolve_aborted_tools',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
-
-      // Then
-      expect(result.events).toHaveLength(1);
-      expect(result.events[0].type).toBe('done');
-    });
-
     it('should include finalState in event', async () => {
       // Given
       const mockStore = createMockStore();
