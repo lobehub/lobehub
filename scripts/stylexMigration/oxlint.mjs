@@ -54,7 +54,7 @@ export const stylexMigrationOverrides = [
           patterns: [
             {
               message:
-                'Style the element with StyleX: a slot prop (classNames / styles), a pseudo-class on the slot element, or an xstyle prop (see the react skill). Only DOM no prop reaches keeps a .css file, disabled inline with the reason.',
+                'Style the element with StyleX: a slot prop (classNames / styles), a pseudo-class on the slot element, or an xstyle prop (see the react skill). Only DOM no prop reaches keeps its nested rule in createStaticStyles.',
               regex: String.raw`^(?:\.{1,2}|@)/(?:.*/)?[^/]+(?<!\.module)\.css(?:\?.*)?$`,
             },
           ],
