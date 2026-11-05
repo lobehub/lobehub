@@ -129,6 +129,7 @@ describe('AgentTopicManager utils', () => {
   it('exposes human-readable platform names', () => {
     expect(getBotPlatformName('discord')).toBe('Discord');
     expect(getBotPlatformName('feishu')).toBe('Feishu');
+    expect(getBotPlatformName('dingtalk')).toBe('DingTalk');
     expect(getBotPlatformName('unknown-platform')).toBe('unknown-platform');
   });
 });
