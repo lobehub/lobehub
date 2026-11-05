@@ -3,6 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { type CorpusEntry, fetchMethod, type RunPayload, type SelfTestPayload } from '../api';
+import { UNMODELED_SHAPES } from '../knownGaps';
 import { FLAG_EXPLANATIONS, flagLabel, shortKey } from '../labels';
 import { aaSummary, conditionScope } from '../method';
 import { hrefOf } from '../route';
@@ -206,6 +207,14 @@ export const MethodPage = ({ anchor, payload }: { anchor?: string; payload: RunP
             <b>{flagLabel(flag)}</b>
             <code {...stylex.props(styles.code, styles.muted)}>{flag}</code>
             <span>{text}</span>
+          </div>
+        ))}
+      </Card>
+      <Card lead="下面这些写法工具还没有建模，结果里可能出现不是真差异的差异。" title="尚未建模">
+        {UNMODELED_SHAPES.map((entry) => (
+          <div key={entry.title} {...stylex.props(styles.row)}>
+            <b>{entry.title}</b>
+            <span>{entry.text}</span>
           </div>
         ))}
       </Card>
