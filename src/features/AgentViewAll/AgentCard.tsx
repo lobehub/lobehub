@@ -85,14 +85,9 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
             variant={'outlined'}
           >
             <div
+              className={stylex.props(coverStyles.root).className}
               data-cover-image={badge.coverImage ? '' : undefined}
               data-pattern={badge.coverImage ? undefined : coverPattern(item)}
-              className={
-                stylex.props(
-                  coverStyles.root,
-                  badge.coverImage ? coverStyles.coverImage : coverStyles[coverPattern(item)],
-                ).className
-              }
               style={
                 {
                   '--agent-cover': coverColor,

@@ -127,29 +127,6 @@ export const cardStyles = stylex.create({
 });
 
 export const coverStyles = stylex.create({
-  coverImage: {
-    backgroundPosition: 'center',
-    backgroundSize: 'cover',
-  },
-  crosshatch: {
-    backgroundImage: `repeating-linear-gradient(45deg, var(--cover-line) 0 1px, transparent 1px 10px), repeating-linear-gradient(-45deg, var(--cover-line) 0 1px, transparent 1px 10px)`,
-    backgroundSize: 'auto',
-  },
-  dots: {},
-  grid: {
-    backgroundImage: `linear-gradient(var(--cover-faint) 1px, transparent 1px), linear-gradient(90deg, var(--cover-faint) 1px, transparent 1px)`,
-    backgroundSize: '16px 16px',
-  },
-  lines: {
-    backgroundImage:
-      'repeating-linear-gradient(0deg, var(--cover-faint) 0 1px, transparent 1px 8px)',
-    backgroundSize: 'auto',
-  },
-  rings: {
-    backgroundImage:
-      'repeating-radial-gradient(circle at 100% 0, var(--cover-line) 0 1px, transparent 1px 10px)',
-    backgroundSize: 'auto',
-  },
   root: {
     '--cover-ink': `color-mix(in srgb, ${cssVar.colorBgContainer} 30%, transparent)`,
     '--cover-line': `color-mix(in srgb, ${cssVar.colorBgContainer} 22%, transparent)`,
@@ -160,24 +137,39 @@ export const coverStyles = stylex.create({
     'insetInlineEnd': 0,
     'height': '80px',
     'backgroundColor': `color-mix(in srgb, var(--agent-cover, ${cssVar.colorFill}) 72%, ${cssVar.colorBgContainer})`,
-    'backgroundImage': 'radial-gradient(var(--cover-ink) 1px, transparent 1.5px)',
-    'backgroundSize': '10px 10px',
+    'backgroundImage': {
+      'default': 'radial-gradient(var(--cover-ink) 1px, transparent 1.5px)',
+      ":is([data-pattern='grid'])":
+        'linear-gradient(var(--cover-faint) 1px, transparent 1px), linear-gradient(90deg, var(--cover-faint) 1px, transparent 1px)',
+      ":is([data-pattern='stripes'])":
+        'repeating-linear-gradient(45deg, var(--cover-line) 0 1px, transparent 1px 8px)',
+      ":is([data-pattern='crosshatch'])":
+        'repeating-linear-gradient(45deg, var(--cover-line) 0 1px, transparent 1px 10px), repeating-linear-gradient(-45deg, var(--cover-line) 0 1px, transparent 1px 10px)',
+      ":is([data-pattern='rings'])":
+        'repeating-radial-gradient(circle at 100% 0, var(--cover-line) 0 1px, transparent 1px 10px)',
+      ":is([data-pattern='stagger'])":
+        'radial-gradient(var(--cover-ink) 1.5px, transparent 2px), radial-gradient(var(--cover-ink) 1.5px, transparent 2px)',
+      ":is([data-pattern='lines'])":
+        'repeating-linear-gradient(0deg, var(--cover-faint) 0 1px, transparent 1px 8px)',
+      ":is([data-pattern='scales'])":
+        'radial-gradient(circle at 50% 0, transparent 6px, var(--cover-line) 6px 7px, transparent 7px)',
+    },
+    'backgroundPosition': {
+      'default': null,
+      ':is([data-cover-image])': 'center',
+      ":is([data-pattern='stagger'])": '0 0, 8px 8px',
+    },
+    'backgroundSize': {
+      'default': '10px 10px',
+      ':is([data-cover-image])': 'cover',
+      ":is([data-pattern='grid'])": '16px 16px',
+      ":is([data-pattern='stripes'])": 'auto',
+      ":is([data-pattern='crosshatch'])": 'auto',
+      ":is([data-pattern='rings'])": 'auto',
+      ":is([data-pattern='stagger'])": '16px 16px',
+      ":is([data-pattern='lines'])": 'auto',
+      ":is([data-pattern='scales'])": '14px 8px',
+    },
     'transition': 'background-color 0.3s',
-  },
-  scales: {
-    backgroundImage:
-      'radial-gradient(circle at 50% 0, transparent 6px, var(--cover-line) 6px 7px, transparent 7px)',
-    backgroundSize: '14px 8px',
-  },
-  stagger: {
-    backgroundImage:
-      'radial-gradient(var(--cover-ink) 1.5px, transparent 2px), radial-gradient(var(--cover-ink) 1.5px, transparent 2px)',
-    backgroundPosition: '0 0, 8px 8px',
-    backgroundSize: '16px 16px',
-  },
-  stripes: {
-    backgroundImage:
-      'repeating-linear-gradient(45deg, var(--cover-line) 0 1px, transparent 1px 8px)',
-    backgroundSize: 'auto',
   },
 });
