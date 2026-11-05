@@ -1,6 +1,3 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the rules target images inside RichTextMessage (Lexical renderer) and lobe-ui Markdown output, which expose no slot or xstyle for the figure/img they render
-import './styles.css';
-
 import type { DocumentCommentItem } from '@lobechat/types';
 import { ChatInput, ChatInputActionBar, useEditor } from '@lobehub/editor/react';
 import {
@@ -39,7 +36,7 @@ import DocumentCommentEditor, {
 } from './DocumentCommentEditor';
 import type { DocumentCommentUpdateHandler } from './optimistic';
 import { isOptimisticDocumentComment } from './optimistic';
-import { COMMENT_INPUT_MAX_HEIGHT, HIGHLIGHTED_CLASS_NAMES, styles } from './styles';
+import { COMMENT_INPUT_MAX_HEIGHT, fallback, HIGHLIGHTED_CLASS_NAMES, styles } from './styles';
 
 interface CommentCardProps {
   comment: DocumentCommentItem;
@@ -73,7 +70,7 @@ const hasDocumentCommentEditorData = (editorData: DocumentCommentItem['editorDat
 const CommentContent = memo<
   Pick<DocumentCommentItem, 'content' | 'editorData'> & { compact?: boolean }
 >(({ compact, content, editorData }) => (
-  <div className={'lobe-document-comments-2aa32e1f-comment-content'}>
+  <div className={fallback.commentContent}>
     {hasDocumentCommentEditorData(editorData) ? (
       <RichTextMessage editorState={editorData} variant={'default'} />
     ) : (

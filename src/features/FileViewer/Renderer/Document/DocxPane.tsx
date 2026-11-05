@@ -1,13 +1,13 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- docx-preview generates .docx-wrapper and its section.docx pages inside the container; no prop reaches that DOM
-import './DocxPane.css';
-
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- docx-preview page DOM gets no className
+import { createStaticStyles, cssVar as cssVarValue } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import Loading from '@/components/Loading/CircleLoading';
+import { sx } from '@/styles/sx';
 
 import { collectDocxSections, type DocxSection } from './docxSections';
 import PaneFooter from './PaneFooter';
@@ -27,6 +27,27 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  scroll: css`
+    .docx-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: safe center;
+
+      padding: 10px;
+
+      background: transparent;
+    }
+
+    .docx-wrapper > section.docx {
+      margin-block-end: 0;
+      border-radius: 4px;
+      box-shadow: ${cssVarValue.boxShadowTertiary};
+    }
+  `,
+}));
 
 interface DocxPaneProps {
   blob: Blob;
@@ -99,10 +120,7 @@ const DocxPane = memo<DocxPaneProps>(({ blob, onError }) => {
 
   return (
     <div {...stylex.props(styles.wrapper)}>
-      <div
-        className={`${stylex.props(styles.scroll).className} ${'lobe-docx-pane-f4c06479-scroll'}`}
-        ref={scrollRef}
-      >
+      <div {...sx(styles.scroll, fallback.scroll)} ref={scrollRef}>
         {loading && <Loading />}
         <div ref={setContainer} />
       </div>

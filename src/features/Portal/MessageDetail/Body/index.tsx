@@ -1,17 +1,24 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the padding goes on the direct div children of the rendered markdown, which lobe-ui Markdown creates with no slot
-import './index.css';
-
-import { cx, Flexbox, Markdown } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { createStaticStyles, Flexbox, Markdown } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { useEffect } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, dbMessageSelectors } from '@/store/chat/selectors';
+import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
   md: { overflow: 'scroll' },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  md: css`
+    > div {
+      padding-block-end: 40px;
+    }
+  `,
+}));
 
 const MessageDetailBody = () => {
   const [messageDetailId, clearPortalStack] = useChatStore((s) => [
@@ -32,10 +39,7 @@ const MessageDetailBody = () => {
   return (
     <Flexbox height={'100%'} paddingBlock={'0 12px'} paddingInline={8}>
       {!!content && (
-        <Markdown
-          className={cx(stylex.props(styles.md).className, 'lobe-body-b06ffb5c-md')}
-          variant={'chat'}
-        >
+        <Markdown {...sx(styles.md, fallback.md)} variant={'chat'}>
           {content}
         </Markdown>
       )}

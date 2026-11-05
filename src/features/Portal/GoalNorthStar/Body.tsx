@@ -1,11 +1,10 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the dashed target series is a recharts path inside @lobehub/charts LineChart, which has no per-series stroke prop
-import './Body.css';
-
 import { LineChart } from '@lobehub/charts';
 import {
   Button,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- LineChart series paths get no className
+  createStaticStyles,
   cssVar as cssVarValue,
   Flexbox,
   Icon,
@@ -57,6 +56,14 @@ const styles = stylex.create({
   value: { flex: 'none', minWidth: '96px' },
   section: { fontSize: '12px', fontWeight: 600, color: cssVar.colorTextSecondary },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  chart: css`
+    & path[name='target'] {
+      stroke-dasharray: 4 4;
+    }
+  `,
+}));
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -168,7 +175,7 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
           <LineChart
             autoMinValue
             categories={['value', 'target']}
-            className={'lobe-body-53f5b50e-chart'}
+            className={fallback.chart}
             colors={chartColors}
             data={chartRows}
             height={200}

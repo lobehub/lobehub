@@ -1,6 +1,3 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the rules target Lexical editor content (contenteditable children, placeholder, pasted images) that EditorCanvas renders with no slot or xstyle
-import './styles.css';
-
 import type { DocumentCommentJson } from '@lobechat/types';
 import type { IEditor } from '@lobehub/editor';
 import type { EditorProps } from '@lobehub/editor/react';
@@ -18,7 +15,7 @@ import {
 import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
 import { sx } from '@/styles/sx';
 
-import { styles } from './styles';
+import { fallback, styles } from './styles';
 import { useFreezeHeightWhileResizingImage } from './useFreezeHeightWhileResizingImage';
 
 export type DocumentCommentEditorValue = TopicCommentEditorValue;
@@ -99,7 +96,7 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
         ref={rootRef}
         {...sx(
           [styles.commentEditor, flush && styles.commentEditorFlush],
-          cx('lobe-document-comments-2aa32e1f-comment-editor', mentionPlainClassName),
+          cx(fallback.commentEditor, mentionPlainClassName),
         )}
       >
         <EditorCanvas

@@ -1,11 +1,10 @@
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Lexical editor and comment markdown DOM get no className
+import { createStaticStyles } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 /** Max rendered height of an image inside the comment composer / edit box. */
 export const COMMENT_EDITOR_IMAGE_MAX_HEIGHT = 400;
-// The descendant rules that use these heights, and RESIZED_IMAGE_SELECTOR below,
-// live in styles.css (StyleX cannot reach the editor's DOM); styles.test.ts
-// keeps the two in sync.
 /** Max rendered height of an image inside a published comment. */
 export const COMMENT_CONTENT_IMAGE_MAX_HEIGHT = 480;
 
@@ -28,6 +27,61 @@ export const COMMENT_INPUT_MAX_HEIGHT = 100_000;
  */
 export const RESIZED_IMAGE_SELECTOR =
   'img:is([style^="width:"], [style*=" width:"]):not([style^="width: inherit"]):not([style*=" width: inherit"])';
+
+const RESIZED_IMAGE = RESIZED_IMAGE_SELECTOR;
+
+export const fallback = createStaticStyles(({ css }) => ({
+  commentContent: css`
+    & figure:has(img) {
+      margin-block: 8px;
+      text-align: start;
+    }
+
+    & img {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+
+    & img:not(${RESIZED_IMAGE}) {
+      width: auto !important;
+      max-height: ${COMMENT_CONTENT_IMAGE_MAX_HEIGHT}px;
+    }
+  `,
+  commentEditor: css`
+    & [contenteditable='true'] ~ div {
+      margin-block-start: 0 !important;
+    }
+
+    & [contenteditable='true'] > :first-child {
+      margin-block-start: 0 !important;
+    }
+
+    & [contenteditable='true'] > :last-child {
+      margin-block-end: 0 !important;
+    }
+
+    & [contenteditable='true'] :has(> img) {
+      width: auto !important;
+      max-width: 100% !important;
+      text-align: start;
+    }
+
+    & [contenteditable='true'] > div:has(img) {
+      margin-block: 8px;
+      text-align: start;
+    }
+
+    & [contenteditable='true'] img {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+
+    & [contenteditable='true'] img:not(${RESIZED_IMAGE}) {
+      width: auto !important;
+      max-height: ${COMMENT_EDITOR_IMAGE_MAX_HEIGHT}px;
+    }
+  `,
+}));
 
 /**
  * The margin marker (`blockMarker`) sits in the body's right margin at the
