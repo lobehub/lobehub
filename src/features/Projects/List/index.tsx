@@ -21,6 +21,7 @@ import {
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
+  ArrowDownUpIcon,
   FolderClosedIcon,
   MoreHorizontalIcon,
   PencilIcon,
@@ -49,6 +50,9 @@ import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useGlobalStore } from '@/store/global';
+import type { ProjectListSortBy } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useLoadedProjectList, useProjectStore } from '@/store/project';
 import type { ProjectListItem } from '@/store/project/store';
 import { useUserStore } from '@/store/user';
@@ -56,6 +60,10 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import { projectFavoriteTarget } from '../projectFavorite';
 import { resolveProjectListState } from '../projectListState';
+import SortableProjectRows from './SortableProjectRows';
+import { sortProjects } from './sortProjects';
+
+const SORT_BYS: ProjectListSortBy[] = ['manual', 'createdAt', 'updatedAt'];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
@@ -173,7 +181,10 @@ const ProjectFavoriteStar = memo<{ project: ProjectListItem }>(({ project }) => 
 
   return (
     // A favorited star stays visible so the row shows it is pinned.
-    <span className={cx(styles.actions, 'project-row-actions', isFavorite && styles.favorited)}>
+    <span
+      data-row-action
+      className={cx(styles.actions, 'project-row-actions', isFavorite && styles.favorited)}
+    >
       <ActionIcon
         aria-label={label}
         aria-pressed={isFavorite}
@@ -268,7 +279,7 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
         </Text>
       </WorkspaceLink>
       <ProjectFavoriteStar project={project} />
-      <span className={cx(styles.actions, 'project-row-actions')}>
+      <span data-row-action className={cx(styles.actions, 'project-row-actions')}>
         <DropdownMenu items={menuItems} placement={'bottomRight'}>
           <ActionIcon
             icon={MoreHorizontalIcon}
@@ -295,18 +306,35 @@ const ProjectListPage = memo(() => {
     (s) => s.useFetchProjectList,
   )(enabled);
   const listState = resolveProjectListState({ error, isHydrated, isValidating, projects });
+  const sortBy = useGlobalStore(systemStatusSelectors.projectListSortBy);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  // The custom order is shared by the workspace, so only editors may change it.
+  const canManage = useCanManageProject();
+  const normalizedKeyword = keyword.trim().toLocaleLowerCase();
 
   const filteredProjects = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLocaleLowerCase();
     if (!projects) return [];
+    const sorted = sortProjects(projects, sortBy);
     return normalizedKeyword
-      ? projects.filter((project) =>
+      ? sorted.filter((project) =>
           [project.name, project.identifier, project.description]
             .filter(Boolean)
             .some((value) => value!.toLocaleLowerCase().includes(normalizedKeyword)),
         )
-      : projects;
-  }, [keyword, projects]);
+      : sorted;
+  }, [normalizedKeyword, projects, sortBy]);
+
+  const sortMenuItems = SORT_BYS.map((by) => ({
+    checked: sortBy === by,
+    key: by,
+    label: t(`sidebar.sort.${by}`),
+    onCheckedChange: () => updateSystemStatus({ projectListSortBy: by }),
+    type: 'checkbox' as const,
+  }));
+
+  // A drop inside search results would reorder only the matches, so dragging
+  // waits for the full list.
+  const draggable = sortBy === 'manual' && canManage && !normalizedKeyword;
 
   if (!enabled) return <ProjectDisabled />;
 
@@ -329,9 +357,16 @@ const ProjectListPage = memo(() => {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
-          <Button icon={PlusIcon} style={{ flex: 'none' }} onClick={() => openCreateProjectModal()}>
-            {t('create.action')}
-          </Button>
+          <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+            <DropdownMenu items={sortMenuItems} placement={'bottomRight'}>
+              <Button icon={ArrowDownUpIcon} title={t('sidebar.sort.title')}>
+                {t(`sidebar.sort.${sortBy}`)}
+              </Button>
+            </DropdownMenu>
+            <Button icon={PlusIcon} onClick={() => openCreateProjectModal()}>
+              {t('create.action')}
+            </Button>
+          </Flexbox>
         </Flexbox>
         {listState === 'error' ? (
           <AsyncError error={error} onRetry={() => revalidate()} />
@@ -346,9 +381,14 @@ const ProjectListPage = memo(() => {
           </Center>
         ) : (
           <Flexbox gap={4}>
-            {filteredProjects.map((project) => (
-              <ProjectRow key={project.id} project={project} />
-            ))}
+            {draggable ? (
+              <SortableProjectRows
+                projects={filteredProjects}
+                renderRow={(project) => <ProjectRow project={project} />}
+              />
+            ) : (
+              filteredProjects.map((project) => <ProjectRow key={project.id} project={project} />)
+            )}
           </Flexbox>
         )}
       </WideScreenContainer>
