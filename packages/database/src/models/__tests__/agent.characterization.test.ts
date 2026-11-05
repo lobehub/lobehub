@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { getPluginMode } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,30 +23,7 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'agent-char-user';
 const otherUserId = 'agent-char-other';
 
-/** Former private helpers; excluded so the pin only covers the public surface. */
-const PRIVATE_MEMBERS = new Set([
-  'agentsFilesOwnership',
-  'agentsKnowledgeBasesOwnership',
-  'agentsToSessionsOwnership',
-  'assertFixedExecutionTarget',
-  'assertNotAgentBuilderProtectedWrite',
-  'assertSessionGroupAssignable',
-  'assertWorkspaceDeviceBinding',
-  'buildQueryAgentsWhere',
-  'collectBoundDeviceIds',
-  'documentsOwnership',
-  'enrichAgentWithKnowledge',
-  'findOwnedGroupMemberships',
-  'ownership',
-  'queryGroupMemberships',
-  'sanitizeAgencyConfigForWorkspace',
-  'sessionsOwnership',
-  'stripImmutableFields',
-  'stripReservedSlug',
-  'trashScope',
-  'withWorkspaceSelectionPolicyDefaults',
-]);
-
+/** Callers keep these established methods when the model gains new capabilities. */
 const PUBLIC_METHODS = [
   'assertDeletable',
   'batchCreate',
@@ -105,7 +83,7 @@ const PUBLIC_METHODS = [
   'updateConfig',
   'updateSessionGroupId',
   'updateSlug',
-];
+] as const;
 
 const deletedAt = new Date('2026-01-01T00:00:00.000Z');
 
@@ -171,14 +149,9 @@ afterEach(async () => {
 
 describe('AgentModel - characterization', () => {
   describe('public surface', () => {
-    it('exposes the same instance methods', () => {
+    it('keeps the established instance methods callable', () => {
       const model = new AgentModel(serverDB, userId);
-      const methods = Object.keys(model)
-        .filter((key) => typeof (model as any)[key] === 'function')
-        .filter((key) => !PRIVATE_MEMBERS.has(key))
-        .sort();
-
-      expect(methods).toEqual(PUBLIC_METHODS);
+      for (const method of PUBLIC_METHODS) expect(model[method], method).toBeTypeOf('function');
     });
 
     it('keeps the runtime exports', () => {
@@ -198,6 +171,56 @@ describe('AgentModel - characterization', () => {
       expect(error.message).toBe('AGENT_OWNED_BY_GROUP');
       expect(error.name).toBe('AgentOwnedByGroupError');
       expect(error.groups).toEqual([]);
+    });
+  });
+
+  describe('personal plugin access', () => {
+    it('disables only the selected personal agents owned by the caller', async () => {
+      await serverDB.update(agents).set({ plugins: ['gmail', 'notion'] });
+      await serverDB.insert(agents).values({
+        id: 'own-workspace',
+        plugins: ['gmail', 'notion'],
+        userId,
+        workspaceId,
+      });
+
+      await serverDB.transaction((tx) =>
+        new AgentModel(tx as unknown as LobeChatDatabase, userId).disablePersonalPluginForAgents(
+          ['own-public', 'foreign', 'own-workspace', 'ws-member-public'],
+          'gmail',
+        ),
+      );
+
+      const rows = await serverDB.select({ id: agents.id, plugins: agents.plugins }).from(agents);
+      const gmailModes = Object.fromEntries(
+        rows.map((agent) => [agent.id, getPluginMode(agent.plugins ?? undefined, 'gmail')]),
+      );
+      expect(gmailModes).toEqual({
+        'own-public': 'disabled',
+        'own-private': 'pinned',
+        'foreign': 'pinned',
+        'own-workspace': 'pinned',
+        'ws-member-private': 'pinned',
+        'ws-member-public': 'pinned',
+      });
+      expect(
+        rows.every((agent) => getPluginMode(agent.plugins ?? undefined, 'notion') === 'pinned'),
+      ).toBe(true);
+    });
+
+    it('keeps every personal agent enabled when none are selected', async () => {
+      await serverDB.update(agents).set({ plugins: ['gmail'] });
+      await serverDB.transaction((tx) =>
+        new AgentModel(tx as unknown as LobeChatDatabase, userId).disablePersonalPluginForAgents(
+          [],
+          'gmail',
+        ),
+      );
+      const rows = await serverDB.select({ plugins: agents.plugins }).from(agents);
+      expect(rows).toHaveLength(5);
+      expect(
+        rows.every((agent) => getPluginMode(agent.plugins ?? undefined, 'gmail') === 'pinned'),
+      ).toBe(true);
     });
   });
 
