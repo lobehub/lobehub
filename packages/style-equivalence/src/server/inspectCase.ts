@@ -131,7 +131,7 @@ export const caseShot = async (
     if (!(await section.count())) throw new ApiError(404, 'CASE_NOT_RENDERED');
     const snapshot = snapshots[`${request.key}|${request.combo}`];
     if (request.reveal && isSnapshot(snapshot))
-      await revealCase(page, `${request.key}|${request.combo}`, targetOf(snapshot).targetKey);
+      await revealCase(page, `${request.key}|${request.combo}`, snapshot.targetKey ?? 'root');
     const target = request.crop && isSnapshot(snapshot) ? targetOf(snapshot).target : undefined;
     const origin = target ? await section.boundingBox() : null;
     if (!target || !origin || target.box[2] <= 0 || target.box[3] <= 0)

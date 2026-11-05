@@ -64,7 +64,7 @@ export interface HashedElement {
 export interface CaseDetail {
   case?: ReportCase & {
     plan: ReportCase['plan'] & {
-      combos: Array<Record<string, boolean>>;
+      combos: Array<Record<string, boolean | string>>;
       variables: Array<{ kinds: Record<string, string>; name: string }>;
     };
     result: ReportCase['result'] & { unstableConditions: string[] };

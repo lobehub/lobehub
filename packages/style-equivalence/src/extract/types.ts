@@ -17,21 +17,26 @@ export interface StyleBinding {
 
 export interface StyleElement {
   bindings: StyleBinding[];
+  children?: string[];
   flags: string[];
   id: string;
   literalProps: Record<string, LiteralValue>;
   owner: string;
   parent?: string;
+  runtimeStyle?: string;
   slots: string[];
+  subtreeTags?: Record<string, number>;
   tag: string;
   variables: VariableUse[];
 }
 
 export interface StyleRule {
   conditions: string[];
+  declarations?: string[];
   owned: Record<string, string>;
   selector: string;
   slot?: string;
+  stylesheet?: string;
 }
 
 export type StylesheetBinding = { kind: 'global' } | { kind: 'module'; symbol: string };
@@ -41,10 +46,12 @@ export interface FileExtraction {
   file: string;
   gaps: string[];
   outsideReferences: string[];
+  plain?: StyleElement[];
   prelude: string;
   rules: StyleRule[];
   slotProperties?: Record<string, string[]>;
   styleSymbols: string[];
+  tables?: Record<string, string[]>;
 }
 
 export interface StyleAdapter {

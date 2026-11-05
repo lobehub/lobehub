@@ -60,7 +60,11 @@ export const differenceSummary = (causes: Cause[], limit = 2) => {
 export const comboLabel = (combo: Combo) => {
   const entries = Object.entries(combo);
   return entries.length
-    ? entries.map(([name, value]) => `${name}：${value ? '是' : '否'}`).join(' · ')
+    ? entries
+        .map(
+          ([name, value]) => `${name}：${typeof value === 'string' ? value : value ? '是' : '否'}`,
+        )
+        .join(' · ')
     : '默认';
 };
 

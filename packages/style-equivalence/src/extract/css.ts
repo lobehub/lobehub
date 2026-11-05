@@ -1,4 +1,4 @@
-import postcss, { type AtRule, type Container, type Rule } from 'postcss';
+import postcss, { type AtRule, type Container, type Declaration, type Rule } from 'postcss';
 import ts from 'typescript';
 
 import type { StyleRule } from './types';
@@ -36,8 +36,16 @@ const fullSelector = (rule: Rule, rootSelector: string | undefined): string | un
     .join(', ');
 };
 
+const declarationsOf = (rule: Rule) =>
+  (rule.nodes ?? [])
+    .filter((node): node is Declaration => node.type === 'decl')
+    .map(
+      (node) =>
+        `${node.prop.toLowerCase()}: ${node.value.replaceAll(/\s+/g, ' ').trim()}${node.important ? ' !important' : ''}`,
+    );
+
 export const parseRules = (css: string, rootSelector?: string) => {
-  const rules: Array<{ conditions: string[]; selector: string }> = [];
+  const rules: Array<{ conditions: string[]; declarations: string[]; selector: string }> = [];
   let root;
   try {
     root = postcss.parse(css);
@@ -47,7 +55,7 @@ export const parseRules = (css: string, rootSelector?: string) => {
   root.walkRules((rule) => {
     const selector = fullSelector(rule, rootSelector);
     if (selector && selector !== rootSelector)
-      rules.push({ conditions: conditionsOf(rule), selector });
+      rules.push({ conditions: conditionsOf(rule), declarations: declarationsOf(rule), selector });
   });
   return { error: false, rules };
 };

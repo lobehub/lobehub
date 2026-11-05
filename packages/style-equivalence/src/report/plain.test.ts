@@ -48,6 +48,10 @@ describe('comboLabel', () => {
     expect(comboLabel({ active: false, open: true })).toBe('active：否 · open：是');
     expect(comboLabel({})).toBe('默认');
   });
+
+  it('shows a table key as it is', () => {
+    expect(comboLabel({ kind: 'added', open: false })).toBe('kind：added · open：否');
+  });
 });
 
 describe('askSentence', () => {

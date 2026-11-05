@@ -2,7 +2,7 @@ import { Component, type ComponentType, type ReactNode } from 'react';
 
 import type { FilePlan } from '../plan/planFile';
 
-type CaseRender = (combo: Record<string, boolean>) => ReactNode;
+type CaseRender = (combo: Record<string, boolean | string>) => ReactNode;
 export type CaseModules = Record<
   string,
   { cases: Record<string, CaseRender>; error?: string; unpaired?: Record<string, () => ReactNode> }
@@ -33,7 +33,7 @@ const CaseView = ({
   error,
   render,
 }: {
-  combo: Record<string, boolean>;
+  combo: Record<string, boolean | string>;
   error?: string;
   render?: CaseRender;
 }) =>
@@ -46,6 +46,8 @@ const CaseView = ({
   );
 
 export const SECTION_WIDTH = 360;
+
+export const INNER_BASELINE = ':where([data-synthetic-inner]){width:fit-content}';
 
 const Section = ({ caseKey, children }: { caseKey: string; children: ReactNode }) => (
   <section
@@ -82,6 +84,7 @@ export const CaseList = ({
   selection?: CaseSelection;
 }) => (
   <main data-synthetic-cases="">
+    <style>{INNER_BASELINE}</style>
     {selection && 'caseKey' in selection && selection.caseKey.includes('|unpaired:') ? (
       <UnpairedView modules={modules} selection={selection.caseKey} />
     ) : (

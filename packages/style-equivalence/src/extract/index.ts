@@ -1,5 +1,6 @@
 import ts from 'typescript';
 
+import { collectChildren, literalOf } from './children';
 import { parseRules } from './css';
 import {
   declaredLocally,
@@ -10,6 +11,7 @@ import {
   valueIdentifiers,
 } from './identifiers';
 import { classifyRules, classNamesIn, foreignClassNames } from './selectors';
+import { collectTables } from './tables';
 import { collectTopLevel } from './topLevel';
 import type {
   ExtractOptions,
@@ -46,15 +48,6 @@ const ownerOf = (statement: ts.Statement, ast: ts.SourceFile) => {
   if (ts.isFunctionDeclaration(statement)) return statement.name?.text ?? 'default';
   if (ts.isExportAssignment(statement)) return 'default';
   return `statement@${ast.getLineAndCharacterOfPosition(statement.getStart(ast)).line + 1}`;
-};
-
-const literalOf = (expression: ts.Expression): LiteralValue | undefined => {
-  if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression))
-    return expression.text;
-  if (ts.isNumericLiteral(expression)) return Number(expression.text);
-  if (expression.kind === ts.SyntaxKind.TrueKeyword) return true;
-  if (expression.kind === ts.SyntaxKind.FalseKeyword) return false;
-  return undefined;
 };
 
 export const extractFile = (
@@ -112,11 +105,12 @@ export const extractFile = (
         ? Object.fromEntries([...classes].map((name) => [name, `${binding.symbol}.${name}`]))
         : {};
     if (binding.kind === 'global') classes.forEach((name) => globalClasses.add(name));
-    for (const rule of parsed.rules) rules.push({ ...rule, owned });
+    for (const rule of parsed.rules) rules.push({ ...rule, owned, stylesheet: source });
   }
   const usedGlobal = new Set<string>();
 
   const elements: StyleElement[] = [];
+  const styled = new Map<ts.Node, StyleElement>();
   const classTokens = new Map<string, Set<string>>();
   const bound = new Set<ts.Node>();
 
@@ -134,6 +128,7 @@ export const extractFile = (
       const literalProps: Record<string, LiteralValue> = {};
       const slots = new Set<string>();
       const expressions: ts.Expression[] = [];
+      let runtimeStyle: string | undefined;
       for (const attribute of opening.attributes.properties) {
         if (ts.isJsxSpreadAttribute(attribute)) {
           if (!referencesStyle(attribute.expression)) continue;
@@ -183,6 +178,8 @@ export const extractFile = (
         }
         const literal = literalOf(expression);
         if (literal !== undefined) literalProps[name] = literal;
+        else if (name === 'style' && ts.isIdentifier(expression) && !GLOBALS.has(expression.text))
+          runtimeStyle = expression.text;
       }
       let current = parent;
       if (bindings.length) {
@@ -213,20 +210,25 @@ export const extractFile = (
           if (binding.prop === 'className' && binding.expr.startsWith('"'))
             (JSON.parse(binding.expr) as string).split(/\s+/).forEach((token) => tokens.add(token));
         classTokens.set(id, tokens);
-        elements.push({
+        const element: StyleElement = {
           bindings,
           flags: [],
           id,
           literalProps,
           owner,
           parent,
+          ...(runtimeStyle && !opening.attributes.properties.some(ts.isJsxSpreadAttribute)
+            ? { runtimeStyle }
+            : {}),
           slots: [...slots].sort(),
           tag,
           variables: [...names].sort().map((name) => ({
             kind: mergeKinds(kinds.get(name) ?? ['unknown']),
             name,
           })),
-        });
+        };
+        elements.push(element);
+        styled.set(node, element);
         current = id;
       }
       if (ts.isJsxElement(node)) {
@@ -236,6 +238,10 @@ export const extractFile = (
     };
     visit(statement, undefined);
   }
+
+  const plain = collectChildren(styled, ast, (tag) => {
+    if (layout.has(tag)) top.require(tag);
+  });
 
   const outsideReferences: string[] = [];
   for (const statement of ast.statements) {
@@ -280,9 +286,11 @@ export const extractFile = (
     file,
     gaps,
     outsideReferences,
+    ...(plain.length ? { plain } : {}),
     prelude: top.prelude(),
     rules,
     slotProperties,
     styleSymbols: [...top.styleSymbols].sort(),
+    tables: collectTables(ast),
   };
 };
