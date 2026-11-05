@@ -37,3 +37,13 @@ export const presentOutgoingMessage = (
   threadId: message.threadId,
   userId: author.userId ?? null,
 });
+
+/**
+ * Changes whenever the feed gains a message at its end, stored or sent from this tab. The two
+ * tails are tracked apart: a failed message stays last until retried or deleted, and replies
+ * arriving above it must still be followed.
+ */
+export const timelineTail = (
+  messages: Pick<ChannelPublicMessage, 'id'>[] | undefined,
+  outgoing: { message: Pick<ChannelPublicMessage, 'id'> }[],
+) => `${messages?.at(-1)?.id ?? ''}|${outgoing.at(-1)?.message.id ?? ''}`;

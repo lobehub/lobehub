@@ -24,7 +24,7 @@ import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
 import { isCurrentUserMember } from './memberName';
 import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
-import { presentOutgoingMessage } from './outgoing';
+import { presentOutgoingMessage, timelineTail } from './outgoing';
 import { OutgoingStatus } from './OutgoingStatus';
 import { ReplyActivity } from './ReplyActivity';
 import { styles } from './styles';
@@ -81,7 +81,7 @@ const Timeline = ({
   const outgoingById = new Map(outgoing.map((item) => [item.message.id, item.entry]));
   const feedRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
-  const lastMessageId = (outgoing.at(-1)?.message ?? detail?.messages.at(-1))?.id;
+  const feedTail = timelineTail(detail?.messages, outgoing);
   const sequence = detail?.channel.sequence;
   useChannelEvents(params);
   const jumpToMessage = (target: ChannelReplyTarget) => {
@@ -102,7 +102,7 @@ const Timeline = ({
   useEffect(() => {
     const feed = feedRef.current;
     if (feed && followLatest.current && before === undefined) feed.scrollTop = feed.scrollHeight;
-  }, [lastMessageId, before]);
+  }, [feedTail, before]);
 
   useEffect(() => {
     if (threadId || sequence === undefined || before !== undefined) return;
