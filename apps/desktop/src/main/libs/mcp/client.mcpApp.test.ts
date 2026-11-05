@@ -113,3 +113,13 @@ describe('desktop MCPClient when the server cannot list its tools', () => {
     }
   });
 });
+
+describe('desktop MCPClient.isToolCallableByApp for names the listing did not name', () => {
+  it('refuses them: only tools the server offered to views run', async () => {
+    listTools.mockResolvedValueOnce({ tools: [{ name: 'search' }] });
+    const client = new MCPClient(params, { mcpApps: true });
+
+    await expect(client.isToolCallableByApp('search')).resolves.toBe(true);
+    await expect(client.isToolCallableByApp('not_listed')).resolves.toBe(false);
+  });
+});

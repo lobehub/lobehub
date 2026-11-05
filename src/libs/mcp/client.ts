@@ -185,8 +185,11 @@ export class MCPClient {
   private params: MCPClientParams;
   /** tool name → `ui://` resource URI, filled from the last successful `listTools` */
   private uiResourceUris?: Map<string, string>;
-  /** Tools a view may not call (`_meta.ui.visibility` without "app"), from the same listing */
-  private appHiddenTools?: Set<string>;
+  /**
+   * The tools a view may call (`_meta.ui.visibility` with "app", or unset), from
+   * the same listing. An allow-list: a name the listing didn't name is refused.
+   */
+  private appVisibleTools?: Set<string>;
   /** Tools only views may call (`_meta.ui.visibility` without "model"), from the same listing */
   private modelHiddenTools?: Set<string>;
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
@@ -404,8 +407,8 @@ export class MCPClient {
           return uri ? [[tool.name, uri] as const] : [];
         }),
       );
-      this.appHiddenTools = new Set(
-        tools.filter((tool) => !isToolVisibleToApp(tool)).map((tool) => tool.name),
+      this.appVisibleTools = new Set(
+        tools.filter((tool) => isToolVisibleToApp(tool)).map((tool) => tool.name),
       );
       this.modelHiddenTools = new Set(
         tools
@@ -499,15 +502,14 @@ export class MCPClient {
   }
 
   /**
-   * Whether a view may call `toolName` (its `_meta.ui.visibility` includes
-   * "app", or is unset). Unknown while the tools can't be listed, which counts
-   * as no: a view's call is refused rather than run unchecked.
+   * Whether a view may call `toolName`: the listing named it, with a
+   * `_meta.ui.visibility` that includes "app" or is unset. Unknown while the
+   * tools can't be listed, which counts as no: a view's call is refused rather
+   * than run unchecked.
    */
   async isToolCallableByApp(toolName: string): Promise<boolean> {
     await this.ensureToolUiListed();
-    if (!this.appHiddenTools) return false;
-
-    return !this.appHiddenTools.has(toolName);
+    return !!this.appVisibleTools?.has(toolName);
   }
 
   /**
@@ -523,7 +525,7 @@ export class MCPClient {
 
   private forgetToolListing() {
     this.uiResourceUris = undefined;
-    this.appHiddenTools = undefined;
+    this.appVisibleTools = undefined;
     this.modelHiddenTools = undefined;
     this.uiResourceListFailedAt = undefined;
   }

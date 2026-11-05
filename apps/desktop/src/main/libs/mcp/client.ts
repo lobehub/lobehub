@@ -365,8 +365,11 @@ export class MCPClient {
   private stdioParams?: { args?: string[]; command: string; env?: Record<string, string> };
   /** tool name → `ui://` resource URI, filled from the last `listTools` */
   private uiResourceUris?: Map<string, string>;
-  /** Tools a view may not call (`_meta.ui.visibility` without "app"), from the same listing */
-  private appHiddenTools?: Set<string>;
+  /**
+   * The tools a view may call (`_meta.ui.visibility` with "app", or unset), from
+   * the same listing. An allow-list: a name the listing didn't name is refused.
+   */
+  private appVisibleTools?: Set<string>;
   /** Tools only views may call (`_meta.ui.visibility` without "model"), from the same listing */
   private modelHiddenTools?: Set<string>;
   /** When the last listing for these lookups failed, while none has succeeded */
@@ -404,7 +407,7 @@ export class MCPClient {
     // voids what its last listing taught; the next lookup lists them again
     this.mcp.setNotificationHandler('notifications/tools/list_changed', () => {
       this.uiResourceUris = undefined;
-      this.appHiddenTools = undefined;
+      this.appVisibleTools = undefined;
       this.modelHiddenTools = undefined;
       this.toolListingFailedAt = undefined;
     });
@@ -773,9 +776,9 @@ export class MCPClient {
           : [];
       }),
     );
-    this.appHiddenTools = new Set(
+    this.appVisibleTools = new Set(
       (tools || [])
-        .filter((tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'app'))
+        .filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'app'))
         .map((tool) => tool.name),
     );
     this.modelHiddenTools = new Set(
@@ -793,7 +796,7 @@ export class MCPClient {
    * (or two) before every tool call.
    */
   private async ensureToolsListed() {
-    if (this.appHiddenTools) return;
+    if (this.appVisibleTools) return;
     const failedAt = this.toolListingFailedAt;
     if (failedAt !== undefined && Date.now() - failedAt < TOOL_LISTING_RETRY_MS) {
       throw new Error('The MCP server could not list its tools recently');
@@ -818,13 +821,14 @@ export class MCPClient {
   }
 
   /**
-   * Whether an MCP App view may call `toolName`: its `_meta.ui.visibility`
-   * includes "app", or is unset. Lists tools once per client to learn it.
+   * Whether an MCP App view may call `toolName`: the listing named it, with a
+   * `_meta.ui.visibility` that includes "app" or is unset. Lists tools once per
+   * client to learn it.
    */
   async isToolCallableByApp(toolName: string): Promise<boolean> {
     await this.ensureToolsListed();
 
-    return !this.appHiddenTools?.has(toolName);
+    return !!this.appVisibleTools?.has(toolName);
   }
 
   /**

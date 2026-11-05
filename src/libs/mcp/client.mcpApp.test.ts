@@ -193,3 +193,13 @@ describe('web MCPClient after the server changes its tools', () => {
     expect(listTools).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('web MCPClient.isToolCallableByApp for names the listing did not name', () => {
+  it('refuses them: only tools the server offered to views run', async () => {
+    listTools.mockResolvedValueOnce({ tools: [{ name: 'search' }] });
+    const client = new MCPClient(params, { mcpApps: true });
+
+    await expect(client.isToolCallableByApp('search')).resolves.toBe(true);
+    await expect(client.isToolCallableByApp('not_listed')).resolves.toBe(false);
+  });
+});
