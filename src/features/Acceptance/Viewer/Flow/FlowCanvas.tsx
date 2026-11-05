@@ -1,7 +1,5 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the edge label renderer and controls buttons are DOM @xyflow/react renders inside ReactFlow with no className or slot for them
-import './FlowCanvas.css';
-
-import { Flexbox } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- @xyflow/react edge labels and control buttons take no className
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -40,6 +38,20 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
 });
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  canvas: css`
+    .react-flow__edgelabel-renderer {
+      z-index: 5;
+    }
+
+    .react-flow__controls-button {
+      border-color: ${cssVar.colorBorderSecondary};
+      background: ${cssVar.colorBgContainer};
+      fill: ${cssVar.colorTextSecondary};
+    }
+  `,
+}));
 
 export function FlowCanvas({
   fullscreen = false,
@@ -123,7 +135,7 @@ export function FlowCanvas({
         ref={ref}
         {...sx(
           [styles.canvas],
-          'lobe-flow-canvas-885d63c0-canvas',
+          fallback.canvas,
           fullscreen ? { flex: 1, height: '100%', minHeight: 0 } : undefined,
         )}
       >

@@ -1,6 +1,5 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: createModal.classNames.panel (the popup's inner panel div, which createModal renders without a className)
-import './rejectModalShell.css';
-
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: createModal panel
+import { createStaticStyles, cx } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 
 import { frostedModalStyles } from './modals';
@@ -8,7 +7,6 @@ import { frostedModalStyles } from './modals';
 export const CHECK_REJECT_MODAL_SIZE = { height: '98dvh', width: '98vw' } as const;
 export const TEXT_REJECT_MODAL_WIDTH = 'min(560px, calc(100vw - 32px))';
 
-// The module CSS repeats CHECK_REJECT_MODAL_SIZE (98vw x 98dvh) in `.modalPopupMedia`.
 const phone = '@media (width <= 767px)';
 
 /**
@@ -41,6 +39,43 @@ const styles = stylex.create({
   },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  mobilePopup: css`
+    @media (width <= 767px) {
+      > div {
+        width: 100vw;
+        max-width: 100vw;
+        height: 100dvh;
+        max-height: 100dvh;
+        padding: 0;
+        border-radius: 0;
+      }
+    }
+  `,
+  modalPopup: css`
+    > div {
+      display: flex;
+      flex-direction: column;
+    }
+  `,
+  modalPopupMedia: css`
+    > div {
+      width: ${CHECK_REJECT_MODAL_SIZE.width};
+      max-width: ${CHECK_REJECT_MODAL_SIZE.width};
+      height: ${CHECK_REJECT_MODAL_SIZE.height};
+
+      @media (width <= 767px) {
+        width: 100vw;
+        max-width: 100vw;
+        height: 100dvh;
+        max-height: 100dvh;
+        padding: 0;
+        border-radius: 0;
+      }
+    }
+  `,
+}));
+
 /** Evidence earns a near-fullscreen stage; a text-only reject stays a dialog. */
 export const checkRejectModalSize = (evidenceCount: number) =>
   evidenceCount > 0
@@ -54,14 +89,12 @@ export const checkRejectModalShell = (evidenceCount: number) => {
       close: stylex.props(styles.mobileClose).className,
       content: stylex.props(styles.mobileContent).className,
       header: stylex.props(styles.mobileHeader).className,
-      popup: [
+      popup: cx(
         stylex.props(styles.mobilePopup).className,
-        'lobe-reject-modal-shell-5f6eda7d-modal-popup',
-        'lobe-reject-modal-shell-5f6eda7d-mobile-popup',
-        evidenceCount > 0 && 'lobe-reject-modal-shell-5f6eda7d-modal-popup-media',
-      ]
-        .filter(Boolean)
-        .join(' '),
+        fallback.modalPopup,
+        fallback.mobilePopup,
+        evidenceCount > 0 && fallback.modalPopupMedia,
+      ),
     },
     styles: {
       ...frostedModalStyles,

@@ -1,8 +1,5 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Video.Controls frameNumber (the frame readout span Controls renders with no className)
-import './styles.css';
-
 import { isFullFrameRect } from '@lobechat/const/verify';
 import type {
   AcceptanceCommentTime,
@@ -10,6 +7,9 @@ import type {
   VerifyEvidenceChapter,
 } from '@lobechat/types';
 import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Video.Controls frame number
+  createStaticStyles,
+  cx,
   Flexbox,
   useVideo,
   useVideoPlayer,
@@ -36,6 +36,16 @@ import { frameOf } from './videoTime';
 
 const MAX_HEIGHT = 360;
 const MIN_PLAYER_WIDTH = 480;
+
+const fallback = createStaticStyles(({ css }) => ({
+  compactControls: css`
+    @media (width <= 767px) {
+      .lobe-video__frame-number {
+        display: none;
+      }
+    }
+  `,
+}));
 
 const playerStyles = stylex.create({
   root: {
@@ -234,13 +244,16 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
           })}
         >
           <Video.Root
-            className={`${stylex.props(playerStyles.root, videoPlayerMarker).className} lobe-video-3f6c2110-compact-controls`}
             defaultPlaybackRate={defaultRate}
             markers={markers}
             maxHeight={frameMaxHeight ? undefined : MAX_HEIGHT}
             player={player}
             sections={sections}
             src={src}
+            className={cx(
+              stylex.props(playerStyles.root, videoPlayerMarker).className,
+              fallback.compactControls,
+            )}
             style={
               {
                 '--acceptance-video-aspect': aspect,

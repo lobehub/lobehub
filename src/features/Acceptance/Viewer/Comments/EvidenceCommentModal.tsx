@@ -1,10 +1,17 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: createModal.classNames.panel (the popup's inner panel div, which createModal renders without a className)
-import './EvidenceCommentModal.css';
-
 import type { AcceptanceCommentTime, AcceptanceReviewAnnotation } from '@lobechat/types';
-import { createModal, Flexbox, Icon, Text, toast, useModalContext } from '@lobehub/ui';
+import {
+  createModal,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: createModal panel
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
@@ -37,7 +44,6 @@ import { VideoCommentEditor } from './VideoCommentEditor';
 
 const MODAL_WIDTH = 'min(1180px, calc(100vw - 48px))';
 
-// The popup's inner panel is sized in EvidenceCommentModal.css, which repeats MODAL_WIDTH.
 const phone = '@media (width <= 767px)';
 
 const styles = stylex.create({
@@ -122,6 +128,30 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorText,
   },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  popup: css`
+    > div {
+      display: flex;
+      flex-direction: column;
+
+      width: ${MODAL_WIDTH};
+      max-width: ${MODAL_WIDTH};
+      height: min(860px, calc(100dvh - 48px));
+    }
+
+    @media (width <= 767px) {
+      > div {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh;
+        max-height: 100dvh;
+        padding: 0;
+        border-radius: 0;
+      }
+    }
+  `,
+}));
 
 export interface EvidenceCommentValue {
   clientId: string;
@@ -339,7 +369,7 @@ export const openEvidenceCommentModal = (options: EvidenceCommentModalProps) =>
     classNames: {
       close: stylex.props(styles.close).className,
       header: stylex.props(styles.header).className,
-      popup: `${stylex.props(styles.popup).className} lobe-evidence-comment-modal-fa2b0329-popup`,
+      popup: cx(stylex.props(styles.popup).className, fallback.popup),
     },
     footer: null,
     maskClosable: true,
