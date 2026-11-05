@@ -488,6 +488,31 @@ describe('FileService', () => {
       );
     });
 
+    /**
+     * 2026-11-02: a page-editor paste sent 78 `rehostImage` calls in one batch. Each held a pool
+     * connection while waiting on the owner's row lock, and the lock holder's `checkHash` waited
+     * for an 11th connection on the default 10-connection pool, so the instance hung until it
+     * timed out. Every globalFiles query of the record step must run on the transaction.
+     */
+    it('runs the globalFiles queries on the record transaction, not the shared pool', async () => {
+      const tx = { name: 'record-tx' };
+      const txDb = { transaction: (run: (trx: unknown) => unknown) => run(tx) } as any;
+      const txService = new FileService(txDb, mockUserId);
+      vi.mocked(txService['impl'].uploadBuffer).mockResolvedValue({ key: 'images/new.png' });
+      vi.mocked(txService['impl'].getFileMetadata).mockRejectedValue(new Error('NoSuchKey'));
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'images/old.png' });
+
+      await txService.uploadFromBuffer(Buffer.from('image'), 'image/png', 'images/new.png');
+
+      expect(mockFileModel.checkHash).toHaveBeenCalledWith(expect.any(String), tx);
+      expect(mockFileModel.updateGlobalFile).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ url: 'images/new.png' }),
+        tx,
+      );
+      expect(mockFileModel.create).toHaveBeenCalledWith(expect.anything(), false, tx);
+    });
+
     it('should compute hash for deduplication', async () => {
       const content = Buffer.from('test content');
 
@@ -600,10 +625,14 @@ describe('FileService', () => {
         url: 'new/path.txt',
       });
 
-      expect(mockFileModel.updateGlobalFile).toHaveBeenCalledWith('existing-hash', {
-        metadata: { dirname: 'new', filename: 'test.txt', path: 'new/path.txt' },
-        url: 'new/path.txt',
-      });
+      expect(mockFileModel.updateGlobalFile).toHaveBeenCalledWith(
+        'existing-hash',
+        {
+          metadata: { dirname: 'new', filename: 'test.txt', path: 'new/path.txt' },
+          url: 'new/path.txt',
+        },
+        undefined,
+      );
       expect(mockFileModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           fileHash: 'existing-hash',
