@@ -153,6 +153,7 @@ describe('config command', () => {
         ),
       );
     });
+
     // Self-hosted servers older than this CLI have no `auth.getScope`; whoami
     // must still print the identity rather than failing outright.
     it('should fall back to the local scope when the server lacks auth.getScope', async () => {
