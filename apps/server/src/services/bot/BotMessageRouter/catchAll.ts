@@ -81,6 +81,21 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
       // recorder refuses them) and never the bot's own.
       remember('catchAll', [...(context?.skipped ?? []), message], thread);
       if (message.author.isBot === true) return;
+      // Blank events (recalls, unsupported types, whitespace) carry nothing for the agent. Drop them
+      // before the access gates, commands and wake judgement, all of which can reply or call a model.
+      const burst = mergeSkippedMessages(message, context);
+      if (isEmptyInboundMessage(burst)) {
+        log(
+          'onNewMessage (catch-all): skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
+          agentId,
+          platform,
+          thread.id,
+          message.id,
+          (context?.skipped?.length ?? 0) + 1,
+        );
+        observe('catchAll', burst, thread, 'skip', 'empty-message');
+        return;
+      }
 
       // Skip text-based slash commands — already handled by registerCommands
       // (which applies the same gates).
@@ -180,18 +195,6 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
       }
 
       let merged = mergeSkippedMessages(message, context);
-      if (isEmptyInboundMessage(merged)) {
-        log(
-          'onNewMessage (catch-all): skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
-          agentId,
-          platform,
-          thread.id,
-          message.id,
-          (context?.skipped?.length ?? 0) + 1,
-        );
-        observe('catchAll', merged, thread, 'skip', 'empty-message');
-        return;
-      }
       // same instruction-injection rule as `onSubscribedMessage`
       // — prepend the matched entries' operator-authored instructions when
       // the keyword (not a mention / DM / command) is what wakes the bot.

@@ -53,10 +53,8 @@ const dmThread = () => ({
   post: vi.fn().mockResolvedValue(undefined),
 });
 
-async function loadHandlers() {
-  mockFindEnabledByPlatform.mockResolvedValue([
-    makeProvider({ applicationId: 'app-1', settings: { dmPolicy: 'open' } }),
-  ]);
+async function loadHandlers(settings: Record<string, unknown> = { dmPolicy: 'open' }) {
+  mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'app-1', settings })]);
   const router = new BotMessageRouter();
   await router.getWebhookHandler(
     'telegram',
@@ -160,6 +158,26 @@ describe('BotMessageRouter empty inbound messages', () => {
 
       expect(dispatch).toHaveBeenCalledTimes(1);
       expect(dispatch.mock.calls[0][1].text).toBe('hello');
+    });
+
+    it('drops a blank message from a rejected sender without posting the access notice', async () => {
+      const handlers = await loadHandlers({ allowFrom: 'bob-id', dmPolicy: 'open' });
+      const thread = dmThread();
+
+      await handlers[key](thread, { author, id: 'm-1', isMention: true, text: ' ' });
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('still notifies a rejected sender who sent text', async () => {
+      const handlers = await loadHandlers({ allowFrom: 'bob-id', dmPolicy: 'open' });
+      const thread = dmThread();
+
+      await handlers[key](thread, { author, id: 'm-1', isMention: true, text: 'hello' });
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalled();
     });
 
     it('dispatches normal text', async () => {

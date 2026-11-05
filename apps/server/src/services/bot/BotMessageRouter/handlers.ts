@@ -468,6 +468,21 @@ export function registerHandlers(
     // a "newcomer" — otherwise count would be 0 at that moment and the
     // single-user-relaxation logic wouldn't kick in.
     await trackThreadParticipants(thread, [...(context?.skipped ?? []), message]);
+    // Blank events (recalls, unsupported types, whitespace) carry nothing for the agent. Drop them
+    // before the access gates, commands and wake judgement, all of which can reply or call a model.
+    const burst = mergeSkippedMessages(message, context);
+    if (isEmptyInboundMessage(burst)) {
+      log(
+        'onNewMention: skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
+        agentId,
+        platform,
+        thread.id,
+        message.id,
+        (context?.skipped?.length ?? 0) + 1,
+      );
+      observe('onNewMention', burst, thread, 'skip', 'empty-message');
+      return;
+    }
 
     // Side-effect-free `bypassGate` commands (`/whoami`) answer before the
     // gate so a not-yet-configured operator can discover their own ID.
@@ -513,18 +528,6 @@ export function registerHandlers(
     }
 
     const merged = mergeSkippedMessages(message, context);
-    if (isEmptyInboundMessage(merged)) {
-      log(
-        'onNewMention: skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
-        agentId,
-        platform,
-        thread.id,
-        message.id,
-        (context?.skipped?.length ?? 0) + 1,
-      );
-      observe('onNewMention', merged, thread, 'skip', 'empty-message');
-      return;
-    }
     const { openingReply, release } = await startReply({
       entryPoint: 'onNewMention',
       message: merged,
@@ -612,6 +615,21 @@ export function registerHandlers(
     ]);
     remember('onSubscribedMessage', [...(context?.skipped ?? []), message], thread);
     if (message.author.isBot === true) return;
+    // Blank events (recalls, unsupported types, whitespace) carry nothing for the agent. Drop them
+    // before the access gates, commands and wake judgement, all of which can reply or call a model.
+    const burst = mergeSkippedMessages(message, context);
+    if (isEmptyInboundMessage(burst)) {
+      log(
+        'onSubscribedMessage: skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
+        agentId,
+        platform,
+        thread.id,
+        message.id,
+        (context?.skipped?.length ?? 0) + 1,
+      );
+      observe('onSubscribedMessage', burst, thread, 'skip', 'empty-message', true);
+      return;
+    }
     const replyLocale = detectReplyLocale(message);
 
     // Group / channel / thread policy: only respond when the bot is @-mentioned.
@@ -755,18 +773,6 @@ export function registerHandlers(
     }
 
     let merged = mergeSkippedMessages(message, context);
-    if (isEmptyInboundMessage(merged)) {
-      log(
-        'onSubscribedMessage: skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
-        agentId,
-        platform,
-        thread.id,
-        message.id,
-        (context?.skipped?.length ?? 0) + 1,
-      );
-      observe('onSubscribedMessage', merged, thread, 'skip', 'empty-message', true);
-      return;
-    }
     // when a keyword (and not a mention / DM / command) is what
     // wakes the bot, prepend the matched entries' operator-authored
     // instructions to the user message so the agent gets a directive
