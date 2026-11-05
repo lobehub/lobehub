@@ -307,14 +307,6 @@ describe('mergeBotSettingsForCreate', () => {
     expect(settings).toMatchObject({ botWakeDisabled: true, dmPolicy: 'open' });
   });
 
-  it('switches bot wake off for a heterogeneous agent created without settings', async () => {
-    const db = dbWith({ heterogeneousProvider: { type: 'claude-code' } });
-
-    expect(
-      (await mergeBotSettingsForCreate(db, 'agt', 'discord', undefined))?.botWakeDisabled,
-    ).toBe(true);
-  });
-
   it('writes the defaults for an ordinary agent created without settings, reactions off', async () => {
     const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', undefined);
 

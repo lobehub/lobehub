@@ -633,15 +633,12 @@ describe('BotMessageRouter', () => {
     });
   });
 
-  describe('regression: nested settings.dm.policy is ignored', () => {
+  describe('DM policy gating', () => {
     /**
-     * Original bug: the form persisted `settings.dmPolicy` (flat) but the
-     * router read `settings.dm.policy` (nested), so every saved policy
-     * silently fell back to `'open'` and DMs were never blocked. Lock that
-     * direction in: the *flat* key is authoritative; the legacy nested
-     * shape is dead.
+     * The real flat/nested-key parser is covered in platforms/__tests__/const.test.ts.
+     * This suite uses a parser double and verifies the router's policy gate.
      */
-    it('a saved dmPolicy=disabled at the flat key blocks DMs end-to-end', async () => {
+    it('blocks DMs when the resolved policy is disabled', async () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({ applicationId: 'app-1', settings: { dmPolicy: 'disabled' } }),
       ]);
@@ -670,7 +667,7 @@ describe('BotMessageRouter', () => {
       expect(thread.post.mock.calls[0][0]).toContain("isn't accepting direct messages");
     });
 
-    it('a legacy nested settings.dm.policy=disabled is IGNORED and DMs pass through', async () => {
+    it('allows DMs when the parser resolves the legacy input to open', async () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-1',

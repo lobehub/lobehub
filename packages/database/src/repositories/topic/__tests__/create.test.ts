@@ -268,7 +268,7 @@ describe('TopicRepository - create', () => {
       expect(createdTopic.sessionId).toBeNull();
     });
 
-    it('attaches given messages to the new topic in one transaction', async () => {
+    it('attaches each given message to the newly created topic', async () => {
       await serverDB.insert(messages).values([
         { content: 'm1', id: 'msg-1', role: 'user', userId },
         { content: 'm2', id: 'msg-2', role: 'assistant', userId },

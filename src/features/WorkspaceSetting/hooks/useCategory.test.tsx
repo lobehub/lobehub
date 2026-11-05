@@ -112,9 +112,7 @@ describe('workspace settings useCategory', () => {
     ]);
   });
 
-  // The drives need no opt-in: every member sees the tab, which shows the
-  // public drive, their own, and the way to a plan when the workspace has none.
-  it('groups devices, subscription accounts, environments and drives under Resources', () => {
+  it('groups devices, subscription accounts and environments under Resources', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const keys = result.current.map((group) => group.key);
     const resourceGroup = result.current.find(

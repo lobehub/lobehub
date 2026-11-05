@@ -387,7 +387,7 @@ describe('ChatInput store actions', () => {
       await vi.waitFor(() => expect(onSend).toHaveBeenCalledOnce());
       const { getEditorData, getMarkdownContent } = onSend.mock.calls[0][0];
       expect(getMarkdownContent()).toBe('<mention name="Writer" id="agt_writer" /> hi');
-      expect(getEditorData().root.children[0].children[0].metadata).toEqual({
+      expect(getEditorData().root.children[0].children[0].metadata).toStrictEqual({
         id: 'agt_writer',
         label: 'Writer',
         type: 'agent',

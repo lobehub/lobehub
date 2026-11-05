@@ -335,7 +335,7 @@ describe('ChatInput InputEditor', () => {
     expect(props.markdownOption).toBeUndefined();
   });
 
-  it('converts pasted markdown when paste auto-convert is on', async () => {
+  it('enables the editor markdown-paste option when auto-convert is on', async () => {
     render(<InputEditor />);
 
     const props = await getEditorProps();
@@ -343,7 +343,7 @@ describe('ChatInput InputEditor', () => {
     expect(props.pasteAsPlainText).toBe(true);
   });
 
-  it('pastes verbatim when paste auto-convert is off', async () => {
+  it('disables the editor markdown-paste option when auto-convert is off', async () => {
     userSettings.enablePasteAutoConvert = false;
 
     render(<InputEditor />);
