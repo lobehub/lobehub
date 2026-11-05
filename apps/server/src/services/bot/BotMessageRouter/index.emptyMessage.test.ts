@@ -92,6 +92,13 @@ describe('isEmptyInboundMessage', () => {
     expect(isEmptyInboundMessage({ author, raw: { reply_to_message: {} }, text: '' } as any)).toBe(
       false,
     );
+    // Telegram can deliver a selected quote without `reply_to_message`.
+    expect(
+      isEmptyInboundMessage({ author, raw: { quote: { text: 'fragment' } }, text: '' } as any),
+    ).toBe(false);
+    expect(isEmptyInboundMessage({ author, raw: { quote: { text: '' } }, text: '' } as any)).toBe(
+      true,
+    );
   });
 });
 

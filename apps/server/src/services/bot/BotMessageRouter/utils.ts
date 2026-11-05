@@ -1,5 +1,6 @@
 import type { Message } from 'chat';
 
+import { formatReferencedMessage } from '../formatPrompt';
 import { getSameSenderMessages, getSourceMessages, mergeBotMessages } from '../mergeMessages';
 import {
   findMatchingWatchKeywordEntries,
@@ -51,6 +52,7 @@ const isEmptySourceMessage = (message: Message): boolean => {
   if (message.text?.trim()) return false;
   if (message.attachments?.length) return false;
   const raw = (message as { raw?: Record<string, unknown> }).raw;
+  if (formatReferencedMessage(raw)) return false;
   return !(raw?.parent_id || raw?.reply_to_message || raw?.referenced_message);
 };
 
@@ -59,9 +61,9 @@ const isEmptySourceMessage = (message: Message): boolean => {
  * and no quoted message in any of its source messages. Platforms deliver such events (recalls,
  * unsupported message types, whitespace) and dispatching them runs the agent on an empty prompt.
  *
- * A quoted reply counts as content even with blank text: the platform client resolves the quoted
- * body from `raw` later (Feishu `parent_id`, Telegram `reply_to_message`, Discord
- * `referenced_message`).
+ * A quoted reply counts as content even with blank text: anything the prompt renders as a
+ * referenced message (e.g. a Telegram selected `quote`), plus quotes the platform client resolves
+ * from `raw` later (Feishu `parent_id`, Telegram `reply_to_message`, Discord `referenced_message`).
  */
 export const isEmptyInboundMessage = (message: Message): boolean =>
   getSourceMessages(message).every(isEmptySourceMessage);
