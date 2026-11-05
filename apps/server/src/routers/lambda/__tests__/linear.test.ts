@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
+import { LINEAR_NO_PROJECT_ID } from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -288,6 +289,36 @@ describe('linearRouter', () => {
         teamName: 'Engineering',
       });
       expect(saved.lastRunAt).toBeInstanceOf(Date);
+    });
+
+    it('saves and runs a rule for the team’s issues without a Linear project', async () => {
+      const connection = await connect({ userId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.runSync.mockResolvedValue({ ok: true });
+      mocks.syncByFilter.mockResolvedValue(syncResult);
+
+      const rule = await caller({ userId }).createSyncRule({
+        connectionId: connection.id,
+        linearProjectId: LINEAR_NO_PROJECT_ID,
+        linearProjectName: 'ignored',
+        projectId,
+        stateTypes: ['backlog'],
+        teamId: 'team-1',
+        teamName: 'Engineering',
+      });
+      expect(rule).toMatchObject({
+        linearProjectId: LINEAR_NO_PROJECT_ID,
+        linearProjectName: null,
+      });
+
+      const { id } = await caller({ userId }).startRuleSync({ ruleId: rule.id });
+      await new LinearSyncJobService(serverDB, userId).run(id);
+
+      expect(mocks.syncByFilter).toHaveBeenCalledWith(
+        'token',
+        { linearProjectId: LINEAR_NO_PROJECT_ID, stateTypes: ['backlog'], teamId: 'team-1' },
+        { targetProjectId: projectId },
+      );
     });
 
     describe('when a rule matches more issues than one round creates', () => {

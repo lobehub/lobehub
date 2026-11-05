@@ -11,6 +11,9 @@ export const serverConfigSelectors = {
   /** Runtime flag `dashboard`: dashboards, widget previews and the builtin-dashboard tool. */
   enableChannels: (s: ServerConfigStore) => s.featureFlags.enableChannels === true,
   enableDashboard: (s: ServerConfigStore) => s.featureFlags.enableDashboard === true,
+  /** Runtime flag `managed_cloud_device`: the entry that creates a managed cloud device. */
+  enableManagedCloudDevice: (s: ServerConfigStore) =>
+    s.featureFlags.enableManagedCloudDevice === true,
   enableGatewayMode: (s: ServerConfigStore) => s.serverConfig.enableGatewayMode || false,
   enableTopicPreview: (s: ServerConfigStore) => s.featureFlags.enableTopicPreview === true,
   enableLobehubSkill: (s: ServerConfigStore) => s.serverConfig.enableLobehubSkill || false,

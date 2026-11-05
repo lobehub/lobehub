@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { LINEAR_NO_PROJECT_ID } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { countLinearIssues, getLinearProjectTeamIds, listLinearIssues } from '../issues';
@@ -48,6 +49,21 @@ describe('listLinearIssues filter', () => {
     expect(requestBody(fetchMock.mock.calls[0]).variables.filter).toEqual({
       project: { id: { eq: 'project-1' } },
       state: { type: { in: ['unstarted', 'started'] } },
+    });
+  });
+  it('keeps the team and drops issues with a project when No project is chosen', async () => {
+    fetchMock.mockResolvedValue(reply(emptyIssues));
+
+    await countLinearIssues('token', {
+      linearProjectId: LINEAR_NO_PROJECT_ID,
+      stateTypes: ['backlog'],
+      teamId: 'team-pkg',
+    });
+
+    expect(requestBody(fetchMock.mock.calls[0]).variables.filter).toEqual({
+      project: { null: true },
+      state: { type: { in: ['backlog'] } },
+      team: { id: { eq: 'team-pkg' } },
     });
   });
 });

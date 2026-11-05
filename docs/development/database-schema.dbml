@@ -5629,7 +5629,8 @@ table workspace_invitations {
   role text [not null, default: 'member']
   token text [not null, unique]
   status text [not null, default: 'pending']
-  expires_at "timestamp with time zone" [not null]
+  reusable boolean [not null, default: false]
+  expires_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -5638,6 +5639,7 @@ table workspace_invitations {
     inviter_id [name: 'workspace_invitations_inviter_id_idx']
     email [name: 'workspace_invitations_email_idx']
     token [name: 'workspace_invitations_token_idx']
+    
   }
 }
 

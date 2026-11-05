@@ -300,6 +300,9 @@ describe('useFileStore:chat', () => {
 
     expect(toast.error).not.toHaveBeenCalled();
     expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+    expect(uploadWithProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationAgentId: AGENT_ID }),
+    );
   });
 
   it('uploadChatFiles should allow any file type for heterogeneous agents', async () => {
