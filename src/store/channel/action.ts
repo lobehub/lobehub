@@ -195,6 +195,21 @@ class ChannelActionImpl {
       await this.#refreshAfterWrite(() => this.refreshDetail({ channelId }));
     }
   };
+  /**
+   * Adds one person or Agent, as an @mention of someone outside the Channel does, and returns
+   * the member id the mention resolves to. Idempotent like `addMembers`.
+   */
+  addMember = async (
+    channelId: string,
+    member: { agent: ChannelAgentSelection } | { userId: string },
+  ) => {
+    const { data } =
+      'userId' in member
+        ? await channelService.addUser(channelId, member.userId)
+        : await channelService.addAgent(channelId, member.agent);
+    await this.#refreshAfterWrite(() => this.refreshDetail({ channelId }));
+    return data.id;
+  };
   send = async (input: Parameters<typeof channelService.send>[0]) => {
     const scope = cacheScope.get();
     const { data } = await channelService.send(input);
