@@ -374,10 +374,10 @@ describe('connect --managed', () => {
   });
 
   it('reports tool calls, RPCs and agent dispatch through the activity hook', async () => {
-    process.env.LOBEHUB_DEVICE_ACTIVITY_COMMAND = 'report-activity';
+    process.env.LOBEHUB_DEVICE_ACTIVITY_COMMAND = '["my-agent","touch"]';
     await run();
 
-    expect(activity.options.command).toBe('report-activity');
+    expect(activity.options.command).toEqual(['my-agent', 'touch']);
     expect(activity.start).toHaveBeenCalled();
 
     await handlers.tool_call_request({

@@ -70,11 +70,14 @@ platform supervises the process and restarts it when it exits.
 | `LOBEHUB_MANAGED_DEVICE_SECRET`   | yes      | The bootstrap secret. The CLI never prints it.              |
 | `LOBEHUB_SERVER`                  | yes      | The LobeHub server URL.                                     |
 | `LOBEHUB_DEVICE_GATEWAY_URL`      | yes      | The device gateway URL.                                     |
-| `LOBEHUB_DEVICE_ACTIVITY_COMMAND` | no       | A command to run while the device does work (see below).    |
+| `LOBEHUB_DEVICE_ACTIVITY_COMMAND` | no       | A JSON array: a command to run while the device does work.  |
 
 If a required variable is missing, the CLI names it and exits with status 1.
 `LOBEHUB_SERVER` and `LOBEHUB_DEVICE_GATEWAY_URL` must use `https`; `http` is
-accepted only for `localhost`, `127.0.0.1` and `::1`. `--managed` cannot be used
+accepted only for `localhost` and the loopback addresses `127.0.0.0/8` and
+`::1`. The URLs must not contain a user name, a password, a query or a fragment.
+A path is kept, so `https://example.com/lobehub` sends the token request to
+`https://example.com/lobehub/api/device/managed/token`. `--managed` cannot be used
 with `--token`, `--gateway`, `--device-id`, `--workspace`, `--public` or
 `--daemon`.
 
@@ -86,7 +89,8 @@ The secret only gets tokens for this device, and it stops working when the
 device is deleted.
 
 **Token.** The CLI sends `POST {LOBEHUB_SERVER}/api/device/managed/token` with
-`{ "deviceId", "secret" }` and gets `{ "token", "expiresAt" }`. The token's
+`{ "deviceId", "secret" }` and gets `{ "token", "expiresAt" }`, where
+`expiresAt` is an RFC 3339 time with `Z` or an offset. The token's
 `workspace_id` claim, when present, makes the device a workspace device;
 otherwise its `sub` is the owning user.
 
@@ -110,12 +114,14 @@ more than once in 30 s and never two at a time. The work does not wait for it.
 A run that takes longer than 10 s is stopped. Failures appear only in the debug
 log (`--verbose`).
 
-The CLI does not use a shell to run the command. It splits the value into words
-at spaces. Single quotes, double quotes and backslashes group and escape
-characters as in a POSIX shell, but there is no `$VAR`, `~` or glob expansion,
-and `|`, `;`, `&`, `>` and `<` are ordinary characters. If the value has an
-unclosed quote, the CLI exits with status 1 at startup. To use shell features,
-set the value to an explicit shell, for example `sh -c 'report-activity >> /var/log/activity'`.
+The value is a JSON array of strings: the program, then its arguments, for
+example `["my-agent","touch"]`. The CLI runs the program directly, without a
+shell, so there is no quoting, `$VAR`, `~` or glob expansion, and `|`, `;`, `&`,
+`>` and `<` are ordinary characters. If the value is not a non-empty JSON array
+of non-empty strings, the CLI exits with status 1 at startup. To use shell
+features, give an explicit shell, for example
+`["sh","-c","my-agent touch >> /var/log/activity"]`. When the CLI stops, it
+also stops a command that is still running.
 
 ## Publish local artifacts
 

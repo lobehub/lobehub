@@ -6,7 +6,11 @@
  * written to the stored login.
  */
 
-import { splitCommandLine } from './activityHook';
+import { BlockList, isIP } from 'node:net';
+
+import dayjs from 'dayjs';
+import { delay, retry } from 'es-toolkit';
+import { z } from 'zod';
 
 const MANAGED_DEVICE_ID_ENV = 'LOBEHUB_MANAGED_DEVICE_ID';
 export const MANAGED_DEVICE_SECRET_ENV = 'LOBEHUB_MANAGED_DEVICE_SECRET';
@@ -14,7 +18,7 @@ const MANAGED_SERVER_ENV = 'LOBEHUB_SERVER';
 export const MANAGED_GATEWAY_ENV = 'LOBEHUB_DEVICE_GATEWAY_URL';
 const DEVICE_ACTIVITY_COMMAND_ENV = 'LOBEHUB_DEVICE_ACTIVITY_COMMAND';
 
-const MANAGED_TOKEN_PATH = '/api/device/managed/token';
+const MANAGED_TOKEN_PATH = 'api/device/managed/token';
 
 /** Refresh when this share of the token's lifetime has passed. */
 const MANAGED_TOKEN_REFRESH_RATIO = 0.8;
@@ -29,7 +33,8 @@ const MANAGED_TOKEN_RETRY_MAX_DELAY_MS = 60_000;
 const MANAGED_TOKEN_REQUEST_TIMEOUT_MS = 15_000;
 
 export interface ManagedDeviceConfig {
-  activityCommand?: string;
+  /** The program and its arguments, run without a shell. */
+  activityCommand?: string[];
   deviceId: string;
   gatewayUrl: string;
   secret: string;
@@ -39,20 +44,56 @@ export interface ManagedDeviceConfig {
 export type ManagedDeviceConfigResult =
   { config: ManagedDeviceConfig; ok: true } | { message: string; ok: false };
 
-const NOT_A_SERVICE_URL = 'is not an https URL (http is allowed only for localhost).';
+const NOT_A_SERVICE_URL =
+  'is not a valid service URL: it must use https (http only for a loopback address) and have no user name, password, query or fragment.';
 
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', '[::1]', 'localhost']);
+const LOOPBACK_ADDRESSES = new BlockList();
+LOOPBACK_ADDRESSES.addSubnet('127.0.0.0', 8, 'ipv4');
+LOOPBACK_ADDRESSES.addSubnet('::1', 128, 'ipv6');
 
-/** An https URL, or an http one on this machine; the secret and tokens travel over it. */
+/** `localhost`, or an IP address in 127.0.0.0/8 or ::1. `hostname` is `URL.hostname`. */
+const isLoopbackHost = (hostname: string): boolean => {
+  if (hostname === 'localhost') return true;
+  const address = hostname.replace(/^\[(.*)]$/, '$1');
+  const family = isIP(address);
+  if (family === 0) return false;
+  return LOOPBACK_ADDRESSES.check(address, family === 4 ? 'ipv4' : 'ipv6');
+};
+
+/**
+ * An https URL, or an http one to a loopback address; the secret and tokens
+ * travel over it. A user name or password is rejected because a request to
+ * such a URL fails with an error that repeats it. Returns the origin plus the
+ * path without a trailing slash, so a path prefix is kept.
+ */
 const parseServiceUrl = (value: string): string | undefined => {
+  let url: URL;
   try {
-    const url = new URL(value);
-    const allowed =
-      url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname));
-    return allowed ? value.replace(/\/+$/, '') : undefined;
+    url = new URL(value);
   } catch {
     return undefined;
   }
+  if (url.username || url.password) return undefined;
+  if (url.search || url.hash) return undefined;
+  const secure =
+    url.protocol === 'https:' || (url.protocol === 'http:' && isLoopbackHost(url.hostname));
+  if (!secure) return undefined;
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+};
+
+/** The program and its arguments, for example `["my-agent","touch"]`. */
+const activityCommandSchema = z.array(z.string().min(1)).min(1);
+
+/** A non-empty JSON array of non-empty strings, else `undefined`. */
+const parseActivityCommand = (value: string): string[] | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+  const result = activityCommandSchema.safeParse(parsed);
+  return result.success ? result.data : undefined;
 };
 
 /**
@@ -91,16 +132,13 @@ export function readManagedDeviceConfig(
     return { message: `${MANAGED_GATEWAY_ENV} ${NOT_A_SERVICE_URL}`, ok: false };
   }
 
-  const activityCommand = read(DEVICE_ACTIVITY_COMMAND_ENV);
-  if (activityCommand) {
-    try {
-      splitCommandLine(activityCommand);
-    } catch (err) {
-      return {
-        message: `${DEVICE_ACTIVITY_COMMAND_ENV} could not be parsed: ${(err as Error).message}.`,
-        ok: false,
-      };
-    }
+  const rawActivityCommand = read(DEVICE_ACTIVITY_COMMAND_ENV);
+  const activityCommand = rawActivityCommand ? parseActivityCommand(rawActivityCommand) : undefined;
+  if (rawActivityCommand && !activityCommand) {
+    return {
+      message: `${DEVICE_ACTIVITY_COMMAND_ENV} is not a JSON array of non-empty strings.`,
+      ok: false,
+    };
   }
 
   return {
@@ -138,6 +176,12 @@ export type ManagedTokenExchangeResult =
   /** 408, 429, 5xx, a network error or an unreadable body. */
   | { reason: string; status: 'retryable' };
 
+/** The token route's 200 body. `expiresAt` is RFC 3339 with a `Z` or an offset. */
+const managedTokenResponseSchema = z.object({
+  expiresAt: z.iso.datetime({ offset: true }),
+  token: z.string().min(1),
+});
+
 export async function exchangeManagedDeviceToken({
   deviceId,
   secret,
@@ -148,7 +192,8 @@ export async function exchangeManagedDeviceToken({
 >): Promise<ManagedTokenExchangeResult> {
   let response: Response;
   try {
-    response = await fetch(`${serverUrl}${MANAGED_TOKEN_PATH}`, {
+    // Relative to the server URL with a trailing slash, so a path prefix is kept.
+    response = await fetch(new URL(MANAGED_TOKEN_PATH, `${serverUrl}/`).href, {
       body: JSON.stringify({ deviceId, secret }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
@@ -165,18 +210,25 @@ export async function exchangeManagedDeviceToken({
   }
   if (!response.ok) return { httpStatus: response.status, status: 'rejected' };
 
+  let body: unknown;
   try {
-    const body = (await response.json()) as { expiresAt?: unknown; token?: unknown };
-    const expiresAt = typeof body.expiresAt === 'string' ? Date.parse(body.expiresAt) : Number.NaN;
-    if (typeof body.token !== 'string' || !body.token || Number.isNaN(expiresAt)) {
-      return { reason: 'the response has no token or expiresAt', status: 'retryable' };
-    }
-    const serverNow = Date.parse(response.headers.get('date') ?? '');
-    const issuedAt = Number.isNaN(serverNow) ? Date.now() : serverNow;
-    return { expiresAt, issuedAt, status: 'issued', token: body.token };
+    body = await response.json();
   } catch {
     return { reason: 'the response is not JSON', status: 'retryable' };
   }
+  const parsed = managedTokenResponseSchema.safeParse(body);
+  if (!parsed.success) {
+    return { reason: 'the response has no token or expiresAt', status: 'retryable' };
+  }
+
+  const dateHeader = response.headers.get('date');
+  const serverDate = dateHeader ? dayjs(dateHeader) : undefined;
+  return {
+    expiresAt: dayjs(parsed.data.expiresAt).valueOf(),
+    issuedAt: serverDate?.isValid() ? serverDate.valueOf() : Date.now(),
+    status: 'issued',
+    token: parsed.data.token,
+  };
 }
 
 /**
@@ -229,6 +281,14 @@ export class ManagedTokenFatalError extends Error {
   }
 }
 
+/** A token exchange answer that a later attempt may change: 408, 429, 5xx, network. */
+class ManagedTokenRetryableError extends Error {
+  constructor(readonly reason: string) {
+    super(reason);
+    this.name = 'ManagedTokenRetryableError';
+  }
+}
+
 function describeFatalResult(result: FatalExchangeResult): string {
   switch (result.status) {
     case 'invalid-credentials': {
@@ -258,10 +318,9 @@ export interface ManagedTokenSessionOptions {
  * until the server answers. A 401, 404 or other 4xx is final.
  */
 export class ManagedTokenSession {
+  /** Aborted by `stop()`; ends a pending retry wait at once. */
+  private readonly abort = new AbortController();
   private inFlight: Promise<ManagedDeviceToken> | undefined;
-  /** Ends the current retry wait early; set while one is pending. */
-  private retryWait: { timer: ReturnType<typeof setTimeout>; wake: () => void } | undefined;
-  private stopped = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly options: ManagedTokenSessionOptions) {}
@@ -283,27 +342,23 @@ export class ManagedTokenSession {
   }
 
   stop(): void {
-    this.stopped = true;
+    this.abort.abort();
     this.clearTimer();
-    if (this.retryWait) {
-      clearTimeout(this.retryWait.timer);
-      this.retryWait.wake();
-    }
   }
 
   private schedule(token: ManagedDeviceToken) {
     this.clearTimer();
-    if (this.stopped) return;
-    const delay = getManagedTokenRefreshDelay(token);
+    if (this.abort.signal.aborted) return;
+    const refreshDelay = getManagedTokenRefreshDelay(token);
     this.options.logger.debug(
-      `Scheduled managed device token refresh in ${Math.round(delay / 1000)}s`,
+      `Scheduled managed device token refresh in ${Math.round(refreshDelay / 1000)}s`,
     );
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.refreshNow().catch((err) => {
         if (err instanceof ManagedTokenFatalError) this.options.onFatal(err);
       });
-    }, delay);
+    }, refreshDelay);
     this.timer.unref?.();
   }
 
@@ -321,32 +376,48 @@ export class ManagedTokenSession {
   }
 
   private async exchangeWithRetry(): Promise<ManagedDeviceToken> {
-    for (let attempt = 1; ; attempt++) {
-      if (this.stopped) throw new Error('The managed device token session was stopped.');
-      const result = await exchangeManagedDeviceToken(this.options.config);
-      switch (result.status) {
-        case 'issued': {
-          const { expiresAt, issuedAt, token } = result;
-          return { expiresAt, issuedAt, token };
-        }
-        case 'retryable': {
-          const delay = getManagedTokenRetryDelay(attempt);
-          this.options.logger.warn(
-            `Could not get a managed device token (${result.reason}); retrying in ${Math.round(delay / 1000)}s`,
-          );
-          await new Promise<void>((resolve) => {
-            const wake = () => {
-              this.retryWait = undefined;
-              resolve();
-            };
-            this.retryWait = { timer: setTimeout(wake, delay), wake };
-          });
-          break;
-        }
-        default: {
-          throw new ManagedTokenFatalError(result);
-        }
+    const { signal } = this.abort;
+    // es-toolkit's `retry` checks `signal` only before an attempt and does not
+    // pass it to its own wait, so a stop during a 60 s backoff would hang
+    // until the wait ended. The backoff therefore runs at the start of the
+    // next attempt, through `delay`, which rejects as soon as `signal` aborts.
+    let backoff = 0;
+    try {
+      return await retry(
+        async () => {
+          if (backoff > 0) await delay(backoff, { signal });
+          const result = await exchangeManagedDeviceToken(this.options.config);
+          switch (result.status) {
+            case 'issued': {
+              const { expiresAt, issuedAt, token } = result;
+              return { expiresAt, issuedAt, token };
+            }
+            case 'retryable': {
+              throw new ManagedTokenRetryableError(result.reason);
+            }
+            default: {
+              throw new ManagedTokenFatalError(result);
+            }
+          }
+        },
+        {
+          // `attempts` counts from 0, so the first backoff is about 1 s.
+          delay: (attempts, error) => {
+            backoff = getManagedTokenRetryDelay(attempts + 1);
+            this.options.logger.warn(
+              `Could not get a managed device token (${(error as ManagedTokenRetryableError).reason}); retrying in ${Math.round(backoff / 1000)}s`,
+            );
+            return 0;
+          },
+          shouldRetry: (error) => error instanceof ManagedTokenRetryableError,
+          signal,
+        },
+      );
+    } catch (err) {
+      if (signal.aborted) {
+        throw new Error('The managed device token session was stopped.', { cause: err });
       }
+      throw err;
     }
   }
 }

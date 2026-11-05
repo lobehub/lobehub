@@ -2,33 +2,10 @@ import { EventEmitter } from 'node:events';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityReporter, splitCommandLine } from './activityHook';
+import { ActivityReporter } from './activityHook';
 
 const spawn = vi.hoisted(() => vi.fn());
 vi.mock('node:child_process', () => ({ spawn }));
-
-describe('splitCommandLine', () => {
-  it.each([
-    ['report', ['report']],
-    ['  report   --id  dev-1 ', ['report', '--id', 'dev-1']],
-    [`report 'a b' "c d"`, ['report', 'a b', 'c d']],
-    [String.raw`report a\ b "x\"y" 'x\y'`, ['report', 'a b', 'x"y', String.raw`x\y`]],
-    [`report ''`, ['report', '']],
-    // No shell: operators and expansions are plain text.
-    [
-      'report; rm -rf ~ | tee $HOME > out',
-      ['report;', 'rm', '-rf', '~', '|', 'tee', '$HOME', '>', 'out'],
-    ],
-    ['report "$(id)"', ['report', '$(id)']],
-  ])('splits %s', (line, expected) => {
-    expect(splitCommandLine(line)).toEqual(expected);
-  });
-
-  it('rejects unterminated quotes and empty commands', () => {
-    expect(() => splitCommandLine(`report 'a`)).toThrow("unterminated ' quote");
-    expect(() => splitCommandLine('   ')).toThrow('the command is empty');
-  });
-});
 
 class FakeChild extends EventEmitter {
   kill = vi.fn(() => true);
@@ -42,7 +19,7 @@ describe('ActivityReporter', () => {
 
   const createReporter = () =>
     new ActivityReporter({
-      command: 'report --device "dev 1"',
+      command: ['report', '--device', 'dev 1'],
       isBusy: () => busy,
       logger: { debug },
     });
@@ -67,7 +44,7 @@ describe('ActivityReporter', () => {
     for (const child of children) child.emit('exit', code, null);
   };
 
-  it('runs the split command without a shell when work starts', () => {
+  it('runs the command without a shell when work starts', () => {
     const reporter = createReporter();
     reporter.begin();
     expect(spawn).toHaveBeenCalledWith(
@@ -170,5 +147,42 @@ describe('ActivityReporter', () => {
     reporter.begin();
     children[1].emit('exit', 3, null);
     expect(debug).toHaveBeenCalledWith('Activity command exited with 3');
+  });
+
+  it('kills a running hook and clears its kill timer on stop', () => {
+    const reporter = createReporter();
+    reporter.start();
+    reporter.begin();
+    expect(vi.getTimerCount()).toBe(2);
+
+    reporter.stop();
+    expect(children[0].kill).toHaveBeenCalledWith('SIGKILL');
+    expect(vi.getTimerCount()).toBe(0);
+
+    // The killed child settling later is ignored.
+    expect(() => {
+      children[0].emit('exit', null, 'SIGKILL');
+      children[0].emit('error', new Error('late'));
+    }).not.toThrow();
+    expect(debug).not.toHaveBeenCalled();
+  });
+
+  it('runs nothing after stop', () => {
+    const reporter = createReporter();
+    reporter.stop();
+    reporter.start();
+    busy = true;
+    reporter.begin();
+    vi.advanceTimersByTime(60_000);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stops cleanly when no hook is running', () => {
+    const reporter = createReporter();
+    reporter.begin();
+    finishAll();
+    reporter.stop();
+    expect(children[0].kill).not.toHaveBeenCalled();
   });
 });
