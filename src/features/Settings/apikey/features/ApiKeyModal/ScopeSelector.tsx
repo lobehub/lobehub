@@ -1,66 +1,60 @@
 'use client';
 
-import { Checkbox, createStaticStyles, Flexbox, Switch, Text } from '@lobehub/ui';
+import { Checkbox, Flexbox, Switch, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check } from 'lucide-react';
 import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ApiKeyScope } from '@/const/apiKeyScope';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  disabled: css`
-    pointer-events: none;
-    opacity: 0.45;
-  `,
-  fullAccessRow: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 16px;
-
-    /* same card treatment as the full-access row so the whole Scope block
-       reads as one system */
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  grantCheck: css`
-    flex: none;
-    color: ${cssVar.colorSuccess};
-  `,
+const styles = stylex.create({
+  disabled: { pointerEvents: 'none', opacity: 0.45 },
+  fullAccessRow: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    rowGap: '12px',
+    columnGap: '16px',
+    // same card treatment as the full-access row so the whole Scope block
+    // reads as one system
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  grantCheck: { flex: 'none', color: cssVar.colorSuccess },
   /* Granted-only list: one row per domain the key actually reaches. Hairline
      separators, no card-in-card — the surrounding card is the container. */
-  grantList: css`
-    padding-block: 4px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  grantRow: css`
-    padding-block: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  groupTitle: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  scopeRow: css`
-    flex-wrap: wrap;
-  `,
-}));
+  grantList: {
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  grantRow: {
+    paddingBlock: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  groupTitle: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  scopeRow: { flexWrap: 'wrap' },
+});
 
 /**
  * Scope groups shown to the user. Most domains carry read and write scopes;
@@ -132,10 +126,16 @@ export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
   if (grants.length === 0) return <Text type={'secondary'}>{t('apikey.scopes.none')}</Text>;
 
   return (
-    <Flexbox className={styles.grantList}>
+    <Flexbox className={stylex.props(styles.grantList).className}>
       {grants.map((grant) => (
-        <Flexbox horizontal align={'center'} className={styles.grantRow} gap={10} key={grant.key}>
-          <Check className={styles.grantCheck} size={16} />
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.grantRow).className}
+          gap={10}
+          key={grant.key}
+        >
+          <Check className={stylex.props(styles.grantCheck).className} size={16} />
           <span style={{ fontSize: 13 }}>
             <strong>{grant.label}</strong>
             {t('apikey.scopes.grantJoin')}
@@ -180,7 +180,7 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
 
   return (
     <Flexbox gap={12}>
-      <div className={styles.fullAccessRow}>
+      <div {...stylex.props(styles.fullAccessRow)}>
         <Flexbox gap={2}>
           <Text style={{ fontSize: 14 }}>{t('apikey.form.fields.scopes.fullAccess')}</Text>
           <Text style={{ fontSize: 12 }} type={'secondary'}>
@@ -190,13 +190,13 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
         <Switch checked={fullAccess} onChange={onFullAccessChange} />
       </div>
 
-      <div className={fullAccess ? styles.disabled : undefined}>
+      <div {...stylex.props(fullAccess ? styles.disabled : undefined)}>
         <Flexbox gap={10}>
-          <div className={styles.grid}>
+          <div {...stylex.props(styles.grid)}>
             {SCOPE_GROUPS.map((group) => (
               <Flexbox gap={4} key={group.key}>
-                <span className={styles.groupTitle}>{t(group.label)}</span>
-                <Flexbox horizontal className={styles.scopeRow} gap={12}>
+                <span {...stylex.props(styles.groupTitle)}>{t(group.label)}</span>
+                <Flexbox horizontal className={stylex.props(styles.scopeRow).className} gap={12}>
                   <Checkbox
                     checked={selectedSet.has(group.read)}
                     disabled={fullAccess}

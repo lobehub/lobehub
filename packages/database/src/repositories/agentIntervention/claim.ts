@@ -20,7 +20,6 @@ import type {
 import {
   hasExactKeys,
   isCanonicalJsonSafe,
-  isUniqueViolation,
   sameJson,
   uniqueSorted,
 } from '../../models/agentIntervention/utils';
@@ -34,6 +33,7 @@ import {
   agentInterventionResolutions,
   agentInterventions,
 } from '../../schemas';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { applyArgumentEffect, applyRememberEffect } from './effects';
 
 /**

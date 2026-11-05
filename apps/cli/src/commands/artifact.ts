@@ -375,9 +375,7 @@ export function registerArtifactCommand(program: Command) {
           const manifest = resolveManifest(path.resolve(file), process.cwd());
           deploymentId = readBinding(manifest).deploymentId;
           if (!deploymentId) {
-            fail(
-              `${file} is not bound to a deployment. Pass --deployment <id> to unpublish one.`,
-            );
+            fail(`${file} is not bound to a deployment. Pass --deployment <id> to unpublish one.`);
             return;
           }
         }
@@ -387,8 +385,7 @@ export function registerArtifactCommand(program: Command) {
         try {
           ({ data } = await deployments.unpublish.mutate({ id: deploymentId }));
         } catch (error) {
-          if (options.json !== undefined)
-            outputJson({ error: formatError(error), success: false });
+          if (options.json !== undefined) outputJson({ error: formatError(error), success: false });
           fail(formatError(error));
           return;
         }

@@ -226,6 +226,11 @@ export interface VideoGenerationTaskMetadata {
 
 export interface VideoGenerationRoute {
   apiType: string;
+  /**
+   * Router attempt that created the video, so the completion charge can be attributed to it.
+   * Routing ignores it: only `routerId` and `channelId` pin later polls.
+   */
+  attemptId?: string;
   channelId?: string;
   routerId?: string;
 }

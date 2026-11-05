@@ -1,8 +1,8 @@
 import type { CDPSession, Page } from '@playwright/test';
 
+import type { StyleSnapshot } from '../../../../packages/style-equivalence/src/capture/snapshot';
+import { captureInPage } from '../../../../packages/style-equivalence/src/capture/snapshot';
 import { createFastCapture } from './fastCapture';
-import type { StyleSnapshot } from './snapshot';
-import { captureInPage } from './snapshot';
 import type { CaptureRoot, CaptureScope, CaptureSurface } from './surfaces';
 import { resolveCaptureSurfacesInPage } from './surfaces';
 

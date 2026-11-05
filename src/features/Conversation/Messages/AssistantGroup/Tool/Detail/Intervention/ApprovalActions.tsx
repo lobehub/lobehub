@@ -1,10 +1,10 @@
 import { registerPendingHotkeyCard } from '@lobechat/shared-tool-ui/pending-hotkeys';
 import type { BuiltinRememberApproval, DynamicInterventionResolver } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
-import { Button, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CircleStop, CornerDownLeft } from 'lucide-react';
+import { CircleStop, CornerDownLeft, Zap } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { clientInterventionAudits } from '@/store/chat/slices/agentRun/actions/transports/client/interventionAudits';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
+import { useUserStore } from '@/store/user';
 
 import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
@@ -19,6 +20,7 @@ import {
   type ApprovalChoice,
   approveChoiceLabelKeys,
   canRememberViaAllowList,
+  canSwitchToAutoRun,
   dynamicAuditType,
   getApprovalChoices,
   isChoiceSubmitBlocked,
@@ -200,6 +202,13 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       s.stopPendingApprovalForCard,
     ]);
     const [stopping, setStopping] = useState(false);
+    const isShare = useConversationStore((s) => !!s.context.agentShareId);
+    const updateHumanIntervention = useUserStore((s) => s.updateHumanIntervention);
+    const showSwitchToAutoRun = canSwitchToAutoRun({
+      allowListRememberable,
+      approvalMode,
+      isShare,
+    });
 
     /**
      * "Stop here — don't continue." Sits beside Submit because it answers the
@@ -278,6 +287,43 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       rememberAction,
       rememberOption,
       submitBlocked,
+    ]);
+
+    /**
+     * "Switch to auto approve": the one-click way out of being asked call after
+     * call. Approves this call (and the same tool's covered siblings in its
+     * batch) and moves the approval mode to auto-run, so the rest of this run
+     * and later runs stop asking — except for calls that must always ask.
+     * The mode is persisted first: the server continuation reads it.
+     */
+    const handleSwitchToAutoRun = useCallback(async () => {
+      if (loading || isMessageCreating || !canUseResource || approveDisabled) return;
+      setLoading(true);
+      try {
+        await updateHumanIntervention({ approvalMode: 'auto-run' });
+        const editedArguments = await onBeforeApprove?.();
+        await approveToolCallAndCovered(messageId, assistantGroupId ?? '', {
+          editedArguments,
+          isCovered: async (sibling) =>
+            canRememberViaAllowList({
+              config: interventionConfig,
+              toolArgs: safeParseJSON(sibling.requestArgs) ?? {},
+            }),
+        });
+      } finally {
+        setLoading(false);
+      }
+    }, [
+      approveDisabled,
+      approveToolCallAndCovered,
+      assistantGroupId,
+      canUseResource,
+      interventionConfig,
+      isMessageCreating,
+      loading,
+      messageId,
+      onBeforeApprove,
+      updateHumanIntervention,
     ]);
 
     // When choice flips to reject (via click on row, '2', or arrow), pull focus
@@ -443,6 +489,19 @@ const ApprovalActions = memo<ApprovalActionsProps>(
           >
             {t('tool.intervention.stop')}
           </Button>
+          {showSwitchToAutoRun && (
+            <Tooltip title={t('tool.intervention.switchToAutoRunDesc')}>
+              <Button
+                disabled={loading || isMessageCreating || approveDisabled}
+                icon={Zap}
+                size={'middle'}
+                type={'default'}
+                onClick={handleSwitchToAutoRun}
+              >
+                {t('tool.intervention.switchToAutoRun')}
+              </Button>
+            </Tooltip>
+          )}
           <Button
             className={stylex.props(styles.submitButton).className}
             disabled={isMessageCreating || submitBlocked}

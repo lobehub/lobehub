@@ -34,7 +34,7 @@ import type { StyleFixture } from '../fixtures/fixtureRegistry';
 import { serveFixtures } from '../fixtures/fixtureServer';
 import { loadPinnedAssets } from '../fixtures/pinnedAssets';
 import { sha256, writeJson } from '../reporting/report';
-import type { GateInput } from '../types';
+import type { FixtureResult, VerificationFinding } from '../types';
 import type { FixtureProbe } from './probePlanner';
 import { planFixtureProbes } from './probePlanner';
 import type { ProbeShardBudget } from './probeShards';
@@ -230,7 +230,6 @@ export const runComponentFixture = async (options: {
   return { ...result, artifactFiles: ['fixture-builds.json', ...result.artifactFiles] };
 };
 
-/** Lower-level browser integration; callers cannot turn this into a gate approval. */
 export const runFixtureComparison = async (options: {
   browser?: string;
   bindingPlans?: { base: StyleBindingPlan; candidate: StyleBindingPlan };
@@ -262,7 +261,7 @@ export const runFixtureComparison = async (options: {
   });
   let browser: Browser | undefined;
   const failures = new Set<string>();
-  const findings: GateInput['findings'] = [
+  const findings: VerificationFinding[] = [
     {
       confirmed: false,
       id: 'font-contract',
@@ -270,7 +269,7 @@ export const runFixtureComparison = async (options: {
       severity: 'review',
     },
   ];
-  const fixtureResults: GateInput['fixtures'] = [];
+  const fixtureResults: FixtureResult[] = [];
   const artifactFiles = ['probe-plan.json'];
   const results: ProbeResult[] = [];
   const screenshots: Array<{
@@ -727,7 +726,6 @@ export const runFixtureComparison = async (options: {
       ],
       fixture,
       fixtureResults,
-      gateEligible: false,
       results,
       ruleCoverageRef: ruleCoverage ? 'rule-coverage.json' : undefined,
       schemaVersion: 1,

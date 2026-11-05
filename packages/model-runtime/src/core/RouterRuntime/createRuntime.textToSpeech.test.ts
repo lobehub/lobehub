@@ -40,8 +40,13 @@ describe('createRouterRuntime textToSpeech', () => {
     const options = { metadata: { trigger: RequestTrigger.Tts }, onUsage };
     const result = await new Runtime().textToSpeech(payload, options);
 
-    expect(textToSpeech).toHaveBeenCalledWith(payload, options);
+    expect(textToSpeech).toHaveBeenCalledWith(
+      payload,
+      expect.objectContaining({ metadata: options.metadata }),
+    );
     expect(result).toMatchObject({ format: 'wav', usage });
-    expect(onUsage).toHaveBeenCalledWith(usage);
+    expect(onUsage).toHaveBeenCalledWith(usage, {
+      routeAttempt: expect.objectContaining({ attemptId: expect.any(String) }),
+    });
   });
 });

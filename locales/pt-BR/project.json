@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Pesquisar bibliotecas",
   "knowledgeBases.updateFailed": "Não foi possível atualizar a biblioteca",
   "list.deleteAction": "Excluir projeto",
-  "list.deleteConfirmDescription": "Excluir “{{name}}”? Suas tarefas de projeto, metas, tópicos e vínculos serão removidos permanentemente.",
-  "list.deleteConfirmTitle": "Excluir projeto?",
   "list.deleteError": "Não foi possível excluir o projeto.",
   "list.deleteSuccess": "“{{name}}” excluído",
   "list.emptyDescription": "Crie seu primeiro projeto para organizar metas, tarefas e recursos.",

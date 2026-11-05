@@ -172,6 +172,30 @@ describe('Tool Actions', () => {
     });
   });
 
+  it('writes legacy-fallback edits without loading the still-pending server rows', async () => {
+    const context: ConversationContext = { agentId: 'session-1', topicId: null, threadId: null };
+    const store = createStore({ context });
+    const updatePluginArguments = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      store.setState({
+        dbMessages: [{ id: 'tool-msg-1', role: 'tool', tool_call_id: 'call-1' } as any],
+        updatePluginArguments,
+      });
+    });
+
+    await act(async () => {
+      await store
+        .getState()
+        .approveToolCall('tool-msg-1', 'group-1', { editedArguments: { path: 'edited' } });
+    });
+    const [, , , options] = mockApproveToolCalling.mock.calls[0];
+    await options.onLegacyEditFallback();
+
+    expect(updatePluginArguments).toHaveBeenCalledWith('call-1', { path: 'edited' }, true, {
+      refresh: false,
+    });
+  });
+
   describe('submitHeteroIntervention', () => {
     it('should pass this conversation context to ChatStore, not fall back to global activeTopicId', async () => {
       // Regression: the hetero path used to call the chat store directly with no

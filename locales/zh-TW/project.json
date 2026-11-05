@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "搜尋資料庫",
   "knowledgeBases.updateFailed": "無法更新資料庫",
   "list.deleteAction": "刪除專案",
-  "list.deleteConfirmDescription": "刪除「{{name}}」？其專案任務、目標、主題和綁定將被永久移除。",
-  "list.deleteConfirmTitle": "刪除專案？",
   "list.deleteError": "無法刪除專案。",
   "list.deleteSuccess": "「{{name}}」已刪除",
   "list.emptyDescription": "建立您的第一個專案來組織目標、任務和資源。",

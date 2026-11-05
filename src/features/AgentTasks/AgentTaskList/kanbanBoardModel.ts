@@ -177,6 +177,44 @@ export interface KanbanColumnCreateDefaults {
 }
 
 /**
+ * Whether a task group offers a create entry, and what the new task is pinned
+ * to. Shared by board columns and list group headers so both views offer the
+ * entry on the same groups. `undefined` means no entry: a task created there
+ * could not be guaranteed to land in that group.
+ */
+export const getTaskGroupCreateDefaults = (
+  groupMeta: TaskGroupMeta | undefined,
+): KanbanColumnCreateDefaults | undefined => {
+  switch (groupMeta?.groupBy) {
+    // New tasks start in backlog, so only that status group can receive one.
+    case 'status': {
+      return groupMeta.status === 'backlog' ? {} : undefined;
+    }
+    case 'priority': {
+      return { priority: groupMeta.priority ?? 0 };
+    }
+    // The unassigned group has no entry: the modal cannot pin "no agent".
+    case 'assignee': {
+      return groupMeta.assigneeId ? { assigneeAgentId: groupMeta.assigneeId } : undefined;
+    }
+  }
+};
+
+/**
+ * Create defaults of a sub-group: it must satisfy its parent group too, so the
+ * entry exists only when both levels offer one, and their pins are combined.
+ */
+export const getTaskSubGroupCreateDefaults = (
+  parentMeta: TaskGroupMeta | undefined,
+  subMeta: TaskGroupMeta | undefined,
+): KanbanColumnCreateDefaults | undefined => {
+  const parent = getTaskGroupCreateDefaults(parentMeta);
+  const sub = getTaskGroupCreateDefaults(subMeta);
+  if (!parent || !sub) return undefined;
+  return { ...parent, ...sub };
+};
+
+/**
  * Whether a column offers a create entry, and what the new task is pinned to.
  * `undefined` means no entry: a task created there could not be guaranteed to
  * land in that column.
@@ -185,15 +223,9 @@ export const getKanbanColumnCreateDefaults = (
   groupBy: TaskKanbanGroupBy,
   column: KanbanColumnDefinition,
 ): KanbanColumnCreateDefaults | undefined => {
-  if (groupBy === 'status' && column.key === 'backlog') return {};
-  if (groupBy === 'priority' && column.groupMeta?.groupBy === 'priority') {
-    return { priority: column.groupMeta.priority ?? 0 };
-  }
-  // The unassigned column has no entry: the modal cannot pin "no agent".
-  if (groupBy === 'assignee' && column.groupMeta?.groupBy === 'assignee') {
-    const { assigneeId } = column.groupMeta;
-    return assigneeId ? { assigneeAgentId: assigneeId } : undefined;
-  }
+  if (groupBy === 'status') return column.key === 'backlog' ? {} : undefined;
+  if (column.groupMeta?.groupBy !== groupBy) return undefined;
+  return getTaskGroupCreateDefaults(column.groupMeta);
 };
 
 /**

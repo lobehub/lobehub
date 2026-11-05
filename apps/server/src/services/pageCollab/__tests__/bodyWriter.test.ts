@@ -44,7 +44,7 @@ vi.mock('@/server/services/document', () => ({
   },
 }));
 
-const writer = { saveSource: 'system' as const, userId: 'u1' };
+const writer = { saveSource: 'system' as const, userId: 'u1', writeSource: 'system' as const };
 
 const editorDataOf = (markdown: string) => {
   const editor = createHeadlessEditor();
