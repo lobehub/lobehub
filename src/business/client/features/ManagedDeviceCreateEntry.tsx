@@ -14,7 +14,8 @@ export interface ManagedDeviceCreateEntryProps {
 
 /**
  * An entry for creating a managed cloud device, shown by the device list next
- * to its connect actions.
+ * to its connect actions. The list renders it only while the
+ * `managed_cloud_device` flag is on for the user.
  *
  * Nothing in the open-source build: it has no managed device provider.
  * Downstream builds override this module through their own `@/business/...`

@@ -21,6 +21,7 @@ import ManagedDeviceCreateEntry from '@/business/client/features/ManagedDeviceCr
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import DeviceCard from './DeviceCard';
 import DeviceGrid from './DeviceGrid';
@@ -242,6 +243,11 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   const { onConnect, onOpenDevice, scope, toolbarLeading, visibility } = props;
   const { t } = useTranslation('setting');
   const isWorkspace = scope === 'workspace';
+  // The `managed_cloud_device` flag gates only the entry that creates a managed
+  // device. Managed devices that already exist still list and open here.
+  const showManagedDeviceCreate = useServerConfigStore(
+    serverConfigSelectors.enableManagedCloudDevice,
+  );
 
   // The device replica every device-listing surface reads (see `useDeviceList`):
   // a reload paints the persisted cards first, presence pending.
@@ -298,7 +304,9 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
               {t('devices.empty.methodCli.title')}
             </Button>
           )}
-          <ManagedDeviceCreateEntry placement={'empty'} scope={scope} visibility={visibility} />
+          {showManagedDeviceCreate && (
+            <ManagedDeviceCreateEntry placement={'empty'} scope={scope} visibility={visibility} />
+          )}
         </Flexbox>
 
         {!isWorkspace && (
@@ -338,7 +346,9 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
           title={t('devices.actions.refresh')}
           onClick={() => mutate()}
         />
-        <ManagedDeviceCreateEntry placement={'toolbar'} scope={scope} visibility={visibility} />
+        {showManagedDeviceCreate && (
+          <ManagedDeviceCreateEntry placement={'toolbar'} scope={scope} visibility={visibility} />
+        )}
         {isWorkspace ? (
           <Button
             icon={<Icon icon={TerminalIcon} />}
