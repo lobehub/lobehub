@@ -16,6 +16,7 @@ import { registerDeviceCommand } from './commands/device';
 import { registerDocCommand } from './commands/doc';
 import { registerDoctorCommand } from './commands/doctor';
 import { registerEvalCommand } from './commands/eval';
+import { registerExpertiseCommand } from './commands/expertise';
 import { registerFileCommand } from './commands/file';
 import { registerGenerateCommand } from './commands/generate';
 import { registerGoalCommand } from './commands/goal';
@@ -94,6 +95,7 @@ export function createProgram() {
   registerRecallCommand(program);
   registerKbCommand(program);
   registerMemoryCommand(program);
+  registerExpertiseCommand(program);
   registerAgentCommand(program);
   registerAgentGroupCommand(program);
   registerAgentSignalCommand(program);

@@ -18,6 +18,7 @@ import config from './references/config';
 import dashboard from './references/dashboard';
 import doc from './references/doc';
 import eval_ from './references/eval';
+import expertise from './references/expertise';
 import file from './references/file';
 import generate from './references/generate';
 import goal from './references/goal';
@@ -55,6 +56,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/dashboard': dashboard,
     'references/doc': doc,
     'references/eval': eval_,
+    'references/expertise': expertise,
     'references/file': file,
     'references/generate': generate,
     'references/goal': goal,

@@ -44,6 +44,7 @@ apps/cli/src/
 │   ├── doc.ts                # Document management
 │   ├── doctor.ts             # Machine diagnostics (runtime, endpoints, credentials, readiness)
 │   ├── eval.ts               # Evaluation workflows & benchmarks
+│   ├── expertise.ts          # Self-evolving expertise: domains, lessons, rules
 │   ├── file.ts               # File management
 │   ├── generate/             # Content generation (text/image/video/tts/asr)
 │   ├── goal.ts               # Long-horizon Goal Graphs
@@ -115,6 +116,7 @@ apps/cli/src/
 | `lh artifact`      | -     | Publish local HTML pages as artifacts                                              |
 | `lh kb`            | -     | Knowledge base CRUD, folders, docs, upload, tree view                              |
 | `lh memory`        | -     | User memory CRUD + extraction                                                      |
+| `lh expertise`     | -     | Self-evolving expertise: domains, lessons, rules, history ingestion                |
 | `lh message`       | -     | Message list, search, delete, count, heatmap                                       |
 | `lh topic`         | -     | Topic CRUD + search + recent                                                       |
 | `lh notify`        | -     | Send a callback message to a topic and trigger the agent to process it             |
@@ -365,6 +367,7 @@ See `references/` for each command group:
 - **Knowledge & Files**: `references/knowledge.md` (kb, file, doc)
 - **Conversation**: `references/conversation.md` (topic, message)
 - **Memory**: `references/memory.md` (memory management, extraction)
+- **Expertise**: `references/expertise.md` (domains, lessons, rules, ingest-history)
 - **Skills & Plugins**: `references/skills-plugins.md` (skill, plugin)
 - **Models & Providers**: `references/models-providers.md` (model, provider)
 - **Search & Config**: `references/search-config.md` (search, whoami, usage, workspace)
