@@ -42,8 +42,8 @@ const styles = stylex.create({
   openable: {
     cursor: 'pointer',
     borderColor: { 'default': null, ':hover': cssVar.colorBorder },
-    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
-    backgroundImage: { 'default': null, ':hover': 'none' },
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
     outlineWidth: { 'default': null, ':focus-visible': '2px' },
     outlineStyle: { 'default': null, ':focus-visible': 'solid' },
     outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorderHover },

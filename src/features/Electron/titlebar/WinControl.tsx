@@ -19,7 +19,7 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorError },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
-  container: (width: string) => ({ width, minWidth: width }),
+  container: { width: `${WINDOW_CONTROL_WIDTH}px`, minWidth: `${WINDOW_CONTROL_WIDTH}px` },
   controlButton: {
     borderRadius: '8px',
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
@@ -78,12 +78,9 @@ const WinControl = memo(() => {
     <Flexbox
       horizontal
       align={'center'}
+      className={cx(stylex.props(styles.container).className, electronStylish.nodrag)}
       gap={4}
       justify={'flex-end'}
-      className={cx(
-        stylex.props(styles.container(`${WINDOW_CONTROL_WIDTH}px`)).className,
-        electronStylish.nodrag,
-      )}
     >
       {controls.map((control) => (
         <ActionIcon
