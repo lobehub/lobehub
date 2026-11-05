@@ -1,6 +1,16 @@
 import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
+  ['EvalCaptureContent', 'src/features/EvalCapture/CaptureContent.tsx'],
+  [
+    'EvalRunCreateFooter',
+    'src/routes/(main)/eval/bench/[benchmarkId]/features/RunCreateModal/Footer.tsx',
+  ],
+  [
+    'EvalTestCaseTable',
+    'src/routes/(main)/eval/bench/[benchmarkId]/features/DatasetsTab/TestCaseTable.tsx',
+  ],
+  ['EvalTestCaseDetail', 'src/routes/(main)/eval/features/TestCaseDetail/index.tsx'],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -8,7 +18,66 @@ export const migrationFixtures = [
   ['WorkPreviewStatus', 'src/features/WorkGallery/WorkPreview.tsx'],
 ] as const;
 
+const evalData = 'fixtures/EvalFixtureData.ts';
+
 export const migrationProfiles: Record<string, FixtureProfile> = {
+  EvalCaptureContent: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    selector: '[data-component-mount] [data-segmented-item]',
+    settleFrames: 2,
+    variants: [
+      { id: 'normal', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'dark', appearance: 'dark' },
+    ],
+    boundaries: [
+      {
+        importer: 'src/features/EvalCapture/CaptureContent.tsx',
+        source: '@/services/agentEval',
+        replacement: evalData,
+      },
+    ],
+  },
+  EvalRunCreateFooter: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    selector: '[data-component-mount] button[aria-haspopup]',
+    variants: [
+      { id: 'normal', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'loading' },
+      { id: 'dark', appearance: 'dark' },
+    ],
+  },
+  EvalTestCaseTable: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    selector: '[data-component-mount] tbody tr',
+    variants: [
+      { id: 'selected', states: ['default', 'hover'] },
+      { id: 'unselected', states: ['default', 'hover'] },
+      { id: 'readonly' },
+      { id: 'dark-selected', appearance: 'dark', states: ['default', 'hover'] },
+    ],
+  },
+  EvalTestCaseDetail: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next', 'react-router'],
+    selector: '[data-component-mount] nav a',
+    settleFrames: 2,
+    variants: [
+      { id: 'view', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'editing' },
+      { id: 'dark-editing', appearance: 'dark' },
+    ],
+    boundaries: [
+      {
+        importer: 'src/routes/(main)/eval/features/TestCaseDetail/index.tsx',
+        source: '@/store/eval',
+        replacement: evalData,
+      },
+      {
+        importer: 'src/features/Workspace/WorkspaceLink.tsx',
+        source: '@/business/client/hooks/useActiveWorkspaceSlug',
+        replacement: evalData,
+      },
+    ],
+  },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     i18n: true,
