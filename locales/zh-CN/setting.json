@@ -573,6 +573,7 @@
   "devices.managed.create.submit": "创建",
   "devices.managed.create.success": "云端设备已创建，约一分钟后启动。",
   "devices.managed.create.title": "创建云端设备",
+  "devices.managed.remove.confirmDesc": "这会删除此云端设备，且无法撤销。",
   "devices.managed.status.deleting": "删除中",
   "devices.managed.status.failed": "不可用",
   "devices.managed.status.sleeping": "休眠中",

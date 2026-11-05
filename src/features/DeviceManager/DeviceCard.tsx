@@ -32,6 +32,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
+import { canOfferDeviceShare, removeConfirmDescKey } from './deviceCardActions';
 import { useDeviceMetricSeries } from './DeviceHealth/shared';
 import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
@@ -209,25 +210,24 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
   // Share-to-workspace entry for personal enrollments. The share
   // handshake needs a live connection to mint the workspace identity, so the
   // item stays disabled (with an explanatory desc) while the device is offline.
-  const shareItems =
-    device.scope === 'personal' && device.registered
-      ? [
-          {
-            desc: online ? undefined : t('devices.share.offlineDesc'),
-            disabled: !online,
-            icon: <Icon icon={Share2Icon} />,
-            key: 'share',
-            label: t('devices.share.menu'),
-            onClick: () => openShareDeviceModal(device),
-          },
-        ]
-      : [];
+  const shareItems = canOfferDeviceShare(device)
+    ? [
+        {
+          desc: online ? undefined : t('devices.share.offlineDesc'),
+          disabled: !online,
+          icon: <Icon icon={Share2Icon} />,
+          key: 'share',
+          label: t('devices.share.menu'),
+          onClick: () => openShareDeviceModal(device),
+        },
+      ]
+    : [];
 
   const handleRemove = () =>
     confirmModal({
       content: isCurrent
-        ? `${t('devices.remove.confirmDesc')}\n\n${t('devices.remove.currentSessionWarning')}`
-        : t('devices.remove.confirmDesc'),
+        ? `${t(removeConfirmDescKey(device))}\n\n${t('devices.remove.currentSessionWarning')}`
+        : t(removeConfirmDescKey(device)),
       okButtonProps: { danger: true },
       okText: t('devices.actions.remove'),
       onOk: async () => {

@@ -878,6 +878,7 @@ export default {
   'devices.managed.create.submit': 'Create',
   'devices.managed.create.success': 'Cloud device created. It starts in about a minute.',
   'devices.managed.create.title': 'Create a cloud device',
+  'devices.managed.remove.confirmDesc': 'This deletes the cloud device. You cannot undo this.',
   'devices.managed.status.deleting': 'Deleting',
   'devices.managed.status.failed': 'Unavailable',
   'devices.managed.status.sleeping': 'Sleeping',
