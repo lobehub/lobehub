@@ -65,7 +65,7 @@ afterEach(() => {
 describe('workspace settings useCategory', () => {
   // Account-level tabs follow the user, not the workspace, so they are shown
   // to every role — including viewers with no workspace permissions.
-  it('mirrors the account-level tabs in a leading Account group for every role', () => {
+  it('shows Account and System tabs without workspace permissions', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
     mocks.canViewBilling = false;
@@ -90,14 +90,7 @@ describe('workspace settings useCategory', () => {
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Profile,
     );
-  });
 
-  it('shows Trash and About in a System group for every role', () => {
-    mocks.canCreateContent = false;
-    mocks.canManageWorkspace = false;
-    mocks.canViewBilling = false;
-
-    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const systemGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.System,
     );
@@ -135,6 +128,33 @@ describe('workspace settings useCategory', () => {
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Devices,
     );
+
+    const adminGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Admin,
+    );
+    const developerGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
+    );
+
+    expect(developerGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
+    expect(adminGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
+
+    const itemKeys = result.current.flatMap((group) => group.items.map((item) => item.key));
+
+    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.OAuthApps);
+
+    // Admin-or-higher reads the billing numbers; the pages keep the
+    // money-moving controls behind the narrower manage_subscription gate.
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Credits);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.Billing);
+
+    const accountGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Account,
+    );
+
+    expect(accountGroup?.items.map((item) => item.key)).toContain(
+      WorkspaceSettingsTabs.Integrations,
+    );
   });
 
   // Accounts are shared capacity every agent routes onto, so managing them is
@@ -144,10 +164,6 @@ describe('workspace settings useCategory', () => {
 
     expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.SubscriptionAccounts);
     expect(getItemKeys()).toContain(WorkspaceSettingsTabs.Devices);
-  });
-
-  it('hides OAuth Apps by default', () => {
-    expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.OAuthApps);
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {
@@ -172,19 +188,6 @@ describe('workspace settings useCategory', () => {
     expect(agentGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.OAuthApps,
     );
-  });
-
-  it('places API Key in the Developer group', () => {
-    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
-    const adminGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.Admin,
-    );
-    const developerGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
-    );
-
-    expect(developerGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
-    expect(adminGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
   });
 
   it('exposes API Key settings to members', () => {
@@ -238,15 +241,6 @@ describe('workspace settings useCategory', () => {
     ]);
   });
 
-  // Admin-or-higher reads the billing numbers; the pages keep the
-  // money-moving controls behind the narrower manage_subscription gate.
-  it('shows Credits and Billing to roles that may view billing', () => {
-    const itemKeys = getItemKeys();
-
-    expect(itemKeys).toContain(WorkspaceSettingsTabs.Credits);
-    expect(itemKeys).toContain(WorkspaceSettingsTabs.Billing);
-  });
-
   it('hides financial settings below Admin', () => {
     mocks.canViewBilling = false;
 
@@ -256,16 +250,5 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Billing);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
-  });
-
-  it('lists Integrations with the account tabs without any Labs flag', () => {
-    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
-    const accountGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.Account,
-    );
-
-    expect(accountGroup?.items.map((item) => item.key)).toContain(
-      WorkspaceSettingsTabs.Integrations,
-    );
   });
 });
