@@ -140,3 +140,62 @@ export const Chart = () => <SparkAreaChart className={fallback.spark} />;
     expect(entry.flags).toContain('CROSS_COMPONENT');
   });
 });
+
+describe('a restored rule that reads module constants', () => {
+  const CONTENT = 'lobe-comments-2aa3-content';
+  const contentCss = (height = '480px') => `.${CONTENT}
+  img:not(
+    img:is([style^='width:'], [style*=' width:'])
+  ) {
+  width: auto !important;
+  max-height: ${height};
+}
+
+.${CONTENT} [contenteditable='true'] ~ div {
+  margin-block-start: 0 !important;
+}
+`;
+  const contentBase = `import './Comment.css';
+
+export const Content = () => <div className={'${CONTENT}'} />;
+`;
+  const contentHead = (height = '480') => `import { createStaticStyles } from '@lobehub/ui';
+
+const MAX_HEIGHT = ${height};
+const RESIZED_IMAGE = 'img:is([style^="width:"], [style*=" width:"])';
+
+const fallback = createStaticStyles(({ css }) => ({
+  content: css\`
+    & img:not(\${RESIZED_IMAGE}) {
+      width: auto !important;
+      max-height: \${MAX_HEIGHT}px;
+    }
+
+    & [contenteditable='true'] ~ div {
+      margin-block-start: 0 !important;
+    }
+  \`,
+}));
+
+export const Content = () => <div className={fallback.content} />;
+`;
+  const run = (head: string, css = contentCss()) =>
+    planFile(
+      'a.tsx',
+      extractFile(contentBase, 'a.tsx', options({ './Comment.css': css })),
+      extractFile(head, 'a.tsx', options({})),
+      { layoutComponents: [] },
+    ).cases[0];
+
+  it('folds the constants, ignores quote style and proves selectors it cannot render', () => {
+    const entry = run(contentHead());
+    expect(entry.flags).toEqual([]);
+    expect(entry.evidence).toContain('EMOTION_RULE_KEPT');
+    expect(entry.inner).toBeUndefined();
+  });
+
+  it('keeps the flag when a folded constant differs from the stylesheet value', () => {
+    const entry = run(contentHead('400'));
+    expect(entry.flags).toEqual(['INNER_TARGET']);
+  });
+});

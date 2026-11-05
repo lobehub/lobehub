@@ -32,8 +32,13 @@ const literalTokens = (element: StyleElement) => {
 
 export const normalizeSelector = (selector: string, from?: string, to?: string) => {
   let count = 0;
+  let selectors = 0;
   try {
     const result = selectorParser((root) => {
+      selectors = root.nodes.length;
+      root.walkAttributes((node) => {
+        if (node.value !== undefined) node.quoteMark = '"';
+      });
       if (from === undefined) return;
       root.walkClasses((node) => {
         if (node.value !== from) return;
@@ -41,7 +46,7 @@ export const normalizeSelector = (selector: string, from?: string, to?: string) 
         node.value = to!;
       });
     }).processSync(selector, { lossless: false });
-    return from === undefined || count === result.split(',').length ? result : undefined;
+    return from === undefined || count === selectors ? result : undefined;
   } catch {
     return undefined;
   }

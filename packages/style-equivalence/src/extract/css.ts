@@ -78,24 +78,50 @@ export const returnedObject = (factory: ts.CallExpression) => {
   return body && ts.isObjectLiteralExpression(body) ? body : undefined;
 };
 
+const topLevelConstants = (sf: ts.SourceFile) => {
+  const constants = new Map<string, ts.Expression>();
+  for (const statement of sf.statements)
+    if (ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.Const)
+      for (const declaration of statement.declarationList.declarations)
+        if (ts.isIdentifier(declaration.name) && declaration.initializer)
+          constants.set(declaration.name.text, declaration.initializer);
+  return constants;
+};
+
+const constantText = (
+  node: ts.Expression,
+  constants: Map<string, ts.Expression>,
+  depth = 0,
+): string | undefined => {
+  if (depth > 4) return undefined;
+  if (ts.isParenthesizedExpression(node)) return constantText(node.expression, constants, depth);
+  if (ts.isStringLiteralLike(node)) return node.text;
+  if (ts.isNumericLiteral(node)) return String(Number(node.getText().replaceAll('_', '')));
+  if (!ts.isIdentifier(node)) return undefined;
+  const target = constants.get(node.text);
+  return target && constantText(target, constants, depth + 1);
+};
+
 export const templateSlotRules = (symbol: string, factory: ts.CallExpression): StyleRule[] => {
   const object = returnedObject(factory);
   if (!object) return [];
+  const constants = topLevelConstants(factory.getSourceFile());
   const rules: StyleRule[] = [];
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
     const value = property.initializer;
     if (!ts.isTaggedTemplateExpression(value)) continue;
     const slot = `${symbol}.${property.name.getText()}`;
-    const interpolations = ts.isTemplateExpression(value.template)
-      ? value.template.templateSpans.map((span) =>
-          span.expression.getText().replaceAll(/\s+/g, ' ').trim(),
-        )
-      : [];
+    const spans = ts.isTemplateExpression(value.template) ? value.template.templateSpans : [];
+    const interpolations = spans.map((span) =>
+      span.expression.getText().replaceAll(/\s+/g, ' ').trim(),
+    );
+    const folded = spans.map((span) => constantText(span.expression, constants) ?? null);
     for (const rule of parseRules(templateText(value.template), `.${SELF}`).rules)
       rules.push({
         ...rule,
         ...(interpolations.length ? { interpolations } : {}),
+        ...(folded.some((item) => item !== null) ? { interpolationValues: folded } : {}),
         owned: { [SELF]: slot },
         slot,
       });

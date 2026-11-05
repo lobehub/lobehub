@@ -137,6 +137,8 @@ const tokenValue = (expression: string) => {
 
 const resolve = (text: string, rule: StyleRule) =>
   text.replaceAll(/__I(\d+)__/g, (match, index: string) => {
+    const value = rule.interpolationValues?.[Number(index)];
+    if (typeof value === 'string') return value;
     const expression = rule.interpolations?.[Number(index)];
     return expression === undefined ? match : tokenValue(expression);
   });
@@ -228,8 +230,10 @@ const proveElement = (
     selectors.push(selector);
     slots.add(`${leftSlot}\n${rightSlot}`);
   }
-  const nodes = innerTargets(selectors, SELF);
-  if (!nodes?.length) return undefined;
+  const nodes = innerTargets(
+    selectors.filter((selector) => innerTargets([selector], SELF)),
+    SELF,
+  );
   const pairs = [...slots].map((entry) => entry.split('\n') as [string, string]);
   const globals = new Set(pairs.flatMap(([slot]) => (slot.startsWith('global.') ? [slot] : [])));
   const exhaustive =
@@ -237,7 +241,7 @@ const proveElement = (
     literalTokens(base).every((token) => globals.has(`global.${token}`)) &&
     !literalTokens(head).length;
   const placement = pairs.length === 1 ? placementSwap(base, head, pairs[0]) : undefined;
-  return { exhaustive, head: head.id, nodes, ...(placement ? { placement } : {}) };
+  return { exhaustive, head: head.id, nodes: nodes ?? [], ...(placement ? { placement } : {}) };
 };
 
 export const keptEmotionRules = (

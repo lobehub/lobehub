@@ -42,6 +42,7 @@ export interface StyleRule {
   conditions: string[];
   declarations?: string[];
   interpolations?: string[];
+  interpolationValues?: Array<string | null>;
   owned: Record<string, string>;
   selector: string;
   slot?: string;
