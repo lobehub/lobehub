@@ -1,5 +1,3 @@
-import './index.css';
-
 import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
@@ -63,7 +61,6 @@ const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
     <TooltipGroup>
       <Select
         options={options}
-        popupClassName={'lobe-function-calling-model-select-85737e92-select'}
         popupMatchSelectWidth={false}
         value={`${value?.provider}/${value?.model}`}
         variant={'filled'}

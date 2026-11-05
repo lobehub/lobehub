@@ -1,7 +1,5 @@
 'use client';
 
-import './ActionPopover.css';
-
 import { type PopoverProps } from '@lobehub/ui';
 import { Flexbox, Popover, Spin } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -43,9 +41,7 @@ const ActionPopover = memo<ActionPopoverProps>(
     const resolvedClassNames =
       typeof customClassNames === 'function' ? customClassNames : customClassNames;
     const contentClassName =
-      typeof resolvedClassNames === 'object' && resolvedClassNames?.content
-        ? `${'lobe-action-popover-3d63c815-popover-content'} ${resolvedClassNames.content}`
-        : 'lobe-action-popover-3d63c815-popover-content';
+      typeof resolvedClassNames === 'object' ? resolvedClassNames?.content : undefined;
 
     // Properly handle styles (can be object or function)
     const resolvedStyles = typeof customStyles === 'function' ? customStyles : customStyles;
