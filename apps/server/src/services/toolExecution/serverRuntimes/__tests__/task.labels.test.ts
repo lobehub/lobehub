@@ -36,14 +36,15 @@ const setup = () => {
     delete: vi.fn().mockResolvedValue(undefined),
     resolve: vi.fn().mockResolvedValue(task),
   };
+  const agentModel = { existsById: vi.fn().mockResolvedValue(true) };
   const runtime = createTaskRuntime({
-    agentModel: { existsById: vi.fn().mockResolvedValue(true) } as any,
+    agentModel: agentModel as any,
     taskCaller: taskCaller as any,
     taskLabelCaller: taskLabelCaller as any,
     taskModel: taskModel as any,
     taskService: taskService as any,
   });
-  return { runtime, taskCaller, taskLabelCaller, taskModel, taskService };
+  return { agentModel, runtime, taskCaller, taskLabelCaller, taskModel, taskService };
 };
 
 describe('task tool labels', () => {
@@ -135,6 +136,27 @@ describe('task tool labels', () => {
     ).rejects.toThrow('update failed');
     expect(taskLabelCaller.changeForTask).toHaveBeenLastCalledWith({
       add: ['bug'],
+      remove: ['feat'],
+      taskId: 'task-1',
+    });
+  });
+
+  it('editTask undoes its label change when a later input fails validation', async () => {
+    const { agentModel, runtime, taskCaller, taskLabelCaller } = setup();
+    agentModel.existsById.mockResolvedValue(false);
+    taskCaller.detail.mockResolvedValue({ data: { labels: [] } });
+    taskLabelCaller.changeForTask.mockResolvedValueOnce([{ id: 'feat' }]).mockResolvedValueOnce([]);
+
+    const result = await runtime.editTask({
+      addLabels: ['Feature'],
+      assigneeAgentId: 'agt_missing',
+      identifier: 'T-1',
+    });
+
+    expect(result.success).toBe(false);
+    expect(taskCaller.update).not.toHaveBeenCalled();
+    expect(taskLabelCaller.changeForTask).toHaveBeenLastCalledWith({
+      add: [],
       remove: ['feat'],
       taskId: 'task-1',
     });

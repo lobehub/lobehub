@@ -449,139 +449,152 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         }
       }
 
-      const updateData: {
-        assigneeAgentId?: string | null;
-        assigneeUserId?: string | null;
-        description?: string;
-        instruction?: string;
-        name?: string;
-        parentTaskId?: string | null;
-        priority?: number;
-      } = {};
-      const changes: string[] = [];
-      const ops: Promise<unknown>[] = [];
+      // Every failure from here on — a validation exit or a rejected write —
+      // undoes this edit's label change, so the edit never half-applies.
+      try {
+        const result = await (async () => {
+          const updateData: {
+            assigneeAgentId?: string | null;
+            assigneeUserId?: string | null;
+            description?: string;
+            instruction?: string;
+            name?: string;
+            parentTaskId?: string | null;
+            priority?: number;
+          } = {};
+          const changes: string[] = [];
+          const ops: Promise<unknown>[] = [];
 
-      if (args.name !== undefined) {
-        updateData.name = args.name;
-        changes.push(`name → "${args.name}"`);
-      }
-      if (args.assigneeAgentId !== undefined) {
-        const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId, task.projectId);
-        if (!assigneeResult.success) return assigneeResult;
+          if (args.name !== undefined) {
+            updateData.name = args.name;
+            changes.push(`name → "${args.name}"`);
+          }
+          if (args.assigneeAgentId !== undefined) {
+            const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId, task.projectId);
+            if (!assigneeResult.success) return assigneeResult;
 
-        updateData.assigneeAgentId = args.assigneeAgentId;
-        changes.push(
-          args.assigneeAgentId ? `assignee agent → ${args.assigneeAgentId}` : 'assignee cleared',
-        );
-      }
-      // Independent of the agent side: the member is the human owner and the
-      // two assignees coexist, so touching one never clears the other.
-      if (args.assigneeUserId !== undefined) {
-        updateData.assigneeUserId = args.assigneeUserId;
-        changes.push(
-          args.assigneeUserId
-            ? `assignee member → ${await resolveMemberLabel(args.assigneeUserId)}`
-            : 'assignee member cleared',
-        );
-      }
-      if (args.instruction !== undefined) {
-        updateData.instruction = args.instruction;
-        changes.push(`instruction updated`);
-      }
-      if (args.description !== undefined) {
-        updateData.description = args.description;
-        changes.push('description updated');
-      }
-      if (args.parentIdentifier !== undefined) {
-        const parentIdentifier = args.parentIdentifier?.trim() || null;
-        updateData.parentTaskId = parentIdentifier
-          ? (await resolveTaskOrThrow(taskModel(), parentIdentifier)).id
-          : null;
-        changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
-      }
-      if (args.priority !== undefined) {
-        updateData.priority = args.priority;
-        changes.push(`priority → ${priorityLabel(args.priority)}`);
-      }
+            updateData.assigneeAgentId = args.assigneeAgentId;
+            changes.push(
+              args.assigneeAgentId
+                ? `assignee agent → ${args.assigneeAgentId}`
+                : 'assignee cleared',
+            );
+          }
+          // Independent of the agent side: the member is the human owner and the
+          // two assignees coexist, so touching one never clears the other.
+          if (args.assigneeUserId !== undefined) {
+            updateData.assigneeUserId = args.assigneeUserId;
+            changes.push(
+              args.assigneeUserId
+                ? `assignee member → ${await resolveMemberLabel(args.assigneeUserId)}`
+                : 'assignee member cleared',
+            );
+          }
+          if (args.instruction !== undefined) {
+            updateData.instruction = args.instruction;
+            changes.push(`instruction updated`);
+          }
+          if (args.description !== undefined) {
+            updateData.description = args.description;
+            changes.push('description updated');
+          }
+          if (args.parentIdentifier !== undefined) {
+            const parentIdentifier = args.parentIdentifier?.trim() || null;
+            updateData.parentTaskId = parentIdentifier
+              ? (await resolveTaskOrThrow(taskModel(), parentIdentifier)).id
+              : null;
+            changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
+          }
+          if (args.priority !== undefined) {
+            updateData.priority = args.priority;
+            changes.push(`priority → ${priorityLabel(args.priority)}`);
+          }
 
-      // Deep-merged into `config` so checkpoint / review / execution keys survive.
-      const configPatch = toTaskModelConfigPatch(args);
-      if (configPatch) changes.push(describeTaskModelChange(configPatch));
+          // Deep-merged into `config` so checkpoint / review / execution keys survive.
+          const configPatch = toTaskModelConfigPatch(args);
+          if (configPatch) changes.push(describeTaskModelChange(configPatch));
 
-      if (Object.keys(updateData).length > 0 || configPatch) {
-        // Attribution rides the caller's context, not this payload — see
-        // `AuthContext.actingAgentId`.
-        ops.push(
-          taskCaller().update({
-            id: task.id,
-            ...updateData,
-            ...(configPatch && { configPatch }),
-          }),
-        );
-      }
+          if (Object.keys(updateData).length > 0 || configPatch) {
+            // Attribution rides the caller's context, not this payload — see
+            // `AuthContext.actingAgentId`.
+            ops.push(
+              taskCaller().update({
+                id: task.id,
+                ...updateData,
+                ...(configPatch && { configPatch }),
+              }),
+            );
+          }
 
-      const applyDeps = async (
-        ids: string[],
-        apply: (depId: string) => Promise<unknown>,
-        onChange: (depIdentifier: string) => void,
-      ): Promise<string | undefined> => {
-        const resolved = await resolveTasksOrThrow(taskModel(), ids, { duplicates: 'collapse' });
-        await pMap(resolved.tasks, (dep) => apply(dep.id), { concurrency: 5 });
-        resolved.tasks.forEach((dep) => onChange(taskResultLabel(dep)));
-        return undefined;
-      };
+          const applyDeps = async (
+            ids: string[],
+            apply: (depId: string) => Promise<unknown>,
+            onChange: (depIdentifier: string) => void,
+          ): Promise<string | undefined> => {
+            const resolved = await resolveTasksOrThrow(taskModel(), ids, {
+              duplicates: 'collapse',
+            });
+            await pMap(resolved.tasks, (dep) => apply(dep.id), { concurrency: 5 });
+            resolved.tasks.forEach((dep) => onChange(taskResultLabel(dep)));
+            return undefined;
+          };
 
-      const depResults: Promise<string | undefined>[] = [];
-      if (args.addDependencies?.length) {
-        depResults.push(
-          applyDeps(
-            args.addDependencies,
-            (depId) => taskModel().addDependency(task.id, depId),
-            (depIdentifier) => changes.push(formatDependencyAdded(task.identifier, depIdentifier)),
-          ),
-        );
-      }
-      if (args.removeDependencies?.length) {
-        depResults.push(
-          applyDeps(
-            args.removeDependencies,
-            (depId) => taskModel().removeDependency(task.id, depId),
-            (depIdentifier) =>
-              changes.push(formatDependencyRemoved(task.identifier, depIdentifier)),
-          ),
-        );
-      }
+          const depResults: Promise<string | undefined>[] = [];
+          if (args.addDependencies?.length) {
+            depResults.push(
+              applyDeps(
+                args.addDependencies,
+                (depId) => taskModel().addDependency(task.id, depId),
+                (depIdentifier) =>
+                  changes.push(formatDependencyAdded(task.identifier, depIdentifier)),
+              ),
+            );
+          }
+          if (args.removeDependencies?.length) {
+            depResults.push(
+              applyDeps(
+                args.removeDependencies,
+                (depId) => taskModel().removeDependency(task.id, depId),
+                (depIdentifier) =>
+                  changes.push(formatDependencyRemoved(task.identifier, depIdentifier)),
+              ),
+            );
+          }
 
-      if (removeLabels.ids.length > 0) {
-        changes.push(`labels removed: ${args.removeLabels!.join(', ')}`);
-      }
-      if (addLabels.ids.length > 0) changes.push(`labels added: ${args.addLabels!.join(', ')}`);
+          if (removeLabels.ids.length > 0) {
+            changes.push(`labels removed: ${args.removeLabels!.join(', ')}`);
+          }
+          if (addLabels.ids.length > 0) changes.push(`labels added: ${args.addLabels!.join(', ')}`);
 
-      const hasLabelEdit = labelDelta.add.length > 0 || labelDelta.remove.length > 0;
-      if (ops.length === 0 && depResults.length === 0 && !hasLabelEdit) {
-        return { content: 'No fields provided; nothing to update.', success: false };
-      }
+          const hasLabelEdit = labelDelta.add.length > 0 || labelDelta.remove.length > 0;
+          if (ops.length === 0 && depResults.length === 0 && !hasLabelEdit) {
+            return { content: 'No fields provided; nothing to update.', success: false };
+          }
 
-      // Settle every started write before reporting: fail-fast would return
-      // while a sibling write is still running and could commit afterwards.
-      const [opResults, depSettled] = await Promise.all([
-        Promise.allSettled(ops),
-        Promise.allSettled(depResults),
-      ]);
-      const failedOp = [...opResults, ...depSettled].find(
-        (result): result is PromiseRejectedResult => result.status === 'rejected',
-      );
-      if (failedOp) {
+          // Settle every started write before reporting: fail-fast would return
+          // while a sibling write is still running and could commit afterwards.
+          const [opResults, depSettled] = await Promise.all([
+            Promise.allSettled(ops),
+            Promise.allSettled(depResults),
+          ]);
+          const failedOp = [...opResults, ...depSettled].find(
+            (result): result is PromiseRejectedResult => result.status === 'rejected',
+          );
+          if (failedOp) throw failedOp.reason;
+          const depErrors = depSettled.map((result) =>
+            result.status === 'fulfilled' ? result.value : undefined,
+          );
+          const firstDepError = depErrors.find((e) => e);
+          if (firstDepError) return { content: firstDepError, success: false };
+
+          return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
+        })();
+        if (!result.success) await undoLabels();
+        return result;
+      } catch (error) {
         await undoLabels();
-        throw failedOp.reason;
+        throw error;
       }
-      const depErrors = depSettled.map((result) =>
-        result.status === 'fulfilled' ? result.value : undefined,
-      );
-      const firstDepError = depErrors.find((e) => e);
-      if (firstDepError) return { content: firstDepError, success: false };
-
-      return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
     },
 
     listTasks: async (args: {
