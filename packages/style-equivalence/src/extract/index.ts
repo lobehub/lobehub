@@ -1,5 +1,6 @@
 import ts from 'typescript';
 
+import { aliasDeclaration, aliasOf } from './aliases';
 import { collectChildren, literalOf } from './children';
 import { parseRules } from './css';
 import { applicationIn, componentOfStatement, forwardsOf } from './forward';
@@ -24,6 +25,7 @@ import type {
   StyleRule,
   VariableKind,
 } from './types';
+import { stylexUnsupported } from './unsupported';
 
 export type * from './types';
 
@@ -45,30 +47,6 @@ const GLOBALS = new Set([
 ]);
 
 const CLASS_PROPS = new Set(['...', 'className', 'classNames']);
-
-const aliasDeclaration = (declaration: ts.VariableDeclaration, symbols: Set<string>) =>
-  ts.isIdentifier(declaration.name) &&
-  declaration.initializer &&
-  ts.isIdentifier(declaration.initializer) &&
-  symbols.has(declaration.initializer.text) &&
-  !symbols.has(declaration.name.text) &&
-  ts.isVariableDeclarationList(declaration.parent) &&
-  declaration.parent.flags & ts.NodeFlags.Const
-    ? declaration.initializer.text
-    : undefined;
-
-const aliasOf = (node: ts.Identifier, symbols: Set<string>) => {
-  for (let scope: ts.Node = node.parent; scope; scope = scope.parent) {
-    if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) continue;
-    for (const statement of scope.statements)
-      if (ts.isVariableStatement(statement))
-        for (const declaration of statement.declarationList.declarations)
-          if (ts.isIdentifier(declaration.name) && declaration.name.text === node.text)
-            return aliasDeclaration(declaration, symbols);
-    if (ts.isSourceFile(scope)) return undefined;
-  }
-  return undefined;
-};
 
 const ownerOf = (statement: ts.Statement, ast: ts.SourceFile) => {
   if (ts.isVariableStatement(statement))
@@ -137,6 +115,7 @@ export const extractFile = (
   const rules: StyleRule[] = [];
   const slotProperties: Record<string, string[]> = {};
   const slotConditions: Record<string, string[]> = {};
+  const unsupported = stylexUnsupported(top.styleFactories);
   for (const [symbol, factory] of top.styleFactories)
     for (const adapter of options.adapters)
       if (adapter.recognizeFactory(factory)) {
@@ -462,6 +441,7 @@ export const extractFile = (
     gaps,
     ...(globalRules.length ? { globalRules } : {}),
     ...(literalClasses.size ? { literalClasses: [...literalClasses].sort() } : {}),
+    ...(Object.keys(unsupported).length ? { unsupported } : {}),
     outsideReferences,
     ...(plain.length ? { plain } : {}),
     prelude: top.prelude(),

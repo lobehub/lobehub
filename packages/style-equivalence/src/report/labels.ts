@@ -60,6 +60,7 @@ const globalCounts = (detail: string) => {
 };
 
 const DETAIL_LABELS: Record<string, (detail: string) => string> = {
+  STYLEX_UNSUPPORTED: (detail) => `StyleX 不支持 ${detail} 属性`,
   GLOBAL_RULES_CHANGED: (detail) => {
     const { added, removed } = globalCounts(detail);
     return `全局样式规则变了（少了 ${removed} 条，多了 ${added} 条）`;
@@ -70,6 +71,8 @@ const DETAIL_LABELS: Record<string, (detail: string) => string> = {
 };
 
 const DETAIL_EXPLANATIONS: Record<string, (detail: string) => string> = {
+  STYLEX_UNSUPPORTED: (detail) =>
+    `stylex.create 里写了 ${detail}，StyleX 编译时会把它丢掉，不生成任何样式（比如 all: 'unset' 不会重置按钮的原生外观）。改成逐条写出要重置的属性。`,
   GLOBAL_RULES_CHANGED: (detail) => {
     const { added, removed } = globalCounts(detail);
     return `文件里不挂在任何元素上的全局规则（createGlobalStyle、引入的全局 CSS）两侧不一致：改之前有 ${removed} 条在改之后找不到原样的对应，改之后有 ${added} 条是新的。原样保留的规则会自动证明，这里要确认差别是有意的。`;

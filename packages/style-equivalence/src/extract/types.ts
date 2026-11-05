@@ -67,6 +67,7 @@ export interface FileExtraction {
   slotProperties?: Record<string, string[]>;
   styleSymbols: string[];
   tables?: Record<string, string[]>;
+  unsupported?: Record<string, string[]>;
 }
 
 export interface StyleAdapter {

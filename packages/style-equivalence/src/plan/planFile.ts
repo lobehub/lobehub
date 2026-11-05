@@ -213,6 +213,9 @@ export const planFile = (
         .flatMap(({ index }) => [chains.base[index], chains.head[index]]),
     );
     if (left.tag !== right.tag) flags.add('TAG_CHANGED');
+    for (const item of chains.head)
+      for (const slot of item.slots)
+        for (const key of head.unsupported?.[slot] ?? []) flags.add(`STYLEX_UNSUPPORTED:${key}`);
     const realItems = realItemsOf(chains, config.realComponents);
     for (const item of [...chains.base, ...chains.head]) {
       const real = realItems.has(item) || resolved.has(item);
