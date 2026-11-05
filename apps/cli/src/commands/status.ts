@@ -10,6 +10,7 @@ import {
   resolveCliDeviceGateway,
 } from '../device/gatewayEndpoint';
 import { log, setVerbose } from '../utils/logger';
+import { warnStaleConnectors } from './connectStatus';
 
 /**
  * `status` answers one question — does the gateway accept this machine. When it
@@ -39,6 +40,12 @@ export function registerStatusCommand(program: Command) {
     .option('-v, --verbose', 'Enable verbose logging')
     .action(async (options: StatusOptions) => {
       if (options.verbose) setVerbose(true);
+
+      // This probe opens its own connection, so a pass says nothing about the code a
+      // running connector executes. Flag that first; it must never block the probe.
+      await warnStaleConnectors().catch((error) =>
+        log.debug(`Connector version check skipped: ${(error as Error).message}`),
+      );
 
       const auth = await resolveToken(options);
       // Same resolution as `connect`, against the server this token belongs to.

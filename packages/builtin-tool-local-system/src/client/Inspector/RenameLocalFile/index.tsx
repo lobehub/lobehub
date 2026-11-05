@@ -2,8 +2,8 @@
 
 import type { RenameLocalFileParams } from '@lobechat/electron-client-ipc';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { MaterialFileTypeIcon } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx, MaterialFileTypeIcon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import path from 'path-browserify-esm';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,12 +12,7 @@ import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/sty
 
 import type { LocalRenameFileState } from '../../..';
 
-const styles = createStaticStyles(({ css }) => ({
-  icon: css`
-    flex-shrink: 0;
-    margin-inline-end: 4px;
-  `,
-}));
+const styles = stylex.create({ icon: { flexShrink: 0, marginInlineEnd: '4px' } });
 
 export const RenameLocalFileInspector = memo<
   BuiltinInspectorProps<RenameLocalFileParams, LocalRenameFileState>
@@ -38,7 +33,7 @@ export const RenameLocalFileInspector = memo<
         <>
           {t('builtins.lobe-local-system.apiName.renameLocalFile')} {oldName} →{' '}
           <MaterialFileTypeIcon
-            className={styles.icon}
+            className={stylex.props(styles.icon).className}
             filename={newName}
             size={16}
             type={'file'}

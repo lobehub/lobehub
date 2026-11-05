@@ -246,11 +246,20 @@ export interface WidgetParam {
   value?: WidgetParamValue;
 }
 
+/** Largest `view.html` document, in characters. */
+export const WIDGET_HTML_MAX_LENGTH = 200 * 1024;
+
 /** Rendering hints for the widget card, independent of the data. */
 export interface WidgetView {
   chart?: 'line' | 'bar' | 'area';
   /** Column keys to show, in order, for table output. */
   columns?: string[];
+  /**
+   * A self-contained HTML document that draws the card in a sandboxed frame:
+   * no network, no access to the app. It receives the output and theme by
+   * `postMessage` as `window.widgetData`. Takes precedence over `layout`.
+   */
+  html?: string;
   /**
    * Declarative card template. When set it replaces the built-in rendering of
    * the output type; required to show a `data` output.

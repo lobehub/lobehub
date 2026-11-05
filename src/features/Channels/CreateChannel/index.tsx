@@ -5,12 +5,13 @@ import { Hash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import type { ChannelPersonOption } from '@/services/channel';
 import { channelActions } from '@/store/channel';
 
 import type { ChannelAgentDraft } from './agentEnvironment';
-import { canSubmitChannelAgents, toChannelAgentSelection } from './agentEnvironment';
+import { canSubmitChannelMembers, toChannelAgentSelection } from './agentEnvironment';
 import { defaultChannelTitle } from './channelTitle';
 import { MemberSelection } from './MemberSelection';
 import { usePersonName } from './PeopleOptions';
@@ -56,7 +57,7 @@ export const openInviteMembers = (existing: ExistingChannel, onCreated?: (id: st
 /**
  * Like starting a group chat: choose members first. The name is optional and defaults to the
  * members' names; the sidebar renames it later. Inviting into an existing Channel uses the
- * same picker without a name, and also lists workspace members in workspace Channels.
+ * same picker without a name. Workspace Channels, new or existing, also list workspace members.
  */
 function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   const { t } = useTranslation('channel');
@@ -69,6 +70,9 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   const options = useChannelAgentOptions(existing ? undefined : projectId);
   const direct = existing?.directAgentName !== undefined;
   const nameOf = usePersonName();
+  const activeWorkspaceId = useActiveWorkspaceId();
+  // People join only workspace Channels: a new one is created in the active workspace.
+  const canPickPeople = existing ? !!existing.workspaceId : !!activeWorkspaceId;
   const dirty = !!title.trim() || agents.length > 0 || people.length > 0;
 
   // A mask click must not drop what the user typed or picked; ✕ and Esc still close.
@@ -82,17 +86,22 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
       t('unnamedAgent'),
     ),
   );
-  const autoTitle = defaultChannelTitle(
-    direct
-      ? [existing?.directAgentName || t('unnamedAgent'), ...agentNames, ...people.map(nameOf)]
-      : agentNames,
-    {
-      more: (names, count, total) => t('autoTitle.more', { count, names, total }),
-      separator: t('autoTitle.separator'),
-    },
-    CHANNEL_LIMITS.titleLength,
-  );
-  const canSubmit = canSubmitChannelAgents(agents) || (!agents.length && people.length > 0);
+  // A Channel with no one else in it yet still needs a name the sidebar can show.
+  const autoTitle =
+    defaultChannelTitle(
+      direct
+        ? [existing?.directAgentName || t('unnamedAgent'), ...agentNames, ...people.map(nameOf)]
+        : [...agentNames, ...people.map(nameOf)],
+      {
+        more: (names, count, total) => t('autoTitle.more', { count, names, total }),
+        separator: t('autoTitle.separator'),
+      },
+      CHANNEL_LIMITS.titleLength,
+    ) || t('autoTitle.empty');
+  const canSubmit = canSubmitChannelMembers(agents, {
+    creating: !existing,
+    people: people.length,
+  });
 
   const submit = async () => {
     if (busy || !canSubmit) return;
@@ -120,6 +129,7 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
           agents: selections,
           projectId,
           title: title.trim() || autoTitle,
+          userIds: people.map((person) => person.userId),
         });
         close();
         onCreated?.(id);
@@ -141,12 +151,13 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
       )}
       <Flexbox gap={8} inert={busy}>
         <MemberSelection
+          emptyHint={existing ? undefined : t('create.onlyYou')}
           exclude={existing?.agentIds}
           options={options}
           value={agents}
           people={
-            existing?.workspaceId
-              ? { channelId: existing.id, onChange: setPeople, value: people }
+            canPickPeople
+              ? { channelId: existing?.id, onChange: setPeople, value: people }
               : undefined
           }
           onChange={setAgents}
@@ -160,7 +171,7 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
           <Input
             id="channel-title"
             maxLength={CHANNEL_LIMITS.titleLength}
-            placeholder={autoTitle || t('nameAutoPlaceholder')}
+            placeholder={autoTitle}
             prefix={<Icon icon={Hash} size={14} />}
             value={title}
             onChange={(event) => setTitle(event.target.value)}

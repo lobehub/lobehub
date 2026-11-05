@@ -1,4 +1,4 @@
-import { ACCEPTANCE_REVIEW_CLIENT_ID, ACCEPTANCE_REVIEW_SCOPE } from '@lobechat/const';
+import { ACCEPTANCE_CLIENT_ID, ACCEPTANCE_REVIEW_SCOPE } from '@lobechat/const';
 import { type ClientMetadata } from 'oidc-provider';
 import urlJoin from 'url-join';
 
@@ -81,12 +81,12 @@ export const defaultClients: ClientMetadata[] = [
   },
   {
     application_type: 'web',
-    client_id: ACCEPTANCE_REVIEW_CLIENT_ID,
-    client_name: 'LobeHub Review',
+    client_id: ACCEPTANCE_CLIENT_ID,
+    client_name: 'LobeHub Acceptance',
     grant_types: ['urn:ietf:params:oauth:grant-type:device_code', 'authorization_code'],
     scope: ACCEPTANCE_REVIEW_SCOPE,
     logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
-    redirect_uris: [urlJoin(appUrl, '/oidc/review/callback')],
+    redirect_uris: [urlJoin(appUrl, '/oidc/acceptance/callback')],
     response_types: ['code'],
     token_endpoint_auth_method: 'none',
   },

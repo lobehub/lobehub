@@ -1,7 +1,8 @@
 import { ACCEPTANCE_REVIEW_ACTIVATION_PARAM } from '@lobechat/const';
 import { normalizeSiteOrigin, type SiteOriginError } from '@lobechat/utils/siteOrigin';
 
-const REVIEW_SDK_SRC = 'https://web-assets.lobehub.com/review-sdk/assets/v1/lobehub-review.js';
+const ACCEPTANCE_SDK_SRC =
+  'https://web-assets.lobehub.com/acceptance-sdk/assets/v1/lobehub-acceptance.js';
 const REVIEW_DEFAULT_SERVER = 'https://app.lobehub.com';
 
 const HTML_ATTRIBUTE_ESCAPES: Record<string, string> = {
@@ -16,7 +17,7 @@ const escapeAttribute = (value: string) =>
   value.replaceAll(/["&'<>]/g, (char) => HTML_ATTRIBUTE_ESCAPES[char]);
 
 export const siteSnippet = (siteId: string, server: string) =>
-  `<script src="${REVIEW_SDK_SRC}" data-site="${escapeAttribute(siteId)}"${
+  `<script src="${ACCEPTANCE_SDK_SRC}" data-site="${escapeAttribute(siteId)}"${
     server === REVIEW_DEFAULT_SERVER ? '' : ` data-server="${escapeAttribute(server)}"`
   }></script>`;
 

@@ -47,6 +47,7 @@ describe('TaskModel public surface', () => {
       'addActivities',
       'addActivity',
       'addComment',
+      'addComments',
       'addDependency',
       'areAllDependenciesCompleted',
       'areAllSubtasksCompleted',

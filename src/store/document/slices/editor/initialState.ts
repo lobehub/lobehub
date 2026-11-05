@@ -3,6 +3,10 @@
 import type { IEditor } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 
+import type { SaveStatus } from '@/types/saveState';
+
+import type { DocumentCharLimitRefusal } from './charLimit';
+
 /**
  * Document source type - determines which service to use for persistence
  */
@@ -29,6 +33,12 @@ export interface EditorContentState {
    * Defaults to true. Set to false if the consumer handles saving themselves.
    */
   autoSave?: boolean;
+  /**
+   * Set when the last save was refused for exceeding the plan's per-document
+   * character limit. The body stays dirty and unsaved; cleared by the next
+   * successful save.
+   */
+  charLimitError?: DocumentCharLimitRefusal;
   /**
    * The body syncs through a live collaboration room, which persists it; local
    * saves only carry metadata.
@@ -85,7 +95,7 @@ export interface EditorContentState {
   /**
    * Current save status
    */
-  saveStatus: 'idle' | 'saving' | 'saved';
+  saveStatus: SaveStatus;
   /**
    * YAML frontmatter for SKILL.md documents. It is kept outside the rich Markdown editor because
    * the editor parses the closing `---` as a Setext heading underline and renders metadata as a giant heading.
