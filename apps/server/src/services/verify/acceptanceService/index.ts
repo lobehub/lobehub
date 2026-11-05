@@ -7,7 +7,7 @@ import type {
   VerifyCheckTally,
   VerifyRunDecisionDetail,
 } from '@lobechat/types';
-import { statusFromRound } from '@lobechat/utils/verify/acceptanceStatus';
+import { isClosedByRetirement, statusFromRound } from '@lobechat/utils/verify/acceptanceStatus';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -382,7 +382,7 @@ export class AcceptanceService {
     // updateNodeStatus). The Goal discarded that node's outcome, so a settled
     // result must not reopen a sign-off request for dropped work.
     if (
-      (status === 'delivered' || status === 'errored') &&
+      isClosedByRetirement(status) &&
       acceptance.subjectType === 'task' &&
       (await this.acceptanceModel.isRetiredGoalTask(acceptance.subjectId))
     )

@@ -292,12 +292,24 @@ describe('buildGoalGraphView', () => {
           w1: { id: 'acc-1', status: 'delivered' },
           w2: { id: 'acc-2', status: 'errored' },
           w3: { id: 'acc-3', status: 'delivered' },
+          w4: { id: 'acc-4', status: 'pending' },
+          w5: { id: 'acc-5', status: 'rejected' },
+          w6: { id: 'acc-6', status: 'verifying' },
         },
-        events: [event('w1', 'retired', 30), event('w2', 'retired', 30)],
+        events: [
+          event('w1', 'retired', 30),
+          event('w2', 'retired', 30),
+          event('w4', 'retired', 30),
+          event('w5', 'retired', 30),
+          event('w6', 'retired', 30),
+        ],
         nodes: [
           node('w1', { status: 'retired', taskId: 'task-1' }),
           node('w2', { status: 'retired', taskId: 'task-2' }),
           node('w3', { status: 'active', taskId: 'task-3' }),
+          node('w4', { status: 'retired', taskId: 'task-4' }),
+          node('w5', { status: 'retired', taskId: 'task-5' }),
+          node('w6', { status: 'retired', taskId: 'task-6' }),
         ],
       }),
       NOW,
@@ -306,6 +318,11 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.w1.acceptance).toEqual({ id: 'acc-1', status: 'closed' });
     expect(view.byId.w2.acceptance).toEqual({ id: 'acc-2', status: 'closed' });
     expect(view.byId.w3.acceptance).toEqual({ id: 'acc-3', status: 'delivered' });
+    // Retired before its first round, or after a reject: nothing is coming.
+    expect(view.byId.w4.acceptance).toEqual({ id: 'acc-4', status: 'closed' });
+    expect(view.byId.w5.acceptance).toEqual({ id: 'acc-5', status: 'closed' });
+    // A round still being judged lands first; the server closes it on settle.
+    expect(view.byId.w6.acceptance).toEqual({ id: 'acc-6', status: 'verifying' });
   });
 
   it('gives up on a delivery the coordinator itself would no longer wait for', () => {

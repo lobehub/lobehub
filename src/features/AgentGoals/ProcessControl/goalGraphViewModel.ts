@@ -13,6 +13,7 @@ import type {
   WorkType,
 } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
+import { isClosedByRetirement } from '@lobechat/utils/verify/acceptanceStatus';
 
 /**
  * Read model for the Goal process-control surface.
@@ -42,8 +43,7 @@ const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
  * it did, and a round that landed after — neither should ask for a sign-off.
  */
 const nodeAcceptance = (node: GoalGraphNode, acceptance: GoalNodeAcceptance): GoalNodeAcceptance =>
-  node.status === 'retired' &&
-  (acceptance.status === 'delivered' || acceptance.status === 'errored')
+  node.status === 'retired' && isClosedByRetirement(acceptance.status)
     ? { ...acceptance, status: 'closed' }
     : acceptance;
 

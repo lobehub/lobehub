@@ -15,6 +15,7 @@ import type {
   GoalStatus,
 } from '@lobechat/types';
 import { experimentStatus } from '@lobechat/utils/goalGraph';
+import { ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT } from '@lobechat/utils/verify/acceptanceStatus';
 import {
   and,
   asc,
@@ -1007,11 +1008,12 @@ export class GoalGraphModel {
         taskId: node.taskId ?? undefined,
       });
       // A retired node's delivery will never be judged: its outcome is
-      // discarded (see GoalService completion). Left `delivered` / `errored`, its
-      // acceptance keeps asking the person to sign off on work the Goal already
-      // dropped. Close it in the same transaction so the node and its
+      // discarded (see GoalService completion). Left open — awaiting sign-off,
+      // a first round that never comes (`pending` / `planned`), or rework after
+      // a reject — its acceptance stays in the active list for work the Goal
+      // already dropped. Close it in the same transaction so the node and its
       // acceptance reach their terminal states together. A round still
-      // verifying is left to land; the goal page hides it on a retired row.
+      // verifying is left to land; settling it closes it (recomputeStatus).
       if (status === 'retired' && node.taskId) {
         await tx
           .update(acceptances)
@@ -1020,7 +1022,7 @@ export class GoalGraphModel {
             and(
               eq(acceptances.subjectType, 'task'),
               eq(acceptances.subjectId, node.taskId),
-              inArray(acceptances.status, ['delivered', 'errored']),
+              inArray(acceptances.status, [...ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT]),
             ),
           );
       }

@@ -255,6 +255,15 @@ describe('AcceptanceService task lifecycle', () => {
         expect(mocks.taskServiceUpdateStatus).not.toHaveBeenCalled();
       });
 
+      it('closes a round that comes back only planned', async () => {
+        mocks.listByAcceptance.mockResolvedValue([
+          { id: 'run-1', roundIndex: 1, status: 'planned' },
+        ]);
+
+        await expect(service().recomputeStatus('acc-1')).resolves.toBe('closed');
+        expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'closed');
+      });
+
       it('keeps a round still verifying open', async () => {
         mocks.listByAcceptance.mockResolvedValue([
           { id: 'run-1', roundIndex: 1, status: 'verifying' },

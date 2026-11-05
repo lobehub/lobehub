@@ -311,6 +311,32 @@ describe('GoalGraphModel', () => {
     expect(statusOf(inFlight.id)).toMatchObject({ status: 'verifying' });
   });
 
+  it.each(['pending', 'planned', 'rejected'] as const)(
+    'closes a %s acceptance when its node is retired before delivering',
+    async (status) => {
+      // Dispatch files the acceptance as `pending` before any round exists; a
+      // node retired then has no round left to settle, so retirement is the
+      // only chance to take it off the active list.
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Early retire' });
+      const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Dropped early' });
+      const task = await new TaskModel(serverDB, userId).create({ instruction: 'Not yet run' });
+      await graphModel.bindTask(goal.id, node!.id, task.id);
+      const [acceptance] = await serverDB
+        .insert(acceptances)
+        .values({ status, subjectId: task.id, subjectType: 'task', userId })
+        .returning();
+
+      await graphModel.updateNodeStatus(goal.id, node!.id, 'retired');
+
+      const [row] = await serverDB
+        .select()
+        .from(acceptances)
+        .where(eq(acceptances.id, acceptance.id));
+      expect(row).toMatchObject({ status: 'closed' });
+      expect(row.completedAt).toBeInstanceOf(Date);
+    },
+  );
+
   it('reports which tasks back a retired goal node', async () => {
     // The acceptance rollup closes a round that settles after retirement; it
     // asks this to tell a dropped step from a live one.
