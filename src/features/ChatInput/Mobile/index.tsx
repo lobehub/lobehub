@@ -1,7 +1,5 @@
 'use client';
 
-import './index.css';
-
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -30,6 +28,8 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorBgLayout,
     backgroundImage: 'none',
   },
+  leftActions: { flex: 'none', minWidth: '0' },
+  leftActionsItem: { flex: 'none' },
   leftSlot: { overflow: 'hidden', flex: '1', minWidth: '0' },
 });
 
@@ -73,9 +73,9 @@ const DesktopChatInput = memo(() => {
                     <Flexbox
                       horizontal
                       align={'center'}
-                      className={'lobe-mobile-92241386-left-actions'}
+                      className={stylex.props(styles.leftActions).className}
                     >
-                      <ActionBar disableCollapse />
+                      <ActionBar disableCollapse xstyle={styles.leftActionsItem} />
                     </Flexbox>
                     <ComposerExpandButton />
                   </Flexbox>

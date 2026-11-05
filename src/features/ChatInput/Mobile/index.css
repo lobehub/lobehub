@@ -1,9 +1,0 @@
-.lobe-mobile-92241386-left-actions {
-  flex: none;
-  min-width: 0;
-}
-
-/* The action bar renders its own items; keep them from flex-shrinking. */
-.lobe-mobile-92241386-left-actions > * {
-  flex: none !important;
-}

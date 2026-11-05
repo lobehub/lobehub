@@ -1,14 +1,11 @@
 'use client';
 
-import './index.css';
-
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
 import { Center, cx, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { type ReactNode, use } from 'react';
-import { memo, useEffect } from 'react';
+import { memo, type ReactNode, use, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -30,6 +27,7 @@ import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
 import { useTopicDrop } from '../InputEditor/ReferTopic/useTopicDrop';
 import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
+import { composerHoverMarker } from '../markers.stylex';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
@@ -55,6 +53,8 @@ const styles = stylex.create({
     borderEndStartRadius: 0,
     borderEndEndRadius: 0,
   },
+  leftActions: { flex: 'none', minWidth: '0' },
+  leftActionsItem: { flex: 'none' },
   leftSlot: { overflow: 'hidden', flex: '1', minWidth: '0' },
 });
 
@@ -183,13 +183,14 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     // does not create a false gap after the microphone action.
     const leftSlotContent = (
       <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
-        <Flexbox horizontal align={'center'} className={'lobe-desktop-67d6876b-left-actions'}>
+        <Flexbox horizontal align={'center'} className={stylex.props(styles.leftActions).className}>
           {leftContent ?? (
             <ActionBar
               disableCollapse
               borderRadius={borderRadius}
               dropdownPlacement={dropdownPlacement}
               extraActionItems={extraActionItems}
+              xstyle={styles.leftActionsItem}
             />
           )}
         </Flexbox>
@@ -207,13 +208,10 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const content = (
       <Flexbox
+        className={stylex.props(composerHoverMarker, expand && styles.fullscreen).className}
         gap={8}
         paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
         style={{ display: hidden ? 'none' : undefined }}
-        className={cx(
-          'lobe-desktop-67d6876b-container',
-          stylex.props(expand && styles.fullscreen).className,
-        )}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
