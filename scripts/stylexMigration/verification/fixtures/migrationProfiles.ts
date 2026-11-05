@@ -1,6 +1,8 @@
 import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
+  ['ShareTextExport', 'src/features/ShareModal/ShareText/index.tsx'],
+  ['SideBarHeaderLayout', 'src/features/NavPanel/SideBarHeaderLayout.tsx'],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -9,6 +11,50 @@ export const migrationFixtures = [
 ] as const;
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
+  ShareTextExport: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    i18n: true,
+    selector: '[data-component-mount] button',
+    variants: [{ id: 'default', states: ['default', 'hover', 'focus-visible'] }],
+    boundaries: [
+      '../ShareDataProvider',
+      '../useExportMessages',
+      './template',
+      '@lobechat/utils/client',
+      '@lobechat/utils/format',
+    ].map((source) => ({
+      importer: 'src/features/ShareModal/ShareText/index.tsx',
+      replacement: 'fixtures/ShareFixtureData.ts',
+      source,
+    })),
+  },
+  SideBarHeaderLayout: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    i18n: true,
+    selector: '[data-component-mount] a',
+    variants: ['breadcrumb', 'breadcrumb-outside', 'back', 'back-outside'].map((id) => ({
+      id,
+      states: ['default', 'hover', 'focus-visible'],
+    })),
+    boundaries: [
+      {
+        importer: 'src/features/NavPanel/SideBarHeaderLayout.tsx',
+        source: '@/features/Workspace/useWorkspaceAwareNavigate',
+      },
+      ...[
+        '@/store/global',
+        '@/store/global/selectors',
+        '@/store/user',
+        '@/store/user/selectors',
+        '@/utils/platform',
+      ].map((source) => ({ importer: 'src/features/NavPanel/ToggleLeftPanelButton.tsx', source })),
+      ...[
+        '@/business/client/hooks/useActiveWorkspaceSlug',
+        '@/features/Electron/navigation/appNavigate',
+        '@/features/Workspace/workspaceAwarePath',
+      ].map((source) => ({ importer: 'src/features/NavPanel/components/BackButton.tsx', source })),
+    ].map((boundary) => ({ ...boundary, replacement: 'fixtures/NavPanelFixtureData.ts' })),
+  },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     i18n: true,

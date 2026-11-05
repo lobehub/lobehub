@@ -25,6 +25,11 @@ declare module 'verification:component' {
     tableLayout: 'auto' | 'fixed';
   }
   export const LiteTable: ComponentType<Props>;
+  export const ShareTextExport: ComponentType;
+  export const SideBarHeaderLayout: ComponentType<{
+    breadcrumb?: Array<{ href?: string; title: ReactNode }>;
+    left?: ReactNode;
+  }>;
   export const WorkPreview: ComponentType<{
     item: WorkSummaryItem;
     title: string;
