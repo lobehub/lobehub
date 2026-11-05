@@ -33,6 +33,7 @@ import { scheduleProactiveRefresh } from '../auth/proactiveRefresh';
 import { resolveToken } from '../auth/resolveToken';
 import { CLI_API_KEY_ENV } from '../constants/auth';
 import { CLI_CONNECT_SERVICE_NAME, CLI_DISPLAY_NAME, CLI_PRIMARY_BIN } from '../constants/identity';
+import { getCliInstallationPath } from '../daemon/installation';
 import { CliMaintenance } from '../daemon/maintenance';
 import {
   appendLog,
@@ -44,6 +45,7 @@ import {
   reportDaemonStartupReady,
   spawnDaemon,
   stopDaemon,
+  stopDaemonAndWait,
   writeStatus,
 } from '../daemon/manager';
 import { listTasks } from '../daemon/taskRegistry';
@@ -68,7 +70,6 @@ import {
   CONNECT_RETRYABLE_EXIT_CODE,
   getWorkspaceFailureExitCode,
   installConnectService,
-  restartConnectService,
   startConnectService,
   stopConnectService,
   uninstallConnectService,
@@ -87,6 +88,7 @@ import { executeComputerUseCall, resolveComputerUseDevice } from '../tools/compu
 import { cleanupAllProcesses, getActiveShellCount } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { sweepLocalTraces } from '../utils/traceMaintenance';
+import { restartConnector } from './connectRestart';
 import { printConnectStatus } from './connectStatus';
 
 /** Longest a clean stop waits to push pending device health samples. */
@@ -102,6 +104,7 @@ interface ConnectOptions {
   daemonChild?: boolean;
   deviceId?: string;
   gateway?: string;
+  manager?: string;
   /** With --workspace: enroll into the shared pool visible to every member (default: private). */
   public?: boolean;
   serviceChild?: boolean;
@@ -161,8 +164,11 @@ export function registerConnectCommand(program: Command) {
 
   connectCmd
     .command('status')
-    .description('Show connect daemon and user/system service status')
-    .action(() => printConnectStatus());
+    .description('Show connection, running version, and any required action')
+    .option('-v, --verbose', 'Include service details and installation paths')
+    .action((options: { verbose?: boolean }, command: Command) =>
+      printConnectStatus({ verbose: options.verbose || command.optsWithGlobals().verbose }),
+    );
 
   connectCmd
     .command('logs')
@@ -191,7 +197,8 @@ export function registerConnectCommand(program: Command) {
 
   connectCmd
     .command('restart')
-    .description('Restart the background daemon process')
+    .description('Restart the detected daemon or systemd connect service')
+    .option('--manager <manager>', 'Choose a connector when multiple exist: daemon, user, system')
     .option('--token <jwt>', 'JWT access token')
     .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID')
@@ -201,12 +208,13 @@ export function registerConnectCommand(program: Command) {
       'Run the browser tool with this agent-browser binary (default: agent-browser on PATH)',
     )
     .option('-v, --verbose', 'Enable verbose logging')
-    .action(async (options: ConnectOptions) => {
-      const wasStopped = stopDaemon();
-      if (wasStopped) {
-        log.info('Stopped existing daemon.');
-      }
-      await handleDaemonStart({ ...options, daemon: true });
+    .action((_options: ConnectOptions, command: Command) => {
+      const options = command.optsWithGlobals<ConnectOptions>();
+      return restartConnector(options, async () => {
+        const wasStopped = await stopDaemonAndWait();
+        if (wasStopped) log.info('Stopped existing daemon.');
+        await handleDaemonStart({ ...options, daemon: true });
+      });
     });
 
   const serviceCmd = connectCmd
@@ -270,20 +278,21 @@ export function registerConnectCommand(program: Command) {
 
   serviceCmd
     .command('restart')
-    .description('Restart the installed connect service')
-    .action(() => {
-      const restarted = restartConnectService();
-      if (restarted) log.info(`Restarted ${CONNECT_SERVICE_NAME}.`);
-      else
-        log.warn(
-          "No user-level connect service is installed. Run 'lh connect service status' to check for a system-level service.",
-        );
-    });
+    .description(
+      'Restart the user-level connect service (alias for connect restart --manager user)',
+    )
+    .action(() => restartConnector({ manager: 'user' }, async () => {}));
 
   serviceCmd
     .command('status')
     .description('Show user-level and system-level connect service status')
-    .action(() => printConnectStatus({ servicesOnly: true }));
+    .option('-v, --verbose', 'Include service details and installation paths')
+    .action((options: { verbose?: boolean }, command: Command) =>
+      printConnectStatus({
+        servicesOnly: true,
+        verbose: options.verbose || command.optsWithGlobals().verbose,
+      }),
+    );
 
   // Top-level alias for `connect stop`. Users who run `lh connect` naturally
   // reach for `lh disconnect` to undo it; the nested `connect stop` is not
@@ -467,11 +476,13 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   info('───────────────────');
 
   // Update local connection status so other CLI commands can resolve the current device
+  const cliPath = await getCliInstallationPath();
   let connectionStatus = 'connecting';
   let lastRequestAt: string | undefined;
   const updateStatus = (status: string) => {
     connectionStatus = status;
     writeStatus({
+      cliPath,
       cliVersion,
       connectionStatus,
       deviceId: client.currentDeviceId,
@@ -521,7 +532,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     daemon:
       !!options.daemonChild && !options.serviceChild && process.env.LOBEHUB_CONNECT_SERVICE !== '1',
     restartArgs: buildDaemonArgs(options).slice(1),
-    shutdown: () => shutdown(),
+    shutdown: (exitCode) => shutdown(exitCode),
   });
 
   const deviceControlDeps: DeviceControlDeps = {
@@ -909,26 +920,26 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     for (const wsId of workspaceConnections.keys()) closeWorkspaceConnection(wsId);
     void metricsSampler?.stop();
     client.disconnect();
-    removeStatus();
+    removeStatus(process.pid);
     if (isDaemonChild) {
-      removePid();
+      removePid(process.pid);
     }
   };
 
   // A clean stop pushes the health samples taken since the last upload
   // (bounded) before the socket closes, so the device page doesn't show the
   // final minutes as "not running".
-  const shutdown = async () => {
+  const shutdown = async (exitCode = 0) => {
     await Promise.all([
       metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS }),
       closeBrowserSessions(browser),
     ]);
     cleanup();
-    process.exit(0);
+    process.exit(exitCode);
   };
 
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => shutdown());
+  process.on('SIGTERM', () => shutdown());
 
   // Register this device in the server registry before opening the WS, so the
   // row exists by the time the gateway reports it online. `lh login` already

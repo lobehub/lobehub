@@ -15,6 +15,8 @@ import {
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
+  DownloadIcon,
+  EyeIcon,
   FolderPlusIcon,
   HardDriveIcon,
   LockIcon,
@@ -38,6 +40,7 @@ import {
 } from '@/features/WorkingDirectory';
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
+import { openDriveFilePreview } from './DriveFilePreview';
 import {
   entryKind,
   entryModified,
@@ -46,6 +49,7 @@ import {
   sortDriveEntries,
 } from './entryColumns';
 import { useDriveFiles, useRefreshDrive } from './useDriveData';
+import { useDriveDownload } from './useDriveDownload';
 
 /**
  * The columns after the name — size, kind, then date modified — fixed so
@@ -130,7 +134,8 @@ interface DriveExplorerProps {
 /**
  * One drive, browsed like a desktop file manager's list view: a header, then
  * each folder and file with its icon, when it changed, its size and its kind;
- * a new folder, rename and delete.
+ * a new folder, rename, delete and download — a file as it is, a folder as a
+ * zip. Opening a file previews it the way the resource library does.
  *
  * Every folder is an ordinary one. A folder a code environment initialized is
  * a checkout like any other — environments are one-time initializers — so
@@ -142,6 +147,7 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
   const [creating, setCreating] = useState(false);
   const files = useDriveFiles(drive, path);
   const refreshDrive = useRefreshDrive();
+  const download = useDriveDownload(drive);
 
   const tSetting = (key: string, options?: Record<string, unknown>) =>
     (t as (key: string, options?: Record<string, unknown>) => string)(key, {
@@ -202,6 +208,9 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
 
   const scope = drive === 'public' && isWorkspace ? 'public' : 'personal';
 
+  const preview = (entry: { name: string; path: string }) =>
+    openDriveFilePreview({ drive, entry, onDownload: () => void download(entry) });
+
   const menuFor = (entry: { isDirectory: boolean; name: string; path: string }) => (
     <span
       role={'none'}
@@ -211,6 +220,22 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
       <DropdownMenu
         placement={'bottomRight'}
         items={[
+          ...(entry.isDirectory
+            ? []
+            : [
+                {
+                  icon: <Icon icon={EyeIcon} />,
+                  key: 'preview',
+                  label: t('drive.explorer.preview'),
+                  onClick: () => preview(entry),
+                },
+              ]),
+          {
+            icon: <Icon icon={DownloadIcon} />,
+            key: 'download',
+            label: t(entry.isDirectory ? 'drive.explorer.downloadZip' : 'drive.explorer.download'),
+            onClick: () => void download(entry),
+          },
           ...(entry.isDirectory
             ? [
                 {
@@ -360,29 +385,26 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
           </Flexbox>
         ) : (
           entries.map((entry) => {
-            const open = entry.isDirectory ? () => setPath(entry.path) : undefined;
+            // A folder opens in place; a file opens its preview.
+            const open = entry.isDirectory ? () => setPath(entry.path) : () => preview(entry);
 
             return (
               <Flexbox
                 horizontal
                 align={'center'}
-                className={stylex.props(styles.row, open && styles.clickable).className}
+                className={stylex.props(styles.row, styles.clickable).className}
                 data-testid={'drive-entry'}
                 gap={10}
                 key={entry.path}
-                role={open ? 'button' : undefined}
-                tabIndex={open ? 0 : undefined}
+                role={'button'}
+                tabIndex={0}
                 onClick={open}
-                onKeyDown={
-                  open
-                    ? (event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          open();
-                        }
-                      }
-                    : undefined
-                }
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    open();
+                  }
+                }}
               >
                 <span {...stylex.props(styles.entryIcon)}>
                   <FileIcon

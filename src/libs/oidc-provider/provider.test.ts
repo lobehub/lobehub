@@ -55,6 +55,20 @@ describe('OIDC Provider - Market Client Integration', () => {
 
       vi.doUnmock('@/envs/app');
     });
+
+    it('names the acceptance toolbar client after the product people see', async () => {
+      vi.doMock('@/envs/app', () => ({
+        appEnv: { APP_URL: 'https://example.com' },
+      }));
+
+      const { defaultClients } = await import('./config');
+      const client = defaultClients.find((c) => c.client_id === 'lobehub-acceptance');
+
+      expect(client?.client_name).toBe('LobeHub Acceptance');
+      expect(client?.redirect_uris).toEqual(['https://example.com/oidc/acceptance/callback']);
+
+      vi.doUnmock('@/envs/app');
+    });
   });
 
   describe('Provider Configuration', () => {

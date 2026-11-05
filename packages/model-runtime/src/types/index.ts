@@ -7,6 +7,7 @@ export * from './image';
 export * from './model';
 export * from './pricing';
 export * from './providerDiagnostics';
+export * from './routeAttempt';
 export * from './structureOutput';
 export * from './toolsCalling';
 export * from './tts';

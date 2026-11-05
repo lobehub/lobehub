@@ -18,6 +18,7 @@ user-invocable: false
 ### StyleX
 
 - New code may not import `createStaticStyles` / `createStyles` / `css` / `keyframes` / `createGlobalStyle` / `injectGlobal` from `@lobehub/ui` (`stylex-migration/no-emotion-styles`). Files still on them are listed in `scripts/stylexMigration/legacyFiles.json`; after migrating one, run `bun run stylex:migration --prune-legacy`. Never add entries.
+- New code may not import a plain `.css` file either (`stylex-migration/no-plain-css`; CSS modules and package stylesheets are fine). Files that already do are listed in `scripts/stylexMigration/plainCssImporters.json`, which only shrinks. A stylesheet for DOM no prop reaches is imported under `// oxlint-disable-next-line stylex-migration/no-plain-css -- <why no slot or xstyle reaches it>`.
 - Migrate a whole file at once. StyleX longhand rules carry raised specificity (`.x:not(#\#)`) and beat emotion classes on the same element, but StyleX shorthand rules do not, so a half-migrated element resolves by property.
 - Element that also forwards a caller's `className` / `style`: `{...sx([styles.root, active && styles.active], className, style)}` from `@/styles/sx`. Spreading `stylex.props` next to `className` fails `@stylexjs/no-conflicting-props`.
 - Component that lets callers restyle it: take `xstyle?: StyleXStyles` and pass it last in the `sx` / `stylex.props` array. A plain `className` from outside cannot override StyleX rules. Passing a class to `@lobehub/ui` components (`className`, `classNames`) works, because lobe-ui CSS sits in `@layer lobe-ui`.

@@ -1,7 +1,7 @@
 import type { CDPSession, Page } from '@playwright/test';
 
-import type { StyleSnapshot } from './snapshot';
-import { captureInPage } from './snapshot';
+import type { StyleSnapshot } from '../../../../packages/style-equivalence/src/capture/snapshot';
+import { captureInPage } from '../../../../packages/style-equivalence/src/capture/snapshot';
 
 /** Blink batches standard computed properties and interns their values in DOMSnapshot.
  * Custom properties are not accepted by this CDP method. Resolved consumers still are.

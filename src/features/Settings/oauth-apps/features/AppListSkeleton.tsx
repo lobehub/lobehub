@@ -1,23 +1,25 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import { SkeletonBar } from '@/components/Skeleton';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = stylex.create({
   // Same card chrome as the loaded list column in `OAuthApps`.
-  listCol: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
+  listCol: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
   // Same padding and gap as `AppItem`'s row.
-  row: css`
-    padding-block: 12px;
-    padding-inline: 12px;
-  `,
-}));
+  row: { paddingBlock: '12px', paddingInline: '12px' },
+});
 
 /** Centres a text-height skeleton bar inside the line box of the text it replaces. */
 const Line = ({
@@ -46,7 +48,13 @@ interface AppRowsSkeletonProps {
 export const AppRowsSkeleton = ({ rows = 2 }: AppRowsSkeletonProps) => (
   <>
     {Array.from({ length: rows }).map((_, index) => (
-      <Flexbox horizontal align={'center'} className={styles.row} gap={12} key={index}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.row).className}
+        gap={12}
+        key={index}
+      >
         <SkeletonBar height={36} radius={cssVar.borderRadius} width={36} />
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Line height={14} lineHeight={22} width={index % 2 ? 112 : 144} />
@@ -60,7 +68,7 @@ export const AppRowsSkeleton = ({ rows = 2 }: AppRowsSkeletonProps) => (
 
 /** The OAuth app list card (same chrome as the loaded list) filled with row skeletons. */
 const AppListSkeleton = ({ rows }: AppRowsSkeletonProps) => (
-  <Flexbox aria-busy className={styles.listCol} gap={2} padding={4}>
+  <Flexbox aria-busy className={stylex.props(styles.listCol).className} gap={2} padding={4}>
     <AppRowsSkeleton rows={rows} />
   </Flexbox>
 );

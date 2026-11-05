@@ -7,7 +7,7 @@ import type {
   AcceptanceCommentList,
   AcceptanceCommentReaction,
 } from '@lobechat/types';
-import { acceptanceCommentTimeSchema, reviewAnchorSchema } from '@lobechat/types';
+import { acceptanceCommentTimeSchema, acceptanceReviewAnchorSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -68,7 +68,7 @@ const createSchema = z
     editorData: z.unknown().optional(),
     kind: z.enum(['approval', 'comment', 'proposal']).optional(),
     parentCommentId: z.string().trim().min(1).max(64).optional(),
-    source: reviewAnchorSchema.optional(),
+    source: acceptanceReviewAnchorSchema.optional(),
   })
   .refine(
     (value) =>

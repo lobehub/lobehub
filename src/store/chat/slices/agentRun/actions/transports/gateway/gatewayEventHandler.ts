@@ -44,6 +44,7 @@ import {
   resolveRuntimeEndStatus,
 } from './runtimeEndReason';
 import { applyStepMetrics } from './stepMetrics';
+import { insertStreamStartSeeds } from './streamStartSeed';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
@@ -640,37 +641,12 @@ export const createGatewayEventHandler = (
             // interrupt instead of falling back to a placeholder-clobbering refetch.
             hasStreamedContent = true;
 
-            // The step_start uiMessages snapshot is resolved BEFORE the server
-            // creates this step's assistant row, so for every step after the
-            // first the message is NOT in the store yet. `updateMessage`
-            // dispatches on a missing id are silent no-ops, so without an
-            // insert here the whole step renders nothing until the next DB
-            // refetch — and the final step has none before agent_runtime_end,
-            // which is how "loading cleared but no text" happened.
+            // The step_start uiMessages snapshot predates this step's rows;
+            // insert the seeded ones so chunks land on a stored message.
             const stored = dbMessageSelectors.getDbMessageById(newAssistantMessageId)(get());
             if (!stored) {
-              const seed = data?.assistantMessage;
-              if (seed?.role) {
-                // Newer servers ship the message seed on stream_start — insert
-                // the shell locally so chunks land immediately, zero roundtrips.
-                get().internal_dispatchMessage(
-                  {
-                    id: newAssistantMessageId,
-                    type: 'createMessage',
-                    value: {
-                      agentId: seed.agentId ?? context.agentId,
-                      content: '',
-                      groupId: seed.groupId ?? undefined,
-                      model: seed.model ?? data?.model,
-                      parentId: seed.parentId ?? undefined,
-                      provider: seed.provider ?? data?.provider,
-                      role: 'assistant',
-                      threadId: seed.threadId ?? undefined,
-                      topicId: seed.topicId ?? context.topicId ?? undefined,
-                    },
-                  },
-                  dispatchContext,
-                );
+              if (data?.assistantMessage?.role) {
+                insertStreamStartSeeds(get, data, context, dispatchContext);
               } else {
                 // Older servers send only `{ id }` — fall back to a DB read.
                 // The row is inserted before stream_start is published, so the

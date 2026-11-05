@@ -17,6 +17,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-haiku',
     generation: 'claude-5.5',
     id: 'claude-haiku-5-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-06',
     maxOutput: 128_000,
     // Priced by prompt length: once a prompt (cache reads and writes included) exceeds 100K
@@ -89,6 +90,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-sonnet',
     generation: 'claude-5.5',
     id: 'claude-sonnet-5-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-06',
     maxOutput: 128_000,
     // https://platform.claude.com/docs/en/about-claude/pricing
@@ -132,6 +134,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-opus',
     generation: 'claude-5.5',
     id: 'claude-opus-5-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-06',
     maxOutput: 128_000,
     pricing: {
@@ -174,6 +177,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-mythos',
     generation: 'mythos-5.1',
     id: 'claude-fable-5-1',
+    isOfficial: true,
     knowledgeCutoff: '2026-06',
     maxOutput: 128_000,
     pricing: {
@@ -216,6 +220,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-mythos',
     generation: 'mythos-5',
     id: 'claude-fable-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
@@ -255,6 +260,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-opus',
     generation: 'claude-5',
     id: 'claude-opus-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-05',
     maxOutput: 128_000,
     pricing: {
@@ -294,6 +300,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-sonnet',
     generation: 'claude-5',
     id: 'claude-sonnet-5',
+    isOfficial: true,
     knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     // The $2 / $10 launch pricing became the standard price; the increase to $3 / $15 that was
@@ -336,6 +343,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-opus',
     generation: 'claude-4.8',
     id: 'claude-opus-4-8',
+    isOfficial: true,
     knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
@@ -375,6 +383,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-opus',
     generation: 'claude-4.7',
     id: 'claude-opus-4-7',
+    isOfficial: true,
     knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
@@ -413,6 +422,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-opus',
     generation: 'claude-4.6',
     id: 'claude-opus-4-6',
+    isOfficial: true,
     knowledgeCutoff: '2025-05',
     maxOutput: 128_000,
     pricing: {
@@ -450,6 +460,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-sonnet',
     generation: 'claude-4.6',
     id: 'claude-sonnet-4-6',
+    isOfficial: true,
     knowledgeCutoff: '2025-08',
     maxOutput: 64_000,
     pricing: {
@@ -529,6 +540,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-sonnet',
     generation: 'claude-4.5',
     id: 'claude-sonnet-4-5-20250929',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
@@ -567,6 +579,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude-haiku',
     generation: 'claude-4.5',
     id: 'claude-haiku-4-5-20251001',
+    isOfficial: true,
     knowledgeCutoff: '2025-02',
     maxOutput: 64_000,
     pricing: {

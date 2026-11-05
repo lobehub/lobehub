@@ -2,22 +2,21 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Markdown } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import type { CallAgentParams } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding: 12px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  instruction: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  instruction: { fontSize: '13px', color: cssVar.colorTextSecondary },
+});
 
 export const CallAgentRender = memo<BuiltinRenderProps<CallAgentParams>>(({ args }) => {
   const { instruction } = args || {};
@@ -25,8 +24,8 @@ export const CallAgentRender = memo<BuiltinRenderProps<CallAgentParams>>(({ args
   if (!instruction) return null;
 
   return (
-    <div className={styles.container}>
-      <div className={styles.instruction}>
+    <div {...stylex.props(styles.container)}>
+      <div {...stylex.props(styles.instruction)}>
         <Markdown variant={'chat'}>{instruction}</Markdown>
       </div>
     </div>

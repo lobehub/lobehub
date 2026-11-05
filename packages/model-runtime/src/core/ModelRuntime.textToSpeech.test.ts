@@ -69,7 +69,7 @@ describe('ModelRuntime textToSpeech', () => {
         mockRuntimeAI.textToSpeech.mock.invocationCallOrder[0],
       );
       // The caller's own onUsage still fires alongside the hook's capture.
-      expect(callerOnUsage).toHaveBeenCalledWith(usage);
+      expect(callerOnUsage).toHaveBeenCalledWith(usage, undefined);
       expect(onTextToSpeechFinal).toHaveBeenCalledWith(
         { latencyMs: expect.any(Number), usage },
         { options, payload: ttsPayload },
