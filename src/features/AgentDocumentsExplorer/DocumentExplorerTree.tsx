@@ -1,6 +1,8 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
-import { Center, createStaticStyles, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   FilePlusIcon,
   FileTextIcon,
@@ -37,6 +39,7 @@ import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
 import type { AgentDocumentSort } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { sx } from '@/styles/sx';
 
 import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
@@ -72,44 +75,50 @@ const selectStemOfActiveRenameInput = (root: HTMLElement | null) => {
   input.setSelectionRange(0, dotIndex);
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  tree: css`
-    --trees-bg-override: transparent;
-    --trees-border-color-override: transparent;
-    --trees-selected-bg-override: ${cssVar.colorFillSecondary};
-    --trees-selected-fg-override: ${cssVar.colorText};
-    --trees-bg-muted-override: ${cssVar.colorFillTertiary};
+const styles = stylex.create({
+  tree: {
+    '--trees-bg-override': 'transparent',
+    '--trees-border-color-override': 'transparent',
+    '--trees-selected-bg-override': cssVar.colorFillSecondary,
+    '--trees-selected-fg-override': cssVar.colorText,
+    '--trees-bg-muted-override': cssVar.colorFillTertiary,
 
-    /* Every row is a document the user can open, so labels keep the primary
-       text color; only the glyphs step back. Mirrors the sidebar NavItem, which
-       pairs colorText titles with colorTextDescription icons. */
-    --trees-fg-override: ${cssVar.colorText};
-    --trees-fg-muted-override: ${cssVar.colorTextDescription};
-    --trees-accent-override: ${cssVar.colorPrimary};
+    // Every row is a document the user can open, so labels keep the primary
+    // text color; only the glyphs step back. Mirrors the sidebar NavItem, which
+    // pairs colorText titles with colorTextDescription icons.
+    '--trees-fg-override': cssVar.colorText,
+    '--trees-fg-muted-override': cssVar.colorTextDescription,
+    '--trees-accent-override': cssVar.colorPrimary,
 
-    /* Nesting reads from indentation alone — no indent guides. */
-    --trees-indent-guide-bg-override: transparent;
+    // Nesting reads from indentation alone — no indent guides.
+    '--trees-indent-guide-bg-override': 'transparent',
 
-    /* Documents are prose, not code: give rows the breathing room of a
-       Notion / 语雀 outline instead of the IDE density the Files tree wants.
-       Row height and label size match the sidebar NavItem (36px / 14px). */
-    --trees-font-size-override: ${DOCUMENT_TREE_LAYOUT.fontSize}px;
-    --trees-level-gap-override: ${DOCUMENT_TREE_LAYOUT.levelGap}px;
-    --trees-item-row-gap-override: ${DOCUMENT_TREE_LAYOUT.iconGap}px;
+    // Documents are prose, not code: give rows the breathing room of a
+    // Notion / 语雀 outline instead of the IDE density the Files tree wants.
+    // Row height and label size match the sidebar NavItem (36px / 14px). The
+    // font size, level gap and row gap come from DOCUMENT_TREE_LAYOUT (inline).
 
-    /* No horizontal gutter of its own: a row's hover fill spans the panel's
-       content edges, the same edges as the panel tabs (技能 / 文档) above. Rows
-       pad their start (DOCUMENT_TREE_ROW_CSS) so the first glyph — file icon or
-       chevron — lines up with the 「文档」 title. */
-    --trees-item-padding-x-override: 6px;
-    --trees-item-margin-x-override: 0px;
-    --trees-padding-inline-override: 0px;
-    --trees-border-radius-override: 8px;
+    // No horizontal gutter of its own: a row's hover fill spans the panel's
+    // content edges, the same edges as the panel tabs (技能 / 文档) above. Rows
+    // pad their start (DOCUMENT_TREE_ROW_CSS) so the first glyph — file icon or
+    // chevron — lines up with the 「文档」 title.
+    '--trees-item-padding-x-override': '6px',
+    '--trees-item-margin-x-override': '0px',
+    '--trees-padding-inline-override': '0px',
+    '--trees-border-radius-override': '8px',
 
-    /* Consumed by DOCUMENT_TREE_ICON_CSS inside the shadow root. */
-    --explorer-tree-icon-fg: ${cssVar.colorTextDescription};
-  `,
-}));
+    // Consumed by DOCUMENT_TREE_ICON_CSS inside the shadow root.
+    '--explorer-tree-icon-fg': cssVar.colorTextDescription,
+  },
+});
+
+// Layout tokens shared with the document tree's CSS constants, so they stay
+// runtime values rather than literals in the stylesheet.
+const TREE_LAYOUT_VARS = {
+  '--trees-font-size-override': `${DOCUMENT_TREE_LAYOUT.fontSize}px`,
+  '--trees-item-row-gap-override': `${DOCUMENT_TREE_LAYOUT.iconGap}px`,
+  '--trees-level-gap-override': `${DOCUMENT_TREE_LAYOUT.levelGap}px`,
+} as CSSProperties;
 
 interface Props {
   agentId: string;
@@ -217,7 +226,10 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     [nodes],
   );
 
-  const treeStyle = useMemo(() => ({ ...style, ...treeStyleVars }), [style, treeStyleVars]);
+  const treeStyle = useMemo(
+    () => ({ ...TREE_LAYOUT_VARS, ...style, ...treeStyleVars }),
+    [style, treeStyleVars],
+  );
 
   const parentMap = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -522,7 +534,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
   );
 
   return (
-    <div className={styles.tree} ref={containerRef} style={treeStyle}>
+    <div {...sx([styles.tree], undefined, treeStyle)} ref={containerRef}>
       <input
         hidden
         multiple

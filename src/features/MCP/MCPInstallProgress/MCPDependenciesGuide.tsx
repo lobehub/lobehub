@@ -1,13 +1,6 @@
-import {
-  Block,
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Markdown,
-  Snippet,
-  Text,
-} from '@lobehub/ui';
+import { Block, Button, Flexbox, Markdown, Snippet, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AlertTriangle, CheckCircle, ExternalLink, Terminal } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { memo } from 'react';
@@ -21,60 +14,30 @@ interface MCPDependenciesGuideProps {
   systemDependencies: SystemDependencyCheckResult[];
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  commandBlock: css`
-    position: relative;
-
-    padding-block: ${cssVar.paddingXS};
-    padding-inline: ${cssVar.paddingSM};
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-
-    background-color: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background-color: ${cssVar.colorFillSecondary};
-    }
-  `,
-  container: css`
-    margin-block-start: ${cssVar.marginXS};
-    padding: ${cssVar.padding};
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    background-color: ${cssVar.colorBgContainer};
-  `,
-  copyButton: css`
-    position: absolute;
-    inset-block-start: ${cssVar.paddingXXS};
-    inset-inline-end: ${cssVar.paddingXXS};
-
-    height: auto;
-    min-height: auto;
-    padding-block: 2px;
-    padding-inline: 6px;
-
-    font-size: 12px;
-  `,
-  dependencyCard: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusSM};
-  `,
-  footer: css`
-    display: flex;
-    gap: ${cssVar.marginXS};
-    justify-content: flex-end;
-    margin-block-start: ${cssVar.marginXS};
-  `,
-  statusIcon: css`
-    display: flex;
-    gap: ${cssVar.marginXXS};
-    align-items: center;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    marginBlockStart: cssVar.marginXS,
+    padding: cssVar.padding,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  dependencyCard: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusSM,
+  },
+  footer: {
+    display: 'flex',
+    gap: cssVar.marginXS,
+    justifyContent: 'flex-end',
+    marginBlockStart: cssVar.marginXS,
+  },
+  statusIcon: { display: 'flex', gap: cssVar.marginXXS, alignItems: 'center' },
+});
 
 const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
   ({ identifier, systemDependencies }) => {
@@ -101,7 +64,7 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
     return (
       <m.div
         animate={{ y: 0 }}
-        className={styles.container}
+        {...stylex.props(styles.container)}
         initial={{ y: 8 }}
         transition={{ delay: 0.1, duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
       >
@@ -132,7 +95,7 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
           <Flexbox gap={8}>
             {systemDependencies.map((dep) => (
               <Block
-                className={styles.dependencyCard}
+                className={stylex.props(styles.dependencyCard).className}
                 key={dep.name}
                 padding={12}
                 variant={'outlined'}
@@ -149,7 +112,7 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
                         </Text>
                       )}
                     </Flexbox>
-                    <div className={styles.statusIcon}>
+                    <div {...stylex.props(styles.statusIcon)}>
                       {dep.meetRequirement ? (
                         <>
                           <CheckCircle color={cssVar.colorSuccess} size={14} />
@@ -201,7 +164,7 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
 
         <m.div
           animate={{ opacity: 1, y: 0 }}
-          className={styles.footer}
+          {...stylex.props(styles.footer)}
           initial={{ opacity: 0, y: 4 }}
           transition={{ delay: 0.3, duration: 0.2 }}
         >

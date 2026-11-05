@@ -11,16 +11,6 @@ import ModelDetailPanel from './ModelDetailPanel';
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  createStaticStyles: () => ({
-    actionText: 'actionText',
-    container: 'container',
-    description: 'description',
-    originalPriceText: 'originalPriceText',
-    priceValue: 'priceValue',
-    radarClickable: 'radarClickable',
-    row: 'row',
-    titleText: 'titleText',
-  }),
   cssVar: new Proxy({}, { get: (_, token) => `var(--${String(token)})` }),
 }));
 
@@ -196,7 +186,7 @@ describe('ModelDetailPanel pricing', () => {
       />,
     );
 
-    expect(container.querySelector('.description')).toHaveTextContent(
+    expect(container.querySelector('[data-testid="model-description"]')).toHaveTextContent(
       'Localized LobeHub model description.',
     );
   });
@@ -212,7 +202,7 @@ describe('ModelDetailPanel pricing', () => {
       />,
     );
 
-    expect(container.querySelector('.description')).toHaveTextContent(
+    expect(container.querySelector('[data-testid="model-description"]')).toHaveTextContent(
       'Localized model description.',
     );
   });
@@ -229,7 +219,7 @@ describe('ModelDetailPanel pricing', () => {
       />,
     );
 
-    expect(container.querySelector('.description')).toHaveTextContent(
+    expect(container.querySelector('[data-testid="model-description"]')).toHaveTextContent(
       'Fallback model description.',
     );
   });
@@ -246,7 +236,7 @@ describe('ModelDetailPanel pricing', () => {
       />,
     );
 
-    expect(container.querySelector('.description')).toHaveTextContent(
+    expect(container.querySelector('[data-testid="model-description"]')).toHaveTextContent(
       'Localized LobeHub colon-id model description.',
     );
   });
@@ -274,7 +264,7 @@ describe('ModelDetailPanel pricing', () => {
       />,
     );
 
-    const originalPrice = container.querySelector('.originalPriceText');
+    const originalPrice = container.querySelector('[data-testid="original-price"]');
 
     expect(originalPrice).toHaveTextContent('5M');
     expect(originalPrice).not.toHaveTextContent('credits/M tokens');

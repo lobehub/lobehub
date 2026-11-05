@@ -1,5 +1,7 @@
 import { RadarChart } from '@lobehub/charts';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- @lobehub/charts RadarChart PolarGrid takes no className
+import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import type { ModelRating, ModelRatingSource } from 'model-bank';
 import type { FC } from 'react';
 import { memo } from 'react';
@@ -37,14 +39,8 @@ export interface RadarDimensionDatum {
 }
 
 export const radarStyles = createStaticStyles(({ css, cssVar }) => ({
-  /**
-   * Grid strokes are re-colored with the alpha-based fill token: the library
-   * draws them with colorBorderSecondary, which equals colorBgElevated in the
-   * dark theme (both neutral scale[2]), so they vanish on elevated surfaces.
-   * Note the concentric rings render as `path` (class
-   * recharts-polar-grid-concentric-polygon) and `circle` in circle grid mode —
-   * there is no `polygon` element inside the grid group.
-   */
+  // The library strokes the grid with colorBorderSecondary, which equals colorBgElevated
+  // in the dark theme; rings render as path and circle, never polygon.
   radar: css`
     .recharts-polar-grid line,
     .recharts-polar-grid path,

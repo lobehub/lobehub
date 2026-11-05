@@ -5,18 +5,9 @@ import {
   getTopicMetadataWorkingDirectoryEffectivePath,
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
-import {
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Popover,
-  Skeleton,
-  Tag,
-  Text,
-  Tooltip,
-  useTheme,
-} from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { MessageSquareDashed, TargetIcon } from 'lucide-react';
@@ -80,50 +71,46 @@ const META_HOVER_CARD_STYLES = {
   } as CSSProperties,
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  ciBadge: css`
-    position: absolute;
-    inset-block-end: -3px;
-    inset-inline-end: -3px;
+const ciSpin = stylex.keyframes({
+  to: { transform: 'rotate(360deg)' },
+});
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-
-    line-height: 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  ciPending: css`
-    animation: ci-spin 1s linear infinite;
-
-    @keyframes ci-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
-  markerIcon: css`
-    position: relative;
-    display: inline-flex;
-    flex: none;
-  `,
-  runningElapsedTime: css`
-    flex: none;
-
-    min-width: 42px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-    text-align: end;
-  `,
-}));
+const styles = stylex.create({
+  ciBadge: {
+    position: 'absolute',
+    insetBlockEnd: '-3px',
+    insetInlineEnd: '-3px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
+    lineHeight: 0,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  ciPending: {
+    animationName: ciSpin,
+    animationDuration: '1s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+  markerIcon: {
+    position: 'relative',
+    display: 'inline-flex',
+    flex: 'none',
+  },
+  runningElapsedTime: {
+    flex: 'none',
+    minWidth: '42px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+    color: cssVar.colorTextTertiary,
+    textAlign: 'end',
+  },
+});
 
 /**
  * The mobile surface renders its topic list in a modal and never mounts the
@@ -204,7 +191,9 @@ const RunningElapsedTime = memo<RunningElapsedTimeProps>(({ agentId, runStartedA
   if (!startTime) return null;
 
   return (
-    <span className={styles.runningElapsedTime}>{formatElapsedClockTime(now - startTime)}</span>
+    <span {...stylex.props(styles.runningElapsedTime)}>
+      {formatElapsedClockTime(now - startTime)}
+    </span>
   );
 });
 
@@ -536,7 +525,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       if (hasGoal && goalsEnabled) {
         return (
           <Tooltip title={t('metaCard.goal')}>
-            <span aria-label={t('metaCard.goal')} className={styles.markerIcon}>
+            <span aria-label={t('metaCard.goal')} {...stylex.props(styles.markerIcon)}>
               <Icon
                 icon={TargetIcon}
                 size={'small'}
@@ -559,15 +548,17 @@ const TopicItemRow = memo<TopicItemRowProps>(
           : t(prVisual.labelKey);
         return (
           <Tooltip title={tooltip}>
-            <span className={styles.markerIcon}>
+            <span className={stylex.props(styles.markerIcon).className}>
               <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
               {showCiBadge && (
-                <span className={styles.ciBadge}>
+                <span {...stylex.props(styles.ciBadge)}>
                   <Icon
-                    className={ciStatus === 'pending' ? styles.ciPending : undefined}
                     icon={ciVisual.icon}
                     size={9}
                     style={{ color: ciVisual.color }}
+                    className={
+                      ciStatus === 'pending' ? stylex.props(styles.ciPending).className : undefined
+                    }
                   />
                 </span>
               )}

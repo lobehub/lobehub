@@ -1,5 +1,6 @@
 import { Flexbox, Icon, SearchBar, stopPropagation, Tabs, Tooltip } from '@lobehub/ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
+import * as stylex from '@stylexjs/stylex';
 import { Brain } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +24,7 @@ export const Toolbar = memo<ToolbarProps>(
       <Flexbox
         horizontal
         align="center"
-        className={styles.toolbar}
+        className={stylex.props(styles.toolbar).className}
         gap={4}
         justify="space-between"
         paddingBlock={8}

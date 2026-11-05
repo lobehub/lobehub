@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessagesSquare } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,35 +19,36 @@ import { useAgentStore } from '@/store/agent';
 import { lessonSectionLabel } from '../helpers';
 import { useExpertiseDomain, useExpertiseLesson } from '../hooks';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-    display: flex;
-  `,
-  sections: css`
-    overflow: hidden;
-    width: min(100%, 760px);
-  `,
-  sectionItem: css`
-    display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
-    gap: 16px;
-
-    padding-block: 14px;
-    padding-inline: 16px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  title: css`
-    max-width: 880px;
-    text-wrap: balance;
-  `,
-  hitTitle: css`
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflowY: 'auto',
+    display: 'flex',
+  },
+  sections: {
+    overflow: 'hidden',
+    width: 'min(100%, 760px)',
+  },
+  sectionItem: {
+    display: 'grid',
+    gridTemplateColumns: '72px minmax(0, 1fr)',
+    gap: '16px',
+    paddingBlock: '14px',
+    paddingInline: '16px',
+  },
+  // Every section after the first is separated from the one above.
+  sectionSeparated: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  title: {
+    maxWidth: '880px',
+    textWrap: 'balance',
+  },
+  hitTitle: {
+    minWidth: '0',
+  },
+});
 
 /** Labels a lesson section, falling back to the raw key when no polarity declares it. */
 const SectionLabel = memo<{ sectionKey: string }>(({ sectionKey }) => {
@@ -95,7 +98,7 @@ const LessonDetail = memo(() => {
           ) : null
         }
       />
-      <Flexbox className={styles.body} flex={1} width={'100%'}>
+      <Flexbox className={stylex.props(styles.body).className} flex={1} width={'100%'}>
         <WideScreenContainer>
           <AsyncBoundary
             data={data}
@@ -113,7 +116,12 @@ const LessonDetail = memo(() => {
                   <Text fontSize={12} type={'secondary'} weight={600}>
                     {t('rules.detail.eyebrow', { code: data.lesson.code })}
                   </Text>
-                  <Text className={styles.title} fontSize={26} lineHeight={1.35} weight={700}>
+                  <Text
+                    className={stylex.props(styles.title).className}
+                    fontSize={26}
+                    lineHeight={1.35}
+                    weight={700}
+                  >
                     {data.lesson.title}
                   </Text>
                   <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
@@ -135,9 +143,16 @@ const LessonDetail = memo(() => {
                   )}
                 </Flexbox>
 
-                <Block className={styles.sections} padding={0} variant={'outlined'}>
-                  {sections?.map((section) => (
-                    <div className={styles.sectionItem} key={section.key}>
+                <Block
+                  className={stylex.props(styles.sections).className}
+                  padding={0}
+                  variant={'outlined'}
+                >
+                  {sections?.map((section, index) => (
+                    <div
+                      {...stylex.props(styles.sectionItem, index > 0 && styles.sectionSeparated)}
+                      key={section.key}
+                    >
                       <Text fontSize={12} type={'secondary'} weight={600}>
                         <SectionLabel sectionKey={section.key} />
                       </Text>
@@ -166,7 +181,11 @@ const LessonDetail = memo(() => {
                         variant={'outlined'}
                       >
                         <Flexbox horizontal align={'flex-start'} gap={12} justify={'space-between'}>
-                          <Text className={styles.hitTitle} fontSize={13} lineHeight={1.65}>
+                          <Text
+                            className={stylex.props(styles.hitTitle).className}
+                            fontSize={13}
+                            lineHeight={1.65}
+                          >
                             {hit.example}
                           </Text>
                           <Tag color={hit.outcome === 'pass' ? 'green' : 'red'}>

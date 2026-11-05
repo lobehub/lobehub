@@ -9,8 +9,6 @@ import {
   AccordionTrigger,
   ActionIcon,
   Center,
-  createStaticStyles,
-  cssVar,
   cx,
   type DropdownItem,
   DropdownMenu,
@@ -19,6 +17,8 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ListFilter, LucideCheck, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -44,14 +44,15 @@ import DevicePresenceDot from './DevicePresenceDot';
 const AGENT_GROUP_PREFIX = 'agent:';
 const SUB_GROUP_MODES: ProjectTopicSubGroupMode[] = ['none', 'byDevice', 'byTime', 'byStatus'];
 
-const styles = createStaticStyles(({ css }) => ({
-  avatarWrap: css`
-    position: relative;
-    flex: none;
-    border-radius: 50%;
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  avatarWrap: {
+    position: 'relative',
+    flex: 'none',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 /**
  * Agent attribution only exists on feeds that join it in (the project topic
@@ -150,7 +151,12 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
       <AccordionHeader>
         <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
-            <Center className={styles.avatarWrap} flex={'none'} height={18} width={18}>
+            <Center
+              className={stylex.props(styles.avatarWrap).className}
+              flex={'none'}
+              height={18}
+              width={18}
+            >
               <AgentAvatar
                 agentId={agentId ?? (isOwnBucket ? activeAgentId : undefined)}
                 avatar={avatar}

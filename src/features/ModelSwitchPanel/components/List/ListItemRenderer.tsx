@@ -12,6 +12,7 @@ import {
   Icon,
   menuSharedStyles,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -80,7 +81,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
           <Block
             clickable
             horizontal
-            className={styles.menuItem}
+            className={stylex.props(styles.menuItem).className}
             gap={8}
             key="no-provider"
             style={{ color: cssVar.colorTextTertiary }}
@@ -100,7 +101,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         return (
           <Flexbox
             horizontal
-            className={styles.groupHeader}
+            className={stylex.props(styles.groupHeader).className}
             justify="space-between"
             key={`header-${item.provider.id}`}
             paddingBlock={'12px 4px'}
@@ -137,7 +138,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         return (
           <Flexbox
             horizontal
-            className={styles.menuItem}
+            className={stylex.props(styles.menuItem).className}
             gap={8}
             key={`empty-${item.provider.id}`}
             style={{ color: cssVar.colorTextTertiary }}
@@ -161,8 +162,11 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
               <DropdownMenuSubmenuTrigger
-                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
                 style={{ paddingBlock: 8, paddingInline: 8 }}
+                className={cx(
+                  menuSharedStyles.item,
+                  isActive && stylex.props(styles.menuItemActive).className,
+                )}
                 onClick={(e) => {
                   e.preventDefault();
                   setDetailOpen(false);
@@ -185,7 +189,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
-                  <DropdownMenuPopup className={styles.detailPopup}>
+                  <DropdownMenuPopup className={stylex.props(styles.detailPopup).className}>
                     <ModelDetailPanel model={item.model.id} provider={item.provider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>
@@ -205,8 +209,11 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
               <DropdownMenuSubmenuTrigger
-                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
                 style={{ paddingBlock: 8, paddingInline: 8 }}
+                className={cx(
+                  menuSharedStyles.item,
+                  isActive && stylex.props(styles.menuItemActive).className,
+                )}
                 onClick={(e) => {
                   e.preventDefault();
                   setDetailOpen(false);
@@ -229,7 +236,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={16}>
-                  <DropdownMenuPopup className={styles.detailPopup}>
+                  <DropdownMenuPopup className={stylex.props(styles.detailPopup).className}>
                     <ModelDetailPanel model={item.data.model.id} provider={singleProvider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>

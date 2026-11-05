@@ -15,6 +15,7 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   ArchiveIcon,
@@ -35,6 +36,7 @@ import { expertiseService } from '@/services/expertise';
 
 import { countTiers, type HabitTier, habitTier, TIER_ORDER } from '../helpers';
 import LessonPreview from './LessonPreview';
+import { rowMarker } from './markers.stylex';
 import { portraitStyles as styles } from './styles';
 import TeachBox from './TeachBox';
 
@@ -65,9 +67,9 @@ const RecentDots = memo<{ recent: ExpertiseHabit['recent'] }>(({ recent }) => {
     <Tooltip title={tip}>
       <Flexbox horizontal gap={3} style={{ flex: 'none' }}>
         {recent.length === 0
-          ? [0, 1, 2].map((i) => <span className={`${styles.dot} ${styles.dotNone}`} key={i} />)
+          ? [0, 1, 2].map((i) => <span {...stylex.props(styles.dot, styles.dotNone)} key={i} />)
           : recent.map((r, i) => (
-              <span className={`${styles.dot} ${r.pass ? styles.dotOk : styles.dotBad}`} key={i} />
+              <span {...stylex.props(styles.dot, r.pass ? styles.dotOk : styles.dotBad)} key={i} />
             ))}
       </Flexbox>
     </Tooltip>
@@ -167,7 +169,7 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
   ];
 
   return (
-    <Flexbox className={styles.row} gap={6}>
+    <Flexbox className={stylex.props(styles.row, rowMarker).className} gap={6}>
       <Flexbox horizontal align={'flex-start'} gap={12}>
         <Text code fontSize={12} style={{ flex: 'none', marginTop: 2 }} type={'secondary'}>
           {habit.code}
@@ -194,7 +196,7 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
           }
         >
           <Flexbox
-            className={styles.previewTarget}
+            className={stylex.props(styles.previewTarget).className}
             gap={2}
             style={{ flex: 1, minWidth: 0 }}
             onClick={() => navigate(lessonPath)}
@@ -223,7 +225,13 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
           </Flexbox>
         </Popover>
         <RecentDots recent={habit.recent} />
-        <Flexbox horizontal align={'center'} className={'teach'} gap={4} style={{ flex: 'none' }}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.teach).className}
+          gap={4}
+          style={{ flex: 'none' }}
+        >
           {(tier === 'recurring' || tier === 'shaky') && (
             <Button
               size={'small'}
@@ -296,7 +304,7 @@ const HabitList = memo<HabitListProps>(
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>
             {viewAllPath && (
-              <Link className={styles.viewAll} to={viewAllPath}>
+              <Link className={stylex.props(styles.viewAll).className} to={viewAllPath}>
                 {t('habits.viewAll', { count: habits.length })}
               </Link>
             )}
@@ -315,11 +323,18 @@ const HabitList = memo<HabitListProps>(
             if (rows.length === 0) return null;
             return (
               <Fragment key={tier}>
-                <Flexbox horizontal align={'center'} className={styles.groupHead} gap={8}>
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={stylex.props(styles.groupHead).className}
+                  gap={8}
+                >
                   <Text
-                    className={tier === 'recurring' ? styles.accent : undefined}
                     fontSize={12.5}
                     weight={600}
+                    className={
+                      tier === 'recurring' ? stylex.props(styles.accent).className : undefined
+                    }
                   >
                     {t(`tier.${tier}`)} {rows.length}
                   </Text>
@@ -344,7 +359,7 @@ const HabitList = memo<HabitListProps>(
             horizontal
             align={'center'}
             as={'button'}
-            className={styles.groupHead}
+            className={stylex.props(styles.groupHead).className}
             gap={8}
             justify={'space-between'}
             style={{ background: undefined, color: 'inherit', cursor: 'pointer', width: '100%' }}

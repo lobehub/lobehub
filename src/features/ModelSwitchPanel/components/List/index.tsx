@@ -1,4 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type ComponentType, type FC } from 'react';
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -120,7 +121,7 @@ export const List: FC<ListProps> = ({
 
   return (
     <Flexbox
-      className={styles.list}
+      className={stylex.props(styles.list).className}
       flex={1}
       ref={listRef}
       // No fixed height: flex-shrink within the height-capped panel so the list

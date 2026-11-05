@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, createStaticStyles, Empty, Flexbox, Text } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { DnaIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,12 +18,7 @@ import { useAgentStore } from '@/store/agent';
 import { useExpertiseOverview } from '../hooks';
 import HabitList from '../Portrait/HabitList';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-    display: flex;
-  `,
-}));
+const styles = stylex.create({ body: { overflowY: 'auto', display: 'flex' } });
 
 /**
  * 一个方向的全部经验 —— 画像上的习惯清单会把「已养成」折起来；这里是完整的、不折叠的清单，
@@ -68,7 +64,7 @@ const ExperienceList = memo(() => {
           ) : null
         }
       />
-      <Flexbox className={styles.body} flex={1} width={'100%'}>
+      <Flexbox className={stylex.props(styles.body).className} flex={1} width={'100%'}>
         <WideScreenContainer>
           <AsyncBoundary
             data={data}

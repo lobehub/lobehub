@@ -1,25 +1,26 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Icon, Tabs } from '@lobehub/ui';
+import { Flexbox, Icon, Tabs } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BookOpenIcon, BotIcon, CodeIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  nav: css`
-    border-block-end: 1px solid ${cssVar.colorBorder};
-  `,
-  tabs: css`
-    scrollbar-width: none;
-    overflow-x: auto;
-    flex: 1;
-    min-width: 0;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  nav: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+  },
+  tabs: {
+    'scrollbarWidth': 'none',
+    'overflowX': 'auto',
+    'flex': '1',
+    'minWidth': '0',
+    '::-webkit-scrollbar': { display: 'none' },
+  },
+});
 
 export type TabKey = 'agents' | 'overview' | 'schema';
 
@@ -54,10 +55,10 @@ const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab }) => {
   );
 
   return (
-    <Flexbox className={styles.nav}>
+    <Flexbox className={stylex.props(styles.nav).className}>
       <Tabs
         activeKey={activeTab}
-        className={styles.tabs}
+        className={stylex.props(styles.tabs).className}
         items={items}
         onChange={(key) => setActiveTab?.(key as TabKey)}
       />

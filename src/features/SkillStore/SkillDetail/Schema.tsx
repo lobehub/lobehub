@@ -1,7 +1,9 @@
 'use client';
 
 import { type SkillItem } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Tabs, Tag } from '@lobehub/ui';
+import { Flexbox, Tabs, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,24 +17,16 @@ import Title from '@/routes/(main)/community/features/Title';
 
 import { useDetailContext } from './DetailContext';
 
-const styles = createStaticStyles(({ css }) => ({
-  divider: css`
-    flex-shrink: 0;
-    width: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  left: css`
-    overflow-y: auto;
-    flex-shrink: 0;
-    width: 240px;
-    padding: 8px;
-  `,
-  right: css`
-    container-type: size;
-    overflow: auto;
-    flex: 1;
-  `,
-}));
+const styles = stylex.create({
+  divider: {
+    flexShrink: 0,
+    width: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  left: { overflowY: 'auto', flexShrink: 0, width: '240px', padding: '8px' },
+  right: { containerType: 'size', overflow: 'auto', flex: '1' },
+});
 
 const Schema = memo(() => {
   const { t } = useTranslation('discover');
@@ -87,15 +81,15 @@ const Schema = memo(() => {
               overflow: 'hidden',
             }}
           >
-            <div className={styles.left}>
+            <div {...stylex.props(styles.left)}>
               <FileTree
                 resourceTree={[]}
                 selectedFile={selectedFile}
                 onSelectFile={setSelectedFile}
               />
             </div>
-            <div className={styles.divider} />
-            <div className={styles.right} key={selectedFile}>
+            <div {...stylex.props(styles.divider)} />
+            <div {...stylex.props(styles.right)} key={selectedFile}>
               <ContentViewer
                 contentMap={{}}
                 selectedFile={selectedFile}

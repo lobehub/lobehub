@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
-import { confirmModal, css, cx, type DropdownItem, Icon, toast, Upload } from '@lobehub/ui';
+import { confirmModal, type DropdownItem, Icon, toast, Upload } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Archive, HardDriveDownload, Hash, Import, LucideCheck, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,14 +20,17 @@ import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors
 import { useAddFolderMenuItem } from './useAddFolderMenuItem';
 import { getMergedPullRequestTopics } from './utils/mergedPullRequestTopics';
 
-const hotArea = css`
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-color: transparent;
-  }
-`;
+const styles = stylex.create({
+  hotArea: {
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      insetBlock: 0,
+      insetInline: 0,
+      backgroundColor: 'transparent',
+    },
+  },
+});
 
 interface UseTopicActionsDropdownMenuOptions {
   onUploadClose?: () => void;
@@ -142,7 +146,7 @@ export const useTopicActionsDropdownMenu = (
             disabled={!canCreateTopic}
             onFiles={([file]) => handleImport(file)}
           >
-            <div className={cx(hotArea)}>{t('actions.import')}</div>
+            <div {...stylex.props(styles.hotArea)}>{t('actions.import')}</div>
           </Upload>
         ),
         ...(onUploadClose ? { closeOnClick: false } : null),

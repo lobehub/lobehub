@@ -9,8 +9,6 @@ import {
   ActionIcon,
   Button,
   createModal,
-  createStaticStyles,
-  cssVar,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -21,6 +19,8 @@ import {
   Tooltip,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowLeftIcon,
   BellIcon,
@@ -38,34 +38,28 @@ import { useTranslation } from 'react-i18next';
 import GeneratingBorder from '@/components/GeneratingBorder';
 import { expertiseService, type RuleDraft, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
+import { sx } from '@/styles/sx';
 
 import { DIRECTION_ICON } from './DirectionToggle';
 import { composeStyles, type CreatedGroup, createGroupModal } from './GroupModal';
 import { useScopeLabel } from './labels';
 
-const styles = createStaticStyles(({ css }) => ({
-  chip: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12.5px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  field: css`
-    font-size: 13px;
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12.5px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  field: { fontSize: '13px' },
+});
 
 /** What the reviewer can claim; `compiled` is only set by the compiler. */
 type Compilability = 'compilable' | 'not-compilable';
@@ -227,7 +221,7 @@ const ComposeContent = ({
         }
       }}
     >
-      <Flexbox className={composeStyles.head} gap={6}>
+      <Flexbox className={stylex.props(composeStyles.head).className} gap={6}>
         {step === 'review' && (
           <Flexbox horizontal align={'center'} gap={8}>
             <ActionIcon
@@ -244,32 +238,36 @@ const ComposeContent = ({
         {step === 'review' ? (
           <input
             autoFocus
-            className={composeStyles.title}
+            {...stylex.props(composeStyles.title)}
             placeholder={t('rules.compose.titlePlaceholder')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
         ) : (
-          <div className={composeStyles.titleStatic}>{t('rules.compose.describeTitle')}</div>
+          <div {...stylex.props(composeStyles.titleStatic)}>{t('rules.compose.describeTitle')}</div>
         )}
         {step !== 'review' && (
           <>
             <GeneratingBorder
-              className={composeStyles.inputShell}
+              className={stylex.props(composeStyles.inputShell).className}
               generating={step === 'preparing'}
             >
               <textarea
                 autoFocus
-                className={composeStyles.describe}
+                {...sx([composeStyles.describe], undefined, { minHeight: 190 })}
                 disabled={step === 'preparing'}
                 placeholder={t('rules.compose.describePlaceholder')}
-                style={{ minHeight: 190 }}
                 value={brief}
                 onChange={(e) => setBrief(e.target.value)}
               />
             </GeneratingBorder>
             {step === 'preparing' ? (
-              <Flexbox horizontal align={'center'} className={composeStyles.status} gap={8}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(composeStyles.status).className}
+                gap={8}
+              >
                 <Spin size={'small'} variant={'network'} />
                 <span className={shinyTextStyles.shinyText}>
                   {generating[tick % generating.length]}
@@ -280,34 +278,38 @@ const ComposeContent = ({
             )}
           </>
         )}
-        <ActionIcon className={composeStyles.close} icon={XIcon} onClick={() => close()} />
+        <ActionIcon
+          className={stylex.props(composeStyles.close).className}
+          icon={XIcon}
+          onClick={() => close()}
+        />
       </Flexbox>
 
       {step === 'review' && (
-        <Flexbox className={composeStyles.body} gap={14}>
+        <Flexbox className={stylex.props(composeStyles.body).className} gap={14}>
           <Flexbox gap={4}>
-            <span className={composeStyles.label}>{t('rules.compose.why')}</span>
+            <span {...stylex.props(composeStyles.label)}>{t('rules.compose.why')}</span>
             <TextArea
               autoSize={{ maxRows: 6, minRows: 1 }}
-              className={styles.field}
+              className={stylex.props(styles.field).className}
               value={why}
               onChange={(e) => setWhy(e.target.value)}
             />
           </Flexbox>
           <Flexbox gap={4}>
-            <span className={composeStyles.label}>{t('rules.compose.how')}</span>
+            <span {...stylex.props(composeStyles.label)}>{t('rules.compose.how')}</span>
             <TextArea
               autoSize={{ maxRows: 6, minRows: 1 }}
-              className={styles.field}
+              className={stylex.props(styles.field).className}
               value={how}
               onChange={(e) => setHow(e.target.value)}
             />
           </Flexbox>
           <Flexbox gap={4}>
-            <span className={composeStyles.label}>{t('rules.compose.limits')}</span>
+            <span {...stylex.props(composeStyles.label)}>{t('rules.compose.limits')}</span>
             <TextArea
               autoSize={{ maxRows: 6, minRows: 1 }}
-              className={styles.field}
+              className={stylex.props(styles.field).className}
               value={limits}
               onChange={(e) => setLimits(e.target.value)}
             />
@@ -318,7 +320,7 @@ const ComposeContent = ({
       <Flexbox
         horizontal
         align={'center'}
-        className={composeStyles.footer}
+        className={stylex.props(composeStyles.footer).className}
         gap={8}
         justify={'space-between'}
       >
@@ -357,7 +359,7 @@ const ComposeContent = ({
                     : []),
                 ]}
               >
-                <span className={styles.chip}>
+                <span {...stylex.props(styles.chip)}>
                   <Icon icon={newGroup && !group ? FolderPlusIcon : FolderIcon} size={13} />
                   {groupLabel}
                   <Icon icon={ChevronDownIcon} size={12} />
@@ -370,7 +372,7 @@ const ComposeContent = ({
                   onClick: () => setDirection(value),
                 }))}
               >
-                <span className={styles.chip}>
+                <span {...stylex.props(styles.chip)}>
                   <Icon icon={DIRECTION_ICON[direction ?? 'unset']} size={13} />
                   {direction ? t(`rules.direction.${direction}`) : t('rules.meta.direction')}
                   <Icon icon={ChevronDownIcon} size={12} />
@@ -390,7 +392,7 @@ const ComposeContent = ({
                   },
                 ]}
               >
-                <span className={styles.chip}>
+                <span {...stylex.props(styles.chip)}>
                   <Icon icon={enforcement === 'block' ? ShieldCheckIcon : BellIcon} size={13} />
                   {t(
                     enforcement === 'block'
@@ -407,7 +409,7 @@ const ComposeContent = ({
                   onClick: () => setCompilability(value),
                 }))}
               >
-                <span className={styles.chip}>
+                <span {...stylex.props(styles.chip)}>
                   <Icon icon={ClipboardCheckIcon} size={13} />
                   {t(`rules.method.${compilability}`)}
                   <Icon icon={ChevronDownIcon} size={12} />
@@ -415,7 +417,10 @@ const ComposeContent = ({
               </DropdownMenu>
               {group && group.scopes.length > 0 && (
                 <Tooltip title={t('rules.group.gate', { gate: group.gate })}>
-                  <span className={styles.chip} style={{ cursor: 'default' }}>
+                  <span
+                    className={stylex.props(styles.chip).className}
+                    style={{ cursor: 'default' }}
+                  >
                     {t('rules.compose.scope', { scopes: scopeLabel(group.scopes) })}
                   </span>
                 </Tooltip>

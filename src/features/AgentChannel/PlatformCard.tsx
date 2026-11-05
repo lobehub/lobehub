@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, Flexbox, Tag, Text, useTheme } from '@lobehub/ui';
+import { Block, Flexbox, Tag, Text, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,53 +10,38 @@ import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '@/types/botRuntimeS
 
 import { type ChannelPlatformDefinition, getPlatformIcon } from './const';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: stretch;
-
-    min-height: 104px;
-    padding-block: 12px;
-    padding-inline: 12px;
-
-    transition:
-      transform 0.18s,
-      box-shadow 0.18s,
-      border-color 0.18s;
-
-    &:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgb(0 0 0 / 6%);
-    }
-  `,
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    line-height: 1.5;
-  `,
-  statusDot: css`
-    flex-shrink: 0;
-
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorSuccess};
-    box-shadow: 0 0 0 1px ${cssVar.colorBgContainer};
-  `,
-  titleRow: css`
-    width: 100%;
-    min-width: 0;
-  `,
-  trailing: css`
-    flex-shrink: 0;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    alignItems: 'stretch',
+    minHeight: '104px',
+    paddingBlock: '12px',
+    paddingInline: '12px',
+    transition: 'transform 0.18s,\n      box-shadow 0.18s,\n      border-color 0.18s',
+    transform: { 'default': null, ':hover': 'translateY(-1px)' },
+    boxShadow: { 'default': null, ':hover': '0 4px 12px rgb(0 0 0 / 6%)' },
+  },
+  description: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    lineHeight: 1.5,
+  },
+  statusDot: {
+    flexShrink: 0,
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+    boxShadow: `0 0 0 1px ${cssVar.colorBgContainer}`,
+  },
+  titleRow: { width: '100%', minWidth: '0' },
+  trailing: { flexShrink: 0 },
+});
 
 interface PlatformCardProps {
   onSelect: (id: string) => void;
@@ -167,16 +154,26 @@ const PlatformCard = memo<PlatformCardProps>(({ onSelect, platform, status }) =>
   return (
     <Block
       clickable
-      className={styles.card}
+      className={stylex.props(styles.card).className}
       variant={'outlined'}
       onClick={() => onSelect(platform.id)}
     >
-      <Flexbox horizontal align={'center'} className={styles.titleRow} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.titleRow).className}
+        gap={8}
+      >
         {ColorIcon && <ColorIcon size={24} />}
         <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
           {platform.name}
         </Text>
-        <Flexbox horizontal align={'center'} className={styles.trailing} gap={4}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.trailing).className}
+          gap={4}
+        >
           {platform.comingSoon && (
             <Tag size={'small'} style={{ marginInlineEnd: 0 }}>
               {t('channel.comingSoon')}
@@ -191,14 +188,14 @@ const PlatformCard = memo<PlatformCardProps>(({ onSelect, platform, status }) =>
           )}
           {runtimeStatus && (
             <div
-              className={styles.statusDot}
+              className={stylex.props(styles.statusDot).className}
               style={{ background: statusColor }}
               title={statusTitle}
             />
           )}
         </Flexbox>
       </Flexbox>
-      <Text className={styles.description} fontSize={12} type={'secondary'}>
+      <Text className={stylex.props(styles.description).className} fontSize={12} type={'secondary'}>
         {description}
       </Text>
     </Block>

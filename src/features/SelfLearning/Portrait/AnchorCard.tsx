@@ -1,75 +1,68 @@
 'use client';
 
-import { Accordion, Block, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AnchorIcon, CircleCheckIcon, CircleXIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ExpertiseDomainItem } from '@/services/expertise';
 
-const styles = createStaticStyles(({ css }) => ({
-  anchorCard: css`
-    overflow: hidden;
-  `,
-  anchorContent: css`
-    padding-block: 8px 16px;
-    padding-inline: 16px;
-  `,
-  anchorHeader: css`
-    &:hover {
-      background: transparent;
-    }
-  `,
-  canonCard: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-
-    min-width: 0;
-    padding-block: 12px;
-    padding-inline: 14px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  definition: css`
-    display: grid;
-    grid-template-columns: 110px minmax(0, 1fr);
-    gap: 10px 24px;
-    align-items: baseline;
-  `,
-  definitionLabel: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px;
-  `,
-  layerCell: css`
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-
-    min-width: 0;
-    padding-inline-start: 12px;
-    border-inline-start: 2px solid ${cssVar.colorBorderSecondary};
-  `,
-  layerIndex: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
-    letter-spacing: 0.04em;
-  `,
-  sectionLabel: css`
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-    letter-spacing: 0.02em;
-  `,
-}));
+const styles = stylex.create({
+  anchorCard: { overflow: 'hidden' },
+  anchorContent: { paddingBlockStart: '8px', paddingBlockEnd: '16px', paddingInline: '16px' },
+  anchorHeader: {
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  canonCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    minWidth: '0',
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  definition: {
+    display: 'grid',
+    gridTemplateColumns: '110px minmax(0, 1fr)',
+    rowGap: '10px',
+    columnGap: '24px',
+    alignItems: 'baseline',
+  },
+  definitionLabel: { display: 'inline-flex', gap: '6px', alignItems: 'center' },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '10px',
+  },
+  layerCell: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    minWidth: '0',
+    paddingInlineStart: '12px',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+  },
+  layerIndex: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextQuaternary,
+    letterSpacing: '0.04em',
+  },
+  sectionLabel: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: cssVar.colorTextSecondary,
+    letterSpacing: '0.02em',
+  },
+});
 
 /**
  * 它的锚 —— 这个方向拿什么标准在学：什么算实践、对照哪些经典原则、分成哪几层。
@@ -95,9 +88,9 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
   );
 
   return (
-    <Block className={styles.anchorCard} variant={'outlined'}>
+    <Block className={stylex.props(styles.anchorCard).className} variant={'outlined'}>
       <Accordion
-        classNames={{ header: styles.anchorHeader }}
+        classNames={{ header: stylex.props(styles.anchorHeader).className }}
         defaultValue={['anchor']}
         indicatorPlacement={'end'}
         styles={{ trigger: { paddingBlock: 12, paddingInline: 16 } }}
@@ -107,12 +100,16 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
             key: 'anchor',
             title,
             children: (
-              <Flexbox className={styles.anchorContent} gap={24}>
+              <Flexbox className={stylex.props(styles.anchorContent).className} gap={24}>
                 {(domainFilter || outOfScope) && (
-                  <div className={styles.definition}>
+                  <div {...stylex.props(styles.definition)}>
                     {domainFilter && (
                       <>
-                        <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
+                        <Text
+                          className={stylex.props(styles.definitionLabel).className}
+                          fontSize={12.5}
+                          type={'secondary'}
+                        >
                           <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={13} />
                           {t('anchor.filter')}
                         </Text>
@@ -123,7 +120,11 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
                     )}
                     {outOfScope && (
                       <>
-                        <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
+                        <Text
+                          className={stylex.props(styles.definitionLabel).className}
+                          fontSize={12.5}
+                          type={'secondary'}
+                        >
                           <Icon color={cssVar.colorTextTertiary} icon={CircleXIcon} size={13} />
                           {t('anchor.outOfScope')}
                         </Text>
@@ -137,7 +138,7 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
 
                 <Flexbox gap={10}>
                   <Flexbox horizontal align={'baseline'} gap={8}>
-                    <span className={styles.sectionLabel}>{t('create.anchor.canon')}</span>
+                    <span {...stylex.props(styles.sectionLabel)}>{t('create.anchor.canon')}</span>
                     <Text fontSize={12} type={'secondary'}>
                       {domain.canonEntries.length > 0
                         ? t('create.anchor.canonHint')
@@ -145,9 +146,9 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
                     </Text>
                   </Flexbox>
                   {domain.canonEntries.length > 0 && (
-                    <div className={styles.grid}>
+                    <div {...stylex.props(styles.grid)}>
                       {domain.canonEntries.map((c) => (
-                        <div className={styles.canonCard} key={c.key}>
+                        <div {...stylex.props(styles.canonCard)} key={c.key}>
                           <Text fontSize={13.5} weight={600}>
                             {c.title}
                           </Text>
@@ -170,7 +171,7 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
 
                 <Flexbox gap={10}>
                   <Flexbox horizontal align={'baseline'} gap={8}>
-                    <span className={styles.sectionLabel}>{t('create.anchor.layers')}</span>
+                    <span {...stylex.props(styles.sectionLabel)}>{t('create.anchor.layers')}</span>
                     <Text fontSize={12} type={'secondary'}>
                       {domain.layers.length === 0
                         ? t('anchor.noLayers')
@@ -180,10 +181,10 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
                     </Text>
                   </Flexbox>
                   {domain.layers.length > 0 && (
-                    <div className={styles.grid}>
+                    <div {...stylex.props(styles.grid)}>
                       {domain.layers.map((l, i) => (
-                        <div className={styles.layerCell} key={l.key}>
-                          <span className={styles.layerIndex}>L{i + 1}</span>
+                        <div {...stylex.props(styles.layerCell)} key={l.key}>
+                          <span {...stylex.props(styles.layerIndex)}>L{i + 1}</span>
                           <Text fontSize={13.5} weight={600}>
                             {l.title}
                           </Text>

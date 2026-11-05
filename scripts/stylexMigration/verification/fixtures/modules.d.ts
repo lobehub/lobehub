@@ -30,6 +30,32 @@ declare module 'verification:component' {
     title: string;
   }>;
   export const WorkPreviewStatus: typeof WorkPreview;
+  export const AgentCard: ComponentType<{
+    item: Record<string, unknown> & { id: string; type: 'agent' | 'group' };
+    owner?: { avatar: string; name: string };
+  }>;
+  export const MCPConfigForm: ComponentType<{
+    configSchema: Record<string, unknown>;
+    identifier: string;
+  }>;
+  export const ModelSelect: ComponentType<{ value?: { model: string; provider: string } }>;
+  export const MultipleProvidersModelItem: ComponentType<{
+    activeKey: string;
+    data: Record<string, unknown>;
+    isModelRestricted?: (model: string, provider: string) => boolean;
+    newLabel: string;
+    onClose: () => void;
+    onModelChange: (model: string, provider: string) => void;
+    proLabel?: string;
+  }>;
+  export const RulesOnboarding: ComponentType<{
+    agents?: { agentCount: number; lessonCount: number; name: string; onOpen: () => void };
+    backlogRounds?: number;
+    inline?: boolean;
+    onDistill: () => void;
+    onWrite: () => void;
+  }>;
+  export const TopicCard: ComponentType<{ agentId: string; topic: Record<string, unknown> }>;
   export const PreviewToolbar: ComponentType<{
     actions?: ReactNode;
     path: string;

@@ -2,17 +2,9 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { GroupedTopic } from '@lobechat/types';
-import {
-  ActionIcon,
-  Checkbox,
-  createStaticStyles,
-  cssVar,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Checkbox, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FolderIcon, MoreHorizontal, Pin } from 'lucide-react';
 import { Fragment, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,109 +22,82 @@ import { getProjectGroupTitle, getProjectLabel, getTimeGroupTitle } from './util
 
 const KNOWN_TRIGGERS: readonly TriggerFilter[] = ['chat', 'api', 'task', 'eval'];
 
-const styles = createStaticStyles(({ css }) => ({
-  cell: css`
-    overflow: hidden;
-    min-width: 0;
-  `,
-  checkboxBox: css`
-    border-color: ${cssVar.colorBorder};
-  `,
-  groupBar: css`
-    display: flex;
-    gap: 6px;
-    align-items: baseline;
-
-    padding-block: 8px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  groupCount: css`
-    font-size: 11px;
-    font-weight: 400;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  header: css`
-    position: sticky;
-    z-index: 2;
-    inset-block-start: 0;
-
-    display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px 32px;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-
-    /* opaque so scrolled rows don't bleed through */
-    background: ${cssVar.colorBgElevated};
-  `,
-  headerCellEnd: css`
-    text-align: end;
-  `,
-  list: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  row: css`
-    cursor: pointer;
-
-    display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px 32px;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-
-    transition: background 0.12s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  rowSelected: css`
-    background: ${cssVar.colorPrimaryBg};
-
-    &:hover {
-      background: ${cssVar.colorPrimaryBgHover};
-    }
-  `,
-  sub: css`
-    overflow: hidden;
-    margin-block-start: 2px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  title: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  cell: { overflow: 'hidden', minWidth: '0' },
+  checkboxBox: { borderColor: cssVar.colorBorder },
+  groupBar: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'baseline',
+    paddingBlock: '8px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  groupCount: { fontSize: '11px', fontWeight: 400, color: cssVar.colorTextQuaternary },
+  header: {
+    position: 'sticky',
+    zIndex: 2,
+    insetBlockStart: '0',
+    display: 'grid',
+    gridTemplateColumns: '24px minmax(0, 1fr) 120px 100px 80px 100px 32px',
+    gap: '12px',
+    alignItems: 'center',
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  headerCellEnd: { textAlign: 'end' },
+  list: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  row: {
+    cursor: 'pointer',
+    display: 'grid',
+    gridTemplateColumns: '24px minmax(0, 1fr) 120px 100px 80px 100px 32px',
+    gap: '12px',
+    alignItems: 'center',
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorSplit,
+    transition: 'background 0.12s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowSelected: {
+    backgroundColor: { 'default': cssVar.colorPrimaryBg, ':hover': cssVar.colorPrimaryBgHover },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  sub: {
+    overflow: 'hidden',
+    marginBlockStart: '2px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  title: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+});
 
 interface TopicListViewProps {
   agentId: string;
@@ -193,18 +158,23 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
 
   return (
     <div
-      className={[styles.row, selected && styles.rowSelected].filter(Boolean).join(' ')}
+      className={[
+        stylex.props(styles.row).className,
+        stylex.props(selected && styles.rowSelected).className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onClick={handleClick}
     >
       <div onClick={(e) => e.stopPropagation()}>
         <Checkbox
           checked={selected}
-          classNames={{ checkbox: styles.checkboxBox }}
+          classNames={{ checkbox: stylex.props(styles.checkboxBox).className }}
           size={18}
           onChange={handleCheckboxChange}
         />
       </div>
-      <div className={styles.cell}>
+      <div {...stylex.props(styles.cell)}>
         <Flexbox horizontal align={'center'} gap={6}>
           {topic.favorite && (
             <Icon icon={Pin} size={12} style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }} />
@@ -216,17 +186,17 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
               style={{ flexShrink: 0 }}
             />
           )}
-          <Text className={styles.title} fontSize={13} weight={500}>
+          <Text className={stylex.props(styles.title).className} fontSize={13} weight={500}>
             {topic.title || t('defaultTitle')}
           </Text>
         </Flexbox>
         {topic.historySummary && (
-          <Text className={styles.sub} fontSize={11} type={'secondary'}>
+          <Text className={stylex.props(styles.sub).className} fontSize={11} type={'secondary'}>
             {topic.historySummary}
           </Text>
         )}
       </div>
-      <div className={styles.cell}>
+      <div {...stylex.props(styles.cell)}>
         {projectLabel ? (
           <Tag icon={<Icon icon={FolderIcon} size={11} />} size={'small'}>
             {projectLabel}
@@ -282,11 +252,11 @@ const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitl
   };
 
   return (
-    <div className={styles.list}>
-      <div className={styles.header}>
+    <div {...stylex.props(styles.list)}>
+      <div {...stylex.props(styles.header)}>
         <Checkbox
           checked={allSelected}
-          classNames={{ checkbox: styles.checkboxBox }}
+          classNames={{ checkbox: stylex.props(styles.checkboxBox).className }}
           indeterminate={someSelected}
           size={18}
           onChange={handleSelectAll}
@@ -295,7 +265,7 @@ const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitl
         <span>{t('management.columns.project')}</span>
         <span>{t('management.columns.status')}</span>
         <span>{t('management.columns.trigger')}</span>
-        <span className={styles.headerCellEnd}>{t('management.columns.updated')}</span>
+        <span {...stylex.props(styles.headerCellEnd)}>{t('management.columns.updated')}</span>
         <span />
       </div>
       {groups.map((group) => {
@@ -307,9 +277,9 @@ const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitl
         return (
           <Fragment key={group.id}>
             {showGroupTitles && (
-              <div className={styles.groupBar}>
+              <div {...stylex.props(styles.groupBar)}>
                 <span>{title}</span>
-                <span className={styles.groupCount}>{group.children.length}</span>
+                <span {...stylex.props(styles.groupCount)}>{group.children.length}</span>
               </div>
             )}
             {group.children.map((topic) => (

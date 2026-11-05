@@ -2,8 +2,10 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { ImessageBridgeConfig, ImessageBridgeStatus } from '@lobechat/electron-client-ipc';
-import { Button, createStaticStyles, Flexbox, Switch, Tag, Text, toast } from '@lobehub/ui';
+import { Button, Flexbox, Switch, Tag, Text, toast } from '@lobehub/ui';
 import { Form, useFormInstance, useWatch } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Wrench } from 'lucide-react';
 import { memo, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,40 +19,43 @@ import { imessageBridgeService } from '@/services/electron/imessageBridge';
 
 import { ChannelPostSaveContext } from '../../PlatformDetail/postSaveContext';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    margin-block: 8px;
-    padding: 20px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  headerIcon: css`
-    overflow: hidden;
-    flex: none;
-
-    width: 44px;
-    height: 44px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-  `,
-  statusCard: css`
-    padding: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  title: css`
-    font-size: 15px;
-    font-weight: 600;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    marginBlock: '8px',
+    padding: '20px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  headerIcon: {
+    overflow: 'hidden',
+    flex: 'none',
+    width: '44px',
+    height: '44px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  headerImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+  },
+  statusCard: {
+    padding: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  title: {
+    fontSize: '15px',
+    fontWeight: 600,
+  },
+});
 
 type TestStatus = 'idle' | 'success' | 'failed';
 
@@ -230,16 +235,22 @@ const CredentialExtras = memo(() => {
     : t('channel.imessage.bridgeStoppedDesc');
 
   return (
-    <Flexbox className={styles.card}>
+    <Flexbox className={stylex.props(styles.card).className}>
       {/* Top: logo spanning both lines, then title + status and the subtitle.
           Reserve breathing room below so the header doesn't crowd the form. */}
       <Flexbox horizontal align="center" gap={12} style={{ marginBlockEnd: 24 }}>
-        <Flexbox align="center" className={styles.headerIcon} justify="center">
-          <img alt="BlueBubbles" src={BLUEBUBBLES_ICON_URL} />
+        <Flexbox
+          align="center"
+          className={stylex.props(styles.headerIcon).className}
+          justify="center"
+        >
+          <img alt="BlueBubbles" src={BLUEBUBBLES_ICON_URL} {...stylex.props(styles.headerImage)} />
         </Flexbox>
         <Flexbox gap={4}>
           <Flexbox horizontal align="center" gap={8}>
-            <Text className={styles.title}>{t('channel.imessage.bridgeSectionTitle')}</Text>
+            <Text className={stylex.props(styles.title).className}>
+              {t('channel.imessage.bridgeSectionTitle')}
+            </Text>
             <Tag color={statusBadge.color}>{statusBadge.text}</Tag>
           </Flexbox>
           <Text type="secondary">{t('channel.imessage.bridgeSectionDesc')}</Text>
@@ -292,7 +303,11 @@ const CredentialExtras = memo(() => {
 
       {/* Bottom: row 1 — service status + the Enable toggle (write-through);
           row 2 — the connection test. */}
-      <Flexbox className={styles.statusCard} gap={12} style={{ marginBlockStart: 16 }}>
+      <Flexbox
+        className={stylex.props(styles.statusCard).className}
+        gap={12}
+        style={{ marginBlockStart: 16 }}
+      >
         <Flexbox horizontal align="center" gap={16} justify="space-between">
           <Flexbox gap={2}>
             <Flexbox horizontal align="center" gap={8}>

@@ -1,8 +1,10 @@
 import { Block, cssVar, Highlighter, Tag } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import { sx } from '@/styles/sx';
 
 import { useDetailContext } from '../DetailProvider';
 import { SchemaEmpty } from './SchemaList';
@@ -27,16 +29,16 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
             dataIndex: 'name',
             key: 'name',
             render: (text) => (
-              <span className={styles.code} style={{ color: cssVar.gold }}>
-                {text}
-              </span>
+              <span {...sx([styles.code], undefined, { color: cssVar.gold })}>{text}</span>
             ),
             title: t('mcp.details.schema.resources.table.name'),
           },
           {
             dataIndex: 'mimeType',
             key: 'mimeType',
-            render: (_, record) => <Tag className={styles.code}>{record.mimeType}</Tag>,
+            render: (_, record) => (
+              <Tag className={stylex.props(styles.code).className}>{record.mimeType}</Tag>
+            ),
             title: t('mcp.details.schema.resources.table.mineType'),
           },
           {

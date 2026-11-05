@@ -1,22 +1,21 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Tag } from '@lobehub/ui';
+import { Flexbox, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import qs from 'query-string';
 import { memo } from 'react';
 
 import { Link } from '@/libs/router';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    tag: css`
-      margin: 0;
-      padding-block: 4px;
-      padding-inline: 12px;
-      border-radius: 16px;
-
-      color: ${cssVar.colorTextSecondary};
-    `,
-  };
+const styles = stylex.create({
+  tag: {
+    margin: '0',
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderRadius: '16px',
+    color: cssVar.colorTextSecondary,
+  },
 });
 
 const TagList = memo<{ tags: string[] }>(({ tags }) => {
@@ -34,7 +33,7 @@ const TagList = memo<{ tags: string[] }>(({ tags }) => {
               url: '/community/mcp',
             })}
           >
-            <Tag className={styles.tag}>{tag}</Tag>
+            <Tag className={stylex.props(styles.tag).className}>{tag}</Tag>
           </Link>
         ))}
       </Flexbox>

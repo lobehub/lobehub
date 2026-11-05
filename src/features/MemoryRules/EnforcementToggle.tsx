@@ -1,7 +1,8 @@
 'use client';
 
 import type { ExpertiseEnforcement } from '@lobechat/types';
-import { cx, Icon, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { BellIcon, ShieldCheckIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,7 +24,7 @@ const EnforcementToggle = ({ disabled, onChange, value }: EnforcementToggleProps
   return (
     <Tooltip title={t(isBlock ? 'rules.enforcement.blockHint' : 'rules.enforcement.remindHint')}>
       <span
-        className={cx(styles.modeBtn, isBlock ? styles.modeBlock : styles.modeRemind)}
+        {...stylex.props(styles.modeBtn, isBlock ? styles.modeBlock : styles.modeRemind)}
         onClick={(e) => {
           e.stopPropagation();
           if (!disabled) onChange(isBlock ? 'remind' : 'block');

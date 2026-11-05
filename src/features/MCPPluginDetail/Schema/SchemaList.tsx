@@ -6,6 +6,7 @@ import {
   AccordionTrigger,
   Flexbox,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
@@ -43,12 +44,12 @@ export const SchemaItem = memo<SchemaItemProps>(({ id, name, desc, meta, open, c
       <AccordionTrigger style={{ paddingBlock: 12, paddingInline: 14 }}>
         <Flexbox horizontal align={'flex-start'} flex={1} gap={12} style={{ minWidth: 0 }}>
           <Flexbox flex={1} style={{ minWidth: 0 }}>
-            <span className={styles.name} id={id}>
+            <span {...stylex.props(styles.name)} id={id}>
               {name}
             </span>
-            {desc && !open && <p className={styles.desc}>{desc}</p>}
+            {desc && !open && <p {...stylex.props(styles.desc)}>{desc}</p>}
           </Flexbox>
-          {meta && <span className={styles.meta}>{meta}</span>}
+          {meta && <span {...stylex.props(styles.meta)}>{meta}</span>}
         </Flexbox>
       </AccordionTrigger>
     </AccordionHeader>
@@ -59,9 +60,9 @@ export const SchemaItem = memo<SchemaItemProps>(({ id, name, desc, meta, open, c
 ));
 
 export const SchemaEmpty = memo<{ children: ReactNode }>(({ children }) => (
-  <div className={styles.empty}>{children}</div>
+  <div {...stylex.props(styles.empty)}>{children}</div>
 ));
 
 export const SchemaSubtitle = memo<{ children: ReactNode }>(({ children }) => (
-  <span className={styles.subtitle}>{children}</span>
+  <span {...stylex.props(styles.subtitle)}>{children}</span>
 ));

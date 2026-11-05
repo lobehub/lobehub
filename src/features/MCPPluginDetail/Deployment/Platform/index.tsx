@@ -1,4 +1,5 @@
 import { type ConnectionConfig } from '@lobehub/market-types';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Highlighter's Shiki pre takes no className
 import { Block, createStaticStyles, cx, Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 

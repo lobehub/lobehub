@@ -1,29 +1,16 @@
-import {
-  ActionIcon,
-  createStaticStyles,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowDownUpIcon, FilePlusIcon, FileUp, FolderPlusIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AgentDocumentSort } from '@/store/global/initialState';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  toolbar: css`
-    /* Title on the column of the panel tabs' icons; the + stays on the row edge. */
-    padding-inline-start: 10px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    font-size: 11px;
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  toolbar: { paddingInlineStart: '10px', color: cssVar.colorTextSecondary },
+  title: { fontSize: '11px', fontWeight: 500 },
+});
 
 const SORT_FIELDS = ['name', 'createdAt', 'updatedAt'] as const;
 const SORT_ORDERS = ['asc', 'desc'] as const;
@@ -108,10 +95,10 @@ const DocumentExplorerToolbar = memo<Props>(
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.toolbar}
+        className={stylex.props(styles.toolbar).className}
         distribution={'space-between'}
       >
-        <Text className={styles.title} type={'secondary'}>
+        <Text className={stylex.props(styles.title).className} type={'secondary'}>
           {t('workingPanel.resources.filter.documents')}
         </Text>
         <Flexbox horizontal align={'center'}>

@@ -1,10 +1,12 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar } from '@lobehub/ui';
+import { Button } from '@lobehub/ui';
 import ActionIcon from '@lobehub/ui/es/ActionIcon/index';
 import { Center, Flexbox } from '@lobehub/ui/es/Flex/index';
 import Markdown from '@lobehub/ui/es/Markdown/index';
 import Text from '@lobehub/ui/es/Text/index';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,34 +18,33 @@ import {
   useAgentDocumentStore,
 } from '@/store/agentDocument';
 
-const styles = createStaticStyles(({ css }) => ({
-  article: css`
-    width: 100%;
-    max-width: 840px;
-    margin-inline: auto;
-    padding-block: 28px 80px;
-    padding-inline: 20px;
-  `,
-  body: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-  header: css`
-    flex: none;
-
-    min-height: 52px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  page: css`
-    width: 100%;
-    height: 100dvh;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  article: {
+    width: '100%',
+    maxWidth: '840px',
+    marginInline: 'auto',
+    paddingBlockStart: '28px',
+    paddingBlockEnd: '80px',
+    paddingInline: '20px',
+  },
+  body: { overflow: 'auto', flex: '1', minHeight: '0' },
+  header: {
+    flex: 'none',
+    minHeight: '52px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  page: {
+    width: '100%',
+    height: '100dvh',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface AgentDocumentReaderProps {
   agentId: string;
@@ -72,14 +73,19 @@ const AgentDocumentReader = memo<AgentDocumentReaderProps>(({ agentId, documentI
   const title = data?.title || data?.filename || '';
 
   return (
-    <Flexbox className={styles.page}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+    <Flexbox className={stylex.props(styles.page).className}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={8}
+      >
         <ActionIcon icon={ArrowLeft} title={t('back')} onClick={backToAgent} />
         <Text ellipsis strong style={{ flex: 1, minWidth: 0 }} title={title}>
           {title}
         </Text>
       </Flexbox>
-      <div className={styles.body}>
+      <div {...stylex.props(styles.body)}>
         {!error && isLoading ? (
           <Center height={'100%'}>
             <ContentLoading />
@@ -97,7 +103,7 @@ const AgentDocumentReader = memo<AgentDocumentReaderProps>(({ agentId, documentI
             </Button>
           </Center>
         ) : (
-          <article className={styles.article}>
+          <article {...stylex.props(styles.article)}>
             {data?.content ? <Markdown>{data.content}</Markdown> : <Center padding={64}>—</Center>}
           </article>
         )}

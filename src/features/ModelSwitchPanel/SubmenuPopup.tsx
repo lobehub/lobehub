@@ -4,6 +4,7 @@ import {
   DropdownMenuPositioner,
   stopPropagation,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
@@ -32,7 +33,10 @@ export const ModelSwitchSubmenuPopup = memo<ModelSwitchSubmenuPopupProps>(
   ({ activeSecondaryText, enabledList, model, notice, onModelChange, onOpenChange, provider }) => (
     <DropdownMenuPortal>
       <DropdownMenuPositioner alignOffset={-4} anchor={null} placement="right" sideOffset={8}>
-        <DropdownMenuPopup className={styles.container} onKeyDown={stopPropagation}>
+        <DropdownMenuPopup
+          className={stylex.props(styles.container).className}
+          onKeyDown={stopPropagation}
+        >
           <PanelContent
             activeSecondaryText={activeSecondaryText}
             enabledList={enabledList}

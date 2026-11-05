@@ -2,6 +2,7 @@
 
 import {
   ActionIcon,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: FormField.label
   createStaticStyles,
   Flexbox,
   Icon,
@@ -36,7 +37,7 @@ interface ListConfigProps {
   viewMode: ViewMode;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => {
+const fallback = createStaticStyles(({ css, cssVar }) => {
   return {
     form: css`
       label,
@@ -146,7 +147,7 @@ const ListConfig = memo<ListConfigProps>(
           onChange={(key) => setViewMode(key as ViewMode)}
         />
         <Form
-          className={styles.form}
+          className={fallback.form}
           form={form}
           items={formItems}
           itemsType={'flat'}

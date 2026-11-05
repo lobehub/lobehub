@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox, Segmented, Select } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import { agentSectionsByCount, liveCount, type OwnerSection } from './labels';
@@ -49,7 +50,7 @@ const PartSwitcher = ({ onChange, sections, value }: PartSwitcherProps) => {
             label: (
               <Flexbox horizontal align={'center'} gap={6}>
                 <span>{t('rules.owner.agents')}</span>
-                <span className={styles.ownerCount}>{agentTotal}</span>
+                <span {...stylex.props(styles.ownerCount)}>{agentTotal}</span>
               </Flexbox>
             ),
             value: 'agents',

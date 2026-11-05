@@ -1,4 +1,7 @@
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { type StyleXStyles } from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { type LucideIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -11,79 +14,78 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { type ChatTopic } from '@/types/topic';
 
+import { accordionHeaderMarker } from './markers.stylex';
 import {
   getProjectTopicStatusCounts,
   hasProjectTopicStatusCounts,
   type ProjectTopicStatusCounts,
 } from './statusCounts';
 
-export const indicatorStyles = createStaticStyles(({ css }) => ({
-  statusBadge: css`
-    display: inline-flex;
-    gap: 2px;
-    align-items: center;
-    justify-content: center;
-
-    min-width: 20px;
-    height: 18px;
-    padding-inline: 4px;
-    border-radius: 9px;
-
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1;
-  `,
-  statusBadgeError: css`
-    color: ${cssVar.colorError};
-    background: color-mix(in srgb, ${cssVar.colorError} 14%, transparent);
-  `,
-  statusBadgeLoading: css`
-    color: ${cssVar.colorWarning};
-    background: color-mix(in srgb, ${cssVar.colorWarning} 14%, transparent);
-  `,
-  statusBadgeWaiting: css`
-    color: ${cssVar.colorInfo};
-    background: color-mix(in srgb, ${cssVar.colorInfo} 14%, transparent);
-  `,
-  hoverActions: css`
-    pointer-events: none;
-
-    overflow: hidden;
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-
-    max-width: 0;
-
-    opacity: 0;
-
-    transition:
-      max-width 150ms ${cssVar.motionEaseOut},
-      opacity 150ms ${cssVar.motionEaseOut};
-
-    /* Holds up to the grouping menu, the "more" menu and the start "+"
-       (3 × 24px). Stays open while one of its menus is, so the popup keeps
-       its anchor. */
-    &:focus-within,
-    &:has([data-popup-open]),
-    .accordion-header:hover & {
-      pointer-events: auto;
-      max-width: 72px;
-      opacity: 1;
-    }
-
-    /* Touch-only screens have no hover to reveal the actions with, so they
-       keep their width there, as before the actions collapsed at rest. */
-    @media (hover: none) {
-      pointer-events: auto;
-      max-width: 72px;
-      opacity: 1;
-    }
-  `,
-}));
+export const indicatorStyles = stylex.create({
+  statusBadge: {
+    display: 'inline-flex',
+    gap: '2px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '20px',
+    height: '18px',
+    paddingInline: '4px',
+    borderRadius: '9px',
+    fontSize: '11px',
+    fontWeight: 500,
+    lineHeight: 1,
+  },
+  statusBadgeError: {
+    color: cssVar.colorError,
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorError} 14%, transparent)`,
+    backgroundImage: 'none',
+  },
+  statusBadgeLoading: {
+    color: cssVar.colorWarning,
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorWarning} 14%, transparent)`,
+    backgroundImage: 'none',
+  },
+  statusBadgeWaiting: {
+    color: cssVar.colorInfo,
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorInfo} 14%, transparent)`,
+    backgroundImage: 'none',
+  },
+  // Holds up to the grouping menu, the "more" menu and the start "+"
+  // (3 × 24px). Stays open while one of its menus is, so the popup keeps
+  // its anchor. Touch-only screens have no hover to reveal the actions with,
+  // so they keep their width there, as before the actions collapsed at rest.
+  hoverActions: {
+    pointerEvents: {
+      'default': 'none',
+      ':focus-within': 'auto',
+      ':has([data-popup-open])': 'auto',
+      [stylex.when.ancestor(':hover', accordionHeaderMarker)]: 'auto',
+      '@media (hover: none)': 'auto',
+    },
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flex: 'none',
+    alignItems: 'center',
+    maxWidth: {
+      'default': '0',
+      ':focus-within': '72px',
+      ':has([data-popup-open])': '72px',
+      [stylex.when.ancestor(':hover', accordionHeaderMarker)]: '72px',
+      '@media (hover: none)': '72px',
+    },
+    opacity: {
+      'default': 0,
+      ':focus-within': 1,
+      ':has([data-popup-open])': 1,
+      [stylex.when.ancestor(':hover', accordionHeaderMarker)]: 1,
+      '@media (hover: none)': 1,
+    },
+    transition: `max-width 150ms ${cssVar.motionEaseOut}, opacity 150ms ${cssVar.motionEaseOut}`,
+  },
+});
 
 interface StatusBadgeConfig {
-  className: string;
+  badgeStyle: StyleXStyles;
   count: number;
   icon?: LucideIcon;
   label: string;
@@ -95,19 +97,19 @@ const CollapsedStatusBadges = memo<{ counts: ProjectTopicStatusCounts }>(({ coun
 
   const items: StatusBadgeConfig[] = [
     {
-      className: indicatorStyles.statusBadgeLoading,
+      badgeStyle: indicatorStyles.statusBadgeLoading,
       count: counts.loading,
       label: t('projectStatus.loading', { count: counts.loading }),
       loading: true,
     },
     {
-      className: indicatorStyles.statusBadgeWaiting,
+      badgeStyle: indicatorStyles.statusBadgeWaiting,
       count: counts.waitingForHuman,
       icon: TOPIC_STATUS_VISUALS.waitingForHuman.icon,
       label: t('projectStatus.waitingForHuman', { count: counts.waitingForHuman }),
     },
     {
-      className: indicatorStyles.statusBadgeError,
+      badgeStyle: indicatorStyles.statusBadgeError,
       count: counts.failed,
       icon: TOPIC_STATUS_VISUALS.failed.icon,
       label: t('projectStatus.failed', { count: counts.failed }),
@@ -118,12 +120,12 @@ const CollapsedStatusBadges = memo<{ counts: ProjectTopicStatusCounts }>(({ coun
 
   return (
     <Flexbox horizontal align={'center'} gap={3}>
-      {items.map(({ className, count, icon, label, loading }) => (
+      {items.map(({ badgeStyle, count, icon, label, loading }) => (
         <Tooltip key={label} title={label}>
           <span
             aria-label={label}
-            className={cx(indicatorStyles.statusBadge, className)}
             role="status"
+            {...stylex.props(indicatorStyles.statusBadge, badgeStyle)}
           >
             {loading ? (
               <RingLoadingIcon

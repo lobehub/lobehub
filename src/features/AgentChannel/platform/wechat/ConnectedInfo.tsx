@@ -1,7 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,13 +10,9 @@ import { FormInput, FormPassword } from '@/components/FormInput';
 
 import QrCodeAuth from './QrCodeAuth';
 
-const styles = createStaticStyles(({ css }) => ({
-  header: css`
-    display: flex;
-    align-items: center;
-    margin-block-end: 16px;
-  `,
-}));
+const styles = stylex.create({
+  header: { display: 'flex', alignItems: 'center', marginBlockEnd: '16px' },
+});
 
 const ReadOnlyField = memo<{
   divider?: boolean;
@@ -52,7 +49,7 @@ const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
 
     return (
       <>
-        <div className={styles.header}>
+        <div {...stylex.props(styles.header)}>
           <Flexbox gap={4}>
             <div style={{ fontSize: 16, fontWeight: 600 }}>{t('channel.wechatConnectedInfo')}</div>
             <div style={{ color: 'var(--lobe-color-text-secondary)', fontSize: 13 }}>

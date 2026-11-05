@@ -1,16 +1,30 @@
 'use client';
 
 import { type SkillItem } from '@lobechat/types';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Highlighter's Shiki pre, code and .line take no className
 import { CopyButton, createStaticStyles, Highlighter, Markdown } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  codeWrapper: css`
-    position: relative;
-    overflow-x: auto;
-    margin-block-start: 16px;
-    padding-block-end: calc(100cqb - 1lh);
+import { sx } from '@/styles/sx';
 
+const styles = stylex.create({
+  codeWrapper: {
+    position: 'relative',
+    overflowX: 'auto',
+    marginBlockStart: '16px',
+    paddingBlockEnd: 'calc(100cqb - 1lh)',
+  },
+  docWrapper: {
+    maxWidth: '798px',
+    marginInline: 'auto',
+    paddingBlock: '8px',
+    paddingInline: '24px',
+  },
+});
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  codeWrapper: css`
     pre {
       margin: 0;
     }
@@ -38,12 +52,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorTextQuaternary};
       text-align: end;
     }
-  `,
-  docWrapper: css`
-    max-width: 798px;
-    margin-inline: auto;
-    padding-block: 8px;
-    padding-inline: 24px;
   `,
 }));
 
@@ -176,14 +184,14 @@ const ContentViewer = memo<ContentViewerProps>(
       const displayContent = liveContent ?? skillDetail?.content;
       if (!displayContent) {
         return (
-          <div className={styles.docWrapper}>
+          <div {...stylex.props(styles.docWrapper)}>
             <p style={{ opacity: 0.45 }}>No content</p>
           </div>
         );
       }
       const { frontmatter, body } = parseFrontmatter(displayContent);
       return (
-        <div className={styles.docWrapper}>
+        <div {...stylex.props(styles.docWrapper)}>
           {frontmatter && (
             <Highlighter fullFeatured language={'yaml'} variant={'outlined'}>
               {frontmatter}
@@ -199,7 +207,7 @@ const ContentViewer = memo<ContentViewerProps>(
     if (isMarkdownFile(selectedFile)) {
       const { frontmatter, body } = parseFrontmatter(content);
       return (
-        <div className={styles.docWrapper}>
+        <div {...stylex.props(styles.docWrapper)}>
           {frontmatter && (
             <Highlighter fullFeatured language={'yaml'} variant={'outlined'}>
               {frontmatter}
@@ -211,7 +219,7 @@ const ContentViewer = memo<ContentViewerProps>(
     }
 
     return (
-      <div className={styles.codeWrapper}>
+      <div {...sx([styles.codeWrapper], fallback.codeWrapper)}>
         <CopyButton
           content={content}
           style={{ position: 'absolute', right: 8, top: 0, zIndex: 1 }}

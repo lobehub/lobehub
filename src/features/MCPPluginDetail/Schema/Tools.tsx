@@ -1,9 +1,11 @@
 import { cssVar, Flexbox, Highlighter, Icon, Markdown, Tag } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, MinusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import { sx } from '@/styles/sx';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { useDetailContext } from '../DetailProvider';
@@ -63,7 +65,7 @@ const Tools = memo<ToolsProps>(({ mode, activeKey = [], setActiveKey }) => {
                     {
                       dataIndex: 'name',
                       render: (_, record) => (
-                        <span className={styles.code} style={{ color: cssVar.gold }}>
+                        <span {...sx([styles.code], undefined, { color: cssVar.gold })}>
                           {record.name}
                         </span>
                       ),
@@ -71,7 +73,9 @@ const Tools = memo<ToolsProps>(({ mode, activeKey = [], setActiveKey }) => {
                     },
                     {
                       dataIndex: 'type',
-                      render: (_, record) => <Tag className={styles.code}>{record.type}</Tag>,
+                      render: (_, record) => (
+                        <Tag className={stylex.props(styles.code).className}>{record.type}</Tag>
+                      ),
                       title: t('mcp.details.schema.tools.table.type'),
                     },
                     {

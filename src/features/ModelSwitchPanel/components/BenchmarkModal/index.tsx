@@ -1,4 +1,6 @@
-import { createModal, createStaticStyles, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { createModal, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { ChevronDownIcon, ChevronUpIcon, InfoIcon, PlusIcon, XIcon } from 'lucide-react';
 import type { ModelRating } from 'model-bank';
@@ -8,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessModelRating } from '@/business/client/hooks/useBusinessModelRating';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { sx } from '@/styles/sx';
 
 import type { RatingDimensionKey } from '../ModelRatingRadar';
 import { RATING_DIMENSION_ORDER, RATING_SOURCE_NAMES } from '../ModelRatingRadar';
@@ -16,159 +19,136 @@ import CompareRadar, { COMPARE_SERIES_COLORS, MAX_COMPARE_MODELS } from './Compa
 
 const RULE_KEYS = ['relative', 'sources', 'speed', 'price', 'missing'] as const;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  addButton: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: 16px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      border-color: ${cssVar.colorPrimary};
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-  addButtonDisabled: css`
-    cursor: not-allowed;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  bestPill: css`
-    display: inline-block;
-
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 10px;
-
-    font-weight: 600;
-  `,
-  cell: css`
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-align: center;
-  `,
-  cellMissing: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  chip: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    max-width: 200px;
-    padding-block: 2px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-  `,
-  chipName: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  chipRemove: css`
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  colorDot: css`
-    flex-shrink: 0;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  `,
-  headerCell: css`
-    overflow: hidden;
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-    justify-content: center;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  headerName: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  ruleItem: css`
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rulesList: css`
-    margin: 0;
-    padding-inline-start: 16px;
-  `,
-  rulesToggle: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-    align-self: flex-start;
-
-    padding: 0;
-    border: none;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  sourceLink: css`
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-  table: css`
-    display: grid;
-    row-gap: 4px;
-  `,
-  tableDivider: css`
-    grid-column: 1 / -1;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  tableHeader: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-  tableRowLabel: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: start;
-  `,
-}));
+const styles = stylex.create({
+  addButton: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorPrimary },
+    borderRadius: '16px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorPrimary },
+  },
+  addButtonDisabled: {
+    cursor: 'not-allowed',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorBorder },
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorTextSecondary },
+  },
+  bestPill: {
+    display: 'inline-block',
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: '10px',
+    fontWeight: 600,
+  },
+  cell: {
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textAlign: 'center',
+  },
+  cellMissing: {
+    color: cssVar.colorTextQuaternary,
+  },
+  chip: {
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    maxWidth: '200px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+  },
+  chipName: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  chipRemove: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+  },
+  colorDot: {
+    flexShrink: 0,
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+  },
+  headerCell: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+  headerName: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  ruleItem: {
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextTertiary,
+  },
+  rulesList: {
+    margin: 0,
+    paddingInlineStart: '16px',
+  },
+  rulesToggle: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    padding: 0,
+    borderWidth: 0,
+    borderStyle: 'none',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  sourceLink: {
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorPrimary },
+  },
+  table: {
+    display: 'grid',
+    rowGap: '4px',
+  },
+  tableDivider: {
+    gridColumnStart: '1',
+    gridColumnEnd: '-1',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  tableHeader: {
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  tableRowLabel: {
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'start',
+  },
+});
 
 interface RatedModel {
   displayName: string;
@@ -191,7 +171,12 @@ interface ScoreCellProps {
 }
 
 const ScoreCell: FC<ScoreCellProps> = ({ best, color, score }) => {
-  if (!score) return <span className={`${styles.cell} ${styles.cellMissing}`}>-</span>;
+  if (!score)
+    return (
+      <span data-testid={'cell-missing'} {...stylex.props(styles.cell, styles.cellMissing)}>
+        -
+      </span>
+    );
 
   const tooltip = [
     RATING_SOURCE_NAMES[score.source],
@@ -203,10 +188,13 @@ const ScoreCell: FC<ScoreCellProps> = ({ best, color, score }) => {
 
   return (
     <Tooltip title={tooltip}>
-      <span className={styles.cell}>
+      <span {...stylex.props(styles.cell)}>
         {best ? (
           // series color + '26' alpha suffix ≈ 15% tint background
-          <span className={styles.bestPill} style={{ background: `${color}26`, color }}>
+          <span
+            data-testid={'best-pill'}
+            {...sx([styles.bestPill], undefined, { background: `${color}26`, color })}
+          >
             {score.score}
           </span>
         ) : (
@@ -273,7 +261,7 @@ const BenchmarkModalContent: FC<BenchmarkModalContentProps> = memo(({ modelId, p
 
   const addButton = (
     <button
-      className={canAdd ? styles.addButton : `${styles.addButton} ${styles.addButtonDisabled}`}
+      {...stylex.props(styles.addButton, !canAdd && styles.addButtonDisabled)}
       disabled={!canAdd}
       type={'button'}
     >
@@ -287,12 +275,13 @@ const BenchmarkModalContent: FC<BenchmarkModalContentProps> = memo(({ modelId, p
       {/* selected model chips + compare picker */}
       <Flexbox horizontal align={'center'} gap={8} style={{ flexWrap: 'wrap' }}>
         {selected.map((model) => (
-          <span className={styles.chip} key={model.id}>
-            <span className={styles.colorDot} style={{ background: model.color }} />
-            <span className={styles.chipName}>{model.displayName}</span>
+          <span {...stylex.props(styles.chip)} key={model.id}>
+            <span {...sx([styles.colorDot], undefined, { background: model.color })} />
+            <span {...stylex.props(styles.chipName)}>{model.displayName}</span>
             {selected.length > 1 && (
               <span
-                className={styles.chipRemove}
+                data-testid={'chip-remove'}
+                {...stylex.props(styles.chipRemove)}
                 role={'button'}
                 onClick={() => setSelectedIds((prev) => prev.filter((id) => id !== model.id))}
               >
@@ -328,25 +317,26 @@ const BenchmarkModalContent: FC<BenchmarkModalContentProps> = memo(({ modelId, p
       {/* score details: single model = source breakdown, compare = score matrix */}
       {isCompare ? (
         <div
-          className={styles.table}
-          style={{ gridTemplateColumns: `88px repeat(${selected.length}, 1fr)` }}
+          {...sx([styles.table], undefined, {
+            gridTemplateColumns: `88px repeat(${selected.length}, 1fr)`,
+          })}
         >
-          <span className={`${styles.tableHeader} ${styles.tableRowLabel}`}>
+          <span {...stylex.props(styles.tableHeader, styles.tableRowLabel)}>
             {t('ModelSwitchPanel.detail.rating.modal.table.dimension')}
           </span>
           {selected.map((model) => (
-            <span className={styles.headerCell} key={model.id}>
-              <span className={styles.colorDot} style={{ background: model.color }} />
-              <span className={styles.headerName}>{model.displayName}</span>
+            <span {...stylex.props(styles.headerCell)} key={model.id}>
+              <span {...sx([styles.colorDot], undefined, { background: model.color })} />
+              <span {...stylex.props(styles.headerName)}>{model.displayName}</span>
             </span>
           ))}
-          <div className={styles.tableDivider} />
+          <div {...stylex.props(styles.tableDivider)} />
           {RATING_DIMENSION_ORDER.flatMap((key, dimensionIndex) => {
             const scores = selected.map((model) => model.rating[key]?.score);
             const bestScore = Math.max(...scores.map((score) => score ?? -1));
 
             return [
-              <span className={styles.tableRowLabel} key={`${key}-label`}>
+              <span {...stylex.props(styles.tableRowLabel)} key={`${key}-label`}>
                 {dimensions[dimensionIndex].label}
               </span>,
               ...selected.map((model) => (
@@ -362,51 +352,57 @@ const BenchmarkModalContent: FC<BenchmarkModalContentProps> = memo(({ modelId, p
         </div>
       ) : (
         selected[0] && (
-          <div className={styles.table} style={{ gridTemplateColumns: '88px 1fr 1fr 1.4fr 1fr' }}>
+          <div
+            {...sx([styles.table], undefined, { gridTemplateColumns: '88px 1fr 1fr 1.4fr 1fr' })}
+          >
             {(['dimension', 'score', 'raw', 'source', 'updatedAt'] as const).map((column) => (
               <span
                 key={column}
-                className={
-                  column === 'dimension'
-                    ? `${styles.tableHeader} ${styles.tableRowLabel}`
-                    : styles.tableHeader
-                }
+                {...stylex.props(
+                  styles.tableHeader,
+                  column === 'dimension' && styles.tableRowLabel,
+                )}
               >
                 {t(`ModelSwitchPanel.detail.rating.modal.table.${column}`)}
               </span>
             ))}
-            <div className={styles.tableDivider} />
+            <div {...stylex.props(styles.tableDivider)} />
             {RATING_DIMENSION_ORDER.flatMap((key, dimensionIndex) => {
               const score = selected[0].rating[key];
 
               if (!score)
                 return [
                   <span
-                    className={`${styles.tableRowLabel} ${styles.cellMissing}`}
+                    data-testid={'cell-missing'}
+                    {...stylex.props(styles.tableRowLabel, styles.cellMissing)}
                     key={`${key}-label`}
                   >
                     {dimensions[dimensionIndex].label}
                   </span>,
                   ...Array.from({ length: 4 }, (_, i) => (
-                    <span className={`${styles.cell} ${styles.cellMissing}`} key={`${key}-${i}`}>
+                    <span
+                      data-testid={'cell-missing'}
+                      {...stylex.props(styles.cell, styles.cellMissing)}
+                      key={`${key}-${i}`}
+                    >
                       -
                     </span>
                   )),
                 ];
 
               return [
-                <span className={styles.tableRowLabel} key={`${key}-label`}>
+                <span {...stylex.props(styles.tableRowLabel)} key={`${key}-label`}>
                   {dimensions[dimensionIndex].label}
                 </span>,
-                <span className={styles.cell} key={`${key}-score`} style={{ fontWeight: 600 }}>
+                <span {...sx([styles.cell], undefined, { fontWeight: 600 })} key={`${key}-score`}>
                   {score.score}
                 </span>,
-                <span className={styles.cell} key={`${key}-raw`}>
+                <span {...stylex.props(styles.cell)} key={`${key}-raw`}>
                   {score.raw ?? '-'}
                 </span>,
-                <span className={styles.cell} key={`${key}-source`}>
+                <span {...stylex.props(styles.cell)} key={`${key}-source`}>
                   <a
-                    className={styles.sourceLink}
+                    {...stylex.props(styles.sourceLink)}
                     href={score.sourceUrl}
                     rel={'noreferrer'}
                     target={'_blank'}
@@ -414,7 +410,7 @@ const BenchmarkModalContent: FC<BenchmarkModalContentProps> = memo(({ modelId, p
                     {RATING_SOURCE_NAMES[score.source]}
                   </a>
                 </span>,
-                <span className={styles.cell} key={`${key}-updated`}>
+                <span {...stylex.props(styles.cell)} key={`${key}-updated`}>
                   {score.updatedAt}
                 </span>,
               ];
@@ -426,7 +422,7 @@ const BenchmarkModalContent: FC<BenchmarkModalContentProps> = memo(({ modelId, p
       {/* scoring rules & caveats — collapsed footer entry */}
       <Flexbox gap={8}>
         <button
-          className={styles.rulesToggle}
+          {...stylex.props(styles.rulesToggle)}
           type={'button'}
           onClick={() => setRulesOpen((prev) => !prev)}
         >
@@ -435,9 +431,9 @@ const BenchmarkModalContent: FC<BenchmarkModalContentProps> = memo(({ modelId, p
           <Icon icon={rulesOpen ? ChevronUpIcon : ChevronDownIcon} size={12} />
         </button>
         {rulesOpen && (
-          <ul className={styles.rulesList}>
+          <ul {...stylex.props(styles.rulesList)}>
             {RULE_KEYS.map((key) => (
-              <li className={styles.ruleItem} key={key}>
+              <li {...stylex.props(styles.ruleItem)} key={key}>
                 {t(`ModelSwitchPanel.detail.rating.modal.rules.${key}`)}
               </li>
             ))}
