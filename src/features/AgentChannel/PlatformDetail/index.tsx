@@ -64,6 +64,7 @@ import { useNarrowLayout } from './useNarrowLayout';
 const styles = stylex.create({
   content: {
     display: 'flex',
+    flex: '1',
     flexDirection: 'column',
     alignItems: 'center',
     width: '100%',

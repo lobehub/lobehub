@@ -42,7 +42,8 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   inline: {
-    paddingBlock: '40px',
+    paddingBlockStart: '40px',
+    paddingBlockEnd: '40px',
   },
   list: {
     inlineSize: '100%',

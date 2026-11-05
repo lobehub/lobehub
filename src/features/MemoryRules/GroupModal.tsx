@@ -50,7 +50,7 @@ export const composeStyles = stylex.create({
     color: 'inherit',
     backgroundColor: 'transparent',
     backgroundImage: 'none',
-    outlineStyle: 'none',
+    outline: 'none',
   },
   footer: {
     paddingBlock: '10px',
@@ -94,7 +94,7 @@ export const composeStyles = stylex.create({
     color: 'inherit',
     backgroundColor: 'transparent',
     backgroundImage: 'none',
-    outlineStyle: 'none',
+    outline: 'none',
   },
   titleStatic: {
     paddingBlockStart: '4px',

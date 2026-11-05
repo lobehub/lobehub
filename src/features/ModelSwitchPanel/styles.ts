@@ -71,6 +71,6 @@ export const styles = stylex.create({
   },
   trigger: {
     display: 'inline-flex',
-    outlineStyle: 'none',
+    outline: 'none',
   },
 });

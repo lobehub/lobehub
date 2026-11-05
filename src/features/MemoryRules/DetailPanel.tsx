@@ -5,14 +5,14 @@ import {
   type ExpertiseEnforcement,
   type ExpertiseReasonKind,
 } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
+  Block,
   Button,
-  createStaticStyles,
-  cx,
   type DropdownItem,
   DropdownMenu,
+  Flexbox,
+  Icon,
   SkeletonText,
   Tag,
   Text,
@@ -149,7 +149,7 @@ const styles = stylex.create({
     color: 'inherit',
     backgroundColor: 'transparent',
     backgroundImage: 'none',
-    outlineStyle: 'none',
+    outline: 'none',
   },
   warning: {
     paddingBlock: '6px',

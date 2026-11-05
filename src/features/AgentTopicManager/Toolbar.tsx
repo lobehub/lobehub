@@ -105,9 +105,11 @@ const styles = stylex.create({
     borderStyle: 'none',
     borderStartEndRadius: '16px',
     borderEndEndRadius: '16px',
-    outlineStyle: 'none',
+    outline: 'none',
     appearance: 'none',
     font: 'inherit',
+    textRendering: 'inherit',
+    scrollbarWidth: 'auto',
     color: {
       'default': cssVar.colorTextTertiary,
       ':hover': cssVar.colorText,

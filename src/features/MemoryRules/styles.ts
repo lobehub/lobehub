@@ -163,6 +163,8 @@ export const styles = stylex.create({
     width: 'fit-content',
     padding: 0,
     borderWidth: 0,
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
     borderRadius: { 'default': null, ':focus-visible': cssVar.borderRadiusSM },
     font: 'inherit',
     color: { 'default': 'inherit', ':hover': cssVar.colorText },

@@ -27,7 +27,7 @@ const styles = stylex.create({
   },
   labels: { display: 'grid', gap: '8px', width: '100%' },
   root: { width: '100%' },
-  selectedLabel: { color: cssVar.colorText },
+  selectedLabel: { color: { 'default': cssVar.colorText, ':hover': cssVar.colorTextSecondary } },
   slider: { width: '100%', paddingInline: '6px' },
 });
 

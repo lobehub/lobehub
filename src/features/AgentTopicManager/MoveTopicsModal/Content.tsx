@@ -52,7 +52,7 @@ const styles = stylex.create({
     'color': cssVar.colorText,
     'backgroundColor': 'transparent',
     'backgroundImage': 'none',
-    'outlineStyle': 'none',
+    'outline': 'none',
     '::placeholder': { color: cssVar.colorTextPlaceholder },
   },
 });

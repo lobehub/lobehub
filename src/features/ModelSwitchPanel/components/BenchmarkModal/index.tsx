@@ -374,7 +374,7 @@ const BenchmarkModalContent: FC<BenchmarkModalContentProps> = memo(({ modelId, p
                 return [
                   <span
                     data-testid={'cell-missing'}
-                    {...stylex.props(styles.tableRowLabel, styles.cellMissing)}
+                    {...stylex.props(styles.cellMissing, styles.tableRowLabel)}
                     key={`${key}-label`}
                   >
                     {dimensions[dimensionIndex].label}

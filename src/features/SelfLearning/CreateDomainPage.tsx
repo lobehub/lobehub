@@ -159,7 +159,7 @@ const styles = stylex.create({
     color: 'inherit',
     backgroundColor: 'transparent',
     backgroundImage: 'none',
-    outlineStyle: 'none',
+    outline: 'none',
   },
   titleStatic: {
     paddingBlockStart: '4px',
