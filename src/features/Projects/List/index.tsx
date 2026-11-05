@@ -2,19 +2,19 @@
 
 import { agentDisplayName } from '@lobechat/types';
 import {
+  ActionIcon,
+  Button,
   Center,
   ContextMenuTrigger,
+  type DropdownItem,
+  DropdownMenu,
   Empty,
   Flexbox,
   Icon,
   SearchBar,
-  Tooltip,
-  ActionIcon,
-  Button,
-  type DropdownItem,
-  DropdownMenu,
   Text,
   toast,
+  Tooltip,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
