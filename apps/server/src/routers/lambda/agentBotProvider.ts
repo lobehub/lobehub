@@ -39,6 +39,7 @@ import {
   pollFeishuAppRegistration,
 } from '@/server/services/bot/platforms/feishu/registration';
 import { GatewayService } from '@/server/services/gateway';
+import { isAnyMessageGatewayEnabled } from '@/server/services/gateway/MessageGatewayClient';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
 import {
@@ -171,13 +172,19 @@ const withFormSettings = (platform: string, settings?: Record<string, unknown>) 
 
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(async ({ ctx }) => {
+    // A platform that replies over its own connection cannot run behind the message gateway, so a
+    // gateway-managed deployment does not offer it (see `requiresInProcessConnection`).
+    const gatewayManaged = isAnyMessageGatewayEnabled();
     return Promise.all(
-      platformRegistry.listSerializedPlatforms().map((platform) =>
-        withBotPlatformAccessMeta(platform, {
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        }),
-      ),
+      platformRegistry
+        .listSerializedPlatforms()
+        .filter((platform) => !(gatewayManaged && platform.requiresInProcessConnection))
+        .map((platform) =>
+          withBotPlatformAccessMeta(platform, {
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          }),
+        ),
     );
   }),
 

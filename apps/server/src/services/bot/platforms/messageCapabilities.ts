@@ -160,6 +160,9 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
+  // WeCom AI bots only answer on their own long connection; the message tool has no service for
+  // them (no REST API, no history), so every channel operation is unsupported.
+  wecom: [...CHANNEL_MESSAGE_APIS],
 };
 
 /**

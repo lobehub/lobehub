@@ -334,6 +334,20 @@ export class GatewayService {
     const definition = platformRegistry.getPlatform(platform);
     const connectionMode = resolveConnectionMode(definition, provider.settings);
 
+    // The gateway forwards inbound events but cannot relay outbound frames, and these platforms
+    // only reply on their own connection — connecting through it would receive messages that
+    // could never be answered.
+    if (definition?.requiresInProcessConnection) {
+      await updateBotRuntimeStatus({
+        applicationId,
+        errorMessage: `${definition.name} replies over its own long connection, which the message gateway cannot relay yet`,
+        platform,
+        status: BOT_RUNTIME_STATUSES.failed,
+      });
+      log('Refused gateway connect for in-process-only platform %s:%s', platform, applicationId);
+      return 'started';
+    }
+
     // Webhook-mode platforms don't need persistent gateway connections.
     // Run the platform client locally via GatewayManager so each platform can
     // perform its own initialization (e.g. Telegram calls setWebhook).
