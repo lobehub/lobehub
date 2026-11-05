@@ -776,7 +776,7 @@ const ExperimentDashboard = memo(() => {
                       key={`${contender.id}-name`}
                       style={{ minWidth: 0 }}
                     >
-                      <Flexbox horizontal align={'center'} gap={8}>
+                      <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
                         <Text ellipsis weight={500}>
                           {contender.name}
                         </Text>
