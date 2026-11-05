@@ -107,6 +107,7 @@ declare module 'verification:component' {
     tag: string;
     onClick: () => void;
   }>;
+  export const AcceptanceReport: ComponentType<{ runId?: string }>;
 }
 
 declare module 'verification:locale/chat' {
