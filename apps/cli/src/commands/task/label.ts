@@ -250,7 +250,9 @@ export function registerLabelCommands(task: Command) {
           ? `label group "${target.name}" and its ${children.length} label(s)`
           : `label "${target.name}"`;
         const ok = await confirm(
-          `Delete ${what}? It is removed from ${usage} task(s). This cannot be undone.`,
+          // `usageCount` only covers unarchived tasks the caller can see; the
+          // delete itself reaches every task carrying the label.
+          `Delete ${what}? It is removed from every task that carries it (${usage} unarchived task(s) visible to you). This cannot be undone.`,
         );
         if (!ok) return;
       }
