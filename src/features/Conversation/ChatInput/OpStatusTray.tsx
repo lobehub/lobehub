@@ -52,6 +52,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorFillSecondary,
     borderBlockEndWidth: 0,
+    borderBlockEndStyle: 'none',
+    borderBlockEndColor: 'currentcolor',
     borderStartStartRadius: '12px',
     borderStartEndRadius: '12px',
     fontSize: '12px',
@@ -64,6 +66,8 @@ const styles = stylex.create({
   // the conversation above, even without the full card chrome.
   containerSeamless: {
     borderWidth: 0,
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -137,9 +141,9 @@ const styles = stylex.create({
     transformBox: 'fill-box',
     fill: cssVar.colorPrimary,
     animationName: { default: glyphCore, [REDUCED_MOTION]: 'none' },
-    animationDuration: '1.5s',
-    animationTimingFunction: 'ease-in-out',
-    animationIterationCount: 'infinite',
+    animationDuration: { default: '1.5s', [REDUCED_MOTION]: '0s' },
+    animationTimingFunction: { default: 'ease-in-out', [REDUCED_MOTION]: 'ease' },
+    animationIterationCount: { default: 'infinite', [REDUCED_MOTION]: 1 },
   },
   glyphOrbit: {
     transformOrigin: 'center',
@@ -150,9 +154,9 @@ const styles = stylex.create({
     strokeLinecap: 'round',
     strokeWidth: 1.5,
     animationName: { default: glyphSpin, [REDUCED_MOTION]: 'none' },
-    animationDuration: '2s',
-    animationTimingFunction: 'linear',
-    animationIterationCount: 'infinite',
+    animationDuration: { default: '2s', [REDUCED_MOTION]: '0s' },
+    animationTimingFunction: { default: 'linear', [REDUCED_MOTION]: 'ease' },
+    animationIterationCount: { default: 'infinite', [REDUCED_MOTION]: 1 },
   },
 });
 

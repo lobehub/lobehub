@@ -76,7 +76,9 @@ const styles = stylex.create({
     transition: `background-color 0.1s ${cssVar.motionEaseInOut}`,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
   },
-  rowSelected: { backgroundColor: cssVar.colorFillQuaternary },
+  rowSelected: {
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+  },
 });
 
 const ForwardModalContent = memo(() => {

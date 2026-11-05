@@ -26,6 +26,8 @@ const styles = stylex.create({
     paddingBlockStart: 0,
     paddingBlockEnd: 0,
     borderBlockStartWidth: 0,
+    borderBlockStartStyle: 'none',
+    borderBlockStartColor: 'currentcolor',
     opacity: 0,
   },
   container: {
@@ -38,6 +40,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorFillSecondary,
     borderBlockEndWidth: 0,
+    borderBlockEndStyle: 'none',
+    borderBlockEndColor: 'currentcolor',
     borderStartStartRadius: '12px',
     borderStartEndRadius: '12px',
     backgroundColor: cssVar.colorBgElevated,

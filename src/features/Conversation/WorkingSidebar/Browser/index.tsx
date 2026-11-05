@@ -63,9 +63,9 @@ const styles = stylex.create({
       backgroundColor: cssVar.colorInfo,
       backgroundImage: 'none',
       animationName: { default: loadingProgress, [REDUCED_MOTION]: 'none' },
-      animationDuration: '1.15s',
-      animationTimingFunction: 'ease-in-out',
-      animationIterationCount: 'infinite',
+      animationDuration: { default: '1.15s', [REDUCED_MOTION]: '0s' },
+      animationTimingFunction: { default: 'ease-in-out', [REDUCED_MOTION]: 'ease' },
+      animationIterationCount: { default: 'infinite', [REDUCED_MOTION]: 1 },
     },
   },
   container: {

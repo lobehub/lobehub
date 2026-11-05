@@ -27,9 +27,12 @@ export const styles = stylex.create({
     opacity: { default: 0, [REDUCED_MOTION]: 1 },
     transition: 'background 0.15s, color 0.15s',
     animationName: { default: slideUp, [REDUCED_MOTION]: 'none' },
-    animationDuration: '320ms',
-    animationTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
-    animationFillMode: 'forwards',
+    animationDuration: { default: '320ms', [REDUCED_MOTION]: '0s' },
+    animationTimingFunction: {
+      default: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      [REDUCED_MOTION]: 'ease',
+    },
+    animationFillMode: { default: 'forwards', [REDUCED_MOTION]: 'none' },
   },
   chipIcon: {
     flex: 'none',

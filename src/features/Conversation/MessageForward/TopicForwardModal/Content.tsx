@@ -43,7 +43,10 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
-  selected: { backgroundColor: cssVar.colorFillQuaternary, backgroundImage: 'none' },
+  selected: {
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
 });
 
 export interface TopicForwardContentProps {

@@ -39,6 +39,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorFillSecondary,
     borderBlockEndWidth: 0,
+    borderBlockEndStyle: 'none',
+    borderBlockEndColor: 'currentcolor',
     borderStartStartRadius: '12px',
     borderStartEndRadius: '12px',
     borderEndStartRadius: 0,
