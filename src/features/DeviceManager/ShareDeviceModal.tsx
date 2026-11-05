@@ -1,13 +1,12 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Select.valueText (the span Select renders around the selected label)
-import './ShareDeviceModal.css';
-
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
 import {
   Button,
   confirmModal,
   createModal,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Select.valueText
+  createStaticStyles,
   Flexbox,
   Icon,
   Select,
@@ -40,6 +39,16 @@ const styles = stylex.create({
   },
   optionRow: { width: '100%', minWidth: 0, paddingBlock: '2px' },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  selectValue: css`
+    > span {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+    }
+  `,
+}));
 
 interface ShareDeviceContentProps {
   device: DeviceListItem;
@@ -250,7 +259,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
               </Text>
               <Select
                 showSearch
-                classNames={{ value: 'lobe-share-device-modal-e63c1678-select-value' }}
+                classNames={{ value: fallback.selectValue }}
                 options={targetOptions}
                 placeholder={tSetting('devices.share.selectPlaceholder')}
                 style={{ width: '100%' }}
@@ -264,7 +273,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
                 {tSetting('workspace.general.transferScope.title')}
               </Text>
               <Select
-                classNames={{ value: 'lobe-share-device-modal-e63c1678-select-value' }}
+                classNames={{ value: fallback.selectValue }}
                 options={visibilityOptions}
                 style={{ width: '100%' }}
                 value={visibility}

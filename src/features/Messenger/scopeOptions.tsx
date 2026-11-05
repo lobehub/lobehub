@@ -1,7 +1,5 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Select.valueText (the span Select renders around the selected label)
-import './scopeOptions.css';
-
-import { Avatar, Flexbox, Tag, Text } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Select.valueText
+import { Avatar, createStaticStyles, Flexbox, Tag, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 
 import WorkspaceAvatar from '@/components/WorkspaceAvatar';
@@ -21,7 +19,17 @@ const styles = stylex.create({
   scopeTitle: { flex: '1', minWidth: 0 },
 });
 
-export const messengerScopeSelectClassNames = { value: 'lobe-scope-options-21d07918-scope-value' };
+const fallback = createStaticStyles(({ css }) => ({
+  scopeValue: css`
+    > span {
+      display: flex;
+      width: 100%;
+      min-width: 0;
+    }
+  `,
+}));
+
+export const messengerScopeSelectClassNames = { value: fallback.scopeValue };
 
 interface ResolvePersonalScopeLabelParams {
   fallbackLabel: string;

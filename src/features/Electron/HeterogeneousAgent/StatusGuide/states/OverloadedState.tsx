@@ -1,13 +1,19 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the <pre> is Highlighter output injected through dangerouslySetInnerHTML, which no slot or xstyle reaches
-import './OverloadedState.css';
-
-import { Button, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Highlighter <pre> output gets no className
+import { Button, createStaticStyles, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';
 import { Ban, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
+
+const fallback = createStaticStyles(({ css }) => ({
+  errorDetails: css`
+    && pre {
+      padding: 12px;
+    }
+  `,
+}));
 
 const OverloadedState = ({
   autoRetry,
@@ -77,7 +83,7 @@ const OverloadedState = ({
           <Highlighter
             wrap
             actionIconSize={'small'}
-            classNames={{ content: 'lobe-overloaded-state-799d4050-error-details' }}
+            classNames={{ content: fallback.errorDetails }}
             language={'log'}
             style={{ maxHeight: 200, overflow: 'auto' }}
             variant={'outlined'}
