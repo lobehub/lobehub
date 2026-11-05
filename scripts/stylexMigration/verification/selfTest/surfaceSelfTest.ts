@@ -1,10 +1,13 @@
 import type { Browser } from '@playwright/test';
 
+import {
+  captureInPage,
+  compareSnapshots,
+} from '../../../../packages/style-equivalence/src/capture/snapshot';
 import { readConditionHostInPage } from '../analysis/conditionProbePlanner';
 import { collectRuleWitnessesInPage, planRuleWitnesses } from '../analysis/ruleWitnesses';
 import { captureComponent } from '../browser/capture';
 import { collectRulesInPage } from '../browser/ruleInventory';
-import { captureInPage, compareSnapshots } from '../browser/snapshot';
 import type { CaptureSurface } from '../browser/surfaces';
 import { resolveCaptureSurfacesInPage } from '../browser/surfaces';
 

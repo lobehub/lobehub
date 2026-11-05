@@ -147,6 +147,7 @@ describe('changing an Agent member’s channel environment', () => {
       ],
       projectId: undefined,
       title: 'c',
+      userIds: [],
     });
   });
 

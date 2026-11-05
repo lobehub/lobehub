@@ -705,7 +705,7 @@ describe('ModelRuntime', () => {
 
         await runtime.generateObject(genObjPayload, { onUsage: existingOnUsage });
 
-        expect(existingOnUsage).toHaveBeenCalledWith(usage);
+        expect(existingOnUsage).toHaveBeenCalledWith(usage, undefined);
         expect(onGenerateObjectFinal).toHaveBeenCalled();
         expect(callOrder).toEqual(['existing', 'hook']);
       });
@@ -743,6 +743,26 @@ describe('ModelRuntime', () => {
         } finally {
           nowSpy.mockRestore();
         }
+      });
+
+      it('onGenerateObjectFinal receives the route attempt that reported the usage', async () => {
+        const onGenerateObjectFinal = vi.fn();
+        const existingOnUsage = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectFinal });
+        const usage = { totalTokens: 10 };
+        const routeAttempt = { attemptId: 'att-1', channelId: 'ch-1', requestId: 'req-1' };
+        mockRuntimeAI.generateObject.mockImplementation(async (_p: any, opts: any) => {
+          await opts?.onUsage?.(usage, { routeAttempt });
+          return { result: 'ok' };
+        });
+
+        await runtime.generateObject(genObjPayload, { onUsage: existingOnUsage });
+
+        expect(existingOnUsage).toHaveBeenCalledWith(usage, { routeAttempt });
+        expect(onGenerateObjectFinal).toHaveBeenCalledWith(
+          expect.objectContaining({ routeAttempt, usage }),
+          expect.anything(),
+        );
       });
 
       it('onGenerateObjectError is called when generateObject throws, error is re-thrown', async () => {
@@ -882,6 +902,43 @@ describe('ModelRuntime', () => {
           options: undefined,
           payload: embeddingsPayload,
         });
+      });
+    });
+
+    describe('route attempt attribution', () => {
+      const routeAttempt = { attemptId: 'att-1', channelId: 'ch-1', requestId: 'req-1' };
+      const usage = { cost: 0.001, totalTokens: 10 };
+
+      it('passes the route attempt to onEmbeddingsFinal', async () => {
+        const onEmbeddingsFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onEmbeddingsFinal });
+        mockRuntimeAI.embeddings.mockImplementation(async (_p: any, opts: any) => {
+          await opts?.onUsage?.(usage, { routeAttempt });
+          return [[0.1]];
+        });
+
+        await runtime.embeddings({ input: 'hi', model: 'emb' });
+
+        expect(onEmbeddingsFinal).toHaveBeenCalledWith(
+          { latencyMs: expect.any(Number), routeAttempt, usage },
+          expect.anything(),
+        );
+      });
+
+      it('passes the route attempt to onTranscribeFinal', async () => {
+        const onTranscribeFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onTranscribeFinal });
+        mockRuntimeAI.transcribe.mockImplementation(async (_p: any, opts: any) => {
+          await opts.onUsage(usage, { routeAttempt });
+          return { text: 'hello' };
+        });
+
+        await runtime.transcribe({ file: new Blob([new Uint8Array([1])]), model: 'asr' });
+
+        expect(onTranscribeFinal).toHaveBeenCalledWith(
+          { latencyMs: expect.any(Number), routeAttempt, usage },
+          expect.anything(),
+        );
       });
     });
 

@@ -45,6 +45,11 @@ const setup = async () => {
       throw e;
     },
   });
+  // The instruction editor is mounted while the modal is open.
+  const root = document.createElement('div');
+  root.contentEditable = 'true';
+  document.body.append(root);
+  lexical.setRootElement(root);
   lexical.update(() => {
     $getRoot().append($createParagraphNode().append($createTextNode('body')));
   });

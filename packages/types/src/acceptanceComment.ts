@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { ReviewAnchor } from './acceptanceReview';
+import type { AcceptanceReviewAnchor } from './acceptanceReview';
 import type { DocumentCommentJson } from './documentComment';
 import type { AcceptanceAttachment, AcceptanceReviewAnnotation } from './verify';
 
@@ -69,7 +69,7 @@ export interface AcceptanceCommentAttachmentRef {
   fileId: string;
 }
 
-export type AcceptanceCommentSource = ReviewAnchor;
+export type AcceptanceCommentSource = AcceptanceReviewAnchor;
 
 /** A video comment is anchored to a single frame. */
 export const acceptanceCommentTimeSchema = z

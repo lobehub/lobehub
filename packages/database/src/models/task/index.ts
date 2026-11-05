@@ -590,6 +590,13 @@ export class TaskModel {
     return comments.addComment(this.ctx, data);
   }
 
+  async addComments(
+    taskId: string,
+    rows: Omit<NewTaskComment, 'id' | 'taskId'>[],
+  ): Promise<TaskCommentItem[]> {
+    return comments.addComments(this.ctx, taskId, rows);
+  }
+
   async findCommentById(id: string): Promise<TaskCommentItem | undefined> {
     return comments.findCommentById(this.ctx, id);
   }

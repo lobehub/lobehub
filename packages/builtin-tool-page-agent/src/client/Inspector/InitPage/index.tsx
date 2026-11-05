@@ -2,9 +2,9 @@
 
 import type { InitDocumentArgs } from '@lobechat/editor-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,12 +14,7 @@ import { oneLineEllipsis, shinyTextStyles } from '@/styles';
 import type { InitDocumentState } from '../../../types';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  title: css`
-    margin-inline-end: 8px;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({ title: { marginInlineEnd: '8px', color: cssVar.colorText } });
 
 export const InitPageInspector = memo<BuiltinInspectorProps<InitDocumentArgs, InitDocumentState>>(
   ({ args, partialArgs, isArgumentsStreaming, pluginState }) => {
@@ -72,7 +67,7 @@ export const InitPageInspector = memo<BuiltinInspectorProps<InitDocumentArgs, In
 
     return (
       <div className={oneLineEllipsis}>
-        <span className={styles.title}>
+        <span {...stylex.props(styles.title)}>
           {t('builtins.lobe-page-agent.apiName.initPage.result')}
         </span>
         {displayLines > 0 && (
