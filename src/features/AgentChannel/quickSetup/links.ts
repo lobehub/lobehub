@@ -10,6 +10,8 @@ export const FEISHU_CONSOLE_URL = {
   feishu: 'https://open.feishu.cn/app',
   lark: 'https://open.larksuite.com/app',
 } as const;
+// Internal apps list; the robot is a capability added to an internal app.
+export const DINGTALK_CONSOLE_URL = 'https://open-dev.dingtalk.com/fe/app#/corp/app';
 export const QQ_BOT_CONSOLE_URL = 'https://q.qq.com/qqbot/';
 export const LINE_CONSOLE_URL = 'https://developers.line.biz/console/';
 // Since 2024-09-04 a Messaging API channel starts from an Official Account.

@@ -70,6 +70,9 @@ const PlatformCard = memo<PlatformCardProps>(({ onSelect, platform, status }) =>
 
   const getPlatformDescription = (id: string, name: string) => {
     switch (id) {
+      case 'dingtalk': {
+        return t('channel.platform.dingtalk.description');
+      }
       case 'discord': {
         return t('channel.platform.discord.description');
       }

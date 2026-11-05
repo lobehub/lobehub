@@ -158,6 +158,7 @@ export const getProjectLabel = (topic: ChatTopic): string | undefined => {
 
 /** Client-side platform display names (server `PlatformDefinition.name`). */
 const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
+  dingtalk: 'DingTalk',
   discord: 'Discord',
   feishu: 'Feishu',
   googlechat: 'Google Chat',

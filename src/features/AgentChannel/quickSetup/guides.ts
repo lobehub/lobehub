@@ -3,6 +3,7 @@ import {
   buildDiscordInviteUrl,
   buildSlackAppPageUrl,
   buildSlackCreateAppUrl,
+  DINGTALK_CONSOLE_URL,
   DISCORD_DEVELOPER_PORTAL_URL,
   FEISHU_CONSOLE_URL,
   LINE_ACCOUNT_ENTRY_URL,
@@ -151,6 +152,23 @@ export const getSetupGuide = (
         steps: [
           { key: 'create', link: { href: QQ_BOT_CONSOLE_URL, label: 'openConsole' } },
           { key: 'credentials', fields: ['applicationId', 'appSecret'] },
+        ],
+      };
+    }
+    case 'dingtalk': {
+      return {
+        guide: 'dingtalk',
+        // The robot, its Stream mode and the send permission only take effect once a
+        // version is published, so they follow the save that opens the Stream connection.
+        steps: [
+          {
+            key: 'create',
+            fields: ['applicationId', 'clientSecret'],
+            link: { href: DINGTALK_CONSOLE_URL, label: 'openConsole' },
+          },
+          { key: 'robot' },
+          { key: 'permissions' },
+          { key: 'publish' },
         ],
       };
     }
