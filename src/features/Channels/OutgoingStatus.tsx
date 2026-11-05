@@ -8,7 +8,14 @@ import { channelActions, type ChannelOutgoingMessage } from '@/store/channel';
 import { statusStyles, styles, toneStyles } from './styles';
 
 /** Below a message this tab sent: sending, or failed with retry and delete. */
-export function OutgoingStatus({ message }: { message: ChannelOutgoingMessage }) {
+export function OutgoingStatus({
+  message,
+  onRetry,
+}: {
+  message: ChannelOutgoingMessage;
+  /** Sends the failed message again; the conversation follows where it lands. */
+  onRetry: (message: ChannelOutgoingMessage) => void;
+}) {
   const { t } = useTranslation('channel');
   if (message.status === 'sent') return null;
   if (message.status === 'sending')
@@ -27,7 +34,7 @@ export function OutgoingStatus({ message }: { message: ChannelOutgoingMessage })
         <Icon icon={CircleAlert} size={12} />
         {t('outgoing.failed')}
       </span>
-      <Button size="small" type="text" onClick={() => void channelActions.retrySend(message)}>
+      <Button size="small" type="text" onClick={() => onRetry(message)}>
         {t('outgoing.retry')}
       </Button>
       <Button size="small" type="text" onClick={() => channelActions.discardSend(message)}>

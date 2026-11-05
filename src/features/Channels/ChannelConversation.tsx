@@ -1,7 +1,6 @@
 import type { ChannelPublicMessage } from '@lobechat/types';
 import { Button, Empty, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { useLatest } from 'ahooks';
 import { MessageSquare } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +11,6 @@ import { ChannelConversationSkeleton } from '@/components/Skeleton/Channel';
 import { delayed } from '@/components/Skeleton/Delayed';
 import { createStore, Provider } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { cacheScope } from '@/libs/replica';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 import { useUserStore } from '@/store/user';
@@ -33,6 +31,7 @@ import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { useChannelEvents } from './useChannelEvents';
 import { channelDraftKey } from './useComposerDraft';
+import { useFollowSent } from './useFollowSent';
 import { type ChannelReplyTarget, useReplyTarget } from './useReplyTarget';
 
 interface ChannelConversationProps {
@@ -57,15 +56,7 @@ const Timeline = ({
   const reply = useReplyTarget(channelDraftKey(channelId, threadId));
   const [jumpTarget, setJumpTarget] = useState<ChannelReplyTarget | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
-  const mounted = useRef(false);
-  const location = useActiveLocation();
-  const currentLocation = useLatest(location);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
+  const followSent = useFollowSent(threadId, onOpenThread);
   useEffect(() => {
     if (!highlighted) return;
     const timer = setTimeout(() => setHighlighted(null), 1600);
@@ -230,9 +221,14 @@ const Timeline = ({
                     ) : outgoingById.has(item.message.id) ? (
                       <ChannelMessage
                         continuation={continuation}
-                        delivery={<OutgoingStatus message={outgoingById.get(item.message.id)!} />}
                         message={item.message}
                         threadId={threadId}
+                        delivery={
+                          <OutgoingStatus
+                            message={outgoingById.get(item.message.id)!}
+                            onRetry={(failed) => followSent(channelActions.retrySend(failed))}
+                          />
+                        }
                         detail={{
                           ...detail,
                           attachments: outgoingById.get(item.message.id)!.attachments,
@@ -275,25 +271,11 @@ const Timeline = ({
                 }
                 onCancelReply={() => reply.clear()}
                 onQueue={(message) => {
-                  const sentLocation = currentLocation.current;
-                  const sentScope = cacheScope.get();
                   // A reply picked while outsiders were being invited stays for the next message.
                   if (reply.snapshot().target?.id === message.replyToId) reply.clear();
                   followLatest.current = true;
                   setBefore(undefined);
-                  void channelActions
-                    .queueSend({ ...message, channelId, threadId })
-                    .then((stored) => {
-                      if (
-                        stored?.threadId &&
-                        !threadId &&
-                        mounted.current &&
-                        sentScope === cacheScope.get() &&
-                        sentLocation.pathname === currentLocation.current.pathname &&
-                        sentLocation.search === currentLocation.current.search
-                      )
-                        onOpenThread?.(stored.threadId, false);
-                    });
+                  followSent(channelActions.queueSend({ ...message, channelId, threadId }));
                 }}
               />
             )}
