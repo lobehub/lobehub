@@ -2,6 +2,10 @@
 import { readFile } from 'node:fs/promises';
 
 import type { EnvironmentConfiguration } from '@lobechat/types';
+import {
+  MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+  MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE,
+} from '@lobechat/types';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -237,7 +241,7 @@ const createDevice = async () => {
 };
 
 describe('Environment instances', () => {
-  it('materializes the same definition on a device, a sandbox and an rc cluster', async () => {
+  it('materializes the same definition on a device, a sandbox and a cluster', async () => {
     const environment = await createEnvironment();
     const device = await createDevice();
     const common = instanceValues(environment.id);
@@ -255,9 +259,9 @@ describe('Environment instances', () => {
         {
           ...common,
           kind: 'cluster',
-          provider: 'rc',
-          providerScope: 'cluster-1',
-          providerResourceId: 'allocation-1',
+          provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+          providerScope: 'region-1',
+          providerResourceId: 'managed-device-1',
         },
       ])
       .returning();
@@ -292,8 +296,8 @@ describe('Environment instances', () => {
       db.insert(environmentInstances).values({
         ...common,
         kind: 'cluster',
-        provider: 'rc',
-        providerScope: 'cluster-1',
+        provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+        providerScope: 'region-1',
         providerResourceId: ' ',
       }),
     ).rejects.toThrow();
@@ -307,6 +311,38 @@ describe('Environment instances', () => {
         providerResourceId: 'sandbox-1',
       }),
     ).rejects.toThrow();
+  });
+
+  it('maps a managed cloud device to a cluster instance by its managed device id', async () => {
+    const environment = await createEnvironment();
+    const managedDeviceId = '00000000-0000-4000-8000-000000000001';
+    const [device] = await db
+      .insert(devices)
+      .values({
+        deviceId: managedDeviceId,
+        identitySource: MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE,
+        userId,
+      })
+      .returning();
+    expect(device.identitySource).toBe(MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE);
+
+    const [instance] = await db
+      .insert(environmentInstances)
+      .values({
+        ...instanceValues(environment.id),
+        kind: 'cluster',
+        provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+        providerScope: 'region-1',
+        providerResourceId: device.deviceId,
+      })
+      .returning();
+    expect(instance).toMatchObject({
+      deviceId: null,
+      kind: 'cluster',
+      provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+      providerResourceId: managedDeviceId,
+      providerScope: 'region-1',
+    });
   });
 
   it('keeps distinct folders on a device and scopes remote identities to the provider account', async () => {

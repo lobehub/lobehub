@@ -6,6 +6,11 @@ import {
   acceptanceIdFromReviewResource,
   siteReviewFromResource,
 } from '@lobechat/const';
+import {
+  MANAGED_DEVICE_JWT_PURPOSE,
+  TUNNEL_ACCESS_JWT_PURPOSE,
+  WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { JSONWebKeySet, JWK, JWK_RSA_Public } from 'jose';
@@ -20,6 +25,13 @@ import {
 } from './acceptanceReview';
 
 const log = debug('oidc-jwt');
+
+/** See `@lobechat/types` `deviceGatewayToken`: these tokens are not logins. */
+const DEVICE_GATEWAY_ONLY_PURPOSES = new Set<unknown>([
+  MANAGED_DEVICE_JWT_PURPOSE,
+  TUNNEL_ACCESS_JWT_PURPOSE,
+  WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE,
+]);
 
 /**
  * Get JWKS key string from environment
@@ -179,6 +191,13 @@ export const validateOIDCJWT = async (token: string) => {
       throw new TRPCError({
         code: 'UNAUTHORIZED',
         message: 'Acceptance review tokens are not accepted here',
+      });
+    }
+
+    if (DEVICE_GATEWAY_ONLY_PURPOSES.has(payload.purpose)) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'Device gateway tokens are not accepted here',
       });
     }
 

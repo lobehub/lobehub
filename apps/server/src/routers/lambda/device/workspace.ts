@@ -15,6 +15,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
 import { assertWorkspaceDeviceEditable, canEditWorkspaceDevice } from '../deviceWorkspaceGuard';
+import { reportManagedDevicesRemoved } from './managedDeviceRemoval';
 
 /**
  * Fixed workspace agents promise every member the same execution device. Keep
@@ -378,7 +379,8 @@ export const workspaceRouter = router({
           });
         }
       }
-      await model.deleteWorkspaceDevice(input.deviceId);
+      const removed = await model.deleteWorkspaceDevice(input.deviceId);
+      await reportManagedDevicesRemoved(removed);
       return { success: true };
     }),
 });
