@@ -823,6 +823,23 @@ export default class McpCtr extends ControllerModule {
     }
   }
 
+  /**
+   * Fails open: while the tool's visibility can't be learned, the model's call
+   * runs as it did before MCP Apps.
+   */
+  private async isToolHiddenFromModel(client: MCPClient, toolName: string) {
+    try {
+      return await client.isToolHiddenFromModel(toolName);
+    } catch (error) {
+      // A broken session is the call's own failure, recovered by runMcpTool
+      if (isStaleSessionError(error, client.getProtocolEra()) || isDeadTransportError(error)) {
+        throw error;
+      }
+      logger.warn('Failed to resolve MCP App visibility for tool:', { error, toolName });
+      return false;
+    }
+  }
+
   /** Never fails the tool call: an unknown UI resource only means no interactive view. */
   private async getToolUiResourceUri(client: MCPClient, toolName: string) {
     try {
@@ -911,6 +928,17 @@ export default class McpCtr extends ControllerModule {
             // and only while MCP Apps are on
             if (fromApp && !(mcpApps && (await this.isToolCallableByApp(client, toolName)))) {
               const message = `The tool "${toolName}" can't be called from an interactive view.`;
+              return {
+                content: message,
+                error: { message, name: 'MCPToolError' },
+                state: { content: [{ text: message, type: 'text' }], isError: true },
+                success: false,
+              };
+            }
+            // A tool the server keeps from the model is its views' alone, even
+            // when the model names it (e.g. from an earlier turn)
+            if (!fromApp && mcpApps && (await this.isToolHiddenFromModel(client, toolName))) {
+              const message = `The tool "${toolName}" can only be called from its interactive view.`;
               return {
                 content: message,
                 error: { message, name: 'MCPToolError' },

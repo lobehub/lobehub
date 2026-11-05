@@ -364,6 +364,8 @@ export class MCPClient {
   private uiResourceUris?: Map<string, string>;
   /** Tools a view may not call (`_meta.ui.visibility` without "app"), from the same listing */
   private appHiddenTools?: Set<string>;
+  /** Tools only views may call (`_meta.ui.visibility` without "model"), from the same listing */
+  private modelHiddenTools?: Set<string>;
 
   constructor(
     params: MCPClientParams,
@@ -763,7 +765,22 @@ export class MCPClient {
         .filter((tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'app'))
         .map((tool) => tool.name),
     );
+    this.modelHiddenTools = new Set(
+      (tools || [])
+        .filter((tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model'))
+        .map((tool) => tool.name),
+    );
     return (tools || []) as McpTool[];
+  }
+
+  /**
+   * Whether the server keeps `toolName` from the model: its
+   * `_meta.ui.visibility` lacks "model", so only its views may call it.
+   */
+  async isToolHiddenFromModel(toolName: string): Promise<boolean> {
+    if (!this.modelHiddenTools) await this.listTools();
+
+    return !!this.modelHiddenTools?.has(toolName);
   }
 
   /**

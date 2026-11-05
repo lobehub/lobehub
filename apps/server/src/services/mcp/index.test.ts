@@ -314,6 +314,7 @@ describe('MCPService', () => {
       callTool: vi.fn(),
       getToolUiResourceUri: vi.fn().mockResolvedValue(undefined),
       isToolCallableByApp: vi.fn().mockResolvedValue(true),
+      isToolHiddenFromModel: vi.fn().mockResolvedValue(false),
       listManifests: vi.fn(),
       listPrompts: vi.fn(),
       listResources: vi.fn(),
@@ -598,6 +599,21 @@ describe('MCPService', () => {
       expect(mockClient.callTool).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect(result.state.isError).toBe(true);
+    });
+
+    it('refuses a model call to a tool only its views may call, without running it', async () => {
+      mockClient.isToolHiddenFromModel.mockResolvedValue(true);
+
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        mcpApps: true,
+        toolName: 'load_page',
+      });
+
+      expect(mockClient.isToolHiddenFromModel).toHaveBeenCalledWith('load_page');
+      expect(mockClient.callTool).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
     });
 
     it("returns a view the tool's own media, not the chat's uploaded copies", async () => {

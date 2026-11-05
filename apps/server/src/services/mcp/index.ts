@@ -297,6 +297,16 @@ export class MCPService {
           success: false,
         };
       }
+      // A tool the server keeps from the model is its views' alone, even when
+      // the model names it (e.g. from an earlier turn)
+      if (!fromApp && mcpApps && (await client.isToolHiddenFromModel(toolName))) {
+        const message = `The tool "${toolName}" can only be called from its interactive view.`;
+        return {
+          content: message,
+          state: { content: [{ text: message, type: 'text' }], isError: true },
+          success: false,
+        };
+      }
       const uiResourceUri = mcpApps ? await client.getToolUiResourceUri(toolName) : undefined;
 
       try {

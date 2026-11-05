@@ -142,3 +142,29 @@ describe('MCPClient.isToolCallableByApp', () => {
     await expect(client.isToolCallableByApp('search')).resolves.toBe(false);
   });
 });
+
+describe('MCPClient.isToolHiddenFromModel', () => {
+  it('names the tools only views may call, from the same listing', async () => {
+    listTools.mockResolvedValue({
+      tools: [
+        { _meta: { ui: { visibility: ['app'] } }, name: 'load_page' },
+        { _meta: { ui: { visibility: ['model', 'app'] } }, name: 'forecast' },
+        { name: 'search' },
+      ],
+    });
+    const client = new MCPClient(params, { mcpApps: true });
+
+    await expect(client.isToolHiddenFromModel('load_page')).resolves.toBe(true);
+    await expect(client.isToolHiddenFromModel('forecast')).resolves.toBe(false);
+    await expect(client.isToolHiddenFromModel('search')).resolves.toBe(false);
+    expect(listTools).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets the model's calls run while the tools can not be listed", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    listTools.mockRejectedValue(new Error('offline'));
+    const client = new MCPClient(params, { mcpApps: true });
+
+    await expect(client.isToolHiddenFromModel('load_page')).resolves.toBe(false);
+  });
+});

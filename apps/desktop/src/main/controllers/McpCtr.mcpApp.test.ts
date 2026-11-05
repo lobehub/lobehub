@@ -37,6 +37,7 @@ const makeClient = (overrides: Record<string, unknown> = {}) => ({
   getToolUiResourceUri: vi.fn().mockResolvedValue('ui://weather/view'),
   initialize: vi.fn().mockResolvedValue(undefined),
   isToolCallableByApp: vi.fn().mockResolvedValue(true),
+  isToolHiddenFromModel: vi.fn().mockResolvedValue(false),
   listResources: vi.fn().mockResolvedValue([]),
   readResource: vi.fn().mockResolvedValue({ contents: [{ text: '<html />', uri: 'ui://x' }] }),
   ...overrides,
@@ -178,6 +179,36 @@ describe('McpCtr MCP Apps', () => {
     expect(client.isToolCallableByApp).toHaveBeenCalledWith('refresh');
     expect(client.callTool).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
+  });
+
+  it('refuses a model call to a tool only its views may call, and runs it when visibility is unknown', async () => {
+    const hidden = makeClient({ isToolHiddenFromModel: vi.fn().mockResolvedValue(true) });
+    mcpClientMocks.mockReturnValue(hidden);
+    const call = async () =>
+      deserializeMcpIpcPayload<any>(
+        await ctr.callTool(
+          serializeMcpIpcPayload({
+            args: {},
+            http: { name: 'local', url: 'http://127.0.0.1:3000/mcp' },
+            mcpApps: true,
+            toolName: 'load_page',
+          }),
+        ),
+      );
+
+    const refused = await call();
+    expect(hidden.callTool).not.toHaveBeenCalled();
+    expect(refused.success).toBe(false);
+
+    // A failed listing must not stop the model's calls
+    const unknown = makeClient({
+      isToolHiddenFromModel: vi.fn().mockRejectedValue(new Error('list failed')),
+    });
+    mcpClientMocks.mockReturnValue(unknown);
+    // A fresh controller, so its session is the new client
+    ctr = new McpCtr(mockApp);
+    const ran = await call();
+    expect(ran.success).toBe(true);
   });
 
   it.each([

@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
+import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import { toRecord } from '@lobechat/utils/object';
 import {
   Client,
@@ -186,6 +187,8 @@ export class MCPClient {
   private uiResourceUris?: Map<string, string>;
   /** Tools a view may not call (`_meta.ui.visibility` without "app"), from the same listing */
   private appHiddenTools?: Set<string>;
+  /** Tools only views may call (`_meta.ui.visibility` without "model"), from the same listing */
+  private modelHiddenTools?: Set<string>;
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
   private uiResourceListFailedAt?: number;
 
@@ -399,6 +402,11 @@ export class MCPClient {
       this.appHiddenTools = new Set(
         tools.filter((tool) => !isToolVisibleToApp(tool)).map((tool) => tool.name),
       );
+      this.modelHiddenTools = new Set(
+        tools
+          .filter((tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model'))
+          .map((tool) => tool.name),
+      );
       log('Listed %d MCP tool(s)', tools.length);
       return tools as McpTool[];
     } catch (e) {
@@ -495,6 +503,17 @@ export class MCPClient {
     if (!this.appHiddenTools) return false;
 
     return !this.appHiddenTools.has(toolName);
+  }
+
+  /**
+   * Whether the server keeps `toolName` from the model (`_meta.ui.visibility`
+   * without "model"): only its views may call it. Unknown while the tools
+   * can't be listed, which counts as no, so the model's calls keep running.
+   */
+  async isToolHiddenFromModel(toolName: string): Promise<boolean> {
+    await this.ensureToolUiListed();
+
+    return !!this.modelHiddenTools?.has(toolName);
   }
 
   /** List tools once per client for their MCP Apps metadata; see {@link getToolUiResourceUri}. */
