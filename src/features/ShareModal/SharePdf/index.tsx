@@ -6,7 +6,7 @@ import { DownloadIcon, RotateCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ExportLayout from '../components/ExportLayout';
+import ExportLayout, { exportActionClassName } from '../components/ExportLayout';
 import TextOptions from '../ShareText/TextOptions';
 import { type FieldType } from '../ShareText/type';
 import PdfPreview from './PdfPreview';
@@ -82,6 +82,7 @@ const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
       toolbar={<TextOptions value={fieldValue} onChange={setFieldValue} />}
       actions={
         <Button
+          className={exportActionClassName}
           disabled={!pdfData || loading || !!error}
           icon={DownloadIcon}
           type={'primary'}

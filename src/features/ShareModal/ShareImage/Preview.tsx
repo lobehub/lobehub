@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- `* { font-size }` restyles the rendered Markdown of the system role, which takes no per-node props
 import './style.css';
 
 import { DEFAULT_INBOX_TITLE } from '@lobechat/const';

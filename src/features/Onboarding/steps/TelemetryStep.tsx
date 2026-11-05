@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Steps.connector
 import './TelemetryStep.css';
 
 import { BRANDING_NAME } from '@lobechat/business-const';

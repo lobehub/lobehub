@@ -19,6 +19,9 @@ export const styles = stylex.create({
     flexDirection: { default: null, [media.sm]: 'column' },
     alignItems: { default: null, [media.sm]: 'stretch' },
   },
+  footerAction: {
+    flex: { default: null, [media.sm]: '1' },
+  },
   meta: {
     overflow: 'hidden',
     flex: '1',

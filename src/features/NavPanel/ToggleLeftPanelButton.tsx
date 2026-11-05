@@ -2,6 +2,8 @@
 
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { ActionIcon, type ActionIconProps } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
@@ -18,6 +20,21 @@ import { isMacOS } from '@/utils/platform';
 import { useCloseMobileNavDrawer } from './MobileDrawerContext';
 
 export const TOGGLE_BUTTON_ID = 'toggle_left_panel_button';
+
+const IN_NAV_PANEL = ':is([data-nav-panel-draggable] *)';
+const IN_HOVERED_NAV_PANEL = ':is([data-nav-panel-draggable]:hover *)';
+
+const styles = stylex.create({
+  navPanelReveal: {
+    opacity: { default: null, [IN_NAV_PANEL]: 0, [IN_HOVERED_NAV_PANEL]: 1 },
+    transition: { default: null, [IN_NAV_PANEL]: `opacity, width 0.2s ${cssVar.motionEaseOut}` },
+    width: {
+      default: null,
+      [IN_NAV_PANEL]: '0 !important',
+      [IN_HOVERED_NAV_PANEL]: '32px !important',
+    },
+  },
+});
 
 // On macOS desktop a persistent toggle lives in the titlebar (NavigationBar),
 // so in-page instances hide themselves to avoid duplicate collapse buttons.
@@ -74,6 +91,9 @@ const ToggleLeftPanelButton = memo<ToggleLeftPanelButtonProps>(
         id={id ?? undefined}
         size={size || DESKTOP_HEADER_ICON_SMALL_SIZE}
         title={title || t('toggleLeftPanel.title', { ns: 'hotkey' })}
+        className={
+          id === TOGGLE_BUTTON_ID ? stylex.props(styles.navPanelReveal).className : undefined
+        }
         tooltipProps={{
           hotkey,
           placement: 'bottom',

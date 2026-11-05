@@ -1,37 +1,3 @@
-/* The panel hides the sidebar header buttons until it is hovered. They are
-   other components' elements, reached by id (TOGGLE_BUTTON_ID in
-   ToggleLeftPanelButton, USER_DROPDOWN_ICON_ID in ../constants, BACK_BUTTON_ID in
-   ./BackButton), and StyleX cannot select descendants by id. */
-.lobe-nav-panel-draggable-4efd33c1-panel * {
+[data-nav-panel-draggable] * {
   user-select: none;
-}
-
-.lobe-nav-panel-draggable-4efd33c1-panel #toggle_left_panel_button {
-  width: 0 !important;
-  opacity: 0;
-  transition:
-    opacity,
-    width 0.2s var(--lobe-motion-ease-out);
-}
-
-.lobe-nav-panel-draggable-4efd33c1-panel #user-dropdown-icon {
-  width: 0 !important;
-  opacity: 0;
-  transition:
-    opacity,
-    width 0.2s var(--lobe-motion-ease-out);
-}
-
-.lobe-nav-panel-draggable-4efd33c1-panel #lobe-back-button {
-  width: 24px !important;
-}
-
-.lobe-nav-panel-draggable-4efd33c1-panel:hover #toggle_left_panel_button {
-  width: 32px !important;
-  opacity: 1;
-}
-
-.lobe-nav-panel-draggable-4efd33c1-panel:hover #user-dropdown-icon {
-  width: 14px !important;
-  opacity: 1;
 }

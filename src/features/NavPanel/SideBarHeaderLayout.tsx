@@ -1,9 +1,7 @@
 'use client';
 
-import './SideBarHeaderLayout.css';
-
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Breadcrumb, type BreadcrumbItem, Text } from '@lobehub/ui';
+import { Breadcrumb, type BreadcrumbItem, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -18,8 +16,15 @@ import BackButton from './components/BackButton';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
 const containerStyles = stylex.create({
+  breadcrumbItem: {
+    color: cssVar.colorTextDescription,
+    fontSize: '12px',
+    fontWeight: 'normal',
+  },
   container: { overflow: 'hidden' },
 });
+
+const breadcrumbClassNames = { item: stylex.props(containerStyles.breadcrumbItem).className };
 
 interface SideBarHeaderLayoutProps {
   backTo?: string;
@@ -65,7 +70,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     ) : (
       <Flexbox flex={1} paddingInline={6}>
         <Breadcrumb
-          className={'lobe-side-bar-header-layout-1c0171ed-breadcrumb'}
+          classNames={breadcrumbClassNames}
           separator={<Icon icon={ChevronRightIcon} />}
           items={[
             homeItem ?? {

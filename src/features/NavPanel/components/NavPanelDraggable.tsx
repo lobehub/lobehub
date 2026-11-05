@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- `* { user-select }` covers every node of route-owned panel content; no prop reaches arbitrary descendants
 import './NavPanelDraggable.css';
 
 import { cssVar, DraggablePanel } from '@lobehub/ui';
@@ -123,6 +124,8 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
 
   return (
     <DraggablePanel
+      data-nav-panel-draggable
+      className={stylex.props(draggableStyles.panel, imLayout && draggableStyles.imPanel).className}
       classNames={classNames}
       defaultSize={defaultSize}
       expand={expand}
@@ -132,10 +135,6 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       placement="left"
       showBorder={false}
       style={styles}
-      className={[
-        stylex.props(draggableStyles.panel, imLayout && draggableStyles.imPanel).className,
-        'lobe-nav-panel-draggable-4efd33c1-panel',
-      ].join(' ')}
       onExpandChange={togglePanel}
       onSizeDragging={handleSizeChange}
     >

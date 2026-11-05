@@ -14,12 +14,22 @@ import UserPanel from '@/features/User/UserPanel';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+const IN_NAV_PANEL = ':is([data-nav-panel-draggable] *)';
+const IN_HOVERED_NAV_PANEL = ':is([data-nav-panel-draggable]:hover *)';
+
 // The dropdown is a button surface, not selectable text. Without
 // `user-select: none` a triple-click (or click-drag through the avatar /
 // name) paints the system text-selection highlight across the whole row;
 // that bright blue is heavier than the Sidebar's active-route fill below
 // and inverts the visual hierarchy.
-const styles = stylex.create({ trigger: { userSelect: 'none' } });
+const styles = stylex.create({
+  dropdownIcon: {
+    opacity: { default: null, [IN_NAV_PANEL]: 0, [IN_HOVERED_NAV_PANEL]: 1 },
+    transition: { default: null, [IN_NAV_PANEL]: `opacity, width 0.2s ${cssVar.motionEaseOut}` },
+    width: { default: null, [IN_NAV_PANEL]: 0, [IN_HOVERED_NAV_PANEL]: '14px' },
+  },
+  trigger: { userSelect: 'none' },
+});
 
 const User = memo<{ lite?: boolean }>(({ lite }) => {
   const [nickname, username, isSignedIn] = useUserStore((s) => [
@@ -68,6 +78,7 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
               </Text>
             )}
             <Icon
+              className={stylex.props(styles.dropdownIcon).className}
               color={cssVar.colorTextDescription}
               icon={ChevronDownIcon}
               id={USER_DROPDOWN_ICON_ID}

@@ -1,8 +1,14 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Center, ContextMenuTrigger, Empty, Flexbox, Icon, SearchBar, Tooltip } from '@lobehub/ui';
 import {
+  Center,
+  ContextMenuTrigger,
+  Empty,
+  Flexbox,
+  Icon,
+  SearchBar,
+  Tooltip,
   ActionIcon,
   Button,
   type DropdownItem,

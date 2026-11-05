@@ -5,7 +5,7 @@ import { CopyIcon, DownloadIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ExportLayout from '../components/ExportLayout';
+import ExportLayout, { exportActionClassName } from '../components/ExportLayout';
 import { flattenExportMessages } from '../flattenExportMessages';
 import { useShareData } from '../ShareDataProvider';
 import { useExportMessages } from '../useExportMessages';
@@ -50,6 +50,7 @@ const ShareText = memo(() => {
       actions={
         <>
           <Button
+            className={exportActionClassName}
             disabled={disabled}
             icon={CopyIcon}
             loading={isHydrating}
@@ -61,6 +62,7 @@ const ShareText = memo(() => {
             {t('shareModal.actions.copyText')}
           </Button>
           <Button
+            className={exportActionClassName}
             disabled={disabled}
             icon={DownloadIcon}
             type={'primary'}

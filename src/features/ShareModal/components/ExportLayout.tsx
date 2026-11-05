@@ -1,5 +1,3 @@
-import '../style.css';
-
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
@@ -25,12 +23,14 @@ const ExportLayout = ({ actions, children, meta, overlay, toolbar }: ExportLayou
     {overlay}
     <Flexbox horizontal align={'center'} className={stylex.props(styles.footer).className}>
       <div {...stylex.props(styles.meta)}>{meta}</div>
-      <Flexbox horizontal className={'lobe-share-modal-6c66305f-footer-actions'} gap={8}>
+      <Flexbox horizontal gap={8}>
         {actions}
       </Flexbox>
     </Flexbox>
   </Flexbox>
 );
+
+export const exportActionClassName = stylex.props(styles.footerAction).className;
 
 export const ToolbarDivider = () => <span aria-hidden {...stylex.props(styles.toolbarDivider)} />;
 

@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- react-pdf renders the Document / Page descendants itself and exposes no prop for them
 import './useContainerStyles.css';
 
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
