@@ -1,5 +1,5 @@
+import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelListItem } from '@lobechat/types';
-import { CHANNEL_LIMITS } from '@lobechat/types';
 import {
   AccordionHeader,
   AccordionItem,
@@ -8,31 +8,19 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
-  copyToClipboard,
   cx,
   DropdownMenu,
   Flexbox,
   Text,
-  toast,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import {
-  Archive,
-  ArchiveRestore,
-  Copy,
-  Hash,
-  MoreHorizontal,
-  PencilLine,
-  Plus,
-  Trash,
-} from 'lucide-react';
+import { Archive, Hash, MoreHorizontal, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
-import { openRenameModal } from '@/components/RenameModal';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -40,16 +28,14 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { channelsInScope } from './channelScope';
 import { openCreateChannel } from './CreateChannel';
-import { channelPath, matchChannel } from './paths';
+import { matchChannel } from './paths';
 import { threadTitle } from './threadTitle';
-import { useChannelArchive } from './useChannelArchive';
 import { useChannelEvents } from './useChannelEvents';
-import { useRemoveChannel } from './useRemoveChannel';
+import { useChannelMenu } from './useChannelMenu';
+import { useChannelsEnabled } from './useChannelsEnabled';
 import { useThreadMenu } from './useThreadMenu';
 
 // The connector runs down from the centre of the Channel's 18px icon (4px row padding + half
@@ -116,7 +102,7 @@ const ChannelThreads = ({
   return (
     <Flexbox aria-label={t('thread')} gap={1} paddingBlock={1}>
       {shown.map(({ thread, index }, position) => {
-        const path = channelPath(channelId, thread.id, projectId);
+        const path = CHANNEL_URL(channelId, thread.id, projectId);
         const active = thread.id === threadId;
         const items = threadMenu(detail.channel, thread);
         return (
@@ -183,75 +169,15 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const channels = useMemo(() => channelsInScope(allChannels, projectId), [allChannels, projectId]);
   useChannelEvents();
 
-  const remove = useRemoveChannel();
-  const { archive, unarchive } = useChannelArchive();
   const [showArchived, setShowArchived] = useState(false);
   const activeChannelId = matchChannel(pathname);
   const create = () =>
-    openCreateChannel((id) => navigate(channelPath(id, null, projectId)), projectId);
+    openCreateChannel((id) => navigate(CHANNEL_URL(id, null, projectId)), projectId);
   const activeThreadId = new URLSearchParams(search).get('thread');
-  const rename = (channel: ChannelListItem) =>
-    openRenameModal({
-      defaultValue: channel.title,
-      maxLength: CHANNEL_LIMITS.titleLength,
-      title: t('rename'),
-      onSave: async (title) => {
-        try {
-          await channelActions.rename(channel.id, title);
-        } catch (error) {
-          console.error('Failed to rename Channel', error);
-          toast.error(t(isTrpcErrorCode(error, 'FORBIDDEN') ? 'renameForbidden' : 'renameFailed'));
-          throw error; // Keep the dialog open with the typed name.
-        }
-      },
-    });
-  const menuItems = (channel: ChannelListItem) => [
-    ...(channel.canDelete && channel.status !== 'archived'
-      ? [{ icon: PencilLine, key: 'rename', label: t('rename'), onClick: () => rename(channel) }]
-      : []),
-    {
-      icon: Copy,
-      key: 'copyId',
-      label: t('copyId'),
-      onClick: async () => {
-        try {
-          await copyToClipboard(channel.id);
-          toast.success(t('copyIdSuccess'));
-        } catch (error) {
-          console.error('Failed to copy Channel id', error);
-          toast.error(t('actionFailed'));
-        }
-      },
-    },
-    ...(channel.canDelete
-      ? [
-          channel.status === 'archived'
-            ? {
-                icon: ArchiveRestore,
-                key: 'unarchive',
-                label: t('unarchive'),
-                onClick: () => void unarchive(channel.id),
-              }
-            : {
-                icon: Archive,
-                key: 'archive',
-                label: t('archive'),
-                onClick: () => archive(channel),
-              },
-          { type: 'divider' as const },
-          {
-            danger: true,
-            icon: Trash,
-            key: 'delete',
-            label: t('moveToTrash'),
-            onClick: () => remove(channel),
-          },
-        ]
-      : []),
-  ];
+  const menuItems = useChannelMenu();
 
   const renderChannel = (channel: ChannelListItem) => {
-    const path = channelPath(channel.id, null, channel.projectId);
+    const path = CHANNEL_URL(channel.id, null, channel.projectId);
     const open = activeChannelId === channel.id;
     return (
       <Flexbox key={channel.id}>
@@ -349,10 +275,6 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
     </AccordionItem>
   );
 };
-
-// Before the per-user flags load the store holds defaults; wait instead of guessing.
-const useChannelsEnabled = () =>
-  useServerConfigStore((s) => s.serverConfigInit && serverConfigSelectors.enableChannels(s));
 
 /** One accordion item; place it inside an `AccordionRoot`. */
 export const ChannelSection = (props: ChannelSectionProps) =>

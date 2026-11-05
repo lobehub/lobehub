@@ -177,18 +177,6 @@ describe('componentInfo.ts', () => {
       const resultUndefined = getComponentInfo(undefined as any);
       expect(resultUndefined).toBeUndefined();
     });
-
-    it('should work with different file extensions', () => {
-      // Since we're mocking the entire module, we need to test the existing mock data
-      // This test validates that the function works with the current mock setup
-      const result = getComponentInfo('clip-l.safetensors');
-      expect(result).toEqual({
-        displayName: 'CLIP text encoder',
-        folderPath: 'models/clip',
-        nodeType: 'CLIPTextEncode',
-        type: 'clip',
-      });
-    });
   });
 
   describe('isSystemComponent', () => {

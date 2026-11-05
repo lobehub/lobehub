@@ -1,10 +1,15 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
+import { LINEAR_NO_PROJECT_ID } from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LinearConnectionModel, LinearSyncRuleModel } from '@/database/models/linear';
+import {
+  LinearConnectionModel,
+  LinearSyncJobModel,
+  LinearSyncRuleModel,
+} from '@/database/models/linear';
 import {
   asyncTasks,
   linearConnections,
@@ -15,7 +20,12 @@ import {
   workspaces,
 } from '@/database/schemas';
 import { continueLinearRuleSyncJob } from '@/server/services/linear/startSyncJob';
-import { LINEAR_SYNC_MAX_ROUNDS, LinearSyncJobService } from '@/server/services/linear/syncJob';
+import {
+  LINEAR_SYNC_MAX_HAND_OFFS,
+  LINEAR_SYNC_MAX_ROUNDS,
+  LINEAR_SYNC_RUN_BUDGET_MS,
+  LinearSyncJobService,
+} from '@/server/services/linear/syncJob';
 
 import { linearRouter } from '../linear';
 
@@ -30,6 +40,7 @@ vi.mock('@/envs/linear', () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
+  countIssues: vi.fn(),
   getToken: vi.fn(),
   listTeams: vi.fn(),
   revoke: vi.fn(),
@@ -54,6 +65,7 @@ vi.mock('@/server/services/linear/token', () => ({
   LinearReconnectRequiredError: class LinearReconnectRequiredError extends Error {},
 }));
 vi.mock('@/server/services/linear/issues', () => ({
+  countLinearIssues: mocks.countIssues,
   listLinearProjects: vi.fn(),
   listLinearTeams: mocks.listTeams,
 }));
@@ -197,6 +209,26 @@ describe('linearRouter', () => {
       expect(mocks.getToken).not.toHaveBeenCalled();
     });
 
+    it("counts the issues of the picker filter through the caller's connection", async () => {
+      const connection = await connect({ userId });
+      const other = await connect({ userId: otherUserId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.countIssues.mockResolvedValue({ capped: false, count: 234 });
+      const filter = { stateTypes: ['unstarted' as const], teamId: 'team-pkg' };
+
+      await expect(
+        caller({ userId }).countIssues({ connectionId: connection.id, ...filter }),
+      ).resolves.toEqual({ capped: false, count: 234 });
+      expect(mocks.countIssues).toHaveBeenCalledWith(
+        'token',
+        expect.objectContaining({ connectionId: connection.id, ...filter }),
+      );
+
+      await expect(
+        caller({ userId }).countIssues({ connectionId: other.id, ...filter }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
     it('asks to reconnect when Linear rejects the token', async () => {
       const connection = await connect({ userId });
       const { LinearApiError } = await import('@/server/services/linear/client');
@@ -259,6 +291,36 @@ describe('linearRouter', () => {
       expect(saved.lastRunAt).toBeInstanceOf(Date);
     });
 
+    it('saves and runs a rule for the team’s issues without a Linear project', async () => {
+      const connection = await connect({ userId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.runSync.mockResolvedValue({ ok: true });
+      mocks.syncByFilter.mockResolvedValue(syncResult);
+
+      const rule = await caller({ userId }).createSyncRule({
+        connectionId: connection.id,
+        linearProjectId: LINEAR_NO_PROJECT_ID,
+        linearProjectName: 'ignored',
+        projectId,
+        stateTypes: ['backlog'],
+        teamId: 'team-1',
+        teamName: 'Engineering',
+      });
+      expect(rule).toMatchObject({
+        linearProjectId: LINEAR_NO_PROJECT_ID,
+        linearProjectName: null,
+      });
+
+      const { id } = await caller({ userId }).startRuleSync({ ruleId: rule.id });
+      await new LinearSyncJobService(serverDB, userId).run(id);
+
+      expect(mocks.syncByFilter).toHaveBeenCalledWith(
+        'token',
+        { linearProjectId: LINEAR_NO_PROJECT_ID, stateTypes: ['backlog'], teamId: 'team-1' },
+        { targetProjectId: projectId },
+      );
+    });
+
     describe('when a rule matches more issues than one round creates', () => {
       const round = (
         created: number,
@@ -290,10 +352,20 @@ describe('linearRouter', () => {
         return { id, rule };
       };
 
-      /** The service as the async router builds it, able to queue the next round. */
-      const routerService = () =>
-        new LinearSyncJobService(serverDB, userId, undefined, (taskId, metadata) =>
-          continueLinearRuleSyncJob(serverDB, userId, undefined, taskId, metadata),
+      /**
+       * The service as the async router builds it, able to queue the next
+       * round. With no time budget, every round is handed to a new request,
+       * as a run that outlasts one request is.
+       */
+      const routerService = (runBudgetMs = 0, maxHandOffs = Infinity) =>
+        new LinearSyncJobService(
+          serverDB,
+          userId,
+          undefined,
+          (taskId, metadata) =>
+            continueLinearRuleSyncJob(serverDB, userId, undefined, taskId, metadata),
+          runBudgetMs,
+          maxHandOffs,
         );
 
       const settle = async () => {
@@ -349,6 +421,121 @@ describe('linearRouter', () => {
         expect(jobs[0].result).not.toHaveProperty('resumeAfter');
         const [saved] = await caller({ userId }).listSyncRules({ projectId });
         expect(saved.lastResult).toMatchObject({ created: 242, truncated: false });
+      });
+
+      it('runs the rounds one after another in the same request while it has time', async () => {
+        mocks.syncByFilter
+          .mockResolvedValueOnce(round(100, true, '100'))
+          .mockResolvedValueOnce(round(100, true, '200'))
+          .mockResolvedValueOnce(round(100, true, '300'))
+          .mockResolvedValueOnce(round(100, true, '400'))
+          .mockResolvedValueOnce(round(100, true, '500'))
+          .mockResolvedValueOnce(round(42, false))
+          .mockResolvedValueOnce(round(0, false));
+        const { id, rule } = await startRule();
+
+        await routerService(LINEAR_SYNC_RUN_BUDGET_MS).run(id);
+        await settle();
+
+        // One hand-off, the one that started the run: no chain of requests
+        // each waiting on the next, which the host cuts off a few deep.
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(startAfterOfCalls()).toEqual([
+          undefined,
+          '100',
+          '200',
+          '300',
+          '400',
+          '500',
+          undefined,
+        ]);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, id, result: { created: 542, truncated: false }, status: 'success' },
+        ]);
+        const [saved] = await caller({ userId }).listSyncRules({ projectId });
+        expect(saved).toMatchObject({ id: rule.id, lastResult: { created: 542 } });
+      });
+
+      it('hands a slow run to a new request before a round could outlast this one', async () => {
+        // Each round takes 5 minutes: after the first, two more would not fit
+        // in the budget, so the next round goes to a fresh request.
+        let clock = Date.now();
+        const now = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+        try {
+          mocks.syncByFilter.mockImplementation(async (_t, _f, options) => {
+            clock += 5 * 60 * 1000;
+            return options.startAfter ? round(5, false) : round(100, true, '100');
+          });
+          const { id } = await startRule();
+
+          await routerService(LINEAR_SYNC_RUN_BUDGET_MS).run(id);
+          await settle();
+
+          expect(mocks.syncByFilter).toHaveBeenCalledTimes(1);
+          expect(mocks.runSync).toHaveBeenCalledTimes(2);
+        } finally {
+          now.mockRestore();
+        }
+        // Queued for the next request, with the total so far.
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, result: { created: 100 }, status: 'pending' },
+        ]);
+      });
+
+      it(`ends a run that keeps running out of time after ${LINEAR_SYNC_MAX_HAND_OFFS} hand-offs, with issues left`, async () => {
+        // Every round is slow, so each request runs one and hands the run on.
+        let clock = Date.now();
+        const now = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+        let page = 0;
+        mocks.syncByFilter.mockImplementation(async () => {
+          clock += 5 * 60 * 1000;
+          page += 1;
+          return round(100, true, String(page * 100));
+        });
+        let id: string;
+        try {
+          ({ id } = await startRule());
+          const service = routerService(LINEAR_SYNC_RUN_BUDGET_MS, LINEAR_SYNC_MAX_HAND_OFFS);
+          for (let handled = 0; handled < mocks.runSync.mock.calls.length; handled++) {
+            await service.run(mocks.runSync.mock.calls[handled][0].taskId);
+            await settle();
+          }
+        } finally {
+          now.mockRestore();
+        }
+
+        // The click, then three hand-offs: four requests, one round each.
+        expect(mocks.runSync).toHaveBeenCalledTimes(LINEAR_SYNC_MAX_HAND_OFFS + 1);
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(LINEAR_SYNC_MAX_HAND_OFFS + 1);
+        const [job] = await caller({ userId }).listSyncJobs({ projectId });
+        expect(job).toMatchObject({
+          error: null,
+          id: id!,
+          result: { created: 400, truncated: true },
+          status: 'success',
+        });
+        const [saved] = await caller({ userId }).listSyncRules({ projectId });
+        expect(saved.lastResult).toMatchObject({ created: 400, truncated: true });
+      });
+
+      it('stops after the current round when stopped during a run in one request', async () => {
+        const { id } = await startRule();
+        mocks.syncByFilter
+          .mockResolvedValueOnce(round(100, true, '100'))
+          .mockImplementationOnce(async () => {
+            await caller({ userId }).cancelSync({ jobId: id, projectId });
+            return round(100, true, '200');
+          });
+
+        await routerService(LINEAR_SYNC_RUN_BUDGET_MS).run(id);
+
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(2);
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'canceled', id, result: { created: 200 }, status: 'error' },
+        ]);
+        const [rule] = await caller({ userId }).listSyncRules({ projectId });
+        expect(rule).toMatchObject({ lastResult: null, lastRunAt: null });
       });
 
       it('stops when a round neither creates nor moves on, and asks to run again', async () => {
@@ -643,6 +830,37 @@ describe('linearRouter', () => {
       });
 
       it('leaves a job the router accepted to the router, even when the response is lost', async () => {
+        // The router claimed the job and is running it; only its answer is lost.
+        mocks.runSync.mockImplementation(async ({ taskId }: { taskId: string }) => {
+          await LinearSyncJobModel.claim(serverDB, { userId, workspaceId: null }, taskId);
+          throw new TRPCClientError('fetch failed');
+        });
+
+        const { id } = await startRule();
+        await settled(1);
+
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, id, status: 'processing' },
+        ]);
+      });
+
+      it('fails a job the host answered with an error the router never ran', async () => {
+        mocks.runSync.mockRejectedValue(
+          new TRPCClientError('Service Unavailable', {
+            meta: { response: { status: 503 } },
+          } as any),
+        );
+
+        const { id } = await startRule();
+        await settled(1);
+
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'failed', id, status: 'error' },
+        ]);
+      });
+
+      it('leaves a job queued when the connection drops without an answer, so the router can still claim it', async () => {
         mocks.runSync.mockRejectedValue(new TRPCClientError('fetch failed'));
 
         const { id } = await startRule();
@@ -651,6 +869,22 @@ describe('linearRouter', () => {
         expect(mocks.runSync).toHaveBeenCalledTimes(1);
         expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
           { error: null, id, status: 'pending' },
+        ]);
+      });
+
+      it('fails a job the host turned away before the router saw it, instead of leaving it queued', async () => {
+        // Vercel answers a request deep in a chain of requests with a 508
+        // page, which the tRPC client fails to read as JSON.
+        mocks.runSync.mockRejectedValue(
+          TRPCClientError.from(new SyntaxError('Unexpected token \'<\', "<!DOCTYPE "...')),
+        );
+
+        const { id } = await startRule();
+        await settled(1);
+
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'failed', id, status: 'error' },
         ]);
       });
     });

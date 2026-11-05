@@ -3,9 +3,9 @@ export default {
   'advanceSettings': 'Advanced Settings',
   'alert.cloud.action': 'Try now',
   'alert.cloud.desc':
-    'All registered users get {{credit}} free credits per month—no setup needed. Includes global cloud sync and advanced web search.',
+    'All registered users get ${{credit}} of free usage per month—no setup needed. Includes global cloud sync and advanced web search.',
   'alert.cloud.descOnMobile':
-    'All registered users get {{credit}} free credits per month—no setup needed.',
+    'All registered users get ${{credit}} of free usage per month—no setup needed.',
   'alert.cloud.title': '{{name}} beta is live',
   'agentViewAll.addToSidebar': 'Show in my sidebar',
   'agentViewAll.empty': 'No agents yet',
@@ -111,7 +111,7 @@ export default {
 
   'cmdk.keywords.discord': 'discord help support customer service',
 
-  'cmdk.keywords.funds': 'funds balance credit money',
+  'cmdk.keywords.funds': 'funds balance usage money',
 
   'cmdk.keywords.hotkey': 'hotkey shortcut keyboard',
 
@@ -249,10 +249,10 @@ export default {
   'betaFeedback.discord.title': 'Discord',
   'betaFeedback.dismiss': "Don't show again",
   'betaFeedback.promoBanner':
-    'Join the group chat and share issues or suggestions for a chance to earn free trial credits.',
-  'betaFeedback.promoTooltip': 'Join the group chat for a chance to earn free credits',
+    'Join the group chat and share issues or suggestions for a chance to earn free trial usage.',
+  'betaFeedback.promoTooltip': 'Join the group chat for a chance to earn free usage',
   'betaFeedback.title': 'Workspace beta feedback',
-  'betaFeedback.waitlistPromo': 'Join the Workspace beta and get $5 in credits',
+  'betaFeedback.waitlistPromo': 'Join the Workspace beta and get $5 in free usage',
   'betaFeedback.waitlistTitle': 'Workspace beta application',
   'betaFeedback.wechat.desc': 'Scan with WeChat to join the group.',
   'betaFeedback.wechat.title': 'WeChat group',
@@ -426,6 +426,7 @@ export default {
     "Can't delete: this includes other members' topics, comments, or tasks. Ask a workspace owner to delete it.",
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
   'openOnRight': 'Open on the right',
+  'openOriginalFile': 'Open original file',
   'openOnRightHint': 'Release to open side-by-side on the right',
   'operationFailed': 'Operation failed, please try again',
   'addNew': 'Add new',
@@ -548,9 +549,9 @@ export default {
   'supportAgent.inspect.target.access': 'temporary access to your account (10 minutes)',
   'supportAgent.inspect.target.accessWithWorkspace':
     'temporary access to your account in the workspace "{{title}}" (10 minutes)',
-  'supportAgent.inspect.target.account': 'your plan, credit balance and budget usage',
+  'supportAgent.inspect.target.account': 'your plan, balance and usage',
   'supportAgent.inspect.target.accountWithWorkspace':
-    'your plan, credit balance and budget usage, including the workspace "{{title}}"',
+    'your plan, balance and usage, including the workspace "{{title}}"',
   'supportAgent.inspect.target.agent': 'the configuration of the agent "{{title}}"',
   'supportAgent.inspect.target.conversation':
     'the full conversation "{{title}}" ({{total}} messages)',
@@ -558,7 +559,7 @@ export default {
   'supportAgent.inspect.untitled': 'Untitled',
   'supportAgent.newConversation': 'New conversation',
   'supportAgent.placeholder': 'Describe your question…',
-  'supportAgent.starter.billing': 'How are credits calculated and charged?',
+  'supportAgent.starter.billing': 'How is usage calculated and charged?',
   'supportAgent.starter.createAgent': 'How do I create and set up an agent?',
   'supportAgent.starter.feedback': 'I want to report a problem or suggest a feature',
   'supportAgent.starter.modelError': 'A model call failed. How do I troubleshoot it?',
@@ -668,7 +669,7 @@ export default {
   'userPanel.billing': 'Billing',
   'userPanel.cloud': 'Launch {{name}}',
   'userPanel.community': 'Community',
-  'userPanel.credits': 'Credits',
+  'userPanel.credits': 'Balance',
   'userPanel.data': 'Data Storage',
   'userPanel.defaultNickname': 'Community User',
   'userPanel.discord': 'Discord',
@@ -679,11 +680,11 @@ export default {
   'userPanel.inviteFriend': 'Invite a friend',
   'userPanel.moveGuide': 'The settings button has been moved here',
   'userPanel.myUsage': 'My Usage',
-  'userPanel.plans': 'Subscription Plans',
+  'userPanel.plans': 'Subscription plans',
   'userPanel.quota': 'Quota',
   'userPanel.profile': 'Account',
   'userPanel.setting': 'Settings',
-  'userPanel.upgradePlan': 'Upgrade Plan',
+  'userPanel.upgradePlan': 'Upgrade plan',
   'userPanel.usages': 'Usage',
   'userPanel.workspaceSetting': 'Workspace Settings',
   'userPanel.workspaceUsage': 'Workspace Usage',

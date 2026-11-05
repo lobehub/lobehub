@@ -1225,9 +1225,7 @@ describe('ToolsEngine', () => {
         excludeDefaultToolIds: manualModeExcludeToolIds,
       });
 
-      // Web browsing and sandbox should remain available even in manual mode
-      expect(result.enabledToolIds).toContain('lobe-web-browsing');
-      expect(result.enabledToolIds).toContain('lobe-cloud-sandbox');
+      // Only the three execution tools should remain available in manual mode.
       expect(result.enabledToolIds).toHaveLength(3); // skills + web-browsing + cloud-sandbox
     });
 

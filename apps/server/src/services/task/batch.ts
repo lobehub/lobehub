@@ -7,12 +7,12 @@ import { taskActivityActor, TaskModel } from '@/database/models/task';
 import { withStaleReposCleared } from '@/database/models/task/utils';
 import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskTopicModel } from '@/database/models/taskTopic';
-import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { EditLockService } from '@/server/services/editLock';
 
 import { AiAgentService } from '../aiAgent';
 import { TaskRunnerService } from '../taskRunner';
+import { trashTasksInTransaction } from '../trash';
 import { assertArchivedTaskStaysIdle, findTasksInOpenGoals } from './archiveGuard';
 import { notifyAssignedBestEffort } from './assignmentNotification';
 import type { TaskBatchStatus } from './batchLimits';
@@ -24,8 +24,6 @@ const FINISHED_STATUSES = new Set(['canceled', 'completed']);
 
 /** Remote operation interrupts / per-task fallbacks issued by one batch. */
 const BATCH_SIDE_EFFECT_CONCURRENCY = 5;
-/** Cheap per-task checks (Redis edit lock, goal ownership). */
-const BATCH_CHECK_CONCURRENCY = 20;
 
 export type TaskBatchSkipReason =
   /** The task is part of an open goal and cannot be archived. */
@@ -39,7 +37,28 @@ export type TaskBatchSkipReason =
   /** Already in the requested state. */
   | 'unchanged'
   /** The change would break a visibility or archive invariant. */
-  | 'invalid';
+  | 'invalid'
+  /** Undo only: someone changed the task again since the batch, so it is left as it is. */
+  | 'conflict';
+
+/** The values one batch write replaced on one task, and what it wrote instead. */
+export interface TaskBatchRevertValues {
+  archived?: boolean;
+  assigneeAgentId?: string | null;
+  assigneeUserId?: string | null;
+  priority?: number | null;
+  status?: string;
+}
+
+/**
+ * How to undo a batch on one task: write `before` back, but only while the
+ * task still holds `after` — a later edit by anyone wins over the undo.
+ */
+export interface TaskBatchRevert {
+  after: TaskBatchRevertValues;
+  before: TaskBatchRevertValues;
+  id: string;
+}
 
 export interface TaskBatchResult {
   failed: { error: string; id: string }[];
@@ -49,6 +68,12 @@ export interface TaskBatchResult {
    * tasks are completed; the caller should say the follow-ups did not run.
    */
   followUpFailed?: boolean;
+  /**
+   * One entry per task in `updated`: the values this write replaced, as read
+   * under the row lock (not the caller's possibly stale copy), so an undo can
+   * put exactly those back. Absent for deletes — they undo through the bin.
+   */
+  reverts?: TaskBatchRevert[];
   skipped: { id: string; reason: TaskBatchSkipReason }[];
   /** Ids (as stored, not the caller's refs) that the batch changed. */
   updated: string[];
@@ -107,14 +132,13 @@ export class TaskBatchService {
   /** Drop tasks another workspace member is editing (inert in personal mode). */
   private async withoutEditLocked(tasks: TaskItem[], result: TaskBatchResult) {
     if (!this.workspaceId || tasks.length === 0) return tasks;
-    const editLock = new EditLockService(this.userId);
-    const blocked = await pMap(
-      tasks,
-      async (task) => !!(await editLock.getBlockingHolder('task', task.id)),
-      { concurrency: BATCH_CHECK_CONCURRENCY },
+    // One MGET for the whole selection, not one GET per task.
+    const blocked = await new EditLockService(this.userId).getBlockingHolders(
+      'task',
+      tasks.map((task) => task.id),
     );
-    return tasks.filter((task, index) => {
-      if (!blocked[index]) return true;
+    return tasks.filter((task) => {
+      if (!blocked.has(task.id)) return true;
       result.skipped.push({ id: task.id, reason: 'locked' });
       return false;
     });
@@ -283,6 +307,16 @@ export class TaskBatchService {
     });
 
     result.updated = updatedTasks.map(({ task }) => task.id);
+    const pick = (row: TaskBatchRevertValues): TaskBatchRevertValues => ({
+      ...(data.assigneeAgentId !== undefined && { assigneeAgentId: row.assigneeAgentId ?? null }),
+      ...(data.assigneeUserId !== undefined && { assigneeUserId: row.assigneeUserId ?? null }),
+      ...(data.priority !== undefined && { priority: row.priority ?? null }),
+    });
+    result.reverts = updatedTasks.map(({ before, task }) => ({
+      after: pick(task),
+      before: pick(before),
+      id: task.id,
+    }));
     const scope = { userId: this.userId, workspaceId: this.workspaceId };
     for (const { before, task } of updatedTasks) {
       // Only an actual assignee change notifies (self-assignment stays silent).
@@ -378,6 +412,7 @@ export class TaskBatchService {
     const extra =
       status === 'completed' || status === 'canceled' ? { completedAt: new Date() } : undefined;
     let updatedTasks: TaskItem[] = [];
+    const statusBefore = new Map<string, string>();
     let canceledTopics: Awaited<ReturnType<TaskTopicModel['cancelRunningByTaskIds']>> = [];
     await this.db.transaction(async (tx) => {
       const model = new TaskModel(tx, this.userId, this.workspaceId);
@@ -405,6 +440,7 @@ export class TaskBatchService {
         return true;
       });
       const changingIds = changing.map((row) => row.id);
+      for (const row of changing) statusBefore.set(row.id, row.status);
 
       canceledTopics = await new TaskTopicModel(
         tx,
@@ -425,6 +461,11 @@ export class TaskBatchService {
       );
     });
     result.updated = updatedTasks.map((task) => task.id);
+    result.reverts = updatedTasks.map((task) => ({
+      after: { status },
+      before: { status: statusBefore.get(task.id)! },
+      id: task.id,
+    }));
 
     // Best-effort: stop operations that only showed up inside the transaction.
     const interrupted = new Set(runningTopics.map((topic) => topic.operationId));
@@ -510,6 +551,11 @@ export class TaskBatchService {
     if (!archived) {
       const restored = await archiveModel.unarchiveMany(candidates.map((task) => task.id));
       result.updated = restored.map((task) => task.id);
+      result.reverts = result.updated.map((id) => ({
+        after: { archived: false },
+        before: { archived: true },
+        id,
+      }));
       return result;
     }
 
@@ -531,6 +577,11 @@ export class TaskBatchService {
       if (!done.has(task.id)) result.skipped.push({ id: task.id, reason: 'running' });
     }
     result.updated = [...done];
+    result.reverts = result.updated.map((id) => ({
+      after: { archived: true },
+      before: { archived: false },
+      id,
+    }));
     return result;
   }
 
@@ -572,17 +623,23 @@ export class TaskBatchService {
         if (!deletableIds.has(row.id)) busy.add(row.id);
       }
 
-      const topicIds = (await txTopics.findByTaskIds(deletable.map((row) => row.id)))
-        .map((topic) => topic.topicId)
-        .filter((topicId): topicId is string => !!topicId);
-      const deleted = await model.deleteIfStatusForIds(deletable);
-      if (topicIds.length > 0) {
-        // Same cascade as the single delete: linked topics (including ones in
-        // the recycle bin) go with the task instead of lingering as orphans.
-        await new TopicModel(tx, this.userId, this.workspaceId).batchDeleteIncludingTrashed(
-          topicIds,
-        );
+      // Same cascade as the single delete: each task's linked topics go into
+      // the recycle bin with it (as its children) instead of lingering as
+      // sidebar orphans. One stamp and one registry write for the batch.
+      const topicIdsByTask = new Map<string, string[]>();
+      for (const link of await txTopics.findByTaskIds(deletable.map((row) => row.id))) {
+        if (!link.topicId) continue;
+        topicIdsByTask.set(link.taskId, [...(topicIdsByTask.get(link.taskId) ?? []), link.topicId]);
       }
+      const deleted = await trashTasksInTransaction(
+        tx,
+        { userId: this.userId, workspaceId: this.workspaceId },
+        deletable.map((row) => ({
+          status: row.status,
+          taskId: row.id,
+          topicIds: topicIdsByTask.get(row.id) ?? [],
+        })),
+      );
       return deleted;
     });
     result.updated.push(...deletedIdle);

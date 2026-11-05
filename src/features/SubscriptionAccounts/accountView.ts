@@ -1,4 +1,5 @@
 import {
+  displayPlanTier,
   isSessionLimit,
   isWeeklyAllLimit,
   type QuotaDisplayReading,
@@ -125,12 +126,17 @@ export const sortAccounts = <
 
 /** Whether an account matches the search box: name, email or plan, case-insensitive. */
 export const matchesKeyword = (
-  account: { email?: string | null; label?: string | null; planTier?: string | null },
+  account: {
+    email?: string | null;
+    label?: string | null;
+    planTier?: string | null;
+    rateLimitTier?: string | null;
+  },
   keyword: string,
 ): boolean => {
   const needle = keyword.trim().toLowerCase();
   if (!needle) return true;
-  return [account.label, account.email, account.planTier].some((field) =>
+  return [account.label, account.email, displayPlanTier(account)].some((field) =>
     field?.toLowerCase().includes(needle),
   );
 };

@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.74",
+  "version": "0.0.75",
   "type": "module",
   "bin": {
     "lh": "dist/index.js",
@@ -55,6 +55,7 @@
     "dayjs": "^1.11.21",
     "debug": "^4.4.3",
     "diff": "^8.0.4",
+    "es-toolkit": "^1.50.0",
     "fast-glob": "^3.3.3",
     "ignore": "^7.0.5",
     "picocolors": "^1.1.1",

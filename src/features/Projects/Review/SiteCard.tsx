@@ -1,6 +1,7 @@
 import { ACCEPTANCE_REVIEW_ACTIVATION_PARAM, isDesktop, OFFICIAL_URL } from '@lobechat/const';
 import {
   ActionIcon,
+  Alert,
   Block,
   Button,
   confirmModal,
@@ -15,6 +16,7 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import dayjs from 'dayjs';
 import { ExternalLinkIcon, MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,10 +24,23 @@ import { useTranslation } from 'react-i18next';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { projectReviewService, type ProjectSiteItem } from '@/services/projectReview';
 
+import { getSiteDetection } from './siteDetection';
 import { openSiteModal } from './SiteFormModal';
 import { reviewLink, siteSnippet } from './siteSnippet';
 
 const styles = stylex.create({
+  dot: {
+    borderRadius: '50%',
+    flexShrink: 0,
+    height: 6,
+    width: 6,
+  },
+  dotSeen: {
+    backgroundColor: cssVar.colorSuccess,
+  },
+  dotWaiting: {
+    backgroundColor: cssVar.colorWarning,
+  },
   origin: {
     fontFamily: cssVar.fontFamilyCode,
     fontSize: 12,
@@ -49,6 +64,7 @@ export function SiteCard({ onChanged, site }: { onChanged: () => void; site: Pro
   const [deleting, setDeleting] = useState(false);
   const link = reviewLink(site.origins, site.acceptanceId);
   const snippet = siteSnippet(site.id, reviewServer());
+  const detection = getSiteDetection(site.lastSeenAt);
 
   const remove = () =>
     confirmModal({
@@ -92,7 +108,22 @@ export function SiteCard({ onChanged, site }: { onChanged: () => void; site: Pro
     <Block gap={12} padding={16} variant="outlined">
       <Flexbox horizontal align="flex-start" gap={12} justify="space-between" wrap="wrap">
         <Flexbox gap={6} style={{ minWidth: 0 }}>
-          <Text weight={600}>{site.name}</Text>
+          <Flexbox horizontal align="center" gap={8} wrap="wrap">
+            <Text weight={600}>{site.name}</Text>
+            <Tag>
+              <Flexbox horizontal align="center" gap={6}>
+                <span
+                  {...stylex.props(
+                    styles.dot,
+                    detection.state === 'seen' ? styles.dotSeen : styles.dotWaiting,
+                  )}
+                />
+                {detection.state === 'seen'
+                  ? t('review.sites.detectSeen', { time: dayjs(detection.at).fromNow() })
+                  : t('review.sites.detectWaiting')}
+              </Flexbox>
+            </Tag>
+          </Flexbox>
           <Flexbox horizontal gap={6} wrap="wrap">
             {site.origins.map((origin) => (
               <Tag {...stylex.props(styles.origin)} key={origin}>
@@ -127,6 +158,14 @@ export function SiteCard({ onChanged, site }: { onChanged: () => void; site: Pro
         <code {...stylex.props(styles.snippet)}>{snippet}</code>
         <CopyButton content={snippet} size="small" title={t('review.sites.copySnippet')} />
       </Block>
+      {detection.state === 'waiting' ? (
+        <Alert
+          showIcon
+          description={t('review.sites.detectWaitingDescription')}
+          title={t('review.sites.detectWaitingTitle')}
+          type="warning"
+        />
+      ) : null}
       {link ? (
         <Flexbox gap={6}>
           <Text fontSize={12} weight={500}>

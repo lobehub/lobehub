@@ -115,7 +115,7 @@ describe('reportInstalledConnectStatus', () => {
     await reportInstalledConnectStatus('2.0.0');
 
     expect(spawn).not.toHaveBeenCalled();
-    expect(printConnectStatus).toHaveBeenCalledWith({ installedVersion: '2.0.0' });
+    expect(printConnectStatus).toHaveBeenCalledWith({ installedVersion: '2.0.0', verbose: false });
   });
 
   it('reports from this process when the installed CLI cannot report', async () => {
@@ -124,6 +124,19 @@ describe('reportInstalledConnectStatus', () => {
 
     await reportInstalledConnectStatus('2.0.0');
 
-    expect(printConnectStatus).toHaveBeenCalledWith({ installedVersion: '2.0.0' });
+    expect(printConnectStatus).toHaveBeenCalledWith({ installedVersion: '2.0.0', verbose: false });
+  });
+
+  it('forwards verbose diagnostics to the installed CLI', async () => {
+    installedReports('2.0.0');
+    statusExits(0);
+    await reportInstalledConnectStatus('2.0.0', true);
+    expect(spawn).toHaveBeenCalledWith(
+      process.execPath,
+      [entry, 'connect', 'status', '--verbose'],
+      {
+        stdio: 'inherit',
+      },
+    );
   });
 });

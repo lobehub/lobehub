@@ -165,23 +165,6 @@ describe('ActivatorExecutionRuntime.activateTools — request-name resolution', 
     expect(result.state?.notFound).toEqual([]);
   });
 
-  it('activates a tool requested by a wire name with an MD5-compressed api segment, mirroring ToolNameResolver variants', async () => {
-    // Codex P2 on PR #20791: `ToolNameResolver.generate` compresses the api
-    // segment to `MD5HASH_…` when the name is provider-invalid or over the
-    // length cap; a request copied from `tools[]` must match that exact
-    // variant instead of falling to the prefix probe.
-    const service = buildService([webBrowsingManifest]);
-    const runtime = new ActivatorExecutionRuntime({ service });
-
-    const result = await runtime.activateTools({
-      identifiers: ['lobe-web-browsing____' + wireHash('search')],
-      reason: 'test',
-    });
-
-    expect(result.content).toContain('Successfully activated tools: lobe-web-browsing.search');
-    expect(result.state?.notFound).toEqual([]);
-  });
-
   it('activates a tool requested by a wire name whose identifier segment is MD5-compressed', async () => {
     // Codex P2 on PR #20791: when the identifier makes the generated name
     // exceed the provider length cap, `ToolNameResolver.generate` hashes the

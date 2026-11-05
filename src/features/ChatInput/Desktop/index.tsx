@@ -23,6 +23,7 @@ import ControlBar from '../ControlBar';
 import InputEditor from '../InputEditor';
 import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
+import { useDocumentDrop } from '../InputEditor/ReferDocument/useDocumentDrop';
 import { useTopicDrop } from '../InputEditor/ReferTopic/useTopicDrop';
 import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
 import SendArea from '../SendArea';
@@ -156,6 +157,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     const setExpand = useChatInputStore((s) => s.setExpand);
     const skillDrop = useSkillDrop();
     const topicDrop = useTopicDrop();
+    const documentDrop = useDocumentDrop();
     const workspaceFileDrop = useWorkspaceFileDrop();
 
     // Fan a single drag event out to every custom-MIME drop handler. Each one
@@ -163,11 +165,13 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     const handleDragOver = (event: React.DragEvent) => {
       skillDrop.onDragOver(event);
       topicDrop.onDragOver(event);
+      documentDrop.onDragOver(event);
       workspaceFileDrop.onDragOver(event);
     };
     const handleDrop = (event: React.DragEvent) => {
       skillDrop.onDrop(event);
       topicDrop.onDrop(event);
+      documentDrop.onDrop(event);
       workspaceFileDrop.onDrop(event);
     };
 

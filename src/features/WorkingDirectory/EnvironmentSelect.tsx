@@ -49,7 +49,6 @@ const EnvironmentSelect = memo<EnvironmentSelectProps>(
         disabled={disabled}
         loading={isLoading}
         placeholder={t('workingDirectory.environment.none')}
-        size={'small'}
         style={{ minWidth: 168 }}
         value={value}
         options={environments.map((environment) => ({

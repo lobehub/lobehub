@@ -65,7 +65,6 @@ describe('MCP automatic descriptions and installed tool prompts', () => {
       const result = await service.getStdioMcpServerManifest({ command: 'mcp', name: 'test-mcp' });
 
       expect(result.meta.description).toBe(expected);
-      expect(result.meta.description).not.toContain('undefined');
     },
   );
 
@@ -82,7 +81,6 @@ describe('MCP automatic descriptions and installed tool prompts', () => {
       );
 
       expect(result.meta.description).toBe(scenario.expected);
-      expect(result.meta.description).not.toContain('undefined');
     },
   );
 

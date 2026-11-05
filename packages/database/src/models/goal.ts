@@ -10,7 +10,7 @@ import type {
   GoalSupervisionState,
   GoalUnderstanding,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import type { GoalItem, NewGoal } from '../schemas/goal';
@@ -20,6 +20,7 @@ import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { GoalArchivedError, goalSignedOffSql } from './goalArchive';
 
 /** States after which a goal's loop no longer advances. */
 const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
@@ -340,7 +341,15 @@ export class GoalModel {
     return row ? next : undefined;
   };
 
-  update = async (id: string, value: Partial<Omit<GoalItem, 'id' | 'userId'>>) => {
+  update = async (
+    id: string,
+    value: Partial<Omit<GoalItem, 'id' | 'userId'>>,
+    /**
+     * Match an archived goal only when its status already is this one — an
+     * archived goal's status is frozen until it is restored (see `updateStatus`).
+     */
+    options: { archivedKeepsStatus?: GoalStatus } = {},
+  ) => {
     // Policy editors may carry a pre-claim or pre-release snapshot. Runtime
     // ownership always comes from the current row, never that snapshot, and
     // policy edits cannot replace the concurrently written incident ledger.
@@ -375,7 +384,15 @@ export class GoalModel {
           : {}),
         updatedAt: new Date(),
       })
-      .where(and(eq(goals.id, id), this.ownership()))
+      .where(
+        and(
+          eq(goals.id, id),
+          this.ownership(),
+          options.archivedKeepsStatus
+            ? or(isNull(goals.archivedAt), eq(goals.status, options.archivedKeepsStatus))
+            : undefined,
+        ),
+      )
       .returning();
     return row as GoalItem | undefined;
   };
@@ -459,11 +476,24 @@ export class GoalModel {
     const existing = await this.findById(id);
     if (!existing) return undefined;
 
-    return this.update(id, {
-      completedAt: TERMINAL_GOAL_STATUSES.has(status) ? (existing.completedAt ?? new Date()) : null,
-      startedAt: existing.startedAt ?? (status === 'running' ? new Date() : null),
-      status,
-    });
+    // Every status write — resume, pause, close, a sign-off sent back, the
+    // coordinator — lands here, so this is where an archived goal is kept put:
+    // its status is frozen until it is restored, which keeps the archive's own
+    // rule (completed or canceled) true while it is hidden. The check is part
+    // of the UPDATE, which serializes with the guarded archive write.
+    const row = await this.update(
+      id,
+      {
+        completedAt: TERMINAL_GOAL_STATUSES.has(status)
+          ? (existing.completedAt ?? new Date())
+          : null,
+        startedAt: existing.startedAt ?? (status === 'running' ? new Date() : null),
+        status,
+      },
+      { archivedKeepsStatus: status },
+    );
+    if (!row && (await this.findById(id))?.archivedAt) throw new GoalArchivedError(id);
+    return row;
   };
 
   /**
@@ -492,6 +522,8 @@ export class GoalModel {
           // Only a goal parked on its questions asks them; one the user paused
           // or ended keeps its open questions without nagging about them.
           notInArray(goals.status, ['paused', 'achieved', 'failed', 'canceled']),
+          // An archived goal was put away; its open questions stay with it.
+          isNull(goals.archivedAt),
           eq(goalNodeDecisions.status, 'pending'),
           eq(goalNodes.title, GOAL_CLARIFICATION_TITLE),
         ),
@@ -549,6 +581,7 @@ export class GoalModel {
               sql`${goals.config} ->> 'pausedBy' in ('release_review', 'pattern_break')`,
             ),
           ),
+          isNull(goals.archivedAt),
           eq(goalNodeDecisions.status, 'pending'),
           eq(goalNodeDecisions.authority, 'user'),
           // In a workspace every member can see the goal, but a gate is asked
@@ -634,6 +667,11 @@ export class GoalModel {
   list = async (
     options: {
       agentId?: string;
+      /**
+       * Archived goals are put away by the user and left out of every list
+       * unless asked for: `true` lists only them (the list page's Archived tab).
+       */
+      archived?: boolean;
       limit?: number;
       offset?: number;
       projectId?: string;
@@ -642,13 +680,17 @@ export class GoalModel {
       topicId?: string;
     } = {},
   ): Promise<{ goals: GoalListItem[]; total: number }> => {
-    const { agentId, limit = 50, offset = 0, projectId, statuses, topicId } = options;
+    const { agentId, archived, limit = 50, offset = 0, projectId, statuses, topicId } = options;
 
     // Only goals that actually have a graph. Rows created by the earlier
     // task-carried flow have no `goal_nodes`, so they would render as a
     // zero-task goal page that can never advance; they stay out of the list
     // until something backfills them into graphs.
-    const conditions = [this.ownership(), GoalModel.hasGraphSql];
+    const conditions = [
+      this.ownership(),
+      GoalModel.hasGraphSql,
+      archived ? isNotNull(goals.archivedAt) : isNull(goals.archivedAt),
+    ];
     if (agentId) conditions.push(eq(goals.agentId, agentId));
     if (projectId) conditions.push(eq(goals.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(goals.status, statuses));
@@ -671,7 +713,7 @@ export class GoalModel {
       .offset(offset);
 
     const goalIds = rows.map((goal) => goal.id);
-    const [nodeRows, decisionRows, runStats] = await Promise.all([
+    const [nodeRows, decisionRows, runStats, signedOffRows] = await Promise.all([
       this.db
         .select({
           goalId: goalNodes.goalId,
@@ -689,7 +731,13 @@ export class GoalModel {
         .where(and(inArray(goalNodes.goalId, goalIds), eq(goalNodeDecisions.status, 'pending')))
         .groupBy(goalNodes.goalId),
       this.graphTaskRunStats(goalIds),
+      // Archiving needs the owner's sign-off, which the row alone cannot say.
+      this.db
+        .select({ id: goals.id })
+        .from(goals)
+        .where(and(inArray(goals.id, goalIds), eq(goals.status, 'achieved'), goalSignedOffSql)),
     ]);
+    const signedOff = new Set(signedOffRows.map((row) => row.id));
 
     const stats = new Map<string, { findingCount: number; taskDone: number; taskTotal: number }>();
     for (const row of nodeRows) {
@@ -711,6 +759,7 @@ export class GoalModel {
         findingCount: counts.findingCount,
         goal,
         pendingDecisions: pendingByGoal.get(goal.id) ?? 0,
+        signedOff: signedOff.has(goal.id),
         taskDone: counts.taskDone,
         taskTotal: counts.taskTotal,
         totalRunCost: run.totalRunCost,
@@ -783,6 +832,8 @@ export interface GoalListItem {
   goal: GoalItem;
   /** Decision gates waiting on a human right now. */
   pendingDecisions: number;
+  /** Achieved and accepted by its owner (its Goal-level acceptance is `accepted`). */
+  signedOff: boolean;
   /** Task nodes in a terminal status (resolved / rejected / retired). */
   taskDone: number;
   taskTotal: number;

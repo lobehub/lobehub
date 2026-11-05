@@ -86,6 +86,10 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
         const editor = storeApi.getState().editor;
         if (editor) void useDocumentStore.getState().onEditorInit(editor, documentId!);
       },
+      // Like a refused autosave: the banner and save status say it, without a toast.
+      onCharLimitExceeded: (refusal) =>
+        useDocumentStore.getState().setCharLimitRefusal(documentId!, refusal),
+      onCharLimitCleared: () => useDocumentStore.getState().clearCharLimitRefusal(documentId!),
       onPendingChange: (pending) => setCollab({ pending }),
       onReset: (reason) => {
         const editor = storeApi.getState().editor;

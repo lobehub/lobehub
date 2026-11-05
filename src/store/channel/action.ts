@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import type { ChannelPublicThread, ChannelStatus, ChannelThreadStatus } from '@lobechat/types';
 
 import { cacheScope } from '@/libs/replica';
@@ -8,6 +9,7 @@ import {
   channelService,
   type ChannelViewParams,
 } from '@/services/channel';
+import { getElectronStoreState } from '@/store/electron';
 
 import { ChannelPrivateAction } from './privateAction';
 import { channelThreadEntityId } from './projection';
@@ -62,6 +64,34 @@ class ChannelActionImpl {
     const result = await channelService.createGroupFromDirect(input);
     await this.#refreshAfterWrite(this.refreshList);
     return result.data.channel.id;
+  };
+  /**
+   * Marks the main channel read up to `sequence`. The listed unread count drops at once, so a
+   * conversation row does not keep its badge until the next list poll; a failed write restores it.
+   */
+  markRead = (channelId: string, sequence: number) =>
+    this.#private.entity.optimistic(
+      channelId,
+      (channel) => ({
+        ...channel,
+        unreadCount: Math.min(channel.unreadCount ?? 0, Math.max(0, channel.sequence - sequence)),
+      }),
+      () => channelService.markRead(channelId, sequence),
+    );
+  /**
+   * The caller's direct Channel with an Agent, opening it for an Agent that predates direct
+   * Channels. Undefined when the Agent cannot answer in a Channel.
+   */
+  openDirect = async (agentId: string) => {
+    const existing = channelSelectors.directByAgent(agentId)(useChannelStore.getState());
+    if (existing) return existing.id;
+    // On desktop, name this machine so a direct Channel to a local Agent can run here.
+    const localDeviceId = isDesktop
+      ? await getElectronStoreState().resolveGatewayDeviceId()
+      : undefined;
+    const channelId = await channelService.openDirect({ agentId, localDeviceId });
+    if (channelId) await this.#refreshAfterWrite(this.refreshList);
+    return channelId ?? undefined;
   };
   remove = async (channelId: string) => {
     const scope = cacheScope.get();
@@ -164,6 +194,21 @@ class ChannelActionImpl {
       // A partial failure still shows the members that did join.
       await this.#refreshAfterWrite(() => this.refreshDetail({ channelId }));
     }
+  };
+  /**
+   * Adds one person or Agent, as an @mention of someone outside the Channel does, and returns
+   * the member id the mention resolves to. Idempotent like `addMembers`.
+   */
+  addMember = async (
+    channelId: string,
+    member: { agent: ChannelAgentSelection } | { userId: string },
+  ) => {
+    const { data } =
+      'userId' in member
+        ? await channelService.addUser(channelId, member.userId)
+        : await channelService.addAgent(channelId, member.agent);
+    await this.#refreshAfterWrite(() => this.refreshDetail({ channelId }));
+    return data.id;
   };
   send = async (input: Parameters<typeof channelService.send>[0]) => {
     const scope = cacheScope.get();

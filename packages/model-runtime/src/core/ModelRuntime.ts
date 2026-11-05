@@ -22,8 +22,10 @@ import type {
   ModelRequestOptions,
   OnFinishData,
   PullModelParams,
+  RouteAttemptIdentity,
   TextToSpeechOptions,
   TextToSpeechPayload,
+  UsageReportContext,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
 import type {
@@ -189,7 +191,7 @@ export interface ModelRuntimeHooks {
   ) => void | Promise<void>;
 
   onEmbeddingsFinal?: (
-    data: { latencyMs?: number; usage?: ModelUsage },
+    data: { latencyMs?: number; routeAttempt?: RouteAttemptIdentity; usage?: ModelUsage },
     context: { options?: EmbeddingsOptions; payload: EmbeddingsPayload },
   ) => void | Promise<void>;
 
@@ -218,7 +220,7 @@ export interface ModelRuntimeHooks {
   ) => void | Promise<void>;
 
   onGenerateObjectFinal?: (
-    data: { speed?: ModelPerformance; usage?: ModelUsage },
+    data: { routeAttempt?: RouteAttemptIdentity; speed?: ModelPerformance; usage?: ModelUsage },
     context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
   ) => void | Promise<void>;
 
@@ -233,7 +235,7 @@ export interface ModelRuntimeHooks {
    * `beforeTextToSpeech`.
    */
   onTextToSpeechFinal?: (
-    data: { latencyMs: number; usage?: ModelUsage },
+    data: { latencyMs: number; routeAttempt?: RouteAttemptIdentity; usage?: ModelUsage },
     context: { options?: TextToSpeechOptions; payload: TextToSpeechPayload },
   ) => void | Promise<void>;
 
@@ -248,7 +250,7 @@ export interface ModelRuntimeHooks {
    * settle or release anything taken in `beforeTranscribe`.
    */
   onTranscribeFinal?: (
-    data: { latencyMs: number; usage?: ModelUsage },
+    data: { latencyMs: number; routeAttempt?: RouteAttemptIdentity; usage?: ModelUsage },
     context: { options?: ASROptions; payload: ASRPayload },
   ) => void | Promise<void>;
 }
@@ -497,12 +499,15 @@ export class ModelRuntime {
       const finalOptions = needsUsageCapture
         ? {
             ...hookOptions,
-            onUsage: async (usage: ModelUsage) => {
+            onUsage: async (usage: ModelUsage, context?: UsageReportContext) => {
               usageCapture = usage;
               const speed = buildGenerateObjectSpeed(runtimeStartedAt, usage);
-              await hookOptions?.onUsage?.(usage);
+              await hookOptions?.onUsage?.(usage, context);
               try {
-                await this._hooks?.onGenerateObjectFinal?.({ speed, usage }, { options, payload });
+                await this._hooks?.onGenerateObjectFinal?.(
+                  { routeAttempt: context?.routeAttempt, speed, usage },
+                  { options, payload },
+                );
               } catch (e) {
                 // Hook failures (billing, tracing) must not interfere with response completion
                 console.error('[ModelRuntime] onGenerateObjectFinal hook error:', e);
@@ -577,11 +582,14 @@ export class ModelRuntime {
       const finalOptions = this._hooks?.onEmbeddingsFinal
         ? {
             ...hookOptions,
-            onUsage: async (usage: ModelUsage) => {
-              await hookOptions?.onUsage?.(usage);
+            onUsage: async (usage: ModelUsage, context?: UsageReportContext) => {
+              await hookOptions?.onUsage?.(usage, context);
               try {
                 const latencyMs = Date.now() - startTime;
-                await this._hooks!.onEmbeddingsFinal!({ latencyMs, usage }, { options, payload });
+                await this._hooks!.onEmbeddingsFinal!(
+                  { latencyMs, routeAttempt: context?.routeAttempt, usage },
+                  { options, payload },
+                );
               } catch (e) {
                 console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
               }
@@ -607,12 +615,14 @@ export class ModelRuntime {
 
       const startTime = Date.now();
       let usage: ModelUsage | undefined;
+      let routeAttempt: RouteAttemptIdentity | undefined;
       const finalOptions = this._hooks?.onTextToSpeechFinal
         ? {
             ...hookOptions,
-            onUsage: async (reported: ModelUsage) => {
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
               usage = reported;
-              await hookOptions?.onUsage?.(reported);
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
@@ -622,7 +632,7 @@ export class ModelRuntime {
       if (this._hooks?.onTextToSpeechFinal) {
         try {
           await this._hooks.onTextToSpeechFinal(
-            { latencyMs: Date.now() - startTime, usage },
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
             { options, payload },
           );
         } catch (e) {
@@ -649,12 +659,14 @@ export class ModelRuntime {
 
       const startTime = Date.now();
       let usage: ModelUsage | undefined;
+      let routeAttempt: RouteAttemptIdentity | undefined;
       const finalOptions = this._hooks?.onTranscribeFinal
         ? {
             ...hookOptions,
-            onUsage: async (reported: ModelUsage) => {
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
               usage = reported;
-              await hookOptions?.onUsage?.(reported);
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
@@ -664,7 +676,7 @@ export class ModelRuntime {
       if (this._hooks?.onTranscribeFinal) {
         try {
           await this._hooks.onTranscribeFinal(
-            { latencyMs: Date.now() - startTime, usage },
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
             { options, payload },
           );
         } catch (e) {

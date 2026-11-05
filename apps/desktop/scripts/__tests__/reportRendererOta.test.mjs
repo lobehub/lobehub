@@ -102,6 +102,15 @@ describe('classifyResult', () => {
     expect(
       classifyResult(
         {
+          base: { outcome: 'success', outputs: { published: 'true' } },
+          manifests: { outcome: 'failure' },
+        },
+        'release',
+      ),
+    ).toMatchObject({ outcome: 'failed', reason: 'installer-manifest-upload-failed' });
+    expect(
+      classifyResult(
+        {
           collect: { outcome: 'success', outputs: { skipped: 'false' } },
           publish: { outcome: 'success', outputs: { published: 'true' } },
         },

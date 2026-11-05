@@ -16,6 +16,7 @@
     "@lobechat/builtin-agents": "workspace:*",
     "@lobechat/builtin-skills": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
+    "@lobechat/builtin-tool-agent-documents": "workspace:*",
     "@lobechat/builtin-tool-agent-management": "workspace:*",
     "@lobechat/builtin-tool-attachments": "workspace:*",
     "@lobechat/builtin-tool-auv": "workspace:*",

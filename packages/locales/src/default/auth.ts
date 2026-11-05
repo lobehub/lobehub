@@ -354,7 +354,7 @@ export default {
   'oauthApp.secret.usage': 'Send it to the token endpoint as `client_secret` in the request body.',
   'oauthApp.stats.activeUsers': 'Active Users',
   'oauthApp.stats.calls': 'Total Calls',
-  'oauthApp.stats.credits': 'Credits Used',
+  'oauthApp.stats.credits': 'Amount Spent',
   'oauthApp.stats.empty': 'No usage data yet',
   'oauthApp.stats.lastUsed': 'Last Called',
   'oauthApp.stats.neverUsed': 'Never used',

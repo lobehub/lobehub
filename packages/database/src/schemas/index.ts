@@ -68,6 +68,7 @@ export * from './signalDecision';
 export * from './systemBotProvider';
 export * from './task';
 export * from './taskExternalLink';
+export * from './taskLabel';
 export * from './topic';
 export * from './topicAnalysis';
 export * from './topicComment';

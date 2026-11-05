@@ -19,7 +19,6 @@
   "artifacts.deploy.outdated": "舊版本已上線",
   "artifacts.deploy.publish": "發布",
   "artifacts.deploy.publishNewVersion": "發布此版本",
-  "artifacts.deploy.quotaUnavailable": "部署配額驗證暫時不可用。請稍後再試。",
   "artifacts.deploy.serviceOverloaded": "工件託管暫時過載。請稍後再嘗試發布。",
   "artifacts.deploy.success": "已發布",
   "artifacts.deploy.writeInProgress": "另一項部署變更正在進行中。請稍後再試。",

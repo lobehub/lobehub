@@ -19,7 +19,6 @@
   "artifacts.deploy.outdated": "Versión anterior en vivo",
   "artifacts.deploy.publish": "Publicar",
   "artifacts.deploy.publishNewVersion": "Publicar esta versión",
-  "artifacts.deploy.quotaUnavailable": "La validación de la cuota de despliegue no está disponible temporalmente. Intenta nuevamente más tarde.",
   "artifacts.deploy.serviceOverloaded": "El alojamiento de artefactos está temporalmente sobrecargado. Intenta publicar nuevamente en breve.",
   "artifacts.deploy.success": "Publicado",
   "artifacts.deploy.writeInProgress": "Otro cambio de despliegue está en progreso. Intenta nuevamente en breve.",

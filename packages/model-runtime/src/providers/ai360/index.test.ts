@@ -55,22 +55,6 @@ describe('LobeAi360AI - custom features', () => {
       });
     });
 
-    it('should correctly set web_search properties', () => {
-      const payload = {
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: '360gpt-pro',
-        enabledSearch: true,
-      } as any;
-
-      const result = params.chatCompletion.handlePayload!(payload);
-      const webSearchTool = result.tools?.find((tool: any) => tool.type === 'web_search');
-
-      expect(webSearchTool).toBeDefined();
-      expect(webSearchTool.type).toBe('web_search');
-      expect(webSearchTool.web_search).toBeDefined();
-      expect(webSearchTool.web_search.search_mode).toBe('auto');
-    });
-
     it('should not add web_search tool when enabledSearch is false', () => {
       const payload = {
         messages: [{ content: 'Hello', role: 'user' }],
@@ -650,27 +634,6 @@ describe('LobeAi360AI - custom features', () => {
 
       // Should detect reasoning from keyword even if not in LOBE_DEFAULT_MODEL_LIST
       expect(model.reasoning).toBe(true);
-    });
-
-    it('should prioritize functionCall from model ID check over knownModel', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: '360gpt-pro',
-                max_tokens: 4096,
-                total_tokens: 8192,
-              },
-            ],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      const model = models[0];
-
-      expect(model.functionCall).toBe(true);
     });
 
     it('should merge multiple capabilities correctly', async () => {

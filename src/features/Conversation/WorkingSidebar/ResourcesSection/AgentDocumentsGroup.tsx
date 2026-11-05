@@ -34,6 +34,7 @@ import {
   DocumentExplorerTree,
 } from '@/features/AgentDocumentsExplorer';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
+import { startDocumentDrag } from '@/features/ChatInput/InputEditor/ReferDocument/documentDragData';
 import {
   filterSkillItems,
   openRenameSkillModal,
@@ -426,6 +427,15 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       [agentId, data, navigate, openDocument, resolvedOpenMode],
     );
 
+    // Dragging a document into the chat input inserts a `<refer_document>` chip;
+    // the server resolves it against this agent's documents when sending.
+    const handleDocumentDragStart = useCallback(
+      (doc: { filename?: string | null; id: string; title?: string | null }, event: DragEvent) => {
+        startDocumentDrag(event, { documentId: doc.id, title: doc.title || doc.filename || '' });
+      },
+      [],
+    );
+
     // Open the SKILL.md (skills/index child) when present; fall back to the
     // bundle itself (orphan bundles surface for recovery).
     const openAgentSkill = useCallback(
@@ -688,6 +698,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
           data={documentsData}
           mutate={mutate}
           style={{ height: '100%' }}
+          onDocumentDragStart={handleDocumentDragStart}
           onOpenDocument={openAgentDocument}
         />
       </Flexbox>

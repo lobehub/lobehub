@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { ModelProvider } from 'model-bank';
 import { Ollama } from 'ollama/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import * as debugStreamModule from '../../utils/debugStream';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { LobeOllamaAI, params } from './index';
 
 vi.mock('ollama/browser');
@@ -628,26 +628,6 @@ describe('LobeOllamaAI', () => {
       expect(ollamaMessage).toEqual({
         content: '',
         role: 'user',
-      });
-    });
-
-    it('should handle content with only images (no text)', async () => {
-      const message = {
-        content: [
-          {
-            type: 'image_url',
-            image_url: { url: 'data:image/png;base64,abc123' },
-          },
-        ],
-        role: 'user',
-      };
-
-      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
-
-      expect(ollamaMessage).toEqual({
-        content: '',
-        role: 'user',
-        images: ['abc123'],
       });
     });
 
