@@ -1,4 +1,4 @@
-import { WIDGET_OUTPUT_TYPES, WIDGET_RUNTIMES } from '@lobechat/types';
+import { WIDGET_HTML_MAX_LENGTH, WIDGET_OUTPUT_TYPES, WIDGET_RUNTIMES } from '@lobechat/types';
 import { z } from 'zod';
 
 import { widgetLayoutSchema, widgetSurfaceSchema } from './layout';
@@ -95,6 +95,7 @@ export const widgetManifestSchema = z
 export const widgetViewSchema = z.object({
   chart: z.enum(['line', 'bar', 'area']).optional(),
   columns: z.array(z.string()).optional(),
+  html: z.string().min(1).max(WIDGET_HTML_MAX_LENGTH).optional(),
   layout: widgetLayoutSchema.optional(),
   limit: z.number().int().positive().max(500).optional(),
   size: z.enum(['sm', 'md', 'lg']).optional(),

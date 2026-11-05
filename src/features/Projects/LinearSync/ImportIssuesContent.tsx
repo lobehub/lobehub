@@ -10,6 +10,7 @@ import useSWR from 'swr';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { linearService } from '@/services/linear';
 
+import ImportOptions from './ImportOptions';
 import IssueList from './IssueList';
 import RunStep from './RunStep';
 import ScopeStep from './ScopeStep';
@@ -36,6 +37,8 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
     const [step, setStep] = useState<Step>('scope');
     const [filter, setFilter] = useState<LinearImportFilter>(initialImportFilter);
     const [selected, setSelected] = useState<Set<string>>(() => new Set());
+    // Comments carry much of an issue's context, so they come along unless unchecked.
+    const [syncComments, setSyncComments] = useState(true);
     const [starting, setStarting] = useState<'import' | 'rule' | null>(null);
     const [jobId, setJobId] = useState<string>();
     // Shown as the running title until the job loads, so a single import never reads as a rule sync.
@@ -98,6 +101,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
           connectionId: connection.id,
           issueIds: [...selected],
           projectId,
+          syncComments,
         }),
       );
 
@@ -117,7 +121,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
           ruleId = rule.id;
           setSavedRuleId(rule.id);
         }
-        return linearService.startRuleSync(ruleId);
+        return linearService.startRuleSync(ruleId, { syncComments });
       });
 
     const leaveRunning = () => {
@@ -226,6 +230,11 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
                 teamId: filter.teamId!,
               }}
               onSelectionChange={changeSelection}
+            />
+            <ImportOptions
+              disabled={starting !== null}
+              syncComments={syncComments}
+              onSyncCommentsChange={setSyncComments}
             />
           </Flexbox>
         ) : null}

@@ -8,7 +8,6 @@ import {
   prepareFixtureDependencies,
 } from '../dependencies/fixtureDependencies';
 import { discoverFixtureCandidates, getStyleFixture } from '../fixtures/fixtureRegistry';
-import { evaluateGate } from '../gate/gate';
 import { summarizeComponentRun } from '../reporting/componentSummary';
 import { writeArtifactManifest, writeHtmlReport, writeJson } from '../reporting/report';
 import { prepareSourceSnapshots } from '../source/buildSnapshots';
@@ -50,21 +49,6 @@ export const runPreflight = async (options: PreflightOptions) => {
     });
     await writeJson(options.output, 'fixtures.json', fixtures);
     const routing = !options.planOnly && scope.changedFiles.length === 0;
-    const gateInput = {
-      errors: [],
-      findings: [],
-      fixtures: [],
-      fullScope: false,
-      identityVerified: false,
-      pureStyleMigration: false,
-      units: scope.units.map((unit) => ({
-        componentId: unit.file,
-        fixtureIds: [],
-        id: unit.id,
-        requiredKeys: [],
-      })),
-      witnesses: [],
-    };
     const snapshots =
       !routing && !options.planOnly
         ? await prepareSourceSnapshots(session, options.output)
@@ -146,13 +130,6 @@ export const runPreflight = async (options: PreflightOptions) => {
         screenshots: options.screenshots,
       });
     }
-    const gate = evaluateGate({
-      ...gateInput,
-      errors: component?.result.errors ?? batch?.errors ?? [],
-      findings: component?.result.findings ?? batch?.findings ?? [],
-      fixtures: component?.result.fixtureResults ?? batch?.fixtureResults ?? [],
-    });
-    await writeJson(options.output, 'coverage.json', gate.coverage);
     const reasonCodes = routing
       ? ['NO_STYLE_IMPACT']
       : [
@@ -163,7 +140,6 @@ export const runPreflight = async (options: PreflightOptions) => {
             : []),
           'SOURCE_UNIT_BINDING_UNPROVEN',
           ...(!component && !batch ? ['BROWSER_VERIFICATION_NOT_RUN'] : []),
-          ...gate.reasonCodes,
           ...scope.limitations,
         ];
     const result = {
@@ -175,7 +151,6 @@ export const runPreflight = async (options: PreflightOptions) => {
       componentBatchRef: batch ? 'fixture-batch.json' : undefined,
       componentRunRef: component ? 'component-run.json' : undefined,
       fixtures,
-      gateEligible: false as const,
       identity: session.identity,
       mode: 'preflight' as const,
       migrationResidueRef: 'migration-residue.json',
@@ -184,7 +159,6 @@ export const runPreflight = async (options: PreflightOptions) => {
       schemaVersion: 1 as const,
       scopeHash: scope.hash,
       snapshots,
-      status: routing ? ('NOT_APPLICABLE' as const) : gate.status,
       unresolvedUnitIds: scope.units.map((unit) => unit.id),
       verifierHash: options.verifierHash,
     };
@@ -195,7 +169,6 @@ export const runPreflight = async (options: PreflightOptions) => {
       'scope.json',
       'migration-residue.json',
       'fixtures.json',
-      'coverage.json',
       'preflight.json',
       'report.html',
       ...(options.pullRequest ? ['pull-request.json'] : []),

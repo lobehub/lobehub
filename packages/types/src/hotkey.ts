@@ -10,6 +10,7 @@ export type HotkeyId =
   | 'openChatSettings'
   | 'prevTab'
   | 'openHotkeyHelper'
+  | 'openTaskFilter'
   | 'regenerateMessage'
   | 'saveDocument'
   | 'saveTopic'

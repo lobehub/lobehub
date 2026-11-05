@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/> 將優先級從 <from/> 更改為 <to/>",
   "taskDetail.activities.status.changed": "<actor/> 將狀態從 <from/> 更改為 <to/>",
   "taskDetail.activitiesEmpty": "尚無活動",
+  "taskDetail.activitiesLoadMore": "查看更早的動態（{{count}}）",
   "taskDetail.addSubtask": "新增子任務",
   "taskDetail.artifactInaccessible": "不可用的文件 — 無法訪問",
   "taskDetail.artifactMenu.delete": "從任務中移除",

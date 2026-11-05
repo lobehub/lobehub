@@ -11,6 +11,7 @@ import {
 } from 'lexical';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { selectEditorStartLineOnLexical } from './focusEditorStartLine';
 import { releaseEditorSelectionOnLexical } from './releaseEditorSelection';
 
 const commit = (editor: LexicalEditor, fn: () => void) =>
@@ -78,6 +79,22 @@ describe('releaseEditorSelectionOnLexical', () => {
     const { finishUpload, root } = await setup();
 
     await finishUpload();
+
+    expect(selectionInside(root)).toBe(true);
+  });
+
+  // Enter in the title hands the caret to the instruction. Releasing must not
+  // leave anything behind that stops that later selection from reaching the DOM,
+  // or focus stays in the title (T-2690).
+  it('lets a later selection reach the DOM after releasing', async () => {
+    const { editor, root } = await setup();
+
+    releaseEditorSelectionOnLexical(editor);
+    await commit(editor, () => undefined);
+    await new Promise<void>((resolve) => {
+      selectEditorStartLineOnLexical(editor);
+      editor.update(() => undefined, { onUpdate: resolve });
+    });
 
     expect(selectionInside(root)).toBe(true);
   });

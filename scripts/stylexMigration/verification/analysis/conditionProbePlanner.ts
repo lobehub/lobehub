@@ -1,7 +1,10 @@
+import type { WidthCondition } from '../../../../packages/style-equivalence/src/capture/conditionPartitions';
+import {
+  matchesWidth,
+  partitionWidthCells,
+} from '../../../../packages/style-equivalence/src/capture/conditionPartitions';
 import type { CaptureRoot } from '../browser/surfaces';
 import type { FixtureProbe } from '../pipeline/probePlanner';
-import type { WidthCondition } from './conditionPartitions';
-import { matchesWidth, partitionWidthCells } from './conditionPartitions';
 import type { RuleObservation, RuleWitnessPlan } from './ruleWitnesses';
 
 export interface ConditionSeed {
@@ -270,7 +273,6 @@ export const planConditionProbes = (options: {
   const scheduled = ordered.slice(0, Math.max(0, options.remaining));
   return {
     blocked,
-    gateEligible: false as const,
     gaps: [
       ...new Set([
         ...blocked.map((entry) => entry.reason),

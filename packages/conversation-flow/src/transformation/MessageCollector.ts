@@ -48,20 +48,31 @@ const getMessageSignal = (msg: Message): MessageSignal | undefined => {
 const isCallbackSignal = (sig: MessageSignal | undefined): boolean =>
   sig?.type === 'tool-stdout' || sig?.type === 'tool-callback';
 
-/** `task-completion` — post-task summary, rendered as a plain message AFTER the SignalCallbacks block. */
-const isTaskCompletionSignal = (sig: MessageSignal | undefined): boolean =>
-  sig?.type === 'task-completion';
+/**
+ * A toolless signal turn. The writer never anchors a later turn to one, so it
+ * cannot be the step a follow-up hangs off.
+ */
+export const isToollessSignalTurn = (msg: Message): boolean => !!getMessageSignal(msg);
 
 /**
- * A signal-tagged turn that called tools: a background task woke the LLM and it
- * went back to work on the main chain. `getMessageSignal` hides its tag so the
- * chain walks it, but it is a later step, never a regenerated branch, so it must
- * not compete with the step's other continuations in branch resolution.
+ * A turn a finished background task woke: either it went back to work with
+ * tools, or (`task-completion`) it only replied. Either way it is a later step
+ * of the run, never a regenerated branch, so it must not compete with the
+ * step's other continuations in branch resolution. The writer parents every
+ * wake-up off the run's latest tool result, so several can share one parent
+ * and sit next to the reply that ended the turn; they are ordered by creation.
  */
-const isWakeUpTurn = (msg: Message): boolean =>
-  msg.role === 'assistant' &&
-  !!msg.tools?.length &&
-  !!(msg.metadata as { signal?: MessageSignal } | undefined | null)?.signal;
+const isWakeUpTurn = (msg: Message): boolean => {
+  if (msg.role !== 'assistant') return false;
+  const signal = (msg.metadata as { signal?: MessageSignal } | undefined | null)?.signal;
+  return !!signal && (!!msg.tools?.length || signal.type === 'task-completion');
+};
+
+/** Whether a same-agent assistant may continue the main chain (callback turns render in their accordion). */
+const isChainCandidate = (msg: Message | undefined, groupAgentId: string | undefined): boolean =>
+  msg?.role === 'assistant' &&
+  msg.agentId === groupAgentId &&
+  !isCallbackSignal(getMessageSignal(msg));
 
 /** Lookups over one message array, each list in that array's order. */
 interface MessageArrayIndex {
@@ -355,11 +366,10 @@ export class MessageCollector {
    *   continuations under different tool results), then resolve regenerated
    *   siblings under that child.
    *
-   * Wake-up turns ({@link isWakeUpTurn}) skip branch resolution. The writer
-   * parents them off the run's latest tool result, so they sit next to the
-   * toolless reply that ended the turn, and two of them can share one tool.
-   * They join `pending` with the active continuation, and the earliest pending
-   * one becomes the next step, so every turn renders in creation order.
+   * Wake-up turns ({@link isWakeUpTurn}) skip branch resolution. They join
+   * `pending` with the active continuation, and the earliest pending one
+   * becomes the next step, so every turn renders in creation order — a
+   * text-only wake-up included, even when a later wake-up continues the run.
    */
   private findFlatChainContinuation(
     currentAssistant: Message,
@@ -390,8 +400,7 @@ export class MessageCollector {
       toTime(a.createdAt) - toTime(b.createdAt) || position.get(a.id)! - position.get(b.id)!;
     const candidates = [...candidateParentIds]
       .flatMap((parentId) => this.childrenOf(allMessages, parentId))
-      .filter((m) => m.role !== 'tool' && !processedIds.has(m.id))
-      .filter((m) => m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m))
+      .filter((m) => !processedIds.has(m.id) && isChainCandidate(m, groupAgentId))
       .sort(byCreation);
     const wakeUps = candidates.filter(isWakeUpTurn);
     const branchCandidates = candidates.filter((m) => !isWakeUpTurn(m));
@@ -535,9 +544,6 @@ export class MessageCollector {
         callbacks.push(child);
       }
       if (callbacks.length === 0) continue;
-      // (task-completion siblings are emitted separately by
-      // `collectFlatTaskCompletions` so they land in the parent
-      // AssistantGroup after the callbacks accordion.)
 
       callbacks.sort((a, b) => {
         const sa = getMessageSignal(a)?.sequence ?? Number.POSITIVE_INFINITY;
@@ -553,29 +559,6 @@ export class MessageCollector {
       });
     }
     return blocks;
-  }
-
-  /**
-   * Flat-list variant — find post-task-summary assistants (),
-   * i.e. toolless assistants tagged with
-   * `metadata.signal.type === 'task-completion'`, fired by the LLM after
-   * CC delivers `task_notification` for a long-running tool.
-   *
-   * Returns them in createdAt order; the caller is responsible for
-   * marking returned messages as processed so they don't render as
-   * separate top-level groups.
-   */
-  collectFlatTaskCompletions(allToolMessages: Message[], allMessages: Message[]): Message[] {
-    const completions: Message[] = [];
-    for (const toolMsg of allToolMessages) {
-      const children = this.childrenOf(allMessages, toolMsg.id);
-      for (const child of children) {
-        if (!isTaskCompletionSignal(getMessageSignal(child))) continue;
-        completions.push(child);
-      }
-    }
-    completions.sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
-    return completions;
   }
 
   /**
@@ -679,9 +662,9 @@ export class MessageCollector {
    * guard (AgentCouncil / async tasks end the chain — including any
    * assistant-anchored post-task summary) and branch resolution (>1 non-tool
    * siblings under one parent ⇒ pick the active branch) as the flat variant.
-   * Signal-tagged toolless siblings (Monitor callbacks etc.) are skipped so the
-   * main chain walks the real follower, and wake-up turns queue in `pending`
-   * outside branch resolution, as in the flat variant.
+   * Callback turns (Monitor stdout etc.) are skipped so the main chain walks
+   * the real follower, and wake-up turns queue in `pending` outside branch
+   * resolution, as in the flat variant.
    */
   private findChainContinuationNode(
     idNode: IdNode,
@@ -717,10 +700,7 @@ export class MessageCollector {
 
     const eligible = candidateNodes
       .map((node) => ({ msg: this.messageMap.get(node.id), node }))
-      .filter(
-        (c) =>
-          c.msg?.role === 'assistant' && c.msg.agentId === groupAgentId && !getMessageSignal(c.msg),
-      )
+      .filter((c) => isChainCandidate(c.msg, groupAgentId))
       .sort((a, b) => toTime(a.msg!.createdAt) - toTime(b.msg!.createdAt));
     const wakeUps = eligible.filter((c) => isWakeUpTurn(c.msg!)).map((c) => c.node);
     const branchCandidates = eligible.filter((c) => !isWakeUpTurn(c.msg!));
@@ -805,8 +785,7 @@ export class MessageCollector {
       // Gather callback-typed signal toolless siblings among this
       // tool's children. `getMessageSignal` already returns undefined
       // for tool-using assistants and non-assistants; `task-completion`
-      // turns are excluded here so they render outside the accordion
-      // (see `collectTaskCompletions`).
+      // turns are main-chain steps, not callbacks.
       const callbacks: Message[] = [];
       for (const toolChild of child.children) {
         const toolChildMsg = this.messageMap.get(toolChild.id);
@@ -834,38 +813,6 @@ export class MessageCollector {
       }
     });
     return blocks;
-  }
-
-  /**
-   * Collect post-task-summary toolless siblings () — assistants
-   * tagged with `metadata.signal.type === 'task-completion'`, fired by
-   * the LLM after CC delivers `system task_notification` for a long-
-   * running tool (Monitor, etc.). Each one belongs inside the same
-   * AssistantGroup as the preceding SignalCallbacks block, rendered as
-   * a plain message AFTER the accordion.
-   *
-   * Walks the same main-chain as `collectAssistantGroupMessages` so the
-   * lookup tracks signal-tagged toolless siblings exactly where they
-   * live in the parentId tree (children of the source tool's
-   * tool_result, alongside the callbacks).
-   *
-   * Returned in creation order. Multiple completions per group are rare
-   * but supported (e.g. two long-running tools both summarized in one
-   * LLM call).
-   */
-  collectTaskCompletions(message: Message, idNode: IdNode): MessageNode[] {
-    const groupAgentId = message.agentId;
-    const nodes: MessageNode[] = [];
-    this.forEachMainChainTool(idNode, groupAgentId, (child) => {
-      for (const toolChild of child.children) {
-        const toolChildMsg = this.messageMap.get(toolChild.id);
-        if (!toolChildMsg) continue;
-        if (toolChildMsg.agentId !== groupAgentId) continue;
-        if (!isTaskCompletionSignal(getMessageSignal(toolChildMsg))) continue;
-        nodes.push({ id: toolChildMsg.id, type: 'message' });
-      }
-    });
-    return nodes;
   }
 
   /**
@@ -899,9 +846,11 @@ export class MessageCollector {
   }
 
   /**
-   * Return the final same-agent assistant that belongs inside this group. The
-   * child selected after that assistant can be either a tool-hosted legacy
-   * continuation or a direct non-tool continuation in the current storage form.
+   * Return the final same-agent assistant that belongs inside this group and
+   * can host what follows it. The child selected after that assistant can be
+   * either a tool-hosted legacy continuation or a direct non-tool continuation
+   * in the current storage form. A text-only wake-up never hosts a follow-up,
+   * so a run ending on one keeps the step before it.
    */
   private findLastAssistantNodeInGroup(idNode: IdNode, groupAgentId?: string): IdNode {
     // Iterative: a group's chain can be thousands of steps long.
@@ -909,8 +858,9 @@ export class MessageCollector {
     let current = idNode;
     let nextNode = this.findChainContinuationNode(current, groupAgentId, pending);
     while (nextNode) {
-      current = nextNode;
-      nextNode = this.findChainContinuationNode(current, groupAgentId, pending);
+      const nextMessage = this.messageMap.get(nextNode.id);
+      if (!nextMessage || !isToollessSignalTurn(nextMessage)) current = nextNode;
+      nextNode = this.findChainContinuationNode(nextNode, groupAgentId, pending);
     }
     return current;
   }

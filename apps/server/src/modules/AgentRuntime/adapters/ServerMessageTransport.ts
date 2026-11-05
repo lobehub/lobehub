@@ -110,8 +110,10 @@ export class ServerMessageTransport implements MessageTransport {
     return message
       ? {
           agentId: message.agentId,
+          content: message.content,
           groupId: message.groupId,
           id: message.id,
+          metadata: message.metadata,
           model: message.model,
           parentId: message.parentId,
           provider: message.provider,
