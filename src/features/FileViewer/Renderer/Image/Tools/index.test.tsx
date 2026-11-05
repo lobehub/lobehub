@@ -21,6 +21,9 @@ const fileStore = vi.hoisted(() => ({
   uploadWithProgress: vi.fn(),
 }));
 vi.mock('@/store/file', () => ({
+  fileChatSelectors: {
+    chatUploadFileList: () => (s: typeof fileStore) => s.chatUploadFileList,
+  },
   fileManagerSelectors: {
     getFileByChunkTargetId: () => () => ({ id: 'file_src', parentId: 'docs_folder' }),
   },
@@ -118,12 +121,16 @@ const renderTools = (stage: Partial<ImageStageValue> = {}) => {
 
 describe('ImageEditTools', () => {
   beforeEach(() => {
-    useComposerDraftBus.setState({ attached: true, draft: null });
+    useComposerDraftBus.setState({
+      attached: true,
+      contextKey: 'main_agt_current_tpc_1',
+      draft: null,
+    });
     fileStore.chatUploadFileList = [];
     chatState.activeTopicId = 'tpc_1';
     permission.allowed = true;
     permission.reason = undefined;
-    fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+    fileStore.uploadChatFiles.mockImplementation(async (_contextKey: string, [file]: File[]) => {
       fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
     });
     exporter.loadStageImage.mockResolvedValue({ naturalHeight: 1000, naturalWidth: 2000 });
@@ -325,7 +332,8 @@ describe('ImageEditTools', () => {
         'Remove this',
       ]);
 
-      const [[file], agentId] = fileStore.uploadChatFiles.mock.calls[0];
+      const [contextKey, [file], agentId] = fileStore.uploadChatFiles.mock.calls[0];
+      expect(contextKey).toBe('main_agt_current_tpc_1');
       expect(file.name).toBe('sunset-annotated.png');
       expect(agentId).toBe('agt_current');
       // Nothing is saved to the library.
@@ -375,7 +383,8 @@ describe('ImageEditTools', () => {
       });
 
       await waitFor(() => expect(navigate).toHaveBeenCalledWith('/agent/agt_inbox'));
-      expect(fileStore.uploadChatFiles.mock.calls[0][1]).toBe('agt_inbox');
+      expect(fileStore.uploadChatFiles.mock.calls[0][0]).toBe('main_agt_inbox_new');
+      expect(fileStore.uploadChatFiles.mock.calls[0][2]).toBe('agt_inbox');
       // Queued for the composer that mounts after navigating.
       expect(useComposerDraftBus.getState().draft?.text).toContain(
         'imageViewer.markup.message.item',
@@ -399,7 +408,7 @@ describe('ImageEditTools', () => {
     // Regression: the text and success used to land before the attachment was
     // in the input, so Send could go out with the text alone.
     it('keeps the marks and adds no text when the attachment does not reach the input', async () => {
-      fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+      fileStore.uploadChatFiles.mockImplementation(async (_contextKey: string, [file]: File[]) => {
         fileStore.chatUploadFileList = [
           { error: 'Upload failed', file, id: 'sunset-annotated.png', status: 'error' },
         ];
@@ -413,7 +422,7 @@ describe('ImageEditTools', () => {
       });
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('imageViewer.markup.failed'));
-      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith({
+      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith('main_agt_current_tpc_1', {
         id: 'sunset-annotated.png',
         type: 'removeFile',
       });
@@ -425,7 +434,7 @@ describe('ImageEditTools', () => {
     // Regression: switching conversations during the upload sent the marks to
     // whichever conversation was open when it finished.
     it('does not hand the marks to another conversation opened meanwhile', async () => {
-      fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+      fileStore.uploadChatFiles.mockImplementation(async (_contextKey: string, [file]: File[]) => {
         chatState.activeTopicId = 'tpc_other';
         fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
       });
@@ -438,7 +447,7 @@ describe('ImageEditTools', () => {
       });
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('imageViewer.markup.failed'));
-      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith({
+      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith('main_agt_current_tpc_1', {
         id: 'file_chat',
         type: 'removeFile',
       });
@@ -450,7 +459,7 @@ describe('ImageEditTools', () => {
     it('keeps marks added while the image was uploading', async () => {
       let finishUpload!: () => void;
       fileStore.uploadChatFiles.mockImplementation(
-        ([file]: File[]) =>
+        (_contextKey: string, [file]: File[]) =>
           new Promise<void>((resolve) => {
             finishUpload = () => {
               fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
@@ -480,7 +489,7 @@ describe('ImageEditTools', () => {
     it('drops the handoff when the viewer closes during the upload', async () => {
       let finishUpload!: () => void;
       fileStore.uploadChatFiles.mockImplementation(
-        ([file]: File[]) =>
+        (_contextKey: string, [file]: File[]) =>
           new Promise<void>((resolve) => {
             finishUpload = () => {
               fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
@@ -500,7 +509,7 @@ describe('ImageEditTools', () => {
       await act(async () => finishUpload());
 
       expect(useComposerDraftBus.getState().draft).toBeNull();
-      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith({
+      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith('main_agt_current_tpc_1', {
         id: 'file_chat',
         type: 'removeFile',
       });
@@ -511,7 +520,7 @@ describe('ImageEditTools', () => {
     // Regression: an upload that failed without throwing left a pending chip
     // that was taken for success.
     it('treats an attachment left pending as a failed handoff', async () => {
-      fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+      fileStore.uploadChatFiles.mockImplementation(async (_contextKey: string, [file]: File[]) => {
         fileStore.chatUploadFileList = [{ file, id: 'sunset-annotated.png', status: 'pending' }];
       });
       const { overlay } = renderTools();
@@ -523,7 +532,7 @@ describe('ImageEditTools', () => {
       });
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('imageViewer.markup.failed'));
-      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith({
+      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith('main_agt_current_tpc_1', {
         id: 'sunset-annotated.png',
         type: 'removeFile',
       });
@@ -533,7 +542,7 @@ describe('ImageEditTools', () => {
     it('judges this upload, not an earlier attachment with the same name', async () => {
       const earlier = new File(['old'], 'sunset-annotated.png', { type: 'image/png' });
       fileStore.chatUploadFileList = [{ file: earlier, id: 'file_earlier', status: 'success' }];
-      fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+      fileStore.uploadChatFiles.mockImplementation(async (_contextKey: string, [file]: File[]) => {
         fileStore.chatUploadFileList = [
           ...fileStore.chatUploadFileList,
           { error: 'Upload failed', file, id: 'sunset-annotated.png', status: 'error' },

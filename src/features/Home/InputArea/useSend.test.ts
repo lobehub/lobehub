@@ -163,7 +163,8 @@ vi.mock('@/store/file', () => {
     fileChatSelectors: {
       chatContextSelections: (contextKey: string) => (state: typeof fileState) =>
         state.chatContextSelectionsByContext[contextKey] ?? [],
-      chatUploadFileList: (state: typeof fileState) => state.chatUploadFileList,
+      chatUploadFileList: (contextKey: string) => (state: typeof fileState) =>
+        contextKey === 'home' ? state.chatUploadFileList : [],
     },
     useFileStore,
   };
@@ -187,13 +188,16 @@ describe('Home InputArea useSend', () => {
     sendMessageMock.mockReset();
     clearContentMock.mockReset();
     clearChatUploadFileListMock.mockReset();
-    clearChatUploadFileListMock.mockImplementation((submittedIds?: string[]) => {
-      fileState.chatUploadFileList = submittedIds
-        ? fileState.chatUploadFileList.filter(
-            (file: { id: string }) => !submittedIds.includes(file.id),
-          )
-        : [];
-    });
+    clearChatUploadFileListMock.mockImplementation(
+      (contextKey: string, submittedIds?: string[]) => {
+        if (contextKey !== 'home') return;
+        fileState.chatUploadFileList = submittedIds
+          ? fileState.chatUploadFileList.filter(
+              (file: { id: string }) => !submittedIds.includes(file.id),
+            )
+          : [];
+      },
+    );
     clearChatContextSelectionsMock.mockReset();
     restoreChatContextSelectionsMock.mockReset();
     createTaskMock.mockReset();
